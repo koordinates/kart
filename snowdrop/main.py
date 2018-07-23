@@ -85,9 +85,8 @@ def init_db(db_path, api_key):
         domain = None
 
         # find layers
-        for row in cur.execute("SELECT table_name, description, last_change FROM gpkg_contents WHERE data_type = 'features'"):
-            # Source: https://koordinates.com/layer/55-nz-titles/
-            m = re.match(r'Source: (?P<url>(?P<site>https://(?P<domain>[^/]+)/)layer/(?P<layer_id>\d+)-[^/]+/)\n', row['description'])
+        for row in cur.execute("SELECT table_name, description, last_change, data_type FROM gpkg_contents WHERE data_type IN ('features', 'aspatial', 'attributes')"):
+            m = re.search(r'^Source: (?P<url>(?P<site>https://(?P<domain>[^/]+)/)(layer|table)/(?P<layer_id>\d+)-[^/]+/)\n', row['description'], re.MULTILINE)
             if not m:
                 raise UserError(f"{db_path} isn't from a Koordinates site")
 
@@ -96,7 +95,7 @@ def init_db(db_path, api_key):
                 L.info("%s is from %s", db_path, m.group('site'))
 
             layer_id = int(m['layer_id'])
-            L.info("Found feature table: %s (%s)", row['table_name'], m.group('url'))
+            L.info("Found %s table: %s (%s)", row['data_type'], row['table_name'], m.group('url'))
 
             layer_info = api_get_layer(domain, api_key, layer_id)
 
