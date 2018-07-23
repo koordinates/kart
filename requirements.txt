@@ -1,0 +1,2 @@
+-e .
+https://github.com/pyinstaller/pyinstaller/archive/develop.zip#egg=PyInstaller
