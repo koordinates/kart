@@ -1,4 +1,4 @@
-
+# ~~ python ~~
 
 block_cipher = None
 
@@ -62,19 +62,22 @@ for package, files in data_package_imports:
 # Binary libraries
 a.binaries.extend([
     # Spatialite
-    ('libspatialite.7.dylib', './spatialite/libspatialite-4.3.0a/src/.libs/libspatialite.7.dylib', 'BINARY'),
-    ('mod_spatialite.so', './spatialite/libspatialite-4.3.0a/src/.libs/mod_spatialite.so', 'BINARY'),
-    ('mod_spatialite.7.so', './spatialite/libspatialite-4.3.0a/src/.libs/mod_spatialite.7.so', 'BINARY'),
+    ('libspatialite.7.dylib', '/usr/local/opt/libspatialite/lib/libspatialite.7.dylib', 'BINARY'),
+    ('mod_spatialite.dylib', '/usr/local/opt/libspatialite/lib/mod_spatialite.dylib', 'BINARY'),
+    ('libxml2.2.dylib', '/usr/local/opt/libxml2/lib/libxml2.2.dylib', 'BINARY'),
     ('libfreexl.1.dylib', '/usr/local/opt/freexl/lib/libfreexl.1.dylib', 'BINARY'),
     ('libproj.13.dylib', '/usr/local/opt/proj/lib/libproj.13.dylib', 'BINARY'),
+    ('libsqlite3.0.dylib', '/usr/local/opt/sqlite/lib/libsqlite3.0.dylib', 'BINARY'),
     ('libgeos_c.1.dylib', '/usr/local/opt/geos/lib/libgeos_c.1.dylib', 'BINARY'),
-    # Already included by _sqlite extension
-    # ('libsqlite3.0.dylib',  ('/usr/local/opt/sqlite/lib/libsqlite3.0.dylib', 'BINARY'),
+    ('libgeos-3.6.2.dylib', '/usr/local/opt/geos/lib/libgeos-3.6.2.dylib', 'BINARY'),
 ])
 #EndCustomisations
 
 pyz = PYZ(a.pure, a.zipped_data,
              cipher=block_cipher)
+
+
+# Release
 exe = EXE(pyz,
           a.scripts,
           a.binaries,
@@ -86,6 +89,26 @@ exe = EXE(pyz,
           upx=True,
           runtime_tmpdir=None,
           console=True )
+# EndRelease
+
+# Debug
+# exe = EXE(pyz,
+#           a.scripts,
+#           exclude_binaries=True,
+#           name='kx-sync',
+#           debug=True,
+#           strip=False,
+#           upx=True,
+#           console=True )
+# coll = COLLECT(exe,
+#                a.binaries,
+#                a.zipfiles,
+#                a.datas,
+#                strip=False,
+#                upx=True,
+#                name='kx-sync')
+# EndDebug
+
 
 # Build OSX .app bundle
 # app = BUNDLE(exe,

@@ -1,8 +1,10 @@
 import contextlib
 import json
 import logging
+import os
 import re
 import sqlite3
+import sys
 import textwrap
 import time
 from collections import defaultdict
@@ -51,6 +53,25 @@ def check_geopackage(db, initialized=False):
             return False
 
     return True
+
+
+def load_spatialite(db):
+    # Initialise Spatialite in the SQLite connection
+    L = logging.getLogger('snowdrop.main.load_spatialite')
+
+    MODULE = 'mod_spatialite'
+
+    # in PyInstaller-packaged land we need to load an explicit path
+    if getattr(sys, 'frozen', False):
+        load_path = os.path.join(getattr(sys, '_MEIPASS', os.path.dirname(sys.executable)), MODULE)
+    else:
+        load_path = MODULE
+
+    L.debug("Loading Spatialite from: %s", load_path)
+    db.enable_load_extension(True)
+    # on error, this raises:
+    # sqlite3.OperationalError: dlopen(mod_spatialite.dylib, 10): image not found
+    db.execute("SELECT load_extension(?)", (load_path,))
 
 
 def init_db(db_path, api_key):
@@ -183,8 +204,7 @@ def sync_db(db_path, date_to=None, verbosity=1):
 
     cur = db.cursor()
     try:
-        db.enable_load_extension(True)
-        db.execute("SELECT load_extension(?)", ('mod_spatialite',))
+        load_spatialite(db)
         cur.execute("SELECT EnableGpkgMode()")
     except sqlite3.Error as e:
         raise UserError(f"Spatialite Error") from e

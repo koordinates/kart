@@ -58,11 +58,39 @@ kx-sync --help
 
 #### Standalone Binaries
 
-Using PyInstaller we can create fully-bundled binaries for multiple OS'. In theory.
+Using [PyInstaller](https://www.pyinstaller.org/) we can create fully-bundled binaries for multiple OS'. In theory.
+
+##### Buil an OSX binary
+
+* Use Sierra, since building on newer OS versions seems to restrict it to that OS version.
+* [OSX on vagrant](https://github.com/AndrewDryga/vagrant-box-osx)
 
 ```sh
-python setup.py pyinstaller
-dist/kx-sync --help
-```
+vagrant up
+vagrant ssh
 
-At the moment may end up requiring OSX High Sierra 10.13.6 becuase that's what Rob developed it on.
+brew update
+# PyInstaller has issues with Python3.7; this is 3.6.5
+brew install https://raw.githubusercontent.com/Homebrew/homebrew-core/f2a764ef944b1080be64bd88dca9a1d80130c558/Formula/python.rb
+brew install libspatialite
+
+cd /vagrant
+pip3 install virtualenv
+virtualenv ./.venv-osxbuild
+source .venv-osxbuild/bin/activate
+pip install -r requirements.txt
+
+# build
+rm -rf build/ dist/
+python setup.py pyinstaller -o '--clean'
+# issues? Try `-o '--clean --log-level=DEBUG --debug=all'`
+# and switching to the Debug path in snowdrop.spec
+
+# libspatialite + dependencies
+brew unlink libspatialite proj python@2 geos libxml2 freexl
+# Python3 + dependencies
+brew unlink python@3 gdbm openssl readline sqlite xz
+
+# Check
+./dist/kx-sync -v 2 -V
+```

@@ -7,7 +7,7 @@ import click
 import dateutil.parser
 import dateutil.tz
 
-from .main import check_geopackage, init_db, sync_db, UserError, SyncError
+from .main import init_db, sync_db, UserError, SyncError, check_geopackage, load_spatialite
 
 
 L = logging.getLogger('snowdrop.cli')
@@ -46,18 +46,57 @@ def validate_timestamp(ctx, param, value):
         raise click.BadParameter(f"{value} isn't a valid ISO timestamp") from e
 
 
+def config_logging(ctx, param, value):
+    if value == 2:
+        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(name)s:%(lineno)d %(levelname)s %(message)s')
+    elif value == 0:
+        logging.basicConfig(level=logging.ERROR, format='%(message)s')
+    else:
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+
+def version(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+
+    import sqlite3
+    import snowdrop
+
+    click.echo(f'kx-sync version: {snowdrop.__version__}', color=ctx.color)
+
+    click.echo(f'Python {sys.version} [PyAPI v{sys.api_version}]', color=ctx.color)
+
+    # Check SQLite/Spatialite versions
+    try:
+        # this doesn't actually check whether it's a SQLite DB...
+        db = sqlite3.connect(':memory:')
+        db.row_factory = sqlite3.Row
+    except sqlite3.DatabaseError as e:
+        raise "Starting SQLite" from e
+
+    cur = db.cursor()
+
+    r = cur.execute("SELECT sqlite_version()").fetchone()
+    click.echo("SQLite version: %s" % r[0], color=ctx.color)
+
+    try:
+        load_spatialite(db)
+    except sqlite3.Error as e:
+        raise "Loading Spatialite" from e
+
+    r = cur.execute("SELECT spatialite_version(), HasGeoPackage()").fetchone()
+    click.echo("Spatialite version: %s\nSpatialite GeoPackage support? %s" % (r[0], bool(r[1])), color=ctx.color)
+
+    ctx.exit()
+
+
 @click.group()
-@click.option('-v', '--verbosity', type=click.IntRange(0, 2, clamp=True), default=1)
+@click.option('-v', '--verbosity', type=click.IntRange(0, 2, clamp=True), default=1, is_eager=True, callback=config_logging)
+@click.option('-V', '--version', callback=version, is_eager=True, is_flag=True, help='Show the version and exit.', expose_value=False)
 @click.pass_context
 def cli(ctx, verbosity):
     ctx.obj = box.Box()
 
-    if verbosity == 2:
-        logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(name)s:%(lineno)d %(levelname)s %(message)s')
-    elif verbosity == 1:
-        logging.basicConfig(level=logging.INFO, format='%(message)s')
-    elif verbosity == 1:
-        logging.basicConfig(level=logging.ERROR, format='%(message)s')
     ctx.obj.verbosity = verbosity
 
 
