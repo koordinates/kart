@@ -216,7 +216,7 @@ def import_gpkg(ctx, geopackage, table):
                 file_mode = 0o100644
                 entry = git.BaseIndexEntry((file_mode, istream.binsha, 0, object_path))
                 index_entries.append(entry)
-            #print(feature_id, object_path, field, value, entry)
+            print(feature_id, object_path, field, value, entry)
 
             if i and i % 500 == 0:
                 print(f"  {i+1} features... @{time.time()-t1:.1f}s")
@@ -285,7 +285,7 @@ def checkout(ctx, commitish, working_copy, layer, force, fmt):
     if not fmt:
         fmt = 'GPKG'
 
-    click.echo(f'Checkout {layer}@{commitish} to {working_copy} as {fmt} ...')
+    click.echo(f'Checkout {layer}@{commitish or "HEAD"} to {working_copy} as {fmt} ...')
 
     _checkout_new(repo, working_copy, layer, commit, fmt)
 
@@ -551,7 +551,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
                 max_y=NULL,
                 last_change=?
             WHERE
-(SELECT bounds update after we have  FROM a)
+                table_name=?;
             """,
             (
                 commit.committed_datetime.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),  # GPKG Spec Req.15
@@ -560,13 +560,13 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
         )
         assert dbcur.rowcount == 1, f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
 
-    print(f"Added {feat_count} Features to GPKG in {t1-t0:.1f}s")
+    print(f"Added {feat_count} Features to GPKG") # in {t1-t0:.1f}s")
     print(f"Overall rate: {(feat_count/(t1-t0)):.0f} features/s)")
 
     # Create the GeoPackage Spatial Index
     gdal_ds = gdal.OpenEx(working_copy, gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR, ["GPKG"])
     gdal_ds.ExecuteSQL(f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(meta_geom["column_name"])});')
-    print(f"Created spatial index in {time.time()-t1:.1f}s")
+    print(f"Created spatial index") # in {time.time()-t1:.1f}s")
     del gdal_ds
 
     # update the bounds
