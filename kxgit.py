@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import time
+import typing
 import uuid
 from datetime import timezone
 
@@ -246,6 +247,20 @@ def import_gpkg(ctx, geopackage, table):
         print(f"GC completed in {time.time()-t4:.1f}s")
 
 
+class WorkingCopy(typing.NamedTuple):
+    path: str
+    fmt: str
+    layer: str
+
+def _get_working_copy(repo):
+    repo_cfg = repo.config_reader('repository')
+    if repo_cfg.has_option('kx', 'workingcopy'):
+        fmt, path, layer = repo_cfg.get('kx', 'workingcopy').split(':')
+        if not os.path.isfile(path):
+            raise FileNotFoundError(f"Working copy missing? {path}")
+        return WorkingCopy(fmt=fmt, path=path, layer=layer)
+    else:
+        return None
 
 @cli.command()
 @click.pass_context
@@ -265,16 +280,14 @@ def checkout(ctx, commitish, working_copy, layer, force, fmt):
     else:
         commit = repo.head.commit
 
-    repo_cfg = repo.config_reader('repository')
-    if repo_cfg.has_option('kx', 'workingcopy'):
+
+    wc = _get_working_copy(repo)
+    if wc:
         if working_copy is not None:
-            raise click.BadParameter(f"This repository already has a working copy at: {repo_cfg.get('kx', 'workingcopy')}", param_hint='WORKING_COPY')
-        fmt, working_copy, layer = repo_cfg.get('kx', 'workingcopy').split(':')
+            raise click.BadParameter(f"This repository already has a working copy at: {wc.path}", param_hint='WORKING_COPY')
 
-        assert os.path.isfile(working_copy), f"Working copy missing? {working_copy}"
-
-        click.echo(f'Updating {working_copy} ...')
-        return _checkout_update(repo, working_copy, layer, commit, force=force)
+        click.echo(f'Updating {wc.path} ...')
+        return _checkout_update(repo, wc.path, wc.layer, commit, force=force)
 
     # new working-copy path
     if not working_copy:
@@ -585,7 +598,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     assert dbcur.rowcount == 1, f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
 
 
-def _checkout_update(repo, working_copy, layer, commit, force=False):
+def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit=None):
     table = layer
     tree = commit.tree
 
@@ -605,7 +618,8 @@ def _checkout_update(repo, working_copy, layer, commit, force=False):
             dbcur.execute(f"DELETE FROM {sqlite_ident(table)} WHERE fid IN (SELECT feature_id FROM __kxg_map WHERE state != 0);")
 
         # this is where we're starting from
-        base_commit = repo.head.commit
+        if not base_commit:
+            base_commit = repo.head.commit
         base_tree = base_commit.tree
         _assert_db_tree_match(db, table, base_tree)
 
@@ -991,6 +1005,107 @@ def commit(ctx, message):
         # update the ref (branch) to point to the current commit
         if not repo.head.is_detached:
             repo.head.ref.commit = new_commit
+
+
+@cli.command(help=(
+    "Incorporates changes from the named commits (usually other branch heads) into the current branch."
+))
+@click.option('--ff/--no-ff', default=True, help=(
+    "When the merge resolves as a fast-forward, only update the branch pointer, without creating a merge commit. "
+    "With --no-ff create a merge commit even when the merge resolves as a fast-forward."
+))
+@click.option('--ff-only', default=False, is_flag=True, help=(
+    "Refuse to merge and exit with a non-zero status unless the current HEAD is already up to date or the merge can be resolved as a fast-forward."
+))
+@click.argument('commits', nargs=-1, required=True, metavar='COMMIT...')
+@click.pass_context
+def merge(ctx, ff, ff_only, commits):
+    repo_dir = ctx.obj['repo_dir']
+    repo = pygit2.Repository(repo_dir)
+
+    if len(commits) != 1:
+        raise NotImplementedError("Only one merge source currently supported")
+
+    if ff_only and not ff:
+        raise click.BadParameter("Conflicting parameters: --no-ff & --ff-only", param_hint='--ff-only')
+
+    c_base = repo[repo.head.target]
+
+    # accept ref-ish things (refspec, branch, commit)
+    r_head = None
+    if pygit2.reference_is_valid_name(commits[0]):
+        try:
+            r_head = repo.lookup_reference(commits[0])
+        except KeyError:
+            pass
+    if not r_head:
+        r_head = repo.lookup_branch(commits[0], pygit2.GIT_BRANCH_LOCAL)
+    if not r_head:
+        r_head = repo.lookup_branch(commits[0], pygit2.GIT_BRANCH_REMOTE)
+
+    if r_head:
+        c_head = r_head.peel(pygit2.Commit)
+    else:
+        c_head = repo.revparse_single(commits[0])
+
+    print(f"Merging {c_head.id} to {c_base.id} ...")
+    merge_base = repo.merge_base(c_base.oid, c_head.oid)
+    print(f"Found merge base: {merge_base}")
+
+    # We're up-to-date if we're trying to merge our own common ancestor.
+    if merge_base == c_head.oid:
+        print("Already merged!")
+        return
+
+    # We're fastforwardable if we're our own common ancestor.
+    can_ff = (merge_base == c_base.id)
+
+    if ff_only and not can_ff:
+        print("Can't resolve as a fast-forward merge and --ff-only specified")
+        ctx.exit(1)
+
+    if can_ff and ff:
+        # do fast-forward merge
+        repo.head.set_target(c_head.id, "merge: Fast-forward")
+        commit_id = c_head.id
+        print("Fast-forward")
+    else:
+        ancestor_tree = repo[merge_base].tree
+
+        merge_index = repo.merge_trees(
+            ancestor=ancestor_tree,
+            ours=c_base.tree,
+            theirs=c_head.tree,
+        )
+        if merge_index.conflicts:
+            print("Merge conflicts!")
+            for path, (ancestor, ours, theirs) in merge_index.conflicts:
+                print(f"Conflict: {path:60} {ancestor} | {ours} | {theirs}")
+            ctx.exit(1)
+
+        print("No conflicts!")
+        merge_tree_id = merge_index.write_tree(repo)
+        print(f"Merge tree: {merge_tree_id}")
+
+        user = repo.default_signature
+        merge_message = "Merge '{}'".format(r_head.shorthand if r_head else c_head.id)
+        commit_id = repo.create_commit(
+            repo.head.name,
+            user,
+            user,
+            merge_message,
+            merge_tree_id,
+            [c_base.oid, c_head.oid],
+        )
+        print(f"Merge commit: {commit_id}")
+
+    # update our working copy
+    gpy_repo = git.Repo(repo_dir, **repo_params)
+    gpy_commit = gpy_repo.commit(commit_id)
+    gpy_base_commit = gpy_repo.commit(c_base.id)
+    wc = _get_working_copy(gpy_repo)
+    click.echo(f'Updating {wc.path} ...')
+    return _checkout_update(gpy_repo, wc.path, wc.layer, gpy_commit, base_commit=gpy_base_commit)
 
 
 # straight process-replace commands
