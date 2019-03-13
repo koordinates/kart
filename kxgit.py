@@ -14,6 +14,7 @@ from datetime import timezone
 import click
 import git
 import gitdb
+import pygit2
 from osgeo import gdal, ogr, osr
 
 
@@ -24,9 +25,22 @@ repo_params = {
 }
 
 
+def print_version(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+
+    import osgeo
+
+    click.echo("kxgit proof of concept")
+    click.echo(f"GDAL v{osgeo._gdal.__version__}")
+    click.echo(f"PyGit2 v{pygit2.__version__}; Libgit2 v{pygit2.LIBGIT2_VERSION}")
+    click.echo(f"GitPython v{git.__version__}")
+    ctx.exit()
+
 
 @click.group()
 @click.option('repo_dir', '--repo', type=click.Path(file_okay=False, dir_okay=True), default=os.curdir, metavar="PATH")
+@click.option('--version', is_flag=True, callback=print_version, expose_value=False, is_eager=True, help='Show version information and exit.')
 @click.pass_context
 def cli(ctx, repo_dir):
     ctx.ensure_object(dict)
@@ -37,11 +51,13 @@ def sqlite_ident(identifier):
     escaped = identifier.replace("\"", "\"\"")
     return f'"{escaped}"'
 
+
 def sqlite_param_str(value):
     if value is None:
         return "NULL"
     escaped = value.replace('\'', '\'\'')
     return f'\'{escaped}\''
+
 
 def _get_db(path, **kwargs):
     db = sqlite3.connect(path, **kwargs)
@@ -50,6 +66,7 @@ def _get_db(path, **kwargs):
     db.enable_load_extension(True)
     db.execute("SELECT load_extension('mod_spatialite');")
     return db
+
 
 def _dump_gpkg_meta_info(db, layer):
     yield (
