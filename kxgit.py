@@ -1037,5 +1037,13 @@ def fetch(ctx, args):
     os.execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
 
 
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+))
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def clone(args):
+    os.execvp("git", ["git", "clone", "--bare"] + list(args))
+
+
 if __name__ == "__main__":
     cli()
