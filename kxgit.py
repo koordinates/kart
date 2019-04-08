@@ -264,22 +264,36 @@ def _get_working_copy(repo):
 
 @cli.command()
 @click.pass_context
+@click.option('branch', '-b', is_flag=True, help="Create a new branch")
 @click.option('fmt', '--format', type=click.Choice(['GPKG']))
 @click.option('layer', '--layer')
 @click.option('--force', '-f', is_flag=True)
 @click.option('--working-copy', type=click.Path(writable=True, dir_okay=False))
 @click.argument('commitish', default=None, required=False)
-def checkout(ctx, commitish, working_copy, layer, force, fmt):
+def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
     repo_dir = ctx.obj['repo_dir']
     repo = git.Repo(repo_dir, **repo_params)
     if not repo or not repo.bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    if commitish:
+    if branch:
+        # HACK/FIXME
+        if commitish in repo.remotes.origin.refs:
+            print(f"Creating new branch '{commitish}' to track 'origin/{commitish}'...")
+            remote = repo.remotes.origin
+            new_branch = repo.create_head(commitish, remote.refs[commitish])  # create local branch "master" from remote "master"
+            repo.heads[commitish].set_tracking_branch(remote.refs[commitish])  # set local "master" to track remote "master
+            commit = repo.commit(commitish)
+        else:
+            print(f"Creating new branch '{commitish}'...")
+            new_branch = repo.create_head(commitish)
+            repo.head.reference = new_branch
+            assert not repo.head.is_detached
+            commit = repo.head.commit
+    elif commitish:
         commit = repo.commit(commitish)
     else:
         commit = repo.head.commit
-
 
     wc = _get_working_copy(repo)
     if wc:
@@ -1150,6 +1164,20 @@ def fetch(ctx, args):
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
     os.execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
+
+
+@cli.command(context_settings=dict(
+    ignore_unknown_options=True,
+))
+@click.pass_context
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def branch(ctx, args):
+    repo_dir = ctx.obj['repo_dir'] or '.'
+    repo = git.Repo(repo_dir, **repo_params)
+    if not repo or not repo.bare:
+        raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
+
+    os.execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
 
 
 @cli.command(context_settings=dict(
