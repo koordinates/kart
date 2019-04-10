@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import time
 import typing
 import uuid
@@ -149,33 +150,30 @@ def _dump_gpkg_meta_info(db, layer):
 @click.argument('geopackage', type=click.Path(exists=True))
 @click.argument('table')
 def import_gpkg(ctx, geopackage, table):
+    """ Import a Koordinates GeoPackage to a new repository """
     click.echo(f'Importing {geopackage} ...')
 
     repo_dir = ctx.obj['repo_dir']
     if os.path.exists(repo_dir):
-        repo = git.Repo(repo_dir, **repo_params)
-        assert repo.bare, "Not a bare repository?!"
+        repo = pygit2.Repository(repo_dir)
+        assert repo.is_bare, "Not a bare repository?!"
 
-        assert not repo.heads, "Looks like you already have commits in this repository"
+        assert not repo.is_empty, "Looks like you already have commits in this repository"
     else:
         if not repo_dir.endswith('.git'):
-            raise click.BadParameter("Path should end in .git", param_hint="--repo")
-        repo = git.Repo.init(repo_dir, bare=True, **repo_params)
+            raise click.BadParameter("Path should end in .git for now", param_hint="--repo")
+        repo = pygit2.init_repository(repo_dir, bare=True)
 
     db = _get_db(geopackage)
     with db:
         dbcur = db.cursor()
 
-        index_entries = []
+        index = pygit2.Index()
         print("Writing meta bits...")
         for name, value in _dump_gpkg_meta_info(db, layer=table):
-            istream = repo.odb.store(gitdb.IStream(git.Blob.type, len(value), io.BytesIO(value.encode('utf8'))))
-            file_mode = 0o100644
-            entry = git.BaseIndexEntry((file_mode, istream.binsha, 0, f"{table}/meta/{name}"))
-            index_entries.append(entry)
-
-        git_index = repo.index
-        git_index.add(index_entries, write=False)
+            blob_id = repo.create_blob(value.encode('utf8'))
+            entry = pygit2.IndexEntry(f"{table}/meta/{name}", blob_id, pygit2.GIT_FILEMODE_BLOB)
+            index.add(entry)
 
         dbcur.execute(f"SELECT COUNT(*) FROM {sqlite_ident(table)};")
         row_count = dbcur.fetchone()[0]
@@ -201,7 +199,6 @@ def import_gpkg(ctx, geopackage, table):
         #     ...
 
         print(f"Query ran in {t1-t0:.1f}s")
-        index_entries = []
         for i, row in enumerate(dbcur):
             feature_id = str(uuid.uuid4())
 
@@ -212,38 +209,42 @@ def import_gpkg(ctx, geopackage, table):
                 if not isinstance(value, bytes):  # blob
                     value = json.dumps(value).encode('utf8')
 
-                istream = repo.odb.store(gitdb.IStream(git.Blob.type, len(value), io.BytesIO(value)))
-                file_mode = 0o100644
-                entry = git.BaseIndexEntry((file_mode, istream.binsha, 0, object_path))
-                index_entries.append(entry)
-            print(feature_id, object_path, field, value, entry)
+                blob_id = repo.create_blob(value)
+                entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
+                index.add(entry)
+            #print(feature_id, object_path, field, value, entry)
 
             if i and i % 500 == 0:
                 print(f"  {i+1} features... @{time.time()-t1:.1f}s")
 
         t2 = time.time()
-        print("Adding to index...")
-        git_index.add(index_entries, write=True)
-        t3 = time.time()
 
-        print(f"Added {i+1} Features to index in {t3-t2:.1f}s")
-        print(f"Overall rate: {((i+1)/(t3-t0)):.0f} features/s)")
+        print(f"Added {i+1} Features to index in {t2-t1:.1f}s")
+        print(f"Overall rate: {((i+1)/(t2-t0)):.0f} features/s)")
 
         print("Writing tree...")
-        tree_sha = git_index.write_tree()
-        print(f"Tree sha: {tree_sha}")
+        tree_id = index.write_tree(repo)
+        del index
+        t3 = time.time()
+        print(f"Tree sha: {tree_id} (in {(t3-t2):.0f}s)")
 
         print("Committing...")
-        commit = repo.index.commit(f"Import from {os.path.split(geopackage)[1]}")
-        print(f"Commit: {commit}")
-
-        master_ref = repo.create_head('master', commit)
-        repo.head.set_reference(master_ref)
+        user = repo.default_signature
+        commit = repo.create_commit(
+            'refs/heads/master',
+            user,
+            user,
+            f"Import from {os.path.split(geopackage)[1]}",
+            tree_id,
+            []
+        )
+        t4 = time.time()
+        print(f"Commit: {commit} (in {(t4-t3):.0f}s)")
 
         print(f"Garbage-collecting...")
-        t4 = time.time()
-        repo.git.gc()
-        print(f"GC completed in {time.time()-t4:.1f}s")
+        subprocess.check_call(['git', '-C', repo_dir, 'gc'])
+        t5 = time.time()
+        print(f"GC completed in {(t5-t4):.1f}s")
 
 
 class WorkingCopy(typing.NamedTuple):
