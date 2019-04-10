@@ -71,6 +71,12 @@ $ ln -sf $(pwd)/venv/bin/kxgit /usr/local/bin/kxgit
 
 # quit the virtualenv
 $ deactivate
+
+# check it's working (these should be the version numbers)
+$ kxgit --version
+kxgit proof of concept
+GDAL v2.4.0
+PyGit2 v0.28.0; Libgit2 v0.28.1
 ```
 
 Sources:

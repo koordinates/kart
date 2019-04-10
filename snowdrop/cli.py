@@ -35,7 +35,6 @@ def print_version(ctx, param, value):
     click.echo("kxgit proof of concept")
     click.echo(f"GDAL v{osgeo._gdal.__version__}")
     click.echo(f"PyGit2 v{pygit2.__version__}; Libgit2 v{pygit2.LIBGIT2_VERSION}")
-    click.echo(f"GitPython v{git.__version__}")
     ctx.exit()
 
 
