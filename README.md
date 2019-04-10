@@ -29,12 +29,14 @@ SnowDrop
 
 ### Max OS X
 
+You need [Homebrew](https://brew.sh/) installed.
+
 ```console
 $ git clone git@github.com:koordinates/snowdrop.git
 $ cd snowdrop
-$ brew install sqlite3
+$ brew install sqlite3 gdal cmake python
 
-# make our virtualenv
+# create our virtualenv
 $ virtualenv --python=python3.7 ./venv
 $ source venv/bin/activate
 
@@ -60,6 +62,15 @@ $ pip install .
 # install other dependencies
 $ cd ../..
 $ pip install -r requirements.txt
+$ ln -s /usr/local/lib/python3.7/site-packages/{gdal*.py,ogr.py,osr.py,osgeo} venv/lib/python3.7/site-packages/
+
+# install kxgit
+$ pip install -e .
+# make kxgit globally accessible
+$ ln -sf $(pwd)/venv/bin/kxgit /usr/local/bin/kxgit
+
+# quit the virtualenv
+$ deactivate
 ```
 
 Sources:
@@ -71,14 +82,17 @@ Sources:
    * With a single vector layer
    * Which has a primary key
    * Get the whole layer
-2. Import the GeoPackage into a kxgit repository
+2. Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository.
    ```console
    # find/check the table name in the Kx GeoPackage
    $ sqlite3 kx-foo-layer.gpkg 'SELECT table_name FROM gpkg_contents;'
+   # repo directory will be created
    $ kxgit --repo=/path/to/kx-foo-layer.git import-gpkg kx-foo-layer.gpkg foo_layer
    $ cd /path/to/kx-foo-layer.git
    ```
    This will create a _bare_ git repository at `/path/to/kx-foo-layer.git`. Normal git tools & commands will work in there (mostly).
+
+   Use this repository as the directory to run all the other commands in.
 3. Checkout a working copy to edit in eg. QGIS
    ```console
    # find/check the table name in the geopackage
@@ -102,3 +116,9 @@ Sources:
     * `git remote ...`. Remember simple remotes can just be another local directory.
     * `git reset --soft {commitish}`
     * `git tag ...`
+8. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
+   ```console
+   $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
+   # enter your gitea username/password when prompted
+   $ kxgit push --all --set-upstream origin
+   ```
