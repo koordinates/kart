@@ -287,7 +287,7 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
         if commitish in repo.remotes.origin.refs:
             print(f"Creating new branch '{commitish}' to track 'origin/{commitish}'...")
             remote = repo.remotes.origin
-            new_branch = repo.create_head(commitish, remote.refs[commitish])  # create local branch "master" from remote "master"
+            new_branch = repo.create_head(commitish, remote.refs[commitish])   # create local branch "master" from remote "master"
             repo.heads[commitish].set_tracking_branch(remote.refs[commitish])  # set local "master" to track remote "master
             commit = repo.commit(commitish)
         else:
@@ -319,6 +319,8 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
         fmt = 'GPKG'
 
     click.echo(f'Checkout {layer}@{commitish or "HEAD"} to {working_copy} as {fmt} ...')
+
+    repo.head.reset(commit=commit, working_tree=False, index=False)
 
     _checkout_new(repo, working_copy, layer, commit, fmt)
 
@@ -442,8 +444,6 @@ OFTMap = {
 def _checkout_new(repo, working_copy, layer, commit, fmt):
     if fmt != "GPKG":
         raise NotImplementedError(fmt)
-
-    repo.head.reset(commit=commit, working_tree=False, index=False)
 
     commit = repo.head.commit
     tree = commit.tree
@@ -1211,6 +1211,11 @@ def clone(repository, directory):
     subprocess.check_call(["git", "clone", "--bare", repository, repo_dir])
     subprocess.check_call(["git", "-C", repo_dir, "config", "--local", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"])
     subprocess.check_call(["git", "-C", repo_dir, "fetch"])
+
+    repo = git.Repo(repo_dir, **repo_params)
+    head_ref = repo.head.reference.name
+    subprocess.check_call(['git', "-C", repo_dir, 'config', f"branch.{head_ref}.remote", "origin"])
+    subprocess.check_call(['git', "-C", repo_dir, 'config', f"branch.{head_ref}.merge", "refs/heads/master"])
 
 
 if __name__ == "__main__":
