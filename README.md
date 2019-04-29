@@ -31,17 +31,23 @@ SnowDrop
 
 You need [Homebrew](https://brew.sh/) installed.
 
+#### For just general running/updating
 ```console
-$ git clone git@github.com:koordinates/snowdrop.git
+$ brew tap --force-auto-update koordinates/snowdrop git@github.com:koordinates/snowdrop.git
+$ brew install --HEAD kxgit
+```
+
+#### For developing snowdrop
+```
+$ git clone git@github.com:koordinates/snowdrop.git --branch=gitlike-2019
 $ cd snowdrop
-$ brew install sqlite3 gdal cmake python
+$ brew install --only-dependencies --HEAD HomebrewFormula/kxgit.rb
 
 # create our virtualenv
 $ virtualenv --python=python3.7 ./venv
 $ source venv/bin/activate
 
 # get libgit2/pygit2 stuff
-$ brew install --only-dependencies libgit2
 $ mkdir vendor
 $ git clone git@github.com:libgit2/libgit2.git vendor/libgit2
 $ git clone git@github.com:libgit2/pygit2.git vendor/pygit2
@@ -53,7 +59,7 @@ $ cmake . -DCMAKE_INSTALL_PREFIX=$LIBGIT2
 $ make
 $ make install
 
-# build pygit2 
+# build pygit2
 $ cd ../../vendor/pygit2
 $ export LIBGIT2=$VIRTUAL_ENV
 $ export LDFLAGS="-Wl,-rpath,'$LIBGIT2/lib' $LDFLAGS"
@@ -62,7 +68,7 @@ $ pip install .
 # install other dependencies
 $ cd ../..
 $ pip install -r requirements.txt
-$ ln -s /usr/local/lib/python3.7/site-packages/{gdal*.py,ogr.py,osr.py,osgeo} venv/lib/python3.7/site-packages/
+$ rm venv/lib/python*/site-packages/no-global-site-packages.txt
 
 # install kxgit
 $ pip install -e .
@@ -76,7 +82,7 @@ $ deactivate
 $ kxgit --version
 kxgit proof of concept
 GDAL v2.4.0
-PyGit2 v0.28.0; Libgit2 v0.28.1
+PyGit2 v0.28.0; Libgit2 v0.28.0
 ```
 
 Sources:
