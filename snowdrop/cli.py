@@ -1201,9 +1201,16 @@ def branch(ctx, args):
 @cli.command(context_settings=dict(
     ignore_unknown_options=True,
 ))
-@click.argument('args', nargs=-1, type=click.UNPROCESSED)
-def clone(args):
-    os.execvp("git", ["git", "clone", "--bare"] + list(args))
+@click.argument('repository', nargs=1)
+@click.argument('directory', required=False)
+def clone(repository, directory):
+    repo_dir = directory or os.path.split(repository)[1]
+    if not repo_dir.endswith('.git') or len(repo_dir) == 4:
+        raise click.BadParameter("Repository should be foo.git")
+
+    subprocess.check_call(["git", "clone", "--bare", repository, repo_dir])
+    subprocess.check_call(["git", "-C", repo_dir, "config", "--local", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"])
+    subprocess.check_call(["git", "-C", repo_dir, "fetch"])
 
 
 if __name__ == "__main__":
