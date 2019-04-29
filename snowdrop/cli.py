@@ -135,6 +135,12 @@ def _dump_gpkg_meta_info(db, layer):
     }
     try:
         for filename, (sql, params, rtype) in QUERIES.items():
+            # check table exists, the metadata ones may not
+            if not filename.startswith('sqlite_'):
+                dbcur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?;", (filename,))
+                if not dbcur.fetchone():
+                    continue
+
             dbcur.execute(sql, params)
             value = [collections.OrderedDict(sorted(zip(row.keys(), row))) for row in dbcur]
             if rtype is dict:
@@ -453,8 +459,14 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
     meta_geom = json.load((meta_tree / 'gpkg_geometry_columns').data_stream)
     meta_cols = json.load((meta_tree / 'sqlite_table_info').data_stream)
-    meta_md = json.load((meta_tree / 'gpkg_metadata').data_stream)
-    meta_md_ref = json.load((meta_tree / 'gpkg_metadata_reference').data_stream)
+    if 'gpkg_metadata' in meta_tree:
+        meta_md = json.load((meta_tree / 'gpkg_metadata').data_stream)
+    else:
+        meta_md = []
+    if 'gpkg_metadata_reference' in meta_tree:
+        meta_md_ref = json.load((meta_tree / 'gpkg_metadata_reference').data_stream)
+    else:
+        meta_md_ref = []
     meta_srs = json.load((meta_tree / 'gpkg_spatial_ref_sys').data_stream)
     geom_column_name = meta_geom['column_name']
 
@@ -779,7 +791,13 @@ def _build_db_diff(repo, layer, db, tree=None):
 
     meta_diff = {}
     for name, mv_new in _dump_gpkg_meta_info(db, layer):
-        mv_old = json.load((meta_tree / name).data_stream)
+        try:
+            mv_old = (meta_tree / name)
+        except KeyError:
+            mv_old = []
+        else:
+            mv_old = json.load(mv_old.data_stream)
+
         mv_new = json.loads(mv_new)
         if mv_old != mv_new:
             meta_diff[name] = (mv_old, mv_new)
