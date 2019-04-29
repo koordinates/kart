@@ -282,6 +282,8 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
     if not repo or not repo.bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
+    base_commit = repo.head.commit
+
     if branch:
         # HACK/FIXME
         if commitish in repo.remotes.origin.refs:
@@ -292,12 +294,16 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
             commit = repo.commit(commitish)
         else:
             print(f"Creating new branch '{commitish}'...")
+            commit = repo.head.commit
             new_branch = repo.create_head(commitish)
             repo.head.reference = new_branch
             assert not repo.head.is_detached
-            commit = repo.head.commit
+    elif commitish in repo.heads:
+        commit = repo.commit(commitish)
+        repo.head.reference = repo.heads[commitish]
     elif commitish:
         commit = repo.commit(commitish)
+        repo.head.reference = commitish
     else:
         commit = repo.head.commit
 
@@ -307,7 +313,7 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
             raise click.BadParameter(f"This repository already has a working copy at: {wc.path}", param_hint='WORKING_COPY')
 
         click.echo(f'Updating {wc.path} ...')
-        return _checkout_update(repo, wc.path, wc.layer, commit, force=force)
+        return _checkout_update(repo, wc.path, wc.layer, commit, force=force, base_commit=base_commit)
 
     # new working-copy path
     if not working_copy:
@@ -647,7 +653,18 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
         if not base_commit:
             base_commit = repo.head.commit
         base_tree = base_commit.tree
-        _assert_db_tree_match(db, table, base_tree)
+        try:
+            _assert_db_tree_match(db, table, base_tree)
+        except WorkingCopyMismatch as e:
+            if force:
+                try:
+                    # try and find the tree we _do_ have
+                    base_tree = repo.tree(e.working_copy_tree_id)
+                    print(f"Warning: {e}")
+                except ValueError:
+                    raise e
+            else:
+                raise
 
         # check for schema differences
         if base_tree.diff(tree, paths=f"{layer}/meta"):
@@ -910,12 +927,20 @@ def diff(ctx):
             if k in diff_add:
                 click.secho(_repr_row({k: diff_add[k]}, prefix='+ '), fg='green')
 
+class WorkingCopyMismatch(ValueError):
+    def __init__(self, working_copy_tree_id, match_tree_id):
+        self.working_copy_tree_id = working_copy_tree_id
+        self.match_tree_id = match_tree_id
+
+    def __str__(self):
+        return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.match_tree_id}"
 
 def _assert_db_tree_match(db, table, tree):
     dbcur = db.cursor()
     dbcur.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key=?;", (table, 'tree'))
     wc_tree_id = dbcur.fetchone()[0]
-    assert (wc_tree_id == str(tree)), f"Working Copy is tree {wc_tree_id}; expecting {tree}"
+    if (wc_tree_id != str(tree)):
+        raise WorkingCopyMismatch(wc_tree_id, str(tree))
     return wc_tree_id
 
 
