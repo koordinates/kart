@@ -7,3 +7,4 @@
 /node_modules
 /noms
 /vendor
+/tests/data/*/
