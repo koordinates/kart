@@ -477,13 +477,13 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
     meta_geom = json.load((meta_tree / 'gpkg_geometry_columns').data_stream)
     meta_cols = json.load((meta_tree / 'sqlite_table_info').data_stream)
-    if 'gpkg_metadata' in meta_tree:
+    try:
         meta_md = json.load((meta_tree / 'gpkg_metadata').data_stream)
-    else:
+    except KeyError:
         meta_md = []
-    if 'gpkg_metadata_reference' in meta_tree:
+    try:
         meta_md_ref = json.load((meta_tree / 'gpkg_metadata_reference').data_stream)
-    else:
+    except KeyError:
         meta_md_ref = []
     meta_srs = json.load((meta_tree / 'gpkg_spatial_ref_sys').data_stream)
     geom_column_name = meta_geom['column_name']
