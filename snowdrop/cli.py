@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 import time
 import typing
 import uuid
@@ -46,6 +47,17 @@ def print_version(ctx, param, value):
 def cli(ctx, repo_dir):
     ctx.ensure_object(dict)
     ctx.obj['repo_dir'] = repo_dir
+
+
+def _execvp(file, args):
+    if '_SNOWDROP_NO_EXEC' in os.environ:
+        # testing. This is pretty hackzy
+        p = subprocess.run([file] + args[1:], capture_output=True, encoding='utf-8')
+        sys.stdout.write(p.stdout)
+        sys.stderr.write(p.stderr)
+        sys.exit(p.returncode)
+    else:
+        os.execvp(file, args)
 
 
 def sqlite_ident(identifier):
@@ -1178,7 +1190,7 @@ def log(ctx, args):
     if not repo or not repo.bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    os.execvp("git", ["git", "-C", repo_dir, "log"] + list(args))
+    _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))
 
 
 @cli.command(context_settings=dict(
@@ -1192,7 +1204,7 @@ def push(ctx, args):
     if not repo or not repo.bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    os.execvp("git", ["git", "-C", repo_dir, "push"] + list(args))
+    _execvp("git", ["git", "-C", repo_dir, "push"] + list(args))
 
 
 @cli.command(context_settings=dict(
@@ -1206,7 +1218,7 @@ def fetch(ctx, args):
     if not repo or not repo.bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    os.execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
+    _execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
 
 
 @cli.command(context_settings=dict(
@@ -1220,7 +1232,7 @@ def branch(ctx, args):
     if not repo or not repo.bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    os.execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
+    _execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
 
 
 @cli.command(context_settings=dict(
