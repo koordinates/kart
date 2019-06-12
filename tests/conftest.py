@@ -45,7 +45,7 @@ def data_archive(request, tmp_path_factory):
     """
     @contextlib.contextmanager
     def _data_archive(name):
-        extract_dir = tmp_path_factory.mktemp(f"{request.node.name}__{name}")
+        extract_dir = tmp_path_factory.mktemp(request.node.name)
         cleanup = True
         try:
             archive_name = f"{name}.tgz"
@@ -133,11 +133,17 @@ class SnowdropCliRunner(CliRunner):
             # force everything to strings (eg. PathLike objects, numbers)
             args = [str(a) for a in args]
 
+        params = {
+            'catch_exceptions': False,
+        }
+        params.update(kwargs)
+
         L.debug("Invoking Click command: %s (%s)", args, kwargs)
-        r = super().invoke(cli, args=args, **kwargs)
+        r = super().invoke(cli, args=args, **params)
         L.debug("Command result: %s (%s)", r.exit_code, repr(r))
         L.debug("Command stdout=%s", r.stdout)
         L.debug("Command stderr=%s", (r.stderr if r.stderr_bytes else ''))
+
         return r
 
 

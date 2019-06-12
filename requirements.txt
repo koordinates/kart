@@ -6,8 +6,6 @@ cffi==1.12.1
 Click==7.0
 colorama==0.4.1
 decorator==4.3.2
-gitdb2==2.0.5
-GitPython==2.1.11
 ipdb==0.11
 ipython==7.2.0
 ipython-genutils==0.2.0
@@ -25,6 +23,5 @@ pycparser==2.17
 Pygments==2.3.1
 pytest==4.3.1
 six==1.12.0
-smmap2==2.0.5
 traitlets==4.3.2
 wcwidth==0.1.7

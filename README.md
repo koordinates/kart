@@ -35,6 +35,12 @@ You need [Homebrew](https://brew.sh/) installed.
 ```console
 $ brew tap --force-auto-update koordinates/snowdrop git@github.com:koordinates/snowdrop.git
 $ brew install --HEAD kxgit
+
+# check it's working (these should be the version numbers)
+$ kxgit --version
+kxgit proof of concept
+GDAL v2.4.0
+PyGit2 v0.28.0; Libgit2 v0.28.0
 ```
 
 #### For developing snowdrop
@@ -81,8 +87,8 @@ $ deactivate
 # check it's working (these should be the version numbers)
 $ kxgit --version
 kxgit proof of concept
-GDAL v2.4.0
-PyGit2 v0.28.0; Libgit2 v0.28.0
+GDAL v2.4.1
+PyGit2 v0.28.2; Libgit2 v0.28.0
 ```
 
 Sources:

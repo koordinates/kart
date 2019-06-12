@@ -12,20 +12,14 @@ import sys
 import time
 import typing
 import uuid
-from datetime import timezone
+from datetime import datetime, timezone
 
 import click
-import git
-import gitdb
 import pygit2
-from osgeo import gdal, ogr, osr
+from osgeo import gdal, ogr
 
 
 gdal.UseExceptions()
-
-repo_params = {
-    'odbt': git.GitCmdObjectDB,
-}
 
 
 def print_version(ctx, param, value):
@@ -270,15 +264,17 @@ class WorkingCopy(typing.NamedTuple):
     fmt: str
     layer: str
 
+
 def _get_working_copy(repo):
-    repo_cfg = repo.config_reader('repository')
-    if repo_cfg.has_option('kx', 'workingcopy'):
-        fmt, path, layer = repo_cfg.get('kx', 'workingcopy').split(':')
+    repo_cfg = repo.config
+    if 'kx.workingcopy' in repo_cfg:
+        fmt, path, layer = repo_cfg['kx.workingcopy'].split(':')
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Working copy missing? {path}")
         return WorkingCopy(fmt=fmt, path=path, layer=layer)
     else:
         return None
+
 
 @cli.command()
 @click.pass_context
@@ -290,34 +286,31 @@ def _get_working_copy(repo):
 @click.argument('commitish', default=None, required=False)
 def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
     repo_dir = ctx.obj['repo_dir']
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    base_commit = repo.head.commit
+    base_commit = repo.head.peel(pygit2.Commit)
 
     if branch:
-        # HACK/FIXME
-        if commitish in repo.remotes.origin.refs:
-            print(f"Creating new branch '{commitish}' to track 'origin/{commitish}'...")
-            remote = repo.remotes.origin
-            new_branch = repo.create_head(commitish, remote.refs[commitish])   # create local branch "master" from remote "master"
-            repo.heads[commitish].set_tracking_branch(remote.refs[commitish])  # set local "master" to track remote "master
-            commit = repo.commit(commitish)
+        commit = repo.revparse_single(commitish)
+        if commitish in repo.branches:
+            print(f"Creating new branch '{commitish}' to track '{commitish}'...")
+            new_branch = repo.create_branch(branch, commit, force)
+            new_branch.upstream = commitish
         else:
-            print(f"Creating new branch '{commitish}'...")
-            commit = repo.head.commit
-            new_branch = repo.create_head(commitish)
-            repo.head.reference = new_branch
-            assert not repo.head.is_detached
-    elif commitish in repo.heads:
-        commit = repo.commit(commitish)
-        repo.head.reference = repo.heads[commitish]
+            print(f"Creating new branch '{branch}'...")
+            new_branch = repo.create_branch(branch, commit, force)
+
+        repo.set_head(new_branch.name)
+    elif not commitish:  # HEAD
+        commit = repo.head.peel(pygit2.Commit)
+    elif commitish in repo.branches.local:
+        commit = repo.revparse_single(commitish)
+        repo.set_head(repo.branches.local[commitish].name)
     elif commitish:
-        commit = repo.commit(commitish)
-        repo.head.reference = commitish
-    else:
-        commit = repo.head.commit
+        commit = repo.revparse_single(commitish)
+        repo.set_head(commit.id)
 
     wc = _get_working_copy(repo)
     if wc:
@@ -338,27 +331,25 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
 
     click.echo(f'Checkout {layer}@{commitish or "HEAD"} to {working_copy} as {fmt} ...')
 
-    repo.head.reset(commit=commit, working_tree=False, index=False)
+    repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
     _checkout_new(repo, working_copy, layer, commit, fmt)
 
-    repo_cfg = repo.config_writer()
-    if not repo_cfg.has_section("kx"):
-        repo_cfg.add_section("kx")
-    repo_cfg.set("kx", "workingcopy", f"{fmt}:{working_copy}:{layer}")
-    repo_cfg.write()
-    del repo_cfg
+    repo.config["kx.workingcopy"] = f"{fmt}:{working_copy}:{layer}"
 
 
-def _feature_blobs_to_dict(blobs, geom_column_name):
+def _feature_blobs_to_dict(repo, tree_entries, geom_column_name):
     o = {}
-    for blob in blobs:
-        if blob.name == geom_column_name:
-            value = blob.data_stream.read()
+    for te in tree_entries:
+        assert te.type == 'blob'
+
+        blob = te.obj
+        if te.name == geom_column_name:
+            value = blob.data
             assert value[:2] == b'GP', "Not a standard GeoPackage geometry"
         else:
-            value = json.load(blob.data_stream)
-        o[blob.name] = value
+            value = json.loads(blob.data)
+        o[te.name] = value
     return o
 
 @contextlib.contextmanager
@@ -463,30 +454,32 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     if fmt != "GPKG":
         raise NotImplementedError(fmt)
 
-    commit = repo.head.commit
+    repo.reset(commit.id, pygit2.GIT_RESET_SOFT)
+
     tree = commit.tree
     click.echo(f'Commit: {commit} Tree: {tree}')
 
     layer_tree = commit.tree / layer
     meta_tree = layer_tree / 'meta'
-    meta_info = json.load((meta_tree / 'gpkg_contents').data_stream)
+    meta_info = json.loads((meta_tree / 'gpkg_contents').obj.data)
 
     if meta_info['table_name'] != layer:
         assert False, f"Layer mismatch (table_name={meta_info['table_name']}; layer={layer}"
     table = layer
 
-    meta_geom = json.load((meta_tree / 'gpkg_geometry_columns').data_stream)
-    meta_cols = json.load((meta_tree / 'sqlite_table_info').data_stream)
-    try:
-        meta_md = json.load((meta_tree / 'gpkg_metadata').data_stream)
-    except KeyError:
-        meta_md = []
-    try:
-        meta_md_ref = json.load((meta_tree / 'gpkg_metadata_reference').data_stream)
-    except KeyError:
-        meta_md_ref = []
-    meta_srs = json.load((meta_tree / 'gpkg_spatial_ref_sys').data_stream)
+    meta_geom = json.loads((meta_tree / 'gpkg_geometry_columns').obj.data)
+    meta_cols = json.loads((meta_tree / 'sqlite_table_info').obj.data)
+    meta_srs = json.loads((meta_tree / 'gpkg_spatial_ref_sys').obj.data)
     geom_column_name = meta_geom['column_name']
+
+    if 'gpkg_metadata' in meta_tree:
+        meta_md = json.loads((meta_tree / 'gpkg_metadata').obj.data)
+    else:
+        meta_md = {}
+    if 'gpkg_metadata_reference' in meta_tree:
+        meta_md_ref = json.loads((meta_tree / 'gpkg_metadata_reference').obj.data)
+    else:
+        meta_md_ref = {}
 
     # GDAL: Create GeoPackage
     # GDAL: Add metadata/etc
@@ -560,7 +553,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
         db.execute(f"CREATE TABLE __kxg_map (table_name TEXT NOT NULL, feature_key VARCHAR(36) NULL, feature_id INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0);")
         db.execute(f"CREATE TABLE __kxg_meta (table_name TEXT NOT NULL, key TEXT NOT NULL, value TEXT NULL);")
 
-        db.execute("INSERT INTO __kxg_meta (table_name, key, value) VALUES (?, ?, ?);", (table, 'tree', str(tree)))
+        db.execute("INSERT INTO __kxg_meta (table_name, key, value) VALUES (?, ?, ?);", (table, 'tree', tree.hex))
 
         click.echo("Creating features...")
         sql_insert_features = f"INSERT INTO {sqlite_ident(table)} ({','.join([sqlite_ident(k) for k in col_names])}) VALUES ({','.join(['?']*len(col_names))});"
@@ -570,12 +563,19 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
         wip_features = []
         wip_idmap = []
-        for ftree_prefix in (layer_tree / 'features').trees:
-            for ftree in ftree_prefix.trees:
-                feature = _feature_blobs_to_dict(ftree.blobs, geom_column_name)
+        for te_ftree_prefix in (layer_tree / 'features').obj:
+            if te_ftree_prefix.type != 'tree':
+                continue
+            ftree_prefix = te_ftree_prefix.obj
+
+            for te_ftree in ftree_prefix:
+                ftree = te_ftree.obj
+
+                te_blobs = [te for te in ftree if te.type == 'blob']
+                feature = _feature_blobs_to_dict(repo, te_blobs, geom_column_name)
 
                 wip_features.append([feature[c] for c in col_names])
-                wip_idmap.append([table, ftree.name, feature[pk_field]])
+                wip_idmap.append([table, te_ftree.name, feature[pk_field]])
                 feat_count += 1
 
                 if len(wip_features) == 1000:
@@ -599,6 +599,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
         # Update gpkg_contents
         # We do  spatial index built.
+        commit_time = datetime.utcfromtimestamp(commit.commit_time)
         dbcur.execute(f"""
             UPDATE gpkg_contents
             SET
@@ -611,7 +612,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
                 table_name=?;
             """,
             (
-                commit.committed_datetime.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),  # GPKG Spec Req.15
+                commit_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),  # GPKG Spec Req.15
                 table,
             )
         )
@@ -663,7 +664,7 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
 
         # this is where we're starting from
         if not base_commit:
-            base_commit = repo.head.commit
+            base_commit = repo.head.peel(pygit2.Commit)
         base_tree = base_commit.tree
         try:
             _assert_db_tree_match(db, table, base_tree)
@@ -679,12 +680,15 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                 raise
 
         # check for schema differences
-        if base_tree.diff(tree, paths=f"{layer}/meta"):
+        # TODO: libgit2 supports pathspec, pygit2 doesn't
+        base_meta_tree = (base_tree / layer / 'meta').obj
+        meta_tree = (tree / layer / 'meta').obj
+        if base_meta_tree.diff_to_tree(meta_tree):
             raise NotImplementedError("Sorry, no way to do changeset/meta/schema updates yet")
 
         meta_tree = commit.tree / layer / 'meta'
-        meta_cols = json.load((meta_tree / 'sqlite_table_info').data_stream)
-        meta_geom = json.load((meta_tree / 'gpkg_geometry_columns').data_stream)
+        meta_cols = json.loads((meta_tree / 'sqlite_table_info').obj.data)
+        meta_geom = json.loads((meta_tree / 'gpkg_geometry_columns').obj.data)
         geom_column_name = meta_geom['column_name']
 
         cols, pk_field = _get_columns(meta_cols)
@@ -699,18 +703,24 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
         # feature diff
         # todo: suspend/remove spatial index
         with _suspend_triggers(db, table):
-            diff_index = base_tree.diff(tree, paths=f"{layer}/features")
-            diff_index.sort(key=lambda d: (d.a_path, d.b_path))
+            base_index_tree = (base_tree / layer / 'features').obj
+            index_tree = (tree / layer / 'features').obj
+            diff_index = base_index_tree.diff_to_tree(index_tree)
+            diff_index_list = list(diff_index.deltas)
+            diff_index_list.sort(key=lambda d: (d.old_file.path, d.new_file.path))
 
             re_obj_path = re.compile(f'{re.escape(layer)}/features/[0-9a-f]{{4}}/(?P<fk>[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}})/')
             def _get_feature_key_a(diff):
-                m = re_obj_path.match(diff.a_path)
-                assert m, f"Diff object path doesn't match expected path pattern? '{diff.a_path}'"
+                m = re_obj_path.match(diff.old_file.path)
+                assert m, f"Diff object path doesn't match expected path pattern? '{diff.old_file.path}'"
                 return m.group('fk')
             def _get_feature_key_b(diff):
-                m = re_obj_path.match(diff.b_path)
-                assert m, f"Diff object path doesn't match expected path pattern? '{diff.b_path}'"
+                m = re_obj_path.match(diff.new_file.path)
+                assert m, f"Diff object path doesn't match expected path pattern? '{diff.new_file.path}'"
                 return m.group('fk')
+
+            print("DIFF INDEX", diff_index_list)
+            raise NotImplementedError
 
             # deletes
             wip_features = []
@@ -783,7 +793,7 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             # update the tree id
             db.execute("UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';", (str(tree), table))
 
-            repo.head.reset(commit=commit, working_tree=False, index=False)
+            repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
 
 def _repr_row(row, prefix=''):
@@ -812,26 +822,23 @@ def _build_db_diff(repo, layer, db, tree=None):
 
     if not tree:
         dbcur.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key=?;", (table, 'tree'))
-        tree = repo.tree(dbcur.fetchone()[0])
-        tree.path = ''  # HACK https://github.com/gitpython-developers/GitPython/issues/759
+        tree = repo[dbcur.fetchone()[0]]
+        assert tree.type == pygit2.GIT_OBJ_TREE, tree.type
 
     layer_tree = (tree / layer)
     meta_tree = (layer_tree / 'meta')
 
     meta_diff = {}
     for name, mv_new in _dump_gpkg_meta_info(db, layer):
-        try:
-            mv_old = (meta_tree / name)
-        except KeyError:
-            mv_old = []
+        if name in meta_tree:
+            mv_old = json.loads(repo[(meta_tree / name).id].data)
         else:
-            mv_old = json.load(mv_old.data_stream)
-
+            mv_old = []
         mv_new = json.loads(mv_new)
         if mv_old != mv_new:
             meta_diff[name] = (mv_old, mv_new)
 
-    meta_geom = json.load((meta_tree / 'gpkg_geometry_columns').data_stream)
+    meta_geom = json.loads(repo[(meta_tree / 'gpkg_geometry_columns').id].data)
 
     candidates = {'I':[],'U':{},'D':{}}
 
@@ -880,21 +887,18 @@ def _build_db_diff(repo, layer, db, tree=None):
 @click.pass_context
 def diff(ctx):
     repo_dir = ctx.obj['repo_dir']
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
-    repo_cfg = repo.config_reader('repository')
-    if not repo_cfg.has_option('kx', 'workingcopy'):
-        click.UsageError("No working-copy, use 'checkout'")
+    working_copy = _get_working_copy(repo)
+    assert os.path.isfile(working_copy.path), f"Working copy missing? {working_copy.path}"
 
-    fmt, working_copy, layer = repo_cfg.get('kx', 'workingcopy').split(':')
-    assert os.path.isfile(working_copy), f"Working copy missing? {working_copy}"
-
-    db = _get_db(working_copy, isolation_level='DEFERRED')
+    db = _get_db(working_copy.path, isolation_level='DEFERRED')
     with db:
-        _assert_db_tree_match(db, layer, repo.head.commit.tree)
-        diff = _build_db_diff(repo, layer, db)
+        head_tree = repo.head.peel(pygit2.Tree)
+        _assert_db_tree_match(db, working_copy.layer, head_tree)
+        diff = _build_db_diff(repo, working_copy.layer, db)
 
     for k, (v_old, v_new) in diff['META'].items():
         click.secho(f"--- meta/{k}\n+++ meta/{k}", bold=True)
@@ -939,6 +943,7 @@ def diff(ctx):
             if k in diff_add:
                 click.secho(_repr_row({k: diff_add[k]}, prefix='+ '), fg='green')
 
+
 class WorkingCopyMismatch(ValueError):
     def __init__(self, working_copy_tree_id, match_tree_id):
         self.working_copy_tree_id = working_copy_tree_id
@@ -947,12 +952,19 @@ class WorkingCopyMismatch(ValueError):
     def __str__(self):
         return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.match_tree_id}"
 
+
 def _assert_db_tree_match(db, table, tree):
     dbcur = db.cursor()
     dbcur.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key=?;", (table, 'tree'))
     wc_tree_id = dbcur.fetchone()[0]
-    if (wc_tree_id != str(tree)):
-        raise WorkingCopyMismatch(wc_tree_id, str(tree))
+
+    if isinstance(tree, pygit2.Tree):
+        tree_sha = tree.hex
+    else:  # gitpython
+        tree_sha = str(tree)
+
+    if (wc_tree_id != tree_sha):
+        raise WorkingCopyMismatch(wc_tree_id, tree_sha)
     return wc_tree_id
 
 
@@ -961,17 +973,16 @@ def _assert_db_tree_match(db, table, tree):
 @click.option('--message', '-m', required=True)
 def commit(ctx, message):
     repo_dir = ctx.obj['repo_dir']
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
-    commit = repo.head.commit
+    commit = repo.head.peel(pygit2.Commit)
     tree = commit.tree
 
-    repo_cfg = repo.config_reader('repository')
-    if not repo_cfg.has_option('kx', 'workingcopy'):
+    if 'kx.workingcopy' not in repo.config:
         click.UsageError("No working-copy, use 'checkout'")
 
-    fmt, working_copy, layer = repo_cfg.get('kx', 'workingcopy').split(':')
+    fmt, working_copy, layer = repo.config["kx.workingcopy"].split(':')
     assert os.path.isfile(working_copy), f"Working copy missing? {working_copy}"
 
     table = layer
@@ -988,22 +999,21 @@ def commit(ctx, message):
 
         dbcur = db.cursor()
 
-        index_remove_entries = []
-        index_add_entries = []
+        git_index = pygit2.Index()
+        git_index.read_tree(tree)
 
         for k, (obj_old, obj_new) in diff['META'].items():
             object_path = f"{layer}/meta/{k}"
             value = json.dumps(obj_new).encode('utf8')
 
-            istream = repo.odb.store(gitdb.IStream(git.Blob.type, len(value), io.BytesIO(value)))
-            file_mode = 0o100644
-            entry = git.BaseIndexEntry((file_mode, istream.binsha, 0, object_path))
-            index_add_entries.append(entry)
+            blob = repo.create_blob(value)
+            idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
+            git_index.add(idx_entry)
             click.secho(f"Δ {object_path}", fg='yellow')
 
         for feature_key in diff['D'].keys():
             object_path = f"{layer}/features/{feature_key[:4]}/{feature_key}"
-            index_remove_entries.append(object_path)
+            git_index.remove(object_path)
             click.secho(f"- {object_path}", fg='red')
 
             dbcur.execute("DELETE FROM __kxg_map WHERE table_name=? AND feature_key=?", (table, feature_key))
@@ -1016,10 +1026,10 @@ def commit(ctx, message):
                 if not isinstance(value, bytes):  # blob
                     value = json.dumps(value).encode('utf8')
 
-                istream = repo.odb.store(gitdb.IStream(git.Blob.type, len(value), io.BytesIO(value)))
-                file_mode = 0o100644
-                entry = git.BaseIndexEntry((file_mode, istream.binsha, 0, object_path))
-                index_add_entries.append(entry)
+                blob = repo.create_blob(value)
+                blob = repo.create_blob(value)
+                idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
+                git_index.add(idx_entry)
                 click.secho(f"+ {object_path}", fg='green')
 
             dbcur.execute("INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);", (table, feature_key, obj['fid']))
@@ -1040,40 +1050,37 @@ def commit(ctx, message):
                     if not isinstance(value, bytes):  # blob
                         value = json.dumps(value).encode('utf8')
 
-                    istream = repo.odb.store(gitdb.IStream(git.Blob.type, len(value), io.BytesIO(value)))
-                    file_mode = 0o100644
-                    entry = git.BaseIndexEntry((file_mode, istream.binsha, 0, object_path))
-                    index_add_entries.append(entry)
+                    blob = repo.create_blob(value)
+                    idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
+                    git_index.add(idx_entry)
                     click.secho(f"Δ {object_path}", fg='yellow')
                 else:
-                    index_remove_entries.append(object_path)
+                    git_index.remove(object_path)
                     click.secho(f"- {object_path}", fg='red')
 
         dbcur.execute("UPDATE __kxg_map SET state=0 WHERE table_name=? AND state != 0;", (table,))
 
-        print("Updating index...")
-        git_index = repo.index
-        git_index.reset(commit, working_tree=False)
-        if index_remove_entries:
-            git_index.remove(index_remove_entries, working_tree=False, r=True, write=False)
-        if index_add_entries:
-            git_index.add(index_add_entries, write=False)
-        git_index.write()
-
         print("Writing tree...")
-        new_tree = git_index.write_tree()
+        new_tree = git_index.write_tree(repo)
         print(f"Tree sha: {new_tree}")
 
         dbcur.execute("UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';", (str(new_tree), table))
         assert dbcur.rowcount == 1, f"__kxg_meta update: expected 1Δ, got {dbcur.rowcount}"
 
         print("Committing...")
-        new_commit = git_index.commit(message)
+        user = repo.default_signature
+        # this will also update the ref (branch) to point to the current commit
+        new_commit = repo.create_commit(
+            "HEAD",             # reference_name
+            user,               # author
+            user,               # committer
+            message,            # message
+            new_tree,           # tree
+            [repo.head.target]  # parents
+        )
         print(f"Commit: {new_commit}")
 
-        # update the ref (branch) to point to the current commit
-        if not repo.head.is_detached:
-            repo.head.ref.commit = new_commit
+        #TODO: update reflog
 
 
 @cli.command(help=(
@@ -1169,12 +1176,9 @@ def merge(ctx, ff, ff_only, commits):
         print(f"Merge commit: {commit_id}")
 
     # update our working copy
-    gpy_repo = git.Repo(repo_dir, **repo_params)
-    gpy_commit = gpy_repo.commit(commit_id)
-    gpy_base_commit = gpy_repo.commit(c_base.id)
-    wc = _get_working_copy(gpy_repo)
+    wc = _get_working_copy(repo)
     click.echo(f'Updating {wc.path} ...')
-    return _checkout_update(gpy_repo, wc.path, wc.layer, gpy_commit, base_commit=gpy_base_commit)
+    return _checkout_update(repo, wc.path, wc.layer, commit_id, base_commit=c_base.id)
 
 
 # straight process-replace commands
@@ -1186,8 +1190,8 @@ def merge(ctx, ff, ff_only, commits):
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 def log(ctx, args):
     repo_dir = ctx.obj['repo_dir'] or '.'
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
     _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))
@@ -1200,8 +1204,8 @@ def log(ctx, args):
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 def push(ctx, args):
     repo_dir = ctx.obj['repo_dir'] or '.'
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
     _execvp("git", ["git", "-C", repo_dir, "push"] + list(args))
@@ -1214,8 +1218,8 @@ def push(ctx, args):
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, args):
     repo_dir = ctx.obj['repo_dir'] or '.'
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
     _execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
@@ -1228,8 +1232,8 @@ def fetch(ctx, args):
 @click.argument('args', nargs=-1, type=click.UNPROCESSED)
 def branch(ctx, args):
     repo_dir = ctx.obj['repo_dir'] or '.'
-    repo = git.Repo(repo_dir, **repo_params)
-    if not repo or not repo.bare:
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
     _execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
@@ -1249,7 +1253,7 @@ def clone(repository, directory):
     subprocess.check_call(["git", "-C", repo_dir, "config", "--local", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"])
     subprocess.check_call(["git", "-C", repo_dir, "fetch"])
 
-    repo = git.Repo(repo_dir, **repo_params)
+    repo = pygit2.Repository(repo_dir)
     head_ref = repo.head.reference.name
     subprocess.check_call(['git', "-C", repo_dir, 'config', f"branch.{head_ref}.remote", "origin"])
     subprocess.check_call(['git', "-C", repo_dir, 'config', f"branch.{head_ref}.merge", "refs/heads/master"])
