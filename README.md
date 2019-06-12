@@ -27,7 +27,7 @@ SnowDrop
 
 ## Installing
 
-### Max OS X
+### macOS
 
 You need [Homebrew](https://brew.sh/) installed.
 
@@ -93,6 +93,14 @@ PyGit2 v0.28.2; Libgit2 v0.28.0
 
 Sources:
 * [pygit2: libgit2 within a virtual environment](https://www.pygit2.org/install.html#libgit2-within-a-virtual-environment)
+
+### Docker
+
+```console
+$ docker build -t snowdrop .
+# in repository/data directory
+$ /path/to/snowdrop/kxgit-docker.sh kxgit ...
+```
 
 ## Usage
 
