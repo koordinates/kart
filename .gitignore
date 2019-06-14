@@ -8,3 +8,6 @@
 /noms
 /vendor
 /tests/data/*/
+/coverage
+pytest.xml
+.coverage

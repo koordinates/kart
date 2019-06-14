@@ -1,0 +1,46 @@
+---
+steps:
+  - label: ":building_construction::docker: Build images"
+    command: ".buildkite/build-docker.sh"
+    env:
+      TEST_IMAGE: "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-tests-build-${BUILDKITE_BUILD_NUMBER}"
+      TEST_IMAGE_METADATA: "docker-compose-plugin-built-image-tag-tests-.buildkite/docker-compose.yml"
+
+  - wait
+
+  - label: ':pytest::docker::linux: tests'
+    artifact_paths:
+      - "pytest.xml"
+      - "coverage/**/*"
+    plugins:
+      docker-compose#v2.5.1:
+        run: tests
+        config: .buildkite/docker-compose.yml
+        image-repository: "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}"
+
+  - wait: ~
+    continue_on_failure: true
+
+  - label: ':pytest::floppy_disk: Save test results'
+    plugins:
+      junit-annotate#v1.4.1:
+        artifacts: "pytest.xml"
+
+  - label: ":pytest::coverage: Save test coverage report"
+    command: |
+      cat << EOF | buildkite-agent annotate --style "info" --context "test-coverage"
+        <a href="artifact://coverage/index.html">Test coverage report</a>
+      EOF
+
+  - wait
+
+  - label: ':postbox::docker: Publish images'
+    command:
+      - docker pull "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-${service_name}-build-${BUILDKITE_BUILD_NUMBER}"
+      - docker tag "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}"
+      - docker tag "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.latest"
+      - docker push "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}"
+      - docker push "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.latest"
+      - 'echo -e ":docker: ${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}" | buildkite-agent annotate --style info --context docker-tag'
+    retry:
+      automatic: true

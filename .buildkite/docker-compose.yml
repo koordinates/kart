@@ -1,0 +1,16 @@
+---
+version: '3.6'
+
+services:
+  tests:
+    build:
+      dockerfile: ../Dockerfile
+      context: ..
+    image: "${IMAGE}"
+    command: /src/.buildkite/run-tests.sh
+    user: root
+    working_dir: /src
+    volumes:
+      - "..:/src:delegated"
+    tmpfs:
+      - /tmp

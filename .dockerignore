@@ -9,10 +9,12 @@
 
 .coverage
 .coverage.*
-htmlcov
+htmlcov/
+coverage/
 
 .pytest_cache
 .tox
+pytest.xml
 
 build/
 dist/

@@ -3,9 +3,6 @@ FROM python:3.7-slim-stretch AS build-stage
 RUN python3 -m venv /venv
 ENV PATH=/venv/bin:${PATH}
 
-RUN mkdir /app /app/vendor
-WORKDIR /app
-
 RUN apt-get update -q \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -q -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends \
@@ -34,9 +31,19 @@ RUN mkdir ~/.gnupg \
     && gpg --batch --verify /tmp/tini.asc /venv/bin/tini \
     && chmod +x /venv/bin/tini
 
+ENV GOSU_VERSION 1.11
+ADD https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64 /venv/bin/gosu
+ADD https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64.asc /tmp/gosu.asc
+RUN gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
+    && gpg --batch --verify /tmp/gosu.asc /venv/bin/gosu \
+    && chmod +x /venv/bin/gosu
+
+RUN mkdir /app /app/vendor
+WORKDIR /app
+
 # Build LibGit2
 ENV LIBGIT2=/venv
-RUN git clone --branch merge-analysis-bare-repo-5017 --single-branch https://github.com/rcoup/libgit2.git /app/vendor/libgit2 \
+RUN git clone --branch master --single-branch https://github.com/libgit2/libgit2.git /app/vendor/libgit2 \
     && cd /app/vendor/libgit2 \
     && cmake . -DCMAKE_INSTALL_PREFIX=${LIBGIT2} \
     && make \
@@ -48,6 +55,7 @@ RUN git clone --branch better-tree-nav --single-branch https://github.com/rcoup/
     && cd /app/vendor/pygit2 \
     && pip install .
 
+# install GDAL
 RUN pip install pygdal=="$(gdal-config --version).*"
 
 COPY requirements.txt /app
@@ -56,7 +64,7 @@ RUN pip install -r requirements.txt
 COPY . /app
 
 RUN pip install /app
-RUN rm -r /venv/include /venv/share
+RUN rm -rf /venv/include /venv/share
 
 ###############################################################################
 
