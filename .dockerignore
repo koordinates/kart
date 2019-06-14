@@ -21,7 +21,7 @@ dist/
 venv/
 vendor/
 
-.buildkite
+.buildkite/
 
 Dockerfile
 

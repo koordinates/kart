@@ -43,7 +43,7 @@ WORKDIR /app
 
 # Build LibGit2
 ENV LIBGIT2=/venv
-RUN git clone --branch master --single-branch https://github.com/libgit2/libgit2.git /app/vendor/libgit2 \
+RUN git clone --branch kx-0.28 --single-branch https://github.com/rcoup/libgit2.git /app/vendor/libgit2 \
     && cd /app/vendor/libgit2 \
     && cmake . -DCMAKE_INSTALL_PREFIX=${LIBGIT2} \
     && make \
