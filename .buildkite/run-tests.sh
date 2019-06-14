@@ -12,6 +12,7 @@ gosu snowdrop git config --global user.email pytest-snowdrop@koordinates.com
 
 # run the actual test suite
 echo "+++ Running test suite..."
+chmod a+wrx ./ ./tests/
 cd tests
 gosu snowdrop pytest \
     --verbose \
