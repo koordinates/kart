@@ -52,6 +52,7 @@ docker build \
     .
 
 docker tag "${IMAGE}" "${CACHE_RUN_STAGE}"
+docker push "${IMAGE}"
 docker push "${CACHE_RUN_STAGE}"
 
 buildkite-agent meta-data set "${IMAGE_METADATA}" "${IMAGE}"
