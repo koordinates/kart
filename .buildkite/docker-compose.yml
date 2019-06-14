@@ -6,7 +6,6 @@ services:
     build:
       dockerfile: ../Dockerfile
       context: ..
-    image: "${IMAGE}"
     command: /src/.buildkite/run-tests.sh
     user: root
     working_dir: /src

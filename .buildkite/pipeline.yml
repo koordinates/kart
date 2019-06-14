@@ -3,8 +3,8 @@ steps:
   - label: ":building_construction::docker: Build images"
     command: ".buildkite/build-docker.sh"
     env:
-      TEST_IMAGE: "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-tests-build-${BUILDKITE_BUILD_NUMBER}"
-      TEST_IMAGE_METADATA: "docker-compose-plugin-built-image-tag-tests-.buildkite/docker-compose.yml"
+      IMAGE: "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-tests-build-${BUILDKITE_BUILD_NUMBER}"
+      IMAGE_METADATA: "docker-compose-plugin-built-image-tag-tests-.buildkite/docker-compose.yml"
 
   - wait
 
