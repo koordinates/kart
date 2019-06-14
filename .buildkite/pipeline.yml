@@ -1,9 +1,12 @@
 ---
+env:
+  DOCKER_CACHE_IMAGE: "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-tests-build-${BUILDKITE_BUILD_NUMBER}"
+
 steps:
   - label: ":building_construction::docker: Build images"
     command: ".buildkite/build-docker.sh"
     env:
-      IMAGE: "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-tests-build-${BUILDKITE_BUILD_NUMBER}"
+      IMAGE: "${DOCKER_CACHE_IMAGE}"
       IMAGE_METADATA: "docker-compose-plugin-built-image-tag-tests-.buildkite/docker-compose.yml"
 
   - wait
@@ -36,11 +39,20 @@ steps:
 
   - label: ':postbox::docker: Publish images'
     command:
-      - docker pull "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_PIPELINE_SLUG}-tests-build-${BUILDKITE_BUILD_NUMBER}"
-      - docker tag "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}"
-      - docker tag "${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.latest"
+      - docker pull "${DOCKER_CACHE_IMAGE}"
+      - docker tag "${DOCKER_CACHE_IMAGE}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}"
+      - docker tag "${DOCKER_CACHE_IMAGE}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.latest"
       - docker push "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}"
       - docker push "${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.latest"
       - 'echo -e ":docker: ${ECR}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.ci-${BUILDKITE_BUILD_NUMBER}" | buildkite-agent annotate --style info --context docker-tag'
+    retry:
+      automatic: true
+
+  - label: ':postbox::docker: Publish :latest image'
+    branches: "master"
+    command:
+      - docker pull "${DOCKER_CACHE_IMAGE}"
+      - docker tag "${DOCKER_CACHE_IMAGE}" "${ECR}/${BUILDKITE_PIPELINE_SLUG}:latest"
+      - docker push "${ECR}/${BUILDKITE_PIPELINE_SLUG}:latest"
     retry:
       automatic: true
