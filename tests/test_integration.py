@@ -1,8 +1,11 @@
+import re
 import subprocess
 
 import pytest  # noqa
 
 import pygit2
+
+from conftest import chdir
 
 """ Simple integration/E2E tests """
 
@@ -16,7 +19,7 @@ POINTS_INSERT = f"""
 """
 POINTS_RECORD = {
     'fid': 9999,
-    'geom': 'SRID=4326;POINT(0 0)',
+    'geom': 'POINT(0 0)',
     't50_fid': 9999999,
     'name_ascii': 'Te Motu-a-kore',
     'macronated': False,
@@ -24,6 +27,11 @@ POINTS_RECORD = {
 }
 
 
+def _last_change_time(db):
+    return db.execute(f"SELECT last_change FROM gpkg_contents WHERE table_name=?;", [POINTS_LAYER]).fetchone()[0]
+
+
+@pytest.mark.slow
 def test_import_geopackage(data_archive, tmp_path, cli_runner):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository. """
     with data_archive("gpkg-points") as data:
@@ -97,6 +105,12 @@ def test_log(data_archive, cli_runner):
         r = cli_runner.invoke(['log'])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
+            "commit d1bee0841307242ad7a9ab029dc73c652b9f74f3",
+            "Author: Robert Coup <robert@coup.net.nz>",
+            "Date:   Thu Jun 20 15:28:33 2019 +0100",
+            "",
+            "    Improve naming on Coromandel East coast",
+            "",
             "commit edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00",
             "Author: Robert Coup <robert@coup.net.nz>",
             "Date:   Tue Jun 11 12:03:58 2019 +0100",
@@ -113,6 +127,85 @@ def test_push(data_archive, tmp_path, cli_runner):
         r = cli_runner.invoke(['push', '--set-upstream', 'myremote', 'master'])
         assert r.exit_code == 0, r
 
+
+def test_checkout_detached(data_working_copy, cli_runner, geopackage):
+    """ Checkout a working copy to edit """
+    with data_working_copy("points.git") as (repo_dir, wc):
+        db = geopackage(wc)
+        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+
+        # checkout the previous commit
+        r = cli_runner.invoke(['checkout', 'edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00'])
+        assert r.exit_code == 0, r
+
+        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+
+
+def test_checkout_references(data_working_copy, cli_runner, geopackage):
+    with data_working_copy("points.git") as (repo_dir, wc):
+        db = geopackage(wc)
+
+        # checkout the HEAD commit
+        r = cli_runner.invoke(['checkout', 'HEAD'])
+        assert r.exit_code == 0, r
+
+        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+
+        # checkout the HEAD-but-1 commit
+        r = cli_runner.invoke(['checkout', 'HEAD~1'])
+        assert r.exit_code == 0, r
+
+        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+
+        # checkout the master HEAD via branch-name
+        r = cli_runner.invoke(['checkout', 'master'])
+        assert r.exit_code == 0, r
+
+        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+
+        # checkout a short-sha commit
+        r = cli_runner.invoke(['checkout', 'edd5a4b'])
+        assert r.exit_code == 0, r
+
+        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+
+        # checkout the master HEAD via refspec
+        r = cli_runner.invoke(['checkout', 'refs/heads/master'])
+        assert r.exit_code == 0, r
+
+        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+
+
+def test_version(cli_runner):
+    r = cli_runner.invoke(['--version'])
+    assert r.exit_code == 0, r
+    assert re.match(r'^kxgit proof of concept\nGDAL v\d\.\d+\.\d+.*?\nPyGit2 v\d\.\d+\.\d+[^;]*; Libgit2 v\d\.\d+\.\d+.*$', r.stdout)
+
+
+def test_clone(data_archive, tmp_path, cli_runner):
+    with data_archive("points.git") as remote_path:
+        with chdir(tmp_path):
+            r = cli_runner.invoke(['clone', remote_path])
+
+            repo_path = tmp_path / 'points.git'
+            assert repo_path.is_dir()
+
+        subprocess.check_call(["git", "-C", str(repo_path), "config", "--local", "--list"])
+
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.is_bare
+        assert not repo.is_empty
+        assert repo.head.name == "refs/heads/master"
+
+        branch = repo.branches.local[repo.head.shorthand]
+        assert branch.is_checked_out()
+        assert branch.is_head()
+        assert branch.upstream_name == "refs/remotes/origin/master"
+
+        assert len(repo.remotes) == 1
+        remote = repo.remotes['origin']
+        assert remote.url == str(remote_path)
+        assert remote.fetch_refspecs == ['+refs/heads/*:refs/remotes/origin/*']
 
 # TODO:
 # * `kxgit branch` & `kxgit checkout -b` branch management

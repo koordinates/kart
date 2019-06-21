@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import collections
 import contextlib
-import io
 import itertools
 import json
 import os
 import re
 import sqlite3
+import struct
 import subprocess
 import sys
 import time
@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 import click
 import pygit2
-from osgeo import gdal, ogr
+from osgeo import gdal, ogr, osr
 
 
 gdal.UseExceptions()
@@ -305,12 +305,17 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
         repo.set_head(new_branch.name)
     elif not commitish:  # HEAD
         commit = repo.head.peel(pygit2.Commit)
-    elif commitish in repo.branches.local:
-        commit = repo.revparse_single(commitish)
-        repo.set_head(repo.branches.local[commitish].name)
-    elif commitish:
-        commit = repo.revparse_single(commitish)
-        repo.set_head(commit.id)
+    else:
+        try:
+            if commitish in repo.branches.local:
+                commit = repo.revparse_single(commitish)
+                repo.set_head(repo.branches.local[commitish].name)
+        except pygit2.InvalidSpecError:
+            pass
+
+        if commitish:
+            commit = repo.revparse_single(commitish)
+            repo.set_head(commit.id)
 
     wc = _get_working_copy(repo)
     if wc:
@@ -346,11 +351,33 @@ def _feature_blobs_to_dict(repo, tree_entries, geom_column_name):
         blob = te.obj
         if te.name == geom_column_name:
             value = blob.data
-            assert value[:2] == b'GP', "Not a standard GeoPackage geometry"
         else:
             value = json.loads(blob.data)
         o[te.name] = value
     return o
+
+
+def _diff_feature_to_dict(repo, diff_deltas, geom_column_name, select):
+    o = {}
+    for dd in diff_deltas:
+        if select == 'old':
+            df = dd.old_file
+        elif select == 'new':
+            df = dd.new_file
+        else:
+            raise ValueError("select should be 'old' or 'new'")
+
+        blob = repo[df.id]
+        assert isinstance(blob, pygit2.Blob)
+
+        name = df.path.rsplit('/', 1)[-1]
+        if name == geom_column_name:
+            value = blob.data
+        else:
+            value = json.loads(blob.data)
+        o[name] = value
+    return o
+
 
 @contextlib.contextmanager
 def _suspend_triggers(db, table):
@@ -369,7 +396,7 @@ def _suspend_triggers(db, table):
         dbcur.execute("PRAGMA locking_mode;")
         orig_locking = dbcur.fetchone()[0];
 
-        if orig_locking.lower() != 'normal':
+        if orig_locking.lower() != 'exclusive':
             dbcur.execute("PRAGMA locking_mode=EXCLUSIVE;")
 
         try:
@@ -379,6 +406,9 @@ def _suspend_triggers(db, table):
             _create_triggers(db, table)
         finally:
             dbcur.execute(f"PRAGMA locking_mode={orig_locking};")
+            # Simply setting the locking-mode to NORMAL is not enough
+            # - locks are not released until the next time the database file is accessed.
+            dbcur.execute(f"SELECT COUNT(*) FROM gpkg_contents;")
 
 
 def _drop_triggers(dbcur, table):
@@ -489,6 +519,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
     db = _get_db(working_copy, isolation_level='DEFERRED')
     db.execute("PRAGMA synchronous = OFF;")
+    db.execute("PRAGMA locking_mode = EXCLUSIVE;")
     with db:
         dbcur = db.cursor()
 
@@ -618,6 +649,8 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
         )
         assert dbcur.rowcount == 1, f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
 
+        db.execute("PRAGMA locking_mode = NORMAL;")
+
     print(f"Added {feat_count} Features to GPKG") # in {t1-t0:.1f}s")
     print(f"Overall rate: {(feat_count/(t1-t0)):.0f} features/s)")
 
@@ -651,7 +684,6 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
     db.execute("PRAGMA synchronous = OFF;")
     with db:
         dbcur = db.cursor()
-        #dbcur.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
         # check for dirty working copy
         dbcur.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0;")
@@ -667,12 +699,13 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             base_commit = repo.head.peel(pygit2.Commit)
         base_tree = base_commit.tree
         try:
-            _assert_db_tree_match(db, table, base_tree)
+            _assert_db_tree_match(db, table, base_tree.id)
         except WorkingCopyMismatch as e:
             if force:
                 try:
                     # try and find the tree we _do_ have
-                    base_tree = repo.tree(e.working_copy_tree_id)
+                    base_tree = repo[e.working_copy_tree_id]
+                    assert isinstance(base_tree, pygit2.Tree)
                     print(f"Warning: {e}")
                 except ValueError:
                     raise e
@@ -709,25 +742,25 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             diff_index_list = list(diff_index.deltas)
             diff_index_list.sort(key=lambda d: (d.old_file.path, d.new_file.path))
 
-            re_obj_path = re.compile(f'{re.escape(layer)}/features/[0-9a-f]{{4}}/(?P<fk>[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}})/')
+            re_obj_a_path = re.compile(f'[0-9a-f]{{4}}/(?P<fk>[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}})/')
+            re_obj_b_path = re.compile(f'{re.escape(layer)}/features/[0-9a-f]{{4}}/(?P<fk>[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}})/')
             def _get_feature_key_a(diff):
-                m = re_obj_path.match(diff.old_file.path)
+                m = re_obj_a_path.match(diff.old_file.path)
                 assert m, f"Diff object path doesn't match expected path pattern? '{diff.old_file.path}'"
                 return m.group('fk')
             def _get_feature_key_b(diff):
-                m = re_obj_path.match(diff.new_file.path)
+                m = re_obj_b_path.match(diff.new_file.path)
                 assert m, f"Diff object path doesn't match expected path pattern? '{diff.new_file.path}'"
                 return m.group('fk')
 
-            print("DIFF INDEX", diff_index_list)
-            raise NotImplementedError
+            def _filter_delta_status(*statuses):
+                return filter(lambda d: d.status in statuses, diff_index_list)
 
             # deletes
             wip_features = []
             wip_idmap = []
-            for feature_key, feature_diffs in itertools.groupby(diff_index.iter_change_type('D'), _get_feature_key_a):  # D=delete
-                a_blobs = [diff.a_blob for diff in feature_diffs]
-                feature = _feature_blobs_to_dict(a_blobs, geom_column_name)
+            for feature_key, feature_diffs in itertools.groupby(_filter_delta_status(pygit2.GIT_DELTA_DELETED), _get_feature_key_a):
+                feature = _diff_feature_to_dict(repo, feature_diffs, geom_column_name, select='old')
                 wip_features.append((feature[pk_field],))
                 wip_idmap.append((table, feature_key))
 
@@ -738,32 +771,30 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                 assert dbcur.rowcount == len(wip_features), f"checkout delete-id: expected Δ{len(wip_features)} changes, got {dbcur.rowcount}"
 
             # updates
-            for feature_key, feature_diffs in itertools.groupby(diff_index.iter_change_type('M'), _get_feature_key_a):  # M=modified
-                b_blobs = [diff.b_blob for diff in feature_diffs]
-                b_feature = _feature_blobs_to_dict(b_blobs, geom_column_name)
+            for feature_key, feature_diffs in itertools.groupby(_filter_delta_status(pygit2.GIT_DELTA_MODIFIED), _get_feature_key_a):
+                feature = _diff_feature_to_dict(repo, feature_diffs, geom_column_name, select='new')
 
-                if b_feature:
+                if feature:
                     sql_update_feature = f"""
                         UPDATE {sqlite_ident(table)}
-                        SET {','.join([f'{sqlite_ident(k)}=?' for k in b_feature.keys()])}
+                        SET {','.join([f'{sqlite_ident(k)}=?' for k in feature.keys()])}
                         WHERE {sqlite_ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
                     """
-                    params = list(b_feature.values()) + [table, feature_key]
+                    params = list(feature.values()) + [table, feature_key]
                     dbcur.execute(sql_update_feature, params)
                     assert dbcur.rowcount == 1, f"checkout update: expected Δ1, got {dbcur.rowcount}"
 
-                    if 'fid' in b_feature:
+                    if 'fid' in feature:
                         # fid change
                         sql_update_id = f"UPDATE __kxg_map SET feature_id=? WHERE table_name=? AND feature_key=?;"
-                        dbcur.execute(sql_update_id, (b_feature[pk_field], table, feature_key))
+                        dbcur.execute(sql_update_id, (feature[pk_field], table, feature_key))
                         assert dbcur.rowcount == 1, f"checkout update-id: expected Δ1, got {dbcur.rowcount}"
 
             # adds/inserts
             wip_features = []
             wip_idmap = []
-            for feature_key, feature_diffs in itertools.groupby(diff_index.iter_change_type('A'), _get_feature_key_b):  # A=add
-                b_blobs = [diff.b_blob for diff in feature_diffs]
-                feature = _feature_blobs_to_dict(b_blobs, geom_column_name)
+            for feature_key, feature_diffs in itertools.groupby(_filter_delta_status(pygit2.GIT_DELTA_ADDED), _get_feature_key_b):
+                feature = _diff_feature_to_dict(repo, feature_diffs, geom_column_name, select='new')
                 wip_features.append([feature[c] for c in col_names])
                 wip_idmap.append((table, feature_key, feature[pk_field]))
 
@@ -771,7 +802,21 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                 dbcur.executemany(sql_insert_feature, wip_features)
                 dbcur.executemany(sql_insert_id, wip_idmap)
 
+            # unexpected things
+            unsupported_deltas = _filter_delta_status(
+                pygit2.GIT_DELTA_COPIED,
+                pygit2.GIT_DELTA_IGNORED,
+                pygit2.GIT_DELTA_RENAMED,
+                pygit2.GIT_DELTA_TYPECHANGE,
+                pygit2.GIT_DELTA_UNMODIFIED,
+                pygit2.GIT_DELTA_UNREADABLE,
+                pygit2.GIT_DELTA_UNTRACKED,
+            )
+            if any(unsupported_deltas):
+                raise NotImplementedError("Deltas for unsupported diff states:\n" + diff_index.stats.format(pygit2.GIT_DIFF_STATS_FULL | pygit2.GIT_DIFF_STATS_INCLUDE_SUMMARY, 80))
+
             # Update gpkg_contents
+            commit_time = datetime.utcfromtimestamp(commit.commit_time)
             dbcur.execute(f"""
                 UPDATE gpkg_contents
                 SET
@@ -784,16 +829,63 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                     table_name=?;
                 """,
                 (
-                    commit.committed_datetime.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ'),  # GPKG Spec Req.15
+                    commit_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ'),  # GPKG Spec Req.15
                     table,
                 )
             )
             assert dbcur.rowcount == 1, f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
 
             # update the tree id
-            db.execute("UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';", (str(tree), table))
+            db.execute("UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';", (tree.hex, table))
 
             repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
+
+
+def _gpkg_geom_to_ogr(gpkg_geom, parse_srs=False):
+    """
+    Parse GeoPackage geometry values to an OGR Geometry object
+    http://www.geopackage.org/spec/#gpb_format
+    """
+    if gpkg_geom is None:
+        return None
+
+    if not isinstance(gpkg_geom, bytes):
+        raise TypeError("Expected bytes")
+
+    if gpkg_geom[0:2] != b'GP':  # 0x4750
+        raise ValueError("Expected GeoPackage Binary Geometry")
+    (version, flags) = struct.unpack_from('BB', gpkg_geom, 2)
+    if version != 0:
+        raise NotImplementedError("Expected GeoPackage v1 geometry, got %d", version)
+
+    is_le = (flags & 0b0000001) != 0  # Endian-ness
+
+    if flags & (0b00100000):  # GeoPackageBinary type
+        raise NotImplementedError("ExtendedGeoPackageBinary")
+
+    envelope_typ = (flags & 0b000001110) >> 1
+    wkb_offset = 8
+    if envelope_typ == 1:
+        wkb_offset += 32
+    elif envelope_typ in (2, 3):
+        wkb_offset += 48
+    elif envelope_typ == 4:
+        wkb_offset += 64
+    elif envelope_typ > 4:
+        wkb_offset += 32
+    else:  # 0
+        pass
+
+    geom = ogr.CreateGeometryFromWkb(gpkg_geom[wkb_offset:])
+
+    if parse_srs:
+        srid = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
+        if srid > 0:
+            srs = osr.SpatialReference()
+            srs.ImportFromEPSG(srid)
+            geom.AssignSpatialReference(srs)
+
+    return geom
 
 
 def _repr_row(row, prefix=''):
@@ -804,12 +896,12 @@ def _repr_row(row, prefix=''):
 
         v = row[k]
 
-        if isinstance(v, bytes) and v[:2] == b'GP':
-            g = ogr.CreateGeometryFromWkb(v[40:])  # FIXME
+        if isinstance(v, bytes):
+            g = _gpkg_geom_to_ogr(v)
             v = f"{g.GetGeometryName()}(...)"
             del g
 
-        v = "NULL" if v is None else v
+        v = "␀" if v is None else v
         m.append("{prefix}{k:>40} = {v}".format(k=k, v=v, prefix=prefix))
 
     return "\n".join(m)
@@ -838,9 +930,9 @@ def _build_db_diff(repo, layer, db, tree=None):
         if mv_old != mv_new:
             meta_diff[name] = (mv_old, mv_new)
 
-    meta_geom = json.loads(repo[(meta_tree / 'gpkg_geometry_columns').id].data)
+    meta_geom = json.loads((meta_tree / 'gpkg_geometry_columns').obj.data)
 
-    candidates = {'I':[],'U':{},'D':{}}
+    candidates = {'I': [], 'U': {}, 'D': {}}
 
     diff_sql = f"""
         SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __fid, T.*
@@ -854,7 +946,7 @@ def _build_db_diff(repo, layer, db, tree=None):
         ORDER BY M.feature_key;
     """
     for row in dbcur.execute(diff_sql, (table,)):
-        o = {k:row[k] for k in row.keys() if not k.startswith('__')}
+        o = {k: row[k] for k in row.keys() if not k.startswith('__')}
         if row["__s"] < 0:
             candidates['D'][row['__fk']] = o
         elif row['__fk'] is None:
@@ -871,8 +963,14 @@ def _build_db_diff(repo, layer, db, tree=None):
 
     features_tree = (tree / layer / 'features')
     for feature_key, db_obj in candidates['U'].items():
-        ftree = (features_tree / feature_key[:4] / feature_key)
-        repo_obj = _feature_blobs_to_dict(ftree.blobs, meta_geom['column_name'])
+        ftree = (features_tree / feature_key[:4] / feature_key).obj
+        assert ftree.type == pygit2.GIT_OBJ_TREE
+
+        repo_obj = _feature_blobs_to_dict(
+            repo=repo,
+            tree_entries=ftree,
+            geom_column_name=meta_geom['column_name'],
+        )
 
         s_old = set(repo_obj.items())
         s_new = set(db_obj.items())
@@ -892,7 +990,7 @@ def diff(ctx):
         raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
 
     working_copy = _get_working_copy(repo)
-    assert os.path.isfile(working_copy.path), f"Working copy missing? {working_copy.path}"
+    assert working_copy, f"No working copy? Try `kxgit checkout`"
 
     db = _get_db(working_copy.path, isolation_level='DEFERRED')
     with db:
@@ -958,10 +1056,7 @@ def _assert_db_tree_match(db, table, tree):
     dbcur.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key=?;", (table, 'tree'))
     wc_tree_id = dbcur.fetchone()[0]
 
-    if isinstance(tree, pygit2.Tree):
-        tree_sha = tree.hex
-    else:  # gitpython
-        tree_sha = str(tree)
+    tree_sha = tree.hex
 
     if (wc_tree_id != tree_sha):
         raise WorkingCopyMismatch(wc_tree_id, tree_sha)
@@ -988,7 +1083,6 @@ def commit(ctx, message):
     table = layer
 
     db = _get_db(working_copy, isolation_level='DEFERRED')
-    #db.execute("PRAGMA locking_mode = EXCLUSIVE;")
     with db:
         _assert_db_tree_match(db, table, tree)
 
@@ -1026,7 +1120,6 @@ def commit(ctx, message):
                 if not isinstance(value, bytes):  # blob
                     value = json.dumps(value).encode('utf8')
 
-                blob = repo.create_blob(value)
                 blob = repo.create_blob(value)
                 idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
                 git_index.add(idx_entry)
@@ -1254,9 +1347,9 @@ def clone(repository, directory):
     subprocess.check_call(["git", "-C", repo_dir, "fetch"])
 
     repo = pygit2.Repository(repo_dir)
-    head_ref = repo.head.reference.name
-    subprocess.check_call(['git', "-C", repo_dir, 'config', f"branch.{head_ref}.remote", "origin"])
-    subprocess.check_call(['git', "-C", repo_dir, 'config', f"branch.{head_ref}.merge", "refs/heads/master"])
+    head_ref = repo.head.shorthand  # master
+    subprocess.check_call(['git', "-C", repo_dir, 'config', "--local", f"branch.{head_ref}.remote", "origin"])
+    subprocess.check_call(['git', "-C", repo_dir, 'config', "--local", f"branch.{head_ref}.merge", "refs/heads/master"])
 
 
 if __name__ == "__main__":
