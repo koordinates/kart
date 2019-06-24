@@ -140,6 +140,20 @@ def test_log(data_archive, cli_runner):
         ]
 
 
+def test_show(data_archive, cli_runner):
+    """ review commit history """
+    with data_archive("points.git"):
+        r = cli_runner.invoke(['show'])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "commit d1bee0841307242ad7a9ab029dc73c652b9f74f3",
+            "Author: Robert Coup <robert@coup.net.nz>",
+            "Date:   Thu Jun 20 15:28:33 2019 +0100",
+            "",
+            "    Improve naming on Coromandel East coast",
+        ]
+
+
 def test_push(data_archive, tmp_path, cli_runner):
     with data_archive("points.git") as repo:
         subprocess.run(['git', 'init', '--bare', tmp_path], check=True)

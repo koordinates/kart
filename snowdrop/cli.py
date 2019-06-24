@@ -1353,5 +1353,11 @@ def clone(repository, directory):
     subprocess.check_call(['git', "-C", repo_dir, 'config', "--local", f"branch.{head_ref}.merge", "refs/heads/master"])
 
 
+@cli.command()
+@click.pass_context
+def show(ctx):
+    ctx.invoke(log, args=['-1'])
+
+
 if __name__ == "__main__":
     cli()
