@@ -394,7 +394,7 @@ def _suspend_triggers(db, table):
     with cm:
         dbcur = db.cursor()
         dbcur.execute("PRAGMA locking_mode;")
-        orig_locking = dbcur.fetchone()[0];
+        orig_locking = dbcur.fetchone()[0]
 
         if orig_locking.lower() != 'exclusive':
             dbcur.execute("PRAGMA locking_mode=EXCLUSIVE;")
@@ -408,7 +408,7 @@ def _suspend_triggers(db, table):
             dbcur.execute(f"PRAGMA locking_mode={orig_locking};")
             # Simply setting the locking-mode to NORMAL is not enough
             # - locks are not released until the next time the database file is accessed.
-            dbcur.execute(f"SELECT COUNT(*) FROM gpkg_contents;")
+            dbcur.execute(f"SELECT table_name FROM gpkg_contents LIMIT 1;")
 
 
 def _drop_triggers(dbcur, table):
@@ -479,6 +479,7 @@ OFTMap = {
     'TEXT': ogr.OFTString,
     'REAL': ogr.OFTReal,
 }
+
 
 def _checkout_new(repo, working_copy, layer, commit, fmt):
     if fmt != "GPKG":

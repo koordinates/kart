@@ -93,6 +93,9 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
     @contextlib.contextmanager
     def _data_working_copy(name):
         with data_archive(name) as repo_dir:
+            if name.endswith('.git'):
+                name = name[:-4]
+
             wc_path = repo_dir / f"{name}.gpkg"
             if not wc_path.exists():
                 wc_path = tmp_path / f"{name}.gpkg"
@@ -106,6 +109,8 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                 r = cli_runner.invoke(['checkout', f'--working-copy={wc_path}', f'--layer={layer}'])
                 assert r.exit_code == 0, r
                 L.debug("Checkout result: %s", r)
+            else:
+                L.info("Existing working copy at: %s", wc_path)
 
             yield repo_dir, wc_path
 

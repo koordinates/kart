@@ -1,16 +1,19 @@
+import hashlib
 import re
+import sqlite3
 import subprocess
+from pathlib import Path
 
 import pytest  # noqa
 
 import pygit2
 
-from conftest import chdir
+from snowdrop import cli
 
 """ Simple integration/E2E tests """
 
 POINTS_LAYER = "nz_pa_points_topo_150k"
-
+POINTS_LAYER_PK = "fid"
 POINTS_INSERT = f"""
     INSERT INTO {POINTS_LAYER}
                     (fid, geom, t50_fid, name_ascii, macronated, name)
@@ -28,7 +31,23 @@ POINTS_RECORD = {
 
 
 def _last_change_time(db):
+    """
+    Get the last change time from the GeoPackage DB.
+    This is the same as the commit time.
+    """
     return db.execute(f"SELECT last_change FROM gpkg_contents WHERE table_name=?;", [POINTS_LAYER]).fetchone()[0]
+
+
+def _clear_working_copy(repo_path="."):
+    """ Delete any existing working copy & associated config """
+    repo = pygit2.Repository(repo_path)
+    if 'kx.workingcopy' in repo.config:
+        print(f"Deleting existing working copy: {repo.config['kx.workingcopy']}")
+        fmt, working_copy, layer = repo.config["kx.workingcopy"].split(':')
+        working_copy = Path(working_copy)
+        if working_copy.exists():
+            working_copy.unlink()
+        del repo.config['kx.workingcopy']
 
 
 @pytest.mark.slow
@@ -51,6 +70,8 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
 def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
     """ Checkout a working copy to edit """
     with data_archive("points.git"):
+        _clear_working_copy()
+
         wc = tmp_path / "data.gpkg"
         r = cli_runner.invoke(
             ["checkout", f"--layer={POINTS_LAYER}", f"--working-copy={wc}"]
@@ -182,9 +203,10 @@ def test_version(cli_runner):
     assert re.match(r'^kxgit proof of concept\nGDAL v\d\.\d+\.\d+.*?\nPyGit2 v\d\.\d+\.\d+[^;]*; Libgit2 v\d\.\d+\.\d+.*$', r.stdout)
 
 
-def test_clone(data_archive, tmp_path, cli_runner):
+def test_clone(data_archive, tmp_path, cli_runner, monkeypatch):
     with data_archive("points.git") as remote_path:
-        with chdir(tmp_path):
+        with monkeypatch.context() as m:
+            m.chdir(tmp_path)
             r = cli_runner.invoke(['clone', remote_path])
 
             repo_path = tmp_path / 'points.git'
@@ -206,6 +228,33 @@ def test_clone(data_archive, tmp_path, cli_runner):
         remote = repo.remotes['origin']
         assert remote.url == str(remote_path)
         assert remote.fetch_refspecs == ['+refs/heads/*:refs/remotes/origin/*']
+
+
+def test_geopackage_locking_edit(data_working_copy, geopackage, cli_runner, monkeypatch):
+    with data_working_copy('points.git') as (repo, wc):
+        db = geopackage(wc)
+
+        is_checked = False
+        orig_func = cli._diff_feature_to_dict
+
+        def _wrap(*args, **kwargs):
+            print("hi!", args, kwargs)
+            nonlocal is_checked
+            if not is_checked:
+                with pytest.raises(sqlite3.OperationalError, match=r'database is locked'):
+                    db.execute("UPDATE gpkg_context SET table_name=table_name;")
+                is_checked = True
+
+            return orig_func(*args, **kwargs)
+
+        monkeypatch.setattr(cli, '_diff_feature_to_dict', _wrap)
+
+        r = cli_runner.invoke(['checkout', 'edd5a4b'])
+        assert r.exit_code == 0, r
+        assert is_checked
+
+        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+
 
 # TODO:
 # * `kxgit branch` & `kxgit checkout -b` branch management
