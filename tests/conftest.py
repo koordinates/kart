@@ -91,12 +91,20 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
     @contextlib.contextmanager
-    def _data_working_copy(name):
+    def _data_working_copy(name, force_new=False):
         with data_archive(name) as repo_dir:
             if name.endswith('.git'):
                 name = name[:-4]
 
             wc_path = repo_dir / f"{name}.gpkg"
+            if wc_path.exists():
+                if force_new:
+                    wc_path.unlink()
+                    repo = pygit2.Repository(str(repo_dir))
+                    del repo.config['kx.workingcopy']
+                else:
+                    L.info("Existing working copy at: %s", wc_path)
+
             if not wc_path.exists():
                 wc_path = tmp_path / f"{name}.gpkg"
 
@@ -109,8 +117,6 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                 r = cli_runner.invoke(['checkout', f'--working-copy={wc_path}', f'--layer={layer}'])
                 assert r.exit_code == 0, r
                 L.debug("Checkout result: %s", r)
-            else:
-                L.info("Existing working copy at: %s", wc_path)
 
             yield repo_dir, wc_path
 
@@ -139,7 +145,7 @@ class SnowdropCliRunner(CliRunner):
             args = [str(a) for a in args]
 
         params = {
-            'catch_exceptions': False,
+            'catch_exceptions': True,
         }
         params.update(kwargs)
 
@@ -148,6 +154,9 @@ class SnowdropCliRunner(CliRunner):
         L.debug("Command result: %s (%s)", r.exit_code, repr(r))
         L.debug("Command stdout=%s", r.stdout)
         L.debug("Command stderr=%s", (r.stderr if r.stderr_bytes else ''))
+
+        if r.exception and not isinstance(r.exception, SystemExit):
+            raise r.exception
 
         return r
 

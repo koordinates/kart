@@ -50,6 +50,18 @@ def _clear_working_copy(repo_path="."):
         del repo.config['kx.workingcopy']
 
 
+def _db_table_hash(db, table, pk=None):
+    if pk is None:
+        pk = 'ROWID'
+
+    sql = f"SELECT * FROM {table} ORDER BY {pk};"
+    r = db.execute(sql)
+    h = hashlib.sha1()
+    for row in r:
+        h.update('|'.join(repr(col) for col in row).encode('utf-8'))
+    return h.hexdigest()
+
+
 @pytest.mark.slow
 def test_import_geopackage(data_archive, tmp_path, cli_runner):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository. """
@@ -211,6 +223,64 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage):
         assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
 
 
+def test_checkout_reset(data_working_copy, cli_runner, geopackage):
+    """
+    Check that we reset any working-copy changes correctly before doing any new checkout
+    """
+    with data_working_copy("points.git", force_new=True) as (repo_dir, wc):
+        db = geopackage(wc)
+
+        h_before = _db_table_hash(db, POINTS_LAYER, POINTS_LAYER_PK)
+
+        with db:
+            cur = db.cursor()
+            cur.execute(POINTS_INSERT, POINTS_RECORD)
+            assert cur.rowcount == 1
+            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid < 5;")
+            assert cur.rowcount == 4
+            cur.execute(f"UPDATE {POINTS_LAYER} SET t50_fid = 888888 WHERE fid>=10 AND fid<15;")
+            assert cur.rowcount == 5
+            cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=20;")
+            assert cur.rowcount == 1
+
+            change_count = db.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0").fetchone()[0]
+            assert change_count == (1 + 4 + 5 + 1)
+
+        # this should error
+        r = cli_runner.invoke(['checkout', 'HEAD'])
+        assert r.exit_code == 1, r
+
+        change_count = db.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0").fetchone()[0]
+        assert change_count == (1 + 4 + 5 + 1)
+
+        # do again with --force
+        r = cli_runner.invoke(['checkout', '--force', 'HEAD'])
+        assert r.exit_code == 0, r
+
+        change_count = db.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0").fetchone()[0]
+        assert change_count == 0
+
+        h_after = _db_table_hash(db, POINTS_LAYER, POINTS_LAYER_PK)
+        if h_before != h_after:
+            r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid=9999;")
+            if r.fetchone():
+                print("E: Newly inserted row is still there (fid=9999)")
+            r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid < 5;")
+            if r.fetchone()[0] != 4:
+                print("E: Deleted rows fid<5 still missing")
+            r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE t50_fid = 888888;")
+            if r.fetchone()[0] != 0:
+                print("E: Updated rows not reset")
+            r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid = 9998;")
+            if r.fetchone():
+                print("E: Updated pk row is still there (fid=20 -> 9998)")
+            r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid = 20;")
+            if not r.fetchone():
+                print("E: Updated pk row is missing (fid=20)")
+
+        assert h_before == h_after
+
+
 def test_version(cli_runner):
     r = cli_runner.invoke(['--version'])
     assert r.exit_code == 0, r
@@ -252,7 +322,6 @@ def test_geopackage_locking_edit(data_working_copy, geopackage, cli_runner, monk
         orig_func = cli._diff_feature_to_dict
 
         def _wrap(*args, **kwargs):
-            print("hi!", args, kwargs)
             nonlocal is_checked
             if not is_checked:
                 with pytest.raises(sqlite3.OperationalError, match=r'database is locked'):
