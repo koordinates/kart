@@ -1066,7 +1066,7 @@ def _build_db_diff(repo, layer, db, tree=None):
     for row in dbcur.execute(diff_sql, (table,)):
         o = {k: row[k] for k in row.keys() if not k.startswith('__')}
         if row["__s"] < 0:
-            candidates['D'][row['__fk']] = o
+            candidates['D'][row['__fk']] = {}
         elif row['__fk'] is None:
             candidates['I'].append(o)
         else:
@@ -1080,21 +1080,22 @@ def _build_db_diff(repo, layer, db, tree=None):
     }
 
     features_tree = (tree / layer / 'features')
-    for feature_key, db_obj in candidates['U'].items():
-        ftree = (features_tree / feature_key[:4] / feature_key).obj
-        assert ftree.type == pygit2.GIT_OBJ_TREE
+    for op in ('U', 'D'):
+        for feature_key, db_obj in candidates[op].items():
+            ftree = (features_tree / feature_key[:4] / feature_key).obj
+            assert ftree.type == pygit2.GIT_OBJ_TREE
 
-        repo_obj = _feature_blobs_to_dict(
-            repo=repo,
-            tree_entries=ftree,
-            geom_column_name=meta_geom['column_name'],
-        )
+            repo_obj = _feature_blobs_to_dict(
+                repo=repo,
+                tree_entries=ftree,
+                geom_column_name=meta_geom['column_name'],
+            )
 
-        s_old = set(repo_obj.items())
-        s_new = set(db_obj.items())
+            s_old = set(repo_obj.items())
+            s_new = set(db_obj.items())
 
-        if s_old ^ s_new:
-            results['U'][feature_key] = (repo_obj, db_obj)
+            if s_old ^ s_new:
+                results[op][feature_key] = (repo_obj, db_obj)
 
     return results
 
@@ -1132,9 +1133,9 @@ def diff(ctx):
             if k in diff_add:
                 click.secho(_repr_row({k: diff_add[k]}, prefix='+ '), fg='green')
 
-    for k, o in diff['D'].items():
+    for k, (v_old, v_new) in diff['D'].items():
         click.secho(f"--- {k}", bold=True)
-        click.secho(_repr_row(o, prefix='- '), fg='red')
+        click.secho(_repr_row(v_old, prefix='- '), fg='red')
 
     for o in diff['I']:
         click.secho("+++ {new feature}", bold=True)

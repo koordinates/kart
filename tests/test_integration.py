@@ -101,11 +101,26 @@ def test_diff(data_working_copy, geopackage, cli_runner):
     with data_working_copy("points.git") as (repo, wc):
         db = geopackage(wc)
         with db:
-            db.execute(POINTS_INSERT, POINTS_RECORD)
+            cur = db.cursor()
+            cur.execute(POINTS_INSERT, POINTS_RECORD)
+            assert cur.rowcount == 1
+            cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+            assert cur.rowcount == 1
+            cur.execute(f"UPDATE {POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;")
+            assert cur.rowcount == 1
+            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
+            assert cur.rowcount == 1
 
         r = cli_runner.invoke(['diff'])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
+            "--- 2bad8ad5-97aa-4910-9e6c-c6e8e692700d",
+            "-                                      fid = 3",
+            "-                                     geom = POINT(...)",
+            "-                               macronated = N",
+            "-                                     name = Tauwhare Pa",
+            "-                               name_ascii = Tauwhare Pa",
+            "-                                  t50_fid = 2426273",
             "+++ {new feature}",
             "+                                      fid = 9999",
             "+                                     geom = POINT(...)",
@@ -113,6 +128,17 @@ def test_diff(data_working_copy, geopackage, cli_runner):
             "+                               name_ascii = Te Motu-a-kore",
             "+                               macronated = 0",
             "+                                     name = Te Motu-a-kore",
+            "--- 7416b7ab-992d-4595-ab96-39a186f5968a",
+            "+++ 7416b7ab-992d-4595-ab96-39a186f5968a",
+            "-                                      fid = 1",
+            "+                                      fid = 9998",
+            "--- 905a8ae1-8346-4b42-8646-42385beac87f",
+            "+++ 905a8ae1-8346-4b42-8646-42385beac87f",
+            "                                       fid = 2",
+            "-                                  t50_fid = 2426272",
+            "+                                  t50_fid = ␀",
+            "-                                     name = ␀",
+            "+                                     name = test",
         ]
 
 
