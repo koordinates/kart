@@ -1225,7 +1225,7 @@ def commit(ctx, message):
 
         for feature_key in diff['D'].keys():
             object_path = f"{layer}/features/{feature_key[:4]}/{feature_key}"
-            git_index.remove(object_path)
+            git_index.remove_all([f"{object_path}/**"])
             click.secho(f"- {object_path}", fg='red')
 
             dbcur.execute("DELETE FROM __kxg_map WHERE table_name=? AND feature_key=?", (table, feature_key))

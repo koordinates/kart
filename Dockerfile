@@ -50,7 +50,7 @@ RUN git clone --branch kx-0.28 --single-branch https://github.com/rcoup/libgit2.
     && make install
 
 # build pygit2
-RUN git clone --branch better-tree-nav --single-branch https://github.com/rcoup/pygit2.git /app/vendor/pygit2 \
+RUN git clone --branch kx-0.28 --single-branch https://github.com/rcoup/pygit2.git /app/vendor/pygit2 \
     && export LDFLAGS="-Wl,-rpath='${LIBGIT2}/lib',--enable-new-dtags $LDFLAGS" \
     && cd /app/vendor/pygit2 \
     && pip install .

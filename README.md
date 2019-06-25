@@ -40,7 +40,7 @@ $ brew install --HEAD kxgit
 $ kxgit --version
 kxgit proof of concept
 GDAL v2.4.0
-PyGit2 v0.28.0; Libgit2 v0.28.0
+PyGit2 v0.28.2; Libgit2 v0.28.0
 ```
 
 #### For developing snowdrop
@@ -55,8 +55,8 @@ $ source venv/bin/activate
 
 # get libgit2/pygit2 stuff
 $ mkdir vendor
-$ git clone git@github.com:libgit2/libgit2.git vendor/libgit2
-$ git clone git@github.com:libgit2/pygit2.git vendor/pygit2
+$ git clone --branch=kx-0.28 git@github.com:rcoup/libgit2.git vendor/libgit2
+$ git clone --branch=kx-0.28 git@github.com:rcoup/pygit2.git vendor/pygit2
 
 # build libgit2
 $ cd vendor/libgit2

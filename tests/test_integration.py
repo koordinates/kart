@@ -121,7 +121,17 @@ def test_commit(data_working_copy, geopackage, cli_runner):
     with data_working_copy("points.git") as (repo, wc):
         db = geopackage(wc)
         with db:
-            db.execute(POINTS_INSERT, POINTS_RECORD)
+            cur = db.cursor()
+            cur.execute(POINTS_INSERT, POINTS_RECORD)
+            assert cur.rowcount == 1
+            cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+            assert cur.rowcount == 1
+            cur.execute(f"UPDATE {POINTS_LAYER} SET name='test' WHERE fid=2;")
+            assert cur.rowcount == 1
+            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
+            assert cur.rowcount == 1
+            fk_del = cur.execute(f"SELECT feature_key FROM __kxg_map WHERE feature_id=3;").fetchone()[0]
+            print("deleted {fk_del}")
 
         r = cli_runner.invoke(['commit', '-m', 'test-commit-1'])
         assert r.exit_code == 0, r
@@ -130,6 +140,9 @@ def test_commit(data_working_copy, geopackage, cli_runner):
 
         r = pygit2.Repository(str(repo))
         assert str(r.head.target) == commit_id
+
+        tree = r.head.peel(pygit2.Tree)
+        assert f"{POINTS_LAYER}/features/{fk_del[:4]}/{fk_del}/geom" not in tree
 
 
 def test_log(data_archive, cli_runner):
