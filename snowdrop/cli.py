@@ -1392,6 +1392,187 @@ def merge(ctx, ff, ff_only, commits):
     return _checkout_update(repo, wc.path, wc.layer, commit_id, base_commit=c_base.id)
 
 
+@cli.command(help=(
+    "Incorporates changes from the named commits (usually other branch heads) into the current branch."
+),
+context_settings=dict(
+    ignore_unknown_options=True,
+))
+@click.pass_context
+@click.argument('args', nargs=-1, type=click.UNPROCESSED)
+def fsck(ctx, args):
+    repo_dir = ctx.obj['repo_dir'] or '.'
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
+        raise click.BadParameter("Not an existing bare repository?", param_hint='--repo')
+
+    click.echo("Checking repository integrity...")
+    r = subprocess.call(['git', "-C", repo_dir, "fsck"] + list(args))
+    if r:
+        click.Abort()
+
+    # now check our stuff:
+    # 1. working copy
+
+    if 'kx.workingcopy' not in repo.config:
+        click.echo("No working-copy configured")
+        return
+
+    fmt, working_copy, layer = repo.config["kx.workingcopy"].split(':')
+    if not os.path.isfile(working_copy):
+        raise click.ClickException(click.style(f"Working copy missing: {working_copy}", fg='red'))
+
+    click.secho(f"✔︎ Working copy: {working_copy}", fg='green')
+    click.echo(f"Layer: {layer}")
+
+    db = _get_db(working_copy, isolation_level='DEFERRED')
+    with db:
+        tree = repo.head.peel(pygit2.Tree)
+
+        # compare repo tree id to what's in the DB
+        try:
+            oid = _assert_db_tree_match(db, layer, tree)
+            click.secho(f"✔︎ Working Copy tree id matches repository: {oid}", fg='green')
+        except WorkingCopyMismatch as e:
+            # try and find the tree we _do_ have
+            click.secho(f"✘ Repository tree is: {tree.id}", fg='red')
+            click.secho(f"✘ Working Copy tree is: {e.working_copy_tree_id}", fg='red')
+            click.echo("This might be fixable via `checkout --force`")
+            raise click.Abort()
+
+        q = db.execute(f"SELECT COUNT(*) FROM {sqlite_ident(layer)};")
+        row_count = q.fetchone()[0]
+        click.echo(f"{row_count} features in {layer}")
+
+        # compare the DB to the index (meta & __kxg_map)
+        index = _db_to_index(db, layer, tree)
+        diff_index = tree.diff_to_index(index)
+        num_changes = len(diff_index)
+        if num_changes:
+            click.secho(f"! Working copy appears dirty: {num_changes} change(s)", fg="yellow")
+
+        meta_prefix = f"{layer}/meta/"
+        meta_changes = [dd for dd in diff_index.deltas if dd.old_file.path.startswith(meta_prefix) or dd.new_file.path.startswith(meta_prefix)]
+        if meta_changes:
+            click.secho(f"! {meta_prefix} ({len(meta_changes)}):", fg="yellow")
+
+            for dd in meta_changes:
+                m = f"  {dd.status_char()}  {dd.old_file.path}"
+                if dd.new_file.path != dd.old_file.path:
+                    m += f" → {dd.new_file.path}"
+                click.echo(m)
+
+        feat_prefix = f"{layer}/features/"
+        feat_changes = sorted([dd for dd in diff_index.deltas if dd.old_file.path.startswith(feat_prefix) or dd.new_file.path.startswith(feat_prefix)], key=lambda d: d.old_file.path)
+        if feat_changes:
+            click.secho(f"! {feat_prefix} ({len(feat_changes)}):", fg="yellow")
+
+            for dd in feat_changes:
+                m = f"  {dd.status_char()}  {dd.old_file.path}"
+                if dd.new_file.path != dd.old_file.path:
+                    m += f" → {dd.new_file.path}"
+                click.echo(m)
+
+        # __kxg_map
+        click.echo("__kxg_map rows:")
+        q = db.execute("""
+            SELECT state, COUNT(*)
+            FROM __kxg_map
+            WHERE
+                table_name = ?
+            GROUP BY state;
+        """, [layer])
+        MAP_STATUS = {
+            -1: "Deleted",
+            0: "Unchanged",
+            1: "Added/Updated",
+        }
+        total = 0
+        for row in q.fetchall():
+            click.echo(f"  {MAP_STATUS[row[0]]}: {row[1]}")
+            total += row[1]
+        click.echo(f"  Total: {total}")
+
+        if total == row_count:
+            click.secho(f"✔︎ Row counts match", fg='green')
+        else:
+            raise click.ClickException(click.style(f"✘ Row count mismatch", fg='red'))
+
+        if num_changes:
+            # can't proceed with content comparison for dirty working copies
+            click.echo("Can't do any further checks")
+            return
+
+        click.echo("Checking features...")
+        q = db.execute(f"""
+            SELECT M.feature_key AS __fk, M.feature_id AS __fid, T.*
+            FROM __kxg_map AS M
+                LEFT OUTER JOIN {sqlite_ident(layer)} AS T
+                ON (M.feature_id = T.fid)
+            WHERE
+                M.table_name = ?
+            UNION ALL
+            SELECT M.feature_key AS __fk, M.feature_id AS __fid, T.*
+            FROM {sqlite_ident(layer)} AS T
+                LEFT OUTER JOIN __kxg_map AS M
+                ON (T.fid = M.feature_id)
+            WHERE
+                M.table_name = ?
+                AND M.feature_id IS NULL
+            ORDER BY M.feature_key;
+        """, [layer, layer])
+        has_err = False
+        feature_tree = tree / layer / 'features'
+        for i, row in enumerate(q):
+            if i and i % 1000 == 0:
+                click.echo(f"  {i}...")
+
+            fkey = row['__fk']
+            fid_m = row['__fid']
+            fid_t = row['fid']
+
+            if fid_m is None:
+                click.secho(f"  ✘ Missing __kxg_map feature (fid={fid_t})", fg='red')
+                has_err = True
+                continue
+            elif fid_t is None:
+                click.secho(f"  ✘ Missing {layer} feature {fkey} (fid={fid_m})", fg='red')
+                has_err = True
+                continue
+
+            try:
+                obj_tree = feature_tree / fkey[:4] / fkey
+            except KeyError:
+                click.secho(f"  ✘ Feature {fkey} (fid={fid_m}) not found in repository", fg='red')
+                has_err = True
+                continue
+
+            for field in row.keys():
+                if field.startswith('__'):
+                    continue
+
+                try:
+                    blob = (obj_tree / field).obj
+                except KeyError:
+                    click.secho(f"  ✘ Feature {fkey} (fid={fid_m}) not found in repository", fg='red')
+                    has_err = True
+                    continue
+
+                value = row[field]
+                if not isinstance(value, bytes):  # blob
+                    value = json.dumps(value).encode('utf8')
+
+                if blob.id != pygit2.hash(value):
+                    click.secho(f"  ✘ Field value mismatch: {fkey}/{field}", fg='red')
+                    has_err = True
+                    continue
+
+        if has_err:
+            raise click.Abort()
+
+    click.secho("✔︎ Everything looks good", fg='green')
+
+
 # straight process-replace commands
 
 @cli.command(context_settings=dict(

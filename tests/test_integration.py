@@ -339,6 +339,22 @@ def test_geopackage_locking_edit(data_working_copy, geopackage, cli_runner, monk
         assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
 
 
+def test_fsck(data_working_copy, geopackage, cli_runner):
+    with data_working_copy('points.git') as (repo, wc):
+        db = geopackage(wc)
+
+        r = cli_runner.invoke(['fsck'])
+        assert r.exit_code == 0, r
+
+        # introduce a feature mismatch
+        with db:
+            db.execute(f"UPDATE {POINTS_LAYER} SET name='fred' WHERE fid=1;")
+            db.execute("UPDATE __kxg_map SET state=0 WHERE feature_id=1;")
+
+        r = cli_runner.invoke(['fsck'])
+        assert r.exit_code == 1, r
+
+
 # TODO:
 # * `kxgit branch` & `kxgit checkout -b` branch management
 # * `kxgit fetch` fetch upstream changes.
