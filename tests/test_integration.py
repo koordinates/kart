@@ -101,6 +101,12 @@ def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
 def test_diff(data_working_copy, geopackage, cli_runner):
     """ diff the working copy against the repository (no index!) """
     with data_working_copy("points.git") as (repo, wc):
+        # empty
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == []
+
+        # make some changes
         db = geopackage(wc)
         with db:
             cur = db.cursor()
@@ -149,6 +155,12 @@ def test_diff(data_working_copy, geopackage, cli_runner):
 def test_commit(data_working_copy, geopackage, cli_runner):
     """ commit outstanding changes from the working copy """
     with data_working_copy("points.git") as (repo, wc):
+        # empty
+        r = cli_runner.invoke(["commit", "-m", "test-commit-0"])
+        assert r.exit_code == 1, r
+        assert r.stdout.splitlines() == ['Error: No changes to commit']
+
+        # make some changes
         db = geopackage(wc)
         with db:
             cur = db.cursor()

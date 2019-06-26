@@ -1358,7 +1358,7 @@ def commit(ctx, message):
     tree = commit.tree
 
     if "kx.workingcopy" not in repo.config:
-        click.UsageError("No working-copy, use 'checkout'")
+        raise click.UsageError("No working-copy, use 'checkout'")
 
     fmt, working_copy, layer = repo.config["kx.workingcopy"].split(":")
     assert os.path.isfile(working_copy), f"Working copy missing? {working_copy}"
@@ -1371,8 +1371,7 @@ def commit(ctx, message):
 
         diff = _build_db_diff(repo, layer, db)
         if not any(diff.values()):
-            print("No changes to commit")
-            return
+            raise click.ClickException("No changes to commit")
 
         dbcur = db.cursor()
 
