@@ -43,6 +43,7 @@ def data_archive(request, tmp_path_factory):
 
     Context-manager produces the directory path and sets the current working directory.
     """
+
     @contextlib.contextmanager
     def _data_archive(name):
         extract_dir = tmp_path_factory.mktemp(request.node.name)
@@ -90,10 +91,11 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
+
     @contextlib.contextmanager
     def _data_working_copy(name, force_new=False):
         with data_archive(name) as repo_dir:
-            if name.endswith('.git'):
+            if name.endswith(".git"):
                 name = name[:-4]
 
             wc_path = repo_dir / f"{name}.gpkg"
@@ -101,7 +103,7 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                 if force_new:
                     wc_path.unlink()
                     repo = pygit2.Repository(str(repo_dir))
-                    del repo.config['kx.workingcopy']
+                    del repo.config["kx.workingcopy"]
                 else:
                     L.info("Existing working copy at: %s", wc_path)
 
@@ -114,7 +116,9 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                 layer = tree[0].name
 
                 L.info("Checking out %s to %s", layer, wc_path)
-                r = cli_runner.invoke(['checkout', f'--working-copy={wc_path}', f'--layer={layer}'])
+                r = cli_runner.invoke(
+                    ["checkout", f"--working-copy={wc_path}", f"--layer={layer}"]
+                )
                 assert r.exit_code == 0, r
                 L.debug("Checkout result: %s", r)
 
@@ -126,6 +130,7 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
 @pytest.fixture
 def geopackage():
     """ Return a sqlite3 db connection for the specified DB, with spatialite loaded """
+
     def _geopackage(path, **kwargs):
         db = sqlite3.connect(path, **kwargs)
         db.row_factory = sqlite3.Row
@@ -140,20 +145,19 @@ def geopackage():
 class SnowdropCliRunner(CliRunner):
     def invoke(self, args=None, **kwargs):
         from snowdrop.cli import cli
+
         if args:
             # force everything to strings (eg. PathLike objects, numbers)
             args = [str(a) for a in args]
 
-        params = {
-            'catch_exceptions': True,
-        }
+        params = {"catch_exceptions": True}
         params.update(kwargs)
 
         L.debug("Invoking Click command: %s (%s)", args, kwargs)
         r = super().invoke(cli, args=args, **params)
         L.debug("Command result: %s (%s)", r.exit_code, repr(r))
         L.debug("Command stdout=%s", r.stdout)
-        L.debug("Command stderr=%s", (r.stderr if r.stderr_bytes else ''))
+        L.debug("Command stderr=%s", (r.stderr if r.stderr_bytes else ""))
 
         if r.exception and not isinstance(r.exception, SystemExit):
             raise r.exception

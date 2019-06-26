@@ -21,12 +21,12 @@ POINTS_INSERT = f"""
                     (:fid, AsGPB(GeomFromEWKT(:geom)), :t50_fid, :name_ascii, :macronated, :name);
 """
 POINTS_RECORD = {
-    'fid': 9999,
-    'geom': 'POINT(0 0)',
-    't50_fid': 9999999,
-    'name_ascii': 'Te Motu-a-kore',
-    'macronated': False,
-    'name': 'Te Motu-a-kore',
+    "fid": 9999,
+    "geom": "POINT(0 0)",
+    "t50_fid": 9_999_999,
+    "name_ascii": "Te Motu-a-kore",
+    "macronated": False,
+    "name": "Te Motu-a-kore",
 }
 
 
@@ -35,30 +35,32 @@ def _last_change_time(db):
     Get the last change time from the GeoPackage DB.
     This is the same as the commit time.
     """
-    return db.execute(f"SELECT last_change FROM gpkg_contents WHERE table_name=?;", [POINTS_LAYER]).fetchone()[0]
+    return db.execute(
+        f"SELECT last_change FROM gpkg_contents WHERE table_name=?;", [POINTS_LAYER]
+    ).fetchone()[0]
 
 
 def _clear_working_copy(repo_path="."):
     """ Delete any existing working copy & associated config """
     repo = pygit2.Repository(repo_path)
-    if 'kx.workingcopy' in repo.config:
+    if "kx.workingcopy" in repo.config:
         print(f"Deleting existing working copy: {repo.config['kx.workingcopy']}")
-        fmt, working_copy, layer = repo.config["kx.workingcopy"].split(':')
+        fmt, working_copy, layer = repo.config["kx.workingcopy"].split(":")
         working_copy = Path(working_copy)
         if working_copy.exists():
             working_copy.unlink()
-        del repo.config['kx.workingcopy']
+        del repo.config["kx.workingcopy"]
 
 
 def _db_table_hash(db, table, pk=None):
     if pk is None:
-        pk = 'ROWID'
+        pk = "ROWID"
 
     sql = f"SELECT * FROM {table} ORDER BY {pk};"
     r = db.execute(sql)
     h = hashlib.sha1()
     for row in r:
-        h.update('|'.join(repr(col) for col in row).encode('utf-8'))
+        h.update("|".join(repr(col) for col in row).encode("utf-8"))
     return h.hexdigest()
 
 
@@ -106,12 +108,14 @@ def test_diff(data_working_copy, geopackage, cli_runner):
             assert cur.rowcount == 1
             cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
             assert cur.rowcount == 1
-            cur.execute(f"UPDATE {POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;")
+            cur.execute(
+                f"UPDATE {POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
+            )
             assert cur.rowcount == 1
             cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
             assert cur.rowcount == 1
 
-        r = cli_runner.invoke(['diff'])
+        r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
             "--- 2bad8ad5-97aa-4910-9e6c-c6e8e692700d",
@@ -135,10 +139,10 @@ def test_diff(data_working_copy, geopackage, cli_runner):
             "--- 905a8ae1-8346-4b42-8646-42385beac87f",
             "+++ 905a8ae1-8346-4b42-8646-42385beac87f",
             "                                       fid = 2",
-            "-                                  t50_fid = 2426272",
-            "+                                  t50_fid = ␀",
             "-                                     name = ␀",
             "+                                     name = test",
+            "-                                  t50_fid = 2426272",
+            "+                                  t50_fid = ␀",
         ]
 
 
@@ -156,10 +160,12 @@ def test_commit(data_working_copy, geopackage, cli_runner):
             assert cur.rowcount == 1
             cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
             assert cur.rowcount == 1
-            fk_del = cur.execute(f"SELECT feature_key FROM __kxg_map WHERE feature_id=3;").fetchone()[0]
+            fk_del = cur.execute(
+                f"SELECT feature_key FROM __kxg_map WHERE feature_id=3;"
+            ).fetchone()[0]
             print("deleted {fk_del}")
 
-        r = cli_runner.invoke(['commit', '-m', 'test-commit-1'])
+        r = cli_runner.invoke(["commit", "-m", "test-commit-1"])
         assert r.exit_code == 0, r
         commit_id = r.stdout.splitlines()[-1].split(": ")[1]
         print("commit:", commit_id)
@@ -174,7 +180,7 @@ def test_commit(data_working_copy, geopackage, cli_runner):
 def test_log(data_archive, cli_runner):
     """ review commit history """
     with data_archive("points.git"):
-        r = cli_runner.invoke(['log'])
+        r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
             "commit d1bee0841307242ad7a9ab029dc73c652b9f74f3",
@@ -194,7 +200,7 @@ def test_log(data_archive, cli_runner):
 def test_show(data_archive, cli_runner):
     """ review commit history """
     with data_archive("points.git"):
-        r = cli_runner.invoke(['show'])
+        r = cli_runner.invoke(["show"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
             "commit d1bee0841307242ad7a9ab029dc73c652b9f74f3",
@@ -207,10 +213,10 @@ def test_show(data_archive, cli_runner):
 
 def test_push(data_archive, tmp_path, cli_runner):
     with data_archive("points.git") as repo:
-        subprocess.run(['git', 'init', '--bare', tmp_path], check=True)
-        subprocess.run(['git', 'remote', 'add', 'myremote', tmp_path], check=True)
+        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        subprocess.run(["git", "remote", "add", "myremote", tmp_path], check=True)
 
-        r = cli_runner.invoke(['push', '--set-upstream', 'myremote', 'master'])
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
         assert r.exit_code == 0, r
 
 
@@ -218,13 +224,13 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
     """ Checkout a working copy to edit """
     with data_working_copy("points.git") as (repo_dir, wc):
         db = geopackage(wc)
-        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+        assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the previous commit
-        r = cli_runner.invoke(['checkout', 'edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00'])
+        r = cli_runner.invoke(["checkout", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00"])
         assert r.exit_code == 0, r
 
-        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+        assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
 
 def test_checkout_references(data_working_copy, cli_runner, geopackage):
@@ -232,34 +238,34 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage):
         db = geopackage(wc)
 
         # checkout the HEAD commit
-        r = cli_runner.invoke(['checkout', 'HEAD'])
+        r = cli_runner.invoke(["checkout", "HEAD"])
         assert r.exit_code == 0, r
 
-        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+        assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the HEAD-but-1 commit
-        r = cli_runner.invoke(['checkout', 'HEAD~1'])
+        r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
 
-        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+        assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the master HEAD via branch-name
-        r = cli_runner.invoke(['checkout', 'master'])
+        r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
 
-        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+        assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout a short-sha commit
-        r = cli_runner.invoke(['checkout', 'edd5a4b'])
+        r = cli_runner.invoke(["checkout", "edd5a4b"])
         assert r.exit_code == 0, r
 
-        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+        assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the master HEAD via refspec
-        r = cli_runner.invoke(['checkout', 'refs/heads/master'])
+        r = cli_runner.invoke(["checkout", "refs/heads/master"])
         assert r.exit_code == 0, r
 
-        assert _last_change_time(db) == '2019-06-20T14:28:33.000000Z'
+        assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
 
 def test_checkout_reset(data_working_copy, cli_runner, geopackage):
@@ -277,26 +283,34 @@ def test_checkout_reset(data_working_copy, cli_runner, geopackage):
             assert cur.rowcount == 1
             cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid < 5;")
             assert cur.rowcount == 4
-            cur.execute(f"UPDATE {POINTS_LAYER} SET t50_fid = 888888 WHERE fid>=10 AND fid<15;")
+            cur.execute(
+                f"UPDATE {POINTS_LAYER} SET t50_fid = 888888 WHERE fid>=10 AND fid<15;"
+            )
             assert cur.rowcount == 5
             cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=20;")
             assert cur.rowcount == 1
 
-            change_count = db.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0").fetchone()[0]
+            change_count = db.execute(
+                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+            ).fetchone()[0]
             assert change_count == (1 + 4 + 5 + 1)
 
         # this should error
-        r = cli_runner.invoke(['checkout', 'HEAD'])
+        r = cli_runner.invoke(["checkout", "HEAD"])
         assert r.exit_code == 1, r
 
-        change_count = db.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0").fetchone()[0]
+        change_count = db.execute(
+            "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+        ).fetchone()[0]
         assert change_count == (1 + 4 + 5 + 1)
 
         # do again with --force
-        r = cli_runner.invoke(['checkout', '--force', 'HEAD'])
+        r = cli_runner.invoke(["checkout", "--force", "HEAD"])
         assert r.exit_code == 0, r
 
-        change_count = db.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0").fetchone()[0]
+        change_count = db.execute(
+            "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+        ).fetchone()[0]
         assert change_count == 0
 
         h_after = _db_table_hash(db, POINTS_LAYER, POINTS_LAYER_PK)
@@ -307,7 +321,9 @@ def test_checkout_reset(data_working_copy, cli_runner, geopackage):
             r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid < 5;")
             if r.fetchone()[0] != 4:
                 print("E: Deleted rows fid<5 still missing")
-            r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE t50_fid = 888888;")
+            r = db.execute(
+                f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE t50_fid = 888888;"
+            )
             if r.fetchone()[0] != 0:
                 print("E: Updated rows not reset")
             r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid = 9998;")
@@ -321,21 +337,26 @@ def test_checkout_reset(data_working_copy, cli_runner, geopackage):
 
 
 def test_version(cli_runner):
-    r = cli_runner.invoke(['--version'])
+    r = cli_runner.invoke(["--version"])
     assert r.exit_code == 0, r
-    assert re.match(r'^kxgit proof of concept\nGDAL v\d\.\d+\.\d+.*?\nPyGit2 v\d\.\d+\.\d+[^;]*; Libgit2 v\d\.\d+\.\d+.*$', r.stdout)
+    assert re.match(
+        r"^kxgit proof of concept\nGDAL v\d\.\d+\.\d+.*?\nPyGit2 v\d\.\d+\.\d+[^;]*; Libgit2 v\d\.\d+\.\d+.*$",
+        r.stdout,
+    )
 
 
 def test_clone(data_archive, tmp_path, cli_runner, monkeypatch):
     with data_archive("points.git") as remote_path:
         with monkeypatch.context() as m:
             m.chdir(tmp_path)
-            r = cli_runner.invoke(['clone', remote_path])
+            r = cli_runner.invoke(["clone", remote_path])
 
-            repo_path = tmp_path / 'points.git'
+            repo_path = tmp_path / "points.git"
             assert repo_path.is_dir()
 
-        subprocess.check_call(["git", "-C", str(repo_path), "config", "--local", "--list"])
+        subprocess.check_call(
+            ["git", "-C", str(repo_path), "config", "--local", "--list"]
+        )
 
         repo = pygit2.Repository(str(repo_path))
         assert repo.is_bare
@@ -348,13 +369,15 @@ def test_clone(data_archive, tmp_path, cli_runner, monkeypatch):
         assert branch.upstream_name == "refs/remotes/origin/master"
 
         assert len(repo.remotes) == 1
-        remote = repo.remotes['origin']
+        remote = repo.remotes["origin"]
         assert remote.url == str(remote_path)
-        assert remote.fetch_refspecs == ['+refs/heads/*:refs/remotes/origin/*']
+        assert remote.fetch_refspecs == ["+refs/heads/*:refs/remotes/origin/*"]
 
 
-def test_geopackage_locking_edit(data_working_copy, geopackage, cli_runner, monkeypatch):
-    with data_working_copy('points.git') as (repo, wc):
+def test_geopackage_locking_edit(
+    data_working_copy, geopackage, cli_runner, monkeypatch
+):
+    with data_working_copy("points.git") as (repo, wc):
         db = geopackage(wc)
 
         is_checked = False
@@ -363,26 +386,28 @@ def test_geopackage_locking_edit(data_working_copy, geopackage, cli_runner, monk
         def _wrap(*args, **kwargs):
             nonlocal is_checked
             if not is_checked:
-                with pytest.raises(sqlite3.OperationalError, match=r'database is locked'):
+                with pytest.raises(
+                    sqlite3.OperationalError, match=r"database is locked"
+                ):
                     db.execute("UPDATE gpkg_context SET table_name=table_name;")
                 is_checked = True
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(cli, '_diff_feature_to_dict', _wrap)
+        monkeypatch.setattr(cli, "_diff_feature_to_dict", _wrap)
 
-        r = cli_runner.invoke(['checkout', 'edd5a4b'])
+        r = cli_runner.invoke(["checkout", "edd5a4b"])
         assert r.exit_code == 0, r
         assert is_checked
 
-        assert _last_change_time(db) == '2019-06-11T11:03:58.000000Z'
+        assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
 
 def test_fsck(data_working_copy, geopackage, cli_runner):
-    with data_working_copy('points.git') as (repo, wc):
+    with data_working_copy("points.git") as (repo, wc):
         db = geopackage(wc)
 
-        r = cli_runner.invoke(['fsck'])
+        r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 0, r
 
         # introduce a feature mismatch
@@ -390,7 +415,7 @@ def test_fsck(data_working_copy, geopackage, cli_runner):
             db.execute(f"UPDATE {POINTS_LAYER} SET name='fred' WHERE fid=1;")
             db.execute("UPDATE __kxg_map SET state=0 WHERE feature_id=1;")
 
-        r = cli_runner.invoke(['fsck'])
+        r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 1, r
 
 
