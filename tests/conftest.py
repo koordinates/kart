@@ -1,4 +1,5 @@
 import contextlib
+import io
 import logging
 import os
 import shutil
@@ -20,6 +21,12 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="Preserve temporary data directories",
+    )
+    parser.addoption(
+        "--pdb-trace",
+        action="store_true",
+        default=False,
+        help="Allow calling pytest.set_trace() within Click commands",
     )
 
 
@@ -143,6 +150,10 @@ def geopackage():
 
 
 class SnowdropCliRunner(CliRunner):
+    def __init__(self, *args, in_pdb=False, **kwargs):
+        self._in_pdb = in_pdb
+        super().__init__(*args, **kwargs)
+
     def invoke(self, args=None, **kwargs):
         from snowdrop.cli import cli
 
@@ -150,11 +161,13 @@ class SnowdropCliRunner(CliRunner):
             # force everything to strings (eg. PathLike objects, numbers)
             args = [str(a) for a in args]
 
-        params = {"catch_exceptions": True}
+        L.debug("Invoking Click command: %s (%s)", args, kwargs)
+
+        params = {"catch_exceptions": not self._in_pdb}
         params.update(kwargs)
 
-        L.debug("Invoking Click command: %s (%s)", args, kwargs)
         r = super().invoke(cli, args=args, **params)
+
         L.debug("Command result: %s (%s)", r.exit_code, repr(r))
         L.debug("Command stdout=%s", r.stdout)
         L.debug("Command stderr=%s", (r.stderr if r.stderr_bytes else ""))
@@ -164,9 +177,30 @@ class SnowdropCliRunner(CliRunner):
 
         return r
 
+    def isolation(self, input=None, env=None, color=False):
+        if self._in_pdb:
+            if input or env or color:
+                L.warning("PDB un-isolation doesn't work if input/env/color are passed")
+            else:
+                return self.isolation_pdb()
+
+        return super().isolation(input=input, env=env, color=color)
+
+    @contextlib.contextmanager
+    def isolation_pdb(self):
+        s = io.BytesIO(b"{stdout not captured because --pdb-trace}")
+        yield (
+            s,
+            not self.mix_stderr and s
+        )
+
 
 @pytest.fixture
-def cli_runner():
+def cli_runner(request):
     """ A wrapper round Click's test CliRunner to improve usefulness """
-    # snowdrop.cli._execvp() looks for this env var to prevent fork/exec in tests.
-    return SnowdropCliRunner(env={"_SNOWDROP_NO_EXEC": "1"})
+    return SnowdropCliRunner(
+        # snowdrop.cli._execvp() looks for this env var to prevent fork/exec in tests.
+        env={"_SNOWDROP_NO_EXEC": "1"},
+        # workaround Click's environment isolation so debugging works.
+        in_pdb=request.config.getoption("--pdb-trace")
+    )
