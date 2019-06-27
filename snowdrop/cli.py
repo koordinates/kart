@@ -298,13 +298,13 @@ def _get_working_copy(repo):
 
 @cli.command()
 @click.pass_context
-@click.option("branch", "-b", is_flag=True, help="Create a new branch")
+@click.option("branch", "-b", help="Name for new branch")
 @click.option("fmt", "--format", type=click.Choice(["GPKG"]))
 @click.option("layer", "--layer")
 @click.option("--force", "-f", is_flag=True)
 @click.option("--working-copy", type=click.Path(writable=True, dir_okay=False))
-@click.argument("commitish", default=None, required=False)
-def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
+@click.argument("refish", default=None, required=False)
+def checkout(ctx, branch, refish, working_copy, layer, force, fmt):
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -312,32 +312,40 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
             "Not an existing bare repository?", param_hint="--repo"
         )
 
+    # refish could be:
+    # - branch name
+    # - tag name
+    # - remote branch
+    # - HEAD
+    # - HEAD~1/etc
+    # - 'c0ffee' commit ref
+    # - 'refs/tags/1.2.3' some other refspec
+
     base_commit = repo.head.peel(pygit2.Commit)
+    head_ref = None
+
+    if refish:
+        commit, ref = repo.lookup_refish(refish)
+        head_ref = ref.name if ref else commit.id
+    else:
+        commit = base_commit
+        head_ref = repo.head.name
 
     if branch:
-        commit = repo.revparse_single(commitish)
-        if commitish in repo.branches:
-            print(f"Creating new branch '{commitish}' to track '{commitish}'...")
+        if branch in repo.branches:
+            raise click.BadParameter(f"A branch named '{branch}' already exists.", param_hint="branch")
+
+        if refish and refish in repo.branches:
+            print(f"Creating new branch '{branch}' to track '{refish}'...")
             new_branch = repo.create_branch(branch, commit, force)
-            new_branch.upstream = commitish
+            new_branch.upstream = refish
         else:
             print(f"Creating new branch '{branch}'...")
             new_branch = repo.create_branch(branch, commit, force)
 
-        repo.set_head(new_branch.name)
-    elif not commitish:  # HEAD
-        commit = repo.head.peel(pygit2.Commit)
-    else:
-        try:
-            if commitish in repo.branches.local:
-                commit = repo.revparse_single(commitish)
-                repo.set_head(repo.branches.local[commitish].name)
-        except pygit2.InvalidSpecError:
-            pass
+        head_ref = new_branch.name
 
-        if commitish:
-            commit = repo.revparse_single(commitish)
-            repo.set_head(commit.id)
+    repo.set_head(head_ref)
 
     wc = _get_working_copy(repo)
     if wc:
@@ -366,7 +374,7 @@ def checkout(ctx, branch, commitish, working_copy, layer, force, fmt):
     if not fmt:
         fmt = "GPKG"
 
-    click.echo(f'Checkout {layer}@{commitish or "HEAD"} to {working_copy} as {fmt} ...')
+    click.echo(f'Checkout {layer}@{refish or "HEAD"} to {working_copy} as {fmt} ...')
 
     repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
@@ -742,6 +750,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     assert (
         dbcur.rowcount == 1
     ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
+    db.commit()
 
 
 def _db_to_index(db, layer, tree):
@@ -1309,7 +1318,7 @@ def diff(ctx):
 
         diff_add = dict(s_new - s_old)
         diff_del = dict(s_old - s_new)
-        all_keys = set(diff_del.keys()) | set(diff_add.keys())
+        all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
 
         if "fid" not in all_keys:
             click.echo(_repr_row({"fid": v_new["fid"]}, prefix="  "))

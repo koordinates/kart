@@ -80,10 +80,19 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
         assert r.exit_code == 0, r
         assert (repo_path / "HEAD").exists()
 
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.is_bare
+        assert not repo.is_empty
+
+        assert repo.head.name == 'refs/heads/master'
+        assert repo.head.shorthand == 'master'
+
+        assert len([c for c in repo.walk(repo.head.target)]) == 1
+
 
 def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
     """ Checkout a working copy to edit """
-    with data_archive("points.git"):
+    with data_archive("points.git") as repo_path:
         _clear_working_copy()
 
         wc = tmp_path / "data.gpkg"
@@ -92,10 +101,19 @@ def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
         )
         assert r.exit_code == 0, r
 
-    assert wc.exists()
-    db = geopackage(wc)
-    nrows = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER};").fetchone()[0]
-    assert nrows > 0
+        assert wc.exists()
+        db = geopackage(wc)
+        nrows = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER};").fetchone()[0]
+        assert nrows > 0
+
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.is_bare
+
+        assert repo.head.name == 'refs/heads/master'
+        assert repo.head.shorthand == 'master'
+
+        wc_tree_id = db.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [POINTS_LAYER]).fetchone()[0]
+        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
 
 def test_diff(data_working_copy, geopackage, cli_runner):
@@ -224,7 +242,7 @@ def test_show(data_archive, cli_runner):
 
 
 def test_push(data_archive, tmp_path, cli_runner):
-    with data_archive("points.git") as repo:
+    with data_archive("points.git"):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)
         subprocess.run(["git", "remote", "add", "myremote", tmp_path], check=True)
 
@@ -241,43 +259,66 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
         # checkout the previous commit
         r = cli_runner.invoke(["checkout", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00"])
         assert r.exit_code == 0, r
-
         assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+
+        repo = pygit2.Repository(str(repo_dir))
+        assert repo.head.name == 'HEAD'
+        assert repo.head_is_detached
+        assert repo.head.target.hex == 'edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00'
 
 
 def test_checkout_references(data_working_copy, cli_runner, geopackage):
     with data_working_copy("points.git") as (repo_dir, wc):
         db = geopackage(wc)
+        repo = pygit2.Repository(str(repo_dir))
+
+        # create a tag
+        repo.create_reference('refs/tags/version1', repo.head.target)
+
+        def r_head():
+            return (repo.head.name, repo.head.target.hex)
 
         # checkout the HEAD commit
         r = cli_runner.invoke(["checkout", "HEAD"])
         assert r.exit_code == 0, r
-
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        assert not repo.head_is_detached
+        assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
 
         # checkout the HEAD-but-1 commit
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
-
         assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+        assert repo.head_is_detached
+        assert r_head() == ('HEAD', 'edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00')
 
         # checkout the master HEAD via branch-name
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
-
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        assert not repo.head_is_detached
+        assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
 
         # checkout a short-sha commit
         r = cli_runner.invoke(["checkout", "edd5a4b"])
         assert r.exit_code == 0, r
-
         assert _last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+        assert repo.head_is_detached
+        assert r_head() == ('HEAD', 'edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00')
 
         # checkout the master HEAD via refspec
         r = cli_runner.invoke(["checkout", "refs/heads/master"])
         assert r.exit_code == 0, r
-
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        assert not repo.head_is_detached
+        assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+
+        # checkout the master HEAD via refspec
+        r = cli_runner.invoke(["checkout", "version1"])
+        assert r.exit_code == 0, r
+        assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        assert repo.head_is_detached
+        assert r_head() == ('HEAD', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
 
 
 def test_checkout_reset(data_working_copy, cli_runner, geopackage):
@@ -430,6 +471,42 @@ def test_fsck(data_working_copy, geopackage, cli_runner):
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 1, r
 
+
+def test_checkout_branch(data_working_copy, geopackage, cli_runner):
+    with data_working_copy("points.git") as (repo_path, wc):
+        db = geopackage(wc)
+
+        # creating a new branch with existing name errors
+        r = cli_runner.invoke(["checkout", "-b", "master"])
+        assert r.exit_code == 2, r
+        assert r.stdout.splitlines()[-1].endswith("A branch named 'master' already exists.")
+
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "foo"])
+        assert r.exit_code == 0, r
+
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.head.name == "refs/heads/foo"
+        assert 'foo' in repo.branches
+        assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+
+        # make some changes
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+            cur.execute(POINTS_INSERT, POINTS_RECORD)
+            assert cur.rowcount == 1
+
+        r = cli_runner.invoke(["commit", "-m", "test1"])
+        assert r.exit_code == 0, r
+
+        assert repo.head.peel(pygit2.Commit).hex != 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
 
 # TODO:
 # * `kxgit branch` & `kxgit checkout -b` branch management
