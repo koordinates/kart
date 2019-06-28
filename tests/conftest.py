@@ -31,7 +31,7 @@ def pytest_addoption(parser):
 
 
 @contextlib.contextmanager
-def chdir(path):
+def chdir_(path):
     """ Context manager to change the current working directory """
     prev_cwd = os.getcwd()
     try:
@@ -42,7 +42,12 @@ def chdir(path):
 
 
 @pytest.fixture
-def data_archive(request, tmp_path_factory):
+def chdir():
+    return chdir_
+
+
+@pytest.fixture
+def data_archive(request, tmp_path_factory, chdir):
     """
     Extract a .tgz data archive to a temporary folder.
 

@@ -289,7 +289,9 @@ def test_show(data_archive, cli_runner):
 def test_push(data_archive, tmp_path, cli_runner):
     with data_archive("points.git"):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)
-        subprocess.run(["git", "remote", "add", "myremote", tmp_path], check=True)
+
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
         assert r.exit_code == 0, r
@@ -312,13 +314,21 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
         assert repo.head.target.hex == 'edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00'
 
 
-def test_checkout_references(data_working_copy, cli_runner, geopackage):
+def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path):
     with data_working_copy("points.git") as (repo_dir, wc):
         db = geopackage(wc)
         repo = pygit2.Repository(str(repo_dir))
 
         # create a tag
         repo.create_reference('refs/tags/version1', repo.head.target)
+
+        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["push", "myremote", "master"])
+        assert r.exit_code == 0, r
 
         def r_head():
             return (repo.head.name, repo.head.target.hex)
@@ -358,8 +368,15 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage):
         assert not repo.head_is_detached
         assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
 
-        # checkout the master HEAD via refspec
+        # checkout the tag
         r = cli_runner.invoke(["checkout", "version1"])
+        assert r.exit_code == 0, r
+        assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        assert repo.head_is_detached
+        assert r_head() == ('HEAD', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+
+        # checkout the remote branch
+        r = cli_runner.invoke(["checkout", "myremote/master"])
         assert r.exit_code == 0, r
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
         assert repo.head_is_detached
@@ -443,10 +460,9 @@ def test_version(cli_runner):
     )
 
 
-def test_clone(data_archive, tmp_path, cli_runner, monkeypatch):
+def test_clone(data_archive, tmp_path, cli_runner, chdir):
     with data_archive("points.git") as remote_path:
-        with monkeypatch.context() as m:
-            m.chdir(tmp_path)
+        with chdir(tmp_path):
             r = cli_runner.invoke(["clone", remote_path])
 
             repo_path = tmp_path / "points.git"
@@ -678,7 +694,102 @@ def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, re
         assert r.fetchone()[0] == num_inserts
 
 
+def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_commit, tmp_path, request):
+    with data_working_copy("points.git") as (path1, wc):
+        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        db = geopackage(wc)
+        commit_id = insert_commit(db)
+
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        assert r.exit_code == 0, r
+
+    with data_working_copy("points.git") as (path2, wc):
+        repo = pygit2.Repository(str(path2))
+        h = repo.head.target.hex
+
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["fetch", "myremote"])
+        assert r.exit_code == 0, r
+
+        _git_graph(request, "post-fetch")
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.target.hex == h
+
+        remote_branch = repo.lookup_reference_dwim("myremote/master")
+        assert remote_branch.target.hex == commit_id
+
+        fetch_head = repo.lookup_reference("FETCH_HEAD")
+        assert fetch_head.target.hex == commit_id
+
+        # merge
+        r = cli_runner.invoke(["merge", "myremote/master"])
+        assert r.exit_code == 0, r
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.target.hex == commit_id
+        commit = repo.head.peel(pygit2.Commit)
+        assert len(commit.parents) == 1
+        assert commit.parents[0].hex == h
+
+
+def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_commit, tmp_path, request, chdir):
+    with data_working_copy("points.git") as (path1, wc1), data_working_copy("points.git") as (path2, wc2):
+        with chdir(path1):
+            subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+            r = cli_runner.invoke(["remote", "add", "origin", tmp_path])
+            assert r.exit_code == 0, r
+
+            r = cli_runner.invoke(["push", "--set-upstream", "origin", "master"])
+            assert r.exit_code == 0, r
+
+        with chdir(path2):
+            r = cli_runner.invoke(["remote", "add", "origin", tmp_path])
+            assert r.exit_code == 0, r
+
+            r = cli_runner.invoke(["fetch", "origin"])
+            assert r.exit_code == 0, r
+
+            r = cli_runner.invoke(["branch", "--set-upstream-to=origin/master"])
+            assert r.exit_code == 0, r
+
+        with chdir(path1):
+            db = geopackage(wc1)
+            commit_id = insert_commit(db)
+
+            r = cli_runner.invoke(["push"])
+            assert r.exit_code == 0, r
+
+        with chdir(path2):
+            repo = pygit2.Repository(str(path2))
+            h = repo.head.target.hex
+
+            r = cli_runner.invoke(["pull"])
+            assert r.exit_code == 0, r
+
+            _git_graph(request, "post-pull")
+
+            remote_branch = repo.lookup_reference_dwim("origin/master")
+            assert remote_branch.target.hex == commit_id
+
+            assert repo.head.name == "refs/heads/master"
+            assert repo.head.target.hex == commit_id
+            commit = repo.head.peel(pygit2.Commit)
+            assert len(commit.parents) == 1
+            assert commit.parents[0].hex == h
+
+            # pull again / no-op
+            r = cli_runner.invoke(["pull"])
+            assert r.exit_code == 0, r
+            assert repo.head.target.hex == commit_id
+
+
 # TODO:
-# * `kxgit fetch` fetch upstream changes.
 # * `git reset --soft {commitish}`
 # * `git tag ...`
