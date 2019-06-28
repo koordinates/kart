@@ -39,7 +39,7 @@ $ brew install --HEAD kxgit
 # check it's working (these should be the version numbers)
 $ kxgit --version
 kxgit proof of concept
-GDAL v2.4.0
+GDAL v2.4.1
 PyGit2 v0.28.2; Libgit2 v0.28.0
 ```
 
@@ -73,7 +73,8 @@ $ pip install .
 
 # install other dependencies
 $ cd ../..
-$ pip install -r requirements.txt
+$ pip install pygdal=="$(gdal-config --version).*"
+$ pip install -r requirements-dev.txt
 $ rm venv/lib/python*/site-packages/no-global-site-packages.txt
 
 # install kxgit
