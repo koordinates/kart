@@ -174,7 +174,7 @@ def _dump_gpkg_meta_info(db, layer):
 @click.argument("geopackage", type=click.Path(exists=True))
 @click.argument("table")
 def import_gpkg(ctx, geopackage, table):
-    """ Import a Koordinates GeoPackage to a new repository """
+    """ Import a GeoPackage to a new repository """
     click.echo(f"Importing {geopackage} ...")
 
     repo_dir = ctx.obj["repo_dir"]
@@ -305,6 +305,7 @@ def _get_working_copy(repo):
 @click.option("--working-copy", type=click.Path(writable=True, dir_okay=False))
 @click.argument("refish", default=None, required=False)
 def checkout(ctx, branch, refish, working_copy, layer, force, fmt):
+    """ Switch branches or restore working tree files """
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1270,6 +1271,7 @@ def _build_db_diff(repo, layer, db, tree=None):
 @cli.command()
 @click.pass_context
 def diff(ctx):
+    """ Show changes between commits, commit and working tree, etc """
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1357,6 +1359,7 @@ def _assert_db_tree_match(db, table, tree):
 @click.pass_context
 @click.option("--message", "-m", required=True)
 def commit(ctx, message):
+    """ Record changes to the repository """
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1489,11 +1492,7 @@ def commit(ctx, message):
         # TODO: update reflog
 
 
-@cli.command(
-    help=(
-        "Incorporates changes from the named commits (usually other branch heads) into the current branch."
-    )
-)
+@cli.command()
 @click.option(
     "--ff/--no-ff",
     default=True,
@@ -1513,6 +1512,7 @@ def commit(ctx, message):
 @click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
 def merge(ctx, ff, ff_only, commit):
+    """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
 
@@ -1583,14 +1583,12 @@ def merge(ctx, ff, ff_only, commit):
 
 
 @cli.command(
-    help=(
-        "Incorporates changes from the named commits (usually other branch heads) into the current branch."
-    ),
     context_settings=dict(ignore_unknown_options=True),
 )
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fsck(ctx, args):
+    """ Verifies the connectivity and validity of the objects in the database """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1870,6 +1868,7 @@ def pull(ctx, ff, ff_only, repository, refspecs):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def log(ctx, args):
+    """ Show commit logs """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1884,6 +1883,7 @@ def log(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, args):
+    """ Update remote refs along with associated objects """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1898,6 +1898,7 @@ def push(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, args):
+    """ Download objects and refs from another repository """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1912,6 +1913,7 @@ def fetch(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def branch(ctx, args):
+    """ List, create, or delete branches """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
@@ -1941,6 +1943,7 @@ def remote(ctx, args):
 @click.argument("repository", nargs=1)
 @click.argument("directory", required=False)
 def clone(repository, directory):
+    """ Clone a repository into a new directory """
     repo_dir = directory or os.path.split(repository)[1]
     if not repo_dir.endswith(".git") or len(repo_dir) == 4:
         raise click.BadParameter("Repository should be foo.git")
@@ -1989,6 +1992,7 @@ def clone(repository, directory):
 @cli.command()
 @click.pass_context
 def show(ctx):
+    """ Show the current commit """
     ctx.invoke(log, args=["-1"])
 
 
