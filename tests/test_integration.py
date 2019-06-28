@@ -286,6 +286,19 @@ def test_show(data_archive, cli_runner):
         ]
 
 
+def test_tag(data_working_copy, cli_runner):
+    """ review commit history """
+    with data_working_copy("points.git") as (repo_dir, wc):
+        # create a tag
+        r = cli_runner.invoke(["tag", "version1"])
+        assert r.exit_code == 0, r
+
+        repo = pygit2.Repository(str(repo_dir))
+        assert 'refs/tags/version1' in repo.references
+        ref = repo.lookup_reference_dwim('version1')
+        assert ref.target.hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+
+
 def test_push(data_archive, tmp_path, cli_runner):
     with data_archive("points.git"):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)

@@ -1941,6 +1941,21 @@ def remote(ctx, args):
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
+@click.pass_context
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def tag(ctx, args):
+    """ Create, list, delete or verify a tag object signed with GPG """
+    repo_dir = ctx.obj["repo_dir"] or "."
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
+        raise click.BadParameter(
+            "Not an existing bare repository?", param_hint="--repo"
+        )
+
+    _execvp("git", ["git", "-C", repo_dir, "tag"] + list(args))
+
+
+@cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.argument("repository", nargs=1)
 @click.argument("directory", required=False)
 def clone(repository, directory):
