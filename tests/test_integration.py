@@ -546,7 +546,7 @@ def test_fsck(data_working_copy, geopackage, cli_runner):
         assert r.exit_code == 1, r
 
 
-def test_checkout_branch(data_working_copy, geopackage, cli_runner):
+def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
     with data_working_copy("points.git") as (repo_path, wc):
         db = geopackage(wc)
 
@@ -554,6 +554,13 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner):
         r = cli_runner.invoke(["checkout", "-b", "master"])
         assert r.exit_code == 2, r
         assert r.stdout.splitlines()[-1].endswith("A branch named 'master' already exists.")
+
+        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        assert r.exit_code == 0, r
 
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "foo"])
@@ -581,6 +588,15 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner):
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+
+        # new branch from remote
+        r = cli_runner.invoke(["checkout", "-b", "test99", "myremote/master"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == "refs/heads/test99"
+        assert 'test99' in repo.branches
+        assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+        branch = repo.branches['test99']
+        assert branch.upstream_name == 'refs/remotes/myremote/master'
 
 
 def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_commit, request):

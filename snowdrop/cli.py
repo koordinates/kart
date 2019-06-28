@@ -336,10 +336,13 @@ def checkout(ctx, branch, refish, working_copy, layer, force, fmt):
         if branch in repo.branches:
             raise click.BadParameter(f"A branch named '{branch}' already exists.", param_hint="branch")
 
-        if refish and refish in repo.branches:
+        if refish and refish in repo.branches.remote:
             print(f"Creating new branch '{branch}' to track '{refish}'...")
             new_branch = repo.create_branch(branch, commit, force)
-            new_branch.upstream = refish
+            new_branch.upstream = repo.branches.remote[refish]
+        elif refish and refish in repo.branches:
+            print(f"Creating new branch '{branch}' from '{refish}'...")
+            new_branch = repo.create_branch(branch, commit, force)
         else:
             print(f"Creating new branch '{branch}'...")
             new_branch = repo.create_branch(branch, commit, force)
