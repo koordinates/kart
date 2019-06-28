@@ -1,7 +1,9 @@
 import hashlib
+import os
 import re
 import sqlite3
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest  # noqa
@@ -53,6 +55,7 @@ def _clear_working_copy(repo_path="."):
 
 
 def _db_table_hash(db, table, pk=None):
+    """ Calculate a SHA1 hash of the contents of a SQLite table """
     if pk is None:
         pk = "ROWID"
 
@@ -60,8 +63,50 @@ def _db_table_hash(db, table, pk=None):
     r = db.execute(sql)
     h = hashlib.sha1()
     for row in r:
-        h.update("|".join(repr(col) for col in row).encode("utf-8"))
+        h.update("🔸".join(repr(col) for col in row).encode("utf-8"))
     return h.hexdigest()
+
+
+def _git_graph(request, message, count=10, *paths):
+    """ Print a pretty graph of recent git revisions """
+    cmd = ["git", "log", "--all", "--decorate", "--oneline", "--graph", f"--max-count={count}"]
+
+    # total hackery to figure out whether we're _actually_ in a terminal
+    try:
+        cm = request.config.pluginmanager.getplugin("capturemanager")
+        fd = cm._global_capturing.in_.targetfd_save
+        if os.isatty(fd):
+            cmd += ["--color=always"]
+    except Exception:
+        pass
+
+    print(f"{message}:")
+    subprocess.check_call(cmd + list(paths))
+
+
+@pytest.fixture
+def insert_commit(request, cli_runner):
+    def func(db):
+        rec = POINTS_RECORD.copy()
+        rec['fid'] = 98000 + func.index
+
+        with db:
+            cur = db.cursor()
+            cur.execute(POINTS_INSERT, rec)
+            assert cur.rowcount == 1
+            func.inserted_fids.append(rec['fid'])
+
+        r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}"])
+        assert r.exit_code == 0, r
+        func.index += 1
+
+        commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+        return commit_id
+
+    func.index = 0
+    func.inserted_fids = []
+
+    return func
 
 
 @pytest.mark.slow
@@ -508,9 +553,132 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner):
         assert repo.head.name == "refs/heads/master"
         assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
 
+
+def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_commit, request):
+    with data_working_copy("points.git") as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "changes"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == 'refs/heads/changes'
+
+        h = repo.head.target.hex
+
+        # make some changes
+        db = geopackage(wc)
+        insert_commit(db)
+        insert_commit(db)
+        commit_id = insert_commit(db)
+
+        _git_graph(request, "pre-merge")
+        assert repo.head.target.hex == commit_id
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != commit_id
+
+        r = cli_runner.invoke(["merge", "--ff-only", "changes"])
+        assert r.exit_code == 0, r
+
+        _git_graph(request, "post-merge")
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.target.hex == commit_id
+        c = repo.head.peel(pygit2.Commit)
+        assert len(c.parents) == 1
+        assert c.parents[0].parents[0].parents[0].hex == h
+
+
+def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, insert_commit, request):
+    with data_working_copy("points.git") as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "changes"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == 'refs/heads/changes'
+
+        h = repo.head.target.hex
+
+        # make some changes
+        db = geopackage(wc)
+        insert_commit(db)
+        insert_commit(db)
+        commit_id = insert_commit(db)
+
+        _git_graph(request, "pre-merge")
+        assert repo.head.target.hex == commit_id
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != commit_id
+
+        # force creation of a merge commit
+        r = cli_runner.invoke(["merge", "--no-ff", "changes"])
+        assert r.exit_code == 0, r
+
+        _git_graph(request, "post-merge")
+
+        merge_commit_id = r.stdout.splitlines()[-2].split(": ")[1]
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.target.hex == merge_commit_id
+        c = repo.head.peel(pygit2.Commit)
+        assert len(c.parents) == 2
+        assert c.parents[0].hex == h
+        assert c.parents[1].hex == commit_id
+        assert c.message == "Merge 'changes'"
+
+
+def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, request):
+    with data_working_copy("points.git") as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "changes"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == 'refs/heads/changes'
+
+        h = repo.head.target.hex
+
+        # make some changes
+        db = geopackage(wc)
+        insert_commit(db)
+        insert_commit(db)
+        b_commit_id = insert_commit(db)
+        assert repo.head.target.hex == b_commit_id
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != b_commit_id
+        m_commit_id = insert_commit(db)
+        _git_graph(request, "pre-merge-master")
+
+        # fastforward merge should fail
+        r = cli_runner.invoke(["merge", "--ff-only", "changes"])
+        assert r.exit_code == 1, r
+        assert r.stdout.splitlines()[-1] == "Can't resolve as a fast-forward merge and --ff-only specified"
+
+        r = cli_runner.invoke(["merge", "--ff", "changes"])
+        assert r.exit_code == 0, r
+        _git_graph(request, "post-merge")
+
+        merge_commit_id = r.stdout.splitlines()[-2].split(": ")[1]
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.target.hex == merge_commit_id
+        c = repo.head.peel(pygit2.Commit)
+        assert len(c.parents) == 2
+        assert c.parents[0].hex == m_commit_id
+        assert c.parents[1].hex == b_commit_id
+        assert c.parents[0].parents[0].hex == h
+        assert c.message == "Merge 'changes'"
+
+        # check the database state
+        num_inserts = len(insert_commit.inserted_fids)
+        r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid IN ({','.join(['?']*num_inserts)});", insert_commit.inserted_fids)
+        assert r.fetchone()[0] == num_inserts
+
+
 # TODO:
-# * `kxgit branch` & `kxgit checkout -b` branch management
 # * `kxgit fetch` fetch upstream changes.
-# * `kxgit merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
 # * `git reset --soft {commitish}`
 # * `git tag ...`

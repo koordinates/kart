@@ -855,7 +855,7 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             return m.group("fk")
 
         def _get_feature_key_b(diff):
-            m = re_obj_full_path.match(diff.new_file.path)
+            m = re_obj_feature_path.match(diff.new_file.path)
             assert (
                 m
             ), f"Diff object path doesn't match expected path pattern? '{diff.new_file.path}'"
@@ -1510,14 +1510,11 @@ def commit(ctx, message):
         "Refuse to merge and exit with a non-zero status unless the current HEAD is already up to date or the merge can be resolved as a fast-forward."
     ),
 )
-@click.argument("commits", nargs=-1, required=True, metavar="COMMIT...")
+@click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
-def merge(ctx, ff, ff_only, commits):
+def merge(ctx, ff, ff_only, commit):
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
-
-    if len(commits) != 1:
-        raise NotImplementedError("Only one merge source currently supported")
 
     if ff_only and not ff:
         raise click.BadParameter(
@@ -1527,21 +1524,7 @@ def merge(ctx, ff, ff_only, commits):
     c_base = repo[repo.head.target]
 
     # accept ref-ish things (refspec, branch, commit)
-    r_head = None
-    if pygit2.reference_is_valid_name(commits[0]):
-        try:
-            r_head = repo.lookup_reference(commits[0])
-        except KeyError:
-            pass
-    if not r_head:
-        r_head = repo.lookup_branch(commits[0], pygit2.GIT_BRANCH_LOCAL)
-    if not r_head:
-        r_head = repo.lookup_branch(commits[0], pygit2.GIT_BRANCH_REMOTE)
-
-    if r_head:
-        c_head = r_head.peel(pygit2.Commit)
-    else:
-        c_head = repo.revparse_single(commits[0])
+    c_head, r_head = repo.lookup_refish(commit)
 
     print(f"Merging {c_head.id} to {c_base.id} ...")
     merge_base = repo.merge_base(c_base.oid, c_head.oid)
@@ -1595,7 +1578,8 @@ def merge(ctx, ff, ff_only, commits):
     # update our working copy
     wc = _get_working_copy(repo)
     click.echo(f"Updating {wc.path} ...")
-    return _checkout_update(repo, wc.path, wc.layer, commit_id, base_commit=c_base.id)
+    commit = repo[commit_id]
+    return _checkout_update(repo, wc.path, wc.layer, commit, base_commit=c_base)
 
 
 @cli.command(
