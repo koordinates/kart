@@ -785,6 +785,9 @@ def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_co
             assert commit.parents[0].hex == h
 
             # pull again / no-op
+            r = cli_runner.invoke(["branch", "--unset-upstream"])
+            assert r.exit_code == 0, r
+
             r = cli_runner.invoke(["pull"])
             assert r.exit_code == 0, r
             assert repo.head.target.hex == commit_id

@@ -1844,11 +1844,12 @@ def pull(ctx, ff, ff_only, repository, refspecs):
         current_branch = repo.branches[repo.head.shorthand]
         if current_branch.upstream:
             repository = current_branch.upstream.remote_name
-        elif 'origin' in repo.remotes:
-            repository = 'origin'
         else:
-            # git-pull seems to just exit 0 here...?
-            raise click.BadParameter("Please specify the remote you want to fetch from", param_hint="repository")
+            try:
+                repository = repo.remotes['origin'].name
+            except KeyError:
+                # git-pull seems to just exit 0 here...?
+                raise click.BadParameter("Please specify the remote you want to fetch from", param_hint="repository")
 
     remote = repo.remotes[repository]
 
