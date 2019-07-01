@@ -177,14 +177,23 @@ def import_gpkg(ctx, geopackage, table):
     """ Import a GeoPackage to a new repository """
     click.echo(f"Importing {geopackage} ...")
 
+    db = _get_db(geopackage)
+    dbcur = db.cursor()
+
+    if not dbcur.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='gpkg_contents';").fetchone():
+        raise click.BadParameter(f"'{geopackage}' doesn't appear to be a valid GeoPackage", param_hint="geopackage")
+    if not dbcur.execute("SELECT 1 FROM gpkg_contents WHERE table_name=?;", (table,)).fetchone():
+        raise click.BadParameter(f"Table '{table}' not found in gpkg_contents", param_hint="table")
+
     repo_dir = ctx.obj["repo_dir"]
     if os.path.exists(repo_dir):
         repo = pygit2.Repository(repo_dir)
         assert repo.is_bare, "Not a bare repository?!"
 
-        assert (
-            not repo.is_empty
-        ), "Looks like you already have commits in this repository"
+        if not repo.is_empty:
+            raise click.ClickException(
+                "Looks like you already have commits in this repository"
+            )
     else:
         if not repo_dir.endswith(".git"):
             raise click.BadParameter(
@@ -192,9 +201,7 @@ def import_gpkg(ctx, geopackage, table):
             )
         repo = pygit2.init_repository(repo_dir, bare=True)
 
-    db = _get_db(geopackage)
     with db:
-        dbcur = db.cursor()
 
         index = pygit2.Index()
         print("Writing meta bits...")

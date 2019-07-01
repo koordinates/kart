@@ -132,7 +132,51 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
         assert repo.head.name == 'refs/heads/master'
         assert repo.head.shorthand == 'master'
 
+        # has a single commit
         assert len([c for c in repo.walk(repo.head.target)]) == 1
+
+        # existing
+        r = cli_runner.invoke(
+            [
+                f"--repo={repo_path}",
+                "import-gpkg",
+                data / "nz-pa-points-topo-150k.gpkg",
+                POINTS_LAYER,
+            ]
+        )
+        assert r.exit_code == 1, r
+        assert 'Looks like you already have commits in this repository' in r.stdout
+
+        # missing/bad table name
+        repo_path = tmp_path / "data2.git"
+        r = cli_runner.invoke(
+            [
+                f"--repo={repo_path}",
+                "import-gpkg",
+                data / "nz-pa-points-topo-150k.gpkg",
+                "some-layer-that-doesn't-exist",
+            ]
+        )
+        assert r.exit_code == 2, r
+        assert "Table 'some-layer-that-doesn't-exist' not found in gpkg_contents"
+
+        # Not a GeoPackage
+        db = sqlite3.connect(str(tmp_path / "a.gpkg"))
+        with db:
+            db.execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val VARCHAR);")
+
+        # not a GeoPackage
+        repo_path = tmp_path / "data3.git"
+        r = cli_runner.invoke(
+            [
+                f"--repo={repo_path}",
+                "import-gpkg",
+                tmp_path / "a.gpkg",
+                "mytable",
+            ]
+        )
+        assert r.exit_code == 2, r
+        assert "a.gpkg' doesn't appear to be a valid GeoPackage" in r.stdout
 
 
 def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
