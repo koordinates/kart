@@ -113,7 +113,22 @@ def insert_commit(request, cli_runner):
 def test_import_geopackage(data_archive, tmp_path, cli_runner):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository. """
     with data_archive("gpkg-points") as data:
+        # list tables
         repo_path = tmp_path / "data.git"
+        r = cli_runner.invoke(
+            [
+                "import-gpkg",
+                f"--list-tables",
+                data / "nz-pa-points-topo-150k.gpkg",
+            ]
+        )
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            f'GeoPackage tables in \'{data / "nz-pa-points-topo-150k.gpkg"}\':',
+            f'nz_pa_points_topo_150k  -  NZ Pa Points (Topo, 1:50k)',
+        ]
+
+        # successful import
         r = cli_runner.invoke(
             [
                 f"--repo={repo_path}",
@@ -163,7 +178,7 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
         # Not a GeoPackage
         db = sqlite3.connect(str(tmp_path / "a.gpkg"))
         with db:
-            db.execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val VARCHAR);")
+            db.execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val TEXT);")
 
         # not a GeoPackage
         repo_path = tmp_path / "data3.git"

@@ -111,9 +111,9 @@ $ /path/to/snowdrop/kxgit-docker.sh kxgit ...
    * Get the whole layer
 2. Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository.
    ```console
-   # find/check the table name in the Kx GeoPackage
-   $ sqlite3 kx-foo-layer.gpkg 'SELECT table_name FROM gpkg_contents;'
-   # repo directory will be created
+   # find the table name in the GeoPackage
+   $ kxgit import-gpkg --list-tables kx-foo-layer.gpkg
+   # import the layer (`foo_layer`) — the repo directory will be created:
    $ kxgit --repo=/path/to/kx-foo-layer.git import-gpkg kx-foo-layer.gpkg foo_layer
    $ cd /path/to/kx-foo-layer.git
    ```

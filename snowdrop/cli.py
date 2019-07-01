@@ -172,18 +172,43 @@ def _dump_gpkg_meta_info(db, layer):
 @cli.command("import-gpkg")
 @click.pass_context
 @click.argument("geopackage", type=click.Path(exists=True))
-@click.argument("table")
-def import_gpkg(ctx, geopackage, table):
+@click.argument("table", required=False)
+@click.option("--list-tables", is_flag=True)
+def import_gpkg(ctx, geopackage, table, list_tables):
     """ Import a GeoPackage to a new repository """
-    click.echo(f"Importing {geopackage} ...")
-
     db = _get_db(geopackage)
     dbcur = db.cursor()
 
-    if not dbcur.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='gpkg_contents';").fetchone():
+    sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='gpkg_contents';"
+    if not dbcur.execute(sql).fetchone():
         raise click.BadParameter(f"'{geopackage}' doesn't appear to be a valid GeoPackage", param_hint="geopackage")
-    if not dbcur.execute("SELECT 1 FROM gpkg_contents WHERE table_name=?;", (table,)).fetchone():
-        raise click.BadParameter(f"Table '{table}' not found in gpkg_contents", param_hint="table")
+
+    if list_tables:
+        # print a list of the GeoPackage tables
+        click.secho(f"GeoPackage tables in '{geopackage}':", bold=True)
+        sql = """
+            SELECT table_name, data_type, identifier
+            FROM gpkg_contents
+            WHERE data_type IN ('features', 'attributes')
+            ORDER BY table_name;
+        """
+        for table_name, data_type, identifier in dbcur.execute(sql):
+            click.echo(f"{table_name}  -  {identifier}")
+            return
+
+    if not table:
+        raise click.BadParameter('Missing argument', param_hint='table')
+
+    sql = """
+        SELECT 1
+        FROM gpkg_contents
+        WHERE
+            table_name=?
+            AND data_type IN ('features', 'attributes');"""
+    if not dbcur.execute(sql, (table,)).fetchone():
+        raise click.BadParameter(f"Feature/Attributes table '{table}' not found in gpkg_contents", param_hint="table")
+
+    click.echo(f"Importing {geopackage} ...")
 
     repo_dir = ctx.obj["repo_dir"]
     if os.path.exists(repo_dir):
