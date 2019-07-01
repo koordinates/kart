@@ -3,12 +3,13 @@ set -eu
 
 echo "--- Pulling images from build cache"
 
-if [ -n "${NO_DOCKER_CACHE-}" ]; then
-    echo "Skipping because NO_DOCKER_CACHE is set"
+CACHE_BUILD_STAGE="${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.build-stage"
+CACHE_RUN_STAGE="${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.run-stage"
+
+if [ -n "${NO_DOCKER_CACHE-}" ] || [[ "${BUILDKITE_MESSAGE,,}" =~ \[\s*ci\s+nocache\s*\] ]]; then
+    echo "Skipping because NO_DOCKER_CACHE / [ci nocache] is set"
     CACHE_FROM=""
 else
-    CACHE_BUILD_STAGE="${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.build-stage"
-    CACHE_RUN_STAGE="${ECR_CACHE}/${BUILDKITE_PIPELINE_SLUG}:${BUILDKITE_BRANCH}.run-stage"
     CACHE_IMAGES=(
         "${CACHE_BUILD_STAGE}"
         "${CACHE_RUN_STAGE}"
