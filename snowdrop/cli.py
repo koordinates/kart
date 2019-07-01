@@ -326,7 +326,7 @@ def checkout(ctx, branch, refish, working_copy, layer, force, fmt):
     head_ref = None
 
     if refish:
-        commit, ref = repo.lookup_refish(refish)
+        commit, ref = repo.resolve_refish(refish)
         head_ref = ref.name if ref else commit.id
     else:
         commit = base_commit
@@ -1527,7 +1527,7 @@ def merge(ctx, ff, ff_only, commit):
     c_base = repo[repo.head.target]
 
     # accept ref-ish things (refspec, branch, commit)
-    c_head, r_head = repo.lookup_refish(commit)
+    c_head, r_head = repo.resolve_refish(commit)
 
     print(f"Merging {c_head.id} to {c_base.id} ...")
     merge_base = repo.merge_base(c_base.oid, c_head.oid)
