@@ -1,27 +1,29 @@
-class Kxgit < Formula
+class Snowdrop < Formula
   include Language::Python::Virtualenv
 
-  desc "Koordinates Gitlike Proof of Concept"
+  desc "Distributed version-control for datasets"
   homepage "https://github.com/koordinates/snowdrop"
 
   head do
-    url "git@github.com:koordinates/snowdrop.git", :branch => 'gitlike-2019', :using => :git
+    url "git@github.com:koordinates/snowdrop.git", :branch => 'master', :using => :git
 
     resource "libgit2" do
-      url "https://github.com/libgit2/libgit2/archive/af95615faa87d3181fb5e8bc140c1aa6a8eda085.tar.gz"
-      sha256 "f1c4d666555bee81d2bac1677876a2ffe4c6e7c8cb64a3e51fc7540913cf4bbc"
+      # kx-0.28 branch
+      url "https://github.com/koordinates/libgit2/archive/7a39d0d1aad41d92cf0e3f980ddbb7d4ea88373c.tar.gz"
+      sha256 "caa6e64e4c09dc9cb728a6cfcc4e7466e6e6ec032f0dea72ca10a2f7aafd8186"
     end
 
     resource "pygit2" do
-      # better-tree-nav branch
-      url "https://github.com/rcoup/pygit2/archive/613a742796f8318181974fa8122ca094cb2c9bcd.tar.gz"
-      sha256 "5cade50e8e237939017ea3af9955edf439fabe149f955408d14dcbadf49c2503"
+      # kx-0.28 branch
+      url "https://github.com/koordinates/pygit2/archive/fd9d9d336d9379841a6a3818097e13a9955fc5e5.tar.gz"
+      sha256 "fba9a55a93d27b2091d567a3c238971431bc6b3395dbe004747a765598c0012a"
     end
   end
 
-  depends_on "python" # Python3
+  depends_on "python"  # Python3
   depends_on "git"
   depends_on "sqlite3"
+  depends_on "libspatialite"
   depends_on "gdal"
 
   # depends_on "libgit2"
@@ -43,10 +45,14 @@ class Kxgit < Formula
 
     resource("libgit2").stage {
       cmake_args = std_cmake_args
-      cmake_args[2] = "-DCMAKE_INSTALL_PREFIX=#{venv_root}"
+      cmake_args << "-DCMAKE_INSTALL_PREFIX=#{venv_root}"
+      cmake_args << "-DBUILD_EXAMPLES=NO"
+      cmake_args << "-DBUILD_CLAR=NO"
 
-      system "cmake", ".", *cmake_args
-      system "make", "install"
+      mkdir "build" do
+        system "cmake", *cmake_args, ".."
+        system "make", "install"
+      end
     }
 
     resource("pygit2").stage {
@@ -54,14 +60,16 @@ class Kxgit < Formula
       venv.pip_install resources[2]  # pygit2
     }
 
+    gdal_version = `gdal-config --version`.chomp()
+    system "#{venv_root}/bin/pip", "install",
+      "-v", "--no-deps", "pygdal==#{gdal_version}.*"
+
     # Kx: install requirements.txt dependencies
     # Total hack that works only by coincidence:
     # venv.pip_install "--requirement=requirements.txt --no-binary=:none:"
     system "#{venv_root}/bin/pip", "install",
-      "-v", "--no-deps", "--ignore-installed",
+      "-v", "--no-deps",
       "--requirement=requirements.txt"
-
-    Pathname.glob("#{venv_root}/lib/python*/no-global-site-packages.txt").each {|p| p.delete}
 
     # `pip_install_and_link` takes a look at the virtualenv's bin directory
     # before and after installing its argument. New scripts will be symlinked

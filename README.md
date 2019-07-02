@@ -34,16 +34,16 @@ You need [Homebrew](https://brew.sh/) installed.
 $ brew tap --force-auto-update koordinates/snowdrop git@github.com:koordinates/snowdrop.git
 $ brew install --HEAD snowdrop
 
-# check it's working (these should be the version numbers)
+# check it's working
 $ snow --version
-Project Snowdrop
+Project Snowdrop v0.1
 GDAL v2.4.1
-PyGit2 v0.28.2; Libgit2 v0.28.0
+PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
 #### For developing snowdrop
 ```
-$ git clone git@github.com:koordinates/snowdrop.git --branch=gitlike-2019
+$ git clone git@github.com:koordinates/snowdrop.git
 $ cd snowdrop
 $ brew install --only-dependencies --HEAD HomebrewFormula/snowdrop.rb
 
@@ -53,8 +53,8 @@ $ source venv/bin/activate
 
 # get libgit2/pygit2 stuff
 $ mkdir vendor
-$ git clone --branch=kx-0.28 git@github.com:rcoup/libgit2.git vendor/libgit2
-$ git clone --branch=kx-0.28 git@github.com:rcoup/pygit2.git vendor/pygit2
+$ git clone --branch=kx-0.28 git@github.com:koordinates/libgit2.git vendor/libgit2
+$ git clone --branch=kx-0.28 git@github.com:koordinates/pygit2.git vendor/pygit2
 
 # build libgit2
 $ cd vendor/libgit2
@@ -84,11 +84,11 @@ $ ln -sf $(pwd)/venv/bin/snowdrop /usr/local/bin/snowdrop
 # quit the virtualenv
 $ deactivate
 
-# check it's working (these should be the version numbers)
+# check it's working
 $ snow --version
-Project Snowdrop
+Project Snowdrop v0.1
 GDAL v2.4.1
-PyGit2 v0.28.2; Libgit2 v0.28.0
+PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
 Sources:
