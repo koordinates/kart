@@ -142,8 +142,8 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
     * `snow tag ...`
     * `snow remote ...`. Remember simple remotes can just be another local directory.
     * `snow push` / `snow pull`
-7. Other git commands will _probably_ work if run from the `kx-foo-layer.snow/` folder. eg:
-    * `snow reset --soft {commitish}`
+7. Other git commands will _possibly_ work if run from the `kx-foo-layer.snow/` folder. eg:
+    * `git reset --soft {commitish}`
 8. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
    ```console
    $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
