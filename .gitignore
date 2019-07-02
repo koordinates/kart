@@ -1,7 +1,5 @@
 *.egg-info
-
-*.pyc
-*.pyo
+*.py?
 /data
 /venv
 /vendor

@@ -99,7 +99,7 @@ def data_archive(request, tmp_path_factory, chdir):
 def data_working_copy(data_archive, tmp_path, cli_runner):
     """
     Extract a repo archive with a working copy geopackage
-    If the geopackage isn't in the archive, create it via `kxgit checkout`
+    If the geopackage isn't in the archive, create it via `snow checkout`
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
@@ -107,8 +107,8 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
     @contextlib.contextmanager
     def _data_working_copy(name, force_new=False):
         with data_archive(name) as repo_dir:
-            if name.endswith(".git"):
-                name = name[:-4]
+            if name.endswith(".snow"):
+                name = name[:-5]
 
             wc_path = repo_dir / f"{name}.gpkg"
             if wc_path.exists():

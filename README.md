@@ -1,17 +1,15 @@
-SnowDrop
---------
+Project Snowdrop
+----------------
 ```
       @@@
          @
           @
            @
            @@
-          @@@@
          @@@@@
        @@@@@@@@@
       @@@@@@@@@@@@
-     @@@@@@@@@@@@@@
-    @@@@@@@@@@@ @@@@
+     @@@@@@@@@@ @@@@
     @@@@@ @@@@@ @@@@
     @@@@  @@@@@@ @@@@
     @@@  @@@@@@  @@@@
@@ -23,7 +21,7 @@ SnowDrop
           @
 ```
 
-### Koordinates git-like Sync Client (experiments)
+### Distributed version-control for datasets
 
 ## Installing
 
@@ -34,11 +32,11 @@ You need [Homebrew](https://brew.sh/) installed.
 #### For just general running/updating
 ```console
 $ brew tap --force-auto-update koordinates/snowdrop git@github.com:koordinates/snowdrop.git
-$ brew install --HEAD kxgit
+$ brew install --HEAD snowdrop
 
 # check it's working (these should be the version numbers)
-$ kxgit --version
-kxgit proof of concept
+$ snow --version
+Project Snowdrop
 GDAL v2.4.1
 PyGit2 v0.28.2; Libgit2 v0.28.0
 ```
@@ -47,7 +45,7 @@ PyGit2 v0.28.2; Libgit2 v0.28.0
 ```
 $ git clone git@github.com:koordinates/snowdrop.git --branch=gitlike-2019
 $ cd snowdrop
-$ brew install --only-dependencies --HEAD HomebrewFormula/kxgit.rb
+$ brew install --only-dependencies --HEAD HomebrewFormula/snowdrop.rb
 
 # create our virtualenv
 $ virtualenv --python=python3.7 ./venv
@@ -77,17 +75,18 @@ $ pip install pygdal=="$(gdal-config --version).*"
 $ pip install -r requirements-dev.txt
 $ rm venv/lib/python*/site-packages/no-global-site-packages.txt
 
-# install kxgit
+# install snowdrop
 $ pip install -e .
-# make kxgit globally accessible
-$ ln -sf $(pwd)/venv/bin/kxgit /usr/local/bin/kxgit
+# make snowdrop globally accessible
+$ ln -sf $(pwd)/venv/bin/snow /usr/local/bin/snow
+$ ln -sf $(pwd)/venv/bin/snowdrop /usr/local/bin/snowdrop
 
 # quit the virtualenv
 $ deactivate
 
 # check it's working (these should be the version numbers)
-$ kxgit --version
-kxgit proof of concept
+$ snow --version
+Project Snowdrop
 GDAL v2.4.1
 PyGit2 v0.28.2; Libgit2 v0.28.0
 ```
@@ -100,7 +99,7 @@ Sources:
 ```console
 $ docker build -t snowdrop .
 # in repository/data directory
-$ /path/to/snowdrop/kxgit-docker.sh kxgit ...
+$ /path/to/snowdrop/snowdrop-docker.sh snow ...
 ```
 
 ## Usage
@@ -109,43 +108,43 @@ $ /path/to/snowdrop/kxgit-docker.sh kxgit ...
    * With a single vector layer
    * Which has a primary key
    * Get the whole layer
-2. Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository.
+2. Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository.
    ```console
    # find the table name in the GeoPackage
-   $ kxgit import-gpkg --list-tables kx-foo-layer.gpkg
+   $ snow import-gpkg --list-tables kx-foo-layer.gpkg
    # import the layer (`foo_layer`) — the repo directory will be created:
-   $ kxgit --repo=/path/to/kx-foo-layer.git import-gpkg kx-foo-layer.gpkg foo_layer
-   $ cd /path/to/kx-foo-layer.git
+   $ snow --repo=/path/to/kx-foo-layer.snow import-gpkg kx-foo-layer.gpkg foo_layer
+   $ cd /path/to/kx-foo-layer.snow
    ```
-   This will create a _bare_ git repository at `/path/to/kx-foo-layer.git`. Normal git tools & commands will work in there (mostly).
+   This will create a _bare_ git repository at `/path/to/kx-foo-layer.snow`.
 
    Use this repository as the directory to run all the other commands in.
 3. Checkout a working copy to edit in eg. QGIS
    ```console
    # find/check the table name in the geopackage
-   $ kxgit checkout --layer=foo_layer --working-copy=/path/to/foo.gpkg
+   $ snow checkout --layer=foo_layer --working-copy=/path/to/foo.gpkg
    ```
 4. Editing in QGIS/etc:
    * will track changes in the `__kxg_*` tables
    * additions/edits/deletes of features are supported
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).
-   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `kxgit`.
-6. With your working copy, `kxgit` commands should work if run from the `kx-foo-layer.git/` folder. Check `--help` for options, the most important ones are supported, and in some cases options are passed straight through to the underlying git command:
-    * `kxgit diff` diff the working copy against the repository (no index!)
-    * `kxgit commit -m {message}` commit outstanding changes from the working copy
-    * `kxgit log` review commit history
-    * `kxgit branch` & `kxgit checkout -b` branch management
-    * `kxgit fetch` fetch upstream changes.
-    * `kxgit merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
-    * `kxgit push`
-7. Other git commands will _probably_ work if run from the `kx-foo-layer.git/` folder. eg:
-    * `git remote ...`. Remember simple remotes can just be another local directory.
-    * `git reset --soft {commitish}`
-    * `git tag ...`
+   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `snow`.
+6. With your working copy, `snow` commands should work if run from the `kx-foo-layer.snow/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
+    * `snow diff` diff the working copy against the repository (no index!)
+    * `snow commit -m {message}` commit outstanding changes from the working copy
+    * `snow log` review commit history
+    * `snow branch` & `snow checkout -b` branch management
+    * `snow fetch` fetch upstream changes.
+    * `snow merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
+    * `snow tag ...`
+    * `snow remote ...`. Remember simple remotes can just be another local directory.
+    * `snow push` / `snow pull`
+7. Other git commands will _probably_ work if run from the `kx-foo-layer.snow/` folder. eg:
+    * `snow reset --soft {commitish}`
 8. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
    ```console
    $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
    # enter your gitea username/password when prompted
-   $ kxgit push --all --set-upstream origin
+   $ snow push --all --set-upstream origin
    ```

@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='snowdrop',
     version='0.1',
-    description='Koordinates gitlike experiments',
+    description='Distributed version-control for datasets',
     url='http://github.com/koordinates/snowdrop',
     author='Koordinates Limited',
     author_email='support@koordinates.com',
@@ -12,7 +12,8 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'kxgit = snowdrop.cli:cli',
+            'snow = snowdrop.cli:cli',
+            'snowdrop = snowdrop.cli:cli',
         ],
     },
 )

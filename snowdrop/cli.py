@@ -27,8 +27,10 @@ def print_version(ctx, param, value):
         return
 
     import osgeo
+    import pkg_resources  # part of setuptools
+    version = pkg_resources.require("snowdrop")[0].version
 
-    click.echo("kxgit proof of concept")
+    click.echo(f"Project Snowdrop v{version}")
     click.echo(f"GDAL v{osgeo._gdal.__version__}")
     click.echo(f"PyGit2 v{pygit2.__version__}; Libgit2 v{pygit2.LIBGIT2_VERSION}")
     ctx.exit()
@@ -213,16 +215,16 @@ def import_gpkg(ctx, geopackage, table, list_tables):
     repo_dir = ctx.obj["repo_dir"]
     if os.path.exists(repo_dir):
         repo = pygit2.Repository(repo_dir)
-        assert repo.is_bare, "Not a bare repository?!"
+        assert repo.is_bare, "Not a valid repository"
 
         if not repo.is_empty:
             raise click.ClickException(
                 "Looks like you already have commits in this repository"
             )
     else:
-        if not repo_dir.endswith(".git"):
+        if not repo_dir.endswith(".snow"):
             raise click.BadParameter(
-                "Path should end in .git for now", param_hint="--repo"
+                "Path should end in .snow", param_hint="--repo"
             )
         repo = pygit2.init_repository(repo_dir, bare=True)
 
@@ -342,7 +344,7 @@ def checkout(ctx, branch, refish, working_copy, layer, force, fmt):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     # refish could be:
@@ -1311,11 +1313,11 @@ def diff(ctx):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     working_copy = _get_working_copy(repo)
-    assert working_copy, f"No working copy? Try `kxgit checkout`"
+    assert working_copy, f"No working copy? Try `snow checkout`"
 
     db = _get_db(working_copy.path, isolation_level="DEFERRED")
     with db:
@@ -1399,7 +1401,7 @@ def commit(ctx, message):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
     commit = repo.head.peel(pygit2.Commit)
     tree = commit.tree
@@ -1628,7 +1630,7 @@ def fsck(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     click.echo("Checking repository integrity...")
@@ -1861,7 +1863,7 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     if repository is None:
@@ -1909,7 +1911,7 @@ def log(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))
@@ -1924,7 +1926,7 @@ def push(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     _execvp("git", ["git", "-C", repo_dir, "push"] + list(args))
@@ -1939,7 +1941,7 @@ def fetch(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     _execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
@@ -1954,7 +1956,7 @@ def branch(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     _execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
@@ -1969,7 +1971,7 @@ def remote(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     _execvp("git", ["git", "-C", repo_dir, "remote"] + list(args))
@@ -1984,7 +1986,7 @@ def tag(ctx, args):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter(
-            "Not an existing bare repository?", param_hint="--repo"
+            "Not an existing repository", param_hint="--repo"
         )
 
     _execvp("git", ["git", "-C", repo_dir, "tag"] + list(args))
@@ -1996,8 +1998,8 @@ def tag(ctx, args):
 def clone(repository, directory):
     """ Clone a repository into a new directory """
     repo_dir = directory or os.path.split(repository)[1]
-    if not repo_dir.endswith(".git") or len(repo_dir) == 4:
-        raise click.BadParameter("Repository should be foo.git")
+    if not repo_dir.endswith(".snow") or len(repo_dir) == 4:
+        raise click.BadParameter("Repository should be myproject.snow")
 
     subprocess.check_call(["git", "clone", "--bare", repository, repo_dir])
     subprocess.check_call(

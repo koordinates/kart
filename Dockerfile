@@ -94,7 +94,7 @@ USER snowdrop
 WORKDIR /data
 
 # smoke test
-RUN kxgit --version
+RUN snow --version
 
 ENTRYPOINT ["/venv/bin/tini", "--"]
-CMD ["/venv/bin/kxgit"]
+CMD ["/venv/bin/snow"]

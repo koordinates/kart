@@ -111,10 +111,10 @@ def insert_commit(request, cli_runner):
 
 @pytest.mark.slow
 def test_import_geopackage(data_archive, tmp_path, cli_runner):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a kxgit repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
     with data_archive("gpkg-points") as data:
         # list tables
-        repo_path = tmp_path / "data.git"
+        repo_path = tmp_path / "data.snow"
         r = cli_runner.invoke(
             [
                 "import-gpkg",
@@ -163,7 +163,7 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
         assert 'Looks like you already have commits in this repository' in r.stdout
 
         # missing/bad table name
-        repo_path = tmp_path / "data2.git"
+        repo_path = tmp_path / "data2.snow"
         r = cli_runner.invoke(
             [
                 f"--repo={repo_path}",
@@ -181,7 +181,7 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
             db.execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val TEXT);")
 
         # not a GeoPackage
-        repo_path = tmp_path / "data3.git"
+        repo_path = tmp_path / "data3.snow"
         r = cli_runner.invoke(
             [
                 f"--repo={repo_path}",
@@ -196,7 +196,7 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
 
 def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
     """ Checkout a working copy to edit """
-    with data_archive("points.git") as repo_path:
+    with data_archive("points.snow") as repo_path:
         _clear_working_copy()
 
         wc = tmp_path / "data.gpkg"
@@ -222,7 +222,7 @@ def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
 
 def test_diff(data_working_copy, geopackage, cli_runner):
     """ diff the working copy against the repository (no index!) """
-    with data_working_copy("points.git") as (repo, wc):
+    with data_working_copy("points.snow") as (repo, wc):
         # empty
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
@@ -276,7 +276,7 @@ def test_diff(data_working_copy, geopackage, cli_runner):
 
 def test_commit(data_working_copy, geopackage, cli_runner):
     """ commit outstanding changes from the working copy """
-    with data_working_copy("points.git") as (repo, wc):
+    with data_working_copy("points.snow") as (repo, wc):
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-0"])
         assert r.exit_code == 1, r
@@ -313,7 +313,7 @@ def test_commit(data_working_copy, geopackage, cli_runner):
 
 def test_log(data_archive, cli_runner):
     """ review commit history """
-    with data_archive("points.git"):
+    with data_archive("points.snow"):
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
@@ -333,7 +333,7 @@ def test_log(data_archive, cli_runner):
 
 def test_show(data_archive, cli_runner):
     """ review commit history """
-    with data_archive("points.git"):
+    with data_archive("points.snow"):
         r = cli_runner.invoke(["show"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
@@ -347,7 +347,7 @@ def test_show(data_archive, cli_runner):
 
 def test_tag(data_working_copy, cli_runner):
     """ review commit history """
-    with data_working_copy("points.git") as (repo_dir, wc):
+    with data_working_copy("points.snow") as (repo_dir, wc):
         # create a tag
         r = cli_runner.invoke(["tag", "version1"])
         assert r.exit_code == 0, r
@@ -359,7 +359,7 @@ def test_tag(data_working_copy, cli_runner):
 
 
 def test_push(data_archive, tmp_path, cli_runner):
-    with data_archive("points.git"):
+    with data_archive("points.snow"):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
@@ -371,7 +371,7 @@ def test_push(data_archive, tmp_path, cli_runner):
 
 def test_checkout_detached(data_working_copy, cli_runner, geopackage):
     """ Checkout a working copy to edit """
-    with data_working_copy("points.git") as (repo_dir, wc):
+    with data_working_copy("points.snow") as (repo_dir, wc):
         db = geopackage(wc)
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
@@ -387,7 +387,7 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
 
 
 def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path):
-    with data_working_copy("points.git") as (repo_dir, wc):
+    with data_working_copy("points.snow") as (repo_dir, wc):
         db = geopackage(wc)
         repo = pygit2.Repository(str(repo_dir))
 
@@ -459,7 +459,7 @@ def test_checkout_reset(data_working_copy, cli_runner, geopackage):
     """
     Check that we reset any working-copy changes correctly before doing any new checkout
     """
-    with data_working_copy("points.git", force_new=True) as (repo_dir, wc):
+    with data_working_copy("points.snow", force_new=True) as (repo_dir, wc):
         db = geopackage(wc)
 
         h_before = _db_table_hash(db, POINTS_LAYER, POINTS_LAYER_PK)
@@ -527,17 +527,17 @@ def test_version(cli_runner):
     r = cli_runner.invoke(["--version"])
     assert r.exit_code == 0, r
     assert re.match(
-        r"^kxgit proof of concept\nGDAL v\d\.\d+\.\d+.*?\nPyGit2 v\d\.\d+\.\d+[^;]*; Libgit2 v\d\.\d+\.\d+.*$",
+        r"^Project Snowdrop v(\d.\d.*?)\nGDAL v\d\.\d+\.\d+.*?\nPyGit2 v\d\.\d+\.\d+[^;]*; Libgit2 v\d\.\d+\.\d+.*$",
         r.stdout,
     )
 
 
 def test_clone(data_archive, tmp_path, cli_runner, chdir):
-    with data_archive("points.git") as remote_path:
+    with data_archive("points.snow") as remote_path:
         with chdir(tmp_path):
             r = cli_runner.invoke(["clone", remote_path])
 
-            repo_path = tmp_path / "points.git"
+            repo_path = tmp_path / "points.snow"
             assert repo_path.is_dir()
 
         subprocess.check_call(
@@ -563,7 +563,7 @@ def test_clone(data_archive, tmp_path, cli_runner, chdir):
 def test_geopackage_locking_edit(
     data_working_copy, geopackage, cli_runner, monkeypatch
 ):
-    with data_working_copy("points.git") as (repo, wc):
+    with data_working_copy("points.snow") as (repo, wc):
         db = geopackage(wc)
 
         is_checked = False
@@ -590,7 +590,7 @@ def test_geopackage_locking_edit(
 
 
 def test_fsck(data_working_copy, geopackage, cli_runner):
-    with data_working_copy("points.git") as (repo, wc):
+    with data_working_copy("points.snow") as (repo, wc):
         db = geopackage(wc)
 
         r = cli_runner.invoke(["fsck"])
@@ -606,7 +606,7 @@ def test_fsck(data_working_copy, geopackage, cli_runner):
 
 
 def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
-    with data_working_copy("points.git") as (repo_path, wc):
+    with data_working_copy("points.snow") as (repo_path, wc):
         db = geopackage(wc)
 
         # creating a new branch with existing name errors
@@ -659,7 +659,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
 
 
 def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_commit, request):
-    with data_working_copy("points.git") as (repo_path, wc):
+    with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -694,7 +694,7 @@ def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_com
 
 
 def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, insert_commit, request):
-    with data_working_copy("points.git") as (repo_path, wc):
+    with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -734,7 +734,7 @@ def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, inser
 
 
 def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, request):
-    with data_working_copy("points.git") as (repo_path, wc):
+    with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -783,7 +783,7 @@ def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, re
 
 
 def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_commit, tmp_path, request):
-    with data_working_copy("points.git") as (path1, wc):
+    with data_working_copy("points.snow") as (path1, wc):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
@@ -795,7 +795,7 @@ def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_c
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
         assert r.exit_code == 0, r
 
-    with data_working_copy("points.git") as (path2, wc):
+    with data_working_copy("points.snow") as (path2, wc):
         repo = pygit2.Repository(str(path2))
         h = repo.head.target.hex
 
@@ -828,7 +828,7 @@ def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_c
 
 
 def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_commit, tmp_path, request, chdir):
-    with data_working_copy("points.git") as (path1, wc1), data_working_copy("points.git") as (path2, wc2):
+    with data_working_copy("points.snow") as (path1, wc1), data_working_copy("points.snow") as (path2, wc2):
         with chdir(path1):
             subprocess.run(["git", "init", "--bare", tmp_path], check=True)
             r = cli_runner.invoke(["remote", "add", "origin", tmp_path])
