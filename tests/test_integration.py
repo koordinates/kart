@@ -547,6 +547,12 @@ def test_version(cli_runner):
     )
 
 
+def test_cli_help():
+    click_app = cli.cli
+    for name, cmd in click_app.commands.items():
+        assert cmd.help, f"`{name}` command has no help text"
+
+
 def test_clone(data_archive, tmp_path, cli_runner, chdir):
     with data_archive("points.snow") as remote_path:
         with chdir(tmp_path):
