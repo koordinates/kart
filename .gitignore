@@ -4,8 +4,6 @@
 *.pyo
 /data
 /venv
-/node_modules
-/noms
 /vendor
 /tests/data/*/
 /coverage
