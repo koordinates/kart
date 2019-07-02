@@ -136,6 +136,8 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
     * `snow log` review commit history
     * `snow branch` & `snow checkout -b` branch management
     * `snow fetch` fetch upstream changes.
+    * `snow status` show working copy state.
+    * `snow reset` discard changes in the working copy.
     * `snow merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
     * `snow tag ...`
     * `snow remote ...`. Remember simple remotes can just be another local directory.
