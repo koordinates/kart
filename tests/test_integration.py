@@ -85,23 +85,31 @@ def _git_graph(request, message, count=10, *paths):
 
 
 @pytest.fixture
-def insert_commit(request, cli_runner):
-    def func(db):
+def insert(request, cli_runner):
+    def func(db, commit=True, reset_index=None):
+        if reset_index is not None:
+            func.index = reset_index
+
         rec = POINTS_RECORD.copy()
-        rec['fid'] = 98000 + func.index
+        new_fid = 98000 + func.index
+        rec['fid'] = new_fid
 
         with db:
             cur = db.cursor()
             cur.execute(POINTS_INSERT, rec)
             assert cur.rowcount == 1
-            func.inserted_fids.append(rec['fid'])
+            func.inserted_fids.append(new_fid)
 
-        r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}"])
-        assert r.exit_code == 0, r
         func.index += 1
 
-        commit_id = r.stdout.splitlines()[-1].split(": ")[1]
-        return commit_id
+        if commit:
+            r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}"])
+            assert r.exit_code == 0, r
+
+            commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+            return commit_id
+        else:
+            return new_fid
 
     func.index = 0
     func.inserted_fids = []
@@ -679,7 +687,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         assert branch.upstream_name == 'refs/remotes/myremote/master'
 
 
-def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_commit, request):
+def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -691,9 +699,9 @@ def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_com
 
         # make some changes
         db = geopackage(wc)
-        insert_commit(db)
-        insert_commit(db)
-        commit_id = insert_commit(db)
+        insert(db)
+        insert(db)
+        commit_id = insert(db)
 
         _git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
@@ -714,7 +722,7 @@ def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert_com
         assert c.parents[0].parents[0].parents[0].hex == h
 
 
-def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, insert_commit, request):
+def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -726,9 +734,9 @@ def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, inser
 
         # make some changes
         db = geopackage(wc)
-        insert_commit(db)
-        insert_commit(db)
-        commit_id = insert_commit(db)
+        insert(db)
+        insert(db)
+        commit_id = insert(db)
 
         _git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
@@ -754,7 +762,7 @@ def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, inser
         assert c.message == "Merge 'changes'"
 
 
-def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, request):
+def test_merge_true(data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -766,15 +774,15 @@ def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, re
 
         # make some changes
         db = geopackage(wc)
-        insert_commit(db)
-        insert_commit(db)
-        b_commit_id = insert_commit(db)
+        insert(db)
+        insert(db)
+        b_commit_id = insert(db)
         assert repo.head.target.hex == b_commit_id
 
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
         assert repo.head.target.hex != b_commit_id
-        m_commit_id = insert_commit(db)
+        m_commit_id = insert(db)
         _git_graph(request, "pre-merge-master")
 
         # fastforward merge should fail
@@ -798,12 +806,12 @@ def test_merge_true(data_working_copy, geopackage, cli_runner, insert_commit, re
         assert c.message == "Merge 'changes'"
 
         # check the database state
-        num_inserts = len(insert_commit.inserted_fids)
-        r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid IN ({','.join(['?']*num_inserts)});", insert_commit.inserted_fids)
+        num_inserts = len(insert.inserted_fids)
+        r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid IN ({','.join(['?']*num_inserts)});", insert.inserted_fids)
         assert r.fetchone()[0] == num_inserts
 
 
-def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_commit, tmp_path, request):
+def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request):
     with data_working_copy("points.snow") as (path1, wc):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)
 
@@ -811,7 +819,7 @@ def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_c
         assert r.exit_code == 0, r
 
         db = geopackage(wc)
-        commit_id = insert_commit(db)
+        commit_id = insert(db)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
         assert r.exit_code == 0, r
@@ -848,7 +856,7 @@ def test_fetch(data_archive, data_working_copy, geopackage, cli_runner, insert_c
         assert commit.parents[0].hex == h
 
 
-def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_commit, tmp_path, request, chdir):
+def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request, chdir):
     with data_working_copy("points.snow") as (path1, wc1), data_working_copy("points.snow") as (path2, wc2):
         with chdir(path1):
             subprocess.run(["git", "init", "--bare", tmp_path], check=True)
@@ -870,7 +878,7 @@ def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_co
 
         with chdir(path1):
             db = geopackage(wc1)
-            commit_id = insert_commit(db)
+            commit_id = insert(db)
 
             r = cli_runner.invoke(["push"])
             assert r.exit_code == 0, r
@@ -901,3 +909,124 @@ def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_co
             assert r.exit_code == 0, r
             assert repo.head.target.hex == commit_id
 
+
+def test_status(data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request):
+    with data_working_copy("points.snow") as (path1, wc):
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "On branch master",
+            "",
+            "Nothing to commit, working copy clean"
+        ]
+
+        r = cli_runner.invoke(["checkout", "HEAD~1"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "HEAD detached at edd5a4b",
+            "",
+            "Nothing to commit, working copy clean"
+        ]
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+
+        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        db = geopackage(wc)
+        insert(db)
+
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "On branch master",
+            "Your branch is up to date with 'myremote/master'.",
+            "",
+            "Nothing to commit, working copy clean"
+        ]
+
+    with data_working_copy("points.snow") as (path2, wc):
+        db = geopackage(wc)
+
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["fetch", "myremote"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["branch", "--set-upstream-to=myremote/master"])
+        assert r.exit_code == 0, r
+
+        _git_graph(request, "post-fetch")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "On branch master",
+            "Your branch is behind 'myremote/master' by 1 commit, and can be fast-forwarded.",
+            '  (use "snow pull" to update your local branch)',
+            "",
+            "Nothing to commit, working copy clean"
+        ]
+
+        # local commit
+        insert(db, reset_index=100)
+
+        _git_graph(request, "post-commit")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "On branch master",
+            "Your branch and 'myremote/master' have diverged,",
+            'and have 1 and 1 different commits each, respectively.',
+            '  (use "snow pull" to merge the remote branch into yours)',
+            "",
+            "Nothing to commit, working copy clean"
+        ]
+
+        r = cli_runner.invoke(["merge", "myremote/master"])
+        assert r.exit_code == 0, r
+
+        _git_graph(request, "post-merge")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "On branch master",
+            "Your branch is ahead of 'myremote/master' by 2 commits.",
+            '  (use "snow push" to publish your local commits)',
+            "",
+            "Nothing to commit, working copy clean"
+        ]
+
+        # local edits
+        with db:
+            insert(db, commit=False)
+            db.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid <= 2;")
+            db.execute(f"UPDATE {POINTS_LAYER} SET name='test0' WHERE fid <= 5;")
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "On branch master",
+            "Your branch is ahead of 'myremote/master' by 2 commits.",
+            '  (use "snow push" to publish your local commits)',
+            "",
+            "Changes in working copy:",
+            '  (use "snow commit" to commit)',
+            '  (use "snow reset" to discard changes)',
+            "",
+            "    modified:   3 features",
+            "    new:        1 feature",
+            "    deleted:    2 features",
+        ]
