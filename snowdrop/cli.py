@@ -1921,6 +1921,7 @@ def pull(ctx, ff, ff_only, repository, refspecs):
 @cli.command()
 @click.pass_context
 def status(ctx):
+    """ Show the working copy status """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
