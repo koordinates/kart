@@ -1900,6 +1900,23 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     ctx.invoke(merge, ff=ff, ff_only=ff_only, commit="FETCH_HEAD")
 
 
+# aliases/shortcuts
+
+
+@cli.command()
+@click.pass_context
+def show(ctx):
+    """ Show the current commit """
+    ctx.invoke(log, args=["-1"])
+
+
+@cli.command()
+@click.pass_context
+def reset(ctx):
+    """ Discard changes made in the working copy (ie. reset to HEAD """
+    ctx.invoke(checkout, force=True, refish="HEAD")
+
+
 # straight process-replace commands
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -2040,13 +2057,6 @@ def clone(repository, directory):
             "refs/heads/master",
         ]
     )
-
-
-@cli.command()
-@click.pass_context
-def show(ctx):
-    """ Show the current commit """
-    ctx.invoke(log, args=["-1"])
 
 
 if __name__ == "__main__":

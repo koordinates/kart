@@ -455,9 +455,15 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         assert r_head() == ('HEAD', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
 
 
-def test_checkout_reset(data_working_copy, cli_runner, geopackage):
+@pytest.mark.parametrize("via", [
+    pytest.param('reset', id='via-reset'),
+    pytest.param('checkout', id='via-checkout')
+])
+def test_working_copy_reset(via, data_working_copy, cli_runner, geopackage):
     """
     Check that we reset any working-copy changes correctly before doing any new checkout
+
+    We can do this via `snow reset` or `snow checkout --force HEAD`
     """
     with data_working_copy("points.snow", force_new=True) as (repo_dir, wc):
         db = geopackage(wc)
@@ -482,18 +488,27 @@ def test_checkout_reset(data_working_copy, cli_runner, geopackage):
             ).fetchone()[0]
             assert change_count == (1 + 4 + 5 + 1)
 
-        # this should error
-        r = cli_runner.invoke(["checkout", "HEAD"])
-        assert r.exit_code == 1, r
+        if via == 'reset':
+            # using `snow reset`
+            r = cli_runner.invoke(["reset"])
+            assert r.exit_code == 0, r
+        elif via == 'checkout':
+            # using `snow checkout --force`
 
-        change_count = db.execute(
-            "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
-        ).fetchone()[0]
-        assert change_count == (1 + 4 + 5 + 1)
+            # this should error
+            r = cli_runner.invoke(["checkout", "HEAD"])
+            assert r.exit_code == 1, r
 
-        # do again with --force
-        r = cli_runner.invoke(["checkout", "--force", "HEAD"])
-        assert r.exit_code == 0, r
+            change_count = db.execute(
+                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+            ).fetchone()[0]
+            assert change_count == (1 + 4 + 5 + 1)
+
+            # do again with --force
+            r = cli_runner.invoke(["checkout", "--force", "HEAD"])
+            assert r.exit_code == 0, r
+        else:
+            raise NotImplementedError(f"via={via}")
 
         change_count = db.execute(
             "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
@@ -880,7 +895,3 @@ def test_pull(data_archive, data_working_copy, geopackage, cli_runner, insert_co
             assert r.exit_code == 0, r
             assert repo.head.target.hex == commit_id
 
-
-# TODO:
-# * `git reset --soft {commitish}`
-# * `git tag ...`
