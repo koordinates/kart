@@ -6,7 +6,6 @@ import json
 import os
 import re
 import sqlite3
-import string
 import struct
 import subprocess
 import sys
@@ -14,6 +13,7 @@ import time
 import typing
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 import click
 import pygit2
@@ -190,7 +190,7 @@ def _dump_gpkg_meta_info(db, layer):
 
 @cli.command("import-gpkg")
 @click.pass_context
-@click.argument("geopackage", type=click.Path(exists=True))
+@click.argument("geopackage", type=click.Path(exists=True, dir_okay=False))
 @click.argument("table", required=False)
 @click.option("--list-tables", is_flag=True)
 def import_gpkg(ctx, geopackage, table, list_tables):
@@ -2041,6 +2041,31 @@ def status(ctx):
             if -1 in change_counts:
                 n_del = change_counts[-1][1]
                 click.echo(f"    deleted:    {n_del} {_pf(n_del)}")
+
+
+@cli.command('workingcopy-set-path')
+@click.pass_context
+@click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
+def workingcopy_set_path(ctx, new):
+    """ Change the path to the working-copy """
+    repo_dir = ctx.obj["repo_dir"] or "."
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
+        raise click.BadParameter(
+            "Not an existing repository", param_hint="--repo"
+        )
+
+    repo_cfg = repo.config
+    if "kx.workingcopy" in repo_cfg:
+        fmt, path, layer = repo_cfg["kx.workingcopy"].split(":")
+    else:
+        raise click.ClickException("No working copy? Try `snow checkout`")
+
+    new = Path(new)
+    if not new.is_absolute():
+        new = os.path.relpath(new, repo_dir)
+
+    repo.config["kx.workingcopy"] = f"{fmt}:{new}:{layer}"
 
 
 # aliases/shortcuts

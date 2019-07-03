@@ -1077,3 +1077,37 @@ def test_status(data_archive, data_working_copy, geopackage, cli_runner, insert,
             "    new:        1 feature",
             "    deleted:    2 features",
         ]
+
+
+def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
+    with data_working_copy("points.snow") as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+
+        r = cli_runner.invoke(["workingcopy-set-path", "/thingz.gpkg"])
+        assert r.exit_code == 2, r
+
+        # relative path 1
+        new_path = Path("new-thingz.gpkg")
+        wc.rename(new_path)
+        r = cli_runner.invoke(["workingcopy-set-path", new_path])
+        assert r.exit_code == 0, r
+        wc = new_path
+
+        assert repo.config['kx.workingcopy'] == f"GPKG:{new_path}:{POINTS_LAYER}"
+
+        # relative path 2
+        new_path = Path("other-thingz.gpkg")
+        wc.rename(new_path)
+        r = cli_runner.invoke(["workingcopy-set-path", Path("../points.snow") / new_path])
+        assert r.exit_code == 0, r
+        wc = new_path
+
+        assert repo.config['kx.workingcopy'] == f"GPKG:{new_path}:{POINTS_LAYER}"
+
+        # abs path
+        new_path = tmp_path / "thingz.gpkg"
+        wc.rename(new_path)
+        r = cli_runner.invoke(["workingcopy-set-path", new_path])
+        assert r.exit_code == 0, r
+
+        assert repo.config['kx.workingcopy'] == f"GPKG:{new_path}:{POINTS_LAYER}"
