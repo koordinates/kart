@@ -73,7 +73,7 @@ $ pip install .
 $ cd ../..
 $ pip install pygdal=="$(gdal-config --version).*"
 $ pip install -r requirements-dev.txt
-$ rm venv/lib/python*/site-packages/no-global-site-packages.txt
+$ rm venv/lib/python*/no-global-site-packages.txt
 
 # install snowdrop
 $ pip install -e .
