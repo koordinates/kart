@@ -212,6 +212,9 @@ def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
             ["checkout", f"--layer={POINTS_LAYER}", f"--working-copy={wc}"]
         )
         assert r.exit_code == 0, r
+        lines = r.stdout.splitlines()
+        assert re.match(fr"Checkout {POINTS_LAYER}@HEAD to .+ as GPKG \.\.\.$", lines[0])
+        assert re.match(r"Commit: d1bee0841307242ad7a9ab029dc73c652b9f74f3 Tree: [a-f\d]{40}$", lines[1])
 
         assert wc.exists()
         db = geopackage(wc)

@@ -596,7 +596,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     repo.reset(commit.id, pygit2.GIT_RESET_SOFT)
 
     tree = commit.tree
-    click.echo(f"Commit: {commit} Tree: {tree}")
+    click.echo(f"Commit: {commit.hex} Tree: {tree.hex}")
 
     layer_tree = commit.tree / layer
     meta_tree = layer_tree / "meta"
@@ -775,8 +775,8 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
         db.execute("PRAGMA locking_mode = NORMAL;")
 
-    print(f"Added {feat_count} Features to GPKG")  # in {t1-t0:.1f}s")
-    print(f"Overall rate: {(feat_count/(t1-t0)):.0f} features/s)")
+    print(f"Added {feat_count} Features to GPKG in {t1-t0:.1f}s")
+    print(f"Overall rate: {(feat_count/(t1-t0)):.0f} features/s")
 
     # Create the GeoPackage Spatial Index
     gdal_ds = gdal.OpenEx(
@@ -785,7 +785,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     gdal_ds.ExecuteSQL(
         f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(meta_geom["column_name"])});'
     )
-    print(f"Created spatial index")  # in {time.time()-t1:.1f}s")
+    print(f"Created spatial index in {time.time()-t1:.1f}s")
     del gdal_ds
 
     # update the bounds
