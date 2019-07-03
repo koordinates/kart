@@ -303,12 +303,14 @@ def test_commit(data_working_copy, geopackage, cli_runner):
             assert cur.rowcount == 1
             cur.execute(f"UPDATE {POINTS_LAYER} SET name='test' WHERE fid=2;")
             assert cur.rowcount == 1
-            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
-            assert cur.rowcount == 1
-            fk_del = cur.execute(
-                f"SELECT feature_key FROM __kxg_map WHERE feature_id=3;"
-            ).fetchone()[0]
-            print("deleted {fk_del}")
+            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid IN (3,30,31,32,33);")
+            assert cur.rowcount == 5
+
+        fk_del = cur.execute(
+            f"SELECT feature_key FROM __kxg_map WHERE table_name=? AND feature_id=3;",
+            [POINTS_LAYER]
+        ).fetchone()[0]
+        print("deleted fid=3, feature_key={fk_del}")
 
         r = cli_runner.invoke(["commit", "-m", "test-commit-1"])
         assert r.exit_code == 0, r
@@ -320,6 +322,33 @@ def test_commit(data_working_copy, geopackage, cli_runner):
 
         tree = r.head.peel(pygit2.Tree)
         assert f"{POINTS_LAYER}/features/{fk_del[:4]}/{fk_del}/geom" not in tree
+
+        change_count = cur.execute(
+            "SELECT COUNT(*) FROM __kxg_map WHERE table_name=? AND state!=0;",
+            [POINTS_LAYER]
+        ).fetchone()[0]
+        assert change_count == 0, "Changes still listed in __kxg_map"
+
+        del_map_record = cur.execute(
+            "SELECT 1 FROM __kxg_map WHERE table_name=? AND feature_key=?;",
+            [POINTS_LAYER, fk_del]
+        ).fetchone()
+        assert del_map_record is None, "Deleted feature still in __kxg_map"
+
+        map_count, feature_count = cur.execute(
+            f"""
+                SELECT
+                    (SELECT COUNT(*) FROM __kxg_map WHERE table_name=?) AS map_count,
+                    (SELECT COUNT(*) FROM {POINTS_LAYER}) AS feature_count;
+            """,
+            [POINTS_LAYER]
+        ).fetchone()
+        print("map_count=", map_count, "feature_count=", feature_count)
+        assert map_count == feature_count
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        assert r.stdout == ''
 
 
 def test_log(data_archive, cli_runner):
@@ -629,12 +658,27 @@ def test_fsck(data_working_copy, geopackage, cli_runner):
         assert r.exit_code == 0, r
 
         # introduce a feature mismatch
+        assert db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER};").fetchone()[0] == 2143
+        assert db.execute(f"SELECT COUNT(*) FROM __kxg_map;").fetchone()[0] == 2143
+
         with db:
             db.execute(f"UPDATE {POINTS_LAYER} SET name='fred' WHERE fid=1;")
             db.execute("UPDATE __kxg_map SET state=0 WHERE feature_id=1;")
 
+        assert db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER};").fetchone()[0] == 2143
+        assert db.execute(f"SELECT COUNT(*) FROM __kxg_map;").fetchone()[0] == 2143
+
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 1, r
+
+        r = cli_runner.invoke(["fsck", "--reset-layer"])
+        assert r.exit_code == 0, r
+
+        assert db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER};").fetchone()[0] == 2143
+        assert db.execute(f"SELECT COUNT(*) FROM __kxg_map;").fetchone()[0] == 2143
+
+        r = cli_runner.invoke(["fsck"])
+        assert r.exit_code == 0, r
 
 
 def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):

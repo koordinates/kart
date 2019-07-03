@@ -589,7 +589,7 @@ OFTMap = {
 }
 
 
-def _checkout_new(repo, working_copy, layer, commit, fmt):
+def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=None):
     if fmt != "GPKG":
         raise NotImplementedError(fmt)
 
@@ -622,16 +622,22 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     else:
         meta_md_ref = {}
 
-    # GDAL: Create GeoPackage
-    # GDAL: Add metadata/etc
-    gdal_driver = gdal.GetDriverByName(fmt)
-    gdal_ds = gdal_driver.Create(working_copy, 0, 0, 0, gdal.GDT_Unknown)
-    del gdal_ds
+    if not skip_create:
+        # GDAL: Create GeoPackage
+        # GDAL: Add metadata/etc
+        gdal_driver = gdal.GetDriverByName(fmt)
+        gdal_ds = gdal_driver.Create(working_copy, 0, 0, 0, gdal.GDT_Unknown)
+        del gdal_ds
 
-    db = _get_db(working_copy, isolation_level="DEFERRED")
-    db.execute("PRAGMA synchronous = OFF;")
-    db.execute("PRAGMA locking_mode = EXCLUSIVE;")
-    with db:
+    if db:
+        txnctx = _suspend_triggers(db, table)
+    else:
+        db = _get_db(working_copy, isolation_level="DEFERRED")
+        db.execute("PRAGMA synchronous = OFF;")
+        db.execute("PRAGMA locking_mode = EXCLUSIVE;")
+        txnctx = db
+
+    with txnctx:
         dbcur = db.cursor()
 
         # Update GeoPackage core tables
@@ -696,14 +702,15 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
         cols, pk_field = _get_columns(meta_cols)
         col_names = cols.keys()
         col_specs = cols.values()
-        db.execute(f"CREATE TABLE {sqlite_ident(table)} ({', '.join(col_specs)});")
+        if not skip_create:
+            db.execute(f"CREATE TABLE {sqlite_ident(table)} ({', '.join(col_specs)});")
 
-        db.execute(
-            f"CREATE TABLE __kxg_map (table_name TEXT NOT NULL, feature_key VARCHAR(36) NULL, feature_id INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0);"
-        )
-        db.execute(
-            f"CREATE TABLE __kxg_meta (table_name TEXT NOT NULL, key TEXT NOT NULL, value TEXT NULL);"
-        )
+            db.execute(
+                f"CREATE TABLE __kxg_map (table_name TEXT NOT NULL, feature_key VARCHAR(36) NULL, feature_id INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0);"
+            )
+            db.execute(
+                f"CREATE TABLE __kxg_meta (table_name TEXT NOT NULL, key TEXT NOT NULL, value TEXT NULL);"
+            )
 
         db.execute(
             "INSERT INTO __kxg_meta (table_name, key, value) VALUES (?, ?, ?);",
@@ -749,8 +756,9 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
 
         t1 = time.time()
 
-        # Create triggers
-        _create_triggers(db, table)
+        if not skip_create:
+            # Create triggers
+            _create_triggers(db, table)
 
         # Update gpkg_contents
         # We do  spatial index built.
@@ -779,14 +787,15 @@ def _checkout_new(repo, working_copy, layer, commit, fmt):
     print(f"Overall rate: {(feat_count/(t1-t0)):.0f} features/s")
 
     # Create the GeoPackage Spatial Index
-    gdal_ds = gdal.OpenEx(
-        working_copy, gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR, ["GPKG"]
-    )
-    gdal_ds.ExecuteSQL(
-        f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(meta_geom["column_name"])});'
-    )
-    print(f"Created spatial index in {time.time()-t1:.1f}s")
-    del gdal_ds
+    if not skip_create:
+        gdal_ds = gdal.OpenEx(
+            working_copy, gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR, ["GPKG"]
+        )
+        gdal_ds.ExecuteSQL(
+            f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(meta_geom["column_name"])});'
+        )
+        print(f"Created spatial index in {time.time()-t1:.1f}s")
+        del gdal_ds
 
     # update the bounds
     dbcur.execute(
@@ -1637,12 +1646,32 @@ def merge(ctx, ff, ff_only, commit):
     return _checkout_update(repo, wc.path, wc.layer, commit, base_commit=c_base)
 
 
+def _fsck_reset(repo, working_copy, layer):
+    db = _get_db(working_copy, isolation_level="DEFERRED")
+    db.execute("PRAGMA synchronous = OFF;")
+    db.execute("PRAGMA locking_mode = EXCLUSIVE;")
+
+    db.execute("BEGIN")
+    db.execute("PRAGMA defer_foreign_keys = ON;")
+    db.execute("DELETE FROM __kxg_meta WHERE table_name=?;", [layer])
+    db.execute("DELETE FROM __kxg_map WHERE table_name=?;", [layer])
+    db.execute("DELETE FROM gpkg_metadata WHERE id IN (SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name=?);", [layer])
+    db.execute("DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [layer])
+    db.execute("DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [layer])
+    db.execute("DELETE FROM gpkg_contents WHERE table_name=?;", [layer])
+    db.execute(f"DELETE FROM {sqlite_ident(layer)};")
+
+    db.execute("PRAGMA defer_foreign_keys = OFF;")
+    _checkout_new(repo, working_copy, layer, repo.head.peel(pygit2.Commit), "GPKG", skip_create=True, db=db)
+
+
 @cli.command(
     context_settings=dict(ignore_unknown_options=True),
 )
 @click.pass_context
+@click.option("--reset-layer", default=False, is_flag=True, help="Reset the working copy for this layer")
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def fsck(ctx, args):
+def fsck(ctx, reset_layer, args):
     """ Verifies the connectivity and validity of the objects in the database """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
@@ -1672,6 +1701,10 @@ def fsck(ctx, args):
     click.secho(f"✔︎ Working copy: {working_copy}", fg="green")
     click.echo(f"Layer: {layer}")
 
+    if reset_layer:
+        click.secho(f"Resetting working copy for {layer}...", bold=True)
+        return _fsck_reset(repo, working_copy, layer)
+
     db = _get_db(working_copy, isolation_level="DEFERRED")
     with db:
         tree = repo.head.peel(pygit2.Tree)
@@ -1693,13 +1726,41 @@ def fsck(ctx, args):
         row_count = q.fetchone()[0]
         click.echo(f"{row_count} features in {layer}")
 
+        # __kxg_map
+        click.echo("__kxg_map rows:")
+        q = db.execute(
+            """
+            SELECT state, COUNT(*) AS count
+            FROM __kxg_map
+            WHERE
+                table_name = ?
+            GROUP BY state;
+        """,
+            [layer],
+        )
+        MAP_STATUS = {-1: "Deleted", 0: "Unchanged", 1: "Added/Updated"}
+        map_state_counts = {k: 0 for k in MAP_STATUS}
+        for state, count in q.fetchall():
+            map_state_counts[state] = count
+            click.echo(f"  {MAP_STATUS[state]}: {count}")
+        map_row_count = sum(map_state_counts.values())
+        click.echo(f"  Total: {map_row_count}")
+        map_cur_count = map_row_count - map_state_counts[-1]  # non-deleted
+
+        if map_row_count == row_count:
+            click.secho(f"✔︎ Row counts match between __kxg_map & table", fg="green")
+        elif map_cur_count != row_count:
+            raise click.ClickException(click.style(f"✘ Row count mismatch between __kxg_map ({map_cur_count}) & table ({row_count})", fg="red"))
+        else:
+            pass
+
         # compare the DB to the index (meta & __kxg_map)
         index = _db_to_index(db, layer, tree)
         diff_index = tree.diff_to_index(index)
         num_changes = len(diff_index)
         if num_changes:
             click.secho(
-                f"! Working copy appears dirty: {num_changes} change(s)", fg="yellow"
+                f"! Working copy appears dirty according to the index: {num_changes} change(s)", fg="yellow"
             )
 
         meta_prefix = f"{layer}/meta/"
@@ -1736,30 +1797,6 @@ def fsck(ctx, args):
                 if dd.new_file.path != dd.old_file.path:
                     m += f" → {dd.new_file.path}"
                 click.echo(m)
-
-        # __kxg_map
-        click.echo("__kxg_map rows:")
-        q = db.execute(
-            """
-            SELECT state, COUNT(*)
-            FROM __kxg_map
-            WHERE
-                table_name = ?
-            GROUP BY state;
-        """,
-            [layer],
-        )
-        MAP_STATUS = {-1: "Deleted", 0: "Unchanged", 1: "Added/Updated"}
-        total = 0
-        for row in q.fetchall():
-            click.echo(f"  {MAP_STATUS[row[0]]}: {row[1]}")
-            total += row[1]
-        click.echo(f"  Total: {total}")
-
-        if total == row_count:
-            click.secho(f"✔︎ Row counts match", fg="green")
-        else:
-            raise click.ClickException(click.style(f"✘ Row count mismatch", fg="red"))
 
         if num_changes:
             # can't proceed with content comparison for dirty working copies
