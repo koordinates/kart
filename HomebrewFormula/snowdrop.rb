@@ -55,11 +55,6 @@ class Snowdrop < Formula
       end
     }
 
-    resource("pygit2").stage {
-      ENV["LDFLAGS"] = "-Wl,-rpath,'#{venv_root}/lib' #{ENV['LDFLAGS']}"
-      venv.pip_install resources[2]  # pygit2
-    }
-
     gdal_version = `gdal-config --version`.chomp()
     system "#{venv_root}/bin/pip", "install",
       "-v", "--no-deps", "pygdal==#{gdal_version}.*"
@@ -70,6 +65,11 @@ class Snowdrop < Formula
     system "#{venv_root}/bin/pip", "install",
       "-v", "--no-deps",
       "--requirement=requirements.txt"
+
+    resource("pygit2").stage {
+      ENV["LDFLAGS"] = "-Wl,-rpath,'#{venv_root}/lib' #{ENV['LDFLAGS']}"
+      venv.pip_install resources[2]  # pygit2
+    }
 
     # `pip_install_and_link` takes a look at the virtualenv's bin directory
     # before and after installing its argument. New scripts will be symlinked

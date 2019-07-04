@@ -6,6 +6,8 @@ REQ_SOURCES=$(wildcard requirements*.in)
 REQ_TARGETS=$(REQ_SOURCES:.in=.txt)
 
 requirements: $(REQ_TARGETS)
+	# Comment out pygit2, because we install manually afterwards
+	sed -i -E 's/^(pygit2=)/#\1/' *.txt
 
 requirements.txt: requirements.in
 	pip-compile --output-file $@ $<
