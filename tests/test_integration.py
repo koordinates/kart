@@ -51,6 +51,32 @@ POLYGONS_RECORD = {
 }
 POLYGONS_HEAD_SHA = '1c3bb605b91c7a7d2d149cb545dcd0e2ee3df14b'
 
+# Test Dataset (gpkg-spec / table.snow)
+
+TABLE_LAYER = "countiestbl"
+TABLE_LAYER_PK = "OBJECTID"
+TABLE_INSERT = f"""
+    INSERT INTO {TABLE_LAYER}
+                    (OBJECTID, NAME, STATE_NAME, STATE_FIPS, CNTY_FIPS, FIPS, AREA, POP1990, POP2000, POP90_SQMI, Shape_Leng, Shape_Area)
+                VALUES
+                    (:OBJECTID, :NAME, :STATE_NAME, :STATE_FIPS, :CNTY_FIPS, :FIPS, :AREA, :POP1990, :POP2000, :POP90_SQMI, :Shape_Leng, :Shape_Area);
+"""
+TABLE_RECORD = {
+    "OBJECTID": 9999,
+    "NAME": "Lake of the Gruffalo",
+    "STATE_NAME": "Minnesota",
+    "STATE_FIPS": "27",
+    "CNTY_FIPS": "077",
+    "FIPS": "27077",
+    "AREA": 1784.0634,
+    "POP1990": 4076,
+    "POP2000": 4651,
+    "POP90_SQMI": 2,
+    "Shape_Leng": 4.05545998243992,
+    "Shape_Area": 0.565449933741451,
+}
+TABLE_HEAD_SHA = 'e4e9cfae9fe05945bacbfc45d8ea250cdf68b55e'
+
 
 def _last_change_time(db):
     """
@@ -112,8 +138,8 @@ def insert(request, cli_runner):
 
         if layer is None:
             # autodetect
-            layer = db.execute("SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?) LIMIT 1",
-                               [POINTS_LAYER, POLYGONS_LAYER]
+            layer = db.execute("SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?,?) LIMIT 1",
+                               [POINTS_LAYER, POLYGONS_LAYER, TABLE_LAYER]
                                ).fetchone()[0]
 
         if layer == POINTS_LAYER:
@@ -125,6 +151,11 @@ def insert(request, cli_runner):
             rec = POLYGONS_RECORD.copy()
             pk_field = POLYGONS_LAYER_PK
             sql = POLYGONS_INSERT
+            pk_start = 98000
+        elif layer == TABLE_LAYER:
+            rec = TABLE_RECORD.copy()
+            pk_field = TABLE_LAYER_PK
+            sql = TABLE_INSERT
             pk_start = 98000
         else:
             raise NotImplementedError(f"Layer {layer}")
@@ -160,7 +191,9 @@ def insert(request, cli_runner):
 @pytest.mark.parametrize("archive,gpkg,table", [
     pytest.param('gpkg-points', 'nz-pa-points-topo-150k.gpkg', POINTS_LAYER, id='points'),
     pytest.param('gpkg-polygons', 'nz-waca-adjustments.gpkg', POLYGONS_LAYER, id='polygons-pk'),
-    pytest.param('gpkg-au-census', 'census2016_sdhca_ot_short.gpkg', 'census2016_sdhca_ot_ra_short', id='au_ra-short'),
+    pytest.param('gpkg-au-census', 'census2016_sdhca_ot_short.gpkg', 'census2016_sdhca_ot_ra_short', id='au-ra-short'),
+    pytest.param('gpkg-spec', 'sample1_2.gpkg', 'counties', id='spec-counties'),
+    pytest.param('gpkg-spec', 'sample1_2.gpkg', 'countiestbl', id='spec-counties-table'),
 ])
 def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_runner):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
@@ -251,7 +284,8 @@ def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
 
 @pytest.mark.parametrize("archive,table,commit_sha", [
     pytest.param('points.snow', POINTS_LAYER, POINTS_HEAD_SHA, id='points'),
-    pytest.param('polygons.snow', POLYGONS_LAYER, POLYGONS_HEAD_SHA, id='polygons-pk')
+    pytest.param('polygons.snow', POLYGONS_LAYER, POLYGONS_HEAD_SHA, id='polygons-pk'),
+    pytest.param('table.snow', TABLE_LAYER, TABLE_HEAD_SHA, id='table'),
 ])
 def test_checkout_workingcopy(archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage):
     """ Checkout a working copy to edit """
@@ -282,9 +316,14 @@ def test_checkout_workingcopy(archive, table, commit_sha, data_archive, tmp_path
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
 
-def test_diff(data_working_copy, geopackage, cli_runner):
+@pytest.mark.parametrize("archive,table", [
+    pytest.param('points.snow', POINTS_LAYER, id='points'),
+    pytest.param('polygons.snow', POLYGONS_LAYER, id='polygons-pk'),
+    pytest.param('table.snow', TABLE_LAYER, id='table'),
+])
+def test_diff(archive, table, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against the repository (no index!) """
-    with data_working_copy("points.snow") as (repo, wc):
+    with data_working_copy(archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
@@ -294,103 +333,147 @@ def test_diff(data_working_copy, geopackage, cli_runner):
         db = geopackage(wc)
         with db:
             cur = db.cursor()
-            cur.execute(POINTS_INSERT, POINTS_RECORD)
-            assert cur.rowcount == 1
-            cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
-            assert cur.rowcount == 1
-            cur.execute(
-                f"UPDATE {POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
-            )
-            assert cur.rowcount == 1
-            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
-            assert cur.rowcount == 1
+            if table == POINTS_LAYER:
+                cur.execute(POINTS_INSERT, POINTS_RECORD)
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+                assert cur.rowcount == 1
+                cur.execute(
+                    f"UPDATE {POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
+                )
+                assert cur.rowcount == 1
+                cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid=3;")
+                assert cur.rowcount == 1
+
+            elif table == POLYGONS_LAYER:
+                cur.execute(POLYGONS_INSERT, POLYGONS_RECORD)
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
+                assert cur.rowcount == 1
+                cur.execute(
+                    f"UPDATE {POLYGONS_LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
+                )
+                assert cur.rowcount == 1
+                cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id=1452332;")
+                assert cur.rowcount == 1
+
+            elif table == TABLE_LAYER:
+                cur.execute(TABLE_INSERT, TABLE_RECORD)
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {TABLE_LAYER} SET \"OBJECTID\"=9998 WHERE OBJECTID=1;")
+                assert cur.rowcount == 1
+                cur.execute(
+                    f"UPDATE {TABLE_LAYER} SET name='test', POP2000=9867 WHERE OBJECTID=2;"
+                )
+                assert cur.rowcount == 1
+                cur.execute(f'DELETE FROM {TABLE_LAYER} WHERE "OBJECTID"=3;')
+                assert cur.rowcount == 1
+
+            else:
+                raise NotImplementedError(f"table={table}")
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == [
-            "--- 2bad8ad5-97aa-4910-9e6c-c6e8e692700d",
-            "-                                      fid = 3",
-            "-                                     geom = POINT(...)",
-            "-                               macronated = N",
-            "-                                     name = Tauwhare Pa",
-            "-                               name_ascii = Tauwhare Pa",
-            "-                                  t50_fid = 2426273",
-            "+++ {new feature}",
-            "+                                      fid = 9999",
-            "+                                     geom = POINT(...)",
-            "+                                  t50_fid = 9999999",
-            "+                               name_ascii = Te Motu-a-kore",
-            "+                               macronated = 0",
-            "+                                     name = Te Motu-a-kore",
-            "--- 7416b7ab-992d-4595-ab96-39a186f5968a",
-            "+++ 7416b7ab-992d-4595-ab96-39a186f5968a",
-            "-                                      fid = 1",
-            "+                                      fid = 9998",
-            "--- 905a8ae1-8346-4b42-8646-42385beac87f",
-            "+++ 905a8ae1-8346-4b42-8646-42385beac87f",
-            "                                       fid = 2",
-            "-                                     name = ␀",
-            "+                                     name = test",
-            "-                                  t50_fid = 2426272",
-            "+                                  t50_fid = ␀",
-        ]
-
-
-def test_diff_2(data_working_copy, geopackage, cli_runner):
-    """ diff the working copy against the repository (no index!) """
-    with data_working_copy("polygons.snow") as (repo, wc):
-        # empty
-        r = cli_runner.invoke(["diff"])
-        assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == []
-
-        # make some changes
-        db = geopackage(wc)
-        with db:
-            cur = db.cursor()
-            cur.execute(POLYGONS_INSERT, POLYGONS_RECORD)
-            assert cur.rowcount == 1
-            cur.execute(f"UPDATE {POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
-            assert cur.rowcount == 1
-            cur.execute(
-                f"UPDATE {POLYGONS_LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
-            )
-            assert cur.rowcount == 1
-            cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id=1452332;")
-            assert cur.rowcount == 1
-
-        r = cli_runner.invoke(["diff"])
-        assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == [
-            "--- a015ce37-666c-4f90-889b-6c035300dc59",
-            "-                           adjusted_nodes = 558",
-            "-                            date_adjusted = 2011-06-07T15:22:58Z",
-            "-                                     geom = MULTIPOLYGON(...)",
-            "-                                       id = 1452332",
-            "-                         survey_reference = ␀",
-            "+++ {new feature}",
-            "+                                       id = 9999999",
-            "+                                     geom = POLYGON(...)",
-            "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
-            "+                         survey_reference = Null Island™ 🗺",
-            "+                           adjusted_nodes = 123",
-            "--- a7bdd03b-2aa9-41f8-91a7-abb5d5ec621b",
-            "+++ a7bdd03b-2aa9-41f8-91a7-abb5d5ec621b",
-            "-                                       id = 1424927",
-            "+                                       id = 9998",
-            "--- ec360eb3-f57e-47d0-bda5-a0a02231ff6c",
-            "+++ ec360eb3-f57e-47d0-bda5-a0a02231ff6c",
-            "                                        id = 1443053",
-            "-                            date_adjusted = 2011-05-10T12:09:10Z",
-            "+                            date_adjusted = 2019-01-01T00:00:00Z",
-            "-                         survey_reference = ␀",
-            "+                         survey_reference = test",
-        ]
+        if table == POINTS_LAYER:
+            assert r.stdout.splitlines() == [
+                "--- 2bad8ad5-97aa-4910-9e6c-c6e8e692700d",
+                "-                                      fid = 3",
+                "-                                     geom = POINT(...)",
+                "-                               macronated = N",
+                "-                                     name = Tauwhare Pa",
+                "-                               name_ascii = Tauwhare Pa",
+                "-                                  t50_fid = 2426273",
+                "+++ {new feature}",
+                "+                                      fid = 9999",
+                "+                                     geom = POINT(...)",
+                "+                                  t50_fid = 9999999",
+                "+                               name_ascii = Te Motu-a-kore",
+                "+                               macronated = 0",
+                "+                                     name = Te Motu-a-kore",
+                "--- 7416b7ab-992d-4595-ab96-39a186f5968a",
+                "+++ 7416b7ab-992d-4595-ab96-39a186f5968a",
+                "-                                      fid = 1",
+                "+                                      fid = 9998",
+                "--- 905a8ae1-8346-4b42-8646-42385beac87f",
+                "+++ 905a8ae1-8346-4b42-8646-42385beac87f",
+                "                                       fid = 2",
+                "-                                     name = ␀",
+                "+                                     name = test",
+                "-                                  t50_fid = 2426272",
+                "+                                  t50_fid = ␀",
+            ]
+        elif table == POLYGONS_LAYER:
+            assert r.stdout.splitlines() == [
+                "--- a015ce37-666c-4f90-889b-6c035300dc59",
+                "-                           adjusted_nodes = 558",
+                "-                            date_adjusted = 2011-06-07T15:22:58Z",
+                "-                                     geom = MULTIPOLYGON(...)",
+                "-                                       id = 1452332",
+                "-                         survey_reference = ␀",
+                "+++ {new feature}",
+                "+                                       id = 9999999",
+                "+                                     geom = POLYGON(...)",
+                "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
+                "+                         survey_reference = Null Island™ 🗺",
+                "+                           adjusted_nodes = 123",
+                "--- a7bdd03b-2aa9-41f8-91a7-abb5d5ec621b",
+                "+++ a7bdd03b-2aa9-41f8-91a7-abb5d5ec621b",
+                "-                                       id = 1424927",
+                "+                                       id = 9998",
+                "--- ec360eb3-f57e-47d0-bda5-a0a02231ff6c",
+                "+++ ec360eb3-f57e-47d0-bda5-a0a02231ff6c",
+                "                                        id = 1443053",
+                "-                            date_adjusted = 2011-05-10T12:09:10Z",
+                "+                            date_adjusted = 2019-01-01T00:00:00Z",
+                "-                         survey_reference = ␀",
+                "+                         survey_reference = test",
+            ]
+        elif table == TABLE_LAYER:
+            assert r.stdout.splitlines() == [
+                "--- b8e60439-89e2-4432-8fa3-189e2f7813e4",
+                "-                                     AREA = 2529.9794",
+                "-                                CNTY_FIPS = 065",
+                "-                                     FIPS = 53065",
+                "-                                     NAME = Stevens",
+                "-                                 OBJECTID = 3",
+                "-                                  POP1990 = 30948.0",
+                "-                                  POP2000 = 40652.0",
+                "-                               POP90_SQMI = 12",
+                "-                               STATE_FIPS = 53",
+                "-                               STATE_NAME = Washington",
+                "-                               Shape_Area = 0.7954858988987561",
+                "-                               Shape_Leng = 4.876296245235406",
+                "+++ {new feature}",
+                "+                                 OBJECTID = 9999",
+                "+                                     NAME = Lake of the Gruffalo",
+                "+                               STATE_NAME = Minnesota",
+                "+                               STATE_FIPS = 27",
+                "+                                CNTY_FIPS = 077",
+                "+                                     FIPS = 27077",
+                "+                                     AREA = 1784.0634",
+                "+                                  POP1990 = 4076.0",
+                "+                                  POP2000 = 4651.0",
+                "+                               POP90_SQMI = 2",
+                "+                               Shape_Leng = 4.05545998243992",
+                "+                               Shape_Area = 0.565449933741451",
+                "--- 326581a9-766f-48ad-a30b-0fd8dddd5f83",
+                "+++ 326581a9-766f-48ad-a30b-0fd8dddd5f83",
+                "                                  OBJECTID = 2",
+                "-                                     NAME = Ferry",
+                "+                                     NAME = test",
+                "-                                  POP2000 = 7199.0",
+                "+                                  POP2000 = 9867.0",
+                "--- bd2d37e1-1183-433b-98d0-076b5cb1b5be",
+                "+++ bd2d37e1-1183-433b-98d0-076b5cb1b5be",
+                "-                                 OBJECTID = 1",
+                "+                                 OBJECTID = 9998",
+            ]
 
 
 @pytest.mark.parametrize("archive,layer", [
     pytest.param('points.snow', POINTS_LAYER, id='points'),
-    pytest.param('polygons.snow', POLYGONS_LAYER, id='polygons-pk')
+    pytest.param('polygons.snow', POLYGONS_LAYER, id='polygons-pk'),
+    pytest.param('table.snow', TABLE_LAYER, id='table'),
 ])
 def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
     """ commit outstanding changes from the working copy """
@@ -424,6 +507,16 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
                 cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);")
                 assert cur.rowcount == 5
                 pk_del = 1452332
+            elif layer == TABLE_LAYER:
+                cur.execute(TABLE_INSERT, TABLE_RECORD)
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {TABLE_LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {TABLE_LAYER} SET name='test' WHERE OBJECTID=2;")
+                assert cur.rowcount == 1
+                cur.execute(f"DELETE FROM {TABLE_LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
+                assert cur.rowcount == 5
+                pk_del = 3
             else:
                 raise NotImplementedError(f"layer={layer}")
 
@@ -616,32 +709,68 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         assert r_head() == ('HEAD', POINTS_HEAD_SHA)
 
 
+@pytest.mark.parametrize("archive,layer", [
+    pytest.param('points.snow', POINTS_LAYER, id='points'),
+    pytest.param('polygons.snow', POLYGONS_LAYER, id='polygons-pk'),
+    pytest.param('table.snow', TABLE_LAYER, id='table'),
+])
 @pytest.mark.parametrize("via", [
     pytest.param('reset', id='via-reset'),
     pytest.param('checkout', id='via-checkout')
 ])
-def test_working_copy_reset(via, data_working_copy, cli_runner, geopackage):
+def test_working_copy_reset(archive, layer, via, data_working_copy, cli_runner, geopackage):
     """
     Check that we reset any working-copy changes correctly before doing any new checkout
 
     We can do this via `snow reset` or `snow checkout --force HEAD`
     """
-    with data_working_copy("points.snow", force_new=True) as (repo_dir, wc):
+    if layer == POINTS_LAYER:
+        pk_field = POINTS_LAYER_PK
+        rec = POINTS_RECORD
+        sql = POINTS_INSERT
+        del_pk = 5
+        upd_field = 't50_fid'
+        upd_field_value = 888888
+        upd_pk_range = (10, 15)
+        id_chg_pk = 20
+    elif layer == POLYGONS_LAYER:
+        pk_field = POLYGONS_LAYER_PK
+        rec = POLYGONS_RECORD
+        sql = POLYGONS_INSERT
+        del_pk = 1456912
+        upd_field = 'survey_reference'
+        upd_field_value = 'test'
+        upd_pk_range = (1459750, 1460312)
+        id_chg_pk = 1460583
+    elif layer == TABLE_LAYER:
+        pk_field = TABLE_LAYER_PK
+        rec = TABLE_RECORD
+        sql = TABLE_INSERT
+        del_pk = 5
+        upd_field = 'name'
+        upd_field_value = 'test'
+        upd_pk_range = (10, 15)
+        id_chg_pk = 20
+    else:
+        raise NotImplementedError(f"layer={layer}")
+
+    with data_working_copy(archive, force_new=True) as (repo_dir, wc):
         db = geopackage(wc)
 
-        h_before = _db_table_hash(db, POINTS_LAYER, POINTS_LAYER_PK)
+        h_before = _db_table_hash(db, layer, pk_field)
 
         with db:
             cur = db.cursor()
-            cur.execute(POINTS_INSERT, POINTS_RECORD)
+            cur.execute(sql, rec)
             assert cur.rowcount == 1
-            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid < 5;")
+            cur.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
             assert cur.rowcount == 4
             cur.execute(
-                f"UPDATE {POINTS_LAYER} SET t50_fid = 888888 WHERE fid>=10 AND fid<15;"
+                f"UPDATE {layer} SET {upd_field} = ? WHERE {pk_field}>=? AND {pk_field}<?;",
+                [upd_field_value, upd_pk_range[0], upd_pk_range[1]]
             )
             assert cur.rowcount == 5
-            cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=20;")
+            cur.execute(f"UPDATE {layer} SET {pk_field}=? WHERE {pk_field}=?;", [9998, id_chg_pk])
             assert cur.rowcount == 1
 
             change_count = db.execute(
@@ -676,108 +805,25 @@ def test_working_copy_reset(via, data_working_copy, cli_runner, geopackage):
         ).fetchone()[0]
         assert change_count == 0
 
-        h_after = _db_table_hash(db, POINTS_LAYER, POINTS_LAYER_PK)
+        h_after = _db_table_hash(db, layer, pk_field)
         if h_before != h_after:
-            r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid=9999;")
+            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=?;", [rec[pk_field]])
             if r.fetchone():
-                print("E: Newly inserted row is still there (fid=9999)")
-            r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid < 5;")
+                print("E: Newly inserted row is still there ({pk_field}={rec[pk_field]})")
+            r = db.execute(f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk])
             if r.fetchone()[0] != 4:
-                print("E: Deleted rows fid<5 still missing")
+                print("E: Deleted rows {pk_field}<{del_pk} still missing")
             r = db.execute(
-                f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE t50_fid = 888888;"
+                f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;", [upd_field_value]
             )
             if r.fetchone()[0] != 0:
                 print("E: Updated rows not reset")
-            r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid = 9998;")
+            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
             if r.fetchone():
-                print("E: Updated pk row is still there (fid=20 -> 9998)")
-            r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid = 20;")
+                print("E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)")
+            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = ?;", [id_chg_pk])
             if not r.fetchone():
-                print("E: Updated pk row is missing (fid=20)")
-
-        assert h_before == h_after
-
-
-@pytest.mark.parametrize("via", [
-    pytest.param('reset', id='via-reset'),
-    pytest.param('checkout', id='via-checkout')
-])
-def test_working_copy_reset_2(via, data_working_copy, cli_runner, geopackage):
-    """
-    Check that we reset any working-copy changes correctly before doing any new checkout
-
-    We can do this via `snow reset` or `snow checkout --force HEAD`
-    """
-    with data_working_copy("polygons.snow", force_new=True) as (repo_dir, wc):
-        db = geopackage(wc)
-
-        h_before = _db_table_hash(db, POLYGONS_LAYER, POLYGONS_LAYER_PK)
-
-        with db:
-            cur = db.cursor()
-            cur.execute(POLYGONS_INSERT, POLYGONS_RECORD)
-            assert cur.rowcount == 1
-            cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id < 1456912;")
-            assert cur.rowcount == 4
-            cur.execute(
-                f"UPDATE {POLYGONS_LAYER} SET survey_reference = 'test' WHERE id>=1459750 AND id<=1460311;"
-            )
-            assert cur.rowcount == 5
-            cur.execute(f"UPDATE {POLYGONS_LAYER} SET id=9998 WHERE id=1460583;")
-            assert cur.rowcount == 1
-
-            change_count = db.execute(
-                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
-            ).fetchone()[0]
-            assert change_count == (1 + 4 + 5 + 1)
-
-        if via == 'reset':
-            # using `snow reset`
-            r = cli_runner.invoke(["reset"])
-            assert r.exit_code == 0, r
-        elif via == 'checkout':
-            # using `snow checkout --force`
-
-            # this should error
-            r = cli_runner.invoke(["checkout", "HEAD"])
-            assert r.exit_code == 1, r
-
-            change_count = db.execute(
-                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
-            ).fetchone()[0]
-            assert change_count == (1 + 4 + 5 + 1)
-
-            # do again with --force
-            r = cli_runner.invoke(["checkout", "--force", "HEAD"])
-            assert r.exit_code == 0, r
-        else:
-            raise NotImplementedError(f"via={via}")
-
-        change_count = db.execute(
-            "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
-        ).fetchone()[0]
-        assert change_count == 0
-
-        h_after = _db_table_hash(db, POLYGONS_LAYER, POLYGONS_LAYER_PK)
-        if h_before != h_after:
-            r = db.execute(f"SELECT id FROM {POLYGONS_LAYER} WHERE id=9999999;")
-            if r.fetchone():
-                print("E: Newly inserted row is still there (id=9999999)")
-            r = db.execute(f"SELECT COUNT(*) FROM {POLYGONS_LAYER} WHERE id < 1456912;")
-            if r.fetchone()[0] != 4:
-                print("E: Deleted rows id<1456912 still missing")
-            r = db.execute(
-                f"SELECT COUNT(*) FROM {POLYGONS_LAYER} WHERE survey_reference = 'test';"
-            )
-            if r.fetchone()[0] != 0:
-                print("E: Updated rows not reset")
-            r = db.execute(f"SELECT id FROM {POLYGONS_LAYER} WHERE id = 9998;")
-            if r.fetchone():
-                print("E: Updated pk row is still there (id=1460583 -> 9998)")
-            r = db.execute(f"SELECT id FROM {POLYGONS_LAYER} WHERE id = 1460583;")
-            if not r.fetchone():
-                print("E: Updated pk row is missing (id=1460583)")
+                print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
 
         assert h_before == h_after
 
@@ -940,7 +986,8 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
 
 @pytest.mark.parametrize("archive", [
     pytest.param('points.snow', id='points'),
-    pytest.param('polygons.snow', id='polygons-pk')
+    pytest.param('polygons.snow', id='polygons-pk'),
+    pytest.param('table.snow', id='table'),
 ])
 def test_merge_fastforward(archive, data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy("points.snow") as (repo_path, wc):
@@ -979,7 +1026,8 @@ def test_merge_fastforward(archive, data_working_copy, geopackage, cli_runner, i
 
 @pytest.mark.parametrize("archive", [
     pytest.param('points.snow', id='points'),
-    pytest.param('polygons.snow', id='polygons-pk')
+    pytest.param('polygons.snow', id='polygons-pk'),
+    pytest.param('table.snow', id='table'),
 ])
 def test_merge_fastforward_noff(archive, data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy(archive) as (repo_path, wc):
@@ -1023,7 +1071,8 @@ def test_merge_fastforward_noff(archive, data_working_copy, geopackage, cli_runn
 
 @pytest.mark.parametrize("archive,layer,pk_field", [
     pytest.param('points.snow', POINTS_LAYER, POINTS_LAYER_PK, id='points'),
-    pytest.param('polygons.snow', POLYGONS_LAYER, POLYGONS_LAYER_PK, id='polygons-pk')
+    pytest.param('polygons.snow', POLYGONS_LAYER, POLYGONS_LAYER_PK, id='polygons-pk'),
+    pytest.param('table.snow', TABLE_LAYER, TABLE_LAYER_PK, id='table'),
 ])
 def test_merge_true(archive, layer, pk_field, data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy(archive) as (repo_path, wc):

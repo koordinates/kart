@@ -181,7 +181,7 @@ def _dump_gpkg_meta_info(db, layer):
                 collections.OrderedDict(sorted(zip(row.keys(), row))) for row in dbcur
             ]
             if rtype is dict:
-                value = value[0]
+                value = value[0] if len(value) else None
             yield (filename, json.dumps(value))
     except Exception:
         print(f"Error building meta/{filename}")
@@ -227,10 +227,11 @@ def import_gpkg(ctx, geopackage, table, list_tables):
     if list_tables:
         # print a list of the GeoPackage tables
         click.secho(f"GeoPackage tables in '{geopackage}':", bold=True)
+        # support GDAL aspatial extension pre-GeoPackage 1.2 before GPKG supported attributes
         sql = """
             SELECT table_name, data_type, identifier
             FROM gpkg_contents
-            WHERE data_type IN ('features', 'attributes')
+            WHERE data_type IN ('features', 'attributes', 'aspatial')
             ORDER BY table_name;
         """
         for table_name, data_type, identifier in dbcur.execute(sql):
@@ -466,7 +467,7 @@ def _feature_blobs_to_dict(repo, tree_entries, geom_column_name):
         assert te.type == "blob"
 
         blob = te.obj
-        if te.name == geom_column_name:
+        if geom_column_name is not None and te.name == geom_column_name:
             value = blob.data
         else:
             value = json.loads(blob.data)
@@ -488,7 +489,7 @@ def _diff_feature_to_dict(repo, diff_deltas, geom_column_name, select):
         assert isinstance(blob, pygit2.Blob)
 
         name = df.path.rsplit("/", 1)[-1]
-        if name == geom_column_name:
+        if geom_column_name is not None and name == geom_column_name:
             value = blob.data
         else:
             value = json.loads(blob.data)
@@ -635,7 +636,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
     meta_geom = json.loads((meta_tree / "gpkg_geometry_columns").obj.data)
     meta_cols = json.loads((meta_tree / "sqlite_table_info").obj.data)
     meta_srs = json.loads((meta_tree / "gpkg_spatial_ref_sys").obj.data)
-    geom_column_name = meta_geom["column_name"]
+    geom_column_name = meta_geom["column_name"] if meta_geom else None
 
     if "gpkg_metadata" in meta_tree:
         meta_md = json.loads((meta_tree / "gpkg_metadata").obj.data)
@@ -676,9 +677,10 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
         sql = f"INSERT INTO gpkg_contents ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
         db.execute(sql, values)
 
-        keys, values = zip(*meta_geom.items())
-        sql = f"INSERT INTO gpkg_geometry_columns ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
-        db.execute(sql, values)
+        if meta_geom:
+            keys, values = zip(*meta_geom.items())
+            sql = f"INSERT INTO gpkg_geometry_columns ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
+            db.execute(sql, values)
 
         # Remove placeholder stuff GDAL creates
         db.execute(
@@ -810,34 +812,36 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
     print(f"Added {feat_count} Features to GPKG in {t1-t0:.1f}s")
     print(f"Overall rate: {(feat_count/(t1-t0)):.0f} features/s")
 
-    # Create the GeoPackage Spatial Index
-    if not skip_create:
-        gdal_ds = gdal.OpenEx(
-            working_copy, gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR, ["GPKG"]
-        )
-        gdal_ds.ExecuteSQL(
-            f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(meta_geom["column_name"])});'
-        )
-        print(f"Created spatial index in {time.time()-t1:.1f}s")
-        del gdal_ds
+    if geom_column_name is not None:
+        # Create the GeoPackage Spatial Index
+        if not skip_create:
+            gdal_ds = gdal.OpenEx(
+                working_copy, gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR, ["GPKG"]
+            )
+            gdal_ds.ExecuteSQL(
+                f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(geom_column_name)});'
+            )
+            print(f"Created spatial index in {time.time()-t1:.1f}s")
+            del gdal_ds
 
-    # update the bounds
-    dbcur.execute(
-        f"""
-        UPDATE gpkg_contents
-        SET
-            min_x=(SELECT ST_MinX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-            min_y=(SELECT ST_MinY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-            max_x=(SELECT ST_MaxX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-            max_y=(SELECT ST_MaxY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)})
-        WHERE
-            table_name=?;
-        """,
-        (table,),
-    )
-    assert (
-        dbcur.rowcount == 1
-    ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
+        # update the bounds
+        dbcur.execute(
+            f"""
+            UPDATE gpkg_contents
+            SET
+                min_x=(SELECT ST_MinX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
+                min_y=(SELECT ST_MinY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
+                max_x=(SELECT ST_MaxX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
+                max_y=(SELECT ST_MaxY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)})
+            WHERE
+                table_name=?;
+            """,
+            (table,),
+        )
+        assert (
+            dbcur.rowcount == 1
+        ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
+
     db.commit()
 
 
@@ -975,7 +979,7 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             meta_tree = commit.tree / layer / "meta"
             meta_cols = json.loads((meta_tree / "sqlite_table_info").obj.data)
             meta_geom = json.loads((meta_tree / "gpkg_geometry_columns").obj.data)
-            geom_column_name = meta_geom["column_name"]
+            geom_column_name = meta_geom["column_name"] if meta_geom else None
 
             cols, pk_field = _get_columns(meta_cols)
             col_names = cols.keys()
@@ -1189,23 +1193,39 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
 
             # Update gpkg_contents
             commit_time = datetime.utcfromtimestamp(commit.commit_time)
-            dbcur.execute(
-                f"""
-                UPDATE gpkg_contents
-                SET
-                    last_change=?,
-                    min_x=(SELECT ST_MinX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                    min_y=(SELECT ST_MinY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                    max_x=(SELECT ST_MaxX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                    max_y=(SELECT ST_MaxY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)})
-                WHERE
-                    table_name=?;
-                """,
-                (
-                    commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
-                    table,
-                ),
-            )
+            if geom_column_name is not None:
+                dbcur.execute(
+                    f"""
+                    UPDATE gpkg_contents
+                    SET
+                        last_change=?,
+                        min_x=(SELECT ST_MinX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
+                        min_y=(SELECT ST_MinY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
+                        max_x=(SELECT ST_MaxX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
+                        max_y=(SELECT ST_MaxY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)})
+                    WHERE
+                        table_name=?;
+                    """,
+                    (
+                        commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
+                        table,
+                    ),
+                )
+            else:
+                dbcur.execute(
+                    f"""
+                    UPDATE gpkg_contents
+                    SET
+                        last_change=?
+                    WHERE
+                        table_name=?;
+                    """,
+                    (
+                        commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
+                        table,
+                    ),
+                )
+
             assert (
                 dbcur.rowcount == 1
             ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
@@ -1313,6 +1333,7 @@ def _build_db_diff(repo, layer, db, tree=None):
 
     meta_geom = json.loads((meta_tree / "gpkg_geometry_columns").obj.data)
     pk_field = _gpkg_pk(db, table)
+    geom_column_name = meta_geom["column_name"] if meta_geom else None
 
     candidates = {"I": [], "U": {}, "D": {}}
 
@@ -1345,7 +1366,7 @@ def _build_db_diff(repo, layer, db, tree=None):
             assert ftree.type == pygit2.GIT_OBJ_TREE
 
             repo_obj = _feature_blobs_to_dict(
-                repo=repo, tree_entries=ftree, geom_column_name=meta_geom["column_name"]
+                repo=repo, tree_entries=ftree, geom_column_name=geom_column_name
             )
 
             s_old = set(repo_obj.items())

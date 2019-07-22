@@ -14,3 +14,7 @@ Data Sources
 #### `gpkg-au-census`
 
 AU 2016 [Census DataPacks (Other Territories; SDHC GeoPackage A)](https://datapacks.censusdata.abs.gov.au/geopackages/); Australia Bureau of Statistics; CC-BY
+
+#### `gpkg-spec`
+
+OGC [GeoPackage Implementation Guide](http://www.geopackage.org/guide/implementation_guide.html) [sample data](https://github.com/opengeospatial/geopackage/tree/gh-pages/data); Open Geospatial Consortium; [OGC license](http://www.geopackage.org/spec/#_license_agreement)
