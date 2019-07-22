@@ -4,6 +4,7 @@
 /venv
 /vendor
 /tests/data/*/
+/tests/data/*.zip
 /coverage
 pytest.xml
 .coverage
