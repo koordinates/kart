@@ -188,6 +188,28 @@ def _dump_gpkg_meta_info(db, layer):
         raise
 
 
+def _gpkg_pk(db, table):
+    """ Find the primary key for a GeoPackage table """
+
+    # Requirement 150:
+    # A feature table or view SHALL have a column that uniquely identifies the
+    # row. For a feature table, the column SHOULD be a primary key. If there
+    # is no primary key column, the first column SHALL be of type INTEGER and
+    # SHALL contain unique values for each row.
+
+    q = db.execute(f"PRAGMA table_info({sqlite_ident(table)});")
+    fields = []
+    for field in q:
+        if field["pk"]:
+            return field["name"]
+        fields.append(field)
+
+    if fields[0]['type'] == "INTEGER":
+        return fields[0]['name']
+    else:
+        raise ValueError("No valid GeoPackage primary key field found")
+
+
 @cli.command("import-gpkg")
 @click.pass_context
 @click.argument("geopackage", type=click.Path(exists=True, dir_okay=False))
@@ -526,6 +548,8 @@ def _drop_triggers(dbcur, table):
 
 def _create_triggers(dbcur, table):
     # sqlite doesn't let you do param substitutions in CREATE TRIGGER
+    pk = _gpkg_pk(dbcur, table)
+
     dbcur.execute(
         f"""
         CREATE TRIGGER {sqlite_ident(f"__kxg_{table}_ins")}
@@ -533,7 +557,7 @@ def _create_triggers(dbcur, table):
            ON {sqlite_ident(table)}
         BEGIN
             INSERT INTO __kxg_map (table_name, feature_key, feature_id, state)
-                VALUES ({sqlite_param_str(table)}, NULL, NEW.fid, 1);
+                VALUES ({sqlite_param_str(table)}, NULL, NEW.{sqlite_ident(pk)}, 1);
         END;
     """
     )
@@ -544,9 +568,9 @@ def _create_triggers(dbcur, table):
            ON {sqlite_ident(table)}
         BEGIN
             UPDATE __kxg_map
-                SET state=1, feature_id=NEW.fid
+                SET state=1, feature_id=NEW.{sqlite_ident(pk)}
                 WHERE table_name={sqlite_param_str(table)}
-                    AND feature_id=OLD.fid
+                    AND feature_id=OLD.{sqlite_ident(pk)}
                     AND state >= 0;
         END;
     """
@@ -560,14 +584,14 @@ def _create_triggers(dbcur, table):
             UPDATE __kxg_map
             SET state=-1
             WHERE table_name={sqlite_param_str(table)}
-                AND feature_id=OLD.fid;
+                AND feature_id=OLD.{sqlite_ident(pk)};
         END;
     """
     )
 
 
 def _get_columns(meta_cols):
-    pk_field = "fid"
+    pk_field = None
     cols = {}
     for col in meta_cols:
         col_spec = f"{sqlite_ident(col['name'])} {col['type']}"
@@ -827,6 +851,7 @@ def _db_to_index(db, layer, tree):
 
     dbcur = db.cursor()
     table = layer
+    pk_field = _gpkg_pk(db, table)
 
     for name, mv_new in _dump_gpkg_meta_info(db, layer):
         blob_id = pygit2.hash(mv_new)
@@ -836,10 +861,10 @@ def _db_to_index(db, layer, tree):
         index.add(entry)
 
     diff_sql = f"""
-        SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __fid, T.*
+        SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __pk, T.*
         FROM __kxg_map AS M
             LEFT OUTER JOIN {sqlite_ident(table)} AS T
-            ON (M.feature_id = T.fid)
+            ON (M.feature_id = T.{sqlite_ident(pk_field)})
         WHERE
             M.table_name = ?
             AND M.state != 0
@@ -1009,8 +1034,8 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                             dbcur.rowcount == 1
                         ), f"checkout-reset update: expected Δ1, got {dbcur.rowcount}"
 
-                        if "fid" in feature:
-                            # fid change
+                        if pk_field in feature:
+                            # pk change
                             sql_update_id = f"UPDATE __kxg_map SET feature_id=? WHERE table_name=? AND feature_key=?;"
                             dbcur.execute(
                                 sql_update_id, (feature[pk_field], table, feature_key)
@@ -1044,7 +1069,7 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                 dbcur.execute(
                     f"""
                     DELETE FROM {sqlite_ident(table)}
-                    WHERE fid IN (
+                    WHERE {sqlite_ident(pk_field)} IN (
                         SELECT feature_id FROM __kxg_map WHERE state != 0 AND feature_key IS NULL
                     );
                 """
@@ -1114,8 +1139,8 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                         dbcur.rowcount == 1
                     ), f"checkout update: expected Δ1, got {dbcur.rowcount}"
 
-                    if "fid" in feature:
-                        # fid change
+                    if pk_field in feature:
+                        # pk change
                         sql_update_id = f"UPDATE __kxg_map SET feature_id=? WHERE table_name=? AND feature_key=?;"
                         dbcur.execute(
                             sql_update_id, (feature[pk_field], table, feature_key)
@@ -1287,14 +1312,15 @@ def _build_db_diff(repo, layer, db, tree=None):
             meta_diff[name] = (mv_old, mv_new)
 
     meta_geom = json.loads((meta_tree / "gpkg_geometry_columns").obj.data)
+    pk_field = _gpkg_pk(db, table)
 
     candidates = {"I": [], "U": {}, "D": {}}
 
     diff_sql = f"""
-        SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __fid, T.*
+        SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __pk, T.*
         FROM __kxg_map AS M
             LEFT OUTER JOIN {sqlite_ident(table)} AS T
-            ON (M.feature_id = T.fid)
+            ON (M.feature_id = T.{sqlite_ident(pk_field)})
         WHERE
             M.table_name = ?
             AND M.state != 0
@@ -1348,6 +1374,8 @@ def diff(ctx):
 
     db = _get_db(working_copy.path, isolation_level="DEFERRED")
     with db:
+        pk_field = _gpkg_pk(db, working_copy.layer)
+
         head_tree = repo.head.peel(pygit2.Tree)
         _assert_db_tree_match(db, working_copy.layer, head_tree)
         diff = _build_db_diff(repo, working_copy.layer, db)
@@ -1386,8 +1414,8 @@ def diff(ctx):
         diff_del = dict(s_old - s_new)
         all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
 
-        if "fid" not in all_keys:
-            click.echo(_repr_row({"fid": v_new["fid"]}, prefix="  "))
+        if pk_field not in all_keys:
+            click.echo(_repr_row({pk_field: v_new[pk_field]}, prefix="  "))
 
         for k in all_keys:
             if k in diff_del:
@@ -1463,6 +1491,8 @@ def commit(ctx, message):
             git_index.add(idx_entry)
             click.secho(f"Δ {object_path}", fg="yellow")
 
+        pk_field = _gpkg_pk(db, table)
+
         for feature_key in diff["D"].keys():
             object_path = f"{layer}/features/{feature_key[:4]}/{feature_key}"
             git_index.remove_all([f"{object_path}/**"])
@@ -1492,7 +1522,7 @@ def commit(ctx, message):
 
             dbcur.execute(
                 "INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);",
-                (table, feature_key, obj["fid"]),
+                (table, feature_key, obj[pk_field]),
             )
         dbcur.execute(
             "DELETE FROM __kxg_map WHERE table_name=? AND feature_key IS NULL;",
@@ -1707,6 +1737,9 @@ def fsck(ctx, reset_layer, args):
 
     db = _get_db(working_copy, isolation_level="DEFERRED")
     with db:
+        pk_field = _gpkg_pk(db, layer)
+        click.echo(f'Primary key field for {layer}: "{pk_field}"')
+
         tree = repo.head.peel(pygit2.Tree)
 
         # compare repo tree id to what's in the DB
@@ -1806,17 +1839,17 @@ def fsck(ctx, reset_layer, args):
         click.echo("Checking features...")
         q = db.execute(
             f"""
-            SELECT M.feature_key AS __fk, M.feature_id AS __fid, T.*
+            SELECT M.feature_key AS __fk, M.feature_id AS __pk, T.*
             FROM __kxg_map AS M
                 LEFT OUTER JOIN {sqlite_ident(layer)} AS T
-                ON (M.feature_id = T.fid)
+                ON (M.feature_id = T.{sqlite_ident(pk_field)})
             WHERE
                 M.table_name = ?
             UNION ALL
-            SELECT M.feature_key AS __fk, M.feature_id AS __fid, T.*
+            SELECT M.feature_key AS __fk, M.feature_id AS __pk, T.*
             FROM {sqlite_ident(layer)} AS T
                 LEFT OUTER JOIN __kxg_map AS M
-                ON (T.fid = M.feature_id)
+                ON (T.{sqlite_ident(pk_field)} = M.feature_id)
             WHERE
                 M.table_name = ?
                 AND M.feature_id IS NULL
@@ -1831,16 +1864,16 @@ def fsck(ctx, reset_layer, args):
                 click.echo(f"  {i}...")
 
             fkey = row["__fk"]
-            fid_m = row["__fid"]
-            fid_t = row["fid"]
+            pk_m = row["__pk"]
+            pk_t = row[pk_field]
 
-            if fid_m is None:
-                click.secho(f"  ✘ Missing __kxg_map feature (fid={fid_t})", fg="red")
+            if pk_m is None:
+                click.secho(f"  ✘ Missing __kxg_map feature ({pk_field}={pk_t})", fg="red")
                 has_err = True
                 continue
-            elif fid_t is None:
+            elif pk_t is None:
                 click.secho(
-                    f"  ✘ Missing {layer} feature {fkey} (fid={fid_m})", fg="red"
+                    f"  ✘ Missing {layer} feature {fkey} ({pk_field}={pk_m})", fg="red"
                 )
                 has_err = True
                 continue
@@ -1849,7 +1882,7 @@ def fsck(ctx, reset_layer, args):
                 obj_tree = feature_tree / fkey[:4] / fkey
             except KeyError:
                 click.secho(
-                    f"  ✘ Feature {fkey} (fid={fid_m}) not found in repository",
+                    f"  ✘ Feature {fkey} ({pk_field}={pk_m}) not found in repository",
                     fg="red",
                 )
                 has_err = True
@@ -1863,7 +1896,7 @@ def fsck(ctx, reset_layer, args):
                     blob = (obj_tree / field).obj
                 except KeyError:
                     click.secho(
-                        f"  ✘ Feature {fkey} (fid={fid_m}) not found in repository",
+                        f"  ✘ Feature {fkey} ({pk_field}={pk_m}) not found in repository",
                         fg="red",
                     )
                     has_err = True

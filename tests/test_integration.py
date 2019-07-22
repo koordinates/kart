@@ -14,6 +14,7 @@ from snowdrop import cli
 
 """ Simple integration/E2E tests """
 
+# Test Dataset (gpkg-points / points.snow)
 POINTS_LAYER = "nz_pa_points_topo_150k"
 POINTS_LAYER_PK = "fid"
 POINTS_INSERT = f"""
@@ -30,6 +31,25 @@ POINTS_RECORD = {
     "macronated": False,
     "name": "Te Motu-a-kore",
 }
+POINTS_HEAD_SHA = 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+
+# Test Dataset (gpkg-polygons / polygons.snow)
+POLYGONS_LAYER = "nz_waca_adjustments"
+POLYGONS_LAYER_PK = "id"
+POLYGONS_INSERT = f"""
+    INSERT INTO {POLYGONS_LAYER}
+                    (id, geom, date_adjusted, survey_reference, adjusted_nodes)
+                VALUES
+                    (:id, AsGPB(GeomFromEWKT(:geom)), :date_adjusted, :survey_reference, :adjusted_nodes);
+"""
+POLYGONS_RECORD = {
+    "id": 9_999_999,
+    "geom": "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))",
+    "date_adjusted": "2019-07-05T13:04:00+01:00",
+    "survey_reference": "Null Island™ 🗺",
+    "adjusted_nodes": 123,
+}
+POLYGONS_HEAD_SHA = '1c3bb605b91c7a7d2d149cb545dcd0e2ee3df14b'
 
 
 def _last_change_time(db):
@@ -86,19 +106,38 @@ def _git_graph(request, message, count=10, *paths):
 
 @pytest.fixture
 def insert(request, cli_runner):
-    def func(db, commit=True, reset_index=None):
+    def func(db, layer=None, commit=True, reset_index=None):
         if reset_index is not None:
             func.index = reset_index
 
-        rec = POINTS_RECORD.copy()
-        new_fid = 98000 + func.index
-        rec['fid'] = new_fid
+        if layer is None:
+            # autodetect
+            layer = db.execute("SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?) LIMIT 1",
+                               [POINTS_LAYER, POLYGONS_LAYER]
+                               ).fetchone()[0]
+
+        if layer == POINTS_LAYER:
+            rec = POINTS_RECORD.copy()
+            pk_field = POINTS_LAYER_PK
+            sql = POINTS_INSERT
+            pk_start = 98000
+        elif layer == POLYGONS_LAYER:
+            rec = POLYGONS_RECORD.copy()
+            pk_field = POLYGONS_LAYER_PK
+            sql = POLYGONS_INSERT
+            pk_start = 98000
+        else:
+            raise NotImplementedError(f"Layer {layer}")
+
+        # th
+        new_pk = pk_start + func.index
+        rec[pk_field] = new_pk
 
         with db:
             cur = db.cursor()
-            cur.execute(POINTS_INSERT, rec)
+            cur.execute(sql, rec)
             assert cur.rowcount == 1
-            func.inserted_fids.append(new_fid)
+            func.inserted_fids.append(new_pk)
 
         func.index += 1
 
@@ -109,7 +148,7 @@ def insert(request, cli_runner):
             commit_id = r.stdout.splitlines()[-1].split(": ")[1]
             return commit_id
         else:
-            return new_fid
+            return new_pk
 
     func.index = 0
     func.inserted_fids = []
@@ -118,31 +157,35 @@ def insert(request, cli_runner):
 
 
 @pytest.mark.slow
-def test_import_geopackage(data_archive, tmp_path, cli_runner):
+@pytest.mark.parametrize("archive,gpkg,table", [
+    pytest.param('gpkg-points', 'nz-pa-points-topo-150k.gpkg', POINTS_LAYER, id='points'),
+    pytest.param('gpkg-polygons', 'nz-waca-adjustments.gpkg', POLYGONS_LAYER, id='polygons-pk')
+])
+def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_runner):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
-    with data_archive("gpkg-points") as data:
+    with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.snow"
         r = cli_runner.invoke(
             [
                 "import-gpkg",
                 f"--list-tables",
-                data / "nz-pa-points-topo-150k.gpkg",
+                data / gpkg,
             ]
         )
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == [
-            f'GeoPackage tables in \'{data / "nz-pa-points-topo-150k.gpkg"}\':',
-            f'nz_pa_points_topo_150k  -  NZ Pa Points (Topo, 1:50k)',
-        ]
+        lines = r.stdout.splitlines()
+        assert len(lines) == 2
+        assert lines[0] == f'GeoPackage tables in \'{data / gpkg}\':'
+        assert re.match(fr"^{table}\s+- ", lines[1])
 
         # successful import
         r = cli_runner.invoke(
             [
                 f"--repo={repo_path}",
                 "import-gpkg",
-                data / "nz-pa-points-topo-150k.gpkg",
-                POINTS_LAYER,
+                data / gpkg,
+                table,
             ]
         )
         assert r.exit_code == 0, r
@@ -163,20 +206,23 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
             [
                 f"--repo={repo_path}",
                 "import-gpkg",
-                data / "nz-pa-points-topo-150k.gpkg",
-                POINTS_LAYER,
+                data / gpkg,
+                table,
             ]
         )
         assert r.exit_code == 1, r
         assert 'Looks like you already have commits in this repository' in r.stdout
 
+
+def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
+    with data_archive("gpkg-points") as data:
         # missing/bad table name
         repo_path = tmp_path / "data2.snow"
         r = cli_runner.invoke(
             [
                 f"--repo={repo_path}",
                 "import-gpkg",
-                data / "nz-pa-points-topo-150k.gpkg",
+                data / 'nz-pa-points-topo-150k.gpkg',
                 "some-layer-that-doesn't-exist",
             ]
         )
@@ -202,23 +248,27 @@ def test_import_geopackage(data_archive, tmp_path, cli_runner):
         assert "a.gpkg' doesn't appear to be a valid GeoPackage" in r.stdout
 
 
-def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
+@pytest.mark.parametrize("archive,table,commit_sha", [
+    pytest.param('points.snow', POINTS_LAYER, POINTS_HEAD_SHA, id='points'),
+    pytest.param('polygons.snow', POLYGONS_LAYER, POLYGONS_HEAD_SHA, id='polygons-pk')
+])
+def test_checkout_workingcopy(archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage):
     """ Checkout a working copy to edit """
-    with data_archive("points.snow") as repo_path:
+    with data_archive(archive) as repo_path:
         _clear_working_copy()
 
-        wc = tmp_path / "data.gpkg"
+        wc = tmp_path / f"{table}.gpkg"
         r = cli_runner.invoke(
-            ["checkout", f"--layer={POINTS_LAYER}", f"--working-copy={wc}"]
+            ["checkout", f"--layer={table}", f"--working-copy={wc}"]
         )
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
-        assert re.match(fr"Checkout {POINTS_LAYER}@HEAD to .+ as GPKG \.\.\.$", lines[0])
-        assert re.match(r"Commit: d1bee0841307242ad7a9ab029dc73c652b9f74f3 Tree: [a-f\d]{40}$", lines[1])
+        assert re.match(fr"Checkout {table}@HEAD to .+ as GPKG \.\.\.$", lines[0])
+        assert re.match(fr"Commit: {commit_sha} Tree: [a-f\d]{{40}}$", lines[1])
 
         assert wc.exists()
         db = geopackage(wc)
-        nrows = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER};").fetchone()[0]
+        nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
         assert nrows > 0
 
         repo = pygit2.Repository(str(repo_path))
@@ -227,7 +277,7 @@ def test_checkout_workingcopy(data_archive, tmp_path, cli_runner, geopackage):
         assert repo.head.name == 'refs/heads/master'
         assert repo.head.shorthand == 'master'
 
-        wc_tree_id = db.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [POINTS_LAYER]).fetchone()[0]
+        wc_tree_id = db.execute("SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]).fetchone()[0]
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
 
@@ -285,9 +335,65 @@ def test_diff(data_working_copy, geopackage, cli_runner):
         ]
 
 
-def test_commit(data_working_copy, geopackage, cli_runner):
+def test_diff_2(data_working_copy, geopackage, cli_runner):
+    """ diff the working copy against the repository (no index!) """
+    with data_working_copy("polygons.snow") as (repo, wc):
+        # empty
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == []
+
+        # make some changes
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+            cur.execute(POLYGONS_INSERT, POLYGONS_RECORD)
+            assert cur.rowcount == 1
+            cur.execute(f"UPDATE {POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
+            assert cur.rowcount == 1
+            cur.execute(
+                f"UPDATE {POLYGONS_LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
+            )
+            assert cur.rowcount == 1
+            cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id=1452332;")
+            assert cur.rowcount == 1
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            "--- a015ce37-666c-4f90-889b-6c035300dc59",
+            "-                           adjusted_nodes = 558",
+            "-                            date_adjusted = 2011-06-07T15:22:58Z",
+            "-                                     geom = MULTIPOLYGON(...)",
+            "-                                       id = 1452332",
+            "-                         survey_reference = ␀",
+            "+++ {new feature}",
+            "+                                       id = 9999999",
+            "+                                     geom = POLYGON(...)",
+            "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
+            "+                         survey_reference = Null Island™ 🗺",
+            "+                           adjusted_nodes = 123",
+            "--- a7bdd03b-2aa9-41f8-91a7-abb5d5ec621b",
+            "+++ a7bdd03b-2aa9-41f8-91a7-abb5d5ec621b",
+            "-                                       id = 1424927",
+            "+                                       id = 9998",
+            "--- ec360eb3-f57e-47d0-bda5-a0a02231ff6c",
+            "+++ ec360eb3-f57e-47d0-bda5-a0a02231ff6c",
+            "                                        id = 1443053",
+            "-                            date_adjusted = 2011-05-10T12:09:10Z",
+            "+                            date_adjusted = 2019-01-01T00:00:00Z",
+            "-                         survey_reference = ␀",
+            "+                         survey_reference = test",
+        ]
+
+
+@pytest.mark.parametrize("archive,layer", [
+    pytest.param('points.snow', POINTS_LAYER, id='points'),
+    pytest.param('polygons.snow', POLYGONS_LAYER, id='polygons-pk')
+])
+def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
     """ commit outstanding changes from the working copy """
-    with data_working_copy("points.snow") as (repo, wc):
+    with data_working_copy(archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-0"])
         assert r.exit_code == 1, r
@@ -297,20 +403,34 @@ def test_commit(data_working_copy, geopackage, cli_runner):
         db = geopackage(wc)
         with db:
             cur = db.cursor()
-            cur.execute(POINTS_INSERT, POINTS_RECORD)
-            assert cur.rowcount == 1
-            cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
-            assert cur.rowcount == 1
-            cur.execute(f"UPDATE {POINTS_LAYER} SET name='test' WHERE fid=2;")
-            assert cur.rowcount == 1
-            cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid IN (3,30,31,32,33);")
-            assert cur.rowcount == 5
+            if layer == POINTS_LAYER:
+                cur.execute(POINTS_INSERT, POINTS_RECORD)
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {POINTS_LAYER} SET name='test' WHERE fid=2;")
+                assert cur.rowcount == 1
+                cur.execute(f"DELETE FROM {POINTS_LAYER} WHERE fid IN (3,30,31,32,33);")
+                assert cur.rowcount == 5
+                pk_del = 3
+            elif layer == POLYGONS_LAYER:
+                cur.execute(POLYGONS_INSERT, POLYGONS_RECORD)
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
+                assert cur.rowcount == 1
+                cur.execute(f"UPDATE {POLYGONS_LAYER} SET survey_reference='test' WHERE id=1443053;")
+                assert cur.rowcount == 1
+                cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);")
+                assert cur.rowcount == 5
+                pk_del = 1452332
+            else:
+                raise NotImplementedError(f"layer={layer}")
 
         fk_del = cur.execute(
-            f"SELECT feature_key FROM __kxg_map WHERE table_name=? AND feature_id=3;",
-            [POINTS_LAYER]
+            f"SELECT feature_key FROM __kxg_map WHERE table_name=? AND feature_id=?;",
+            [layer, pk_del]
         ).fetchone()[0]
-        print("deleted fid=3, feature_key={fk_del}")
+        print("deleted fid={pk_del}, feature_key={fk_del}")
 
         r = cli_runner.invoke(["commit", "-m", "test-commit-1"])
         assert r.exit_code == 0, r
@@ -321,17 +441,17 @@ def test_commit(data_working_copy, geopackage, cli_runner):
         assert str(r.head.target) == commit_id
 
         tree = r.head.peel(pygit2.Tree)
-        assert f"{POINTS_LAYER}/features/{fk_del[:4]}/{fk_del}/geom" not in tree
+        assert f"{layer}/features/{fk_del[:4]}/{fk_del}/geom" not in tree
 
         change_count = cur.execute(
             "SELECT COUNT(*) FROM __kxg_map WHERE table_name=? AND state!=0;",
-            [POINTS_LAYER]
+            [layer]
         ).fetchone()[0]
         assert change_count == 0, "Changes still listed in __kxg_map"
 
         del_map_record = cur.execute(
             "SELECT 1 FROM __kxg_map WHERE table_name=? AND feature_key=?;",
-            [POINTS_LAYER, fk_del]
+            [layer, fk_del]
         ).fetchone()
         assert del_map_record is None, "Deleted feature still in __kxg_map"
 
@@ -339,9 +459,9 @@ def test_commit(data_working_copy, geopackage, cli_runner):
             f"""
                 SELECT
                     (SELECT COUNT(*) FROM __kxg_map WHERE table_name=?) AS map_count,
-                    (SELECT COUNT(*) FROM {POINTS_LAYER}) AS feature_count;
+                    (SELECT COUNT(*) FROM {layer}) AS feature_count;
             """,
-            [POINTS_LAYER]
+            [layer]
         ).fetchone()
         print("map_count=", map_count, "feature_count=", feature_count)
         assert map_count == feature_count
@@ -395,7 +515,7 @@ def test_tag(data_working_copy, cli_runner):
         repo = pygit2.Repository(str(repo_dir))
         assert 'refs/tags/version1' in repo.references
         ref = repo.lookup_reference_dwim('version1')
-        assert ref.target.hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+        assert ref.target.hex == POINTS_HEAD_SHA
 
 
 def test_push(data_archive, tmp_path, cli_runner):
@@ -450,7 +570,7 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         assert r.exit_code == 0, r
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
         assert not repo.head_is_detached
-        assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+        assert r_head() == ('refs/heads/master', POINTS_HEAD_SHA)
 
         # checkout the HEAD-but-1 commit
         r = cli_runner.invoke(["checkout", "HEAD~1"])
@@ -464,7 +584,7 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         assert r.exit_code == 0, r
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
         assert not repo.head_is_detached
-        assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+        assert r_head() == ('refs/heads/master', POINTS_HEAD_SHA)
 
         # checkout a short-sha commit
         r = cli_runner.invoke(["checkout", "edd5a4b"])
@@ -478,21 +598,21 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         assert r.exit_code == 0, r
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
         assert not repo.head_is_detached
-        assert r_head() == ('refs/heads/master', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+        assert r_head() == ('refs/heads/master', POINTS_HEAD_SHA)
 
         # checkout the tag
         r = cli_runner.invoke(["checkout", "version1"])
         assert r.exit_code == 0, r
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
         assert repo.head_is_detached
-        assert r_head() == ('HEAD', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+        assert r_head() == ('HEAD', POINTS_HEAD_SHA)
 
         # checkout the remote branch
         r = cli_runner.invoke(["checkout", "myremote/master"])
         assert r.exit_code == 0, r
         assert _last_change_time(db) == "2019-06-20T14:28:33.000000Z"
         assert repo.head_is_detached
-        assert r_head() == ('HEAD', 'd1bee0841307242ad7a9ab029dc73c652b9f74f3')
+        assert r_head() == ('HEAD', POINTS_HEAD_SHA)
 
 
 @pytest.mark.parametrize("via", [
@@ -574,6 +694,89 @@ def test_working_copy_reset(via, data_working_copy, cli_runner, geopackage):
             r = db.execute(f"SELECT fid FROM {POINTS_LAYER} WHERE fid = 20;")
             if not r.fetchone():
                 print("E: Updated pk row is missing (fid=20)")
+
+        assert h_before == h_after
+
+
+@pytest.mark.parametrize("via", [
+    pytest.param('reset', id='via-reset'),
+    pytest.param('checkout', id='via-checkout')
+])
+def test_working_copy_reset_2(via, data_working_copy, cli_runner, geopackage):
+    """
+    Check that we reset any working-copy changes correctly before doing any new checkout
+
+    We can do this via `snow reset` or `snow checkout --force HEAD`
+    """
+    with data_working_copy("polygons.snow", force_new=True) as (repo_dir, wc):
+        db = geopackage(wc)
+
+        h_before = _db_table_hash(db, POLYGONS_LAYER, POLYGONS_LAYER_PK)
+
+        with db:
+            cur = db.cursor()
+            cur.execute(POLYGONS_INSERT, POLYGONS_RECORD)
+            assert cur.rowcount == 1
+            cur.execute(f"DELETE FROM {POLYGONS_LAYER} WHERE id < 1456912;")
+            assert cur.rowcount == 4
+            cur.execute(
+                f"UPDATE {POLYGONS_LAYER} SET survey_reference = 'test' WHERE id>=1459750 AND id<=1460311;"
+            )
+            assert cur.rowcount == 5
+            cur.execute(f"UPDATE {POLYGONS_LAYER} SET id=9998 WHERE id=1460583;")
+            assert cur.rowcount == 1
+
+            change_count = db.execute(
+                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+            ).fetchone()[0]
+            assert change_count == (1 + 4 + 5 + 1)
+
+        if via == 'reset':
+            # using `snow reset`
+            r = cli_runner.invoke(["reset"])
+            assert r.exit_code == 0, r
+        elif via == 'checkout':
+            # using `snow checkout --force`
+
+            # this should error
+            r = cli_runner.invoke(["checkout", "HEAD"])
+            assert r.exit_code == 1, r
+
+            change_count = db.execute(
+                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+            ).fetchone()[0]
+            assert change_count == (1 + 4 + 5 + 1)
+
+            # do again with --force
+            r = cli_runner.invoke(["checkout", "--force", "HEAD"])
+            assert r.exit_code == 0, r
+        else:
+            raise NotImplementedError(f"via={via}")
+
+        change_count = db.execute(
+            "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+        ).fetchone()[0]
+        assert change_count == 0
+
+        h_after = _db_table_hash(db, POLYGONS_LAYER, POLYGONS_LAYER_PK)
+        if h_before != h_after:
+            r = db.execute(f"SELECT id FROM {POLYGONS_LAYER} WHERE id=9999999;")
+            if r.fetchone():
+                print("E: Newly inserted row is still there (id=9999999)")
+            r = db.execute(f"SELECT COUNT(*) FROM {POLYGONS_LAYER} WHERE id < 1456912;")
+            if r.fetchone()[0] != 4:
+                print("E: Deleted rows id<1456912 still missing")
+            r = db.execute(
+                f"SELECT COUNT(*) FROM {POLYGONS_LAYER} WHERE survey_reference = 'test';"
+            )
+            if r.fetchone()[0] != 0:
+                print("E: Updated rows not reset")
+            r = db.execute(f"SELECT id FROM {POLYGONS_LAYER} WHERE id = 9998;")
+            if r.fetchone():
+                print("E: Updated pk row is still there (id=1460583 -> 9998)")
+            r = db.execute(f"SELECT id FROM {POLYGONS_LAYER} WHERE id = 1460583;")
+            if not r.fetchone():
+                print("E: Updated pk row is missing (id=1460583)")
 
         assert h_before == h_after
 
@@ -704,7 +907,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         repo = pygit2.Repository(str(repo_path))
         assert repo.head.name == "refs/heads/foo"
         assert 'foo' in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+        assert repo.head.peel(pygit2.Commit).hex == POINTS_HEAD_SHA
 
         # make some changes
         db = geopackage(wc)
@@ -716,25 +919,29 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
-        assert repo.head.peel(pygit2.Commit).hex != 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+        assert repo.head.peel(pygit2.Commit).hex != POINTS_HEAD_SHA
 
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
 
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+        assert repo.head.peel(pygit2.Commit).hex == POINTS_HEAD_SHA
 
         # new branch from remote
         r = cli_runner.invoke(["checkout", "-b", "test99", "myremote/master"])
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert 'test99' in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == 'd1bee0841307242ad7a9ab029dc73c652b9f74f3'
+        assert repo.head.peel(pygit2.Commit).hex == POINTS_HEAD_SHA
         branch = repo.branches['test99']
         assert branch.upstream_name == 'refs/remotes/myremote/master'
 
 
-def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert, request):
+@pytest.mark.parametrize("archive", [
+    pytest.param('points.snow', id='points'),
+    pytest.param('polygons.snow', id='polygons-pk')
+])
+def test_merge_fastforward(archive, data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy("points.snow") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -769,8 +976,12 @@ def test_merge_fastforward(data_working_copy, geopackage, cli_runner, insert, re
         assert c.parents[0].parents[0].parents[0].hex == h
 
 
-def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, insert, request):
-    with data_working_copy("points.snow") as (repo_path, wc):
+@pytest.mark.parametrize("archive", [
+    pytest.param('points.snow', id='points'),
+    pytest.param('polygons.snow', id='polygons-pk')
+])
+def test_merge_fastforward_noff(archive, data_working_copy, geopackage, cli_runner, insert, request):
+    with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -809,8 +1020,12 @@ def test_merge_fastforward_noff(data_working_copy, geopackage, cli_runner, inser
         assert c.message == "Merge 'changes'"
 
 
-def test_merge_true(data_working_copy, geopackage, cli_runner, insert, request):
-    with data_working_copy("points.snow") as (repo_path, wc):
+@pytest.mark.parametrize("archive,layer,pk_field", [
+    pytest.param('points.snow', POINTS_LAYER, POINTS_LAYER_PK, id='points'),
+    pytest.param('polygons.snow', POLYGONS_LAYER, POLYGONS_LAYER_PK, id='polygons-pk')
+])
+def test_merge_true(archive, layer, pk_field, data_working_copy, geopackage, cli_runner, insert, request):
+    with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -854,7 +1069,7 @@ def test_merge_true(data_working_copy, geopackage, cli_runner, insert, request):
 
         # check the database state
         num_inserts = len(insert.inserted_fids)
-        r = db.execute(f"SELECT COUNT(*) FROM {POINTS_LAYER} WHERE fid IN ({','.join(['?']*num_inserts)});", insert.inserted_fids)
+        r = db.execute(f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} IN ({','.join(['?']*num_inserts)});", insert.inserted_fids)
         assert r.fetchone()[0] == num_inserts
 
 
