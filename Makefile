@@ -1,4 +1,4 @@
-.PHONY: requirements ci-test docker
+.PHONY: requirements ci-test docker test
 
 # Python dependencies via pip-compile
 
@@ -33,3 +33,6 @@ ci-test:
 		--user root \
 		$(DOCKER_TAG) \
 		/src/.buildkite/run-tests.sh
+
+test:
+	pytest -v --cov-report term --cov-report html:coverage

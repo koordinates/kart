@@ -235,7 +235,7 @@ def import_gpkg(ctx, geopackage, table, list_tables):
         """
         for table_name, data_type, identifier in dbcur.execute(sql):
             click.echo(f"{table_name}  -  {identifier}")
-            return
+        return
 
     if not table:
         raise click.BadParameter('Missing argument', param_hint='table')

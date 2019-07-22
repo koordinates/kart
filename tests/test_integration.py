@@ -159,7 +159,8 @@ def insert(request, cli_runner):
 @pytest.mark.slow
 @pytest.mark.parametrize("archive,gpkg,table", [
     pytest.param('gpkg-points', 'nz-pa-points-topo-150k.gpkg', POINTS_LAYER, id='points'),
-    pytest.param('gpkg-polygons', 'nz-waca-adjustments.gpkg', POLYGONS_LAYER, id='polygons-pk')
+    pytest.param('gpkg-polygons', 'nz-waca-adjustments.gpkg', POLYGONS_LAYER, id='polygons-pk'),
+    pytest.param('gpkg-au-census', 'census2016_sdhca_ot_short.gpkg', 'census2016_sdhca_ot_ra_short', id='au_ra-short'),
 ])
 def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_runner):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
@@ -175,9 +176,9 @@ def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_run
         )
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
-        assert len(lines) == 2
+        assert len(lines) >= 2
         assert lines[0] == f'GeoPackage tables in \'{data / gpkg}\':'
-        assert re.match(fr"^{table}\s+- ", lines[1])
+        assert any(re.match(fr"^{table}\s+- ", l) for l in lines[1:])
 
         # successful import
         r = cli_runner.invoke(
