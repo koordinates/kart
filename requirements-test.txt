@@ -15,9 +15,9 @@ packaging==19.0           # via pytest, pytest-sugar
 pluggy==0.12.0            # via pytest
 py==1.8.0                 # via pytest
 pycparser==2.19
-#pygit2==0.28.2
 pyparsing==2.4.0          # via packaging
 pytest-cov==2.7.1
+pytest-helpers-namespace==2019.1.8
 pytest-sugar==0.9.2
 pytest==4.6.4
 six==1.12.0
