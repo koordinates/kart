@@ -3,7 +3,6 @@ import os
 import re
 import sqlite3
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest  # noqa
@@ -11,6 +10,8 @@ import pytest  # noqa
 import pygit2
 
 from snowdrop import cli
+import snowdrop.checkout
+
 
 """ Simple integration/E2E tests """
 
@@ -878,7 +879,7 @@ def test_geopackage_locking_edit(
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = cli._diff_feature_to_dict
+        orig_func = snowdrop.checkout.diff_feature_to_dict
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -891,7 +892,7 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(cli, "_diff_feature_to_dict", _wrap)
+        monkeypatch.setattr(snowdrop.checkout, "diff_feature_to_dict", _wrap)
 
         r = cli_runner.invoke(["checkout", "edd5a4b"])
         assert r.exit_code == 0, r
