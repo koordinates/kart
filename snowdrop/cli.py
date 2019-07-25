@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
-import collections
 import contextlib
 import itertools
 import json
 import os
 import re
-import sqlite3
-import struct
 import subprocess
 import sys
 import time
@@ -17,10 +14,10 @@ from pathlib import Path
 
 import click
 import pygit2
-from osgeo import gdal, ogr, osr
 
 
-gdal.UseExceptions()
+from .core import gdal, ogr
+from . import gpkg
 
 
 def print_version(ctx, param, value):
@@ -70,18 +67,6 @@ def _execvp(file, args):
         os.execvp(file, args)
 
 
-def sqlite_ident(identifier):
-    escaped = identifier.replace('"', '""')
-    return f'"{escaped}"'
-
-
-def sqlite_param_str(value):
-    if value is None:
-        return "NULL"
-    escaped = value.replace("'", "''")
-    return f"'{escaped}'"
-
-
 def _pc(count):
     """ Simple pluraliser for commit/commits """
     if count == 1:
@@ -98,118 +83,6 @@ def _pf(count):
         return "features"
 
 
-def _get_db(path, **kwargs):
-    db = sqlite3.connect(path, **kwargs)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys = ON;")
-    db.enable_load_extension(True)
-    db.execute("SELECT load_extension('mod_spatialite');")
-    return db
-
-
-def _dump_gpkg_meta_info(db, layer):
-    yield ("version", json.dumps({"version": "0.0.1"}))
-
-    dbcur = db.cursor()
-    table = layer
-
-    QUERIES = {
-        "gpkg_contents": (
-            # we ignore dynamic fields (last-change, min_x, min_y, max_x, max_y)
-            f"SELECT table_name, data_type, identifier, description, srs_id FROM gpkg_contents WHERE table_name=?;",
-            (table,),
-            dict,
-        ),
-        "gpkg_geometry_columns": (
-            f"SELECT table_name, column_name, geometry_type_name, srs_id, z, m FROM gpkg_geometry_columns WHERE table_name=?;",
-            (table,),
-            dict,
-        ),
-        "sqlite_table_info": (f"PRAGMA table_info({sqlite_ident(table)});", (), list),
-        "gpkg_metadata_reference": (
-            """
-            SELECT MR.*
-            FROM gpkg_metadata_reference MR
-                INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
-            WHERE
-                MR.table_name=?
-                AND MR.column_name IS NULL
-                AND MR.row_id_value IS NULL;
-            """,
-            (table,),
-            list,
-        ),
-        "gpkg_metadata": (
-            """
-            SELECT M.*
-            FROM gpkg_metadata_reference MR
-                INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
-            WHERE
-                MR.table_name=?
-                AND MR.column_name IS NULL
-                AND MR.row_id_value IS NULL;
-            """,
-            (table,),
-            list,
-        ),
-        "gpkg_spatial_ref_sys": (
-            """
-            SELECT DISTINCT SRS.*
-            FROM gpkg_spatial_ref_sys SRS
-                LEFT OUTER JOIN gpkg_contents C ON (C.srs_id = SRS.srs_id)
-                LEFT OUTER JOIN gpkg_geometry_columns G ON (G.srs_id = SRS.srs_id)
-            WHERE
-                (C.table_name=? OR G.table_name=?)
-            """,
-            (table, table),
-            list,
-        ),
-    }
-    try:
-        for filename, (sql, params, rtype) in QUERIES.items():
-            # check table exists, the metadata ones may not
-            if not filename.startswith("sqlite_"):
-                dbcur.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
-                    (filename,),
-                )
-                if not dbcur.fetchone():
-                    continue
-
-            dbcur.execute(sql, params)
-            value = [
-                collections.OrderedDict(sorted(zip(row.keys(), row))) for row in dbcur
-            ]
-            if rtype is dict:
-                value = value[0] if len(value) else None
-            yield (filename, json.dumps(value))
-    except Exception:
-        print(f"Error building meta/{filename}")
-        raise
-
-
-def _gpkg_pk(db, table):
-    """ Find the primary key for a GeoPackage table """
-
-    # Requirement 150:
-    # A feature table or view SHALL have a column that uniquely identifies the
-    # row. For a feature table, the column SHOULD be a primary key. If there
-    # is no primary key column, the first column SHALL be of type INTEGER and
-    # SHALL contain unique values for each row.
-
-    q = db.execute(f"PRAGMA table_info({sqlite_ident(table)});")
-    fields = []
-    for field in q:
-        if field["pk"]:
-            return field["name"]
-        fields.append(field)
-
-    if fields[0]['type'] == "INTEGER":
-        return fields[0]['name']
-    else:
-        raise ValueError("No valid GeoPackage primary key field found")
-
-
 @cli.command("import-gpkg")
 @click.pass_context
 @click.argument("geopackage", type=click.Path(exists=True, dir_okay=False))
@@ -217,7 +90,7 @@ def _gpkg_pk(db, table):
 @click.option("--list-tables", is_flag=True)
 def import_gpkg(ctx, geopackage, table, list_tables):
     """ Import a GeoPackage to a new repository """
-    db = _get_db(geopackage)
+    db = gpkg.db(geopackage)
     dbcur = db.cursor()
 
     sql = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='gpkg_contents';"
@@ -272,20 +145,20 @@ def import_gpkg(ctx, geopackage, table, list_tables):
 
         index = pygit2.Index()
         print("Writing meta bits...")
-        for name, value in _dump_gpkg_meta_info(db, layer=table):
+        for name, value in gpkg.get_meta_info(db, layer=table):
             blob_id = repo.create_blob(value.encode("utf8"))
             entry = pygit2.IndexEntry(
                 f"{table}/meta/{name}", blob_id, pygit2.GIT_FILEMODE_BLOB
             )
             index.add(entry)
 
-        dbcur.execute(f"SELECT COUNT(*) FROM {sqlite_ident(table)};")
+        dbcur.execute(f"SELECT COUNT(*) FROM {gpkg.ident(table)};")
         row_count = dbcur.fetchone()[0]
         print(f"Found {row_count} features in {table}")
 
         # iterate features
         t0 = time.time()
-        dbcur.execute(f"SELECT * FROM {sqlite_ident(table)};")
+        dbcur.execute(f"SELECT * FROM {gpkg.ident(table)};")
         t1 = time.time()
 
         # Repo Structure
@@ -532,60 +405,60 @@ def _suspend_triggers(db, table):
 def _drop_triggers(dbcur, table):
     dbcur.execute(
         f"""
-        DROP TRIGGER IF EXISTS {sqlite_ident(f"__kxg_{table}_ins")};
+        DROP TRIGGER IF EXISTS {gpkg.ident(f"__kxg_{table}_ins")};
     """
     )
     dbcur.execute(
         f"""
-        DROP TRIGGER IF EXISTS {sqlite_ident(f"__kxg_{table}_upd")};
+        DROP TRIGGER IF EXISTS {gpkg.ident(f"__kxg_{table}_upd")};
     """
     )
     dbcur.execute(
         f"""
-        DROP TRIGGER IF EXISTS {sqlite_ident(f"__kxg_{table}_del")};
+        DROP TRIGGER IF EXISTS {gpkg.ident(f"__kxg_{table}_del")};
     """
     )
 
 
 def _create_triggers(dbcur, table):
     # sqlite doesn't let you do param substitutions in CREATE TRIGGER
-    pk = _gpkg_pk(dbcur, table)
+    pk = gpkg.pk(dbcur, table)
 
     dbcur.execute(
         f"""
-        CREATE TRIGGER {sqlite_ident(f"__kxg_{table}_ins")}
+        CREATE TRIGGER {gpkg.ident(f"__kxg_{table}_ins")}
            AFTER INSERT
-           ON {sqlite_ident(table)}
+           ON {gpkg.ident(table)}
         BEGIN
             INSERT INTO __kxg_map (table_name, feature_key, feature_id, state)
-                VALUES ({sqlite_param_str(table)}, NULL, NEW.{sqlite_ident(pk)}, 1);
+                VALUES ({gpkg.param_str(table)}, NULL, NEW.{gpkg.ident(pk)}, 1);
         END;
     """
     )
     dbcur.execute(
         f"""
-        CREATE TRIGGER {sqlite_ident(f"__kxg_{table}_upd")}
+        CREATE TRIGGER {gpkg.ident(f"__kxg_{table}_upd")}
            AFTER UPDATE
-           ON {sqlite_ident(table)}
+           ON {gpkg.ident(table)}
         BEGIN
             UPDATE __kxg_map
-                SET state=1, feature_id=NEW.{sqlite_ident(pk)}
-                WHERE table_name={sqlite_param_str(table)}
-                    AND feature_id=OLD.{sqlite_ident(pk)}
+                SET state=1, feature_id=NEW.{gpkg.ident(pk)}
+                WHERE table_name={gpkg.param_str(table)}
+                    AND feature_id=OLD.{gpkg.ident(pk)}
                     AND state >= 0;
         END;
     """
     )
     dbcur.execute(
         f"""
-        CREATE TRIGGER {sqlite_ident(f"__kxg_{table}_del")}
+        CREATE TRIGGER {gpkg.ident(f"__kxg_{table}_del")}
            AFTER DELETE
-           ON {sqlite_ident(table)}
+           ON {gpkg.ident(table)}
         BEGIN
             UPDATE __kxg_map
             SET state=-1
-            WHERE table_name={sqlite_param_str(table)}
-                AND feature_id=OLD.{sqlite_ident(pk)};
+            WHERE table_name={gpkg.param_str(table)}
+                AND feature_id=OLD.{gpkg.ident(pk)};
         END;
     """
     )
@@ -595,7 +468,7 @@ def _get_columns(meta_cols):
     pk_field = None
     cols = {}
     for col in meta_cols:
-        col_spec = f"{sqlite_ident(col['name'])} {col['type']}"
+        col_spec = f"{gpkg.ident(col['name'])} {col['type']}"
         if col["pk"]:
             col_spec += " PRIMARY KEY"
             pk_field = col["name"]
@@ -657,7 +530,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
     if db:
         txnctx = _suspend_triggers(db, table)
     else:
-        db = _get_db(working_copy, isolation_level="DEFERRED")
+        db = gpkg.db(working_copy, isolation_level="DEFERRED")
         db.execute("PRAGMA synchronous = OFF;")
         db.execute("PRAGMA locking_mode = EXCLUSIVE;")
         txnctx = db
@@ -668,18 +541,18 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
         # Update GeoPackage core tables
         for o in meta_srs:
             keys, values = zip(*o.items())
-            sql = f"INSERT OR REPLACE INTO gpkg_spatial_ref_sys ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
+            sql = f"INSERT OR REPLACE INTO gpkg_spatial_ref_sys ({','.join([gpkg.ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
             db.execute(sql, values)
 
         keys, values = zip(*meta_info.items())
         # our repo copy doesn't include all fields from gpkg_contents
         # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y} should deal with the remaining fields
-        sql = f"INSERT INTO gpkg_contents ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
+        sql = f"INSERT INTO gpkg_contents ({','.join([gpkg.ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
         db.execute(sql, values)
 
         if meta_geom:
             keys, values = zip(*meta_geom.items())
-            sql = f"INSERT INTO gpkg_geometry_columns ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
+            sql = f"INSERT INTO gpkg_geometry_columns ({','.join([gpkg.ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
             db.execute(sql, values)
 
         # Remove placeholder stuff GDAL creates
@@ -717,19 +590,19 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
         # Populate metadata tables
         for o in meta_md:
             keys, values = zip(*o.items())
-            sql = f"INSERT INTO gpkg_metadata ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
+            sql = f"INSERT INTO gpkg_metadata ({','.join([gpkg.ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
             db.execute(sql, values)
 
         for o in meta_md_ref:
             keys, values = zip(*o.items())
-            sql = f"INSERT INTO gpkg_metadata_reference ({','.join([sqlite_ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
+            sql = f"INSERT INTO gpkg_metadata_reference ({','.join([gpkg.ident(k) for k in keys])}) VALUES ({','.join(['?']*len(keys))});"
             db.execute(sql, values)
 
         cols, pk_field = _get_columns(meta_cols)
         col_names = cols.keys()
         col_specs = cols.values()
         if not skip_create:
-            db.execute(f"CREATE TABLE {sqlite_ident(table)} ({', '.join(col_specs)});")
+            db.execute(f"CREATE TABLE {gpkg.ident(table)} ({', '.join(col_specs)});")
 
             db.execute(
                 f"CREATE TABLE __kxg_map (table_name TEXT NOT NULL, feature_key VARCHAR(36) NULL, feature_id INTEGER NOT NULL, state INTEGER NOT NULL DEFAULT 0);"
@@ -744,7 +617,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
         )
 
         click.echo("Creating features...")
-        sql_insert_features = f"INSERT INTO {sqlite_ident(table)} ({','.join([sqlite_ident(k) for k in col_names])}) VALUES ({','.join(['?']*len(col_names))});"
+        sql_insert_features = f"INSERT INTO {gpkg.ident(table)} ({','.join([gpkg.ident(k) for k in col_names])}) VALUES ({','.join(['?']*len(col_names))});"
         sql_insert_ids = "INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);"
         feat_count = 0
         t0 = time.time()
@@ -819,7 +692,7 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
                 working_copy, gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR, ["GPKG"]
             )
             gdal_ds.ExecuteSQL(
-                f'SELECT CreateSpatialIndex({sqlite_ident(table)}, {sqlite_ident(geom_column_name)});'
+                f'SELECT CreateSpatialIndex({gpkg.ident(table)}, {gpkg.ident(geom_column_name)});'
             )
             print(f"Created spatial index in {time.time()-t1:.1f}s")
             del gdal_ds
@@ -829,10 +702,10 @@ def _checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=
             f"""
             UPDATE gpkg_contents
             SET
-                min_x=(SELECT ST_MinX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                min_y=(SELECT ST_MinY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                max_x=(SELECT ST_MaxX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                max_y=(SELECT ST_MaxY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)})
+                min_x=(SELECT ST_MinX({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                min_y=(SELECT ST_MinY({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                max_x=(SELECT ST_MaxX({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                max_y=(SELECT ST_MaxY({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)})
             WHERE
                 table_name=?;
             """,
@@ -855,9 +728,9 @@ def _db_to_index(db, layer, tree):
 
     dbcur = db.cursor()
     table = layer
-    pk_field = _gpkg_pk(db, table)
+    pk_field = gpkg.pk(db, table)
 
-    for name, mv_new in _dump_gpkg_meta_info(db, layer):
+    for name, mv_new in gpkg.get_meta_info(db, layer):
         blob_id = pygit2.hash(mv_new)
         entry = pygit2.IndexEntry(
             f"{layer}/meta/{name}", blob_id, pygit2.GIT_FILEMODE_BLOB
@@ -867,8 +740,8 @@ def _db_to_index(db, layer, tree):
     diff_sql = f"""
         SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __pk, T.*
         FROM __kxg_map AS M
-            LEFT OUTER JOIN {sqlite_ident(table)} AS T
-            ON (M.feature_id = T.{sqlite_ident(pk_field)})
+            LEFT OUTER JOIN {gpkg.ident(table)} AS T
+            ON (M.feature_id = T.{gpkg.ident(pk_field)})
         WHERE
             M.table_name = ?
             AND M.state != 0
@@ -903,7 +776,7 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
     table = layer
     tree = commit.tree
 
-    db = _get_db(working_copy, isolation_level="DEFERRED")
+    db = gpkg.db(working_copy, isolation_level="DEFERRED")
     db.execute("PRAGMA synchronous = OFF;")
     with db:
         dbcur = db.cursor()
@@ -984,11 +857,11 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             cols, pk_field = _get_columns(meta_cols)
             col_names = cols.keys()
 
-            sql_insert_feature = f"INSERT INTO {sqlite_ident(table)} ({','.join([sqlite_ident(k) for k in col_names])}) VALUES ({','.join(['?']*len(col_names))});"
+            sql_insert_feature = f"INSERT INTO {gpkg.ident(table)} ({','.join([gpkg.ident(k) for k in col_names])}) VALUES ({','.join(['?']*len(col_names))});"
             sql_insert_id = "INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);"
 
             sql_delete_feature = (
-                f"DELETE FROM {sqlite_ident(table)} WHERE {sqlite_ident(pk_field)}=?;"
+                f"DELETE FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk_field)}=?;"
             )
             sql_delete_id = (
                 f"DELETE FROM __kxg_map WHERE table_name=? AND feature_key=?;"
@@ -1028,9 +901,9 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
 
                     if feature:
                         sql_update_feature = f"""
-                            UPDATE {sqlite_ident(table)}
-                            SET {','.join([f'{sqlite_ident(k)}=?' for k in feature.keys()])}
-                            WHERE {sqlite_ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
+                            UPDATE {gpkg.ident(table)}
+                            SET {','.join([f'{gpkg.ident(k)}=?' for k in feature.keys()])}
+                            WHERE {gpkg.ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
                         """
                         params = list(feature.values()) + [table, feature_key]
                         dbcur.execute(sql_update_feature, params)
@@ -1072,8 +945,8 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                 # delete added features
                 dbcur.execute(
                     f"""
-                    DELETE FROM {sqlite_ident(table)}
-                    WHERE {sqlite_ident(pk_field)} IN (
+                    DELETE FROM {gpkg.ident(table)}
+                    WHERE {gpkg.ident(pk_field)} IN (
                         SELECT feature_id FROM __kxg_map WHERE state != 0 AND feature_key IS NULL
                     );
                 """
@@ -1133,9 +1006,9 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
 
                 if feature:
                     sql_update_feature = f"""
-                        UPDATE {sqlite_ident(table)}
-                        SET {','.join([f'{sqlite_ident(k)}=?' for k in feature.keys()])}
-                        WHERE {sqlite_ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
+                        UPDATE {gpkg.ident(table)}
+                        SET {','.join([f'{gpkg.ident(k)}=?' for k in feature.keys()])}
+                        WHERE {gpkg.ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
                     """
                     params = list(feature.values()) + [table, feature_key]
                     dbcur.execute(sql_update_feature, params)
@@ -1199,10 +1072,10 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
                     UPDATE gpkg_contents
                     SET
                         last_change=?,
-                        min_x=(SELECT ST_MinX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                        min_y=(SELECT ST_MinY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                        max_x=(SELECT ST_MaxX({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)}),
-                        max_y=(SELECT ST_MaxY({sqlite_ident(geom_column_name)}) FROM {sqlite_ident(table)})
+                        min_x=(SELECT ST_MinX({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                        min_y=(SELECT ST_MinY({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                        max_x=(SELECT ST_MaxX({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                        max_y=(SELECT ST_MaxY({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)})
                     WHERE
                         table_name=?;
                     """,
@@ -1239,53 +1112,6 @@ def _checkout_update(repo, working_copy, layer, commit, force=False, base_commit
             repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
 
-def _gpkg_geom_to_ogr(gpkg_geom, parse_srs=False):
-    """
-    Parse GeoPackage geometry values to an OGR Geometry object
-    http://www.geopackage.org/spec/#gpb_format
-    """
-    if gpkg_geom is None:
-        return None
-
-    if not isinstance(gpkg_geom, bytes):
-        raise TypeError("Expected bytes")
-
-    if gpkg_geom[0:2] != b"GP":  # 0x4750
-        raise ValueError("Expected GeoPackage Binary Geometry")
-    (version, flags) = struct.unpack_from("BB", gpkg_geom, 2)
-    if version != 0:
-        raise NotImplementedError("Expected GeoPackage v1 geometry, got %d", version)
-
-    is_le = (flags & 0b0000001) != 0  # Endian-ness
-
-    if flags & (0b00100000):  # GeoPackageBinary type
-        raise NotImplementedError("ExtendedGeoPackageBinary")
-
-    envelope_typ = (flags & 0b000001110) >> 1
-    wkb_offset = 8
-    if envelope_typ == 1:
-        wkb_offset += 32
-    elif envelope_typ in (2, 3):
-        wkb_offset += 48
-    elif envelope_typ == 4:
-        wkb_offset += 64
-    elif envelope_typ > 4:
-        wkb_offset += 32
-    else:  # 0
-        pass
-
-    geom = ogr.CreateGeometryFromWkb(gpkg_geom[wkb_offset:])
-
-    if parse_srs:
-        srid = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
-        if srid > 0:
-            srs = osr.SpatialReference()
-            srs.ImportFromEPSG(srid)
-            geom.AssignSpatialReference(srs)
-
-    return geom
-
-
 def _repr_row(row, prefix=""):
     m = []
     for k in row.keys():
@@ -1295,7 +1121,7 @@ def _repr_row(row, prefix=""):
         v = row[k]
 
         if isinstance(v, bytes):
-            g = _gpkg_geom_to_ogr(v)
+            g = gpkg.geom_to_ogr(v)
             v = f"{g.GetGeometryName()}(...)"
             del g
 
@@ -1322,7 +1148,7 @@ def _build_db_diff(repo, layer, db, tree=None):
     meta_tree = layer_tree / "meta"
 
     meta_diff = {}
-    for name, mv_new in _dump_gpkg_meta_info(db, layer):
+    for name, mv_new in gpkg.get_meta_info(db, layer):
         if name in meta_tree:
             mv_old = json.loads(repo[(meta_tree / name).id].data)
         else:
@@ -1332,7 +1158,7 @@ def _build_db_diff(repo, layer, db, tree=None):
             meta_diff[name] = (mv_old, mv_new)
 
     meta_geom = json.loads((meta_tree / "gpkg_geometry_columns").obj.data)
-    pk_field = _gpkg_pk(db, table)
+    pk_field = gpkg.pk(db, table)
     geom_column_name = meta_geom["column_name"] if meta_geom else None
 
     candidates = {"I": [], "U": {}, "D": {}}
@@ -1340,8 +1166,8 @@ def _build_db_diff(repo, layer, db, tree=None):
     diff_sql = f"""
         SELECT M.feature_key AS __fk, M.state AS __s, M.feature_id AS __pk, T.*
         FROM __kxg_map AS M
-            LEFT OUTER JOIN {sqlite_ident(table)} AS T
-            ON (M.feature_id = T.{sqlite_ident(pk_field)})
+            LEFT OUTER JOIN {gpkg.ident(table)} AS T
+            ON (M.feature_id = T.{gpkg.ident(pk_field)})
         WHERE
             M.table_name = ?
             AND M.state != 0
@@ -1393,9 +1219,9 @@ def diff(ctx):
     if not working_copy:
         raise click.ClickException("No working copy? Try `snow checkout`")
 
-    db = _get_db(working_copy.path, isolation_level="DEFERRED")
+    db = gpkg.db(working_copy.path, isolation_level="DEFERRED")
     with db:
-        pk_field = _gpkg_pk(db, working_copy.layer)
+        pk_field = gpkg.pk(db, working_copy.layer)
 
         head_tree = repo.head.peel(pygit2.Tree)
         _assert_db_tree_match(db, working_copy.layer, head_tree)
@@ -1490,7 +1316,7 @@ def commit(ctx, message):
 
     table = layer
 
-    db = _get_db(working_copy, isolation_level="DEFERRED")
+    db = gpkg.db(working_copy, isolation_level="DEFERRED")
     with db:
         _assert_db_tree_match(db, table, tree)
 
@@ -1512,7 +1338,7 @@ def commit(ctx, message):
             git_index.add(idx_entry)
             click.secho(f"Δ {object_path}", fg="yellow")
 
-        pk_field = _gpkg_pk(db, table)
+        pk_field = gpkg.pk(db, table)
 
         for feature_key in diff["D"].keys():
             object_path = f"{layer}/features/{feature_key[:4]}/{feature_key}"
@@ -1698,7 +1524,7 @@ def merge(ctx, ff, ff_only, commit):
 
 
 def _fsck_reset(repo, working_copy, layer):
-    db = _get_db(working_copy, isolation_level="DEFERRED")
+    db = gpkg.db(working_copy, isolation_level="DEFERRED")
     db.execute("PRAGMA synchronous = OFF;")
     db.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
@@ -1710,7 +1536,7 @@ def _fsck_reset(repo, working_copy, layer):
     db.execute("DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [layer])
     db.execute("DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [layer])
     db.execute("DELETE FROM gpkg_contents WHERE table_name=?;", [layer])
-    db.execute(f"DELETE FROM {sqlite_ident(layer)};")
+    db.execute(f"DELETE FROM {gpkg.ident(layer)};")
 
     db.execute("PRAGMA defer_foreign_keys = OFF;")
     _checkout_new(repo, working_copy, layer, repo.head.peel(pygit2.Commit), "GPKG", skip_create=True, db=db)
@@ -1756,9 +1582,9 @@ def fsck(ctx, reset_layer, args):
         click.secho(f"Resetting working copy for {layer}...", bold=True)
         return _fsck_reset(repo, working_copy, layer)
 
-    db = _get_db(working_copy, isolation_level="DEFERRED")
+    db = gpkg.db(working_copy, isolation_level="DEFERRED")
     with db:
-        pk_field = _gpkg_pk(db, layer)
+        pk_field = gpkg.pk(db, layer)
         click.echo(f'Primary key field for {layer}: "{pk_field}"')
 
         tree = repo.head.peel(pygit2.Tree)
@@ -1776,7 +1602,7 @@ def fsck(ctx, reset_layer, args):
             click.echo("This might be fixable via `checkout --force`")
             raise click.Abort()
 
-        q = db.execute(f"SELECT COUNT(*) FROM {sqlite_ident(layer)};")
+        q = db.execute(f"SELECT COUNT(*) FROM {gpkg.ident(layer)};")
         row_count = q.fetchone()[0]
         click.echo(f"{row_count} features in {layer}")
 
@@ -1862,15 +1688,15 @@ def fsck(ctx, reset_layer, args):
             f"""
             SELECT M.feature_key AS __fk, M.feature_id AS __pk, T.*
             FROM __kxg_map AS M
-                LEFT OUTER JOIN {sqlite_ident(layer)} AS T
-                ON (M.feature_id = T.{sqlite_ident(pk_field)})
+                LEFT OUTER JOIN {gpkg.ident(layer)} AS T
+                ON (M.feature_id = T.{gpkg.ident(pk_field)})
             WHERE
                 M.table_name = ?
             UNION ALL
             SELECT M.feature_key AS __fk, M.feature_id AS __pk, T.*
-            FROM {sqlite_ident(layer)} AS T
+            FROM {gpkg.ident(layer)} AS T
                 LEFT OUTER JOIN __kxg_map AS M
-                ON (T.{sqlite_ident(pk_field)} = M.feature_id)
+                ON (T.{gpkg.ident(pk_field)} = M.feature_id)
             WHERE
                 M.table_name = ?
                 AND M.feature_id IS NULL
@@ -2057,7 +1883,7 @@ def status(ctx):
         click.echo('\nNo working copy.\n  (use "snow checkout" to create a working copy)')
         return
 
-    db = _get_db(working_copy.path, isolation_level="DEFERRED")
+    db = gpkg.db(working_copy.path, isolation_level="DEFERRED")
     with db:
         dbcur = db.cursor()
 
