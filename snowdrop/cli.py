@@ -7,8 +7,7 @@ from pathlib import Path
 import click
 import pygit2
 
-
-from .core import ogr
+from . import core  # noqa
 from . import checkout, commit, diff, init, fsck, merge, pull, status
 
 
@@ -18,6 +17,7 @@ def print_version(ctx, param, value):
 
     import osgeo
     import pkg_resources  # part of setuptools
+
     version = pkg_resources.require("snowdrop")[0].version
 
     click.echo(f"Project Snowdrop v{version}")
@@ -48,18 +48,8 @@ def cli(ctx, repo_dir):
     ctx.obj["repo_dir"] = repo_dir
 
 
-def _execvp(file, args):
-    if "_SNOWDROP_NO_EXEC" in os.environ:
-        # used in testing. This is pretty hackzy
-        p = subprocess.run([file] + args[1:], capture_output=True, encoding="utf-8")
-        sys.stdout.write(p.stdout)
-        sys.stderr.write(p.stderr)
-        sys.exit(p.returncode)
-    else:
-        os.execvp(file, args)
-
-
 # commands from modules
+
 cli.add_command(checkout.checkout)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
@@ -70,15 +60,7 @@ cli.add_command(pull.pull)
 cli.add_command(status.status)
 
 
-OFTMap = {
-    "INTEGER": ogr.OFTInteger,
-    "MEDIUMINT": ogr.OFTInteger,
-    "TEXT": ogr.OFTString,
-    "REAL": ogr.OFTReal,
-}
-
-
-@cli.command('workingcopy-set-path')
+@cli.command("workingcopy-set-path")
 @click.pass_context
 @click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
 def workingcopy_set_path(ctx, new):
@@ -86,9 +68,7 @@ def workingcopy_set_path(ctx, new):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     repo_cfg = repo.config
     if "kx.workingcopy" in repo_cfg:
@@ -122,6 +102,18 @@ def reset(ctx):
 
 # straight process-replace commands
 
+
+def _execvp(file, args):
+    if "_SNOWDROP_NO_EXEC" in os.environ:
+        # used in testing. This is pretty hackzy
+        p = subprocess.run([file] + args[1:], capture_output=True, encoding="utf-8")
+        sys.stdout.write(p.stdout)
+        sys.stderr.write(p.stderr)
+        sys.exit(p.returncode)
+    else:
+        os.execvp(file, args)
+
+
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
@@ -130,9 +122,7 @@ def log(ctx, args):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))
 
@@ -145,9 +135,7 @@ def push(ctx, args):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "push"] + list(args))
 
@@ -160,9 +148,7 @@ def fetch(ctx, args):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
 
@@ -175,9 +161,7 @@ def branch(ctx, args):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
 
@@ -190,9 +174,7 @@ def remote(ctx, args):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "remote"] + list(args))
 
@@ -205,9 +187,7 @@ def tag(ctx, args):
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "tag"] + list(args))
 
