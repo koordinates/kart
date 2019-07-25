@@ -29,10 +29,10 @@ prompt-toolkit==2.0.9     # via ipython
 ptyprocess==0.6.0         # via pexpect
 py==1.8.0
 pycparser==2.19
-#pygit2==0.28.2
 pygments==2.4.2           # via ipython
 pyparsing==2.4.0
 pytest-cov==2.7.1
+pytest-helpers-namespace==2019.1.8
 pytest-sugar==0.9.2
 pytest==4.6.4
 six==1.12.0
@@ -42,5 +42,5 @@ wcwidth==0.1.7
 zipp==0.5.1
 
 # The following packages are considered to be unsafe in a requirements file:
-# pip==19.1.1               # via pipdeptree
+# pip==19.2.1               # via pipdeptree
 # setuptools==41.0.1        # via ipdb, ipython
