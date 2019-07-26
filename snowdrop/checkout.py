@@ -96,11 +96,7 @@ def checkout(ctx, branch, refish, working_copy, layer, force, fmt):
 
     click.echo(f'Checkout {layer}@{refish or "HEAD"} to {working_copy} as {fmt} ...')
 
-    repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
-
     checkout_new(repo, working_copy, layer, commit, fmt)
-
-    repo.config["kx.workingcopy"] = f"{fmt}:{working_copy}:{layer}"
 
 
 def checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=None):
@@ -334,6 +330,8 @@ def checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=N
         ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
 
     db.commit()
+
+    core.set_working_copy(repo, path=working_copy, layer=layer, fmt=fmt)
 
 
 def checkout_update(repo, working_copy, layer, commit, force=False, base_commit=None):

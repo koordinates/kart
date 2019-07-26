@@ -122,7 +122,7 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).
    * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `snow`.
-6. With your working copy, `snow` commands should work if run from the `myproject.snow/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
+5. With your working copy, `snow` commands should work if run from the `myproject.snow/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
     * `snow diff` diff the working copy against the repository (no index!)
     * `snow commit -m {message}` commit outstanding changes from the working copy
     * `snow log` review commit history
@@ -134,9 +134,10 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
     * `snow tag ...`
     * `snow remote ...`. Remember simple remotes can just be another local directory.
     * `snow push` / `snow pull`
-7. Other git commands will _possibly_ work if run from the `myproject.snow/` folder. eg:
+    * `snow clone` initialise a new repository from a remote URL,
+6. Other git commands will _possibly_ work if run from the `myproject.snow/` folder. eg:
     * `git reset --soft {commitish}`
-8. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
+7. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
    ```console
    $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
    # enter your gitea username/password when prompted

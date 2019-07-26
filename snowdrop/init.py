@@ -278,10 +278,13 @@ def init(ctx, import_from, do_checkout, directory):
         if do_checkout:
             # Checkout a working copy
             wc_path = repo_dir / f"{repo_dir.stem}.gpkg"
-            ctx.obj["repo_dir"] = str(repo_dir)
-            ctx.invoke(
-                checkout.checkout,
+
+            click.echo(f'Checkout {import_table} to {wc_path} as GPKG ...')
+
+            checkout.checkout_new(
+                repo=repo,
+                working_copy=wc_path.name,
                 layer=import_table,
-                fmt="GPKG",
-                working_copy=str(wc_path),
+                commit=repo.head.peel(pygit2.Commit),
+                fmt="GPKG"
             )

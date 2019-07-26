@@ -149,8 +149,9 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             # working copy exists
             wc = (repo_path / f"{repo_path.stem}.gpkg")
             assert wc.exists() and wc.is_file()
+            print("workingcopy at", wc)
 
-            assert repo.config["kx.workingcopy"] == f"GPKG:{wc}:{table}"
+            assert repo.config["kx.workingcopy"] == f"GPKG:{wc.name}:{table}"
 
             db = geopackage(wc)
             nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]

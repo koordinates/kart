@@ -2,6 +2,7 @@ import json
 import os
 import typing
 import uuid
+from pathlib import Path
 
 import pygit2
 from osgeo import gdal, ogr, osr  # noqa
@@ -36,6 +37,22 @@ def get_working_copy(repo):
         return WorkingCopy(fmt=fmt, path=path, layer=layer)
     else:
         return None
+
+
+def set_working_copy(repo, *, path, fmt=None, layer=None):
+    repo_cfg = repo.config
+    if "kx.workingcopy" in repo_cfg:
+        ofmt, opath, olayer = repo_cfg["kx.workingcopy"].split(":")
+        fmt = fmt or ofmt
+        layer = layer or olayer
+    elif not (fmt and layer):
+        raise ValueError("No existing workingcopy to update, specify fmt & layer")
+
+    new_path = Path(path)
+    if not new_path.is_absolute():
+        new_path = os.path.relpath(new_path, Path(repo.path).resolve())
+
+    repo.config["kx.workingcopy"] = f"{fmt}:{new_path}:{layer}"
 
 
 def feature_blobs_to_dict(repo, tree_entries, geom_column_name):
