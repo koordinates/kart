@@ -108,29 +108,21 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
    * With a single vector layer
    * Which has a primary key
    * Get the whole layer
-2. Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository.
+2. Create a new Snowdrop repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
    ```console
-   # find the table name in the GeoPackage
-   $ snow import-gpkg --list-tables kx-foo-layer.gpkg
-   # import the layer (`foo_layer`) — the repo directory will be created:
-   $ snow --repo=/path/to/kx-foo-layer.snow import-gpkg kx-foo-layer.gpkg foo_layer
-   $ cd /path/to/kx-foo-layer.snow
+   $ mkdir myproject.snow
+   $ cd myproject.snow
+   $ snow init --import GPKG:kx-foo-layer.gpkg
    ```
-   This will create a _bare_ git repository at `/path/to/kx-foo-layer.snow`.
-
    Use this repository as the directory to run all the other commands in.
-3. Checkout a working copy to edit in eg. QGIS
-   ```console
-   # find/check the table name in the geopackage
-   $ snow checkout --layer=foo_layer --working-copy=/path/to/foo.gpkg
-   ```
+   This will also create a working copy as `myproject.snow/kx-foo-layer.gpkg` to edit.
 4. Editing in QGIS/etc:
    * will track changes in the `__kxg_*` tables
    * additions/edits/deletes of features are supported
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).
    * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `snow`.
-6. With your working copy, `snow` commands should work if run from the `kx-foo-layer.snow/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
+5. With your working copy, `snow` commands should work if run from the `myproject.snow/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
     * `snow diff` diff the working copy against the repository (no index!)
     * `snow commit -m {message}` commit outstanding changes from the working copy
     * `snow log` review commit history
@@ -142,9 +134,10 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
     * `snow tag ...`
     * `snow remote ...`. Remember simple remotes can just be another local directory.
     * `snow push` / `snow pull`
-7. Other git commands will _possibly_ work if run from the `kx-foo-layer.snow/` folder. eg:
+    * `snow clone` initialise a new repository from a remote URL,
+6. Other git commands will _possibly_ work if run from the `myproject.snow/` folder. eg:
     * `git reset --soft {commitish}`
-8. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
+7. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
    ```console
    $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
    # enter your gitea username/password when prompted

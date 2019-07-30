@@ -8,22 +8,36 @@ import pygit2
 H = pytest.helpers.helpers()
 
 
-def test_clone(data_archive, tmp_path, cli_runner, chdir):
+@pytest.mark.parametrize(
+    "working_copy",
+    [
+        pytest.param(True, id="with-wc"),
+        pytest.param(False, id="without-wc"),
+    ],
+)
+def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopackage):
     with data_archive("points.snow") as remote_path:
         with chdir(tmp_path):
-            r = cli_runner.invoke(["clone", remote_path])
+
+            r = cli_runner.invoke([
+                "clone",
+                remote_path,
+                ("--checkout" if working_copy else "--no-checkout"),
+            ])
 
             repo_path = tmp_path / "points.snow"
             assert repo_path.is_dir()
 
-        subprocess.check_call(
+        r = subprocess.check_output(
             ["git", "-C", str(repo_path), "config", "--local", "--list"]
         )
+        print("git config file:", r.decode('utf-8').splitlines())
 
         repo = pygit2.Repository(str(repo_path))
         assert repo.is_bare
         assert not repo.is_empty
         assert repo.head.name == "refs/heads/master"
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
 
         branch = repo.branches.local[repo.head.shorthand]
         assert branch.is_checked_out()
@@ -34,6 +48,55 @@ def test_clone(data_archive, tmp_path, cli_runner, chdir):
         remote = repo.remotes["origin"]
         assert remote.url == str(remote_path)
         assert remote.fetch_refspecs == ["+refs/heads/*:refs/remotes/origin/*"]
+
+        wc = (repo_path / f"{repo_path.stem}.gpkg")
+        if working_copy:
+            assert wc.exists() and wc.is_file()
+
+            table = H.POINTS_LAYER
+            assert repo.config["kx.workingcopy"] == f"GPKG:{wc.name}:{table}"
+
+            db = geopackage(wc)
+            nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+            assert nrows > 0
+
+            wc_tree_id = db.execute(
+                "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]
+            ).fetchone()[0]
+            assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+        else:
+            assert not wc.exists()
+
+
+def test_clone_layer(data_archive, tmp_path, cli_runner, chdir, geopackage):
+    with data_archive("points.snow") as remote_path:
+        with chdir(tmp_path):
+            url = f"file://{remote_path}#BOBTHEBUILDER"
+            r = cli_runner.invoke([
+                "clone",
+                url,
+            ])
+            assert r.exit_code == 1
+            assert "Couldn't find layer 'BOBTHEBUILDER' to checkout." in r.stdout
+
+            url = f"file://{remote_path}#{H.POINTS_LAYER}"
+            r = cli_runner.invoke([
+                "clone",
+                url,
+                "bob.land"
+            ])
+            assert r.exit_code == 2
+
+            url = f"file://{remote_path}#{H.POINTS_LAYER}"
+            r = cli_runner.invoke([
+                "clone",
+                url,
+                "bob.snow"
+            ])
+            assert r.exit_code == 0
+
+            repo_path = tmp_path / "bob.snow"
+            assert (repo_path / 'HEAD').exists()
 
 
 def test_fetch(

@@ -8,7 +8,7 @@ import click
 import pygit2
 
 from . import core  # noqa
-from . import checkout, commit, diff, init, fsck, merge, pull, status
+from . import checkout, clone, commit, diff, init, fsck, merge, pull, status
 
 
 def print_version(ctx, param, value):
@@ -51,10 +51,12 @@ def cli(ctx, repo_dir):
 # commands from modules
 
 cli.add_command(checkout.checkout)
+cli.add_command(clone.clone)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
 cli.add_command(fsck.fsck)
 cli.add_command(init.import_gpkg)
+cli.add_command(init.init)
 cli.add_command(merge.merge)
 cli.add_command(pull.pull)
 cli.add_command(status.status)
@@ -190,56 +192,6 @@ def tag(ctx, args):
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "tag"] + list(args))
-
-
-@cli.command(context_settings=dict(ignore_unknown_options=True))
-@click.argument("repository", nargs=1)
-@click.argument("directory", required=False)
-def clone(repository, directory):
-    """ Clone a repository into a new directory """
-    repo_dir = directory or os.path.split(repository)[1]
-    if not repo_dir.endswith(".snow") or len(repo_dir) == 4:
-        raise click.BadParameter("Repository should be myproject.snow")
-
-    subprocess.check_call(["git", "clone", "--bare", repository, repo_dir])
-    subprocess.check_call(
-        [
-            "git",
-            "-C",
-            repo_dir,
-            "config",
-            "--local",
-            "--add",
-            "remote.origin.fetch",
-            "+refs/heads/*:refs/remotes/origin/*",
-        ]
-    )
-    subprocess.check_call(["git", "-C", repo_dir, "fetch"])
-
-    repo = pygit2.Repository(repo_dir)
-    head_ref = repo.head.shorthand  # master
-    subprocess.check_call(
-        [
-            "git",
-            "-C",
-            repo_dir,
-            "config",
-            "--local",
-            f"branch.{head_ref}.remote",
-            "origin",
-        ]
-    )
-    subprocess.check_call(
-        [
-            "git",
-            "-C",
-            repo_dir,
-            "config",
-            "--local",
-            f"branch.{head_ref}.merge",
-            "refs/heads/master",
-        ]
-    )
 
 
 if __name__ == "__main__":
