@@ -160,7 +160,7 @@ class ImportGPKG:
         q = self.db.execute(f"PRAGMA table_info({gpkg.ident(self.table)});")
         return {r['name']: r['cid'] for r in q}
 
-    def iter_features_sorted(self, pk_callback):
+    def iter_features_sorted(self, pk_callback, limit=None):
         tbl_hash = hashlib.md5(self.table.encode('utf8')).hexdigest()
         tbl_name = f"_snow_{tbl_hash}"
         func_name = f"_snow_sk_{tbl_hash}"
@@ -169,25 +169,45 @@ class ImportGPKG:
 
         t0 = time.time()
         self.dbcur.execute(f"""
-            CREATE TEMPORARY TABLE {tbl_name} AS
-            SELECT
-                {gpkg.ident(self.primary_key)} AS pk,
-                {func_name}({gpkg.ident(self.primary_key)}) AS sk
-            FROM {gpkg.ident(self.table)};
+            CREATE TEMPORARY TABLE {tbl_name} (
+                sort TEXT PRIMARY KEY,
+                link INTEGER
+            ) WITHOUT ROWID
         """)
+
+        sql = f"""
+            INSERT INTO {tbl_name} (sort, link)
+            SELECT
+                {func_name}({gpkg.ident(self.primary_key)}),
+                {gpkg.ident(self.primary_key)}
+            FROM {gpkg.ident(self.table)}
+        """
+        if limit is not None:
+            sql += f" LIMIT {limit:d}"
+        self.dbcur.execute(sql)
         t1 = time.time()
-        click.echo(f"Build pk/sort mapping table in {t1-t0:0.1f}s")
+        click.echo(f"Build link/sort mapping table in {t1-t0:0.1f}s")
         self.dbcur.execute(f"""
-            CREATE INDEX temp.{tbl_hash}_idx ON {tbl_name}(pk, sk);
+            CREATE INDEX temp.{tbl_hash}_idxm ON {tbl_name}(sort,link);
         """)
         t2 = time.time()
         click.echo(f"Build pk/sort mapping index in {t2-t1:0.1f}s")
 
+        # Print the Query Plan
+        # self.dbcur.execute(f"""
+        #     EXPLAIN QUERY PLAN
+        #     SELECT {gpkg.ident(self.table)}.*
+        #     FROM {tbl_name}
+        #         INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
+        #     ORDER BY {tbl_name}.sort;
+        # """)
+        # print("\n".join("\t".join(str(f) for f in r) for r in self.dbcur.fetchall()))
+
         self.dbcur.execute(f"""
             SELECT {gpkg.ident(self.table)}.*
-            FROM {gpkg.ident(self.table)}
-                INNER JOIN {tbl_name} ON ({gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)}={tbl_name}.pk)
-            ORDER BY {tbl_name}.sk;
+            FROM {tbl_name}
+                INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
+            ORDER BY {tbl_name}.sort;
         """)
         click.echo(f"Ran SELECT query in {time.time()-t2:0.1f}s")
         return self.dbcur

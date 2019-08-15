@@ -314,7 +314,7 @@ class DatasetStructure:
 
             t0 = time.time()
             if iter_func == 2:
-                src_iterator = source.iter_features_sorted(self.get_feature_path)
+                src_iterator = source.iter_features_sorted(self.get_feature_path, limit=limit)
             else:
                 src_iterator = source.iter_features()
             t1 = time.time()
