@@ -248,7 +248,7 @@ class DatasetStructure:
             self.import_meta(repo, index, source)
 
             row_count = source.row_count
-            click.echo(f"Found {row_count} features in {table}")
+            click.echo(f"Found {row_count:,d} features in {table}")
 
             # iterate features
             t0 = time.time()
@@ -265,7 +265,7 @@ class DatasetStructure:
 
             t2 = time.time()
 
-            click.echo(f"Added {i+1} Features to index in {t2-t1:.1f}s")
+            click.echo(f"Added {i+1:,d} Features to index in {t2-t1:.1f}s")
             click.echo(f"Overall rate: {((i+1)/(t2-t0)):.0f} features/s)")
 
             click.echo("Writing tree...")
@@ -307,10 +307,10 @@ class DatasetStructure:
         with source:
             if limit:
                 num_rows = min(limit, source.row_count)
-                click.echo(f"Importing {num_rows}/{source.row_count} features from {source} to {path}/ ...")
+                click.echo(f"Importing {num_rows:,d} of {source.row_count:,d} features from {source} to {path}/ ...")
             else:
                 num_rows = source.row_count
-                click.echo(f"Importing {num_rows} features from {source} to {path}/ ...")
+                click.echo(f"Importing {num_rows:,d} features from {source} to {path}/ ...")
 
             t0 = time.time()
             if iter_func == 2:
@@ -363,12 +363,12 @@ class DatasetStructure:
                     click.echo(f"  {i:,d} features... @{time.time()-t2:.1f}s")
 
                 if limit is not None and i == (limit-1):
-                    click.secho(f"  Stopping at {limit} features", fg='yellow')
+                    click.secho(f"  Stopping at {limit:,d} features", fg='yellow')
                     break
 
             p.stdin.write(b'\ndone\n')
             t3 = time.time()
-            click.echo(f"Added {num_rows} Features to index in {t3-t2:.1f}s")
+            click.echo(f"Added {num_rows:,d} Features to index in {t3-t2:.1f}s")
             click.echo(f"Overall rate: {(num_rows/(t3-t2)):.0f} features/s)")
 
             p.stdin.close()

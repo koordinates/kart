@@ -269,7 +269,7 @@ def import_table(ctx, source, directory, do_list, version, x_method):
         if sys.stdin.isatty():
             t_choices = click.Choice(choices=available_tables.keys())
             t_default = next(iter(available_tables)) if len(available_tables) == 1 else None
-            source_table = click.prompt('Please select a table to import', type=t_choices, show_choices=False, default=t_default)
+            source_table = click.prompt('\nSelect a table to import', type=t_choices, show_choices=False, default=t_default)
 
             # re-init & re-check
             source_loader = source_klass(
