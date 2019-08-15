@@ -8,3 +8,4 @@
 /coverage
 pytest.xml
 .coverage
+/.pytest*
