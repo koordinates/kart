@@ -245,7 +245,7 @@ def checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=N
                 ftree = te_ftree.obj
 
                 te_blobs = [te for te in ftree if te.type == "blob"]
-                feature = core.feature_blobs_to_dict(repo, te_blobs, geom_column_name)
+                feature = core.feature_blobs_to_dict(te_blobs, geom_column_name)
 
                 wip_features.append([feature[c] for c in col_names])
                 wip_idmap.append([table, te_ftree.name, feature[pk_field]])

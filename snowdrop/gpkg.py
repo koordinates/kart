@@ -33,8 +33,8 @@ def db(path, **kwargs):
     return db
 
 
-def get_meta_info(db, layer):
-    yield ("version", json.dumps({"version": "0.0.1"}))
+def get_meta_info(db, layer, repo_version='0.0.1'):
+    yield ("version", json.dumps({"version": repo_version}))
 
     dbcur = db.cursor()
     table = layer
@@ -134,6 +134,17 @@ def pk(db, table):
         return fields[0]["name"]
     else:
         raise ValueError("No valid GeoPackage primary key field found")
+
+
+def geom_cols(db, table):
+    q = db.execute("""
+            SELECT column_name
+            FROM gpkg_geometry_columns
+            WHERE table_name=?
+            ORDER BY column_name;
+        """, (table,)
+    )
+    return tuple(r[0] for r in q.fetchall())
 
 
 def geom_to_ogr(gpkg_geom, parse_srs=False):

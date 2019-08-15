@@ -132,7 +132,7 @@ def db_to_tree(repo, layer, db, tree=None):
             assert ftree.type == pygit2.GIT_OBJ_TREE
 
             repo_obj = core.feature_blobs_to_dict(
-                repo=repo, tree_entries=ftree, geom_column_name=geom_column_name
+                tree_entries=ftree, geom_column_name=geom_column_name
             )
 
             s_old = set(repo_obj.items())

@@ -4,3 +4,5 @@ pytest~=4.3
 pytest-cov
 pytest-sugar
 pytest-helpers-namespace
+pytest-benchmark[aspect]
+pytest-profiling

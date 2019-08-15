@@ -23,6 +23,8 @@ Project Snowdrop
 
 ### Distributed version-control for datasets
 
+[![Build status](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/snowdrop)
+
 ## Installing
 
 ### macOS

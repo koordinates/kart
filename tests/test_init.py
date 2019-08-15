@@ -8,6 +8,7 @@ import pygit2
 
 H = pytest.helpers.helpers()
 
+# also in test_structure.py
 GPKG_IMPORTS = (
     "archive,gpkg,table",
     [
@@ -214,9 +215,8 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         assert "isn't empty" in r.stdout
 
 
-@pytest.mark.xfail(reason="not implemented")
 def test_init_empty(tmp_path, cli_runner, chdir):
-    """ TODO: Create an empty Snowdrop repository. """
+    """ Create an empty Snowdrop repository. """
     repo_path = tmp_path / "data.snow"
     repo_path.mkdir()
 

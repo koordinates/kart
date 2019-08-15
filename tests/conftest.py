@@ -147,6 +147,51 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
 
 
 @pytest.fixture
+def data_imported(cli_runner, data_archive, chdir, request, tmp_path):
+    """
+    Extract a source geopackage archive, then import the table into a new repository.
+
+    Caches it in the pytest cache, so don't use it for writeable things!
+
+    Returns the path to the repository
+    """
+    L = logging.getLogger('data_imported')
+
+    def _data_imported(archive, source_gpkg, table, version):
+        params = [archive, source_gpkg, table, version]
+        cache_key = f"data_imported:{':'.join(params)}"
+
+        repo_path = Path(request.config.cache.makedir(cache_key)) / "data.snow"
+        if repo_path.exists():
+            L.info("Found cache at %s", repo_path)
+            return str(repo_path)
+
+        with data_archive(archive) as data:
+            import_path = tmp_path / "data.snow"
+            import_path.mkdir()
+            with chdir(import_path):
+                r = cli_runner.invoke(
+                    ["init"]
+                )
+                assert r.exit_code == 0, r
+
+                repo = pygit2.Repository(str(import_path))
+                assert repo.is_bare
+                assert repo.is_empty
+
+                r = cli_runner.invoke(
+                    ["import", f"GPKG:{data / source_gpkg}:{table}", f"--version={version}", "mytable"]
+                )
+                assert r.exit_code == 0, r
+
+            import_path.rename(repo_path)
+            L.info("Created cache at %s", repo_path)
+            return str(repo_path)
+
+    return _data_imported
+
+
+@pytest.fixture
 def geopackage():
     """ Return a sqlite3 db connection for the specified DB, with spatialite loaded """
 
