@@ -331,18 +331,13 @@ def test_import_feature_performance(import_version, archive, source_gpkg, table,
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(*GPKG_IMPORTS)
 @pytest.mark.parametrize(*DATASET_VERSIONS)
-def test_fast_import(import_version, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, benchmark, request):
-    """ Per-feature import performance. """
-    param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-', 1)  # yuck
-
-    with data_archive(archive) as data:
+def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
+    table = H.POINTS_LAYER
+    with data_archive("gpkg-points") as data:
         # list tables
         repo_path = tmp_path / "data.snow"
         repo_path.mkdir()
-
-        benchmark.group = f"test_fast_import - {param_ids[-1]}"
 
         with chdir(repo_path):
             r = cli_runner.invoke(
@@ -352,7 +347,7 @@ def test_fast_import(import_version, archive, source_gpkg, table, data_archive, 
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = ImportGPKG(data / source_gpkg, table)
+            source = ImportGPKG(data / "nz-pa-points-topo-150k.gpkg", table)
 
             dataset = DatasetStructure.for_version(import_version)(None, table)
 
@@ -362,9 +357,14 @@ def test_fast_import(import_version, archive, source_gpkg, table, data_archive, 
             assert repo.head.name == "refs/heads/master"
             assert repo.head.shorthand == "master"
 
+            dataset.tree = (repo.head.peel(pygit2.Tree) / table).obj
+
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1
 
-            dataset.tree = (repo.head.peel(pygit2.Tree) / table).obj
+            # has meta information
+            assert import_version == dataset.get_meta_item("version")['version']
+
+            # has the right number of features
             feature_count = sum(1 for f in dataset.features())
             assert feature_count == source.row_count
