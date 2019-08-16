@@ -13,10 +13,12 @@ gosu snowdrop git config --global user.email pytest-snowdrop@koordinates.com
 # run the actual test suite
 echo "+++ Running test suite..."
 chmod a+wrx ./ ./tests/
+mkdir /tmp/pytest_cache
 cd tests
 gosu snowdrop pytest \
     --verbose \
     -p no:sugar \
     --cov-report term \
     --cov-report html:../coverage \
-    --junit-xml=../pytest.xml
+    --junit-xml=../pytest.xml \
+    -o cache_dir=/tmp/pytest_cache --cache-clear

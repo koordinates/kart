@@ -153,7 +153,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path):
 
     Caches it in the pytest cache, so don't use it for writeable things!
 
-    Returns the path to the repository
+    Returns the path to the repository path
     """
     L = logging.getLogger('data_imported')
 
@@ -184,7 +184,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path):
                 )
                 assert r.exit_code == 0, r
 
-            import_path.rename(repo_path)
+            shutil.move(import_path, repo_path)
             L.info("Created cache at %s", repo_path)
             return str(repo_path)
 
