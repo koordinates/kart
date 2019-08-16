@@ -13,7 +13,7 @@ from . import gpkg
 gdal.UseExceptions()
 
 
-class WorkingCopy(typing.NamedTuple):
+class WorkingCopyInfo(typing.NamedTuple):
     path: str
     fmt: str
     layer: str
@@ -34,7 +34,7 @@ def get_working_copy(repo):
         fmt, path, layer = repo_cfg["kx.workingcopy"].split(":")
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Working copy missing? {path}")
-        return WorkingCopy(fmt=fmt, path=path, layer=layer)
+        return WorkingCopyInfo(fmt=fmt, path=path, layer=layer)
     else:
         return None
 

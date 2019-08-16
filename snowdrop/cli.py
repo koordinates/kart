@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 import os
 import subprocess
 import sys
@@ -47,6 +48,7 @@ def cli(ctx, repo_dir):
     ctx.ensure_object(dict)
     ctx.obj["repo_dir"] = repo_dir
 
+    logging.basicConfig(level=logging.DEBUG)
 
 # commands from modules
 

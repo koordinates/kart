@@ -85,6 +85,9 @@ class DatasetStructure:
     META_PATH = 'meta'
 
     def __init__(self, tree, path):
+        if self.__class__ is DatasetStructure:
+            raise TypeError("Use DatasetStructure.instantiate()")
+
         self.tree = tree
         self.path = path.strip('/')
         self.name = self.path.rsplit('/', 1)[-1]
@@ -185,6 +188,11 @@ class DatasetStructure:
             raise ValueError(f"meta/{name} is a {te.type}, expected blob")
 
         return json.loads(te.obj.data)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def has_geometry(self):
+        return self.geom_column_name is not None
 
     @property
     @functools.lru_cache(maxsize=1)

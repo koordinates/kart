@@ -28,6 +28,11 @@ def db(path, **kwargs):
     db = sqlite3.connect(path, **kwargs)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON;")
+
+    current_journal = db.execute("PRAGMA journal_mode").fetchone()[0]
+    if current_journal.lower() == "delete":
+        db.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
+
     db.enable_load_extension(True)
     db.execute("SELECT load_extension('mod_spatialite');")
     return db
