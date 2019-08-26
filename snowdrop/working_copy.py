@@ -1,16 +1,49 @@
 import contextlib
+import itertools
 import logging
 import os
 import time
 from datetime import datetime
-from itertools import islice
+from pathlib import Path
 
+import click
 import pygit2
 from osgeo import gdal
 
-from . import core
 from . import gpkg
-from .structure import Dataset00
+from .structure import Dataset00, RepositoryStructure
+
+
+@click.command('wc-new')
+@click.pass_context
+@click.argument("path", type=click.Path(writable=True, dir_okay=False))
+@click.argument("datasets", nargs=-1)
+def wc_new(ctx, path, datasets):
+    # Temporary command to create a new working copy
+    # Supports multiple datasets
+
+    repo_dir = ctx.obj["repo_dir"]
+    repo = pygit2.Repository(repo_dir)
+    if not repo:
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    repo_cfg = repo.config
+    assert "kx.workingcopy" not in repo_cfg, "Existing v1 working copy"
+    assert "snowdrop.workingcopy" not in repo_cfg, "Existing v2 working copy"
+
+    rs = RepositoryStructure(repo)
+    if not datasets:
+        datasets = list(rs)
+    else:
+        datasets = [rs[ds_path] for ds_path in datasets]
+
+    commit = repo.head.peel(pygit2.Commit)
+
+    wc = WorkingCopy_GPKG_1(repo, path)
+    wc.create()
+    for dataset in datasets:
+        wc.write_full(commit, dataset)
+    wc.save_config(repo)
 
 
 class WorkingCopy:
@@ -22,9 +55,6 @@ class WorkingCopy:
         else:
             return None
 
-        if layer != dataset.name:
-            raise ValueError(f"Dataset is '{dataset.name}', WorkingCopy is '{layer}'")
-
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Working copy missing? {path}")
 
@@ -32,9 +62,9 @@ class WorkingCopy:
             raise NotImplementedError(f"Working copy format: {fmt}")
 
         if isinstance(dataset, Dataset00):
-            return WorkingCopy_GPKG_0(repo, dataset, path)
+            return WorkingCopy_GPKG_0(repo, path)
         else:
-            return WorkingCopy_GPKG_1(repo, dataset, path)
+            return WorkingCopy_GPKG_1(repo, path)
 
     @classmethod
     def new(cls, repo, dataset, fmt, path):
@@ -45,19 +75,17 @@ class WorkingCopy:
             raise NotImplementedError(f"Working copy format: {fmt}")
 
         if isinstance(dataset, Dataset00):
-            return WorkingCopy_GPKG_0(repo, dataset, path)
+            return WorkingCopy_GPKG_0(repo, path)
         else:
-            return WorkingCopy_GPKG_1(repo, dataset, path)
-
-    def __init__(self, repo, dataset, path):
-        self.repo = repo
-        self.dataset = dataset
-        self.path = path
-        self.table = dataset.name
+            return WorkingCopy_GPKG_1(repo, path)
 
 
 class WorkingCopyGPKG(WorkingCopy):
     META_PREFIX = ".sno-"
+
+    def __init__(self, repo, path):
+        self.repo = repo
+        self.path = path
 
     @property
     def TRACKING_TABLE(self):
@@ -84,10 +112,13 @@ class WorkingCopyGPKG(WorkingCopy):
             self._db = gpkg.db(self.path, isolation_level=None)  # autocommit (also means manual transaction management)
 
             if bulk_load:
+                L.debug("Invoking bulk-load mode")
                 orig_journal = self._db.execute("PRAGMA journal_mode;").fetchone()[0]
+                orig_locking = self._db.execute("PRAGMA locking_mode;").fetchone()[0]
                 self._db.execute("PRAGMA synchronous = OFF;")
                 self._db.execute("PRAGMA journal_mode = MEMORY;")
-                L.debug("Invoking bulk-load mode")
+                self._db.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
+                self._db.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
             self._db.execute("BEGIN")
             try:
@@ -99,16 +130,19 @@ class WorkingCopyGPKG(WorkingCopy):
                 self._db.execute("COMMIT")
             finally:
                 if bulk_load:
-                    L.debug("Disabling bulk-load mode (Journal: %s)", orig_journal)
+                    L.debug("Disabling bulk-load mode (Journal: %s; Locking: %s)", orig_journal, orig_locking)
                     self._db.execute("PRAGMA synchronous = ON;")
+                    self._db.execute(f"PRAGMA locking_mode = {orig_locking};")
+                    self._db.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
                     self._db.execute(f"PRAGMA journal_mode = {orig_journal};")
+                    self._db.execute("PRAGMA cache_size = -2000;")  # default
 
             del self._db
 
-    def _get_columns(self):
+    def _get_columns(self, dataset):
         pk_field = None
         cols = {}
-        for col in self.dataset.get_meta_item("sqlite_table_info"):
+        for col in dataset.get_meta_item("sqlite_table_info"):
             col_spec = f"{gpkg.ident(col['name'])} {col['type']}"
             if col["pk"]:
                 col_spec += " PRIMARY KEY"
@@ -167,21 +201,18 @@ class WorkingCopyGPKG(WorkingCopy):
                 );
             """)
 
-    def write_meta(self):
-        meta_info = self.dataset.get_meta_item("gpkg_contents")
+    def write_meta(self, dataset):
+        meta_info = dataset.get_meta_item("gpkg_contents")
 
-        if meta_info["table_name"] != self.table:
-            raise ValueError(f"Table mismatch (table_name={meta_info['table_name']}; table={self.table}")
-
-        meta_geom = self.dataset.get_meta_item("gpkg_geometry_columns")
-        meta_srs = self.dataset.get_meta_item("gpkg_spatial_ref_sys")
+        meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
+        meta_srs = dataset.get_meta_item("gpkg_spatial_ref_sys")
 
         try:
-            meta_md = self.dataset.get_meta_item("gpkg_metadata")
+            meta_md = dataset.get_meta_item("gpkg_metadata")
         except KeyError:
             meta_md = {}
         try:
-            meta_md_ref = self.dataset.get_meta_item("gpkg_metadata_reference")
+            meta_md_ref = dataset.get_meta_item("gpkg_metadata_reference")
         except KeyError:
             meta_md_ref = {}
 
@@ -220,39 +251,54 @@ class WorkingCopyGPKG(WorkingCopy):
                 db.execute(sql, values)
 
             # Populate metadata tables
+            # since there's FKs, need to remap joins
+            dbcur = db.cursor()
+            metadata_id_map = {}
             for o in meta_md:
-                keys, values = zip(*o.items())
+                params = dict(o.items())
+                params.pop('id')
+
+                keys, values = zip(*params.items())
                 sql = f"""
                     INSERT INTO gpkg_metadata
                         ({','.join([gpkg.ident(k) for k in keys])})
                     VALUES
                         ({','.join(['?']*len(keys))});
                     """
-                db.execute(sql, values)
+                dbcur.execute(sql, values)
+                metadata_id_map[o['id']] = dbcur.lastrowid
 
             for o in meta_md_ref:
-                keys, values = zip(*o.items())
+                params = dict(o.items())
+                params['md_file_id'] = metadata_id_map[o['md_file_id']]
+                params['md_parent_id'] = metadata_id_map.get(o['md_parent_id'], None)
+
+                keys, values = zip(*params.items())
                 sql = f"""
                     INSERT INTO gpkg_metadata_reference
                         ({','.join([gpkg.ident(k) for k in keys])})
                     VALUES
                         ({','.join(['?']*len(keys))});
                 """
-                db.execute(sql, values)
+                dbcur.execute(sql, values)
 
-    def read_meta(self):
+    def read_meta(self, dataset):
         pass
 
-    def save_config(self):
-        core.set_working_copy(self.repo, path=self.path, layer=self.dataset.name, fmt="GPKG")
+    def save_config(self, repo):
+        new_path = Path(self.path)
+        if not new_path.is_absolute():
+            new_path = os.path.relpath(new_path, Path(repo.path).resolve())
 
-    def write_full(self, commit):
+        repo.config["snowdrop.workingcopy"] = f"GPKG:{new_path}"
+
+    def write_full(self, commit, dataset):
         raise NotImplementedError()
 
-    def _create_spatial_index(self):
+    def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
-        geom_col = self.dataset.geom_column_name
+        geom_col = dataset.geom_column_name
 
         # Create the GeoPackage Spatial Index
         t0 = time.time()
@@ -262,20 +308,20 @@ class WorkingCopyGPKG(WorkingCopy):
             ["GPKG"],
         )
         gdal_ds.ExecuteSQL(
-            f"SELECT CreateSpatialIndex({gpkg.ident(self.table)}, {gpkg.ident(geom_col)});"
+            f"SELECT CreateSpatialIndex({gpkg.ident(dataset.name)}, {gpkg.ident(geom_col)});"
         )
         del gdal_ds
         L.info("Created spatial index in %ss", time.time()-t0)
 
-    def update_gpkg_contents(self, commit):
-        table = self.table
+    def update_gpkg_contents(self, commit, dataset):
+        table = dataset.name
         commit_time = datetime.utcfromtimestamp(commit.commit_time)
 
         with self.session() as db:
             dbcur = db.cursor()
 
-            if self.dataset.has_geometry:
-                geom_col = self.dataset.geom_column_name
+            if dataset.has_geometry:
+                geom_col = dataset.geom_column_name
                 sql = f"""
                     UPDATE gpkg_contents
                     SET
@@ -302,7 +348,7 @@ class WorkingCopyGPKG(WorkingCopy):
 
             dbcur.execute(sql, (
                 commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
-                self.table
+                table
             ))
 
             assert (
@@ -322,13 +368,13 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
     def TRACKING_TABLE(self):
         return self._meta_name("map")
 
-    def _gen_tree_id(self, commit):
+    def _gen_tree_id(self, commit, dataset):
         tree = commit.peel(pygit2.Tree)
 
         # Check-only
-        layer_tree = (tree / self.dataset.path).obj
-        assert layer_tree == self.dataset.tree, \
-            f"Tree mismatch between dataset ({self.dataset.tree.hex}) and commit ({layer_tree.hex})"
+        layer_tree = (tree / dataset.path).obj
+        assert layer_tree == dataset.tree, \
+            f"Tree mismatch between dataset ({dataset.tree.hex}) and commit ({layer_tree.hex})"
 
         return tree.hex
 
@@ -346,14 +392,13 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
                 );
             """)
 
-    def _create_triggers(self, dbcur):
-        table = self.table
+    def _create_triggers(self, dbcur, table):
         pk = gpkg.pk(dbcur, table)
 
         # sqlite doesn't let you do param substitutions in CREATE TRIGGER
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(self.table, "ins")}
+            CREATE TRIGGER {self._meta_name(table, "ins")}
                AFTER INSERT
                ON {gpkg.ident(table)}
             BEGIN
@@ -364,7 +409,7 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
         )
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(self.table, "upd")}
+            CREATE TRIGGER {self._meta_name(table, "upd")}
                AFTER UPDATE
                ON {gpkg.ident(table)}
             BEGIN
@@ -378,7 +423,7 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
         )
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(self.table, "del")}
+            CREATE TRIGGER {self._meta_name(table, "del")}
                AFTER DELETE
                ON {gpkg.ident(table)}
             BEGIN
@@ -390,7 +435,7 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
         """
         )
 
-    def write_full(self, commit):
+    def write_full(self, commit, dataset):
         """
         Writes a full layer into a working-copy table
 
@@ -398,21 +443,21 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
+        table = dataset.name
+
         with self.session(bulk_load=True) as db:
             dbcur = db.cursor()
 
-            table = self.table
+            self.write_meta(dataset)
 
-            self.write_meta()
-
-            tree_id = self._gen_tree_id(commit)
+            tree_id = self._gen_tree_id(commit, dataset)
             dbcur.execute(
                 f"INSERT INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
                 (table, "tree", tree_id),
             )
 
             # Create the table
-            cols, pk_field = self._get_columns()
+            cols, pk_field = self._get_columns(dataset)
             col_names = cols.keys()
             col_specs = cols.values()
             db.execute(f"""
@@ -435,10 +480,11 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
             """
             feat_count = 0
             t0 = time.time()
+            t0p = t0
 
             wip_features = []
             wip_idmap = []
-            for key, feature in self.dataset.features():
+            for key, feature in dataset.features():
                 wip_features.append([feature[c] for c in col_names])
                 wip_idmap.append([table, key, feature[pk_field]])
                 feat_count += 1
@@ -446,29 +492,32 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
                 if len(wip_features) == 1000:
                     dbcur.executemany(sql_insert_features, wip_features)
                     dbcur.executemany(sql_insert_ids, wip_idmap)
-                    L.info("%s features... @%ss", feat_count, time.time()-t0)
+                    t0a = time.time()
+                    L.info("%s features... @%.1fs (+%.1fs)", feat_count, (t0a-t0), (t0a-t0p))
                     wip_features = []
                     wip_idmap = []
+                    t0p = t0a
 
             if len(wip_features):
                 dbcur.executemany(sql_insert_features, wip_features)
                 dbcur.executemany(sql_insert_ids, wip_idmap)
-                L.info("%s features... @%ss", feat_count, time.time()-t0)
+                t0a = time.time()
+                L.info("%s features... @%.1fs (+%.1fs)", feat_count, (t0a-t0), (t0a-t0p))
                 del wip_features
                 del wip_idmap
 
             t1 = time.time()
-            L.info("Added %s features to GPKG in %ss", feat_count, t1-t0)
-            L.info("Overall rate: %s features/s", (feat_count / (t1 - t0)))
+            L.info("Added %d features to GPKG in %.1fs", feat_count, t1-t0)
+            L.info("Overall rate: %d features/s", (feat_count / (t1 - t0)))
 
-        if self.dataset.has_geometry:
-            self._create_spatial_index()
+        if dataset.has_geometry:
+            self._create_spatial_index(dataset)
 
         with self.session() as db:
-            self.update_gpkg_contents(commit)
+            self.update_gpkg_contents(commit, dataset)
 
             # Create triggers
-            self._create_triggers(db)
+            self._create_triggers(db, table)
 
 
 class WorkingCopy_GPKG_1(WorkingCopyGPKG):
@@ -479,30 +528,22 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         super().create()
 
         with self.session() as db:
-            pk = [col for col in self.dataset.get_meta_item("sqlite_table_info") if col['pk']]
-            if not len(pk) == 1:
-                raise ValueError("Multiple PK columns!")
-            pk = pk[0]
-            if pk['name'] != self.dataset.primary_key:
-                raise ValueError("Mismatch between meta/sqlite_table_info and meta/primary_key!")
-
             db.execute(f"""
                 CREATE TABLE {self.TRACKING_TABLE} (
                     table_name TEXT NOT NULL,
-                    pk {pk['type']} NULL,
+                    pk TEXT NULL,
                     CONSTRAINT {self._meta_name('track', 'pk')} PRIMARY KEY (table_name, pk)
                 );
             """)
 
-    def _create_triggers(self, dbcur):
-        table = self.table
+    def _create_triggers(self, dbcur, table):
         pkf = gpkg.ident(gpkg.pk(dbcur, table))
         ts = gpkg.param_str(table)
 
         # sqlite doesn't let you do param substitutions in CREATE TRIGGER
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(self.table, 'ins')}
+            CREATE TRIGGER {self._meta_name(table, 'ins')}
                AFTER INSERT
                ON {gpkg.ident(table)}
             BEGIN
@@ -514,7 +555,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         )
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(self.table, 'upd')}
+            CREATE TRIGGER {self._meta_name(table, 'upd')}
                AFTER UPDATE
                ON {gpkg.ident(table)}
             BEGIN
@@ -528,7 +569,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         )
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(self.table, 'del')}
+            CREATE TRIGGER {self._meta_name(table, 'del')}
                AFTER DELETE
                ON {gpkg.ident(table)}
             BEGIN
@@ -540,11 +581,17 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         )
 
-    def _chunk(self, it, size):
-        it = iter(it)
-        return iter(lambda: tuple(islice(it, size)), ())
+    def _chunk(self, iterable, size):
+        it = iter(iterable)
+        while True:
+            chunk_it = itertools.islice(it, size)
+            try:
+                first_el = next(chunk_it)
+            except StopIteration:
+                return
+            yield itertools.chain((first_el,), chunk_it)
 
-    def write_full(self, commit):
+    def write_full(self, commit, dataset):
         """
         Writes a full layer into a working-copy table
 
@@ -552,20 +599,20 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
+        table = dataset.name
+
         with self.session(bulk_load=True) as db:
             dbcur = db.cursor()
 
-            table = self.table
-
-            self.write_meta()
+            self.write_meta(dataset)
 
             dbcur.execute(
                 f"INSERT INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
-                (table, "tree", self.dataset.tree.hex),
+                (table, "tree", dataset.tree.hex),
             )
 
             # Create the table
-            cols, pk_field = self._get_columns()
+            cols, pk_field = self._get_columns(dataset)
             col_names = cols.keys()
             col_specs = cols.values()
             db.execute(f"""
@@ -582,25 +629,28 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             """
             feat_count = 0
             t0 = time.time()
+            t0p = t0
 
             CHUNK_SIZE = 10000
-
-            row_generator = ([f[c] for c in col_names] for k, f in self.dataset.features())
-            for j, rows in enumerate(self._chunk(row_generator, CHUNK_SIZE)):
+            for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
                 dbcur.executemany(sql_insert_features, rows)
-                feat_count += len(rows)
-                if (j+1) % 5 == 0:
-                    L.info("%s features... @%ss", feat_count, time.time()-t0)
+                feat_count += dbcur.rowcount
+
+                nc = feat_count / CHUNK_SIZE
+                if nc % 5 == 0 or not nc.is_integer():
+                    t0a = time.time()
+                    L.info("%s features... @%.1fs (+%.1fs, ~%d F/s)", feat_count, t0a-t0, t0a-t0p, (CHUNK_SIZE*5)/(t0a-t0p))
+                    t0p = t0a
 
             t1 = time.time()
-            L.info("Added %s features to GPKG in %ss", feat_count, t1-t0)
-            L.info("Overall rate: %s features/s", (feat_count / (t1 - t0)))
+            L.info("Added %d features to GPKG in %.1fs", feat_count, t1-t0)
+            L.info("Overall rate: %d features/s", (feat_count / (t1 - t0)))
 
-        if self.dataset.has_geometry:
-            self._create_spatial_index()
+        if dataset.has_geometry:
+            self._create_spatial_index(dataset)
 
         with self.session() as db:
-            self.update_gpkg_contents(commit)
+            self.update_gpkg_contents(commit, dataset)
 
             # Create triggers
-            self._create_triggers(db)
+            self._create_triggers(db, table)

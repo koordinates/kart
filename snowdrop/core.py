@@ -55,14 +55,17 @@ def set_working_copy(repo, *, path, fmt=None, layer=None):
     repo.config["kx.workingcopy"] = f"{fmt}:{new_path}:{layer}"
 
 
-def feature_blobs_to_dict(tree_entries, geom_column_name):
+def feature_blobs_to_dict(tree_entries, geom_column_name, ogr_geoms=False):
     o = {}
     for te in tree_entries:
         assert te.type == "blob"
 
         blob = te.obj
         if geom_column_name is not None and te.name == geom_column_name and blob.data != b'null':
-            value = blob.data
+            if ogr_geoms:
+                value = gpkg.geom_to_ogr(blob.data)
+            else:
+                value = blob.data
         else:
             value = json.loads(blob.data)
         o[te.name] = value

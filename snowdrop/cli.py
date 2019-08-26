@@ -9,7 +9,7 @@ import click
 import pygit2
 
 from . import core  # noqa
-from . import checkout, clone, commit, diff, init, fsck, merge, pull, status
+from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query, working_copy
 
 
 def print_version(ctx, param, value):
@@ -29,8 +29,9 @@ def print_version(ctx, param, value):
 
 @click.group()
 @click.option(
-    "repo_dir",
+    "-C",
     "--repo",
+    "repo_dir",
     type=click.Path(file_okay=False, dir_okay=True),
     default=os.curdir,
     metavar="PATH",
@@ -63,6 +64,8 @@ cli.add_command(init.init)
 cli.add_command(merge.merge)
 cli.add_command(pull.pull)
 cli.add_command(status.status)
+cli.add_command(query.query)
+cli.add_command(working_copy.wc_new)
 
 
 @cli.command("workingcopy-set-path")
@@ -126,7 +129,7 @@ def log(ctx, args):
     """ Show commit logs """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
+    if not repo:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))

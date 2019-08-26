@@ -266,7 +266,7 @@ def import_table(ctx, source, directory, do_list, version, x_method):
         if do_list:
             return
 
-        if sys.stdin.isatty():
+        if sys.stdout.isatty():
             t_choices = click.Choice(choices=available_tables.keys())
             t_default = next(iter(available_tables)) if len(available_tables) == 1 else None
             source_table = click.prompt('\nSelect a table to import', type=t_choices, show_choices=False, default=t_default)
@@ -340,7 +340,7 @@ def init(ctx, import_from, do_checkout, directory):
             for t_label in available_tables.values():
                 click.echo(t_label)
 
-            if sys.stdin.isatty():
+            if sys.stdout.isatty():
                 t_choices = click.Choice(choices=available_tables.keys())
                 import_table = click.prompt('Please select a table to import', type=t_choices, show_choices=False)
 

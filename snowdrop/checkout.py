@@ -2,14 +2,12 @@ import contextlib
 import itertools
 import json
 import re
-import time
 from datetime import datetime
 
 import click
 import pygit2
 
 from . import gpkg, core
-from .core import gdal
 
 
 @click.command()

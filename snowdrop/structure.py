@@ -33,19 +33,10 @@ class RepositoryStructure:
             raise
 
         if tree_entry.type == 'tree':
-            ds = self._load_dataset(tree_entry.obj, path)
-            if ds:
-                return ds
+            ds = DatasetStructure.instantiate(tree_entry.obj, path)
+            return ds
 
         raise KeyError(f"No valid dataset found at '{path}'")
-
-    def _load_dataset(self, tree, path):
-        for version_klass in DatasetStructure.all_versions():
-            ds = version_klass.instantiate(tree, path)
-            if ds is not None:
-                return ds
-
-        return None
 
     def __iter__(self):
         """ Iterate over available datasets in this repository """
@@ -64,16 +55,13 @@ class RepositoryStructure:
                         te_path = te.name
 
                     try:
-                        ds = self._load_dataset(te.obj, te_path)
-                        if ds is not None:
-                            yield ds
-                            continue
+                        ds = DatasetStructure.instantiate(te.obj, te_path)
+                        yield ds
                     except IntegrityError:
                         self.L.warn("Error loading dataset from %s, ignoring tree", te_path, exc_info=True)
-                        continue
-
-                    # examine inside this directory
-                    to_examine.append((te_path, te.obj))
+                    except ValueError:
+                        # examine inside this directory
+                        to_examine.append((te_path, te.obj))
 
 
 class IntegrityError(ValueError):
@@ -392,11 +380,11 @@ class Dataset00(DatasetStructure):
     VERSION_SPECIFIER = "0.0."
     VERSION_IMPORT = '0.0.1'
 
-    def repo_feature_to_dict(self, pk, tree):
+    def repo_feature_to_dict(self, pk, tree, ogr_geoms=False):
         tree_entries = [te for te in tree if te.type == 'blob']
-        return core.feature_blobs_to_dict(tree_entries, self.geom_column_name)
+        return core.feature_blobs_to_dict(tree_entries, self.geom_column_name, ogr_geoms=ogr_geoms)
 
-    def features(self):
+    def features(self, *, ogr_geoms=False, **kwargs):
         # layer-name/
         #   features/
         #     {uuid[:4]}/
@@ -412,7 +400,7 @@ class Dataset00(DatasetStructure):
             ftree_prefix = te_ftree_prefix.obj
 
             for te_ftree in ftree_prefix:
-                feature = self.repo_feature_to_dict(None, te_ftree.obj)
+                feature = self.repo_feature_to_dict(None, te_ftree.obj, ogr_geoms=ogr_geoms)
                 yield (te_ftree.name, feature)
 
     @property
@@ -422,6 +410,13 @@ class Dataset00(DatasetStructure):
         field = next(f for f in schema if f['pk'])
         return field['name']
 
+    @property
+    @functools.lru_cache(maxsize=1)
+    def primary_key_type(self):
+        schema = self.get_meta_item('sqlite_table_info')
+        field = next(f for f in schema if f['name'] == self.primary_key)
+        return field['type']
+
     def get_feature(self, pk_value):
         pk_field = self.primary_key
         for tree, path, subtrees, blobs in core.walk_tree((self.tree / 'features').obj, path='features'):
@@ -429,7 +424,7 @@ class Dataset00(DatasetStructure):
             if m:
                 pk_blob = (tree / pk_field).obj
                 if json.loads(pk_blob.data) == pk_value:
-                    return m.group(2), self.repo_feature_to_dict(None, tree)
+                    return m.group(2), self.repo_feature_to_dict(None, tree, ogr_geoms=True)
 
         raise KeyError(pk_value)
 
@@ -511,6 +506,13 @@ class Dataset01(DatasetStructure):
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)
 
+    def _msgpack_unpack_ext_ogr(self, code, data):
+        if code == self.MSGPACK_EXT_GEOM:
+            return gpkg.geom_to_ogr(data)
+        else:
+            self.L.warn("Unexpected msgpack extension: %d", code)
+            return msgpack.ExtType(code, data)
+
     @property
     @functools.lru_cache(maxsize=1)
     def field_cid_map(self):
@@ -529,6 +531,13 @@ class Dataset01(DatasetStructure):
     def primary_key(self):
         return self.get_meta_item('primary_key')
 
+    @property
+    @functools.lru_cache(maxsize=1)
+    def primary_key_type(self):
+        schema = self.get_meta_item('sqlite_table_info')
+        field = next(f for f in schema if f['name'] == self.primary_key)
+        return field['type']
+
     def encode_pk(self, pk):
         pk_enc = msgpack.packb(pk, use_bin_type=True)  # encode pk value via msgpack
         pk_str = base64.urlsafe_b64encode(pk_enc).decode('utf8')  # filename safe
@@ -542,7 +551,7 @@ class Dataset01(DatasetStructure):
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
         return os.path.join('.sno-table', pk_hash[:2], pk_hash[2:4], pk_enc)
 
-    def repo_feature_to_dict(self, pk, tree):
+    def repo_feature_to_dict(self, pk, tree, ogr_geoms=False):
         feature = {
             self.primary_key: self.decode_pk(pk),
         }
@@ -556,7 +565,7 @@ class Dataset01(DatasetStructure):
             field_name = self.field_cid_map[colid]
             feature[field_name] = msgpack.unpackb(
                 blob.data,
-                ext_hook=self._msgpack_unpack_ext,
+                ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
                 raw=False
             )
 
@@ -570,9 +579,9 @@ class Dataset01(DatasetStructure):
         if te.type != 'tree':
             raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
 
-        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj)
+        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj, ogr_geoms=True)
 
-    def features(self):
+    def features(self, *, ogr_geoms=False, **kwargs):
         top_tree = (self.tree / '.sno-table').obj
 
         # .sno-table/
@@ -597,7 +606,7 @@ class Dataset01(DatasetStructure):
                         if hashlib.sha1(d.encode('utf8')).hexdigest()[0:4] != f"{m.group(1)}{m.group(2)}":
                             self.L.warn("features: feature prefix doesn't match hash(pk): %s/%s", path, d)
 
-                        yield d, self.repo_feature_to_dict(d, te_d.obj)
+                        yield d, self.repo_feature_to_dict(d, te_d.obj, ogr_geoms=ogr_geoms)
             elif m or path == '':
                 subtrees[:] = [d for d in subtrees if RE_PREFIX_PATH.match(os.path.join(path, d))]
                 continue
@@ -690,23 +699,22 @@ class Dataset02(Dataset01):
         meta/
           primary_key
           fields/
-            {field}  # map to attribute-id
+            [field]  # map to attribute-id
             ...
-        {pk-hash:2}/
-          {pk-hash:2}/
-            {pk-value}  # {attribute-id: attribute-value, ...}
-
+        [hex(pk-hash):2]/
+          [hex(pk-hash):2]/
+            [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
     """
     VERSION_SPECIFIER = "0.2."
     VERSION_IMPORT = '0.2.0'
 
-    def repo_feature_to_dict(self, pk, blob):
+    def repo_feature_to_dict(self, pk, blob, ogr_geoms=False):
         feature = {
             self.primary_key: self.decode_pk(pk),
         }
         bin_feature = msgpack.unpackb(
             blob.data,
-            ext_hook=self._msgpack_unpack_ext,
+            ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
             raw=False
         )
         for colid, value in bin_feature.items():
@@ -723,39 +731,67 @@ class Dataset02(Dataset01):
         if te.type != 'blob':
             raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
 
-        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj)
+        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj, ogr_geoms=True)
 
-    def features(self):
+    def build_feature_tupleizer(self, tuple_cols, ogr_geoms=False):
+        rev_cid_map = {v: k for k, v in self.field_cid_map.items()}
+
+        ftuple_order = []
+        for field_name in tuple_cols:
+            if field_name == self.primary_key:
+                ftuple_order.append(-1)
+            else:
+                ftuple_order.append(rev_cid_map[field_name])
+        ftuple_order = tuple(ftuple_order)
+
+        def tupleizer(pk, blob):
+            bin_feature = msgpack.unpackb(
+                blob.data,
+                ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
+                raw=False,
+                use_list=False
+            )
+            return tuple([self.decode_pk(pk) if c == -1 else bin_feature[c] for c in ftuple_order])
+        return tupleizer
+
+    def _features(self, feature_builder, fast):
         top_tree = (self.tree / '.sno-table').obj
 
         # .sno-table/
-        #   {hex(pk-hash):2}/
-        #     {hex(pk-hash):2}/
-        #       {base64(pk-value)}/
-        #         {hex(field-id)}
+        #   [hex(pk-hash):2]/
+        #     [hex(pk-hash):2]/
+        #       [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
         URLSAFE_B64 = r"A-Za-z0-9_\-"
-        RE_FEATURE_PATH = re.compile(fr'(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$')
-        RE_PREFIX_PATH = re.compile(r'([0-9a-f]{2})(?:/([0-9a-f]{2}))?$')
 
-        for tree, path, subtrees, blobs in core.walk_tree(top_tree, path=''):
-            m = RE_PREFIX_PATH.match(path)
-            if m and m.group(2) is not None:
-                for b in blobs:
-                    if RE_FEATURE_PATH.match(b):
-                        te_b = (tree / b)
-                        if te_b.type != 'blob':
-                            self.L.warn("features: Unexpected TreeEntry type=%s in feature tree '%s/%s'", te_b.type, path, b)
-                            continue
+        RE_L = re.compile(r'([0-9a-f]{2})?$')
+        RE_F = re.compile(fr'(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$')
 
-                        if hashlib.sha1(b.encode('utf8')).hexdigest()[0:4] != f"{m.group(1)}{m.group(2)}":
-                            self.L.warn("features: feature prefix doesn't match hash(pk): %s/%s", path, b)
-
-                        yield b, self.repo_feature_to_dict(b, te_b.obj)
-            elif m or path == '':
-                subtrees[:] = [d for d in subtrees if RE_PREFIX_PATH.match(os.path.join(path, d))]
+        for l1e in top_tree:
+            if l1e.type != 'tree' or not RE_L.match(l1e.name):
                 continue
 
-            subtrees.clear()
+            for l2e in l1e.obj:
+                if l2e.type != 'tree' or not RE_L.match(l2e.name):
+                    continue
+
+                for fbe in l2e.obj:
+                    if not fast:
+                        if not RE_F.match(fbe.name):
+                            continue
+                        elif fbe.type != 'blob':
+                            self.L.warn("features: Unexpected TreeEntry type=%s in feature tree '%s/%s/%s'", fbe.type, l1e.name, l2e.name, fbe.name)
+                            continue
+
+                    yield feature_builder(fbe.name, fbe.obj)
+
+    def features(self, *, ogr_geoms=False, **kwargs):
+        """ Feature iterator yielding (feature-key, feature-dict) pairs """
+        self._features(lambda x: (x[0], self.repo_feature_to_dict(x[0], x[1], ogr_geoms=ogr_geoms)), fast=False)
+
+    def feature_tuples(self, col_names, **kwargs):
+        """ Optimised feature iterator yielding tuples, ordered by the columns from col_names """
+        tupleizer = self.build_feature_tupleizer(col_names)
+        return self._features(tupleizer, fast=True)
 
     def import_feature(self, row, repo, index, source, path):
         path = f"{self.path}/.sno-table"
@@ -811,3 +847,64 @@ class Dataset02(Dataset01):
                 bin_feature[field_id] = value
 
             yield (feature_path, msgpack.packb(bin_feature, use_bin_type=True))
+
+    RTREE_INDEX_EXTENSIONS = ('sno-idxd', 'sno-idxi')
+
+    def build_spatial_index(self, path):
+        """
+        Internal proof-of-concept method for building a spatial index across the repository.
+
+        Uses Rtree (libspatialindex underneath): http://toblerity.org/rtree/index.html
+        """
+        import rtree
+
+        if not self.has_geometry:
+            raise ValueError("No geometry to index")
+
+        def _indexer():
+            t0 = time.time()
+
+            c = 0
+            for (pk, geom) in self.feature_tuples([self.primary_key, self.geom_column_name]):
+                c += 1
+                if geom is None:
+                    continue
+
+                e = gpkg.geom_envelope(geom)
+                yield (pk, e, None)
+
+                if c % 50000 == 0:
+                    print(f"  {c} features... @{time.time()-t0:.1f}s")
+
+        p = rtree.index.Property()
+        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
+        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
+        p.leaf_capacity = 1000
+        p.fill_factor = 0.9
+        p.overwrite = True
+        p.dimensionality = 2
+
+        t0 = time.time()
+        idx = rtree.index.Index(path, _indexer(), properties=p, interleaved=False)
+        t1 = time.time()
+        b = idx.bounds
+        c = idx.count(b)
+        del idx
+        t2 = time.time()
+        print(f"Indexed {c} features ({b}) in {t1-t0:.1f}s; flushed in {t2-t1:.1f}s")
+
+    def get_spatial_index(self, path):
+        """
+        Retrieve a spatial index built with build_spatial_index().
+
+        Query with .nearest(coords), .intersection(coords), .count(coords)
+        http://toblerity.org/rtree/index.html
+        """
+        import rtree
+
+        p = rtree.index.Property()
+        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
+        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
+
+        idx = rtree.index.Index(path, properties=p)
+        return idx
