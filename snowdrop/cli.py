@@ -79,8 +79,8 @@ def workingcopy_set_path(ctx, new):
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     repo_cfg = repo.config
-    if "kx.workingcopy" in repo_cfg:
-        fmt, path, layer = repo_cfg["kx.workingcopy"].split(":")
+    if "snow.workingcopy" in repo_cfg:
+        fmt, path, layer = repo_cfg["snow.workingcopy"].split(":")
     else:
         raise click.ClickException("No working copy? Try `snow checkout`")
 
@@ -88,7 +88,7 @@ def workingcopy_set_path(ctx, new):
     if not new.is_absolute():
         new = os.path.relpath(new, repo_dir)
 
-    repo.config["kx.workingcopy"] = f"{fmt}:{new}:{layer}"
+    repo.config["snow.workingcopy"] = f"{fmt}:{new}:{layer}"
 
 
 # aliases/shortcuts

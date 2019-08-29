@@ -284,7 +284,7 @@ class WorkingCopyGPKG(WorkingCopy):
         if not new_path.is_absolute():
             new_path = os.path.relpath(new_path, Path(repo.path).resolve())
 
-        repo.config["snowdrop.workingcopy"] = f"GPKG:{new_path}"
+        repo.config["snow.workingcopy"] = f"GPKG:{new_path}"
 
     def write_full(self, commit, dataset):
         raise NotImplementedError()

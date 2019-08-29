@@ -30,8 +30,8 @@ class WorkingCopyMismatch(ValueError):
 
 def get_working_copy(repo):
     repo_cfg = repo.config
-    if "kx.workingcopy" in repo_cfg:
-        fmt, path, layer = repo_cfg["kx.workingcopy"].split(":")
+    if "snow.workingcopy" in repo_cfg:
+        fmt, path, layer = repo_cfg["snow.workingcopy"].split(":")
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Working copy missing? {path}")
         return WorkingCopyInfo(fmt=fmt, path=path, layer=layer)
@@ -41,8 +41,8 @@ def get_working_copy(repo):
 
 def set_working_copy(repo, *, path, fmt=None, layer=None):
     repo_cfg = repo.config
-    if "kx.workingcopy" in repo_cfg:
-        ofmt, opath, olayer = repo_cfg["kx.workingcopy"].split(":")
+    if "snow.workingcopy" in repo_cfg:
+        ofmt, opath, olayer = repo_cfg["snow.workingcopy"].split(":")
         fmt = fmt or ofmt
         layer = layer or olayer
     elif not (fmt and layer):
@@ -52,7 +52,7 @@ def set_working_copy(repo, *, path, fmt=None, layer=None):
     if not new_path.is_absolute():
         new_path = os.path.relpath(new_path, Path(repo.path).resolve())
 
-    repo.config["kx.workingcopy"] = f"{fmt}:{new_path}:{layer}"
+    repo.config["snow.workingcopy"] = f"{fmt}:{new_path}:{layer}"
 
 
 def feature_blobs_to_dict(tree_entries, geom_column_name, ogr_geoms=False):

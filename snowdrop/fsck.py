@@ -62,11 +62,11 @@ def fsck(ctx, reset_layer, args):
     # now check our stuff:
     # 1. working copy
 
-    if "kx.workingcopy" not in repo.config:
+    if "snow.workingcopy" not in repo.config:
         click.echo("No working-copy configured")
         return
 
-    fmt, working_copy, layer = repo.config["kx.workingcopy"].split(":")
+    fmt, working_copy, layer = repo.config["snow.workingcopy"].split(":")
     if not os.path.isfile(working_copy):
         raise click.ClickException(
             click.style(f"Working copy missing: {working_copy}", fg="red")

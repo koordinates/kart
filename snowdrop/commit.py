@@ -20,10 +20,10 @@ def commit(ctx, message):
     commit = repo.head.peel(pygit2.Commit)
     tree = commit.tree
 
-    if "kx.workingcopy" not in repo.config:
+    if "snow.workingcopy" not in repo.config:
         raise click.UsageError("No working-copy, use 'checkout'")
 
-    fmt, working_copy, layer = repo.config["kx.workingcopy"].split(":")
+    fmt, working_copy, layer = repo.config["snow.workingcopy"].split(":")
     assert os.path.isfile(working_copy), f"Working copy missing? {working_copy}"
 
     table = layer
