@@ -115,8 +115,8 @@ def checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=N
 
     wc = WorkingCopy.new(repo, ds, fmt, working_copy)
     wc.create()
-    wc.write_full(commit)
-    wc.save_config()
+    wc.write_full(commit, ds)
+    wc.save_config(repo)
 
 
 def checkout_update(repo, working_copy, layer, commit, force=False, base_commit=None):
