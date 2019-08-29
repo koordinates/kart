@@ -207,14 +207,8 @@ class WorkingCopyGPKG(WorkingCopy):
         meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
         meta_srs = dataset.get_meta_item("gpkg_spatial_ref_sys")
 
-        try:
-            meta_md = dataset.get_meta_item("gpkg_metadata")
-        except KeyError:
-            meta_md = {}
-        try:
-            meta_md_ref = dataset.get_meta_item("gpkg_metadata_reference")
-        except KeyError:
-            meta_md_ref = {}
+        meta_md = dataset.get_meta_item("gpkg_metadata") or {}
+        meta_md_ref = dataset.get_meta_item("gpkg_metadata_reference") or {}
 
         with self.session() as db:
             # Update GeoPackage core tables
