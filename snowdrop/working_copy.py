@@ -381,7 +381,7 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
                     table_name TEXT NOT NULL,
                     feature_key VARCHAR(36) NULL,
                     feature_id INTEGER NOT NULL,
-                    state INTEGER NOT NULL DEFAULT 0
+                    state INTEGER NOT NULL DEFAULT 0,
                     CONSTRAINT {self._meta_name('map', 'u')} UNIQUE (table_name, feature_key)
                 );
             """)
