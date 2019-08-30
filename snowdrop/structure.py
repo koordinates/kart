@@ -162,7 +162,7 @@ class DatasetStructure:
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
-        return self.tree / self.META_PATH
+        return (self.tree / self.META_PATH).obj
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -177,6 +177,18 @@ class DatasetStructure:
 
         return json.loads(te.obj.data)
 
+    def iter_meta_items(self, exclude=None):
+        exclude = set(exclude or [])
+        for top_tree, top_path, subtree_names, blob_names in core.walk_tree(self.meta_tree):
+            for name in blob_names:
+                if name in exclude:
+                    continue
+
+                meta_path = os.path.join(top_path, name)
+                yield (meta_path, self.get_meta_item(meta_path))
+
+            subtree_names[:] = [n for n in subtree_names if n not in exclude]
+
     @property
     @functools.lru_cache(maxsize=1)
     def has_geometry(self):
@@ -190,6 +202,13 @@ class DatasetStructure:
 
     def get_feature(self, pk_value):
         raise NotImplementedError()
+
+    def feature_tuples(self, col_names, **kwargs):
+        """ Feature iterator yielding tuples, ordered by the columns from col_names """
+
+        # not optimised in V0
+        for k, f in self.features():
+            yield tuple(f[c] for c in col_names)
 
     def import_meta(self, repo, index, source):
         """
@@ -419,6 +438,16 @@ class Dataset00(DatasetStructure):
 
     def get_feature(self, pk_value):
         pk_field = self.primary_key
+        pk_type = self.primary_key_type
+
+        if pk_value is not None:
+            # https://www.sqlite.org/datatype3.html
+            # 3.1. Determination Of Column Affinity
+            if 'INT' in pk_type:
+                pk_value = int(pk_value)
+            elif re.search('TEXT|CHAR|CLOB', pk_type):
+                pk_value = str(pk_value)
+
         for tree, path, subtrees, blobs in core.walk_tree((self.tree / 'features').obj, path='features'):
             m = re.match(r'features/([0-9a-f]{4})/([0-9a-f-]{36})$', path)
             if m:
@@ -515,17 +544,22 @@ class Dataset01(DatasetStructure):
 
     @property
     @functools.lru_cache(maxsize=1)
-    def field_cid_map(self):
+    def cid_field_map(self):
         cid_map = {}
         for te in (self.meta_tree / 'fields').obj:
             if te.type != 'blob':
-                self.L.warn("field_cid_map: Unexpected TreeEntry type=%s @ meta/fields/%s", te.type, te.name)
+                self.L.warn("cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s", te.type, te.name)
                 continue
 
             cid = json.loads(te.obj.data)
             field_name = te.name
             cid_map[cid] = field_name
         return cid_map
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def field_cid_map(self):
+        return {v: k for k, v in self.cid_field_map.items()}
 
     @property
     def primary_key(self):
@@ -562,7 +596,7 @@ class Dataset01(DatasetStructure):
 
             blob = te.obj
             colid = int(te.name, 16)
-            field_name = self.field_cid_map[colid]
+            field_name = self.cid_field_map[colid]
             feature[field_name] = msgpack.unpackb(
                 blob.data,
                 ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
@@ -572,6 +606,16 @@ class Dataset01(DatasetStructure):
         return feature
 
     def get_feature(self, pk_value):
+        pk_type = self.primary_key_type
+
+        if pk_value is not None:
+            # https://www.sqlite.org/datatype3.html
+            # 3.1. Determination Of Column Affinity
+            if 'INT' in pk_type:
+                pk_value = int(pk_value)
+            elif re.search('TEXT|CHAR|CLOB', pk_type):
+                pk_value = str(pk_value)
+
         pk_enc = self.encode_pk(pk_value)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
 
@@ -718,12 +762,21 @@ class Dataset02(Dataset01):
             raw=False
         )
         for colid, value in bin_feature.items():
-            field_name = self.field_cid_map[colid]
+            field_name = self.cid_field_map[colid]
             feature[field_name] = value
 
         return feature
 
-    def get_feature(self, pk_value):
+    def get_feature(self, pk_value, *, ogr_geoms=True):
+        pk_type = self.primary_key_type
+        if pk_value is not None:
+            # https://www.sqlite.org/datatype3.html
+            # 3.1. Determination Of Column Affinity
+            if 'INT' in pk_type:
+                pk_value = int(pk_value)
+            elif re.search('TEXT|CHAR|CLOB', pk_type):
+                pk_value = str(pk_value)
+
         pk_enc = self.encode_pk(pk_value)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
 
@@ -731,17 +784,36 @@ class Dataset02(Dataset01):
         if te.type != 'blob':
             raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
 
-        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj, ogr_geoms=True)
+        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj, ogr_geoms=ogr_geoms)
+
+    def get_feature_hash(self, pk_value):
+        pk_type = self.primary_key_type
+        if pk_value is not None:
+            # https://www.sqlite.org/datatype3.html
+            # 3.1. Determination Of Column Affinity
+            if 'INT' in pk_type:
+                pk_value = int(pk_value)
+            elif re.search('TEXT|CHAR|CLOB', pk_type):
+                pk_value = str(pk_value)
+
+        pk_enc = self.encode_pk(pk_value)
+        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
+
+        te = (self.tree / '.sno-table' / pk_hash[:2] / pk_hash[2:4] / pk_enc)
+        if te.type != 'blob':
+            raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
+
+        return te.id.hex
 
     def build_feature_tupleizer(self, tuple_cols, ogr_geoms=False):
-        rev_cid_map = {v: k for k, v in self.field_cid_map.items()}
+        field_cid_map = self.field_cid_map
 
         ftuple_order = []
         for field_name in tuple_cols:
             if field_name == self.primary_key:
                 ftuple_order.append(-1)
             else:
-                ftuple_order.append(rev_cid_map[field_name])
+                ftuple_order.append(field_cid_map[field_name])
         ftuple_order = tuple(ftuple_order)
 
         def tupleizer(pk, blob):
@@ -793,6 +865,22 @@ class Dataset02(Dataset01):
         tupleizer = self.build_feature_tupleizer(col_names)
         return self._features(tupleizer, fast=True)
 
+    def encode_feature(self, feature, field_cid_map=None, geom_cols=None, primary_key=None):
+        bin_feature = {}
+        for field in feature.keys():
+            if field == (primary_key or self.primary_key):
+                continue
+
+            field_id = (field_cid_map or self.field_cid_map)[field]
+            value = feature[field]
+            if field in (geom_cols or [self.geom_column_name]):
+                if value is not None:
+                    value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
+
+            bin_feature[field_id] = value
+
+        return msgpack.packb(bin_feature, use_bin_type=True)
+
     def import_feature(self, row, repo, index, source, path):
         path = f"{self.path}/.sno-table"
 
@@ -802,20 +890,9 @@ class Dataset02(Dataset01):
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
 
         feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
-        bin_feature = {}
-        for field in row.keys():
-            if field == pk_field:
-                continue
 
-            field_id = source.field_cid_map[field]
-            value = row[field]
-            if field in source.geom_cols:
-                if value is not None:
-                    value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
-
-            bin_feature[field_id] = value
-
-        blob_id = repo.create_blob(msgpack.packb(bin_feature, use_bin_type=True))
+        bin_feature = self.encode_feature(row, source.field_cid_map, source.geom_cols, pk_field)
+        blob_id = repo.create_blob(bin_feature)
         entry = pygit2.IndexEntry(
             feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
         )

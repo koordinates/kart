@@ -252,11 +252,15 @@ def test_working_copy_reset(
         db = geopackage(wc)
 
         h_before = H.db_table_hash(db, layer, pk_field)
-
         with db:
             cur = db.cursor()
-            cur.execute(sql, rec)
+            try:
+                cur.execute(sql, rec)
+            except sqlite3.OperationalError:
+                print(sql, rec)
+                raise
             assert cur.rowcount == 1
+
             cur.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
             assert cur.rowcount == 4
             cur.execute(

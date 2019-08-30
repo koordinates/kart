@@ -113,9 +113,9 @@ def checkout_new(repo, working_copy, layer, commit, fmt, skip_create=False, db=N
 
     ds = DatasetStructure.instantiate(layer_tree, layer)
 
-    wc = WorkingCopy.new(repo, ds, fmt, working_copy)
+    wc = WorkingCopy.new(repo, working_copy, version=0, table=layer)
     wc.create()
-    wc.write_full(commit)
+    wc.write_full(commit, ds)
     wc.save_config()
 
 

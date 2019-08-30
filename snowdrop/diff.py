@@ -1,9 +1,15 @@
 import json
+import logging
 
 import click
 import pygit2
 
 from . import core, gpkg
+from .working_copy import WorkingCopy
+from .structure import RepositoryStructure, Dataset00
+
+
+L = logging.getLogger('snowdrop.diff')
 
 
 @click.command()
@@ -12,63 +18,87 @@ def diff(ctx):
     """ Show changes between commits, commit and working tree, etc """
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
+    if not repo:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
-    working_copy = core.get_working_copy(repo)
+    # working_copy = core.get_working_copy(repo)
+    # if not working_copy:
+    #     raise click.ClickException("No working copy? Try `snow checkout`")
+
+    # db = gpkg.db(working_copy.path, isolation_level="DEFERRED")
+    # with db:
+    #     pk_field = gpkg.pk(db, working_copy.layer)
+
+    #     head_tree = repo.head.peel(pygit2.Tree)
+    #     core.assert_db_tree_match(db, working_copy.layer, head_tree)
+    #     diff = db_to_tree(repo, working_copy.layer, db)
+
+    working_copy = WorkingCopy.open(repo)
     if not working_copy:
-        raise click.ClickException("No working copy? Try `snow checkout`")
+        raise click.UsageError("No working copy, use 'checkout'")
 
-    db = gpkg.db(working_copy.path, isolation_level="DEFERRED")
-    with db:
-        pk_field = gpkg.pk(db, working_copy.layer)
+    for dataset in RepositoryStructure(repo):
+        working_copy.assert_db_tree_match(repo.head.peel(pygit2.Tree))
 
-        head_tree = repo.head.peel(pygit2.Tree)
-        core.assert_db_tree_match(db, working_copy.layer, head_tree)
-        diff = db_to_tree(repo, working_copy.layer, db)
+        path = dataset.path
+        pk_field = dataset.primary_key
 
-    for k, (v_old, v_new) in diff["META"].items():
-        click.secho(f"--- meta/{k}\n+++ meta/{k}", bold=True)
+        diff = working_copy.diff_db_to_tree(dataset)
 
-        s_old = set(v_old.items())
-        s_new = set(v_new.items())
+        is_v0 = isinstance(dataset, Dataset00)
+        prefix = '' if is_v0 else f'{path}:'
+        repr_excl = [] if is_v0 else [pk_field]
 
-        diff_add = dict(s_new - s_old)
-        diff_del = dict(s_old - s_new)
-        all_keys = set(diff_del.keys()) | set(diff_add.keys())
+        for k, (v_old, v_new) in diff["META"].items():
+            click.secho(f"--- {prefix}meta/{k}\n+++ {prefix}meta/{k}", bold=True)
 
-        for k in all_keys:
-            if k in diff_del:
-                click.secho(_repr_row({k: diff_del[k]}, prefix="- "), fg="red")
-            if k in diff_add:
-                click.secho(_repr_row({k: diff_add[k]}, prefix="+ "), fg="green")
+            s_old = set(v_old.items())
+            s_new = set(v_new.items())
 
-    for k, (v_old, v_new) in diff["D"].items():
-        click.secho(f"--- {k}", bold=True)
-        click.secho(_repr_row(v_old, prefix="- "), fg="red")
+            diff_add = dict(s_new - s_old)
+            diff_del = dict(s_old - s_new)
+            all_keys = set(diff_del.keys()) | set(diff_add.keys())
 
-    for o in diff["I"]:
-        click.secho("+++ {new feature}", bold=True)
-        click.secho(_repr_row(o, prefix="+ "), fg="green")
+            for k in all_keys:
+                if k in diff_del:
+                    click.secho(_repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl), fg="red")
+                if k in diff_add:
+                    click.secho(_repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl), fg="green")
 
-    for feature_key, (v_old, v_new) in diff["U"].items():
-        click.secho(f"--- {feature_key}\n+++ {feature_key}", bold=True)
+        prefix = '' if is_v0 else f'{path}:{pk_field}='
 
-        s_old = set(v_old.items())
-        s_new = set(v_new.items())
+        for k, v_old in diff["D"].items():
+            click.secho(f"--- {prefix}{k}", bold=True)
+            click.secho(_repr_row(v_old, prefix="- ", exclude=repr_excl), fg="red")
 
-        diff_add = dict(s_new - s_old)
-        diff_del = dict(s_old - s_new)
-        all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
+        for o in diff["I"]:
+            if is_v0:
+                click.secho(f"+++ {prefix}{{new feature}}", bold=True)
+            else:
+                click.secho(f"+++ {prefix}{o[pk_field]}", bold=True)
+            click.secho(_repr_row(o, prefix="+ ", exclude=repr_excl), fg="green")
 
-        if pk_field not in all_keys:
-            click.echo(_repr_row({pk_field: v_new[pk_field]}, prefix="  "))
+        for feature_key, (v_old, v_new) in diff["U"].items():
+            if is_v0:
+                click.secho(f"--- {prefix}{feature_key}\n+++ {prefix}{feature_key}", bold=True)
+            else:
+                click.secho(f"--- {prefix}{v_old[pk_field]}\n+++ {prefix}{v_new[pk_field]}", bold=True)
 
-        for k in all_keys:
-            if k in diff_del:
-                click.secho(_repr_row({k: diff_del[k]}, prefix="- "), fg="red")
-            if k in diff_add:
-                click.secho(_repr_row({k: diff_add[k]}, prefix="+ "), fg="green")
+            s_old = set(v_old.items())
+            s_new = set(v_new.items())
+
+            diff_add = dict(s_new - s_old)
+            diff_del = dict(s_old - s_new)
+            all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
+
+            if is_v0 and pk_field not in all_keys:
+                click.echo(_repr_row({pk_field: v_new[pk_field]}, prefix="  ", exclude=repr_excl))
+
+            for k in all_keys:
+                if k in diff_del:
+                    click.secho(_repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl), fg="red")
+                if k in diff_add:
+                    click.secho(_repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl), fg="green")
 
 
 def db_to_tree(repo, layer, db, tree=None):
@@ -76,7 +106,9 @@ def db_to_tree(repo, layer, db, tree=None):
     table = layer
     dbcur = db.cursor()
 
-    if not tree:
+    if tree:
+        layer_tree = tree
+    else:
         dbcur.execute(
             "SELECT value FROM __kxg_meta WHERE table_name=? AND key=?;",
             (table, "tree"),
@@ -84,7 +116,8 @@ def db_to_tree(repo, layer, db, tree=None):
         tree = repo[dbcur.fetchone()[0]]
         assert tree.type == pygit2.GIT_OBJ_TREE, tree.type
 
-    layer_tree = tree / layer
+        layer_tree = tree / layer
+
     meta_tree = layer_tree / "meta"
 
     meta_diff = {}
@@ -125,7 +158,7 @@ def db_to_tree(repo, layer, db, tree=None):
 
     results = {"META": meta_diff, "I": candidates["I"], "D": candidates["D"], "U": {}}
 
-    features_tree = tree / layer / "features"
+    features_tree = layer_tree / "features"
     for op in ("U", "D"):
         for feature_key, db_obj in candidates[op].items():
             ftree = (features_tree / feature_key[:4] / feature_key).obj
@@ -141,13 +174,16 @@ def db_to_tree(repo, layer, db, tree=None):
             if s_old ^ s_new:
                 results[op][feature_key] = (repo_obj, db_obj)
 
+    results["D"] = {k: v[0] for k, v in results["D"].items()}
+
     return results
 
 
-def _repr_row(row, prefix=""):
+def _repr_row(row, prefix="", exclude=None):
     m = []
+    exclude = exclude or set()
     for k in row.keys():
-        if k.startswith("__"):
+        if k.startswith("__") or k in exclude:
             continue
 
         v = row[k]
