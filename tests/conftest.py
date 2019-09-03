@@ -110,6 +110,7 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
+    from snowdrop.structure import RepositoryStructure
 
     @contextlib.contextmanager
     def _data_working_copy(name, force_new=False):
@@ -117,29 +118,35 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
             if name.endswith(".snow"):
                 name = name[:-5]
 
-            wc_path = repo_dir / f"{name}.gpkg"
-            if wc_path.exists():
+            repo = pygit2.Repository(str(repo_dir))
+            rs = RepositoryStructure(repo)
+            if rs.working_copy:
+                wc_path = rs.working_copy.full_path
                 if force_new:
-                    wc_path.unlink()
-                    repo = pygit2.Repository(str(repo_dir))
-                    del repo.config["kx.workingcopy"]
-                else:
-                    L.info("Existing working copy at: %s", wc_path)
+                    L.info("force_new is set, deleting existing WC: %s", wc_path)
+                    del rs.working_copy
+                    assert not rs.working_copy
+                    del wc_path
 
-            if not wc_path.exists():
+            if not rs.working_copy:
                 wc_path = tmp_path / f"{name}.gpkg"
-
-                # find the layer in the repo
-                repo = pygit2.Repository(str(repo_dir))
-                tree = repo.head.peel(pygit2.Tree)
-                layer = tree[0].name
-
-                L.info("Checking out %s to %s", layer, wc_path)
-                r = cli_runner.invoke(
-                    ["checkout", f"--working-copy={wc_path}", f"--layer={layer}"]
-                )
-                assert r.exit_code == 0, r
-                L.debug("Checkout result: %s", r)
+                ds = next(iter(rs))
+                if ds.VERSION_SPECIFIER == "0.0.":
+                    # v0
+                    L.info("Checking out %s to %s", ds.name, wc_path)
+                    r = cli_runner.invoke(
+                        ["checkout", f"--working-copy={wc_path}", f"--layer={ds.name}"]
+                    )
+                    assert r.exit_code == 0, r
+                    L.debug("Checkout result: %s", r)
+                else:
+                    # v2
+                    L.info("Checking out to %s", wc_path)
+                    r = cli_runner.invoke(
+                        ["wc-new", wc_path]
+                    )
+                    assert r.exit_code == 0, r
+                    L.debug("Checkout result: %s", r)
 
             yield repo_dir, wc_path
 
@@ -284,6 +291,13 @@ class TestHelpers:
         "name": "Te Motu-a-kore",
     }
     POINTS_HEAD_SHA = "d1bee0841307242ad7a9ab029dc73c652b9f74f3"
+
+    # Same data as a version0.2 repo
+    POINTS2_LAYER = POINTS_LAYER
+    POINTS2_LAYER_PK = POINTS_LAYER_PK
+    POINTS2_INSERT = POINTS_INSERT
+    POINTS2_RECORD = POINTS_RECORD
+    POINTS2_HEAD_SHA = "a7a7d8db13827f8c8ea8ce944b7b5bc513f05e91"
 
     # Test Dataset (gpkg-polygons / polygons.snow)
     POLYGONS_LAYER = "nz_waca_adjustments"

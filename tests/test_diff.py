@@ -156,3 +156,57 @@ def test_diff(archive, table, data_working_copy, geopackage, cli_runner):
                 "-                                 OBJECTID = 1",
                 "+                                 OBJECTID = 9998",
             ]
+
+
+@pytest.mark.parametrize("archive,table", [
+    pytest.param('points2', H.POINTS2_LAYER, id='points2'),
+])
+def test_diff2(archive, table, data_working_copy, geopackage, cli_runner):
+    """ diff the working copy against the repository (no index!) """
+    with data_working_copy(archive) as (repo, wc):
+        # empty
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        # assert r.stdout.splitlines() == []
+
+        # make some changes
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+
+            cur.execute(H.POINTS2_INSERT, H.POINTS2_RECORD)
+            assert cur.rowcount == 1
+            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=9998 WHERE fid=1;")
+            assert cur.rowcount == 1
+            cur.execute(
+                f"UPDATE {H.POINTS2_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
+            )
+            assert cur.rowcount == 1
+            cur.execute(f"DELETE FROM {H.POINTS2_LAYER} WHERE fid=3;")
+            assert cur.rowcount == 1
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        print("STDOUT", repr(r.stdout))
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:fid=3",
+            "-                                     geom = POINT(...)",
+            "-                                  t50_fid = 2426273",
+            "-                               name_ascii = Tauwhare Pa",
+            "-                               macronated = N",
+            "-                                     name = Tauwhare Pa",
+            "+++ nz_pa_points_topo_150k:fid=9999",
+            "+                                     geom = POINT(...)",
+            "+                                  t50_fid = 9999999",
+            "+                               name_ascii = Te Motu-a-kore",
+            "+                               macronated = 0",
+            "+                                     name = Te Motu-a-kore",
+            "--- nz_pa_points_topo_150k:fid=2",
+            "+++ nz_pa_points_topo_150k:fid=2",
+            "-                                     name = ␀",
+            "+                                     name = test",
+            "-                                  t50_fid = 2426272",
+            "+                                  t50_fid = ␀",
+            "--- nz_pa_points_topo_150k:fid=1",
+            "+++ nz_pa_points_topo_150k:fid=9998",
+        ]

@@ -63,6 +63,22 @@ class RepositoryStructure:
                         # examine inside this directory
                         to_examine.append((te_path, te.obj))
 
+    @property
+    def working_copy(self):
+        from .working_copy import WorkingCopy
+
+        if getattr(self, '_working_copy', None) is None:
+            self._working_copy = WorkingCopy.open(self.repo)
+
+        return self._working_copy
+
+    @working_copy.deleter
+    def working_copy(self):
+        wc = self.working_copy
+        if wc:
+            wc.delete()
+        del self._working_copy
+
 
 class IntegrityError(ValueError):
     pass
@@ -858,7 +874,13 @@ class Dataset02(Dataset01):
 
     def features(self, *, ogr_geoms=False, **kwargs):
         """ Feature iterator yielding (feature-key, feature-dict) pairs """
-        self._features(lambda x: (x[0], self.repo_feature_to_dict(x[0], x[1], ogr_geoms=ogr_geoms)), fast=False)
+        return self._features(
+            lambda pk, blob: (
+                pk,
+                self.repo_feature_to_dict(pk, blob, ogr_geoms=ogr_geoms)
+            ),
+            fast=False
+        )
 
     def feature_tuples(self, col_names, **kwargs):
         """ Optimised feature iterator yielding tuples, ordered by the columns from col_names """
@@ -866,14 +888,21 @@ class Dataset02(Dataset01):
         return self._features(tupleizer, fast=True)
 
     def encode_feature(self, feature, field_cid_map=None, geom_cols=None, primary_key=None):
+        if field_cid_map is None:
+            field_cid_map = self.field_cid_map
+        if geom_cols is None:
+            geom_cols = [self.geom_column_name]
+        if primary_key is None:
+            primary_key = self.primary_key
+
         bin_feature = {}
         for field in feature.keys():
-            if field == (primary_key or self.primary_key):
+            if field == primary_key:
                 continue
 
-            field_id = (field_cid_map or self.field_cid_map)[field]
+            field_id = field_cid_map[field]
             value = feature[field]
-            if field in (geom_cols or [self.geom_column_name]):
+            if field in geom_cols:
                 if value is not None:
                     value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
 

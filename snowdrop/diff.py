@@ -91,14 +91,18 @@ def diff(ctx):
             diff_del = dict(s_old - s_new)
             all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
 
-            if is_v0 and pk_field not in all_keys:
+            if is_v0 and (pk_field not in all_keys):
                 click.echo(_repr_row({pk_field: v_new[pk_field]}, prefix="  ", exclude=repr_excl))
 
             for k in all_keys:
                 if k in diff_del:
-                    click.secho(_repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl), fg="red")
+                    rk = _repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
+                    if rk:
+                        click.secho(rk, fg="red")
                 if k in diff_add:
-                    click.secho(_repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl), fg="green")
+                    rk = _repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
+                    if rk:
+                        click.secho(rk, fg="green")
 
 
 def db_to_tree(repo, layer, db, tree=None):

@@ -13,7 +13,7 @@ import click
 import pygit2
 from osgeo import gdal
 
-from . import gpkg, core, diff
+from . import gpkg, core
 from .structure import RepositoryStructure
 
 
@@ -93,6 +93,11 @@ class WorkingCopyGPKG(WorkingCopy):
         self.path = path
 
     @property
+    def full_path(self):
+        """ Return a full absolute path to the working copy """
+        return (Path(self.repo.path) / self.path).resolve()
+
+    @property
     def TRACKING_TABLE(self):
         return self._meta_name("track")
 
@@ -112,8 +117,11 @@ class WorkingCopyGPKG(WorkingCopy):
 
         if hasattr(self, '_db'):
             # inner
+            L.debug(f"session(bulk_load={bulk_load}): existing...")
             yield self._db
+            L.debug(f"session(bulk_load={bulk_load}): existing/done")
         else:
+            L.debug(f"session(bulk_load={bulk_load}): new...")
             self._db = gpkg.db(self.path, isolation_level=None)  # autocommit (also means manual transaction management)
 
             if bulk_load:
@@ -125,8 +133,8 @@ class WorkingCopyGPKG(WorkingCopy):
                 self._db.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
                 self._db.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
-            self._db.execute("BEGIN")
             try:
+                self._db.execute("BEGIN")
                 yield self._db
             except:  # noqa
                 self._db.execute("ROLLBACK")
@@ -143,6 +151,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     self._db.execute("PRAGMA cache_size = -2000;")  # default
 
             del self._db
+            L.debug(f"session(bulk_load={bulk_load}): new/done")
 
     def _get_columns(self, dataset):
         pk_field = None
@@ -157,6 +166,18 @@ class WorkingCopyGPKG(WorkingCopy):
             cols[col["name"]] = col_spec
 
         return cols, pk_field
+
+    def delete(self):
+        """ Delete the working copy files """
+        print(f">>> DEL {self.full_path}")
+        self.full_path.unlink()
+
+        # for sqlite this might include wal/journal/etc files
+        # app.gpkg -> app.gpkg-wal, app.gpkg-journal
+        # https://www.sqlite.org/shortnames.html
+        for f in Path(self.path).parent.glob(Path(self.path).name + "-*"):
+            print(f">>> DEL '{f}'")
+            # f.unlink()
 
     def create(self):
         # GDAL: Create GeoPackage
@@ -433,6 +454,12 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
                 );
             """)
 
+    def delete(self):
+        super().delete()
+
+        # clear the config in the repo
+        del self.repo.config["kx.workingcopy"]
+
     def _create_triggers(self, dbcur, table):
         pk = gpkg.pk(dbcur, table)
 
@@ -561,6 +588,8 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
             self._create_triggers(db, table)
 
     def diff_db_to_tree(self, dataset):
+        from . import diff
+
         with self.session() as db:
             return diff.db_to_tree(self.repo, self.table, db, dataset.tree)
 
@@ -568,6 +597,8 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
         return super().assert_db_tree_match(tree, table_name=self.table)
 
     def commit(self, tree, wcdiff, message):
+        from . import diff
+
         table = self.table
 
         with self.session() as db:
@@ -703,6 +734,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 );
             """)
 
+    def delete(self):
+        super().delete()
+
+        # clear the config in the repo
+        del self.repo.config["snowdrop.workingcopy"]
+
     def _create_triggers(self, dbcur, table):
         pkf = gpkg.ident(gpkg.pk(dbcur, table))
         ts = gpkg.param_str(table)
@@ -821,10 +858,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 # Create triggers
                 self._create_triggers(db, table)
 
-            dbcur.execute(
-                    f"INSERT INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
-                    ('*', 'tree', commit.peel(pygit2.Tree).hex),
-                )
+            db.execute(
+                f"INSERT INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
+                ('*', 'tree', commit.peel(pygit2.Tree).hex),
+            )
 
     def diff_db_to_tree(self, dataset):
         """ Generates a diff between a working copy DB and the underlying repository tree """

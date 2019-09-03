@@ -54,6 +54,43 @@ def test_checkout_workingcopy(
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
 
+@pytest.mark.parametrize(
+    "archive,table,commit_sha",
+    [
+        pytest.param("points2", H.POINTS2_LAYER, H.POINTS2_HEAD_SHA, id="points2"),
+    ],
+)
+def test_checkout_workingcopy2(
+    archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
+):
+    """ Checkout a working copy to edit """
+    with data_archive(archive) as repo_path:
+        H.clear_working_copy()
+
+        wc = tmp_path / f"{table}.gpkg"
+        r = cli_runner.invoke(["wc-new", wc])
+        assert r.exit_code == 0, r
+        lines = r.stdout.splitlines()
+        # assert re.match(fr"Checkout {table}@HEAD to .+ as GPKG \.\.\.$", lines[0])
+        # assert re.match(fr"Commit: {commit_sha} Tree: [a-f\d]{{40}}$", lines[1])
+
+        assert wc.exists()
+        db = geopackage(wc)
+        nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+        assert nrows > 0
+
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.is_bare
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.shorthand == "master"
+
+        wc_tree_id = db.execute(
+            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+        ).fetchone()[0]
+        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+
+
 def test_checkout_detached(data_working_copy, cli_runner, geopackage):
     """ Checkout a working copy to edit """
     with data_working_copy("points.snow") as (repo_dir, wc):
