@@ -3,6 +3,7 @@ import hashlib
 import io
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -403,6 +404,13 @@ class TestHelpers:
 
         print(f"{message}:")
         subprocess.check_call(cmd + list(paths))
+
+    @classmethod
+    def parameter_ids(cls, request):
+        """ Get an array of parameter IDs """
+        # nodeid = 'test_import_feature_performance[0.2.0-spec-counties-table]'
+        param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-')
+        return tuple(param_ids)
 
 
 @pytest.fixture

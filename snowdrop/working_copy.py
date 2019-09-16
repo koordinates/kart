@@ -13,7 +13,7 @@ import click
 import pygit2
 from osgeo import gdal
 
-from . import gpkg, core
+from . import gpkg, core, diff
 from .structure import RepositoryStructure
 
 
@@ -169,15 +169,13 @@ class WorkingCopyGPKG(WorkingCopy):
 
     def delete(self):
         """ Delete the working copy files """
-        print(f">>> DEL {self.full_path}")
         self.full_path.unlink()
 
         # for sqlite this might include wal/journal/etc files
         # app.gpkg -> app.gpkg-wal, app.gpkg-journal
         # https://www.sqlite.org/shortnames.html
         for f in Path(self.path).parent.glob(Path(self.path).name + "-*"):
-            print(f">>> DEL '{f}'")
-            # f.unlink()
+            f.unlink()
 
     def create(self):
         # GDAL: Create GeoPackage
@@ -585,131 +583,73 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
         from . import diff
 
         with self.session() as db:
-            return diff.db_to_tree(self.repo, self.table, db, dataset.tree)
+            o = diff.db_to_tree(self.repo, self.table, db, dataset.tree)
+            return diff.Diff(
+                dataset,
+                meta=o['META'],
+                inserts=o['I'],
+                updates=o['U'],
+                deletes=o['D']
+            )
 
     def assert_db_tree_match(self, tree):
         return super().assert_db_tree_match(tree, table_name=self.table)
 
-    def commit(self, tree, wcdiff, message):
-        from . import diff
-
-        table = self.table
-
+    def commit_callback(self, dataset, action, **kwargs):
         with self.session() as db:
-            self.assert_db_tree_match(tree)
-
-            wcdiff = diff.db_to_tree(self.repo, table, db)
-            if not any(wcdiff.values()):
-                raise click.ClickException("No changes to commit")
-
             dbcur = db.cursor()
 
-            git_index = pygit2.Index()
-            git_index.read_tree(tree)
+            if action == "META":
+                pass
 
-            for k, (obj_old, obj_new) in wcdiff["META"].items():
-                object_path = f"{table}/meta/{k}"
-                value = json.dumps(obj_new).encode("utf8")
-
-                blob = self.repo.create_blob(value)
-                idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
-                git_index.add(idx_entry)
-                click.secho(f"Δ {object_path}", fg="yellow")
-
-            pk_field = gpkg.pk(db, table)
-
-            for feature_key in wcdiff["D"].keys():
-                object_path = f"{table}/features/{feature_key[:4]}/{feature_key}"
-                git_index.remove_all([f"{object_path}/**"])
-                click.secho(f"- {object_path}", fg="red")
-
+            elif action == "D":
+                feature_key = kwargs['feature_key']
                 dbcur.execute(
                     "DELETE FROM __kxg_map WHERE table_name=? AND feature_key=?",
-                    (table, feature_key),
+                    (dataset.name, feature_key),
                 )
                 assert (
                     dbcur.rowcount == 1
                 ), f"__kxg_map delete: expected 1Δ, got {dbcur.rowcount}"
 
-            for obj in wcdiff["I"]:
-                feature_key = str(uuid.uuid4())
-                for k, value in obj.items():
-                    object_path = f"{table}/features/{feature_key[:4]}/{feature_key}/{k}"
-                    if not isinstance(value, bytes):  # blob
-                        value = json.dumps(value).encode("utf8")
-
-                    blob = self.repo.create_blob(value)
-                    idx_entry = pygit2.IndexEntry(
-                        object_path, blob, pygit2.GIT_FILEMODE_BLOB
-                    )
-                    git_index.add(idx_entry)
-                    click.secho(f"+ {object_path}", fg="green")
-
+            elif action == "I":
+                obj = kwargs['obj_new']
+                feature_key = kwargs['feature_key']
+                pk_field = dataset.primary_key
                 dbcur.execute(
                     "INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);",
-                    (table, feature_key, obj[pk_field]),
+                    (dataset.name, feature_key, obj[pk_field]),
                 )
-            dbcur.execute(
-                "DELETE FROM __kxg_map WHERE table_name=? AND feature_key IS NULL;",
-                (table,),
-            )
 
-            for feature_key, (obj_old, obj_new) in wcdiff["U"].items():
-                s_old = set(obj_old.items())
-                s_new = set(obj_new.items())
+            elif action == "U":
+                # dealt with afterwards
+                pass
 
-                diff_add = dict(s_new - s_old)
-                diff_del = dict(s_old - s_new)
-                all_keys = set(diff_del.keys()) | set(diff_add.keys())
+            elif action == "INDEX":
+                # deleted
+                dbcur.execute(
+                    "DELETE FROM __kxg_map WHERE table_name=? AND feature_key IS NULL;",
+                    (dataset.name,),
+                )
+                # updated
+                dbcur.execute(
+                    "UPDATE __kxg_map SET state=0 WHERE table_name=? AND state != 0;", (dataset.name,)
+                )
 
-                for k in all_keys:
-                    object_path = f"{table}/features/{feature_key[:4]}/{feature_key}/{k}"
-                    if k in diff_add:
-                        value = obj_new[k]
-                        if not isinstance(value, bytes):  # blob
-                            value = json.dumps(value).encode("utf8")
+            elif action == "TREE":
+                new_tree = kwargs['tree']
+                print(f"Tree sha: {new_tree}")
 
-                        blob = self.repo.create_blob(value)
-                        idx_entry = pygit2.IndexEntry(
-                            object_path, blob, pygit2.GIT_FILEMODE_BLOB
-                        )
-                        git_index.add(idx_entry)
-                        click.secho(f"Δ {object_path}", fg="yellow")
-                    else:
-                        git_index.remove(object_path)
-                        click.secho(f"- {object_path}", fg="red")
+                dbcur.execute(
+                    "UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';",
+                    (str(new_tree), self.table),
+                )
+                assert (
+                    dbcur.rowcount == 1
+                ), f"__kxg_meta update: expected 1Δ, got {dbcur.rowcount}"
 
-            dbcur.execute(
-                "UPDATE __kxg_map SET state=0 WHERE table_name=? AND state != 0;", (table,)
-            )
-
-            print("Writing tree...")
-            new_tree = git_index.write_tree(self.repo)
-            print(f"Tree sha: {new_tree}")
-
-            dbcur.execute(
-                "UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';",
-                (str(new_tree), table),
-            )
-            assert (
-                dbcur.rowcount == 1
-            ), f"__kxg_meta update: expected 1Δ, got {dbcur.rowcount}"
-
-            print("Committing...")
-            user = self.repo.default_signature
-            # this will also update the ref (branch) to point to the current commit
-            new_commit = self.repo.create_commit(
-                "HEAD",  # reference_name
-                user,  # author
-                user,  # committer
-                message,  # message
-                new_tree,  # tree
-                [self.repo.head.target],  # parents
-            )
-            print(f"Commit: {new_commit}")
-
-            # TODO: update reflog
-            return new_commit
+            else:
+                raise NotImplementedError(f"Unexpected action: {action}")
 
 
 class WorkingCopy_GPKG_1(WorkingCopyGPKG):
@@ -925,130 +865,38 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     if not candidates_ins[h]:
                         del candidates_ins[h]
 
-            return {
-                "META": meta_diff,
-                "I": list(itertools.chain(*candidates_ins.values())),
-                "D": dict(itertools.chain(*candidates_del.values())),
-                "U": candidates_upd,
-            }
+            return diff.Diff(
+                dataset,
+                meta=meta_diff,
+                inserts=list(itertools.chain(*candidates_ins.values())),
+                deletes=dict(itertools.chain(*candidates_del.values())),
+                updates=candidates_upd,
+            )
 
+    def commit_callback(self, dataset, action, **kwargs):
+        with self.session() as db:
+            dbcur = db.cursor()
 
-    def commit(self, tree, wcdiff, message):
-        raise NotImplementedError()
-        # table = self.table
+            if action in ("I", "U", "D", "META"):
+                pass
 
-        # with self.session() as db:
-        #     core.assert_db_tree_match(db, table, tree)
+            elif action == "INDEX":
+                dbcur.execute(
+                    f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
+                    (dataset.name,),
+                )
 
-        #     wcdiff = diff.db_to_tree(self.repo, table, db)
-        #     if not any(wcdiff.values()):
-        #         raise click.ClickException("No changes to commit")
+            elif action == "TREE":
+                new_tree = kwargs['tree']
+                print(f"Tree sha: {new_tree}")
 
-        #     dbcur = db.cursor()
+                dbcur.execute(
+                    f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
+                    (str(new_tree),)
+                )
+                assert (
+                    dbcur.rowcount == 1
+                ), f"{self.META_TABLE} update: expected 1Δ, got {dbcur.rowcount}"
 
-        #     git_index = pygit2.Index()
-        #     git_index.read_tree(tree)
-
-        #     for k, (obj_old, obj_new) in wcdiff["META"].items():
-        #         object_path = f"{table}/meta/{k}"
-        #         value = json.dumps(obj_new).encode("utf8")
-
-        #         blob = self.repo.create_blob(value)
-        #         idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
-        #         git_index.add(idx_entry)
-        #         click.secho(f"Δ {object_path}", fg="yellow")
-
-        #     pk_field = gpkg.pk(db, table)
-
-        #     for feature_key in wcdiff["D"].keys():
-        #         object_path = f"{table}/features/{feature_key[:4]}/{feature_key}"
-        #         git_index.remove_all([f"{object_path}/**"])
-        #         click.secho(f"- {object_path}", fg="red")
-
-        #         dbcur.execute(
-        #             "DELETE FROM __kxg_map WHERE table_name=? AND feature_key=?",
-        #             (table, feature_key),
-        #         )
-        #         assert (
-        #             dbcur.rowcount == 1
-        #         ), f"__kxg_map delete: expected 1Δ, got {dbcur.rowcount}"
-
-        #     for obj in wcdiff["I"]:
-        #         feature_key = str(uuid.uuid4())
-        #         for k, value in obj.items():
-        #             object_path = f"{table}/features/{feature_key[:4]}/{feature_key}/{k}"
-        #             if not isinstance(value, bytes):  # blob
-        #                 value = json.dumps(value).encode("utf8")
-
-        #             blob = self.repo.create_blob(value)
-        #             idx_entry = pygit2.IndexEntry(
-        #                 object_path, blob, pygit2.GIT_FILEMODE_BLOB
-        #             )
-        #             git_index.add(idx_entry)
-        #             click.secho(f"+ {object_path}", fg="green")
-
-        #         dbcur.execute(
-        #             "INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);",
-        #             (table, feature_key, obj[pk_field]),
-        #         )
-        #     dbcur.execute(
-        #         "DELETE FROM __kxg_map WHERE table_name=? AND feature_key IS NULL;",
-        #         (table,),
-        #     )
-
-        #     for feature_key, (obj_old, obj_new) in wcdiff["U"].items():
-        #         s_old = set(obj_old.items())
-        #         s_new = set(obj_new.items())
-
-        #         diff_add = dict(s_new - s_old)
-        #         diff_del = dict(s_old - s_new)
-        #         all_keys = set(diff_del.keys()) | set(diff_add.keys())
-
-        #         for k in all_keys:
-        #             object_path = f"{table}/features/{feature_key[:4]}/{feature_key}/{k}"
-        #             if k in diff_add:
-        #                 value = obj_new[k]
-        #                 if not isinstance(value, bytes):  # blob
-        #                     value = json.dumps(value).encode("utf8")
-
-        #                 blob = self.repo.create_blob(value)
-        #                 idx_entry = pygit2.IndexEntry(
-        #                     object_path, blob, pygit2.GIT_FILEMODE_BLOB
-        #                 )
-        #                 git_index.add(idx_entry)
-        #                 click.secho(f"Δ {object_path}", fg="yellow")
-        #             else:
-        #                 git_index.remove(object_path)
-        #                 click.secho(f"- {object_path}", fg="red")
-
-        #     dbcur.execute(
-        #         "UPDATE __kxg_map SET state=0 WHERE table_name=? AND state != 0;", (table,)
-        #     )
-
-        #     print("Writing tree...")
-        #     new_tree = git_index.write_tree(self.repo)
-        #     print(f"Tree sha: {new_tree}")
-
-        #     dbcur.execute(
-        #         "UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';",
-        #         (str(new_tree), table),
-        #     )
-        #     assert (
-        #         dbcur.rowcount == 1
-        #     ), f"__kxg_meta update: expected 1Δ, got {dbcur.rowcount}"
-
-        #     print("Committing...")
-        #     user = self.repo.default_signature
-        #     # this will also update the ref (branch) to point to the current commit
-        #     new_commit = self.repo.create_commit(
-        #         "HEAD",  # reference_name
-        #         user,  # author
-        #         user,  # committer
-        #         message,  # message
-        #         new_tree,  # tree
-        #         [self.repo.head.target],  # parents
-        #     )
-        #     print(f"Commit: {new_commit}")
-
-        #     # TODO: update reflog
-        #     return new_commit
+            else:
+                raise NotImplementedError(f"Unexpected action: {action}")

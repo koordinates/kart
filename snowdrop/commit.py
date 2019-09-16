@@ -1,10 +1,7 @@
-import json
-import uuid
-
 import click
 import pygit2
 
-from . import core, diff, gpkg
+from .diff import Diff
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
 
@@ -29,12 +26,11 @@ def commit(ctx, message):
     working_copy.assert_db_tree_match(tree)
 
     rs = RepositoryStructure(repo)
+    wcdiff = Diff(None)
     for i, dataset in enumerate(rs):
-        if i > 0:
-            raise NotImplementedError("multi-dataset repositories")
+        wcdiff += working_copy.diff_db_to_tree(dataset)
 
-        wcdiff = working_copy.diff_db_to_tree(dataset)
-        if not any(wcdiff.values()):
-            raise click.ClickException("No changes to commit")
+    if not wcdiff:
+        raise click.ClickException("No changes to commit")
 
-    new_commit = working_copy.commit(tree, wcdiff, message)
+    new_commit = rs.commit(wcdiff, message)

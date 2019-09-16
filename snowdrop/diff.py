@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 
@@ -5,17 +6,76 @@ import click
 import pygit2
 
 from . import core, gpkg
-from .working_copy import WorkingCopy
-from .structure import RepositoryStructure, Dataset00
 
 
 L = logging.getLogger('snowdrop.diff')
+
+
+class Diff(object):
+    def __init__(self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None):
+        if dataset_or_diff is None:
+            # empty
+            self._data = {}
+            self._datasets = {}
+        elif isinstance(dataset_or_diff, Diff):
+            # clone
+            diff = dataset_or_diff
+            self._data = copy.deepcopy(diff._data)
+            self._datasets = copy.copy(diff._datasets)
+        else:
+            dataset = dataset_or_diff
+            self._data = {
+                dataset.path: {
+                    'META': meta or {},
+                    'I': inserts or [],
+                    'U': updates or {},
+                    'D': deletes or {},
+                }
+            }
+            self._datasets = {dataset.path: dataset}
+
+    def __add__(self, other):
+        my_datasets = set(self._data.keys())
+        other_datasets = set(other._data.keys())
+        if my_datasets & other_datasets:
+            raise NotImplementedError(f"Same dataset appears in both Diffs? {', '.join(my_datasets & other_datasets)}")
+
+        new_diff = Diff(self)
+        new_diff._data.update(copy.deepcopy(other._data))
+        return new_diff
+
+    def __iadd__(self, other):
+        my_datasets = set(self._datasets.keys())
+        other_datasets = set(other._datasets.keys())
+        if my_datasets & other_datasets:
+            raise NotImplementedError(f"Same dataset appears in both Diffs? {', '.join(my_datasets & other_datasets)}")
+
+        self._data.update(copy.deepcopy(other._data))
+        self._datasets.update(copy.copy(other._datasets))
+        return self
+
+    def __len__(self):
+        count = 0
+        for dataset_diff in self._data.values():
+            count += sum(len(o) for o in dataset_diff.values())
+        return count
+
+    def __getitem__(self, dataset):
+        return self._data[dataset.path]
+
+    def __iter__(self):
+        for ds_path, dsdiff in self._data.items():
+            ds = self._datasets[ds_path]
+            yield ds, dsdiff
 
 
 @click.command()
 @click.pass_context
 def diff(ctx):
     """ Show changes between commits, commit and working tree, etc """
+    from .working_copy import WorkingCopy
+    from .structure import RepositoryStructure, Dataset00
+
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
     if not repo:
@@ -43,7 +103,7 @@ def diff(ctx):
         path = dataset.path
         pk_field = dataset.primary_key
 
-        diff = working_copy.diff_db_to_tree(dataset)
+        diff = working_copy.diff_db_to_tree(dataset)[dataset]
 
         is_v0 = isinstance(dataset, Dataset00)
         prefix = '' if is_v0 else f'{path}:'

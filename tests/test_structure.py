@@ -31,9 +31,9 @@ GPKG_IMPORTS = (
             "census2016_sdhca_ot_ra_short",
             id="au-ra-short",
         ),
-        pytest.param("gpkg-spec", "sample1_2.gpkg", "counties", id="spec-counties"),
+        pytest.param("gpkg-spec", "sample1_2.gpkg", "counties", id="spec_counties"),
         pytest.param(
-            "gpkg-spec", "sample1_2.gpkg", "countiestbl", id="spec-counties-table"
+            "gpkg-spec", "sample1_2.gpkg", "countiestbl", id="spec_counties_table"
         ),
     ],
 )
@@ -91,7 +91,7 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
 @pytest.mark.parametrize(*DATASET_VERSIONS)
 def test_import(import_version, method, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage, benchmark, request, monkeypatch):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
-    param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-', 2)  # yuck
+    param_ids = H.parameter_ids(request)
 
     # wrap the DatasetStructure import method with benchmarking
     method_name = 'fast_import_table' if method == 'fast' else 'import_table'
@@ -196,7 +196,7 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
         # performance is O(N), don't even bother
         pytest.skip()
 
-    param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-', 2)  # yuck
+    param_ids = H.parameter_ids(request)
     benchmark.group = f"test_feature_find_decode_performance - {profile} - {param_ids[-1]}"
 
     repo_path = data_imported(archive, source_gpkg, table, import_version)
@@ -298,16 +298,16 @@ def test_import_multiple(method, import_version, data_archive, chdir, cli_runner
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
 @pytest.mark.parametrize(*DATASET_VERSIONS)
-def test_import_feature_performance(import_version, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, benchmark, request):
+def test_write_feature_performance(import_version, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, benchmark, request):
     """ Per-feature import performance. """
-    param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-', 1)  # yuck
+    param_ids = H.parameter_ids(request)
 
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.snow"
         repo_path.mkdir()
 
-        benchmark.group = f"test_import_feature_performance - {param_ids[-1]}"
+        benchmark.group = f"test_write_feature_performance - {param_ids[-1]}"
 
         with chdir(repo_path):
             r = cli_runner.invoke(
@@ -324,10 +324,17 @@ def test_import_feature_performance(import_version, archive, source_gpkg, table,
 
                 index = pygit2.Index()
 
-                def _import_feature():
-                    return dataset.import_feature(next(feature_iter), repo, index, source, dataset.path)
+                kwargs = {
+                    'geom_cols': source.geom_cols,
+                    'field_cid_map': source.field_cid_map,
+                    'primary_key': source.primary_key,
+                    'path': dataset.path,
+                }
 
-                benchmark(_import_feature)
+                def _write_feature():
+                    return dataset.write_feature(next(feature_iter), repo, index, **kwargs)
+
+                benchmark(_write_feature)
 
 
 @pytest.mark.slow

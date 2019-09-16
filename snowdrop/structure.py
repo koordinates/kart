@@ -79,6 +79,39 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
+    def commit(self, wcdiff, message):
+        tree = self.repo.head.peel(pygit2.Tree)
+        wc = self.working_copy
+
+        git_index = pygit2.Index()
+        git_index.read_tree(tree)
+
+        with wc.session():
+            for ds in self:
+                ds.write_index(wcdiff[ds], git_index, self.repo, callback=wc.commit_callback)
+
+            print("Writing tree...")
+            new_tree = git_index.write_tree(self.repo)
+            print(f"Tree sha: {new_tree}")
+
+            wc.commit_callback(None, "TREE", tree=new_tree)
+
+            print("Committing...")
+            user = self.repo.default_signature
+            # this will also update the ref (branch) to point to the current commit
+            new_commit = self.repo.create_commit(
+                "HEAD",  # reference_name
+                user,  # author
+                user,  # committer
+                message,  # message
+                new_tree,  # tree
+                [self.repo.head.target],  # parents
+            )
+            print(f"Commit: {new_commit}")
+
+        # TODO: update reflog
+        return new_commit
+
 
 class IntegrityError(ValueError):
     pass
@@ -216,6 +249,19 @@ class DatasetStructure:
         meta_geom = self.get_meta_item("gpkg_geometry_columns")
         return meta_geom["column_name"] if meta_geom else None
 
+    def cast_primary_key(self, pk_value):
+        pk_type = self.primary_key_type
+
+        if pk_value is not None:
+            # https://www.sqlite.org/datatype3.html
+            # 3.1. Determination Of Column Affinity
+            if 'INT' in pk_type:
+                pk_value = int(pk_value)
+            elif re.search('TEXT|CHAR|CLOB', pk_type):
+                pk_value = str(pk_value)
+
+        return pk_value
+
     def get_feature(self, pk_value):
         raise NotImplementedError()
 
@@ -281,6 +327,13 @@ class DatasetStructure:
             row_count = source.row_count
             click.echo(f"Found {row_count:,d} features in {table}")
 
+            import_kwargs = {
+                'field_cid_map': source.field_cid_map,
+                'primary_key': source.primary_key,
+                'geom_cols': source.geom_cols,
+                'path': path,
+            }
+
             # iterate features
             t0 = time.time()
             t1 = None
@@ -289,7 +342,7 @@ class DatasetStructure:
                     t1 = time.time()
                     click.echo(f"Query ran in {t1-t0:.1f}s")
 
-                self.import_feature(source_feature, repo, index, source, path)
+                self.write_feature(source_feature, repo, index, **import_kwargs)
 
                 if i and i % 500 == 0:
                     click.echo(f"  {i+1:,d} features... @{time.time()-t1:.1f}s")
@@ -452,8 +505,7 @@ class Dataset00(DatasetStructure):
         field = next(f for f in schema if f['name'] == self.primary_key)
         return field['type']
 
-    def get_feature(self, pk_value):
-        pk_field = self.primary_key
+    def cast_primary_key(self, pk_value):
         pk_type = self.primary_key_type
 
         if pk_value is not None:
@@ -464,6 +516,12 @@ class Dataset00(DatasetStructure):
             elif re.search('TEXT|CHAR|CLOB', pk_type):
                 pk_value = str(pk_value)
 
+        return pk_value
+
+    def get_feature(self, pk_value):
+        pk_field = self.primary_key
+        pk_value = self.cast_primary_key(pk_value)
+
         for tree, path, subtrees, blobs in core.walk_tree((self.tree / 'features').obj, path='features'):
             m = re.match(r'features/([0-9a-f]{4})/([0-9a-f-]{36})$', path)
             if m:
@@ -473,7 +531,7 @@ class Dataset00(DatasetStructure):
 
         raise KeyError(pk_value)
 
-    def import_feature(self, row, repo, index, source, path=None):
+    def write_feature(self, row, repo, index, *, path=None, **kwargs):
         """
             layer-name/
               features/
@@ -486,6 +544,7 @@ class Dataset00(DatasetStructure):
         """
         feature_id = str(uuid.uuid4())
         path = path or self.path
+        entries = []
 
         for field in row.keys():
             object_path = f"{path}/features/{feature_id[:4]}/{feature_id}/{field}"
@@ -499,7 +558,9 @@ class Dataset00(DatasetStructure):
                 object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
             )
             index.add(entry)
+            entries.append(entry)
         # click.echo(feature_id, object_path, field, value, entry)
+        return entries
 
     def import_iter_feature_blobs(self, resultset, source):
         path = self.path
@@ -515,6 +576,70 @@ class Dataset00(DatasetStructure):
                     value = json.dumps(value).encode("utf8")
 
                 yield (object_path, value)
+
+    def write_index(self, dataset_diff, index, repo, callback=None):
+        for k, (obj_old, obj_new) in dataset_diff["META"].items():
+            object_path = f"{self.name}/meta/{k}"
+            value = json.dumps(obj_new).encode("utf8")
+
+            blob = repo.create_blob(value)
+            idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
+            index.add(idx_entry)
+
+            if callback:
+                callback(self, "META", object_path=object_path)
+
+        for feature_key, obj_old in dataset_diff["D"].items():
+            object_path = f"{self.name}/features/{feature_key[:4]}/{feature_key}"
+            index.remove_all([f"{object_path}/**"])
+
+            if callback:
+                callback(self, "D", object_path=object_path, feature_key=feature_key, obj_old=obj_old)
+
+        for obj in dataset_diff["I"]:
+            feature_key = str(uuid.uuid4())
+            for k, value in obj.items():
+                object_path = f"{self.name}/features/{feature_key[:4]}/{feature_key}/{k}"
+                if not isinstance(value, bytes):  # blob
+                    value = json.dumps(value).encode("utf8")
+
+                blob = repo.create_blob(value)
+                idx_entry = pygit2.IndexEntry(
+                    object_path, blob, pygit2.GIT_FILEMODE_BLOB
+                )
+                index.add(idx_entry)
+
+            if callback:
+                callback(self, "I", object_path=object_path, feature_key=feature_key, obj_new=obj)
+
+        for feature_key, (obj_old, obj_new) in dataset_diff["U"].items():
+            s_old = set(obj_old.items())
+            s_new = set(obj_new.items())
+
+            diff_add = dict(s_new - s_old)
+            diff_del = dict(s_old - s_new)
+            all_keys = set(diff_del.keys()) | set(diff_add.keys())
+
+            for k in all_keys:
+                object_path = f"{self.name}/features/{feature_key[:4]}/{feature_key}/{k}"
+                if k in diff_add:
+                    value = obj_new[k]
+                    if not isinstance(value, bytes):  # blob
+                        value = json.dumps(value).encode("utf8")
+
+                    blob = repo.create_blob(value)
+                    idx_entry = pygit2.IndexEntry(
+                        object_path, blob, pygit2.GIT_FILEMODE_BLOB
+                    )
+                    index.add(idx_entry)
+                else:
+                    index.remove(object_path)
+
+            if callback:
+                callback(self, "U", object_path=object_path, feature_key=feature_key, obj_old=obj_old, obj_new=obj_new)
+
+        if callback:
+            callback(self, "INDEX")
 
 
 class Dataset01(DatasetStructure):
@@ -597,6 +722,7 @@ class Dataset01(DatasetStructure):
         return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
 
     def get_feature_path(self, pk):
+        pk = self.cast_primary_key(pk)
         pk_enc = self.encode_pk(pk)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
         return os.path.join('.sno-table', pk_hash[:2], pk_hash[2:4], pk_enc)
@@ -623,14 +749,7 @@ class Dataset01(DatasetStructure):
 
     def get_feature(self, pk_value):
         pk_type = self.primary_key_type
-
-        if pk_value is not None:
-            # https://www.sqlite.org/datatype3.html
-            # 3.1. Determination Of Column Affinity
-            if 'INT' in pk_type:
-                pk_value = int(pk_value)
-            elif re.search('TEXT|CHAR|CLOB', pk_type):
-                pk_value = str(pk_value)
+        pk_value = self.cast_primary_key(pk_value)
 
         pk_enc = self.encode_pk(pk_value)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
@@ -693,23 +812,30 @@ class Dataset01(DatasetStructure):
         pk_field = source.primary_key
         yield ('primary_key', json.dumps(pk_field))
 
-    def import_feature(self, row, repo, index, source, path):
+    def write_feature(self, row, repo, index, *, field_cid_map=None, geom_cols=None, primary_key=None, **kwargs):
+        if field_cid_map is None:
+            field_cid_map = self.field_cid_map
+        if geom_cols is None:
+            geom_cols = [self.geom_column_name]
+        if primary_key is None:
+            primary_key = self.primary_key
+
         path = f"{self.path}/.sno-table"
 
-        pk_field = source.primary_key
-
-        pk_enc = self.encode_pk(row[pk_field])
+        pk_enc = self.encode_pk(row[primary_key])
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
+
+        entries = []
 
         feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
         for field in row.keys():
-            if field == pk_field:
+            if field == primary_key:
                 continue
 
-            field_id = source.field_cid_map[field]
+            field_id = field_cid_map[field]
             object_path = f"{feature_path}/{field_id:x}"
             value = row[field]
-            if field in source.geom_cols:
+            if field in geom_cols:
                 if value is not None:
                     value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
 
@@ -718,8 +844,9 @@ class Dataset01(DatasetStructure):
                 object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
             )
             index.add(entry)
-
+            entries.append(entry)
             # click.echo(pk_val, object_path, field, value, entry)
+        return entries
 
     def import_iter_feature_blobs(self, resultset, source):
         path = f"{self.path}/.sno-table"
@@ -744,6 +871,10 @@ class Dataset01(DatasetStructure):
                         value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
 
                 yield (object_path, msgpack.packb(value, use_bin_type=True))
+
+    def remove_feature(self, pk, index):
+        object_path = self.get_feature_path(pk)
+        index.remove(os.path.join(self.path, object_path))
 
 
 class Dataset02(Dataset01):
@@ -785,13 +916,7 @@ class Dataset02(Dataset01):
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
         pk_type = self.primary_key_type
-        if pk_value is not None:
-            # https://www.sqlite.org/datatype3.html
-            # 3.1. Determination Of Column Affinity
-            if 'INT' in pk_type:
-                pk_value = int(pk_value)
-            elif re.search('TEXT|CHAR|CLOB', pk_type):
-                pk_value = str(pk_value)
+        pk_value = self.cast_primary_key(pk_value)
 
         pk_enc = self.encode_pk(pk_value)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
@@ -804,13 +929,7 @@ class Dataset02(Dataset01):
 
     def get_feature_hash(self, pk_value):
         pk_type = self.primary_key_type
-        if pk_value is not None:
-            # https://www.sqlite.org/datatype3.html
-            # 3.1. Determination Of Column Affinity
-            if 'INT' in pk_type:
-                pk_value = int(pk_value)
-            elif re.search('TEXT|CHAR|CLOB', pk_type):
-                pk_value = str(pk_value)
+        pk_value = self.cast_primary_key(pk_value)
 
         pk_enc = self.encode_pk(pk_value)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
@@ -910,22 +1029,28 @@ class Dataset02(Dataset01):
 
         return msgpack.packb(bin_feature, use_bin_type=True)
 
-    def import_feature(self, row, repo, index, source, path):
+    def write_feature(self, row, repo, index, *, field_cid_map=None, geom_cols=None, primary_key=None, **kwargs):
         path = f"{self.path}/.sno-table"
 
-        pk_field = source.primary_key
+        if field_cid_map is None:
+            field_cid_map = self.field_cid_map
+        if geom_cols is None:
+            geom_cols = [self.geom_column_name]
+        if primary_key is None:
+            primary_key = self.primary_key
 
-        pk_enc = self.encode_pk(row[pk_field])
+        pk_enc = self.encode_pk(row[primary_key])
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
 
         feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
 
-        bin_feature = self.encode_feature(row, source.field_cid_map, source.geom_cols, pk_field)
+        bin_feature = self.encode_feature(row, field_cid_map, geom_cols, primary_key)
         blob_id = repo.create_blob(bin_feature)
         entry = pygit2.IndexEntry(
             feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
         )
         index.add(entry)
+        return [entry]
 
         # click.echo(pk_val, feature_path, bin_feature, entry)
 
@@ -1014,3 +1139,54 @@ class Dataset02(Dataset01):
 
         idx = rtree.index.Index(path, properties=p)
         return idx
+
+    def write_index(self, dataset_diff, index, repo, callback=None):
+        pk_field = self.primary_key
+
+        for k, (obj_old, obj_new) in dataset_diff["META"].items():
+            object_path = f"{self.meta_path}/{k}"
+            value = json.dumps(obj_new).encode("utf8")
+
+            blob = repo.create_blob(value)
+            idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
+            index.add(idx_entry)
+
+            if callback:
+                callback(self, "META", object_path=object_path)
+
+        for feature_key, obj_old in dataset_diff["D"].items():
+            object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
+            index.remove(object_path)
+
+            if callback:
+                callback(self, "D", object_path=object_path, obj_old=obj_old)
+
+        for obj in dataset_diff["I"]:
+            object_path = os.path.join(self.path, self.get_feature_path(obj[pk_field]))
+            bin_feature = self.encode_feature(obj)
+            blob_id = repo.create_blob(bin_feature)
+            entry = pygit2.IndexEntry(
+                object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+            )
+            index.add(entry)
+
+            if callback:
+                callback(self, "I", object_path=object_path, obj_new=obj)
+
+        for feature_key, (obj_old, obj_new) in dataset_diff["U"].items():
+            object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
+            index.remove(object_path)
+
+            object_path = os.path.join(self.path, self.get_feature_path(obj_new[pk_field]))
+            bin_feature = self.encode_feature(obj)
+            blob_id = repo.create_blob(bin_feature)
+            entry = pygit2.IndexEntry(
+                object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+            )
+            index.add(entry)
+
+            if callback:
+                callback(self, "U", object_path=object_path, obj_old=obj_old, obj_new=obj_new)
+
+        if callback:
+            callback(self, "INDEX")
