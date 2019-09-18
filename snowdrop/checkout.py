@@ -592,3 +592,95 @@ def diff_feature_to_dict(repo, diff_deltas, geom_column_name, select):
             value = json.loads(blob.data)
         o[name] = value
     return o
+
+
+@click.command()
+@click.pass_context
+@click.option("--create", "-c", help="Create a new branch")
+@click.option("--force-create", "-C", help="Similar to --create except that if <new-branch> already exists, it will be reset to <start-point>")
+@click.option("--discard-changes", is_flag=True, help="Discard local changes")
+@click.argument("refish", default=None, required=False)
+def switch(ctx, create, force_create, discard_changes, refish):
+    """
+    Switch branches
+
+    Switch to a specified branch. The working copy and the index are updated
+    to match the branch. All new commits will be added to the tip of this
+    branch.
+
+    Optionally a new branch could be created with either -c, -C, automatically
+    from a remote branch of same name.
+
+    REFISH is either the branch name to switch to, or start-point of new branch for -c/--create.
+    """
+    from .structure import RepositoryStructure
+
+    repo_dir = ctx.obj["repo_dir"]
+    repo = pygit2.Repository(repo_dir)
+    if not repo:
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    if create and force_create:
+        raise click.BadParameter("-c/--create and -C/--force-create are incompatible")
+
+    elif create or force_create:
+        # New Branch
+        new_branch = force_create or create
+        is_force = bool(force_create)
+
+        # refish could be:
+        # - branch name
+        # - tag name
+        # - remote branch
+        # - HEAD
+        # - HEAD~1/etc
+        # - 'c0ffee' commit ref
+        # - 'refs/tags/1.2.3' some other refspec
+        start_point = refish
+        if start_point:
+            commit, ref = repo.resolve_refish(start_point)
+        else:
+            commit = repo.head.peel(pygit2.Commit)
+
+        if new_branch in repo.branches and not force_create:
+            raise click.BadParameter(
+                f"A branch named '{new_branch}' already exists.", param_hint="create"
+            )
+
+        if start_point and start_point in repo.branches.remote:
+            print(f"Creating new branch '{new_branch}' to track '{start_point}'...")
+            b_new = repo.create_branch(new_branch, commit, is_force)
+            b_new.upstream = repo.branches.remote[start_point]
+        elif start_point and start_point in repo.branches:
+            print(f"Creating new branch '{new_branch}' from '{start_point}'...")
+            b_new = repo.create_branch(new_branch, commit, is_force)
+        else:
+            print(f"Creating new branch '{new_branch}'...")
+            b_new = repo.create_branch(new_branch, commit, is_force)
+
+        head_ref = b_new.name
+
+    else:
+        # Switch to existing branch
+        #
+        # refish could be:
+        # - branch name
+        try:
+            branch = repo.branches[refish]
+        except KeyError:
+            raise click.BadParameter(
+                f"Branch '{refish}' not found."
+            )
+
+        commit = branch.peel(pygit2.Commit)
+        head_ref = branch.name
+
+    repo.set_head(head_ref)
+
+    repo_structure = RepositoryStructure(repo)
+    working_copy = repo_structure.working_copy
+    if working_copy:
+        click.echo(f"Updating {working_copy.path} ...")
+        working_copy.reset(commit, repo_structure, force=discard_changes)
+
+    repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)

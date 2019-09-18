@@ -39,8 +39,7 @@ def test_checkout_workingcopy(
 
         assert wc.exists()
         db = geopackage(wc)
-        nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-        assert nrows > 0
+        assert H.row_count(db, table) > 0
 
         repo = pygit2.Repository(str(repo_path))
         assert repo.is_bare
@@ -76,8 +75,7 @@ def test_checkout_workingcopy2(
 
         assert wc.exists()
         db = geopackage(wc)
-        nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-        assert nrows > 0
+        assert H.row_count(db, table) > 0
 
         repo = pygit2.Repository(str(repo_path))
         assert repo.is_bare
@@ -230,6 +228,92 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/master"
+
+
+def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
+    with data_working_copy("points2") as (repo_path, wc):
+        db = geopackage(wc)
+
+        # creating a new branch with existing name errors
+        r = cli_runner.invoke(["switch", "-c", "master"])
+        assert r.exit_code == 2, r
+        assert r.stdout.splitlines()[-1].endswith(
+            "A branch named 'master' already exists."
+        )
+
+        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        assert r.exit_code == 0, r
+
+        # new branch
+        r = cli_runner.invoke(["switch", "-c", "foo"])
+        assert r.exit_code == 0, r
+
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.head.name == "refs/heads/foo"
+        assert "foo" in repo.branches
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS2_HEAD_SHA
+
+        # make some changes
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+
+            cur.execute(H.POINTS2_INSERT, H.POINTS2_RECORD)
+            assert cur.rowcount == 1
+
+            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=30000 WHERE fid=3;")
+            assert cur.rowcount == 1
+
+        r = cli_runner.invoke(["commit", "-m", "test1"])
+        assert r.exit_code == 0, r
+
+        new_commit = repo.head.peel(pygit2.Commit).hex
+        assert new_commit != H.POINTS2_HEAD_SHA
+
+        r = cli_runner.invoke(["switch", "master"])
+        assert r.exit_code == 0, r
+
+        assert H.row_count(db, H.POINTS2_LAYER) == H.POINTS2_ROWCOUNT
+
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS2_HEAD_SHA
+
+        # make some changes
+        with db:
+            cur = db.cursor()
+
+            cur.execute(H.POINTS2_INSERT, H.POINTS2_RECORD)
+            assert cur.rowcount == 1
+
+            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=40000 WHERE fid=4;")
+            assert cur.rowcount == 1
+
+        r = cli_runner.invoke(["switch", "foo"])
+        assert r.exit_code == 1, r
+        assert "Error: You have uncommitted changes in your working copy." in r.stdout
+
+        r = cli_runner.invoke(["switch", "foo", "--discard-changes"])
+        assert r.exit_code == 0, r
+
+        assert H.row_count(db, H.POINTS2_LAYER) == H.POINTS2_ROWCOUNT + 1
+
+        assert repo.head.name == "refs/heads/foo"
+        assert repo.head.peel(pygit2.Commit).hex == new_commit
+
+        # new branch from remote
+        r = cli_runner.invoke(["switch", "-c", "test99", "myremote/master"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == "refs/heads/test99"
+        assert "test99" in repo.branches
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS2_HEAD_SHA
+        branch = repo.branches["test99"]
+        assert branch.upstream_name == "refs/remotes/myremote/master"
+
+        assert H.row_count(db, H.POINTS2_LAYER) == H.POINTS2_ROWCOUNT
 
 
 @pytest.mark.parametrize(
@@ -392,7 +476,7 @@ def test_geopackage_locking_edit(
                 with pytest.raises(
                     sqlite3.OperationalError, match=r"database is locked"
                 ):
-                    db.execute("UPDATE gpkg_context SET table_name=table_name;")
+                    db.execute("UPDATE gpkg_contents SET table_name=table_name;")
                 is_checked = True
 
             return orig_func(*args, **kwargs)

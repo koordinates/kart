@@ -155,8 +155,7 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             assert repo.config["kx.workingcopy"] == f"GPKG:{wc.name}:{table}"
 
             db = geopackage(wc)
-            nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-            assert nrows > 0
+            assert H.row_count(db, table) > 0
 
             wc_tree_id = db.execute(
                 "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]

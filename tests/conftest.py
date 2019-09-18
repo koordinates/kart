@@ -149,6 +149,7 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                     assert r.exit_code == 0, r
                     L.debug("Checkout result: %s", r)
 
+            L.info("data_working_copy: %s %s", repo_dir, wc_path)
             yield repo_dir, wc_path
 
     return _data_working_copy
@@ -209,6 +210,7 @@ def geopackage():
         db.execute("PRAGMA foreign_keys = ON;")
         db.enable_load_extension(True)
         db.execute("SELECT load_extension('mod_spatialite');")
+        db.execute("SELECT EnableGpkgMode();")
         return db
 
     return _geopackage
@@ -281,7 +283,7 @@ class TestHelpers:
         INSERT INTO {POINTS_LAYER}
                         (fid, geom, t50_fid, name_ascii, macronated, name)
                     VALUES
-                        (:fid, AsGPB(GeomFromEWKT(:geom)), :t50_fid, :name_ascii, :macronated, :name);
+                        (:fid, GeomFromEWKT(:geom), :t50_fid, :name_ascii, :macronated, :name);
     """
     POINTS_RECORD = {
         "fid": 9999,
@@ -292,6 +294,7 @@ class TestHelpers:
         "name": "Te Motu-a-kore",
     }
     POINTS_HEAD_SHA = "d1bee0841307242ad7a9ab029dc73c652b9f74f3"
+    POINTS_ROWCOUNT = 2143
 
     # Same data as a version0.2 repo
     POINTS2_LAYER = POINTS_LAYER
@@ -299,6 +302,7 @@ class TestHelpers:
     POINTS2_INSERT = POINTS_INSERT
     POINTS2_RECORD = POINTS_RECORD
     POINTS2_HEAD_SHA = "a7a7d8db13827f8c8ea8ce944b7b5bc513f05e91"
+    POINTS2_ROWCOUNT = POINTS_ROWCOUNT
 
     # Test Dataset (gpkg-polygons / polygons.snow)
     POLYGONS_LAYER = "nz_waca_adjustments"
@@ -307,7 +311,7 @@ class TestHelpers:
         INSERT INTO {POLYGONS_LAYER}
                         (id, geom, date_adjusted, survey_reference, adjusted_nodes)
                     VALUES
-                        (:id, AsGPB(GeomFromEWKT(:geom)), :date_adjusted, :survey_reference, :adjusted_nodes);
+                        (:id, GeomFromEWKT(:geom), :date_adjusted, :survey_reference, :adjusted_nodes);
     """
     POLYGONS_RECORD = {
         "id": 9_999_999,
@@ -354,6 +358,10 @@ class TestHelpers:
             f"SELECT last_change FROM gpkg_contents WHERE table_name=?;",
             [cls.POINTS_LAYER],
         ).fetchone()[0]
+
+    @classmethod
+    def row_count(cls, db, table):
+        return db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
 
     @classmethod
     def clear_working_copy(cls, repo_path="."):

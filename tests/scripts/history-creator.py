@@ -63,6 +63,7 @@ def main():
     db.row_factory = sqlite3.Row
     db.enable_load_extension(True)
     db.execute("SELECT load_extension('mod_spatialite');")
+    db.execute("SELECT EnableGpkgMode();")
     if options.debug:
         db.set_trace_callback(db_debug)
     print(f"Connected to {db_path}")
@@ -169,7 +170,7 @@ def main():
             # Geometry
             dx = random.random() * 4 - 2
             dy = random.random() * 4 - 2
-            return (f"AsGPB(ST_Translate(GeomFromGPB(?), {dx}, {dy}, 0))", old)
+            return (f"ST_Translate(?, {dx}, {dy}, 0)", old)
 
         elif re.search('INT', typ):
             return (None, old + random.randint(-1000, 1000))

@@ -36,6 +36,7 @@ def db(path, **kwargs):
 
     db.enable_load_extension(True)
     db.execute("SELECT load_extension('mod_spatialite');")
+    db.execute("SELECT EnableGpkgMode();")
     return db
 
 

@@ -26,9 +26,12 @@ class RepositoryStructure:
 
     def __getitem__(self, path):
         """ Get a specific dataset by path """
-        root = self.repo.head.peel(pygit2.Tree)
+        return self.get_at(path, self.tree)
+
+    def get_at(self, path, tree):
+        """ Get a specific dataset by path using a specified Tree """
         try:
-            tree_entry = root[path]
+            tree_entry = tree[path]
         except KeyError:
             raise
 
@@ -40,7 +43,11 @@ class RepositoryStructure:
 
     def __iter__(self):
         """ Iterate over available datasets in this repository """
-        to_examine = deque([('', self.repo.head.peel(pygit2.Tree))])
+        return self.iter_at(self.tree)
+
+    def iter_at(self, tree):
+        """ Iterate over available datasets in this repository using a specified Tree """
+        to_examine = deque([('', tree)])
 
         while to_examine:
             path, tree = to_examine.popleft()
@@ -62,6 +69,10 @@ class RepositoryStructure:
                     except ValueError:
                         # examine inside this directory
                         to_examine.append((te_path, te.obj))
+
+    @property
+    def tree(self):
+        return self.repo.head.peel(pygit2.Tree)
 
     @property
     def working_copy(self):
@@ -914,8 +925,7 @@ class Dataset02(Dataset01):
 
         return feature
 
-    def get_feature(self, pk_value, *, ogr_geoms=True):
-        pk_type = self.primary_key_type
+    def _get_feature(self, pk_value):
         pk_value = self.cast_primary_key(pk_value)
 
         pk_enc = self.encode_pk(pk_value)
@@ -925,10 +935,26 @@ class Dataset02(Dataset01):
         if te.type != 'blob':
             raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
 
-        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj, ogr_geoms=ogr_geoms)
+        return pk_enc, te.obj
+
+    def get_feature(self, pk_value, *, ogr_geoms=True):
+        pk_enc, blob = self._get_feature(pk_value)
+        return pk_enc, self.repo_feature_to_dict(pk_enc, blob, ogr_geoms=ogr_geoms)
+
+    def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
+        tupleizer = self.build_feature_tupleizer(col_names)
+        for pk in pk_values:
+            try:
+                pk_enc, blob = self._get_feature(pk)
+            except KeyError:
+                if ignore_missing:
+                    continue
+                else:
+                    raise
+
+            yield tupleizer(pk_enc, blob)
 
     def get_feature_hash(self, pk_value):
-        pk_type = self.primary_key_type
         pk_value = self.cast_primary_key(pk_value)
 
         pk_enc = self.encode_pk(pk_value)

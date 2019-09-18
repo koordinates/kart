@@ -112,26 +112,42 @@ class WorkingCopyGPKG(WorkingCopy):
         return gpkg.ident(n)
 
     @contextlib.contextmanager
-    def session(self, bulk_load=False):
+    def session(self, bulk=0):
+        """
+        Context manager for GeoPackage DB sessions, yields a connection object inside a transaction
+
+        Calling again yields the _same_ connection, the transaction/etc only happen in the outer one.
+
+        @bulk controls bulk-loading operating mode:
+            0: default, no bulk operations (normal)
+            1: synchronous, larger cache (bulk changes)
+            2: exclusive locking, memory journal (bulk load)
+        """
         L = logging.getLogger(f"{self.__class__.__qualname__}.session")
 
         if hasattr(self, '_db'):
-            # inner
-            L.debug(f"session(bulk_load={bulk_load}): existing...")
+            # inner - reuse
+            L.debug(f"session(bulk={bulk}): existing...")
             yield self._db
-            L.debug(f"session(bulk_load={bulk_load}): existing/done")
+            L.debug(f"session(bulk={bulk}): existing/done")
         else:
-            L.debug(f"session(bulk_load={bulk_load}): new...")
-            self._db = gpkg.db(self.path, isolation_level=None)  # autocommit (also means manual transaction management)
+            L.debug(f"session(bulk={bulk}): new...")
+            self._db = gpkg.db(
+                self.path,
+                isolation_level=None  # autocommit (also means manual transaction management)
+            )
 
-            if bulk_load:
-                L.debug("Invoking bulk-load mode")
+            if bulk:
+                L.debug("Invoking bulk mode %s", bulk)
                 orig_journal = self._db.execute("PRAGMA journal_mode;").fetchone()[0]
                 orig_locking = self._db.execute("PRAGMA locking_mode;").fetchone()[0]
+
                 self._db.execute("PRAGMA synchronous = OFF;")
-                self._db.execute("PRAGMA journal_mode = MEMORY;")
                 self._db.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
-                self._db.execute("PRAGMA locking_mode = EXCLUSIVE;")
+
+                if bulk >= 2:
+                    self._db.execute("PRAGMA journal_mode = MEMORY;")
+                    self._db.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
             try:
                 self._db.execute("BEGIN")
@@ -142,16 +158,18 @@ class WorkingCopyGPKG(WorkingCopy):
             else:
                 self._db.execute("COMMIT")
             finally:
-                if bulk_load:
-                    L.debug("Disabling bulk-load mode (Journal: %s; Locking: %s)", orig_journal, orig_locking)
+                if bulk:
+                    L.debug("Disabling bulk %s mode (Journal: %s; Locking: %s)", bulk, orig_journal, orig_locking)
                     self._db.execute("PRAGMA synchronous = ON;")
-                    self._db.execute(f"PRAGMA locking_mode = {orig_locking};")
-                    self._db.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
-                    self._db.execute(f"PRAGMA journal_mode = {orig_journal};")
                     self._db.execute("PRAGMA cache_size = -2000;")  # default
 
+                    if bulk >= 2:
+                        self._db.execute(f"PRAGMA locking_mode = {orig_locking};")
+                        self._db.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
+                        self._db.execute(f"PRAGMA journal_mode = {orig_journal};")
+
             del self._db
-            L.debug(f"session(bulk_load={bulk_load}): new/done")
+            L.debug(f"session(bulk={bulk}): new/done")
 
     def _get_columns(self, dataset):
         pk_field = None
@@ -375,7 +393,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 dbcur.rowcount == 1
             ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
 
-    def assert_db_tree_match(self, tree, *, table_name='*'):
+    def get_db_tree(self, table_name='*'):
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(
@@ -391,12 +409,15 @@ class WorkingCopyGPKG(WorkingCopy):
                 raise ValueError(f"No meta entry for {table_name}")
 
             wc_tree_id = row[0]
-
-            tree_sha = tree.hex
-
-            if wc_tree_id != tree_sha:
-                raise core.WorkingCopyMismatch(wc_tree_id, tree_sha)
             return wc_tree_id
+
+    def assert_db_tree_match(self, tree, *, table_name='*'):
+        wc_tree_id = self.get_db_tree(table_name)
+        tree_sha = tree.hex
+
+        if wc_tree_id != tree_sha:
+            raise core.WorkingCopyMismatch(wc_tree_id, tree_sha)
+        return wc_tree_id
 
 
 class WorkingCopy_GPKG_0(WorkingCopyGPKG):
@@ -505,7 +526,7 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
 
         table = dataset.name
 
-        with self.session(bulk_load=True) as db:
+        with self.session(bulk=2) as db:
             dbcur = db.cursor()
 
             self.write_meta(dataset)
@@ -719,6 +740,19 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         )
 
+    def _drop_triggers(self, dbcur, table):
+        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'ins')}")
+        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'upd')}")
+        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'del')}")
+
+    @contextlib.contextmanager
+    def _suspend_triggers(self, dbcur, table):
+        self._drop_triggers(dbcur, table)
+        try:
+            yield
+        finally:
+            self._create_triggers(dbcur, table)
+
     def _chunk(self, iterable, size):
         it = iter(iterable)
         while True:
@@ -737,7 +771,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
-        with self.session(bulk_load=True) as db:
+        with self.session(bulk=2) as db:
             for dataset in datasets:
                 table = dataset.name
 
@@ -796,6 +830,41 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 f"INSERT INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
                 ('*', 'tree', commit.peel(pygit2.Tree).hex),
             )
+
+    def write_features(self, dbcur, dataset, pk_iter, *, ignore_missing=False):
+        cols, pk_field = self._get_columns(dataset)
+        col_names = cols.keys()
+
+        sql_write_feature = f"""
+            INSERT OR REPLACE INTO {gpkg.ident(dataset.name)}
+                ({','.join([gpkg.ident(k) for k in col_names])})
+            VALUES
+                ({','.join(['?'] * len(col_names))});
+        """
+
+        feat_count = 0
+        CHUNK_SIZE = 10000
+        for rows in self._chunk(dataset.get_feature_tuples(pk_iter, col_names, ignore_missing=ignore_missing), CHUNK_SIZE):
+            dbcur.executemany(sql_write_feature, rows)
+            feat_count += dbcur.rowcount
+
+        return feat_count
+
+    def delete_features(self, dbcur, dataset, pk_iter):
+        cols, pk_field = self._get_columns(dataset)
+
+        sql_del_feature = f"""
+            DELETE FROM {gpkg.ident(dataset.name)}
+            WHERE {gpkg.ident(pk_field)}=?;
+        """
+
+        feat_count = 0
+        CHUNK_SIZE = 10000
+        for rows in self._chunk(zip(pk_iter), CHUNK_SIZE):
+            dbcur.executemany(sql_del_feature, rows)
+            feat_count += dbcur.rowcount
+
+        return feat_count
 
     def diff_db_to_tree(self, dataset):
         """ Generates a diff between a working copy DB and the underlying repository tree """
@@ -900,3 +969,162 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             else:
                 raise NotImplementedError(f"Unexpected action: {action}")
+
+    def reset(self, commit, repo_structure, *, force=False):
+        # def checkout_update(repo, working_copy, layer, commit, force=False, base_commit=None):
+        L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
+
+        with self.session(bulk=1) as db:
+            dbcur = db.cursor()
+
+            base_tree_id = self.get_db_tree()
+            base_tree = repo_structure.repo[base_tree_id]
+            L.debug("base_tree_id: %s", base_tree_id)
+            repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
+
+            if base_tree_id != repo_tree_id:
+                L.warning("Working Copy DB is tree:%s, Repo HEAD has tree:%s", base_tree_id, repo_tree_id)
+
+            # check for dirty working copy
+            dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
+            is_dirty = dbcur.fetchone()[0]
+            if is_dirty and not force:
+                raise click.ClickException(
+                    "You have uncommitted changes in your working copy. Commit or use --force to discard."
+                )
+
+            src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
+            dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(commit.tree)}
+            ds_names = set(src_datasets.keys()) | set(dest_datasets.keys())
+
+            for table in ds_names:
+                src_ds = src_datasets.get(table, None)
+                dest_ds = dest_datasets.get(table, None)
+
+                geom_col = dest_ds.geom_column_name
+
+                if not dest_ds:
+                    # drop table
+                    raise NotImplementedError("Drop table via reset")
+                elif not src_ds:
+                    # new table
+                    raise NotImplementedError("Create table via reset")
+                elif src_ds.tree.id == dest_ds.tree.id:
+                    # unchanged table
+                    pass
+                else:
+                    # existing table with update
+
+                    # check for schema differences
+                    base_meta_tree = src_ds.meta_tree
+                    meta_tree = dest_ds.meta_tree
+                    if base_meta_tree.diff_to_tree(meta_tree):
+                        raise NotImplementedError(
+                            "Sorry, no way to do changeset/meta/schema updates yet"
+                        )
+
+                    # todo: suspend/remove spatial index
+                    with self._suspend_triggers(dbcur, table):
+                        if is_dirty:
+                            sql_changed = (
+                                f"SELECT pk FROM {self.TRACKING_TABLE} "
+                                "WHERE table_name=?;"
+                            )
+                            dbcur.execute(sql_changed, (table,))
+                            pk_list = [r[0] for r in dbcur]
+                            track_count = dbcur.rowcount
+                            count = self.delete_features(dbcur, src_ds, pk_list)
+                            L.debug("reset(): dirty: removed %s features, tracking Δ count=%s", count, track_count)
+                            count = self.write_features(dbcur, src_ds, pk_list, ignore_missing=True)
+                            L.debug("reset(): dirty: wrote %s features, tracking Δ count=%s", count, track_count)
+
+                            dbcur.execute(f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,))
+
+                        # feature diff
+                        diff_index = src_ds.tree.diff_to_tree(dest_ds.tree)
+                        for d in diff_index.deltas:
+                            # TODO: improve this by grouping by status then calling
+                            # write_features/delete_features passing multiple PKs?
+                            if d.status == pygit2.GIT_DELTA_DELETED:
+                                old_pk = src_ds.decode_pk(os.path.basename(d.old_file.path))
+                                L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
+                                self.delete_features(dbcur, src_ds, [old_pk])
+                            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                                old_pk = src_ds.decode_pk(os.path.basename(d.old_file.path))
+                                new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
+                                L.warning("reset(): M %s (%s) -> %s (%s)", d.old_file.path, old_pk, d.new_file.path, new_pk)
+                                self.write_features(dbcur, dest_ds, [new_pk])
+                            elif d.status == pygit2.GIT_DELTA_ADDED:
+                                new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
+                                L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)
+                                self.write_features(dbcur, dest_ds, [new_pk])
+                            else:
+                                # GIT_DELTA_RENAMED
+                                # GIT_DELTA_COPIED
+                                # GIT_DELTA_IGNORED
+                                # GIT_DELTA_TYPECHANGE
+                                # GIT_DELTA_UNMODIFIED
+                                # GIT_DELTA_UNREADABLE
+                                # GIT_DELTA_UNTRACKED
+                                raise NotImplementedError(f"Delta status: {d.status_char()}")
+
+                    # Update gpkg_contents
+                    commit_time = datetime.utcfromtimestamp(commit.commit_time)
+                    if geom_col is not None:
+                        # FIXME: Why doesn't Extent(geom) work here as an aggregate?
+                        dbcur.execute(
+                            f"""
+                            WITH _BBOX AS (
+                                SELECT
+                                    Min(MbrMinX({gpkg.ident(geom_col)})) AS min_x,
+                                    Min(MbrMinY({gpkg.ident(geom_col)})) AS min_y,
+                                    Max(MbrMaxX({gpkg.ident(geom_col)})) AS max_x,
+                                    Max(MbrMaxY({gpkg.ident(geom_col)})) AS max_y
+                                FROM {gpkg.ident(table)}
+                            )
+                            UPDATE gpkg_contents
+                            SET
+                                last_change=?,
+                                min_x=(SELECT min_x FROM _BBOX),
+                                min_y=(SELECT min_y FROM _BBOX),
+                                max_x=(SELECT max_x FROM _BBOX),
+                                max_y=(SELECT max_y FROM _BBOX)
+                            WHERE
+                                table_name=?;
+                            """,
+                            (
+                                commit_time.strftime(
+                                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                                ),  # GPKG Spec Req.15
+                                table,
+                            ),
+                        )
+                    else:
+                        dbcur.execute(
+                            f"""
+                            UPDATE gpkg_contents
+                            SET
+                                last_change=?
+                            WHERE
+                                table_name=?;
+                            """,
+                            (
+                                commit_time.strftime(
+                                    "%Y-%m-%dT%H:%M:%S.%fZ"
+                                ),  # GPKG Spec Req.15
+                                table,
+                            ),
+                        )
+
+                    # CTE seems to break dbcur.rowcount
+                    rowcount = dbcur.execute("SELECT changes()").fetchone()[0]
+                    assert (
+                        rowcount == 1
+                    ), f"gpkg_contents update: expected 1Δ, got {rowcount}"
+
+            # update the tree id
+            tree = commit.peel(pygit2.Tree)
+            db.execute(
+                f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
+                (tree.hex,),
+            )

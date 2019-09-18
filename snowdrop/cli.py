@@ -51,9 +51,10 @@ def cli(ctx, repo_dir):
 
     logging.basicConfig(level=logging.DEBUG)
 
-# commands from modules
 
+# Commands from modules:
 cli.add_command(checkout.checkout)
+cli.add_command(checkout.switch)
 cli.add_command(clone.clone)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
