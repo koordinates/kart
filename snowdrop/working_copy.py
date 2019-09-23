@@ -970,9 +970,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             else:
                 raise NotImplementedError(f"Unexpected action: {action}")
 
-    def reset(self, commit, repo_structure, *, force=False):
-        # def checkout_update(repo, working_copy, layer, commit, force=False, base_commit=None):
+    def reset(self, commit, repo_structure, *, force=False, paths=None, update_meta=True):
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
+        L.debug("c=%s update-meta=%s", str(commit.id), update_meta)
 
         with self.session(bulk=1) as db:
             dbcur = db.cursor()
@@ -995,7 +995,14 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
             dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(commit.tree)}
+
+            if paths:
+                for path in paths:
+                    src_datasets = {ds.name: ds for ds in src_datasets.values() if os.path.commonpath([ds.path, path]) == path}
+                    dest_datasets = {ds.name: ds for ds in dest_datasets.values() if os.path.commonpath([ds.path, path]) == path}
+
             ds_names = set(src_datasets.keys()) | set(dest_datasets.keys())
+            L.debug("Datasets: %s", ds_names)
 
             for table in ds_names:
                 src_ds = src_datasets.get(table, None)
@@ -1009,7 +1016,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 elif not src_ds:
                     # new table
                     raise NotImplementedError("Create table via reset")
-                elif src_ds.tree.id == dest_ds.tree.id:
+                elif src_ds.tree.id == dest_ds.tree.id and not is_dirty:
                     # unchanged table
                     pass
                 else:
@@ -1024,8 +1031,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                         )
 
                     # todo: suspend/remove spatial index
-                    with self._suspend_triggers(dbcur, table):
-                        if is_dirty:
+                    if is_dirty:
+                        with self._suspend_triggers(dbcur, table):
+                            L.debug("Cleaning up dirty rows...")
                             sql_changed = (
                                 f"SELECT pk FROM {self.TRACKING_TABLE} "
                                 "WHERE table_name=?;"
@@ -1040,8 +1048,17 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
                             dbcur.execute(f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,))
 
+                    if update_meta:
+                        ctx = self._suspend_triggers(dbcur, table)
+                    else:
+                        # if we're not updating meta information, we want to track these changes
+                        # as working copy edits so they can be committed.
+                        ctx = contextlib.nullcontext()
+
+                    with ctx:
                         # feature diff
                         diff_index = src_ds.tree.diff_to_tree(dest_ds.tree)
+                        L.debug("Index diff: %s changes", len(diff_index))
                         for d in diff_index.deltas:
                             # TODO: improve this by grouping by status then calling
                             # write_features/delete_features passing multiple PKs?
@@ -1122,9 +1139,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                         rowcount == 1
                     ), f"gpkg_contents update: expected 1Δ, got {rowcount}"
 
-            # update the tree id
-            tree = commit.peel(pygit2.Tree)
-            db.execute(
-                f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
-                (tree.hex,),
-            )
+            if update_meta:
+                # update the tree id
+                tree = commit.peel(pygit2.Tree)
+                db.execute(
+                    f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
+                    (tree.hex,),
+                )

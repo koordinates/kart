@@ -90,7 +90,7 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
-    def commit(self, wcdiff, message):
+    def commit(self, wcdiff, message, *, allow_empty=False):
         tree = self.repo.head.peel(pygit2.Tree)
         wc = self.working_copy
 
@@ -1204,7 +1204,7 @@ class Dataset02(Dataset01):
             index.remove(object_path)
 
             object_path = os.path.join(self.path, self.get_feature_path(obj_new[pk_field]))
-            bin_feature = self.encode_feature(obj)
+            bin_feature = self.encode_feature(obj_new)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(
                 object_path, blob_id, pygit2.GIT_FILEMODE_BLOB

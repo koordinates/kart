@@ -9,7 +9,16 @@ from .structure import RepositoryStructure
 @click.command()
 @click.pass_context
 @click.option("--message", "-m", help="Use the given message as the commit message.")
-def commit(ctx, message):
+@click.option(
+    "--allow-empty",
+    is_flag=True, default=False,
+    help=(
+        "Usually recording a commit that has the exact same tree as its sole "
+        "parent commit is a mistake, and the command prevents you from making "
+        "such a commit. This option bypasses the safety"
+    )
+)
+def commit(ctx, message, allow_empty):
     """ Record changes to the repository """
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
@@ -30,7 +39,7 @@ def commit(ctx, message):
     for i, dataset in enumerate(rs):
         wcdiff += working_copy.diff_db_to_tree(dataset)
 
-    if not wcdiff:
+    if not wcdiff and not allow_empty:
         raise click.ClickException("No changes to commit")
 
-    new_commit = rs.commit(wcdiff, message)
+    new_commit = rs.commit(wcdiff, message, allow_empty=allow_empty)

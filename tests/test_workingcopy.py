@@ -524,3 +524,148 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
 
         assert repo.config["kx.workingcopy"] == f"GPKG:{new_path}:{H.POINTS_LAYER}"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param([], id="head"),
+        pytest.param(["-s", H.POINTS2_HEAD_SHA], id="prev"),
+    ],
+)
+@pytest.mark.parametrize(
+    "pathspec",
+    [
+        pytest.param([], id="all"),
+        pytest.param(["bob"], id="exclude"),
+    ],
+)
+def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
+    with data_working_copy("points2", force_new=True) as (repo_dir, wc):
+        layer = H.POINTS2_LAYER
+        pk_field = H.POINTS2_LAYER_PK
+        rec = H.POINTS2_RECORD
+        sql = H.POINTS2_INSERT
+        del_pk = 5
+        upd_field = "t50_fid"
+        upd_field_value = 888_888
+        upd_pk_range = (10, 15)
+        id_chg_pk = 20
+
+        db = geopackage(wc)
+        repo = pygit2.Repository(str(repo_dir))
+
+        # make some changes
+        with db:
+            cur = db.cursor()
+            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=30000 WHERE fid=300;")
+            assert cur.rowcount == 1
+
+        r = cli_runner.invoke(["commit", "-m", "test1"])
+        assert r.exit_code == 0, r
+
+        new_commit = repo.head.peel(pygit2.Commit).hex
+        assert new_commit != H.POINTS2_HEAD_SHA
+        print(f"Original commit={H.POINTS2_HEAD_SHA} New commit={new_commit}")
+
+        with db:
+            cur = db.cursor()
+            try:
+                cur.execute(sql, rec)
+            except sqlite3.OperationalError:
+                print(sql, rec)
+                raise
+            assert cur.rowcount == 1
+
+            cur.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
+            assert cur.rowcount == 4
+            cur.execute(
+                f"UPDATE {layer} SET {upd_field} = ? WHERE {pk_field}>=? AND {pk_field}<?;",
+                [upd_field_value, upd_pk_range[0], upd_pk_range[1]],
+            )
+            assert cur.rowcount == 5
+            cur.execute(
+                f"UPDATE {layer} SET {pk_field}=? WHERE {pk_field}=?;",
+                [9998, id_chg_pk],
+            )
+            assert cur.rowcount == 1
+
+            changes_pre = [r[0] for r in db.execute(
+                'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
+            )]
+            # .sno-track stores pk as strings
+            assert changes_pre == ['1', '2', '3', '4', '10', '11', '12', '13', '14', '20', '9998', '9999']
+
+        # using `snow restore
+        r = cli_runner.invoke(["restore"] + source + pathspec)
+        assert r.exit_code == 0, r
+
+        changes_post = [r[0] for r in db.execute(
+            'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
+        )]
+
+        r = db.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
+        head_sha = r.fetchone()[0]
+
+        if pathspec:
+            # we restore'd paths other than our test dataset, so all the changes should still be there
+            assert changes_post == changes_pre
+
+            if head_sha != new_commit:
+                print(f"E: Bad Tree? {head_sha}")
+
+            return
+
+        if source:
+            assert changes_post == ['300', '30000']
+
+            if head_sha != H.POINTS2_HEAD_SHA:
+                print(f"E: Bad Tree? {head_sha}")
+
+            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
+            if not r.fetchone():
+                print("E: Previous PK bad? ({pk_field}=300)")
+            return
+
+        assert changes_post == []
+
+        if head_sha != new_commit:
+            print(f"E: Bad Tree? {head_sha}")
+
+        r = db.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
+        head_sha = r.fetchone()[0]
+        if head_sha != new_commit:
+            print(f"E: Bad Tree? {head_sha}")
+
+        r = db.execute(
+            f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=?;", [rec[pk_field]]
+        )
+        if r.fetchone():
+            print(
+                "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
+            )
+        r = db.execute(
+            f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk]
+        )
+        if r.fetchone()[0] != 4:
+            print("E: Deleted rows {pk_field}<{del_pk} still missing")
+        r = db.execute(
+            f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;",
+            [upd_field_value],
+        )
+        if r.fetchone()[0] != 0:
+            print("E: Updated rows not reset")
+        r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
+        if r.fetchone():
+            print(
+                "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
+            )
+        r = db.execute(
+            f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = ?;", [id_chg_pk]
+        )
+        if not r.fetchone():
+            print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
+
+        r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
+        if not r.fetchone():
+            print("E: Previous PK bad? ({pk_field}=300)")

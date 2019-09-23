@@ -126,9 +126,13 @@ def test_commit2(archive, layer, data_working_copy, geopackage, cli_runner, requ
 
     with data_working_copy(archive) as (repo_dir, wc_path):
         # empty
-        r = cli_runner.invoke(["commit", "-m", "test-commit-0"])
+        r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
         assert r.exit_code == 1, r
         assert r.stdout.splitlines() == ['Error: No changes to commit']
+
+        # empty
+        r = cli_runner.invoke(["commit", "-m", "test-commit-empty", "--allow-empty"])
+        assert r.exit_code == 0, r
 
         # make some changes
         db = geopackage(wc_path)

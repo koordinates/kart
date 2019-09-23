@@ -684,3 +684,43 @@ def switch(ctx, create, force_create, discard_changes, refish):
         working_copy.reset(commit, repo_structure, force=discard_changes)
 
     repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
+
+
+@click.command()
+@click.pass_context
+@click.option(
+    "--source", "-s",
+    help=(
+        "Restore the working tree files with the content from the given tree. "
+        "It is common to specify the source tree by naming a commit, branch or "
+        "tag associated with it."),
+    default="HEAD"
+)
+@click.argument("pathspec", nargs=-1)
+def restore(ctx, source, pathspec):
+    """
+    Restore specified paths in the working tree with some contents from a restore source.
+    """
+    from .structure import RepositoryStructure
+
+    repo_dir = ctx.obj["repo_dir"]
+    repo = pygit2.Repository(repo_dir)
+    if not repo:
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    repo_structure = RepositoryStructure(repo)
+    working_copy = repo_structure.working_copy
+    if not working_copy:
+        raise click.ClickException("You don't have a working copy")
+
+    head_commit = repo.head.peel(pygit2.Commit)
+
+    commit, ref = repo.resolve_refish(source)
+
+    working_copy.reset(
+        commit,
+        repo_structure,
+        force=True,
+        update_meta=(head_commit.id == commit.id),
+        paths=pathspec
+    )

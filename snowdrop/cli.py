@@ -54,6 +54,7 @@ def cli(ctx, repo_dir):
 
 # Commands from modules:
 cli.add_command(checkout.checkout)
+cli.add_command(checkout.restore)
 cli.add_command(checkout.switch)
 cli.add_command(clone.clone)
 cli.add_command(commit.commit)
