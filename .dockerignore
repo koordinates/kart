@@ -28,3 +28,5 @@ Dockerfile
 data/
 HomebrewFormula/
 gitea/
+
+tests/

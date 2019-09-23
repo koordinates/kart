@@ -25,6 +25,7 @@ class Snowdrop < Formula
   depends_on "sqlite3"
   depends_on "libspatialite"
   depends_on "gdal"
+  depends_on "spatialindex"
 
   # depends_on "libgit2"
   # do this manually for libgit2 support

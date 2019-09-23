@@ -9,4 +9,8 @@ click==7.0
 msgpack==0.6.1
 pycparser==2.19           # via cffi
 #pygit2==0.28.2
+rtree==0.8.3
 six==1.12.0               # via pygit2
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools==41.2.0        # via rtree
