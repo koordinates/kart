@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import typing
 import uuid
@@ -81,6 +82,8 @@ def assert_db_tree_match(db, table, tree):
 
     tree_sha = tree.hex
 
+    L = logging.getLogger("snowdrop.core.assert_db_tree_match")
+    L.debug("db-tree=%s, arg=%s", wc_tree_id, tree_sha)
     if wc_tree_id != tree_sha:
         raise WorkingCopyMismatch(wc_tree_id, tree_sha)
     return wc_tree_id

@@ -3,6 +3,7 @@ import pytest
 import pygit2
 
 from snowdrop.structure import RepositoryStructure
+from snowdrop.working_copy import WorkingCopy
 
 
 H = pytest.helpers.helpers()
@@ -112,6 +113,9 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
         print("map_count=", map_count, "feature_count=", feature_count)
         assert map_count == feature_count
 
+        wc = WorkingCopy.open(r)
+        wc.assert_db_tree_match(tree)
+
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
         assert r.stdout == ''
@@ -166,6 +170,9 @@ def test_commit2(archive, layer, data_working_copy, geopackage, cli_runner, requ
             [layer]
         ).fetchone()[0]
         assert change_count == 0, f"Changes still listed in {dataset.TRACKING_TABLE}"
+
+        wc = WorkingCopy.open(repo)
+        wc.assert_db_tree_match(tree)
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r

@@ -1,7 +1,7 @@
 import click
 import pygit2
 
-from . import core, checkout
+from .structure import RepositoryStructure
 
 
 @click.command()
@@ -89,7 +89,8 @@ def merge(ctx, ff, ff_only, commit):
         print(f"Merge commit: {commit_id}")
 
     # update our working copy
-    wc = core.get_working_copy(repo)
+    repo_structure = RepositoryStructure(repo)
+    wc = repo_structure.working_copy
     click.echo(f"Updating {wc.path} ...")
     commit = repo[commit_id]
-    return checkout.checkout_update(repo, wc.path, wc.layer, commit, base_commit=c_base)
+    return wc.reset(commit, repo_structure)

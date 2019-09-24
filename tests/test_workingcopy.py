@@ -8,6 +8,8 @@ import pytest
 import pygit2
 
 import snowdrop.checkout
+from snowdrop.working_copy import WorkingCopy
+from snowdrop.core import assert_db_tree_match, WorkingCopyMismatch
 
 
 H = pytest.helpers.helpers()
@@ -31,11 +33,11 @@ def test_checkout_workingcopy(
         H.clear_working_copy()
 
         wc = tmp_path / f"{table}.gpkg"
-        r = cli_runner.invoke(["checkout", f"--layer={table}", f"--working-copy={wc}"])
+        r = cli_runner.invoke(["checkout", f"--dataset={table}", f"--path={wc}"])
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
-        assert re.match(fr"Checkout {table}@HEAD to .+ as GPKG \.\.\.$", lines[0])
-        assert re.match(fr"Commit: {commit_sha} Tree: [a-f\d]{{40}}$", lines[1])
+        assert re.match(fr"Checkout HEAD to .+ as GPKG \.\.\.$", lines[0])
+        assert re.match(fr"Commit: {commit_sha}$", lines[1])
 
         assert wc.exists()
         db = geopackage(wc)
@@ -47,10 +49,20 @@ def test_checkout_workingcopy(
         assert repo.head.name == "refs/heads/master"
         assert repo.head.shorthand == "master"
 
+        head_tree = repo.head.peel(pygit2.Tree)
+
         wc_tree_id = db.execute(
             "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]
         ).fetchone()[0]
-        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+        assert wc_tree_id == head_tree.hex
+
+        wc = WorkingCopy.open(repo)
+        assert wc.assert_db_tree_match(head_tree)
+
+        try:
+            assert_db_tree_match(db, table, head_tree)
+        except WorkingCopyMismatch as e:
+            assert False, e
 
 
 @pytest.mark.parametrize(
@@ -70,8 +82,8 @@ def test_checkout_workingcopy2(
         r = cli_runner.invoke(["wc-new", wc])
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
-        # assert re.match(fr"Checkout {table}@HEAD to .+ as GPKG \.\.\.$", lines[0])
-        # assert re.match(fr"Commit: {commit_sha} Tree: [a-f\d]{{40}}$", lines[1])
+        # assert re.match(fr"Checkout HEAD to .+ as GPKG \.\.\.$", lines[0])
+        # assert re.match(fr"Commit: {commit_sha}$", lines[1])
 
         assert wc.exists()
         db = geopackage(wc)
@@ -83,10 +95,15 @@ def test_checkout_workingcopy2(
         assert repo.head.name == "refs/heads/master"
         assert repo.head.shorthand == "master"
 
+        head_tree = repo.head.peel(pygit2.Tree)
+
         wc_tree_id = db.execute(
             """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
         ).fetchone()[0]
-        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+        assert wc_tree_id == head_tree.hex
+
+        wc = WorkingCopy.open(repo)
+        assert wc.assert_db_tree_match(head_tree)
 
 
 def test_checkout_detached(data_working_copy, cli_runner, geopackage):
@@ -101,9 +118,9 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         repo = pygit2.Repository(str(repo_dir))
-        assert repo.head.name == "HEAD"
-        assert repo.head_is_detached
         assert repo.head.target.hex == "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00"
+        assert repo.head_is_detached
+        assert repo.head.name == "HEAD"
 
 
 def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path):
@@ -128,51 +145,51 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         # checkout the HEAD commit
         r = cli_runner.invoke(["checkout", "HEAD"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
-        assert not repo.head_is_detached
         assert r_head() == ("refs/heads/master", H.POINTS_HEAD_SHA)
+        assert not repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the HEAD-but-1 commit
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
-        assert repo.head_is_detached
         assert r_head() == ("HEAD", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00")
+        assert repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the master HEAD via branch-name
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
-        assert not repo.head_is_detached
         assert r_head() == ("refs/heads/master", H.POINTS_HEAD_SHA)
+        assert not repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout a short-sha commit
         r = cli_runner.invoke(["checkout", "edd5a4b"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
-        assert repo.head_is_detached
         assert r_head() == ("HEAD", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00")
+        assert repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the master HEAD via refspec
         r = cli_runner.invoke(["checkout", "refs/heads/master"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
-        assert not repo.head_is_detached
         assert r_head() == ("refs/heads/master", H.POINTS_HEAD_SHA)
+        assert not repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the tag
         r = cli_runner.invoke(["checkout", "version1"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
-        assert repo.head_is_detached
         assert r_head() == ("HEAD", H.POINTS_HEAD_SHA)
+        assert repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the remote branch
         r = cli_runner.invoke(["checkout", "myremote/master"])
         assert r.exit_code == 0, r
-        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
-        assert repo.head_is_detached
         assert r_head() == ("HEAD", H.POINTS_HEAD_SHA)
+        assert repo.head_is_detached
+        assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
 
 def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
@@ -468,7 +485,7 @@ def test_geopackage_locking_edit(
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = snowdrop.checkout.diff_feature_to_dict
+        orig_func = snowdrop.working_copy.WorkingCopy_GPKG_0.diff_feature_to_dict
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -481,7 +498,7 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(snowdrop.checkout, "diff_feature_to_dict", _wrap)
+        monkeypatch.setattr(snowdrop.working_copy.WorkingCopy_GPKG_0, "diff_feature_to_dict", _wrap)
 
         r = cli_runner.invoke(["checkout", "edd5a4b"])
         assert r.exit_code == 0, r

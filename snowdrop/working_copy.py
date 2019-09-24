@@ -4,8 +4,8 @@ import itertools
 import json
 import logging
 import os
+import re
 import time
-import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -15,38 +15,6 @@ from osgeo import gdal
 
 from . import gpkg, core, diff
 from .structure import RepositoryStructure
-
-
-@click.command('wc-new')
-@click.pass_context
-@click.argument("path", type=click.Path(writable=True, dir_okay=False))
-@click.argument("datasets", nargs=-1)
-def wc_new(ctx, path, datasets):
-    """ Temporary command to create a new working copy """
-    # Supports multiple datasets
-
-    repo_dir = ctx.obj["repo_dir"]
-    repo = pygit2.Repository(repo_dir)
-    if not repo:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
-
-    repo_cfg = repo.config
-    assert "kx.workingcopy" not in repo_cfg, "Existing v1 working copy"
-    assert "snowdrop.workingcopy" not in repo_cfg, "Existing v2 working copy"
-
-    rs = RepositoryStructure(repo)
-    if not datasets:
-        datasets = list(rs)
-    else:
-        datasets = [rs[ds_path] for ds_path in datasets]
-
-    commit = repo.head.peel(pygit2.Commit)
-
-    wc = WorkingCopy_GPKG_1(repo, path)
-    wc.create()
-    for dataset in datasets:
-        wc.write_full(commit, dataset)
-    wc.save_config()
 
 
 class WorkingCopy:
@@ -133,7 +101,7 @@ class WorkingCopyGPKG(WorkingCopy):
         else:
             L.debug(f"session(bulk={bulk}): new...")
             self._db = gpkg.db(
-                self.path,
+                self.full_path,
                 isolation_level=None  # autocommit (also means manual transaction management)
             )
 
@@ -192,14 +160,14 @@ class WorkingCopyGPKG(WorkingCopy):
         # for sqlite this might include wal/journal/etc files
         # app.gpkg -> app.gpkg-wal, app.gpkg-journal
         # https://www.sqlite.org/shortnames.html
-        for f in Path(self.path).parent.glob(Path(self.path).name + "-*"):
+        for f in Path(self.full_path).parent.glob(Path(self.path).name + "-*"):
             f.unlink()
 
     def create(self):
         # GDAL: Create GeoPackage
         # GDAL: Add metadata/etc
         gdal_driver = gdal.GetDriverByName("GPKG")
-        gdal_ds = gdal_driver.Create(self.path, 0, 0, 0, gdal.GDT_Unknown)
+        gdal_ds = gdal_driver.Create(str(self.full_path), 0, 0, 0, gdal.GDT_Unknown)
         del gdal_ds
 
         with self.session() as db:
@@ -324,8 +292,8 @@ class WorkingCopyGPKG(WorkingCopy):
 
     def save_config(self, **kwargs):
         new_path = Path(self.path)
-        if not new_path.is_absolute():
-            new_path = os.path.relpath(new_path, Path(self.repo.path).resolve())
+        if (not new_path.is_absolute()) and (str(new_path.parent) != '.'):
+            new_path = Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve())) / new_path.name
 
         self.repo.config["snowdrop.workingcopy.version"] = 1
         self.repo.config["snowdrop.workingcopy.path"] = str(new_path)
@@ -341,7 +309,7 @@ class WorkingCopyGPKG(WorkingCopy):
         # Create the GeoPackage Spatial Index
         t0 = time.time()
         gdal_ds = gdal.OpenEx(
-            self.path,
+            str(self.full_path),
             gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
             ["GPKG"],
         )
@@ -350,6 +318,22 @@ class WorkingCopyGPKG(WorkingCopy):
         )
         del gdal_ds
         L.info("Created spatial index in %ss", time.time()-t0)
+
+    def _create_triggers(self, dbcur, table):
+        raise NotImplementedError()
+
+    def _drop_triggers(self, dbcur, table):
+        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'ins')}")
+        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'upd')}")
+        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'del')}")
+
+    @contextlib.contextmanager
+    def _suspend_triggers(self, dbcur, table):
+        self._drop_triggers(dbcur, table)
+        try:
+            yield
+        finally:
+            self._create_triggers(dbcur, table)
 
     def update_gpkg_contents(self, commit, dataset):
         table = dataset.name
@@ -438,8 +422,8 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
 
     def save_config(self):
         new_path = Path(self.path)
-        if not new_path.is_absolute():
-            new_path = os.path.relpath(new_path, Path(self.repo.path).resolve())
+        if (not new_path.is_absolute()) and (str(new_path.parent) != '.'):
+            new_path = Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve())) / new_path.name
 
         self.repo.config["kx.workingcopy"] = f"GPKG:{new_path}:{self.table}"
 
@@ -672,6 +656,369 @@ class WorkingCopy_GPKG_0(WorkingCopyGPKG):
             else:
                 raise NotImplementedError(f"Unexpected action: {action}")
 
+    def diff_feature_to_dict(self, repo, diff_deltas, geom_column_name, select):
+        o = {}
+
+        for dd in diff_deltas:
+            if select == "old":
+                df = dd.old_file
+            elif select == "new":
+                df = dd.new_file
+            else:
+                raise ValueError("select should be 'old' or 'new'")
+
+            blob = repo[df.id]
+            assert isinstance(blob, pygit2.Blob)
+
+            name = df.path.rsplit("/", 1)[-1]
+            if geom_column_name is not None and name == geom_column_name:
+                value = blob.data
+            else:
+                value = json.loads(blob.data)
+            o[name] = value
+        return o
+
+    def reset(self, commit, repo_structure, *, force=False, paths=None, update_meta=True):
+        L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
+
+        if paths and paths != [self.table]:
+            raise ValueError("Not supported for V0 working copies")
+        if not update_meta:
+            raise NotImplementedError("Not supported for V0 working copies")
+
+        repo = repo_structure.repo
+        table = self.table
+        layer = self.table
+        dataset = repo_structure[table]
+
+        tree = commit.tree
+
+        with self.session(bulk=1) as db:
+            dbcur = db.cursor()
+
+            # this is where we're starting from
+            base_tree_id = self.get_db_tree(table)
+            base_tree = repo[base_tree_id]
+            repo_tree_id = repo.head.peel(pygit2.Tree).hex
+            L.debug("base-tree=%s, target-commit=%s, target-tree=%s", base_tree_id, commit.id, tree.id)
+
+            if base_tree_id != repo_tree_id:
+                L.debug("Working Copy DB is tree:%s, Repo HEAD has tree:%s", base_tree_id, repo_tree_id)
+
+            re_obj_feature_path = re.compile(
+                f"[0-9a-f]{{4}}/(?P<fk>[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}})/"
+            )
+            re_obj_full_path = re.compile(
+                f"{re.escape(layer)}/features/[0-9a-f]{{4}}/(?P<fk>[0-9a-f]{{8}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{4}}-[0-9a-f]{{12}})/"
+            )
+
+            def _get_feature_key_a(diff):
+                m = re_obj_feature_path.match(diff.old_file.path)
+                assert (
+                    m
+                ), f"Diff object path doesn't match expected path pattern? '{diff.old_file.path}'"
+                return m.group("fk")
+
+            def _get_feature_key_a_full(diff):
+                m = re_obj_full_path.match(diff.old_file.path)
+                assert (
+                    m
+                ), f"Diff object path doesn't match expected path pattern? '{diff.old_file.path}'"
+                return m.group("fk")
+
+            def _get_feature_key_b(diff):
+                m = re_obj_feature_path.match(diff.new_file.path)
+                assert (
+                    m
+                ), f"Diff object path doesn't match expected path pattern? '{diff.new_file.path}'"
+                return m.group("fk")
+
+            def _filter_delta_status(delta_list, *statuses):
+                return filter(lambda d: d.status in statuses, delta_list)
+
+            # todo: suspend/remove spatial index
+            with self._suspend_triggers(dbcur, table):
+                # check for dirty working copy
+                dbcur.execute("SELECT COUNT(*) FROM __kxg_map WHERE state != 0;")
+                is_dirty = dbcur.fetchone()[0]
+                if is_dirty and not force:
+                    raise click.ClickException(
+                        "You have uncommitted changes in your working copy. Commit or use --force to discard."
+                    )
+
+                # check for schema differences
+                # TODO: libgit2 supports pathspec, pygit2 doesn't
+                base_meta_tree = (base_tree / layer / "meta").obj
+                meta_tree = (tree / layer / "meta").obj
+                if base_meta_tree.diff_to_tree(meta_tree):
+                    raise NotImplementedError(
+                        "Sorry, no way to do changeset/meta/schema updates yet"
+                    )
+
+                meta_tree = commit.tree / layer / "meta"
+                meta_geom = json.loads((meta_tree / "gpkg_geometry_columns").obj.data)
+                geom_column_name = meta_geom["column_name"] if meta_geom else None
+
+                cols, pk_field = self._get_columns(dataset)
+                col_names = cols.keys()
+
+                sql_insert_feature = f"INSERT INTO {gpkg.ident(table)} ({','.join([gpkg.ident(k) for k in col_names])}) VALUES ({','.join(['?']*len(col_names))});"
+                sql_insert_id = "INSERT INTO __kxg_map (table_name, feature_key, feature_id, state) VALUES (?,?,?,0);"
+
+                sql_delete_feature = (
+                    f"DELETE FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk_field)}=?;"
+                )
+                sql_delete_id = (
+                    f"DELETE FROM __kxg_map WHERE table_name=? AND feature_key=?;"
+                )
+
+                if is_dirty:
+                    # force: reset changes
+                    index = core.db_to_index(db, layer, base_tree)
+                    diff_index = base_tree.diff_to_index(index)
+                    diff_index_list = list(diff_index.deltas)
+                    diff_index_list.sort(key=lambda d: (d.old_file.path, d.new_file.path))
+
+                    wip_features = []
+                    for feature_key, feature_diffs in itertools.groupby(
+                        _filter_delta_status(diff_index_list, pygit2.GIT_DELTA_DELETED),
+                        _get_feature_key_a_full,
+                    ):
+                        feature = self.diff_feature_to_dict(
+                            repo, feature_diffs, geom_column_name, select="old"
+                        )
+                        wip_features.append([feature[c] for c in col_names])
+
+                    if wip_features:
+                        dbcur.executemany(sql_insert_feature, wip_features)
+                        assert dbcur.rowcount == len(
+                            wip_features
+                        ), f"checkout-reset delete: expected Δ{len(wip_features)} changes, got {dbcur.rowcount}"
+
+                    # updates
+                    for feature_key, feature_diffs in itertools.groupby(
+                        _filter_delta_status(diff_index_list, pygit2.GIT_DELTA_MODIFIED),
+                        _get_feature_key_a_full,
+                    ):
+                        feature = self.diff_feature_to_dict(
+                            repo, feature_diffs, geom_column_name, select="old"
+                        )
+
+                        if feature:
+                            sql_update_feature = f"""
+                                UPDATE {gpkg.ident(table)}
+                                SET {','.join([f'{gpkg.ident(k)}=?' for k in feature.keys()])}
+                                WHERE {gpkg.ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
+                            """
+                            params = list(feature.values()) + [table, feature_key]
+                            dbcur.execute(sql_update_feature, params)
+                            assert (
+                                dbcur.rowcount == 1
+                            ), f"checkout-reset update: expected Δ1, got {dbcur.rowcount}"
+
+                            if pk_field in feature:
+                                # pk change
+                                sql_update_id = f"UPDATE __kxg_map SET feature_id=? WHERE table_name=? AND feature_key=?;"
+                                dbcur.execute(
+                                    sql_update_id, (feature[pk_field], table, feature_key)
+                                )
+                                assert (
+                                    dbcur.rowcount == 1
+                                ), f"checkout update-id: expected Δ1, got {dbcur.rowcount}"
+
+                    # unexpected things
+                    unsupported_deltas = _filter_delta_status(
+                        diff_index_list,
+                        pygit2.GIT_DELTA_COPIED,
+                        pygit2.GIT_DELTA_IGNORED,
+                        pygit2.GIT_DELTA_RENAMED,
+                        pygit2.GIT_DELTA_TYPECHANGE,
+                        pygit2.GIT_DELTA_UNMODIFIED,
+                        pygit2.GIT_DELTA_UNREADABLE,
+                        pygit2.GIT_DELTA_UNTRACKED,
+                    )
+                    if any(unsupported_deltas):
+                        raise NotImplementedError(
+                            "Deltas for unsupported diff states:\n"
+                            + diff_index.stats.format(
+                                pygit2.GIT_DIFF_STATS_FULL
+                                | pygit2.GIT_DIFF_STATS_INCLUDE_SUMMARY,
+                                80,
+                            )
+                        )
+
+                    # delete added features
+                    dbcur.execute(
+                        f"""
+                        DELETE FROM {gpkg.ident(table)}
+                        WHERE {gpkg.ident(pk_field)} IN (
+                            SELECT feature_id FROM __kxg_map WHERE state != 0 AND feature_key IS NULL
+                        );
+                    """
+                    )
+                    dbcur.execute(
+                        f"""
+                        DELETE FROM __kxg_map
+                        WHERE state != 0 AND feature_key IS NULL;
+                    """
+                    )
+
+                    # reset other changes
+                    dbcur.execute(
+                        f"""
+                        UPDATE __kxg_map SET state = 0;
+                    """
+                    )
+
+                # feature diff
+                base_index_tree = (base_tree / layer / "features").obj
+                index_tree = (tree / layer / "features").obj
+                diff_index = base_index_tree.diff_to_tree(index_tree)
+                diff_index_list = list(diff_index.deltas)
+                diff_index_list.sort(key=lambda d: (d.old_file.path, d.new_file.path))
+
+                # deletes
+                wip_features = []
+                wip_idmap = []
+                for feature_key, feature_diffs in itertools.groupby(
+                    _filter_delta_status(diff_index_list, pygit2.GIT_DELTA_DELETED),
+                    _get_feature_key_a,
+                ):
+                    feature = self.diff_feature_to_dict(
+                        repo, feature_diffs, geom_column_name, select="old"
+                    )
+                    wip_features.append((feature[pk_field],))
+                    wip_idmap.append((table, feature_key))
+
+                if wip_features:
+                    dbcur.executemany(sql_delete_feature, wip_features)
+                    assert dbcur.rowcount == len(
+                        wip_features
+                    ), f"checkout delete: expected Δ{len(wip_features)} changes, got {dbcur.rowcount}"
+                    dbcur.executemany(sql_delete_id, wip_idmap)
+                    assert dbcur.rowcount == len(
+                        wip_features
+                    ), f"checkout delete-id: expected Δ{len(wip_features)} changes, got {dbcur.rowcount}"
+
+                # updates
+                for feature_key, feature_diffs in itertools.groupby(
+                    _filter_delta_status(diff_index_list, pygit2.GIT_DELTA_MODIFIED),
+                    _get_feature_key_a,
+                ):
+                    feature = self.diff_feature_to_dict(
+                        repo, feature_diffs, geom_column_name, select="new"
+                    )
+
+                    if feature:
+                        sql_update_feature = f"""
+                            UPDATE {gpkg.ident(table)}
+                            SET {','.join([f'{gpkg.ident(k)}=?' for k in feature.keys()])}
+                            WHERE {gpkg.ident(pk_field)}=(SELECT feature_id FROM __kxg_map WHERE table_name=? AND feature_key=?);
+                        """
+                        params = list(feature.values()) + [table, feature_key]
+                        dbcur.execute(sql_update_feature, params)
+                        assert (
+                            dbcur.rowcount == 1
+                        ), f"checkout update: expected Δ1, got {dbcur.rowcount}"
+
+                        if pk_field in feature:
+                            # pk change
+                            sql_update_id = f"UPDATE __kxg_map SET feature_id=? WHERE table_name=? AND feature_key=?;"
+                            dbcur.execute(
+                                sql_update_id, (feature[pk_field], table, feature_key)
+                            )
+                            assert (
+                                dbcur.rowcount == 1
+                            ), f"checkout update-id: expected Δ1, got {dbcur.rowcount}"
+
+                # adds/inserts
+                wip_features = []
+                wip_idmap = []
+                for feature_key, feature_diffs in itertools.groupby(
+                    _filter_delta_status(diff_index_list, pygit2.GIT_DELTA_ADDED),
+                    _get_feature_key_b,
+                ):
+                    feature = self.diff_feature_to_dict(
+                        repo, feature_diffs, geom_column_name, select="new"
+                    )
+                    wip_features.append([feature[c] for c in col_names])
+                    wip_idmap.append((table, feature_key, feature[pk_field]))
+
+                if wip_features:
+                    dbcur.executemany(sql_insert_feature, wip_features)
+                    dbcur.executemany(sql_insert_id, wip_idmap)
+
+                # unexpected things
+                unsupported_deltas = _filter_delta_status(
+                    diff_index_list,
+                    pygit2.GIT_DELTA_COPIED,
+                    pygit2.GIT_DELTA_IGNORED,
+                    pygit2.GIT_DELTA_RENAMED,
+                    pygit2.GIT_DELTA_TYPECHANGE,
+                    pygit2.GIT_DELTA_UNMODIFIED,
+                    pygit2.GIT_DELTA_UNREADABLE,
+                    pygit2.GIT_DELTA_UNTRACKED,
+                )
+                if any(unsupported_deltas):
+                    raise NotImplementedError(
+                        "Deltas for unsupported diff states:\n"
+                        + diff_index.stats.format(
+                            pygit2.GIT_DIFF_STATS_FULL
+                            | pygit2.GIT_DIFF_STATS_INCLUDE_SUMMARY,
+                            80,
+                        )
+                    )
+
+                # Update gpkg_contents
+                commit_time = datetime.utcfromtimestamp(commit.commit_time)
+                if geom_column_name is not None:
+                    dbcur.execute(
+                        f"""
+                        UPDATE gpkg_contents
+                        SET
+                            last_change=?,
+                            min_x=(SELECT ST_MinX({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                            min_y=(SELECT ST_MinY({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                            max_x=(SELECT ST_MaxX({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)}),
+                            max_y=(SELECT ST_MaxY({gpkg.ident(geom_column_name)}) FROM {gpkg.ident(table)})
+                        WHERE
+                            table_name=?;
+                        """,
+                        (
+                            commit_time.strftime(
+                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                            ),  # GPKG Spec Req.15
+                            table,
+                        ),
+                    )
+                else:
+                    dbcur.execute(
+                        f"""
+                        UPDATE gpkg_contents
+                        SET
+                            last_change=?
+                        WHERE
+                            table_name=?;
+                        """,
+                        (
+                            commit_time.strftime(
+                                "%Y-%m-%dT%H:%M:%S.%fZ"
+                            ),  # GPKG Spec Req.15
+                            table,
+                        ),
+                    )
+
+                assert (
+                    dbcur.rowcount == 1
+                ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
+
+                # update the tree id
+                db.execute(
+                    "UPDATE __kxg_meta SET value=? WHERE table_name=? AND key='tree';",
+                    (tree.hex, table),
+                )
+
+
 
 class WorkingCopy_GPKG_1(WorkingCopyGPKG):
     """
@@ -739,19 +1086,6 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             END;
         """
         )
-
-    def _drop_triggers(self, dbcur, table):
-        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'ins')}")
-        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'upd')}")
-        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'del')}")
-
-    @contextlib.contextmanager
-    def _suspend_triggers(self, dbcur, table):
-        self._drop_triggers(dbcur, table)
-        try:
-            yield
-        finally:
-            self._create_triggers(dbcur, table)
 
     def _chunk(self, iterable, size):
         it = iter(iterable)
@@ -983,7 +1317,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
 
             if base_tree_id != repo_tree_id:
-                L.warning("Working Copy DB is tree:%s, Repo HEAD has tree:%s", base_tree_id, repo_tree_id)
+                L.debug("Working Copy DB is tree:%s, Repo HEAD has tree:%s", base_tree_id, repo_tree_id)
 
             # check for dirty working copy
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")

@@ -378,11 +378,9 @@ def init(ctx, import_from, do_checkout, directory):
             click.echo(f'Checkout {import_table} to {wc_path} as GPKG ...')
 
             checkout.checkout_new(
-                repo=repo,
-                working_copy=wc_path.name,
-                layer=import_table,
+                repo_structure=structure.RepositoryStructure(repo),
+                path=wc_path.name,
                 commit=repo.head.peel(pygit2.Commit),
-                fmt="GPKG"
             )
     else:
         click.echo(f"Created an empty repository at {repo_dir} — import some data with `snowdrop import`")

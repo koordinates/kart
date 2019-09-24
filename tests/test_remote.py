@@ -68,37 +68,6 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
             assert not wc.exists()
 
 
-def test_clone_layer(data_archive, tmp_path, cli_runner, chdir, geopackage):
-    with data_archive("points.snow") as remote_path:
-        with chdir(tmp_path):
-            url = f"file://{remote_path}#BOBTHEBUILDER"
-            r = cli_runner.invoke([
-                "clone",
-                url,
-            ])
-            assert r.exit_code == 1
-            assert "Couldn't find layer 'BOBTHEBUILDER' to checkout." in r.stdout
-
-            url = f"file://{remote_path}#{H.POINTS_LAYER}"
-            r = cli_runner.invoke([
-                "clone",
-                url,
-                "bob.land"
-            ])
-            assert r.exit_code == 2
-
-            url = f"file://{remote_path}#{H.POINTS_LAYER}"
-            r = cli_runner.invoke([
-                "clone",
-                url,
-                "bob.snow"
-            ])
-            assert r.exit_code == 0
-
-            repo_path = tmp_path / "bob.snow"
-            assert (repo_path / 'HEAD').exists()
-
-
 def test_fetch(
     data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request
 ):

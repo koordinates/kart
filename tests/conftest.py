@@ -136,7 +136,7 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                     # v0
                     L.info("Checking out %s to %s", ds.name, wc_path)
                     r = cli_runner.invoke(
-                        ["checkout", f"--working-copy={wc_path}", f"--layer={ds.name}"]
+                        ["checkout", f"--path={wc_path}", f"--dataset={ds.name}"]
                     )
                     assert r.exit_code == 0, r
                     L.debug("Checkout result: %s", r)
