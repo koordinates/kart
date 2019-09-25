@@ -473,6 +473,67 @@ class DatasetStructure:
             t4 = time.time()
             click.echo(f"Closed in {(t4-t3):.0f}s")
 
+    RTREE_INDEX_EXTENSIONS = ('sno-idxd', 'sno-idxi')
+
+    def build_spatial_index(self, path):
+        """
+        Internal proof-of-concept method for building a spatial index across the repository.
+
+        Uses Rtree (libspatialindex underneath): http://toblerity.org/rtree/index.html
+        """
+        import rtree
+
+        if not self.has_geometry:
+            raise ValueError("No geometry to index")
+
+        def _indexer():
+            t0 = time.time()
+
+            c = 0
+            for (pk, geom) in self.feature_tuples([self.primary_key, self.geom_column_name]):
+                c += 1
+                if geom is None:
+                    continue
+
+                e = gpkg.geom_envelope(geom)
+                yield (pk, e, None)
+
+                if c % 50000 == 0:
+                    print(f"  {c} features... @{time.time()-t0:.1f}s")
+
+        p = rtree.index.Property()
+        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
+        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
+        p.leaf_capacity = 1000
+        p.fill_factor = 0.9
+        p.overwrite = True
+        p.dimensionality = 2
+
+        t0 = time.time()
+        idx = rtree.index.Index(path, _indexer(), properties=p, interleaved=False)
+        t1 = time.time()
+        b = idx.bounds
+        c = idx.count(b)
+        del idx
+        t2 = time.time()
+        print(f"Indexed {c} features ({b}) in {t1-t0:.1f}s; flushed in {t2-t1:.1f}s")
+
+    def get_spatial_index(self, path):
+        """
+        Retrieve a spatial index built with build_spatial_index().
+
+        Query with .nearest(coords), .intersection(coords), .count(coords)
+        http://toblerity.org/rtree/index.html
+        """
+        import rtree
+
+        p = rtree.index.Property()
+        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
+        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
+
+        idx = rtree.index.Index(path, properties=p)
+        return idx
+
 
 class Dataset00(DatasetStructure):
     VERSION_PATH = "meta/version"
@@ -1104,67 +1165,6 @@ class Dataset02(Dataset01):
                 bin_feature[field_id] = value
 
             yield (feature_path, msgpack.packb(bin_feature, use_bin_type=True))
-
-    RTREE_INDEX_EXTENSIONS = ('sno-idxd', 'sno-idxi')
-
-    def build_spatial_index(self, path):
-        """
-        Internal proof-of-concept method for building a spatial index across the repository.
-
-        Uses Rtree (libspatialindex underneath): http://toblerity.org/rtree/index.html
-        """
-        import rtree
-
-        if not self.has_geometry:
-            raise ValueError("No geometry to index")
-
-        def _indexer():
-            t0 = time.time()
-
-            c = 0
-            for (pk, geom) in self.feature_tuples([self.primary_key, self.geom_column_name]):
-                c += 1
-                if geom is None:
-                    continue
-
-                e = gpkg.geom_envelope(geom)
-                yield (pk, e, None)
-
-                if c % 50000 == 0:
-                    print(f"  {c} features... @{time.time()-t0:.1f}s")
-
-        p = rtree.index.Property()
-        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
-        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
-        p.leaf_capacity = 1000
-        p.fill_factor = 0.9
-        p.overwrite = True
-        p.dimensionality = 2
-
-        t0 = time.time()
-        idx = rtree.index.Index(path, _indexer(), properties=p, interleaved=False)
-        t1 = time.time()
-        b = idx.bounds
-        c = idx.count(b)
-        del idx
-        t2 = time.time()
-        print(f"Indexed {c} features ({b}) in {t1-t0:.1f}s; flushed in {t2-t1:.1f}s")
-
-    def get_spatial_index(self, path):
-        """
-        Retrieve a spatial index built with build_spatial_index().
-
-        Query with .nearest(coords), .intersection(coords), .count(coords)
-        http://toblerity.org/rtree/index.html
-        """
-        import rtree
-
-        p = rtree.index.Property()
-        p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
-        p.idx_extension = self.RTREE_INDEX_EXTENSIONS[1]
-
-        idx = rtree.index.Index(path, properties=p)
-        return idx
 
     def write_index(self, dataset_diff, index, repo, callback=None):
         pk_field = self.primary_key

@@ -321,6 +321,7 @@ class TestHelpers:
         "adjusted_nodes": 123,
     }
     POLYGONS_HEAD_SHA = "1c3bb605b91c7a7d2d149cb545dcd0e2ee3df14b"
+    POLYGONS_ROWCOUNT = 228
 
     # Test Dataset (gpkg-spec / table.snow)
 

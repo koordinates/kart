@@ -35,17 +35,34 @@ def _json_encode_default(o):
 @click.argument("path")
 @click.argument(
     "command",
-    type=click.Choice(("get", "geo-nearest", "geo-intersects", "geo-count")),
+    type=click.Choice(("get", "geo-nearest", "geo-intersects", "geo-count", "index")),
     required=True
 )
-@click.argument("params", nargs=-1, required=True)
+@click.argument("params", nargs=-1, required=False)
 def query(ctx, path, command, params):
     """
     Find features in a Dataset
+
+    WARNING: Spatial indexing is a proof of concept.
+    Significantly, indexes don't update when the repo changes in any way.
     """
     repo = pygit2.Repository(ctx.obj["repo_dir"] or os.curdir)
     rs = structure.RepositoryStructure(repo)
     dataset = rs[path]
+
+    if command == "index":
+        USAGE = "index"
+
+        t0 = time.time()
+        dataset.build_spatial_index(dataset.name)
+        t1 = time.time()
+        L.debug("Indexed {dataset} in %0.3fs", t1-t0)
+        return
+
+    try:
+        dataset.get_spatial_index(dataset.name)
+    except OSError:
+        raise click.ClickException("No spatial index found. Run `snowdrop query index {path}`")
 
     if command == "get":
         USAGE = "get PK"
