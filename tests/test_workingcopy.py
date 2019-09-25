@@ -79,7 +79,7 @@ def test_checkout_workingcopy2(
         H.clear_working_copy()
 
         wc = tmp_path / f"{table}.gpkg"
-        r = cli_runner.invoke(["wc-new", wc])
+        r = cli_runner.invoke(["checkout", f"--path={wc}"])
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
         # assert re.match(fr"Checkout HEAD to .+ as GPKG \.\.\.$", lines[0])

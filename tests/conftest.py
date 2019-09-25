@@ -144,7 +144,7 @@ def data_working_copy(data_archive, tmp_path, cli_runner):
                     # v2
                     L.info("Checking out to %s", wc_path)
                     r = cli_runner.invoke(
-                        ["wc-new", wc_path]
+                        ["checkout", f"--path={wc_path}"]
                     )
                     assert r.exit_code == 0, r
                     L.debug("Checkout result: %s", r)
