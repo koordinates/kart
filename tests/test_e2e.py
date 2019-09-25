@@ -11,7 +11,10 @@ GPKG_IMPORTS = (
     [
         pytest.param(
             "gpkg-points", "nz-pa-points-topo-150k.gpkg", "POINTS", id="points"
-        )
+        ),
+        pytest.param(
+            "gpkg-polygons", "nz-waca-adjustments.gpkg", "POLYGONS", id="polygons-pk",
+        ),
     ]
 )
 
@@ -72,7 +75,7 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
             insert(db, commit=False)
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0
-            assert r.stdout.splitlines()[0] == "+++ nz_pa_points_topo_150k:fid=98000"
+            assert re.match(fr'\+\+\+ {table}:\w+=\d+$', r.stdout.splitlines()[0])
 
             # commit it
             r = cli_runner.invoke(["commit", "-m", "commit-1"])
