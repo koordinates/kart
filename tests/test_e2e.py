@@ -1,4 +1,6 @@
+import re
 import subprocess
+
 import pytest
 
 
@@ -103,4 +105,4 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
             # push
             r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
             assert r.exit_code == 0
-            assert "Branch 'master' set up to track remote branch 'master' from 'myremote'." in r.stdout
+            assert re.match(r"Branch '?master'? set up to track remote branch '?master'? from '?myremote'?\.$", r.stdout.splitlines()[0])
