@@ -1,14 +1,9 @@
-import contextlib
-import itertools
-import json
-import re
-from datetime import datetime
+from pathlib import Path
 
 import click
 import pygit2
 
-from . import gpkg, core
-from .structure import RepositoryStructure, DatasetStructure, Dataset00
+from .structure import RepositoryStructure, Dataset00
 from .working_copy import WorkingCopy
 
 
@@ -84,6 +79,9 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
             repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
     else:
+        if path is None:
+            path = f"{Path(repo_dir).resolve().stem}.gpkg"
+
         # new working-copy path
         click.echo(f'Checkout {refish or "HEAD"} to {path} as {fmt} ...')
         repo.reset(commit.id, pygit2.GIT_RESET_SOFT)
