@@ -1,4 +1,5 @@
 .git
+.ackrc
 
 **/__pycache__
 **/*.pyc

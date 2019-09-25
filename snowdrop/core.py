@@ -40,22 +40,6 @@ def get_working_copy(repo):
         return None
 
 
-def set_working_copy(repo, *, path, fmt=None, layer=None):
-    repo_cfg = repo.config
-    if "kx.workingcopy" in repo_cfg:
-        ofmt, opath, olayer = repo_cfg["kx.workingcopy"].split(":")
-        fmt = fmt or ofmt
-        layer = layer or olayer
-    elif not (fmt and layer):
-        raise ValueError("No existing workingcopy to update, specify fmt & layer")
-
-    new_path = Path(path)
-    if not new_path.is_absolute():
-        new_path = os.path.relpath(new_path, Path(repo.path).resolve())
-
-    repo.config["kx.workingcopy"] = f"{fmt}:{new_path}:{layer}"
-
-
 def feature_blobs_to_dict(tree_entries, geom_column_name, ogr_geoms=False):
     o = {}
     for te in tree_entries:

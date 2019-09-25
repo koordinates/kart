@@ -1,0 +1,8 @@
+### Directories to ignore
+
+--ignore-directory=is:data
+--ignore-directory=is:tests/data
+--ignore-directory=is:vendor
+--ignore-directory=is:coverage
+--ignore-directory=is:venv
+

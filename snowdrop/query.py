@@ -62,7 +62,7 @@ def query(ctx, path, command, params):
     try:
         dataset.get_spatial_index(dataset.name)
     except OSError:
-        raise click.ClickException("No spatial index found. Run `snowdrop query index {path}`")
+        raise click.ClickException("No spatial index found. Run `snowdrop query {path} index`")
 
     if command == "get":
         USAGE = "get PK"

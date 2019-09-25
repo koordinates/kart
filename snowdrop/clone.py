@@ -1,7 +1,5 @@
-import json
 import os
 import subprocess
-import urllib.parse
 from pathlib import Path
 
 import click
@@ -9,24 +7,6 @@ import pygit2
 
 from . import checkout
 from .structure import RepositoryStructure
-
-
-def get_repo_layer(repo):
-    tree = repo.head.peel(pygit2.Tree)
-
-    if len(tree) != 1 or tree[0].type != 'tree':
-        raise ValueError("Repository structure error")
-
-    layer = tree[0].name
-
-    layer_tree = tree / layer
-    meta_tree = layer_tree / "meta"
-    meta_info = json.loads((meta_tree / "gpkg_contents").obj.data)
-
-    if meta_info["table_name"] != layer:
-        raise ValueError(f"Layer mismatch (table_name={meta_info['table_name']}; layer={layer}")
-
-    return layer
 
 
 @click.command()
