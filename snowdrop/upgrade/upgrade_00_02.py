@@ -46,7 +46,7 @@ def upgrade(source, dest, layer):
         raise click.BadParameter(f"Expecting version <0.2, got {version_data['version']}", param_hint="SOURCE")
 
     # action!
-    print(f"Initialising {dest} ...")
+    click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
     dest_repo = pygit2.init_repository(str(dest), bare=True)
 
@@ -60,7 +60,7 @@ def upgrade(source, dest, layer):
 
     commit_map = {}
 
-    print("\nWriting new commits ...")
+    click.secho("\nWriting new commits ...", bold=True)
     for i, source_commit in enumerate(source_walker):
         dest_parents = []
         for parent_id in source_commit.parent_ids:
@@ -74,12 +74,8 @@ def upgrade(source, dest, layer):
         sqlite_table_info = json.loads((source_tree / 'meta' / 'sqlite_table_info').obj.data.decode('utf8'))
         field_cid_map = {r['name']: r['cid'] for r in sqlite_table_info}
 
-        try:
-            gpkg_geometry_columns = json.loads((source_tree / 'meta' / 'gpkg_geometry_columns').obj.data.decode('utf8'))
-        except KeyError:
-            geom_field = []
-        else:
-            geom_field = gpkg_geometry_columns['column_name']
+        gpkg_geometry_columns = json.loads((source_tree / 'meta' / 'gpkg_geometry_columns').obj.data.decode('utf8'))
+        geom_field = gpkg_geometry_columns['column_name'] if gpkg_geometry_columns else None
 
         pk_field = None
         for field in sqlite_table_info:
@@ -93,7 +89,7 @@ def upgrade(source, dest, layer):
                 raise ValueError("No primary key field found")
 
         if i == 0:
-            print(f"  {layer}: Geometry={geom_field} PrimaryKey={pk_field}")
+            click.echo(f"  {layer}: Geometry={geom_field} PrimaryKey={pk_field}")
 
         dataset = Dataset02(None, layer)
         version = json.dumps({"version": dataset.VERSION_IMPORT}).encode('utf8')
@@ -157,22 +153,24 @@ def upgrade(source, dest, layer):
         commit_map[source_commit.hex] = dest_commit.hex
 
         commit_time = datetime.fromtimestamp(source_commit.commit_time)
-        print(f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]} ({commit_time}; {source_commit.committer.name}; {feature_count} rows)")
+        click.echo(f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]} ({commit_time}; {source_commit.committer.name}; {feature_count} rows)")
 
-    print(f"{i+1} commits processed.")
+    click.echo(f"{i+1} commits processed.")
 
-    print("\nUpdating references ...")
+    click.secho("\nUpdating references ...", bold=True)
     for ref in source_repo.listall_reference_objects():
         if ref.type == pygit2.GIT_REF_OID:
             # real references
             target = commit_map[ref.target.hex]
             dest_repo.references.create(ref.name, target, True)  # overwrite
-            print(f"  {ref.name} ({ref.target.hex[:8]} → {target[:8]})")
+            click.echo(f"  {ref.name} ({ref.target.hex[:8]} → {target[:8]})")
 
     for ref in source_repo.listall_reference_objects():
         if ref.type == pygit2.GIT_REF_SYMBOLIC:
             dest_repo.references.create(ref.name, ref.target)
-            print(f"  {ref.name} → {ref.target}")
+            click.echo(f"  {ref.name} → {ref.target}")
 
-    print("\nGarbage-collecting ...")
+    click.secho("\nCompacting repository ...", bold=True)
     subprocess.check_call(["git", "-C", str(dest), "gc"])
+
+    click.secho("\nUpgrade complete", fg='green', bold=True)
