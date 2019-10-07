@@ -9,7 +9,7 @@ import click
 import pygit2
 
 from . import core  # noqa
-from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query
+from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query, upgrade
 
 
 def print_version(ctx, param, value):
@@ -67,6 +67,7 @@ cli.add_command(merge.merge)
 cli.add_command(pull.pull)
 cli.add_command(status.status)
 cli.add_command(query.query)
+cli.add_command(upgrade.upgrade)
 
 
 @cli.command("workingcopy-set-path")

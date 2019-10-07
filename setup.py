@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name='snowdrop',
@@ -8,7 +8,7 @@ setup(
     author='Koordinates Limited',
     author_email='support@koordinates.com',
     license='Proprietary',
-    packages=['snowdrop'],
+    packages=find_packages(),
     zip_safe=False,
     entry_points={
         'console_scripts': [
