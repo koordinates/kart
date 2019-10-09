@@ -34,7 +34,7 @@ for GPKG_PATH in $(unzip -qql "$ZIP" "*.gpkg" | awk '{print $4}'); do
     unzip -d "$TMPDIR" "$ZIP" "$GPKG_PATH"
     (
         cd "$REPODIR" \
-        && time snow import --version=0.2.0 --x-method=fast "GPKG:${TMPDIR}/${GPKG_PATH}:${TABLE}" "${TABLE}"
+        && time snow import "GPKG:${TMPDIR}/${GPKG_PATH}:${TABLE}" "${TABLE}"
     )
     rm "${TMPDIR}/${GPKG_PATH}"
 done

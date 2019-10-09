@@ -1,7 +1,7 @@
 import click
 import pygit2
 
-from . import core, gpkg
+from .structure import RepositoryStructure
 
 
 @click.command()
@@ -12,6 +12,8 @@ def status(ctx):
     repo = pygit2.Repository(repo_dir)
     if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    rs = RepositoryStructure(repo)
 
     commit = repo.head.peel(pygit2.Commit)
 
@@ -53,57 +55,40 @@ def status(ctx):
                 )
 
     # working copy state
-    working_copy = core.get_working_copy(repo)
+    working_copy = rs.working_copy
     if not working_copy:
         click.echo(
             '\nNo working copy.\n  (use "snow checkout" to create a working copy)'
         )
         return
 
-    db = gpkg.db(working_copy.path, isolation_level="DEFERRED")
-    with db:
-        dbcur = db.cursor()
+    wc_changes = {}
+    for dataset in rs:
+        status = working_copy.status(dataset)
+        if any(status.values()):
+            wc_changes[dataset.path] = status
 
-        sql = """
-            SELECT state, COUNT(feature_key) AS mod, COUNT(*) AS count
-            FROM __kxg_map
-            WHERE
-                table_name = ?
-                AND state != 0
-                AND NOT (feature_key IS NULL AND state < 0)  -- ignore INSERT then DELETE
-            GROUP BY state;
-        """
-        dbcur.execute(sql, [working_copy.layer])
-        change_counts = {
-            r["state"]: (r["mod"], r["count"])
-            for r in dbcur.fetchall()
-            if r["state"] is not None
-        }
-
-        # TODO: check meta/ tree
-
-        if not change_counts:
-            click.echo("\nNothing to commit, working copy clean")
-        else:
-            click.echo(
-                (
-                    "\nChanges in working copy:\n"
-                    '  (use "snow commit" to commit)\n'
-                    '  (use "snow reset" to discard changes)\n'
-                )
+    if not wc_changes:
+        click.echo("\nNothing to commit, working copy clean")
+    else:
+        click.echo(
+            (
+                "\nChanges in working copy:\n"
+                '  (use "snow commit" to commit)\n'
+                '  (use "snow reset" to discard changes)\n'
             )
+        )
 
-            if 1 in change_counts:
-                n_mod = change_counts[1][0]
-                n_add = change_counts[1][1] - n_mod
-                if n_mod:
-                    click.echo(f"    modified:   {n_mod} {_pf(n_mod)}")
-                if n_add:
-                    click.echo(f"    new:        {n_add} {_pf(n_add)}")
-
-            if -1 in change_counts:
-                n_del = change_counts[-1][1]
-                click.echo(f"    deleted:    {n_del} {_pf(n_del)}")
+        for dataset_path, status in wc_changes.items():
+            click.echo(f"  {dataset_path}/")
+            if status['META']:
+                click.echo(f"    meta")
+            if status['U']:
+                click.echo(f"    modified:  {status['U']} {_pf(status['U'])}")
+            if status['I']:
+                click.echo(f"    new:       {status['I']} {_pf(status['I'])}")
+            if status['D']:
+                click.echo(f"    deleted:   {status['D']} {_pf(status['D'])}")
 
 
 def _pf(count):

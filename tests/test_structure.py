@@ -7,7 +7,7 @@ import pytest
 
 from snowdrop import gpkg
 from snowdrop.init import ImportGPKG
-from snowdrop.structure import DatasetStructure, Dataset01
+from snowdrop.structure import DatasetStructure, Dataset1
 
 
 H = pytest.helpers.helpers()
@@ -45,16 +45,16 @@ DATASET_VERSIONS = (
 
 
 def test_dataset_versions():
-    assert DatasetStructure.version_numbers() == ('0.0.1', '0.2.0', '0.1.0')
+    assert DatasetStructure.version_numbers() == ('1.0',)
     klasses = DatasetStructure.all_versions()
     assert set(klass.VERSION_IMPORT for klass in klasses) == set(DatasetStructure.version_numbers())
 
     di = DatasetStructure.importer("bob", version=None)
-    assert di.__class__.__name__ == "Dataset00"
+    assert di.__class__.__name__ == "Dataset1"
     assert di.VERSION_IMPORT == DatasetStructure.DEFAULT_IMPORT_VERSION
 
-    di = DatasetStructure.importer("bob", version="0.1.0")
-    assert di.__class__.__name__ == "Dataset01"
+    di = DatasetStructure.importer("bob", version="1.0")
+    assert di.__class__.__name__ == "Dataset1"
 
 
 def _import_check(repo_path, table, source_gpkg, geopackage):
@@ -69,12 +69,10 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     o = subprocess.check_output(["git", "ls-tree", "-r", "-t", "HEAD", table])
     # print("\n".join(l.decode('utf8') for l in o.splitlines()[:20])))
 
-    if dataset.version.startswith("0.2."):
+    if dataset.version.startswith("1."):
         re_paths = r'^\d{6} blob [0-9a-f]{40}\t%s/.sno-table/[0-9a-f]{2}/[0-9a-f]{2}/([^/]+)$' % table
-    elif dataset.version.startswith("0.1."):
-        re_paths = r'^\d{6} tree [0-9a-f]{40}\t%s/.sno-table/[0-9a-f]{2}/[0-9a-f]{2}/([^/]+)$' % table
-    elif dataset.version.startswith("0.0."):
-        re_paths = r'^\d{6} tree [0-9a-f]{40}\t%s/features/[0-9a-f]{4}/([0-9a-f-]{36})$' % table
+    else:
+        raise NotImplementedError(dataset.version)
 
     git_paths = [m for m in re.findall(re_paths, o.decode('utf-8'), re.MULTILINE)]
     assert len(git_paths) == num_rows
@@ -87,7 +85,7 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-@pytest.mark.parametrize("method", ["normal", "fast"])
+@pytest.mark.parametrize("method", ["normal", "slow"])
 @pytest.mark.parametrize(*DATASET_VERSIONS)
 def test_import(import_version, method, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage, benchmark, request, monkeypatch):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
@@ -131,7 +129,7 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
                 "import",
                 f"GPKG:{data / source_gpkg}:{table}",
                 f"--version={import_version}",
-                f"--x-method={method}",
+                f"--method={method}",
                 table
             ])
             assert r.exit_code == 0, r
@@ -145,7 +143,7 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
 
             dataset = _import_check(repo_path, table, f"{data / source_gpkg}", geopackage)
 
-            assert dataset.__class__.__name__ == f"Dataset{import_version[0]}{import_version[2]}"
+            assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
             assert dataset.version == import_version
 
             pk_field = gpkg.pk(db, table)
@@ -170,8 +168,8 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
                 pytest.fail(f"Couldn't find repo feature {pk_field}={row[pk_field]}")
 
 
-def test_01_pk_encoding():
-    ds = Dataset01(None, 'mytable')
+def test_pk_encoding():
+    ds = Dataset1(None, 'mytable')
 
     assert ds.encode_pk(492183) == 'zgAHgpc='
     assert ds.decode_pk('zgAHgpc=') == 492183
@@ -192,10 +190,6 @@ def test_01_pk_encoding():
 @pytest.mark.parametrize("profile", ["get_feature", "feature_to_dict"])
 def test_feature_find_decode_performance(profile, import_version, archive, source_gpkg, table, data_archive, data_imported, geopackage, benchmark, request):
     """ Check single-feature decoding performance """
-    if profile == 'get_feature' and import_version == "0.0.1":
-        # performance is O(N), don't even bother
-        pytest.skip()
-
     param_ids = H.parameter_ids(request)
     benchmark.group = f"test_feature_find_decode_performance - {profile} - {param_ids[-1]}"
 
@@ -206,7 +200,7 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
     tree = (repo.head.peel(pygit2.Tree) / path).obj
 
     dataset = DatasetStructure.instantiate(tree, path)
-    assert dataset.__class__.__name__ == f"Dataset{import_version[0]}{import_version[2]}"
+    assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
     assert dataset.version == import_version
 
     with data_archive(archive) as data:
@@ -219,12 +213,8 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
         benchmark(dataset.get_feature, pk)
 
     elif profile == 'feature_to_dict':
-        if import_version == "0.0.1":
-            pk_enc, o = dataset.get_feature(pk)
-            f_obj = (tree / 'features' / pk_enc[:4] / pk_enc).obj
-        else:
-            f_obj = (tree / dataset.get_feature_path(pk)).obj
-            pk_enc = dataset.encode_pk(pk)
+        f_obj = (tree / dataset.get_feature_path(pk)).obj
+        pk_enc = dataset.encode_pk(pk)
 
         benchmark(dataset.repo_feature_to_dict, pk_enc, f_obj)
 
@@ -233,8 +223,8 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("import_version", ["0.2.0", "0.1.0"])
-@pytest.mark.parametrize("method", ["normal", "fast"])
+@pytest.mark.parametrize("import_version", ["1.0"])
+@pytest.mark.parametrize("method", ["normal", "slow"])
 def test_import_multiple(method, import_version, data_archive, chdir, cli_runner, tmp_path, geopackage):
     repo_path = tmp_path / "data.snow"
     repo_path.mkdir()
@@ -262,7 +252,7 @@ def test_import_multiple(method, import_version, data_archive, chdir, cli_runner
                     "import",
                     f"GPKG:{data / source_gpkg}:{table}",
                     f"--version={import_version}",
-                    f"--x-method={method}",
+                    f"--method={method}",
                     table
                 ])
                 assert r.exit_code == 0, r
@@ -278,7 +268,7 @@ def test_import_multiple(method, import_version, data_archive, chdir, cli_runner
                             "import",
                             f"GPKG:{data / source_gpkg}:{table}",
                             f"--version={import_version}",
-                            f"--x-method={method}",
+                            f"--method={method}",
                             table
                         ])
 

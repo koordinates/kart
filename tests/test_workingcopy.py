@@ -1,4 +1,3 @@
-import re
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -9,7 +8,6 @@ import pygit2
 
 import snowdrop.checkout
 from snowdrop.working_copy import WorkingCopy
-from snowdrop.core import assert_db_tree_match, WorkingCopyMismatch
 
 
 H = pytest.helpers.helpers()
@@ -18,11 +16,11 @@ H = pytest.helpers.helpers()
 @pytest.mark.parametrize(
     "archive,table,commit_sha",
     [
-        pytest.param("points.snow", H.POINTS_LAYER, H.POINTS_HEAD_SHA, id="points"),
+        pytest.param("points", H.POINTS_LAYER, H.POINTS_HEAD_SHA, id="points"),
         pytest.param(
-            "polygons.snow", H.POLYGONS_LAYER, H.POLYGONS_HEAD_SHA, id="polygons-pk"
+            "polygons", H.POLYGONS_LAYER, H.POLYGONS_HEAD_SHA, id="polygons-pk"
         ),
-        pytest.param("table.snow", H.TABLE_LAYER, H.TABLE_HEAD_SHA, id="table"),
+        pytest.param("table", H.TABLE_LAYER, H.TABLE_HEAD_SHA, id="table"),
     ],
 )
 def test_checkout_workingcopy(
@@ -33,55 +31,10 @@ def test_checkout_workingcopy(
         H.clear_working_copy()
 
         wc = tmp_path / f"{table}.gpkg"
-        r = cli_runner.invoke(["checkout", f"--dataset={table}", f"--path={wc}"])
-        assert r.exit_code == 0, r
-        lines = r.stdout.splitlines()
-        assert re.match(fr"Checkout HEAD to .+ as GPKG \.\.\.$", lines[0])
-        assert re.match(fr"Commit: {commit_sha}$", lines[1])
-
-        assert wc.exists()
-        db = geopackage(wc)
-        assert H.row_count(db, table) > 0
-
-        repo = pygit2.Repository(str(repo_path))
-        assert repo.is_bare
-
-        assert repo.head.name == "refs/heads/master"
-        assert repo.head.shorthand == "master"
-
-        head_tree = repo.head.peel(pygit2.Tree)
-
-        wc_tree_id = db.execute(
-            "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]
-        ).fetchone()[0]
-        assert wc_tree_id == head_tree.hex
-
-        wc = WorkingCopy.open(repo)
-        assert wc.assert_db_tree_match(head_tree)
-
-        try:
-            assert_db_tree_match(db, table, head_tree)
-        except WorkingCopyMismatch as e:
-            assert False, e
-
-
-@pytest.mark.parametrize(
-    "archive,table,commit_sha",
-    [
-        pytest.param("points2", H.POINTS2_LAYER, H.POINTS2_HEAD_SHA, id="points2"),
-    ],
-)
-def test_checkout_workingcopy2(
-    archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
-):
-    """ Checkout a working copy to edit """
-    with data_archive(archive) as repo_path:
-        H.clear_working_copy()
-
-        wc = tmp_path / f"{table}.gpkg"
         r = cli_runner.invoke(["checkout", f"--path={wc}"])
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
+        # TODO: restore these
         # assert re.match(fr"Checkout HEAD to .+ as GPKG \.\.\.$", lines[0])
         # assert re.match(fr"Commit: {commit_sha}$", lines[1])
 
@@ -108,23 +61,23 @@ def test_checkout_workingcopy2(
 
 def test_checkout_detached(data_working_copy, cli_runner, geopackage):
     """ Checkout a working copy to edit """
-    with data_working_copy("points.snow") as (repo_dir, wc):
+    with data_working_copy("points") as (repo_dir, wc):
         db = geopackage(wc)
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the previous commit
-        r = cli_runner.invoke(["checkout", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00"])
+        r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         repo = pygit2.Repository(str(repo_dir))
-        assert repo.head.target.hex == "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00"
+        assert repo.head.target.hex == H.POINTS_HEAD1_SHA
         assert repo.head_is_detached
         assert repo.head.name == "HEAD"
 
 
 def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path):
-    with data_working_copy("points.snow") as (repo_dir, wc):
+    with data_working_copy("points") as (repo_dir, wc):
         db = geopackage(wc)
         repo = pygit2.Repository(str(repo_dir))
 
@@ -152,7 +105,7 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         # checkout the HEAD-but-1 commit
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
-        assert r_head() == ("HEAD", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00")
+        assert r_head() == ("HEAD", H.POINTS_HEAD1_SHA)
         assert repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
@@ -164,9 +117,9 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout a short-sha commit
-        r = cli_runner.invoke(["checkout", "edd5a4b"])
+        r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
-        assert r_head() == ("HEAD", "edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00")
+        assert r_head() == ("HEAD", H.POINTS_HEAD1_SHA)
         assert repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
@@ -193,7 +146,7 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
 
 
 def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
-    with data_working_copy("points.snow") as (repo_path, wc):
+    with data_working_copy("points") as (repo_path, wc):
         db = geopackage(wc)
 
         # creating a new branch with existing name errors
@@ -248,7 +201,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
 
 
 def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
-    with data_working_copy("points2") as (repo_path, wc):
+    with data_working_copy("points") as (repo_path, wc):
         db = geopackage(wc)
 
         # creating a new branch with existing name errors
@@ -272,41 +225,41 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         repo = pygit2.Repository(str(repo_path))
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS2_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
 
         # make some changes
         db = geopackage(wc)
         with db:
             cur = db.cursor()
 
-            cur.execute(H.POINTS2_INSERT, H.POINTS2_RECORD)
+            cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
             assert cur.rowcount == 1
 
-            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=30000 WHERE fid=3;")
+            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=30000 WHERE fid=3;")
             assert cur.rowcount == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
         new_commit = repo.head.peel(pygit2.Commit).hex
-        assert new_commit != H.POINTS2_HEAD_SHA
+        assert new_commit != H.POINTS_HEAD_SHA
 
         r = cli_runner.invoke(["switch", "master"])
         assert r.exit_code == 0, r
 
-        assert H.row_count(db, H.POINTS2_LAYER) == H.POINTS2_ROWCOUNT
+        assert H.row_count(db, H.POINTS_LAYER) == H.POINTS_ROWCOUNT
 
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS2_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
 
         # make some changes
         with db:
             cur = db.cursor()
 
-            cur.execute(H.POINTS2_INSERT, H.POINTS2_RECORD)
+            cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
             assert cur.rowcount == 1
 
-            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=40000 WHERE fid=4;")
+            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=40000 WHERE fid=4;")
             assert cur.rowcount == 1
 
         r = cli_runner.invoke(["switch", "foo"])
@@ -316,7 +269,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "foo", "--discard-changes"])
         assert r.exit_code == 0, r
 
-        assert H.row_count(db, H.POINTS2_LAYER) == H.POINTS2_ROWCOUNT + 1
+        assert H.row_count(db, H.POINTS_LAYER) == H.POINTS_ROWCOUNT + 1
 
         assert repo.head.name == "refs/heads/foo"
         assert repo.head.peel(pygit2.Commit).hex == new_commit
@@ -326,19 +279,19 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS2_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/master"
 
-        assert H.row_count(db, H.POINTS2_LAYER) == H.POINTS2_ROWCOUNT
+        assert H.row_count(db, H.POINTS_LAYER) == H.POINTS_ROWCOUNT
 
 
 @pytest.mark.parametrize(
     "archive,layer",
     [
-        pytest.param("points.snow", H.POINTS_LAYER, id="points"),
-        pytest.param("polygons.snow", H.POLYGONS_LAYER, id="polygons-pk"),
-        pytest.param("table.snow", H.TABLE_LAYER, id="table"),
+        pytest.param("points", H.POINTS_LAYER, id="points"),
+        pytest.param("polygons", H.POLYGONS_LAYER, id="polygons-pk"),
+        pytest.param("table", H.TABLE_LAYER, id="table"),
     ],
 )
 @pytest.mark.parametrize(
@@ -413,9 +366,9 @@ def test_working_copy_reset(
             assert cur.rowcount == 1
 
             change_count = db.execute(
-                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+                """SELECT COUNT(*) FROM ".sno-track";"""
             ).fetchone()[0]
-            assert change_count == (1 + 4 + 5 + 1)
+            assert change_count == (1 + 4 + 5 + 2)
 
         if via == "reset":
             # using `snow reset`
@@ -429,9 +382,9 @@ def test_working_copy_reset(
             assert r.exit_code == 1, r
 
             change_count = db.execute(
-                "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+                """SELECT COUNT(*) FROM ".sno-track";"""
             ).fetchone()[0]
-            assert change_count == (1 + 4 + 5 + 1)
+            assert change_count == (1 + 4 + 5 + 2)
 
             # do again with --force
             r = cli_runner.invoke(["checkout", "--force", "HEAD"])
@@ -440,7 +393,7 @@ def test_working_copy_reset(
             raise NotImplementedError(f"via={via}")
 
         change_count = db.execute(
-            "SELECT COUNT(*) FROM __kxg_map WHERE state != 0"
+            """SELECT COUNT(*) FROM ".sno-track";"""
         ).fetchone()[0]
         assert change_count == 0
 
@@ -481,11 +434,11 @@ def test_working_copy_reset(
 def test_geopackage_locking_edit(
     data_working_copy, geopackage, cli_runner, monkeypatch
 ):
-    with data_working_copy("points.snow") as (repo, wc):
+    with data_working_copy("points") as (repo, wc):
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = snowdrop.working_copy.WorkingCopy_GPKG_0.diff_feature_to_dict
+        orig_func = snowdrop.working_copy.WorkingCopy_GPKG_1.write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -498,9 +451,9 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(snowdrop.working_copy.WorkingCopy_GPKG_0, "diff_feature_to_dict", _wrap)
+        monkeypatch.setattr(snowdrop.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap)
 
-        r = cli_runner.invoke(["checkout", "edd5a4b"])
+        r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA])
         assert r.exit_code == 0, r
         assert is_checked
 
@@ -508,7 +461,7 @@ def test_geopackage_locking_edit(
 
 
 def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
-    with data_working_copy("points.snow") as (repo_path, wc):
+    with data_working_copy("points") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
 
         r = cli_runner.invoke(["workingcopy-set-path", "/thingz.gpkg"])
@@ -517,37 +470,40 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         # relative path 1
         new_path = Path("new-thingz.gpkg")
         wc.rename(new_path)
+        assert new_path.exists()
         r = cli_runner.invoke(["workingcopy-set-path", new_path])
         assert r.exit_code == 0, r
         wc = new_path
 
-        assert repo.config["kx.workingcopy"] == f"GPKG:{new_path}:{H.POINTS_LAYER}"
+        assert repo.config["snowdrop.workingcopy.path"] == str(new_path)
 
         # relative path 2
         new_path = Path("other-thingz.gpkg")
         wc.rename(new_path)
+        assert new_path.exists()
         r = cli_runner.invoke(
-            ["workingcopy-set-path", Path("../points.snow") / new_path]
+            ["workingcopy-set-path", Path("../points") / new_path]
         )
         assert r.exit_code == 0, r
         wc = new_path
 
-        assert repo.config["kx.workingcopy"] == f"GPKG:{new_path}:{H.POINTS_LAYER}"
+        assert repo.config["snowdrop.workingcopy.path"] == str(new_path)
 
         # abs path
         new_path = tmp_path / "thingz.gpkg"
         wc.rename(new_path)
+        assert new_path.exists()
         r = cli_runner.invoke(["workingcopy-set-path", new_path])
         assert r.exit_code == 0, r
 
-        assert repo.config["kx.workingcopy"] == f"GPKG:{new_path}:{H.POINTS_LAYER}"
+        assert repo.config["snowdrop.workingcopy.path"] == str(new_path)
 
 
 @pytest.mark.parametrize(
     "source",
     [
         pytest.param([], id="head"),
-        pytest.param(["-s", H.POINTS2_HEAD_SHA], id="prev"),
+        pytest.param(["-s", H.POINTS_HEAD_SHA], id="prev"),
     ],
 )
 @pytest.mark.parametrize(
@@ -558,11 +514,11 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
     ],
 )
 def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
-    with data_working_copy("points2", force_new=True) as (repo_dir, wc):
-        layer = H.POINTS2_LAYER
-        pk_field = H.POINTS2_LAYER_PK
-        rec = H.POINTS2_RECORD
-        sql = H.POINTS2_INSERT
+    with data_working_copy("points", force_new=True) as (repo_dir, wc):
+        layer = H.POINTS_LAYER
+        pk_field = H.POINTS_LAYER_PK
+        rec = H.POINTS_RECORD
+        sql = H.POINTS_INSERT
         del_pk = 5
         upd_field = "t50_fid"
         upd_field_value = 888_888
@@ -575,15 +531,15 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         # make some changes
         with db:
             cur = db.cursor()
-            cur.execute(f"UPDATE {H.POINTS2_LAYER} SET fid=30000 WHERE fid=300;")
+            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=30000 WHERE fid=300;")
             assert cur.rowcount == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
         new_commit = repo.head.peel(pygit2.Commit).hex
-        assert new_commit != H.POINTS2_HEAD_SHA
-        print(f"Original commit={H.POINTS2_HEAD_SHA} New commit={new_commit}")
+        assert new_commit != H.POINTS_HEAD_SHA
+        print(f"Original commit={H.POINTS_HEAD_SHA} New commit={new_commit}")
 
         with db:
             cur = db.cursor()
@@ -636,7 +592,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         if source:
             assert changes_post == ['300', '30000']
 
-            if head_sha != H.POINTS2_HEAD_SHA:
+            if head_sha != H.POINTS_HEAD_SHA:
                 print(f"E: Bad Tree? {head_sha}")
 
             r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")

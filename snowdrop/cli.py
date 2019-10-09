@@ -56,6 +56,7 @@ def cli(ctx, repo_dir):
 cli.add_command(checkout.checkout)
 cli.add_command(checkout.restore)
 cli.add_command(checkout.switch)
+cli.add_command(checkout.workingcopy_set_path)
 cli.add_command(clone.clone)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
@@ -68,29 +69,6 @@ cli.add_command(pull.pull)
 cli.add_command(status.status)
 cli.add_command(query.query)
 cli.add_command(upgrade.upgrade)
-
-
-@cli.command("workingcopy-set-path")
-@click.pass_context
-@click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
-def workingcopy_set_path(ctx, new):
-    """ Change the path to the working-copy """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
-
-    repo_cfg = repo.config
-    if "kx.workingcopy" in repo_cfg:
-        fmt, path, layer = repo_cfg["kx.workingcopy"].split(":")
-    else:
-        raise click.ClickException("No working copy? Try `snow checkout`")
-
-    new = Path(new)
-    if not new.is_absolute():
-        new = os.path.relpath(new, repo_dir)
-
-    repo.config["kx.workingcopy"] = f"{fmt}:{new}:{layer}"
 
 
 # aliases/shortcuts

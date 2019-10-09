@@ -16,7 +16,7 @@ H = pytest.helpers.helpers()
     ],
 )
 def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopackage):
-    with data_archive("points.snow") as remote_path:
+    with data_archive("points") as remote_path:
         with chdir(tmp_path):
 
             r = cli_runner.invoke([
@@ -25,7 +25,7 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
                 ("--checkout" if working_copy else "--no-checkout"),
             ])
 
-            repo_path = tmp_path / "points.snow"
+            repo_path = tmp_path / "points"
             assert repo_path.is_dir()
 
         r = subprocess.check_output(
@@ -54,14 +54,15 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
             assert wc.exists() and wc.is_file()
 
             table = H.POINTS_LAYER
-            assert repo.config["kx.workingcopy"] == f"GPKG:{wc.name}:{table}"
+            assert repo.config["snowdrop.workingcopy.version"] == "1"
+            assert repo.config["snowdrop.workingcopy.path"] == wc.name
 
             db = geopackage(wc)
             nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
             assert nrows > 0
 
             wc_tree_id = db.execute(
-                "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]
+                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';""",
             ).fetchone()[0]
             assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
         else:
@@ -71,7 +72,7 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
 def test_fetch(
     data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request
 ):
-    with data_working_copy("points.snow") as (path1, wc):
+    with data_working_copy("points") as (path1, wc):
         subprocess.run(["git", "init", "--bare", tmp_path], check=True)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
@@ -83,7 +84,7 @@ def test_fetch(
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
         assert r.exit_code == 0, r
 
-    with data_working_copy("points.snow") as (path2, wc):
+    with data_working_copy("points") as (path2, wc):
         repo = pygit2.Repository(str(path2))
         h = repo.head.target.hex
 
@@ -125,8 +126,8 @@ def test_pull(
     request,
     chdir,
 ):
-    with data_working_copy("points.snow") as (path1, wc1), data_working_copy(
-        "points.snow"
+    with data_working_copy("points") as (path1, wc1), data_working_copy(
+        "points"
     ) as (path2, wc2):
         with chdir(path1):
             subprocess.run(["git", "init", "--bare", tmp_path], check=True)

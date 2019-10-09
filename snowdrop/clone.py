@@ -17,8 +17,6 @@ from .structure import RepositoryStructure
 def clone(ctx, do_checkout, url, directory):
     """ Clone a repository into a new directory """
     repo_dir = Path(directory or os.path.split(url)[1])
-    if not repo_dir.suffix == ".snow":
-        raise click.BadParameter("name should end in .snow", param_hint="directory")
 
     # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
     # pygit2.clone_repository() works fine except for that

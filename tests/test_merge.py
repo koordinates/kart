@@ -9,15 +9,15 @@ H = pytest.helpers.helpers()
 @pytest.mark.parametrize(
     "archive",
     [
-        pytest.param("points.snow", id="points"),
-        pytest.param("polygons.snow", id="polygons-pk"),
-        pytest.param("table.snow", id="table"),
+        pytest.param("points", id="points"),
+        pytest.param("polygons", id="polygons-pk"),
+        pytest.param("table", id="table"),
     ],
 )
 def test_merge_fastforward(
     archive, data_working_copy, geopackage, cli_runner, insert, request
 ):
-    with data_working_copy("points.snow") as (repo_path, wc):
+    with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -54,9 +54,9 @@ def test_merge_fastforward(
 @pytest.mark.parametrize(
     "archive",
     [
-        pytest.param("points.snow", id="points"),
-        pytest.param("polygons.snow", id="polygons-pk"),
-        pytest.param("table.snow", id="table"),
+        pytest.param("points", id="points"),
+        pytest.param("polygons", id="polygons-pk"),
+        pytest.param("table", id="table"),
     ],
 )
 def test_merge_fastforward_noff(
@@ -104,11 +104,11 @@ def test_merge_fastforward_noff(
 @pytest.mark.parametrize(
     "archive,layer,pk_field",
     [
-        pytest.param("points.snow", H.POINTS_LAYER, H.POINTS_LAYER_PK, id="points"),
+        pytest.param("points", H.POINTS_LAYER, H.POINTS_LAYER_PK, id="points"),
         pytest.param(
-            "polygons.snow", H.POLYGONS_LAYER, H.POLYGONS_LAYER_PK, id="polygons-pk"
+            "polygons", H.POLYGONS_LAYER, H.POLYGONS_LAYER_PK, id="polygons-pk"
         ),
-        pytest.param("table.snow", H.TABLE_LAYER, H.TABLE_LAYER_PK, id="table"),
+        pytest.param("table", H.TABLE_LAYER, H.TABLE_LAYER_PK, id="table"),
     ],
 )
 def test_merge_true(

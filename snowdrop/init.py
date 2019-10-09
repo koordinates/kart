@@ -116,13 +116,13 @@ class ImportGPKG:
 
         # support GDAL aspatial extension pre-GeoPackage 1.2 before GPKG supported attributes
         sql = """
-            SELECT table_name, data_type, identifier
+            SELECT table_name, identifier
             FROM gpkg_contents
             WHERE data_type IN ('features', 'attributes', 'aspatial')
             ORDER BY table_name;
         """
         tables = {}
-        for table_name, data_type, identifier in dbcur.execute(sql):
+        for table_name, identifier in dbcur.execute(sql):
             tables[table_name] = f"{table_name}  -  {identifier}"
         return tables
 
@@ -228,10 +228,11 @@ class ImportGPKG:
 @click.option(
     "--version",
     type=click.Choice(structure.DatasetStructure.version_numbers()),
-    default=structure.DatasetStructure.version_numbers()[0]
+    default=structure.DatasetStructure.version_numbers()[0],
+    hidden=True
 )
-@click.option("--x-method", hidden=True)
-def import_table(ctx, source, directory, do_list, version, x_method):
+@click.option("--method", hidden=True)
+def import_table(ctx, source, directory, do_list, version, method):
     """
     Import data into a repository.
 
@@ -295,13 +296,13 @@ def import_table(ctx, source, directory, do_list, version, x_method):
         directory = source_table
 
     importer = structure.DatasetStructure.importer(directory, version=version)
-    if x_method == "fast":
-        params = json.loads(os.environ.get("SNOWDROP_X_IMPORT_OPTIONS", None) or "{}")
-        if params:
-            click.echo(f"Fast import parameters: {params}")
-        importer.fast_import_table(repo, source_loader, **params)
+    params = json.loads(os.environ.get("SNOWDROP_IMPORT_OPTIONS", None) or "{}")
+    if params:
+        click.echo(f"Import parameters: {params}")
+    if method == "slow":
+        importer.import_table(repo, source_loader, **params)
     else:
-        importer.import_table(repo, source_loader)
+        importer.fast_import_table(repo, source_loader, **params)
 
 
 @click.command()
@@ -355,10 +356,6 @@ def init(ctx, import_from, do_checkout, directory):
                 ctx.exit(1)
 
     repo_dir = Path(directory).resolve()
-    if repo_dir.suffix != '.snow':
-        raise click.BadParameter(
-            "name should end in .snow", param_hint="directory"
-        )
     if any(repo_dir.iterdir()):
         raise click.BadParameter(
             f'"{repo_dir}" isn\'t empty', param_hint="directory"

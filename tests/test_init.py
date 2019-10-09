@@ -152,13 +152,14 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             assert wc.exists() and wc.is_file()
             print("workingcopy at", wc)
 
-            assert repo.config["kx.workingcopy"] == f"GPKG:{wc.name}:{table}"
+            assert repo.config["snowdrop.workingcopy.version"] == "1"
+            assert repo.config["snowdrop.workingcopy.path"] == f"{wc.name}"
 
             db = geopackage(wc)
             assert H.row_count(db, table) > 0
 
             wc_tree_id = db.execute(
-                "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]
+                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
@@ -184,10 +185,6 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:no-existey"])
         assert r.exit_code == 2, r
         assert "Feature/Attributes table 'no-existey' not found in gpkg_contents" in r.stdout
-
-        r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:{table}"])
-        assert r.exit_code == 2, r
-        assert 'name should end in .snow' in r.stdout
 
         # not empty
         (repo_path / 'a.file').touch()

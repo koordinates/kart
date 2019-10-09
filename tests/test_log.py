@@ -6,17 +6,17 @@ H = pytest.helpers.helpers()
 
 def test_log(data_archive, cli_runner):
     """ review commit history """
-    with data_archive("points.snow"):
+    with data_archive("points"):
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            "commit d1bee0841307242ad7a9ab029dc73c652b9f74f3",
+            "commit 2a1b7be8bdef32aea1510668e3edccbc6d454852",
             "Author: Robert Coup <robert@coup.net.nz>",
             "Date:   Thu Jun 20 15:28:33 2019 +0100",
             "",
             "    Improve naming on Coromandel East coast",
             "",
-            "commit edd5a4b02a7d2ce608f1839eea5e3a8ddb874e00",
+            "commit 63a9492dd785b1f04dfc446330fa017f9459db4f",
             "Author: Robert Coup <robert@coup.net.nz>",
             "Date:   Tue Jun 11 12:03:58 2019 +0100",
             "",
@@ -26,11 +26,11 @@ def test_log(data_archive, cli_runner):
 
 def test_show(data_archive, cli_runner):
     """ review commit history """
-    with data_archive("points.snow"):
+    with data_archive("points"):
         r = cli_runner.invoke(["show"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            "commit d1bee0841307242ad7a9ab029dc73c652b9f74f3",
+            "commit 2a1b7be8bdef32aea1510668e3edccbc6d454852",
             "Author: Robert Coup <robert@coup.net.nz>",
             "Date:   Thu Jun 20 15:28:33 2019 +0100",
             "",

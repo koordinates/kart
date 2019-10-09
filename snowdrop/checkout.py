@@ -1,9 +1,10 @@
+import os
 from pathlib import Path
 
 import click
 import pygit2
 
-from .structure import RepositoryStructure, Dataset00
+from .structure import RepositoryStructure
 from .working_copy import WorkingCopy
 
 
@@ -100,15 +101,7 @@ def checkout_new(repo_structure, path, *, datasets=None, commit=None):
 
     click.echo(f"Commit: {commit.hex}")
 
-    if isinstance(datasets[0], Dataset00):
-        wc_params = {
-            'version': 0,
-            'table': datasets[0].name,
-        }
-    else:
-        wc_params = {}
-
-    wc = WorkingCopy.new(repo_structure.repo, path, **wc_params)
+    wc = WorkingCopy.new(repo_structure.repo, path)
     wc.create()
     for dataset in datasets:
         wc.write_full(commit, dataset)
@@ -245,3 +238,24 @@ def restore(ctx, source, pathspec):
         update_meta=(head_commit.id == commit.id),
         paths=pathspec
     )
+
+
+@click.command("workingcopy-set-path")
+@click.pass_context
+@click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
+def workingcopy_set_path(ctx, new):
+    """ Change the path to the working-copy """
+    repo_dir = ctx.obj["repo_dir"] or "."
+    repo = pygit2.Repository(repo_dir)
+    if not repo:
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    repo_cfg = repo.config
+    if "snowdrop.workingcopy.path" not in repo_cfg:
+        raise click.ClickException("No working copy? Try `snow checkout`")
+
+    new = Path(new)
+    if not new.is_absolute():
+        new = os.path.relpath(os.path.join(repo_dir, new), repo_dir)
+
+    repo.config["snowdrop.workingcopy.path"] = str(new)

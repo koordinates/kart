@@ -49,10 +49,11 @@ def edit_table(dbcur):
 
 
 @pytest.mark.parametrize("archive,layer", [
-    pytest.param('points.snow', H.POINTS_LAYER, id='points'),
-    pytest.param('polygons.snow', H.POLYGONS_LAYER, id='polygons_pk'),
-    pytest.param('table.snow', H.TABLE_LAYER, id='table'),
+    pytest.param('points', H.POINTS_LAYER, id='points'),
+    pytest.param('polygons', H.POLYGONS_LAYER, id='polygons_pk'),
+    pytest.param('table', H.TABLE_LAYER, id='table'),
 ])
+@pytest.mark.skip('remove-me')
 def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
     """ commit outstanding changes from the working copy """
     param_ids = H.parameter_ids(request)
@@ -122,9 +123,11 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
 
 
 @pytest.mark.parametrize("archive,layer", [
-    pytest.param('points2', H.POINTS_LAYER, id='points'),
+    pytest.param('points', H.POINTS_LAYER, id='points'),
+    pytest.param('polygons', H.POLYGONS_LAYER, id='polygons_pk'),
+    pytest.param('table', H.TABLE_LAYER, id='table'),
 ])
-def test_commit2(archive, layer, data_working_copy, geopackage, cli_runner, request):
+def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
     """ commit outstanding changes from the working copy """
     param_ids = H.parameter_ids(request)
 
@@ -181,7 +184,7 @@ def test_commit2(archive, layer, data_working_copy, geopackage, cli_runner, requ
 
 def test_tag(data_working_copy, cli_runner):
     """ review commit history """
-    with data_working_copy("points.snow") as (repo_dir, wc):
+    with data_working_copy("points") as (repo_dir, wc):
         # create a tag
         r = cli_runner.invoke(["tag", "version1"])
         assert r.exit_code == 0, r

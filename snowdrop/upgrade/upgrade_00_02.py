@@ -10,7 +10,7 @@ import click
 import pygit2
 
 from snowdrop.core import walk_tree
-from snowdrop.structure import Dataset02
+from snowdrop.structure import Dataset1
 
 
 @click.command()
@@ -91,7 +91,7 @@ def upgrade(source, dest, layer):
         if i == 0:
             click.echo(f"  {layer}: Geometry={geom_field} PrimaryKey={pk_field}")
 
-        dataset = Dataset02(None, layer)
+        dataset = Dataset1(None, layer)
         version = json.dumps({"version": dataset.VERSION_IMPORT}).encode('utf8')
 
         feature_count = 0
@@ -114,6 +114,21 @@ def upgrade(source, dest, layer):
                         dest_blob,
                         pygit2.GIT_FILEMODE_BLOB
                     ))
+
+                for col, cid in field_cid_map.items():
+                    dest_blob = dest_repo.create_blob(json.dumps(cid))
+                    index.add(pygit2.IndexEntry(
+                        f'{layer}/.sno-table/meta/fields/{col}',
+                        dest_blob,
+                        pygit2.GIT_FILEMODE_BLOB
+                    ))
+
+                dest_blob = dest_repo.create_blob(json.dumps(pk_field))
+                index.add(pygit2.IndexEntry(
+                    f'{layer}/.sno-table/meta/primary_key',
+                    dest_blob,
+                    pygit2.GIT_FILEMODE_BLOB
+                ))
 
             elif re.match(r'^features/[a-f0-9]{4}/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$', top_path):
                 # feature path

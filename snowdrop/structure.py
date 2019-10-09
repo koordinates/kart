@@ -7,7 +7,6 @@ import os
 import re
 import subprocess
 import time
-import uuid
 from collections import deque
 from pathlib import Path
 
@@ -129,7 +128,7 @@ class IntegrityError(ValueError):
 
 
 class DatasetStructure:
-    DEFAULT_IMPORT_VERSION = '0.0.1'
+    DEFAULT_IMPORT_VERSION = '1.0'
     META_PATH = 'meta'
 
     def __init__(self, tree, path):
@@ -192,7 +191,7 @@ class DatasetStructure:
             except KeyError:
                 continue
             else:
-                L.debug("Found candidate %s tree at: %s", version_klass.VERSION_SPECIFIER, path)
+                L.debug("Found candidate %sx tree at: %s", version_klass.VERSION_SPECIFIER, path)
 
             if te_version.type != 'blob':
                 raise IntegrityError(f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({te_version.type})")
@@ -535,190 +534,11 @@ class DatasetStructure:
         return idx
 
 
-class Dataset00(DatasetStructure):
-    VERSION_PATH = "meta/version"
-    VERSION_SPECIFIER = "0.0."
-    VERSION_IMPORT = '0.0.1'
-
-    def repo_feature_to_dict(self, pk, tree, ogr_geoms=False):
-        tree_entries = [te for te in tree if te.type == 'blob']
-        return core.feature_blobs_to_dict(tree_entries, self.geom_column_name, ogr_geoms=ogr_geoms)
-
-    def features(self, *, ogr_geoms=False, **kwargs):
-        # layer-name/
-        #   features/
-        #     {uuid[:4]}/
-        #       {uuid}/
-        #         {field} => value
-        #         ...
-        #       ...
-        #     ...
-        for te_ftree_prefix in (self.tree / "features").obj:
-            if te_ftree_prefix.type != "tree":
-                continue
-
-            ftree_prefix = te_ftree_prefix.obj
-
-            for te_ftree in ftree_prefix:
-                feature = self.repo_feature_to_dict(None, te_ftree.obj, ogr_geoms=ogr_geoms)
-                yield (te_ftree.name, feature)
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def primary_key(self):
-        schema = self.get_meta_item('sqlite_table_info')
-        field = next(f for f in schema if f['pk'])
-        return field['name']
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def primary_key_type(self):
-        schema = self.get_meta_item('sqlite_table_info')
-        field = next(f for f in schema if f['name'] == self.primary_key)
-        return field['type']
-
-    def cast_primary_key(self, pk_value):
-        pk_type = self.primary_key_type
-
-        if pk_value is not None:
-            # https://www.sqlite.org/datatype3.html
-            # 3.1. Determination Of Column Affinity
-            if 'INT' in pk_type:
-                pk_value = int(pk_value)
-            elif re.search('TEXT|CHAR|CLOB', pk_type):
-                pk_value = str(pk_value)
-
-        return pk_value
-
-    def get_feature(self, pk_value):
-        pk_field = self.primary_key
-        pk_value = self.cast_primary_key(pk_value)
-
-        for tree, path, subtrees, blobs in core.walk_tree((self.tree / 'features').obj, path='features'):
-            m = re.match(r'features/([0-9a-f]{4})/([0-9a-f-]{36})$', path)
-            if m:
-                pk_blob = (tree / pk_field).obj
-                if json.loads(pk_blob.data) == pk_value:
-                    return m.group(2), self.repo_feature_to_dict(None, tree, ogr_geoms=True)
-
-        raise KeyError(pk_value)
-
-    def write_feature(self, row, repo, index, *, path=None, **kwargs):
-        """
-            layer-name/
-              features/
-                {uuid[:4]}/
-                  {uuid}/
-                    {field} => value
-                    ...
-                  ...
-                ...
-        """
-        feature_id = str(uuid.uuid4())
-        path = path or self.path
-        entries = []
-
-        for field in row.keys():
-            object_path = f"{path}/features/{feature_id[:4]}/{feature_id}/{field}"
-
-            value = row[field]
-            if not isinstance(value, bytes):  # blob
-                value = json.dumps(value).encode("utf8")
-
-            blob_id = repo.create_blob(value)
-            entry = pygit2.IndexEntry(
-                object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
-            index.add(entry)
-            entries.append(entry)
-        # click.echo(feature_id, object_path, field, value, entry)
-        return entries
-
-    def import_iter_feature_blobs(self, resultset, source):
-        path = self.path
-
-        for row in resultset:
-            feature_id = str(uuid.uuid4())
-
-            for field in row.keys():
-                object_path = f"{path}/features/{feature_id[:4]}/{feature_id}/{field}"
-
-                value = row[field]
-                if not isinstance(value, bytes):  # blob
-                    value = json.dumps(value).encode("utf8")
-
-                yield (object_path, value)
-
-    def write_index(self, dataset_diff, index, repo, callback=None):
-        for k, (obj_old, obj_new) in dataset_diff["META"].items():
-            object_path = f"{self.name}/meta/{k}"
-            value = json.dumps(obj_new).encode("utf8")
-
-            blob = repo.create_blob(value)
-            idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
-            index.add(idx_entry)
-
-            if callback:
-                callback(self, "META", object_path=object_path)
-
-        for feature_key, obj_old in dataset_diff["D"].items():
-            object_path = f"{self.name}/features/{feature_key[:4]}/{feature_key}"
-            index.remove_all([f"{object_path}/**"])
-
-            if callback:
-                callback(self, "D", object_path=object_path, feature_key=feature_key, obj_old=obj_old)
-
-        for obj in dataset_diff["I"]:
-            feature_key = str(uuid.uuid4())
-            for k, value in obj.items():
-                object_path = f"{self.name}/features/{feature_key[:4]}/{feature_key}/{k}"
-                if not isinstance(value, bytes):  # blob
-                    value = json.dumps(value).encode("utf8")
-
-                blob = repo.create_blob(value)
-                idx_entry = pygit2.IndexEntry(
-                    object_path, blob, pygit2.GIT_FILEMODE_BLOB
-                )
-                index.add(idx_entry)
-
-            if callback:
-                callback(self, "I", object_path=object_path, feature_key=feature_key, obj_new=obj)
-
-        for feature_key, (obj_old, obj_new) in dataset_diff["U"].items():
-            s_old = set(obj_old.items())
-            s_new = set(obj_new.items())
-
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = set(diff_del.keys()) | set(diff_add.keys())
-
-            for k in all_keys:
-                object_path = f"{self.name}/features/{feature_key[:4]}/{feature_key}/{k}"
-                if k in diff_add:
-                    value = obj_new[k]
-                    if not isinstance(value, bytes):  # blob
-                        value = json.dumps(value).encode("utf8")
-
-                    blob = repo.create_blob(value)
-                    idx_entry = pygit2.IndexEntry(
-                        object_path, blob, pygit2.GIT_FILEMODE_BLOB
-                    )
-                    index.add(idx_entry)
-                else:
-                    index.remove(object_path)
-
-            if callback:
-                callback(self, "U", object_path=object_path, feature_key=feature_key, obj_old=obj_old, obj_new=obj_new)
-
-        if callback:
-            callback(self, "INDEX")
-
-
-class Dataset01(DatasetStructure):
+class Dataset1(DatasetStructure):
     """
-    Experimental repository structure:
     - messagePack
     - primary key values
+    - blob per feature
     - add at any location: `snowdrop import GPKG:my.gpkg:mytable path/to/mylayer`
 
     any/structure/mylayer/
@@ -726,17 +546,15 @@ class Dataset01(DatasetStructure):
         meta/
           primary_key
           fields/
-            {field}  # map to attribute-id
+            [field]  # map to attribute-id
             ...
-        {pk-hash:2}/
-          {pk-hash:2}/
-            {pk-value}/
-              {attribute-id}
-
+        [hex(pk-hash):2]/
+          [hex(pk-hash):2]/
+            [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
     """
     VERSION_PATH = ".sno-table/meta/version"
-    VERSION_SPECIFIER = "0.1."
-    VERSION_IMPORT = '0.1.0'
+    VERSION_SPECIFIER = "1."
+    VERSION_IMPORT = '1.0'
 
     MSGPACK_EXT_GEOM = 71  # 'G'
     META_PATH = '.sno-table/meta'
@@ -799,71 +617,6 @@ class Dataset01(DatasetStructure):
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
         return os.path.join('.sno-table', pk_hash[:2], pk_hash[2:4], pk_enc)
 
-    def repo_feature_to_dict(self, pk, tree, ogr_geoms=False):
-        feature = {
-            self.primary_key: self.decode_pk(pk),
-        }
-        for te in tree:
-            if te.type != "blob":
-                self.L.warn("repo_feature_to_dict: Unexpected TreeEntry type=%s in feature tree '%s'", te.type, pk)
-                continue
-
-            blob = te.obj
-            colid = int(te.name, 16)
-            field_name = self.cid_field_map[colid]
-            feature[field_name] = msgpack.unpackb(
-                blob.data,
-                ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
-                raw=False
-            )
-
-        return feature
-
-    def get_feature(self, pk_value):
-        pk_type = self.primary_key_type
-        pk_value = self.cast_primary_key(pk_value)
-
-        pk_enc = self.encode_pk(pk_value)
-        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
-
-        te = (self.tree / '.sno-table' / pk_hash[:2] / pk_hash[2:4] / pk_enc)
-        if te.type != 'tree':
-            raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
-
-        return pk_enc, self.repo_feature_to_dict(pk_enc, te.obj, ogr_geoms=True)
-
-    def features(self, *, ogr_geoms=False, **kwargs):
-        top_tree = (self.tree / '.sno-table').obj
-
-        # .sno-table/
-        #   {hex(pk-hash):2}/
-        #     {hex(pk-hash):2}/
-        #       {base64(pk-value)}/
-        #         {hex(field-id)}
-        URLSAFE_B64 = r"A-Za-z0-9_\-"
-        RE_FEATURE_PATH = re.compile(fr'(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$')
-        RE_PREFIX_PATH = re.compile(r'([0-9a-f]{2})(?:/([0-9a-f]{2}))?$')
-
-        for tree, path, subtrees, blobs in core.walk_tree(top_tree, path=''):
-            m = RE_PREFIX_PATH.match(path)
-            if m and m.group(2) is not None:
-                for d in subtrees:
-                    if RE_FEATURE_PATH.match(d):
-                        te_d = (tree / d)
-                        if te_d.type != 'tree':
-                            self.L.warn("features: Unexpected TreeEntry type=%s in feature tree '%s/%s'", te_d.type, path, d)
-                            continue
-
-                        if hashlib.sha1(d.encode('utf8')).hexdigest()[0:4] != f"{m.group(1)}{m.group(2)}":
-                            self.L.warn("features: feature prefix doesn't match hash(pk): %s/%s", path, d)
-
-                        yield d, self.repo_feature_to_dict(d, te_d.obj, ogr_geoms=ogr_geoms)
-            elif m or path == '':
-                subtrees[:] = [d for d in subtrees if RE_PREFIX_PATH.match(os.path.join(path, d))]
-                continue
-
-            subtrees.clear()
-
     def import_meta_items(self, source):
         """
             path/to/layer/.sno-table/
@@ -884,92 +637,9 @@ class Dataset01(DatasetStructure):
         pk_field = source.primary_key
         yield ('primary_key', json.dumps(pk_field))
 
-    def write_feature(self, row, repo, index, *, field_cid_map=None, geom_cols=None, primary_key=None, **kwargs):
-        if field_cid_map is None:
-            field_cid_map = self.field_cid_map
-        if geom_cols is None:
-            geom_cols = [self.geom_column_name]
-        if primary_key is None:
-            primary_key = self.primary_key
-
-        path = f"{self.path}/.sno-table"
-
-        pk_enc = self.encode_pk(row[primary_key])
-        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
-
-        entries = []
-
-        feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
-        for field in row.keys():
-            if field == primary_key:
-                continue
-
-            field_id = field_cid_map[field]
-            object_path = f"{feature_path}/{field_id:x}"
-            value = row[field]
-            if field in geom_cols:
-                if value is not None:
-                    value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
-
-            blob_id = repo.create_blob(msgpack.packb(value, use_bin_type=True))
-            entry = pygit2.IndexEntry(
-                object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
-            index.add(entry)
-            entries.append(entry)
-            # click.echo(pk_val, object_path, field, value, entry)
-        return entries
-
-    def import_iter_feature_blobs(self, resultset, source):
-        path = f"{self.path}/.sno-table"
-
-        pk_field = source.primary_key
-
-        for row in resultset:
-            pk_enc = self.encode_pk(row[pk_field])
-            pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
-
-            feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
-
-            for field in row.keys():
-                if field == pk_field:
-                    continue
-
-                field_id = source.field_cid_map[field]
-                object_path = f"{feature_path}/{field_id:x}"
-                value = row[field]
-                if field in source.geom_cols:
-                    if value is not None:
-                        value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
-
-                yield (object_path, msgpack.packb(value, use_bin_type=True))
-
     def remove_feature(self, pk, index):
         object_path = self.get_feature_path(pk)
         index.remove(os.path.join(self.path, object_path))
-
-
-class Dataset02(Dataset01):
-    """
-    Experimental repository structure:
-    - messagePack
-    - primary key values
-    - blob per feature
-    - add at any location: `snowdrop import GPKG:my.gpkg:mytable path/to/mylayer`
-
-    any/structure/mylayer/
-      .sno-table/
-        meta/
-          primary_key
-          fields/
-            [field]  # map to attribute-id
-            ...
-        [hex(pk-hash):2]/
-          [hex(pk-hash):2]/
-            [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
-    """
-    VERSION_SPECIFIER = "0.2."
-    VERSION_IMPORT = '0.2.0'
 
     def repo_feature_to_dict(self, pk, blob, ogr_geoms=False):
         feature = {
@@ -1014,18 +684,6 @@ class Dataset02(Dataset01):
                     raise
 
             yield tupleizer(pk_enc, blob)
-
-    def get_feature_hash(self, pk_value):
-        pk_value = self.cast_primary_key(pk_value)
-
-        pk_enc = self.encode_pk(pk_value)
-        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
-
-        te = (self.tree / '.sno-table' / pk_hash[:2] / pk_hash[2:4] / pk_enc)
-        if te.type != 'blob':
-            raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
-
-        return te.id.hex
 
     def build_feature_tupleizer(self, tuple_cols, ogr_geoms=False):
         field_cid_map = self.field_cid_map
@@ -1102,7 +760,7 @@ class Dataset02(Dataset01):
             primary_key = self.primary_key
 
         bin_feature = {}
-        for field in feature.keys():
+        for field in sorted(feature.keys(), key=lambda f: field_cid_map[f]):
             if field == primary_key:
                 continue
 
@@ -1180,7 +838,7 @@ class Dataset02(Dataset01):
             if callback:
                 callback(self, "META", object_path=object_path)
 
-        for feature_key, obj_old in dataset_diff["D"].items():
+        for _, obj_old in dataset_diff["D"].items():
             object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
             index.remove(object_path)
 
@@ -1199,7 +857,7 @@ class Dataset02(Dataset01):
             if callback:
                 callback(self, "I", object_path=object_path, obj_new=obj)
 
-        for feature_key, (obj_old, obj_new) in dataset_diff["U"].items():
+        for _, (obj_old, obj_new) in dataset_diff["U"].items():
             object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
             index.remove(object_path)
 
