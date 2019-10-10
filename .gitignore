@@ -8,3 +8,6 @@
 /coverage
 pytest.xml
 .coverage
+/.pytest*
+/dist
+/build

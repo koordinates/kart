@@ -19,6 +19,7 @@ RUN apt-get update -q \
         sqlite3 \
         gdal-bin \
         libsqlite3-mod-spatialite \
+        libspatialindex-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -85,6 +86,7 @@ RUN apt-get update -q \
         libgdal20 \
         gdal-bin \
         libsqlite3-mod-spatialite \
+        libspatialindex-c4v5 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

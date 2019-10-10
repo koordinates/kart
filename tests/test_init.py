@@ -8,6 +8,7 @@ import pygit2
 
 H = pytest.helpers.helpers()
 
+# also in test_structure.py
 GPKG_IMPORTS = (
     "archive,gpkg,table",
     [
@@ -151,14 +152,14 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             assert wc.exists() and wc.is_file()
             print("workingcopy at", wc)
 
-            assert repo.config["kx.workingcopy"] == f"GPKG:{wc.name}:{table}"
+            assert repo.config["snowdrop.workingcopy.version"] == "1"
+            assert repo.config["snowdrop.workingcopy.path"] == f"{wc.name}"
 
             db = geopackage(wc)
-            nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-            assert nrows > 0
+            assert H.row_count(db, table) > 0
 
             wc_tree_id = db.execute(
-                "SELECT value FROM __kxg_meta WHERE table_name=? AND key='tree';", [table]
+                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
@@ -185,10 +186,6 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         assert r.exit_code == 2, r
         assert "Feature/Attributes table 'no-existey' not found in gpkg_contents" in r.stdout
 
-        r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:{table}"])
-        assert r.exit_code == 2, r
-        assert 'name should end in .snow' in r.stdout
-
         # not empty
         (repo_path / 'a.file').touch()
         r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:{table}", repo_path])
@@ -214,9 +211,8 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         assert "isn't empty" in r.stdout
 
 
-@pytest.mark.xfail(reason="not implemented")
 def test_init_empty(tmp_path, cli_runner, chdir):
-    """ TODO: Create an empty Snowdrop repository. """
+    """ Create an empty Snowdrop repository. """
     repo_path = tmp_path / "data.snow"
     repo_path.mkdir()
 

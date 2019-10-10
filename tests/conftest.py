@@ -3,6 +3,7 @@ import hashlib
 import io
 import logging
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -62,10 +63,14 @@ def data_archive(request, tmp_path_factory, chdir):
 
     Context-manager produces the directory path and sets the current working directory.
     """
+    incr = 0
 
     @contextlib.contextmanager
     def _data_archive(name):
-        extract_dir = tmp_path_factory.mktemp(request.node.name)
+        nonlocal incr
+
+        extract_dir = tmp_path_factory.mktemp(request.node.name, str(incr))
+        incr += 1
         cleanup = True
         try:
             archive_name = f"{name}.tgz"
@@ -103,47 +108,99 @@ def data_archive(request, tmp_path_factory, chdir):
 
 
 @pytest.fixture
-def data_working_copy(data_archive, tmp_path, cli_runner):
+def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
     """
     Extract a repo archive with a working copy geopackage
     If the geopackage isn't in the archive, create it via `snow checkout`
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
+    from snowdrop.structure import RepositoryStructure
+    incr = 0
 
     @contextlib.contextmanager
     def _data_working_copy(name, force_new=False):
+        nonlocal incr
+
         with data_archive(name) as repo_dir:
             if name.endswith(".snow"):
                 name = name[:-5]
 
-            wc_path = repo_dir / f"{name}.gpkg"
-            if wc_path.exists():
+            repo = pygit2.Repository(str(repo_dir))
+            rs = RepositoryStructure(repo)
+            if rs.working_copy:
+                wc_path = rs.working_copy.full_path
                 if force_new:
-                    wc_path.unlink()
-                    repo = pygit2.Repository(str(repo_dir))
-                    del repo.config["kx.workingcopy"]
-                else:
-                    L.info("Existing working copy at: %s", wc_path)
+                    L.info("force_new is set, deleting existing WC: %s", wc_path)
+                    del rs.working_copy
+                    assert not rs.working_copy
+                    del wc_path
 
-            if not wc_path.exists():
-                wc_path = tmp_path / f"{name}.gpkg"
+            if not rs.working_copy:
+                wc_path = tmp_path_factory.mktemp(request.node.name, str(incr)) / f"{name}.gpkg"
+                incr += 1
 
-                # find the layer in the repo
-                repo = pygit2.Repository(str(repo_dir))
-                tree = repo.head.peel(pygit2.Tree)
-                layer = tree[0].name
-
-                L.info("Checking out %s to %s", layer, wc_path)
+                L.info("Checking out to %s", wc_path)
                 r = cli_runner.invoke(
-                    ["checkout", f"--working-copy={wc_path}", f"--layer={layer}"]
+                    ["checkout", f"--path={wc_path}"]
                 )
                 assert r.exit_code == 0, r
                 L.debug("Checkout result: %s", r)
 
+            L.info("data_working_copy: %s %s", repo_dir, wc_path)
             yield repo_dir, wc_path
 
     return _data_working_copy
+
+
+@pytest.fixture
+def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
+    """
+    Extract a source geopackage archive, then import the table into a new repository.
+
+    Caches it in the pytest cache, so don't use it for writeable things!
+
+    Returns the path to the repository path
+    """
+    L = logging.getLogger('data_imported')
+    incr = 0
+
+    def _data_imported(archive, source_gpkg, table, version):
+        nonlocal incr
+
+        params = [archive, source_gpkg, table, version]
+        cache_key = f"data_imported:{':'.join(params)}"
+
+        repo_path = Path(request.config.cache.makedir(cache_key)) / "data.snow"
+        if repo_path.exists():
+            L.info("Found cache at %s", repo_path)
+            return str(repo_path)
+
+        with data_archive(archive) as data:
+            import_path = tmp_path_factory.mktemp(request.node.name, str(incr)) / "data"
+            incr += 1
+
+            import_path.mkdir()
+            with chdir(import_path):
+                r = cli_runner.invoke(
+                    ["init"]
+                )
+                assert r.exit_code == 0, r
+
+                repo = pygit2.Repository(str(import_path))
+                assert repo.is_bare
+                assert repo.is_empty
+
+                r = cli_runner.invoke(
+                    ["import", f"GPKG:{data / source_gpkg}:{table}", f"--version={version}", "mytable"]
+                )
+                assert r.exit_code == 0, r
+
+            shutil.move(import_path, repo_path)
+            L.info("Created cache at %s", repo_path)
+            return str(repo_path)
+
+    return _data_imported
 
 
 @pytest.fixture
@@ -156,6 +213,7 @@ def geopackage():
         db.execute("PRAGMA foreign_keys = ON;")
         db.enable_load_extension(True)
         db.execute("SELECT load_extension('mod_spatialite');")
+        db.execute("SELECT EnableGpkgMode();")
         return db
 
     return _geopackage
@@ -221,14 +279,14 @@ def helpers():
 
 
 class TestHelpers:
-    # Test Dataset (gpkg-points / points.snow)
+    # Test Dataset (gpkg-points / points)
     POINTS_LAYER = "nz_pa_points_topo_150k"
     POINTS_LAYER_PK = "fid"
     POINTS_INSERT = f"""
         INSERT INTO {POINTS_LAYER}
                         (fid, geom, t50_fid, name_ascii, macronated, name)
                     VALUES
-                        (:fid, AsGPB(GeomFromEWKT(:geom)), :t50_fid, :name_ascii, :macronated, :name);
+                        (:fid, GeomFromEWKT(:geom), :t50_fid, :name_ascii, :macronated, :name);
     """
     POINTS_RECORD = {
         "fid": 9999,
@@ -238,16 +296,18 @@ class TestHelpers:
         "macronated": False,
         "name": "Te Motu-a-kore",
     }
-    POINTS_HEAD_SHA = "d1bee0841307242ad7a9ab029dc73c652b9f74f3"
+    POINTS_HEAD_SHA = "2a1b7be8bdef32aea1510668e3edccbc6d454852"
+    POINTS_HEAD1_SHA = "63a9492dd785b1f04dfc446330fa017f9459db4f"
+    POINTS_ROWCOUNT = 2143
 
-    # Test Dataset (gpkg-polygons / polygons.snow)
+    # Test Dataset (gpkg-polygons / polygons)
     POLYGONS_LAYER = "nz_waca_adjustments"
     POLYGONS_LAYER_PK = "id"
     POLYGONS_INSERT = f"""
         INSERT INTO {POLYGONS_LAYER}
                         (id, geom, date_adjusted, survey_reference, adjusted_nodes)
                     VALUES
-                        (:id, AsGPB(GeomFromEWKT(:geom)), :date_adjusted, :survey_reference, :adjusted_nodes);
+                        (:id, GeomFromEWKT(:geom), :date_adjusted, :survey_reference, :adjusted_nodes);
     """
     POLYGONS_RECORD = {
         "id": 9_999_999,
@@ -256,9 +316,10 @@ class TestHelpers:
         "survey_reference": "Null Island™ 🗺",
         "adjusted_nodes": 123,
     }
-    POLYGONS_HEAD_SHA = "1c3bb605b91c7a7d2d149cb545dcd0e2ee3df14b"
+    POLYGONS_HEAD_SHA = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
+    POLYGONS_ROWCOUNT = 228
 
-    # Test Dataset (gpkg-spec / table.snow)
+    # Test Dataset (gpkg-spec / table)
 
     TABLE_LAYER = "countiestbl"
     TABLE_LAYER_PK = "OBJECTID"
@@ -282,7 +343,7 @@ class TestHelpers:
         "Shape_Leng": 4.055_459_982_439_92,
         "Shape_Area": 0.565_449_933_741_451,
     }
-    TABLE_HEAD_SHA = "e4e9cfae9fe05945bacbfc45d8ea250cdf68b55e"
+    TABLE_HEAD_SHA = "03622015ea5a82bc75228de052d9c84bc6f41667"
 
     @classmethod
     def last_change_time(cls, db):
@@ -296,16 +357,20 @@ class TestHelpers:
         ).fetchone()[0]
 
     @classmethod
+    def row_count(cls, db, table):
+        return db.execute(f'SELECT COUNT(*) FROM "{table}";').fetchone()[0]
+
+    @classmethod
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
         repo = pygit2.Repository(repo_path)
-        if "kx.workingcopy" in repo.config:
-            print(f"Deleting existing working copy: {repo.config['kx.workingcopy']}")
-            fmt, working_copy, layer = repo.config["kx.workingcopy"].split(":")
-            working_copy = Path(working_copy)
+        if "snowdrop.workingcopy.path" in repo.config:
+            print(f"Deleting existing working copy: {repo.config['snowdrop.workingcopy.path']}")
+            working_copy = Path(repo.config['snowdrop.workingcopy.path'])
             if working_copy.exists():
                 working_copy.unlink()
-            del repo.config["kx.workingcopy"]
+            del repo.config['snowdrop.workingcopy.path']
+            del repo.config['snowdrop.workingcopy.version']
 
     @classmethod
     def db_table_hash(cls, db, table, pk=None):
@@ -344,6 +409,13 @@ class TestHelpers:
 
         print(f"{message}:")
         subprocess.check_call(cmd + list(paths))
+
+    @classmethod
+    def parameter_ids(cls, request):
+        """ Get an array of parameter IDs """
+        # nodeid = 'test_import_feature_performance[0.2.0-spec-counties-table]'
+        param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-')
+        return tuple(param_ids)
 
 
 @pytest.fixture

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import logging
 import os
 import subprocess
 import sys
@@ -8,7 +9,7 @@ import click
 import pygit2
 
 from . import core  # noqa
-from . import checkout, clone, commit, diff, init, fsck, merge, pull, status
+from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query, upgrade
 
 
 def print_version(ctx, param, value):
@@ -28,8 +29,9 @@ def print_version(ctx, param, value):
 
 @click.group()
 @click.option(
-    "repo_dir",
+    "-C",
     "--repo",
+    "repo_dir",
     type=click.Path(file_okay=False, dir_okay=True),
     default=os.curdir,
     metavar="PATH",
@@ -47,42 +49,26 @@ def cli(ctx, repo_dir):
     ctx.ensure_object(dict)
     ctx.obj["repo_dir"] = repo_dir
 
+    logging.basicConfig(level=logging.DEBUG)
 
-# commands from modules
 
+# Commands from modules:
 cli.add_command(checkout.checkout)
+cli.add_command(checkout.restore)
+cli.add_command(checkout.switch)
+cli.add_command(checkout.workingcopy_set_path)
 cli.add_command(clone.clone)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
 cli.add_command(fsck.fsck)
 cli.add_command(init.import_gpkg)
+cli.add_command(init.import_table)
 cli.add_command(init.init)
 cli.add_command(merge.merge)
 cli.add_command(pull.pull)
 cli.add_command(status.status)
-
-
-@cli.command("workingcopy-set-path")
-@click.pass_context
-@click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
-def workingcopy_set_path(ctx, new):
-    """ Change the path to the working-copy """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
-
-    repo_cfg = repo.config
-    if "kx.workingcopy" in repo_cfg:
-        fmt, path, layer = repo_cfg["kx.workingcopy"].split(":")
-    else:
-        raise click.ClickException("No working copy? Try `snow checkout`")
-
-    new = Path(new)
-    if not new.is_absolute():
-        new = os.path.relpath(new, repo_dir)
-
-    repo.config["kx.workingcopy"] = f"{fmt}:{new}:{layer}"
+cli.add_command(query.query)
+cli.add_command(upgrade.upgrade)
 
 
 # aliases/shortcuts
@@ -123,7 +109,7 @@ def log(ctx, args):
     """ Show commit logs """
     repo_dir = ctx.obj["repo_dir"] or "."
     repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
+    if not repo:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))

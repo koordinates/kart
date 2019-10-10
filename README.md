@@ -23,6 +23,8 @@ Project Snowdrop
 
 ### Distributed version-control for datasets
 
+[![Build status](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/snowdrop)
+
 ## Installing
 
 ### macOS
@@ -115,9 +117,9 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
    $ snow init --import GPKG:kx-foo-layer.gpkg
    ```
    Use this repository as the directory to run all the other commands in.
-   This will also create a working copy as `myproject.snow/kx-foo-layer.gpkg` to edit.
+   This will also create a working copy as `myproject.snow/myproject.gpkg` to edit.
 4. Editing in QGIS/etc:
-   * will track changes in the `__kxg_*` tables
+   * will track changes in the `.sno-*` tables
    * additions/edits/deletes of features are supported
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).

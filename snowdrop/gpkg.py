@@ -1,5 +1,6 @@
 import collections
 import json
+import math
 import sqlite3
 import struct
 
@@ -28,13 +29,19 @@ def db(path, **kwargs):
     db = sqlite3.connect(path, **kwargs)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON;")
+
+    current_journal = db.execute("PRAGMA journal_mode").fetchone()[0]
+    if current_journal.lower() == "delete":
+        db.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
+
     db.enable_load_extension(True)
     db.execute("SELECT load_extension('mod_spatialite');")
+    db.execute("SELECT EnableGpkgMode();")
     return db
 
 
-def get_meta_info(db, layer):
-    yield ("version", json.dumps({"version": "0.0.1"}))
+def get_meta_info(db, layer, repo_version='0.0.1'):
+    yield ("version", json.dumps({"version": repo_version}))
 
     dbcur = db.cursor()
     table = layer
@@ -136,6 +143,17 @@ def pk(db, table):
         raise ValueError("No valid GeoPackage primary key field found")
 
 
+def geom_cols(db, table):
+    q = db.execute("""
+            SELECT column_name
+            FROM gpkg_geometry_columns
+            WHERE table_name=?
+            ORDER BY column_name;
+        """, (table,)
+    )
+    return tuple(r[0] for r in q.fetchall())
+
+
 def geom_to_ogr(gpkg_geom, parse_srs=False):
     """
     Parse GeoPackage geometry values to an OGR Geometry object
@@ -166,10 +184,10 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
         wkb_offset += 48
     elif envelope_typ == 4:
         wkb_offset += 64
-    elif envelope_typ > 4:
-        wkb_offset += 32
-    else:  # 0
+    elif envelope_typ == 0:
         pass
+    else:
+        raise ValueError("Invalid envelope contents indicator")
 
     geom = ogr.CreateGeometryFromWkb(gpkg_geom[wkb_offset:])
 
@@ -181,3 +199,55 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
             geom.AssignSpatialReference(srs)
 
     return geom
+
+
+def geom_envelope(gpkg_geom):
+    """
+    Parse GeoPackage geometry to a 2D envelope.
+    This is a shortcut to avoid instantiating a full OGR geometry if possible.
+
+    Returns a 4-tuple (minx, maxx, miny, maxy), or None if the geometry is empty.
+
+    http://www.geopackage.org/spec/#gpb_format
+    """
+    if gpkg_geom is None:
+        return None
+
+    if not isinstance(gpkg_geom, bytes):
+        raise TypeError("Expected bytes")
+
+    if gpkg_geom[0:2] != b"GP":  # 0x4750
+        raise ValueError("Expected GeoPackage Binary Geometry")
+    (version, flags) = struct.unpack_from("BB", gpkg_geom, 2)
+    if version != 0:
+        raise NotImplementedError("Expected GeoPackage v1 geometry, got %d", version)
+
+    is_le = (flags & 0b0000001) != 0  # Endian-ness
+
+    if flags & (0b00100000):  # GeoPackageBinary type
+        raise NotImplementedError("ExtendedGeoPackageBinary")
+
+    if flags & (0b00010000):  # Empty geometry
+        return None
+
+    envelope_typ = (flags & 0b000001110) >> 1
+    # E: envelope contents indicator code (3-bit unsigned integer)
+    # 0: no envelope (space saving slower indexing option), 0 bytes
+    # 1: envelope is [minx, maxx, miny, maxy], 32 bytes
+    # 2: envelope is [minx, maxx, miny, maxy, minz, maxz], 48 bytes
+    # 3: envelope is [minx, maxx, miny, maxy, minm, maxm], 48 bytes
+    # 4: envelope is [minx, maxx, miny, maxy, minz, maxz, minm, maxm], 64 bytes
+    # 5-7: invalid
+
+    if envelope_typ == 0:
+        # parse the full geometry then get it's envelope
+        return geom_to_ogr(gpkg_geom).GetEnvelope()
+    elif envelope_typ <= 4:
+        # we only care about 2D envelopes here
+        envelope = struct.unpack_from(f"{'<' if is_le else '>'}dddd", gpkg_geom, 8)
+        if any(math.isnan(c) for c in envelope):
+            return None
+        else:
+            return envelope
+    else:
+        raise ValueError("Invalid envelope contents indicator")

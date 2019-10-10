@@ -2,17 +2,62 @@ import pytest
 
 import pygit2
 
+from snowdrop.structure import RepositoryStructure
+from snowdrop.working_copy import WorkingCopy
+
 
 H = pytest.helpers.helpers()
 
 
+def edit_points(dbcur):
+    dbcur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"UPDATE {H.POINTS_LAYER} SET name='test' WHERE fid=2;")
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid IN (3,30,31,32,33);")
+    assert dbcur.rowcount == 5
+    pk_del = 3
+    return pk_del
+
+
+def edit_polygons_pk(dbcur):
+    dbcur.execute(H.POLYGONS_INSERT, H.POLYGONS_RECORD)
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"UPDATE {H.POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test' WHERE id=1443053;")
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"DELETE FROM {H.POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);")
+    assert dbcur.rowcount == 5
+    pk_del = 1452332
+    return pk_del
+
+
+def edit_table(dbcur):
+    dbcur.execute(H.TABLE_INSERT, H.TABLE_RECORD)
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"UPDATE {H.TABLE_LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"UPDATE {H.TABLE_LAYER} SET name='test' WHERE OBJECTID=2;")
+    assert dbcur.rowcount == 1
+    dbcur.execute(f"DELETE FROM {H.TABLE_LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
+    assert dbcur.rowcount == 5
+    pk_del = 3
+    return pk_del
+
+
 @pytest.mark.parametrize("archive,layer", [
-    pytest.param('points.snow', H.POINTS_LAYER, id='points'),
-    pytest.param('polygons.snow', H.POLYGONS_LAYER, id='polygons-pk'),
-    pytest.param('table.snow', H.TABLE_LAYER, id='table'),
+    pytest.param('points', H.POINTS_LAYER, id='points'),
+    pytest.param('polygons', H.POLYGONS_LAYER, id='polygons_pk'),
+    pytest.param('table', H.TABLE_LAYER, id='table'),
 ])
-def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
+@pytest.mark.skip('remove-me')
+def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
     """ commit outstanding changes from the working copy """
+    param_ids = H.parameter_ids(request)
+
     with data_working_copy(archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-0"])
@@ -23,44 +68,17 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
         db = geopackage(wc)
         with db:
             cur = db.cursor()
-            if layer == H.POINTS_LAYER:
-                cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
-                assert cur.rowcount == 1
-                cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=9998 WHERE fid=1;")
-                assert cur.rowcount == 1
-                cur.execute(f"UPDATE {H.POINTS_LAYER} SET name='test' WHERE fid=2;")
-                assert cur.rowcount == 1
-                cur.execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid IN (3,30,31,32,33);")
-                assert cur.rowcount == 5
-                pk_del = 3
-            elif layer == H.POLYGONS_LAYER:
-                cur.execute(H.POLYGONS_INSERT, H.POLYGONS_RECORD)
-                assert cur.rowcount == 1
-                cur.execute(f"UPDATE {H.POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
-                assert cur.rowcount == 1
-                cur.execute(f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test' WHERE id=1443053;")
-                assert cur.rowcount == 1
-                cur.execute(f"DELETE FROM {H.POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);")
-                assert cur.rowcount == 5
-                pk_del = 1452332
-            elif layer == H.TABLE_LAYER:
-                cur.execute(H.TABLE_INSERT, H.TABLE_RECORD)
-                assert cur.rowcount == 1
-                cur.execute(f"UPDATE {H.TABLE_LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
-                assert cur.rowcount == 1
-                cur.execute(f"UPDATE {H.TABLE_LAYER} SET name='test' WHERE OBJECTID=2;")
-                assert cur.rowcount == 1
-                cur.execute(f"DELETE FROM {H.TABLE_LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
-                assert cur.rowcount == 5
-                pk_del = 3
-            else:
+            try:
+                edit_func = globals()[f"edit_{param_ids[0]}"]
+                pk_del = edit_func(cur)
+            except KeyError:
                 raise NotImplementedError(f"layer={layer}")
 
         fk_del = cur.execute(
             f"SELECT feature_key FROM __kxg_map WHERE table_name=? AND feature_id=?;",
             [layer, pk_del]
         ).fetchone()[0]
-        print("deleted fid={pk_del}, feature_key={fk_del}")
+        print(f"deleted fid={pk_del}, feature_key={fk_del}")
 
         r = cli_runner.invoke(["commit", "-m", "test-commit-1"])
         assert r.exit_code == 0, r
@@ -96,6 +114,69 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
         print("map_count=", map_count, "feature_count=", feature_count)
         assert map_count == feature_count
 
+        wc = WorkingCopy.open(r)
+        wc.assert_db_tree_match(tree)
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r
+        assert r.stdout == ''
+
+
+@pytest.mark.parametrize("archive,layer", [
+    pytest.param('points', H.POINTS_LAYER, id='points'),
+    pytest.param('polygons', H.POLYGONS_LAYER, id='polygons_pk'),
+    pytest.param('table', H.TABLE_LAYER, id='table'),
+])
+def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
+    """ commit outstanding changes from the working copy """
+    param_ids = H.parameter_ids(request)
+
+    with data_working_copy(archive) as (repo_dir, wc_path):
+        # empty
+        r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
+        assert r.exit_code == 1, r
+        assert r.stdout.splitlines() == ['Error: No changes to commit']
+
+        # empty
+        r = cli_runner.invoke(["commit", "-m", "test-commit-empty", "--allow-empty"])
+        assert r.exit_code == 0, r
+
+        # make some changes
+        db = geopackage(wc_path)
+        with db:
+            cur = db.cursor()
+            try:
+                edit_func = globals()[f"edit_{param_ids[0]}"]
+                pk_del = edit_func(cur)
+            except KeyError:
+                raise NotImplementedError(f"layer={layer}")
+
+        print(f"deleted fid={pk_del}")
+
+        r = cli_runner.invoke(["commit", "-m", "test-commit-1"])
+        assert r.exit_code == 0, r
+        commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+        print("commit:", commit_id)
+
+        repo = pygit2.Repository(str(repo_dir))
+        assert str(repo.head.target) == commit_id
+
+        rs = RepositoryStructure(repo)
+        wc = rs.working_copy
+        dataset = rs[layer]
+
+        tree = repo.head.peel(pygit2.Tree)
+        assert dataset.get_feature_path(pk_del) not in tree
+
+        change_count = cur.execute(
+            f"SELECT COUNT(*) FROM {wc.TRACKING_TABLE} WHERE table_name=?;",
+            [layer]
+        ).fetchone()[0]
+        assert change_count == 0, f"Changes still listed in {dataset.TRACKING_TABLE}"
+
+        wc = WorkingCopy.open(repo)
+        wc.assert_db_tree_match(tree)
+
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
         assert r.stdout == ''
@@ -103,7 +184,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner):
 
 def test_tag(data_working_copy, cli_runner):
     """ review commit history """
-    with data_working_copy("points.snow") as (repo_dir, wc):
+    with data_working_copy("points") as (repo_dir, wc):
         # create a tag
         r = cli_runner.invoke(["tag", "version1"])
         assert r.exit_code == 0, r

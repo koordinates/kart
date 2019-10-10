@@ -19,4 +19,5 @@ gosu snowdrop pytest \
     -p no:sugar \
     --cov-report term \
     --cov-report html:../coverage \
-    --junit-xml=../pytest.xml
+    --junit-xml=../pytest.xml \
+    -o cache_dir=/tmp/pytest_cache --cache-clear

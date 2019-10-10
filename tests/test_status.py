@@ -9,7 +9,7 @@ H = pytest.helpers.helpers()
 def test_status(
     data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request
 ):
-    with data_working_copy("points.snow") as (path1, wc):
+    with data_working_copy("points") as (path1, wc):
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
@@ -24,7 +24,7 @@ def test_status(
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            "HEAD detached at edd5a4b",
+            "HEAD detached at 63a9492",
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -52,7 +52,7 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
 
-    with data_working_copy("points.snow") as (path2, wc):
+    with data_working_copy("points") as (path2, wc):
         db = geopackage(wc)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
@@ -124,7 +124,8 @@ def test_status(
             '  (use "snow commit" to commit)',
             '  (use "snow reset" to discard changes)',
             "",
-            "    modified:   3 features",
-            "    new:        1 feature",
-            "    deleted:    2 features",
+            f"  {H.POINTS_LAYER}/",
+            "    modified:  3 features",
+            "    new:       1 feature",
+            "    deleted:   2 features",
         ]
