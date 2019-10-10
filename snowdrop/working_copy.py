@@ -11,7 +11,8 @@ import click
 import pygit2
 from osgeo import gdal
 
-from . import gpkg, core, diff
+from . import gpkg, diff
+from .core import WorkingCopyMismatch
 
 
 class WorkingCopy:
@@ -387,7 +388,7 @@ class WorkingCopyGPKG(WorkingCopy):
         tree_sha = tree.hex
 
         if wc_tree_id != tree_sha:
-            raise core.WorkingCopyMismatch(wc_tree_id, tree_sha)
+            raise WorkingCopyMismatch(wc_tree_id, tree_sha)
         return wc_tree_id
 
 
@@ -532,7 +533,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 self._create_triggers(db, table)
 
             db.execute(
-                f"INSERT INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
+                f"INSERT OR REPLACE INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
                 ('*', 'tree', commit.peel(pygit2.Tree).hex),
             )
 

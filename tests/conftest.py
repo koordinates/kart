@@ -358,7 +358,7 @@ class TestHelpers:
 
     @classmethod
     def row_count(cls, db, table):
-        return db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+        return db.execute(f'SELECT COUNT(*) FROM "{table}";').fetchone()[0]
 
     @classmethod
     def clear_working_copy(cls, repo_path="."):

@@ -751,6 +751,12 @@ class Dataset1(DatasetStructure):
         tupleizer = self.build_feature_tupleizer(col_names)
         return self._features(tupleizer, fast=True)
 
+    def feature_count(self, fast=True):
+        return sum(self._features(
+            lambda pk, blob: 1,
+            fast=fast
+        ))
+
     def encode_feature(self, feature, field_cid_map=None, geom_cols=None, primary_key=None):
         if field_cid_map is None:
             field_cid_map = self.field_cid_map
