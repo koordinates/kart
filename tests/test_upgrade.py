@@ -37,3 +37,9 @@ def test_upgrade(archive, layer, data_archive, cli_runner, tmp_path, chdir):
                 "",
                 "    Import from nz-pa-points-topo-150k.gpkg",
             ]
+
+
+def test_upgrade_list(cli_runner):
+    r = cli_runner.invoke(["upgrade"])
+    assert r.exit_code == 0, r
+    assert r.stdout.splitlines()[-1] == "  00-02  Upgrade a v0.0/v0.1 Snowdrop repository to Sno v0.2"

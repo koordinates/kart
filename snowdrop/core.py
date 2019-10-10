@@ -1,35 +1,9 @@
-import logging
 import os
 
 from osgeo import gdal, ogr, osr  # noqa
 
 
 gdal.UseExceptions()
-
-
-class WorkingCopyMismatch(ValueError):
-    def __init__(self, working_copy_tree_id, match_tree_id):
-        self.working_copy_tree_id = working_copy_tree_id
-        self.match_tree_id = match_tree_id
-
-    def __str__(self):
-        return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.match_tree_id}"
-
-
-def assert_db_tree_match(db, table, tree):
-    dbcur = db.cursor()
-    dbcur.execute(
-        "SELECT value FROM __kxg_meta WHERE table_name=? AND key=?;", (table, "tree")
-    )
-    wc_tree_id = dbcur.fetchone()[0]
-
-    tree_sha = tree.hex
-
-    L = logging.getLogger("snowdrop.core.assert_db_tree_match")
-    L.debug("db-tree=%s, arg=%s", wc_tree_id, tree_sha)
-    if wc_tree_id != tree_sha:
-        raise WorkingCopyMismatch(wc_tree_id, tree_sha)
-    return wc_tree_id
 
 
 def walk_tree(top, path='', topdown=True):

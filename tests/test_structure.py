@@ -1,4 +1,5 @@
 import itertools
+import json
 import re
 import subprocess
 
@@ -329,7 +330,8 @@ def test_write_feature_performance(import_version, archive, source_gpkg, table, 
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*DATASET_VERSIONS)
-def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
+@pytest.mark.parametrize("iter_func", ["sorted", "normal"])
+def test_fast_import(import_version, iter_func, data_archive, tmp_path, cli_runner, chdir, monkeypatch):
     table = H.POINTS_LAYER
     with data_archive("gpkg-points") as data:
         # list tables
@@ -348,6 +350,8 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
 
             dataset = DatasetStructure.for_version(import_version)(None, table)
 
+            iter_func_id = 2 if iter_func == 'sorted' else 1
+            monkeypatch.setenv('SNOWDROP_IMPORT_OPTIONS', json.dumps({'iter_func': iter_func_id}))
             dataset.fast_import_table(repo, source)
 
             assert not repo.is_empty

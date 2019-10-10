@@ -100,7 +100,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             click.secho(
                 f"✔︎ Working Copy tree id matches repository: {oid}", fg="green"
             )
-        except core.WorkingCopyMismatch as e:
+        except working_copy.Mismatch as e:
             # try and find the tree we _do_ have
             click.secho(f"✘ Repository tree is: {tree.id}", fg="red")
             click.secho(f"✘ Working Copy tree is: {e.working_copy_tree_id}", fg="red")

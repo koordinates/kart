@@ -12,7 +12,6 @@ import pygit2
 from osgeo import gdal
 
 from . import gpkg, diff
-from .core import WorkingCopyMismatch
 
 
 class WorkingCopy:
@@ -39,6 +38,14 @@ class WorkingCopy:
             raise FileExistsError(path)
 
         return WorkingCopy_GPKG_1(repo, path, **kwargs)
+
+    class Mismatch(ValueError):
+        def __init__(self, working_copy_tree_id, match_tree_id):
+            self.working_copy_tree_id = working_copy_tree_id
+            self.match_tree_id = match_tree_id
+
+        def __str__(self):
+            return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.match_tree_id}"
 
 
 class WorkingCopyGPKG(WorkingCopy):
@@ -388,7 +395,7 @@ class WorkingCopyGPKG(WorkingCopy):
         tree_sha = tree.hex
 
         if wc_tree_id != tree_sha:
-            raise WorkingCopyMismatch(wc_tree_id, tree_sha)
+            raise self.Mismatch(wc_tree_id, tree_sha)
         return wc_tree_id
 
 
