@@ -38,10 +38,10 @@ GPKG_IMPORTS = (
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
 def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_runner):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.snow"
+        repo_path = tmp_path / "data.sno"
         r = cli_runner.invoke(["import-gpkg", f"--list-tables", data / gpkg])
         assert r.exit_code == 1, r
         lines = r.stdout.splitlines()
@@ -82,7 +82,7 @@ def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_run
 def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
     with data_archive("gpkg-points") as data:
         # missing/bad table name
-        repo_path = tmp_path / "data2.snow"
+        repo_path = tmp_path / "data2.sno"
         r = cli_runner.invoke(
             [
                 f"--repo={repo_path}",
@@ -100,7 +100,7 @@ def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
             db.execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val TEXT);")
 
         # not a GeoPackage
-        repo_path = tmp_path / "data3.snow"
+        repo_path = tmp_path / "data3.sno"
         r = cli_runner.invoke(
             [f"--repo={repo_path}", "import-gpkg", tmp_path / "a.gpkg", "mytable"]
         )
@@ -124,10 +124,10 @@ def test_init_import_list(archive, gpkg, table, data_archive, tmp_path, cli_runn
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
 def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.snow"
+        repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
         with chdir(repo_path):
@@ -152,8 +152,8 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             assert wc.exists() and wc.is_file()
             print("workingcopy at", wc)
 
-            assert repo.config["snowdrop.workingcopy.version"] == "1"
-            assert repo.config["snowdrop.workingcopy.path"] == f"{wc.name}"
+            assert repo.config["sno.workingcopy.version"] == "1"
+            assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
             db = geopackage(wc)
             assert H.row_count(db, table) > 0
@@ -171,7 +171,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
 
     with data_archive("gpkg-au-census") as data:
         # list tables
-        repo_path = tmp_path / "data.snow"
+        repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
         r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
@@ -193,7 +193,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         assert "isn't empty" in r.stdout
 
         # import
-        repo_path = tmp_path / "data2.snow"
+        repo_path = tmp_path / "data2.sno"
         repo_path.mkdir()
 
         r = cli_runner.invoke(
@@ -212,8 +212,8 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
 
 
 def test_init_empty(tmp_path, cli_runner, chdir):
-    """ Create an empty Snowdrop repository. """
-    repo_path = tmp_path / "data.snow"
+    """ Create an empty Sno repository. """
+    repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
     r = cli_runner.invoke(

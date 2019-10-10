@@ -75,7 +75,7 @@ FROM python:3.7-slim-stretch AS run-stage
 ENV PYTHONFAULTHANDLER=true
 ENV PATH=/venv/bin:${PATH}
 
-RUN useradd --create-home snowdrop \
+RUN useradd --create-home sno \
     && mkdir /data
 
 RUN apt-get update -q \
@@ -90,13 +90,13 @@ RUN apt-get update -q \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build-stage --chown=snowdrop:snowdrop /venv /venv
+COPY --from=build-stage --chown=sno:sno /venv /venv
 
-USER snowdrop
+USER sno
 WORKDIR /data
 
 # smoke test
-RUN snow --version
+RUN sno --version
 
 ENTRYPOINT ["/venv/bin/tini", "--"]
-CMD ["/venv/bin/snow"]
+CMD ["/venv/bin/sno"]

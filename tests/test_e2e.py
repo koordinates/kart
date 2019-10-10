@@ -26,10 +26,10 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
     table = getattr(H, f"{table_ref}_LAYER")
     row_count = getattr(H, f"{table_ref}_ROWCOUNT")
 
-    repo_path = tmp_path / "myproject.snow"
+    repo_path = tmp_path / "myproject.sno"
     repo_path.mkdir()
 
-    remote_path = tmp_path / "myremote.snow"
+    remote_path = tmp_path / "myremote.sno"
     remote_path.mkdir()
     with chdir(remote_path):
         # initialise empty repo for remote

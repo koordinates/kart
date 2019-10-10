@@ -539,7 +539,7 @@ class Dataset1(DatasetStructure):
     - messagePack
     - primary key values
     - blob per feature
-    - add at any location: `snowdrop import GPKG:my.gpkg:mytable path/to/mylayer`
+    - add at any location: `sno import GPKG:my.gpkg:mytable path/to/mylayer`
 
     any/structure/mylayer/
       .sno-table/

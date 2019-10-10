@@ -35,14 +35,14 @@ def status(ctx):
                     (
                         f"Your branch and '{branch.upstream.shorthand}' have diverged,\n"
                         f"and have {n_ahead} and {n_behind} different commits each, respectively.\n"
-                        '  (use "snow pull" to merge the remote branch into yours)'
+                        '  (use "sno pull" to merge the remote branch into yours)'
                     )
                 )
             elif n_ahead > 0:
                 click.echo(
                     (
                         f"Your branch is ahead of '{branch.upstream.shorthand}' by {n_ahead} {_pc(n_ahead)}.\n"
-                        '  (use "snow push" to publish your local commits)'
+                        '  (use "sno push" to publish your local commits)'
                     )
                 )
             elif n_behind > 0:
@@ -50,7 +50,7 @@ def status(ctx):
                     (
                         f"Your branch is behind '{branch.upstream.shorthand}' by {n_behind} {_pc(n_behind)}, "
                         "and can be fast-forwarded.\n"
-                        '  (use "snow pull" to update your local branch)'
+                        '  (use "sno pull" to update your local branch)'
                     )
                 )
 
@@ -58,7 +58,7 @@ def status(ctx):
     working_copy = rs.working_copy
     if not working_copy:
         click.echo(
-            '\nNo working copy.\n  (use "snow checkout" to create a working copy)'
+            '\nNo working copy.\n  (use "sno checkout" to create a working copy)'
         )
         return
 
@@ -74,8 +74,8 @@ def status(ctx):
         click.echo(
             (
                 "\nChanges in working copy:\n"
-                '  (use "snow commit" to commit)\n'
-                '  (use "snow reset" to discard changes)\n'
+                '  (use "sno commit" to commit)\n'
+                '  (use "sno reset" to discard changes)\n'
             )
         )
 

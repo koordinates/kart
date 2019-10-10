@@ -2,8 +2,8 @@ import pytest
 
 import pygit2
 
-from snowdrop.structure import RepositoryStructure
-from snowdrop.working_copy import WorkingCopy
+from sno.structure import RepositoryStructure
+from sno.working_copy import WorkingCopy
 
 
 H = pytest.helpers.helpers()

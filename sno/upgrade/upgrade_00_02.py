@@ -9,8 +9,8 @@ from pathlib import Path
 import click
 import pygit2
 
-from snowdrop.core import walk_tree
-from snowdrop.structure import Dataset1
+from sno.core import walk_tree
+from sno.structure import Dataset1
 
 
 @click.command()

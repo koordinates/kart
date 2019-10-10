@@ -6,8 +6,8 @@ import pytest
 
 import pygit2
 
-import snowdrop.checkout
-from snowdrop.working_copy import WorkingCopy
+import sno.checkout
+from sno.working_copy import WorkingCopy
 
 
 H = pytest.helpers.helpers()
@@ -307,7 +307,7 @@ def test_working_copy_reset(
     """
     Check that we reset any working-copy changes correctly before doing any new checkout
 
-    We can do this via `snow reset` or `snow checkout --force HEAD`
+    We can do this via `sno reset` or `sno checkout --force HEAD`
     """
     if layer == H.POINTS_LAYER:
         pk_field = H.POINTS_LAYER_PK
@@ -371,11 +371,11 @@ def test_working_copy_reset(
             assert change_count == (1 + 4 + 5 + 2)
 
         if via == "reset":
-            # using `snow reset`
+            # using `sno reset`
             r = cli_runner.invoke(["reset"])
             assert r.exit_code == 0, r
         elif via == "checkout":
-            # using `snow checkout --force`
+            # using `sno checkout --force`
 
             # this should error
             r = cli_runner.invoke(["checkout", "HEAD"])
@@ -438,7 +438,7 @@ def test_geopackage_locking_edit(
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = snowdrop.working_copy.WorkingCopy_GPKG_1.write_features
+        orig_func = sno.working_copy.WorkingCopy_GPKG_1.write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -451,7 +451,7 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(snowdrop.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap)
+        monkeypatch.setattr(sno.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA])
         assert r.exit_code == 0, r
@@ -475,7 +475,7 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         wc = new_path
 
-        assert repo.config["snowdrop.workingcopy.path"] == str(new_path)
+        assert repo.config["sno.workingcopy.path"] == str(new_path)
 
         # relative path 2
         new_path = Path("other-thingz.gpkg")
@@ -487,7 +487,7 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         wc = new_path
 
-        assert repo.config["snowdrop.workingcopy.path"] == str(new_path)
+        assert repo.config["sno.workingcopy.path"] == str(new_path)
 
         # abs path
         new_path = tmp_path / "thingz.gpkg"
@@ -496,7 +496,7 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["workingcopy-set-path", new_path])
         assert r.exit_code == 0, r
 
-        assert repo.config["snowdrop.workingcopy.path"] == str(new_path)
+        assert repo.config["sno.workingcopy.path"] == str(new_path)
 
 
 @pytest.mark.parametrize(
@@ -569,7 +569,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             # .sno-track stores pk as strings
             assert changes_pre == ['1', '2', '3', '4', '10', '11', '12', '13', '14', '20', '9998', '9999']
 
-        # using `snow restore
+        # using `sno restore
         r = cli_runner.invoke(["restore"] + source + pathspec)
         assert r.exit_code == 0, r
 

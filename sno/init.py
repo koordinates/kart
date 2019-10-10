@@ -162,8 +162,8 @@ class ImportGPKG:
 
     def iter_features_sorted(self, pk_callback, limit=None):
         tbl_hash = hashlib.md5(self.table.encode('utf8')).hexdigest()
-        tbl_name = f"_snow_{tbl_hash}"
-        func_name = f"_snow_sk_{tbl_hash}"
+        tbl_name = f"_sno_{tbl_hash}"
+        func_name = f"_sno_sk_{tbl_hash}"
 
         self.db.create_function(func_name, 1, pk_callback)
 
@@ -239,10 +239,10 @@ def import_table(ctx, source, directory, do_list, version, method):
     SOURCE: Import from dataset: "FORMAT:PATH[:TABLE]" eg. "GPKG:my.gpkg:my_table"
     DIRECTORY: where to import the table to
 
-    $ snowdrop import GPKG:my.gpkg:my_table layers/the_table
+    $ sno import GPKG:my.gpkg:my_table layers/the_table
 
     To show available tables in the import data, use
-    $ snowdrop import --list GPKG:my.gpkg
+    $ sno import --list GPKG:my.gpkg
     """
     source_prefix, source_path, source_table = source
     source_klass = globals()[f"Import{source_prefix}"]
@@ -296,7 +296,7 @@ def import_table(ctx, source, directory, do_list, version, method):
         directory = source_table
 
     importer = structure.DatasetStructure.importer(directory, version=version)
-    params = json.loads(os.environ.get("SNOWDROP_IMPORT_OPTIONS", None) or "{}")
+    params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
     if params:
         click.echo(f"Import parameters: {params}")
     if method == "slow":
@@ -314,10 +314,10 @@ def init(ctx, import_from, do_checkout, directory):
     """
     Initialise a new repository and optionally import data
 
-    DIRECTORY must be empty, and be named with a '.snow' suffix. Defaults to the current directory.
+    DIRECTORY must be empty, and should be named with a '.sno' suffix. Defaults to the current directory.
 
     To show available tables in the import data, use
-    $ snowdrop init --import=GPKG:my.gpkg
+    $ sno init --import=GPKG:my.gpkg
     """
 
     if import_from:
@@ -380,4 +380,4 @@ def init(ctx, import_from, do_checkout, directory):
                 commit=repo.head.peel(pygit2.Commit),
             )
     else:
-        click.echo(f"Created an empty repository at {repo_dir} — import some data with `snowdrop import`")
+        click.echo(f"Created an empty repository at {repo_dir} — import some data with `sno import`")

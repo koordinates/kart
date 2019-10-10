@@ -54,8 +54,8 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
             assert wc.exists() and wc.is_file()
 
             table = H.POINTS_LAYER
-            assert repo.config["snowdrop.workingcopy.version"] == "1"
-            assert repo.config["snowdrop.workingcopy.path"] == wc.name
+            assert repo.config["sno.workingcopy.version"] == "1"
+            assert repo.config["sno.workingcopy.path"] == wc.name
 
             db = geopackage(wc)
             nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]

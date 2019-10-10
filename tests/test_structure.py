@@ -6,9 +6,9 @@ import subprocess
 import pygit2
 import pytest
 
-from snowdrop import gpkg
-from snowdrop.init import ImportGPKG
-from snowdrop.structure import DatasetStructure, Dataset1
+from sno import gpkg
+from sno.init import ImportGPKG
+from sno.structure import DatasetStructure, Dataset1
 
 
 H = pytest.helpers.helpers()
@@ -89,7 +89,7 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
 @pytest.mark.parametrize("method", ["normal", "slow"])
 @pytest.mark.parametrize(*DATASET_VERSIONS)
 def test_import(import_version, method, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage, benchmark, request, monkeypatch):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Snowdrop repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
 
     # wrap the DatasetStructure import method with benchmarking
@@ -109,7 +109,7 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
 
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.snow"
+        repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
         db = geopackage(f"{data / source_gpkg}")
@@ -227,7 +227,7 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
 @pytest.mark.parametrize("import_version", ["1.0"])
 @pytest.mark.parametrize("method", ["normal", "slow"])
 def test_import_multiple(method, import_version, data_archive, chdir, cli_runner, tmp_path, geopackage):
-    repo_path = tmp_path / "data.snow"
+    repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
     with chdir(repo_path):
@@ -295,7 +295,7 @@ def test_write_feature_performance(import_version, archive, source_gpkg, table, 
 
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.snow"
+        repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
         benchmark.group = f"test_write_feature_performance - {param_ids[-1]}"
@@ -335,7 +335,7 @@ def test_fast_import(import_version, iter_func, data_archive, tmp_path, cli_runn
     table = H.POINTS_LAYER
     with data_archive("gpkg-points") as data:
         # list tables
-        repo_path = tmp_path / "data.snow"
+        repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
         with chdir(repo_path):
@@ -351,7 +351,7 @@ def test_fast_import(import_version, iter_func, data_archive, tmp_path, cli_runn
             dataset = DatasetStructure.for_version(import_version)(None, table)
 
             iter_func_id = 2 if iter_func == 'sorted' else 1
-            monkeypatch.setenv('SNOWDROP_IMPORT_OPTIONS', json.dumps({'iter_func': iter_func_id}))
+            monkeypatch.setenv('SNO_IMPORT_OPTIONS', json.dumps({'iter_func': iter_func_id}))
             dataset.fast_import_table(repo, source)
 
             assert not repo.is_empty

@@ -251,11 +251,11 @@ def workingcopy_set_path(ctx, new):
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     repo_cfg = repo.config
-    if "snowdrop.workingcopy.path" not in repo_cfg:
-        raise click.ClickException("No working copy? Try `snow checkout`")
+    if "sno.workingcopy.path" not in repo_cfg:
+        raise click.ClickException("No working copy? Try `sno checkout`")
 
     new = Path(new)
     if not new.is_absolute():
         new = os.path.relpath(os.path.join(repo_dir, new), repo_dir)
 
-    repo.config["snowdrop.workingcopy.path"] = str(new)
+    repo.config["sno.workingcopy.path"] = str(new)

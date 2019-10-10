@@ -18,7 +18,7 @@ def main():
         description='Create some history by evolving a working copy geopackage and committing repeatedly',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('commits', metavar='COMMITS', type=int, help="how many snowdrop commits to create. 0 will make changes without committing")
+    parser.add_argument('commits', metavar='COMMITS', type=int, help="how many Sno commits to create. 0 will make changes without committing")
     parser.add_argument('tables', metavar='TABLE', nargs='*', help='GeoPackage tables to evolve (skip for all)')
     parser.add_argument('--scale', metavar='M', type=int, default=1, help='Multiply per-commit change counts by this')
     parser.add_argument('--inserts', metavar='N', type=int, default=3, help='count of changes that should be INSERTs (per table per commit)')
@@ -40,10 +40,10 @@ def main():
         if not Path(db_path).exists():
             parser.error(f"GeoPackage {db_path} not found")
     elif repo:
-        if 'snowdrop.workingcopy.path' not in repo.config:
+        if 'sno.workingcopy.path' not in repo.config:
             parser.error(f"No working copy found, specify with --gpkg?")
 
-        db_path = str(Path(repo.path) / repo.config['snowdrop.workingcopy.path'])
+        db_path = str(Path(repo.path) / repo.config['sno.workingcopy.path'])
     else:
         parser.error("If no repository, need to specify GeoPackage path with --gpkg")
 
@@ -220,11 +220,11 @@ def main():
                 db.execute("COMMIT")
 
             if not options.commits:
-                print("GeoPackage changes made, skipping snowdrop commit.")
+                print("GeoPackage changes made, skipping sno commit.")
                 return
             else:
                 subprocess.check_call([
-                    'snowdrop', 'commit',
+                    'sno', 'commit',
                     '-m', f'history-creator changed things at {datetime.now():%H:%M:%S}'
                 ])
 

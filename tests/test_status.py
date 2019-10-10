@@ -71,7 +71,7 @@ def test_status(
         assert r.stdout.splitlines() == [
             "On branch master",
             "Your branch is behind 'myremote/master' by 1 commit, and can be fast-forwarded.",
-            '  (use "snow pull" to update your local branch)',
+            '  (use "sno pull" to update your local branch)',
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -87,7 +87,7 @@ def test_status(
             "On branch master",
             "Your branch and 'myremote/master' have diverged,",
             "and have 1 and 1 different commits each, respectively.",
-            '  (use "snow pull" to merge the remote branch into yours)',
+            '  (use "sno pull" to merge the remote branch into yours)',
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -102,7 +102,7 @@ def test_status(
         assert r.stdout.splitlines() == [
             "On branch master",
             "Your branch is ahead of 'myremote/master' by 2 commits.",
-            '  (use "snow push" to publish your local commits)',
+            '  (use "sno push" to publish your local commits)',
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -118,11 +118,11 @@ def test_status(
         assert r.stdout.splitlines() == [
             "On branch master",
             "Your branch is ahead of 'myremote/master' by 2 commits.",
-            '  (use "snow push" to publish your local commits)',
+            '  (use "sno push" to publish your local commits)',
             "",
             "Changes in working copy:",
-            '  (use "snow commit" to commit)',
-            '  (use "snow reset" to discard changes)',
+            '  (use "sno commit" to commit)',
+            '  (use "sno reset" to discard changes)',
             "",
             f"  {H.POINTS_LAYER}/",
             "    modified:  3 features",

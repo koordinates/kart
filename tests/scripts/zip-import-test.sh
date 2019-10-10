@@ -3,16 +3,16 @@ set -eu
 
 #
 # Given a ZIP file of GeoPackages (eg. from Koordinates),
-# import them all into a single Snowdrop repository.
+# import them all into a single Sno repository.
 #
 
 ZIP=$1
 NAME="${ZIP%.*}"
 NAME=${NAME%%-GPKG}
 
-REPODIR="${NAME}.snow"
+REPODIR="${NAME}.sno"
 mkdir "$REPODIR"
-snow init "$REPODIR"
+sno init "$REPODIR"
 
 TMPDIR="$(mktemp -q -d -t "${NAME}.XXXXXX")"
 
@@ -34,7 +34,7 @@ for GPKG_PATH in $(unzip -qql "$ZIP" "*.gpkg" | awk '{print $4}'); do
     unzip -d "$TMPDIR" "$ZIP" "$GPKG_PATH"
     (
         cd "$REPODIR" \
-        && time snow import "GPKG:${TMPDIR}/${GPKG_PATH}:${TABLE}" "${TABLE}"
+        && time sno import "GPKG:${TMPDIR}/${GPKG_PATH}:${TABLE}" "${TABLE}"
     )
     rm "${TMPDIR}/${GPKG_PATH}"
 done
