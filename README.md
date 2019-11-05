@@ -1,29 +1,7 @@
-Project Snowdrop
-----------------
-```
-      @@@
-         @
-          @
-           @
-           @@
-         @@@@@
-       @@@@@@@@@
-      @@@@@@@@@@@@
-     @@@@@@@@@@ @@@@
-    @@@@@ @@@@@ @@@@
-    @@@@  @@@@@@ @@@@
-    @@@  @@@@@@  @@@@
-    @@@@@@@@@@@   @@@
-    @@   @@@@@@ @  @@
-    @   @@@@@@
-         @@@@
-          @@
-          @
-```
+Sno: Distributed version-control for datasets
+---------------------------------------------
 
-### Distributed version-control for datasets
-
-[![Build status](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/snowdrop)
+[![Build status](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/sno)
 
 ## Installing
 
@@ -33,21 +11,21 @@ You need [Homebrew](https://brew.sh/) installed.
 
 #### For just general running/updating
 ```console
-$ brew tap --force-auto-update koordinates/snowdrop git@github.com:koordinates/snowdrop.git
-$ brew install --HEAD snowdrop
+$ brew tap --force-auto-update koordinates/sno git@github.com:koordinates/sno.git
+$ brew install --HEAD sno
 
 # check it's working
-$ snow --version
-Project Snowdrop v0.1
+$ sno --version
+Project Sno v0.1
 GDAL v2.4.1
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
-#### For developing snowdrop
+#### For developing Sno
 ```
-$ git clone git@github.com:koordinates/snowdrop.git
-$ cd snowdrop
-$ brew install --only-dependencies --HEAD HomebrewFormula/snowdrop.rb
+$ git clone git@github.com:koordinates/sno.git
+$ cd sno
+$ brew install --only-dependencies --HEAD HomebrewFormula/sno.rb
 
 # create our virtualenv
 $ virtualenv --python=python3.7 ./venv
@@ -77,18 +55,17 @@ $ pip install pygdal=="$(gdal-config --version).*"
 $ pip install -r requirements-dev.txt
 $ rm venv/lib/python*/no-global-site-packages.txt
 
-# install snowdrop
+# install sno
 $ pip install -e .
-# make snowdrop globally accessible
-$ ln -sf $(pwd)/venv/bin/snow /usr/local/bin/snow
-$ ln -sf $(pwd)/venv/bin/snowdrop /usr/local/bin/snowdrop
+# make sno globally accessible
+$ ln -sf $(pwd)/venv/bin/sno /usr/local/bin/sno
 
 # quit the virtualenv
 $ deactivate
 
 # check it's working
-$ snow --version
-Project Snowdrop v0.1
+$ sno --version
+Sno v0.1
 GDAL v2.4.1
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
@@ -99,9 +76,9 @@ Sources:
 ### Docker
 
 ```console
-$ docker build -t snowdrop .
+$ docker build -t sno .
 # in repository/data directory
-$ /path/to/snowdrop/snowdrop-docker.sh snow ...
+$ /path/to/sno/sno-docker.sh sno ...
 ```
 
 ## Usage
@@ -110,38 +87,38 @@ $ /path/to/snowdrop/snowdrop-docker.sh snow ...
    * With a single vector layer
    * Which has a primary key
    * Get the whole layer
-2. Create a new Snowdrop repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
+2. Create a new Sno repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
    ```console
-   $ mkdir myproject.snow
-   $ cd myproject.snow
-   $ snow init --import GPKG:kx-foo-layer.gpkg
+   $ mkdir myproject
+   $ cd myproject
+   $ sno init --import GPKG:kx-foo-layer.gpkg
    ```
    Use this repository as the directory to run all the other commands in.
-   This will also create a working copy as `myproject.snow/myproject.gpkg` to edit.
+   This will also create a working copy as `myproject/myproject.gpkg` to edit.
 4. Editing in QGIS/etc:
    * will track changes in the `.sno-*` tables
    * additions/edits/deletes of features are supported
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).
-   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `snow`.
-5. With your working copy, `snow` commands should work if run from the `myproject.snow/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
-    * `snow diff` diff the working copy against the repository (no index!)
-    * `snow commit -m {message}` commit outstanding changes from the working copy
-    * `snow log` review commit history
-    * `snow branch` & `snow checkout -b` branch management
-    * `snow fetch` fetch upstream changes.
-    * `snow status` show working copy state.
-    * `snow reset` discard changes in the working copy.
-    * `snow merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
-    * `snow tag ...`
-    * `snow remote ...`. Remember simple remotes can just be another local directory.
-    * `snow push` / `snow pull`
-    * `snow clone` initialise a new repository from a remote URL,
-6. Other git commands will _possibly_ work if run from the `myproject.snow/` folder. eg:
+   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `sno`.
+5. With your working copy, `sno` commands should work if run from the `myproject/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
+    * `sno diff` diff the working copy against the repository (no index!)
+    * `sno commit -m {message}` commit outstanding changes from the working copy
+    * `sno log` review commit history
+    * `sno branch` & `sno checkout -b` branch management
+    * `sno fetch` fetch upstream changes.
+    * `sno status` show working copy state.
+    * `sno reset` discard changes in the working copy.
+    * `sno merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
+    * `sno tag ...`
+    * `sno remote ...`. Remember simple remotes can just be another local directory.
+    * `sno push` / `sno pull`
+    * `sno clone` initialise a new repository from a remote URL,
+6. Other git commands will _possibly_ work if run from the `myproject/` folder. eg:
     * `git reset --soft {commitish}`
 7. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
    ```console
    $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
    # enter your gitea username/password when prompted
-   $ snow push --all --set-upstream origin
+   $ sno push --all --set-upstream origin
    ```

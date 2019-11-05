@@ -1,11 +1,11 @@
-class Snowdrop < Formula
+class Sno < Formula
   include Language::Python::Virtualenv
 
   desc "Distributed version-control for datasets"
-  homepage "https://github.com/koordinates/snowdrop"
+  homepage "https://github.com/koordinates/sno"
 
   head do
-    url "git@github.com:koordinates/snowdrop.git", :branch => 'master', :using => :git
+    url "git@github.com:koordinates/sno.git", :branch => 'master', :using => :git
 
     resource "libgit2" do
       # kx-0.28 branch
@@ -60,7 +60,7 @@ class Snowdrop < Formula
     system "#{venv_root}/bin/pip", "install",
       "-v", "--no-deps", "pygdal==#{gdal_version}.*"
 
-    # Kx: install requirements.txt dependencies
+    # install requirements.txt dependencies
     # Total hack that works only by coincidence:
     # venv.pip_install "--requirement=requirements.txt --no-binary=:none:"
     system "#{venv_root}/bin/pip", "install",

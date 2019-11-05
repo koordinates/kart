@@ -4,7 +4,7 @@ import subprocess
 
 import pygit2
 
-from snowdrop.core import walk_tree
+from sno.core import walk_tree
 
 
 def test_walk_tree_1(data_archive):

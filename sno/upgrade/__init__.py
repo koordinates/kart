@@ -15,7 +15,7 @@ class UpgradeCommand(click.MultiCommand):
         return rv
 
     def get_command(self, ctx, name):
-        module_name = f"snowdrop.upgrade.upgrade_{name.replace('-', '_')}"
+        module_name = f"sno.upgrade.upgrade_{name.replace('-', '_')}"
 
         module = importlib.import_module(module_name)
         return module.upgrade
@@ -23,5 +23,5 @@ class UpgradeCommand(click.MultiCommand):
 
 @click.command(cls=UpgradeCommand)
 def upgrade():
-    """ Upgrade repositories between versions of Snowdrop """
+    """ Upgrade repositories between versions of Sno """
     pass

@@ -18,12 +18,12 @@ class WorkingCopy:
     @classmethod
     def open(cls, repo):
         repo_cfg = repo.config
-        if "snowdrop.workingcopy.version" in repo_cfg:
-            version = repo_cfg['snowdrop.workingcopy.version']
-            if repo_cfg.get_int('snowdrop.workingcopy.version') != 1:
+        if "sno.workingcopy.version" in repo_cfg:
+            version = repo_cfg['sno.workingcopy.version']
+            if repo_cfg.get_int('sno.workingcopy.version') != 1:
                 raise NotImplementedError(f"Working copy version: {version}")
 
-            path = repo_cfg['snowdrop.workingcopy.path']
+            path = repo_cfg['sno.workingcopy.path']
             if not os.path.isfile(path):
                 raise FileNotFoundError(f"Working copy missing? {path}")
 
@@ -290,8 +290,8 @@ class WorkingCopyGPKG(WorkingCopy):
         if (not new_path.is_absolute()) and (str(new_path.parent) != '.'):
             new_path = Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve())) / new_path.name
 
-        self.repo.config["snowdrop.workingcopy.version"] = 1
-        self.repo.config["snowdrop.workingcopy.path"] = str(new_path)
+        self.repo.config["sno.workingcopy.version"] = 1
+        self.repo.config["sno.workingcopy.path"] = str(new_path)
 
     def write_full(self, commit, dataset):
         raise NotImplementedError()
@@ -419,7 +419,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         super().delete()
 
         # clear the config in the repo
-        del self.repo.config["snowdrop.workingcopy"]
+        del self.repo.config["sno.workingcopy"]
 
     def _create_triggers(self, dbcur, table):
         pkf = gpkg.ident(gpkg.pk(dbcur, table))

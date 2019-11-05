@@ -14,7 +14,7 @@ from osgeo import ogr
 from . import structure
 
 
-L = logging.getLogger('snowdrop.query')
+L = logging.getLogger('sno.query')
 
 
 def _json_encode_default(o):
@@ -62,7 +62,7 @@ def query(ctx, path, command, params):
     try:
         dataset.get_spatial_index(dataset.name)
     except OSError:
-        raise click.ClickException("No spatial index found. Run `snowdrop query {path} index`")
+        raise click.ClickException("No spatial index found. Run `sno query {path} index`")
 
     if command == "get":
         USAGE = "get PK"

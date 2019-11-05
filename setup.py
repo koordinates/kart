@@ -1,10 +1,10 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='snowdrop',
+    name='sno',
     version='0.1',
     description='Distributed version-control for datasets',
-    url='http://github.com/koordinates/snowdrop',
+    url='http://github.com/koordinates/sno',
     author='Koordinates Limited',
     author_email='support@koordinates.com',
     license='Proprietary',
@@ -12,8 +12,7 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'snow = snowdrop.cli:cli',
-            'snowdrop = snowdrop.cli:cli',
+            'sno = sno.cli:cli',
         ],
     },
 )

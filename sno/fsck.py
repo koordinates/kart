@@ -74,11 +74,11 @@ def fsck(ctx, reset_datasets, fsck_args):
     # 1. working copy
     rs = RepositoryStructure(repo)
 
-    if "snowdrop.workingcopy.path" not in repo.config:
+    if "sno.workingcopy.path" not in repo.config:
         click.echo("No working-copy configured")
         return
 
-    working_copy_path = repo.config["snowdrop.workingcopy.path"]
+    working_copy_path = repo.config["sno.workingcopy.path"]
     if not os.path.isfile(working_copy_path):
         raise click.ClickException(
             click.style(f"Working copy missing: {working_copy_path}", fg="red")

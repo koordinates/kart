@@ -3,7 +3,6 @@ import logging
 import os
 import subprocess
 import sys
-from pathlib import Path
 
 import click
 import pygit2
@@ -19,9 +18,9 @@ def print_version(ctx, param, value):
     import osgeo
     import pkg_resources  # part of setuptools
 
-    version = pkg_resources.require("snowdrop")[0].version
+    version = pkg_resources.require("sno")[0].version
 
-    click.echo(f"Project Snowdrop v{version}")
+    click.echo(f"Sno v{version}")
     click.echo(f"GDAL v{osgeo._gdal.__version__}")
     click.echo(f"PyGit2 v{pygit2.__version__}; Libgit2 v{pygit2.LIBGIT2_VERSION}")
     ctx.exit()
@@ -92,7 +91,7 @@ def reset(ctx):
 
 
 def _execvp(file, args):
-    if "_SNOWDROP_NO_EXEC" in os.environ:
+    if "_SNO_NO_EXEC" in os.environ:
         # used in testing. This is pretty hackzy
         p = subprocess.run([file] + args[1:], capture_output=True, encoding="utf-8")
         sys.stdout.write(p.stdout)

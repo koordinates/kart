@@ -7,14 +7,14 @@ pip install \
     -r requirements-test.txt
 
 echo "Setting git username/email"
-gosu snowdrop git config --global user.name pytest
-gosu snowdrop git config --global user.email pytest-snowdrop@koordinates.com
+gosu sno git config --global user.name pytest
+gosu sno git config --global user.email pytest-sno@koordinates.com
 
 # run the actual test suite
 echo "+++ Running test suite..."
 chmod a+wrx ./ ./tests/
 cd tests
-gosu snowdrop pytest \
+gosu sno pytest \
     --verbose \
     -p no:sugar \
     --cov-report term \

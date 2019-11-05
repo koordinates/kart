@@ -20,7 +20,7 @@ import pygit2
 pytest_plugins = ["helpers_namespace"]
 
 
-L = logging.getLogger("snowdrop.tests")
+L = logging.getLogger("sno.tests")
 
 
 def pytest_addoption(parser):
@@ -111,11 +111,11 @@ def data_archive(request, tmp_path_factory, chdir):
 def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
     """
     Extract a repo archive with a working copy geopackage
-    If the geopackage isn't in the archive, create it via `snow checkout`
+    If the geopackage isn't in the archive, create it via `sno checkout`
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
-    from snowdrop.structure import RepositoryStructure
+    from sno.structure import RepositoryStructure
     incr = 0
 
     @contextlib.contextmanager
@@ -123,7 +123,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
         nonlocal incr
 
         with data_archive(name) as repo_dir:
-            if name.endswith(".snow"):
+            if name.endswith(".sno"):
                 name = name[:-5]
 
             repo = pygit2.Repository(str(repo_dir))
@@ -171,7 +171,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
         params = [archive, source_gpkg, table, version]
         cache_key = f"data_imported:{':'.join(params)}"
 
-        repo_path = Path(request.config.cache.makedir(cache_key)) / "data.snow"
+        repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
         if repo_path.exists():
             L.info("Found cache at %s", repo_path)
             return str(repo_path)
@@ -219,13 +219,13 @@ def geopackage():
     return _geopackage
 
 
-class SnowdropCliRunner(CliRunner):
+class SnoCliRunner(CliRunner):
     def __init__(self, *args, in_pdb=False, **kwargs):
         self._in_pdb = in_pdb
         super().__init__(*args, **kwargs)
 
     def invoke(self, args=None, **kwargs):
-        from snowdrop.cli import cli
+        from sno.cli import cli
 
         if args:
             # force everything to strings (eg. PathLike objects, numbers)
@@ -265,9 +265,9 @@ class SnowdropCliRunner(CliRunner):
 @pytest.fixture
 def cli_runner(request):
     """ A wrapper round Click's test CliRunner to improve usefulness """
-    return SnowdropCliRunner(
-        # snowdrop.cli._execvp() looks for this env var to prevent fork/exec in tests.
-        env={"_SNOWDROP_NO_EXEC": "1"},
+    return SnoCliRunner(
+        # sno.cli._execvp() looks for this env var to prevent fork/exec in tests.
+        env={"_SNO_NO_EXEC": "1"},
         # workaround Click's environment isolation so debugging works.
         in_pdb=request.config.getoption("--pdb-trace"),
     )
@@ -364,13 +364,13 @@ class TestHelpers:
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
         repo = pygit2.Repository(repo_path)
-        if "snowdrop.workingcopy.path" in repo.config:
-            print(f"Deleting existing working copy: {repo.config['snowdrop.workingcopy.path']}")
-            working_copy = Path(repo.config['snowdrop.workingcopy.path'])
+        if "sno.workingcopy.path" in repo.config:
+            print(f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}")
+            working_copy = Path(repo.config['sno.workingcopy.path'])
             if working_copy.exists():
                 working_copy.unlink()
-            del repo.config['snowdrop.workingcopy.path']
-            del repo.config['snowdrop.workingcopy.version']
+            del repo.config['sno.workingcopy.path']
+            del repo.config['sno.workingcopy.version']
 
     @classmethod
     def db_table_hash(cls, db, table, pk=None):

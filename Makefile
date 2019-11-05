@@ -18,7 +18,7 @@ requirements-dev.txt: requirements-dev.in requirements.txt requirements-test.txt
 
 # Docker Image
 
-DOCKER_TAG=snowdrop:latest
+DOCKER_TAG=sno:latest
 
 docker:
 	docker build -t $(DOCKER_TAG) .

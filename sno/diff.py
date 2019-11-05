@@ -7,7 +7,7 @@ import pygit2
 from . import gpkg
 
 
-L = logging.getLogger('snowdrop.diff')
+L = logging.getLogger('sno.diff')
 
 
 class Diff(object):
