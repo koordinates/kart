@@ -28,8 +28,12 @@ $ cd sno
 $ brew install --only-dependencies --HEAD HomebrewFormula/sno.rb
 
 # create our virtualenv
-$ virtualenv --python=python3.7 ./venv
+$ python3 -m venv --clear ./venv
 $ source venv/bin/activate
+
+# install python dependencies
+$ pip install pygdal=="$(gdal-config --version).*"
+$ pip install -r requirements-dev.txt
 
 # get libgit2/pygit2 stuff
 $ mkdir vendor
@@ -37,23 +41,19 @@ $ git clone --branch=kx-0.28 git@github.com:koordinates/libgit2.git vendor/libgi
 $ git clone --branch=kx-0.28 git@github.com:koordinates/pygit2.git vendor/pygit2
 
 # build libgit2
-$ cd vendor/libgit2
+$ pushd vendor/libgit2
 $ export LIBGIT2=$VIRTUAL_ENV
 $ cmake . -DCMAKE_INSTALL_PREFIX=$LIBGIT2
 $ make
 $ make install
+$ popd
 
 # build pygit2
-$ cd ../../vendor/pygit2
+$ pushd vendor/pygit2
 $ export LIBGIT2=$VIRTUAL_ENV
 $ export LDFLAGS="-Wl,-rpath,'$LIBGIT2/lib' $LDFLAGS"
 $ pip install .
-
-# install other dependencies
-$ cd ../..
-$ pip install pygdal=="$(gdal-config --version).*"
-$ pip install -r requirements-dev.txt
-$ rm venv/lib/python*/no-global-site-packages.txt
+$ popd
 
 # install sno
 $ pip install -e .

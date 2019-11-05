@@ -10,11 +10,11 @@ requirements: $(REQ_TARGETS)
 	sed -i -E 's/^(pygit2=)/#\1/' *.txt
 
 requirements.txt: requirements.in
-	pip-compile --output-file $@ $<
+	pip-compile --rebuild --output-file $@ $<
 requirements-test.txt: requirements-test.in requirements.txt
-	pip-compile --output-file $@ $<
+	pip-compile --rebuild --output-file $@ $<
 requirements-dev.txt: requirements-dev.in requirements.txt requirements-test.txt
-	pip-compile --output-file $@ $<
+	pip-compile --rebuild --output-file $@ $<
 
 # Docker Image
 
