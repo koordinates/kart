@@ -1,0 +1,41 @@
+---
+name: Homebrew
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: [macOS-latest]
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: Set up Homebrew
+        run: |
+          brew update-reset
+          brew --env
+          brew config
+
+      - name: Set up the Tap
+        run: |
+          mkdir "$(brew --repo)/Library/Taps/koordinates"
+          ln -s "$(pwd)" "$(brew --repo)/Library/Taps/koordinates/homebrew-sno"
+          brew tap --repair
+
+      - name: Brew audit
+        run: brew audit --strict --except=specs HomebrewFormula/sno.rb
+
+      - name: Set up an archive to install from
+        run: |
+          # archive the current revision
+          git archive --format=tar.gz -o ./sno-HEAD.tar.gz --prefix=sno/ HEAD
+          # edit the formula to use the archive instead of git
+          sed -i '' -E "s#^( +url )\"git@github\.com:koordinates/sno\.git.*#\1\"file://$(pwd)/sno-HEAD.tar.gz\"#" HomebrewFormula/sno.rb
+
+      - name: Brew install
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew install --HEAD --only-dependencies --include-test koordinates/sno/sno
+          brew install -v --HEAD --display-times koordinates/sno/sno
+
+      - name: Brew tests
+        run: brew test -v --HEAD koordinates/sno/sno

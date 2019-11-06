@@ -109,7 +109,7 @@ class Sno < Formula
       system bin/"sno", "log"
       system bin/"sno", "checkout"
       system bin/"sno", "switch", "-c", "edit-1"
-      system "sqlite3", "test.gpkg", "
+      system "#{HOMEBREW_PREFIX}/opt/sqlite/bin/sqlite3", "test.gpkg", "
         SELECT load_extension('mod_spatialite');
         SELECT EnableGpkgMode();
         INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
