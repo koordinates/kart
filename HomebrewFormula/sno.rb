@@ -5,7 +5,7 @@ class Sno < Formula
   homepage "https://github.com/koordinates/sno"
 
   head do
-    url "git@github.com:koordinates/sno.git", :branch => 'master', :using => :git
+    url "git@github.com:koordinates/sno.git", :branch => "master", :using => :git
 
     resource "libgit2" do
       # kx-0.28 branch
@@ -20,18 +20,16 @@ class Sno < Formula
     end
   end
 
-  depends_on "python"  # Python3
-  depends_on "git"
-  depends_on "sqlite3"
-  depends_on "libspatialite"
-  depends_on "gdal"
-  depends_on "spatialindex"
-
-  # depends_on "libgit2"
-  # do this manually for libgit2 support
   depends_on "cmake" => [:build]
   depends_on "pkg-config" => [:build]
+  depends_on "gdal"
+  depends_on "libspatialite"
   depends_on "libssh2"
+  depends_on "python" # Python3
+  depends_on "spatialindex"
+  depends_on "sqlite"
+  # also required but handled manually:
+  # - libgit2
 
   def install
     # https://docs.brew.sh/Python-for-Formula-Authors
@@ -44,7 +42,7 @@ class Sno < Formula
     # Install the resources declared on the formula into the virtualenv.
     ENV["LIBGIT2"] = venv_root
 
-    resource("libgit2").stage {
+    resource("libgit2").stage do
       cmake_args = std_cmake_args
       cmake_args << "-DCMAKE_INSTALL_PREFIX=#{venv_root}"
       cmake_args << "-DBUILD_EXAMPLES=NO"
@@ -54,9 +52,9 @@ class Sno < Formula
         system "cmake", *cmake_args, ".."
         system "make", "install"
       end
-    }
+    end
 
-    gdal_version = `gdal-config --version`.chomp()
+    gdal_version = `gdal-config --version`.chomp
     system "#{venv_root}/bin/pip", "install",
       "-v", "--no-deps", "pygdal==#{gdal_version}.*"
 
@@ -67,10 +65,10 @@ class Sno < Formula
       "-v", "--no-deps",
       "--requirement=requirements.txt"
 
-    resource("pygit2").stage {
-      ENV["LDFLAGS"] = "-Wl,-rpath,'#{venv_root}/lib' #{ENV['LDFLAGS']}"
-      venv.pip_install resources[2]  # pygit2
-    }
+    resource("pygit2").stage do
+      ENV["LDFLAGS"] = "-Wl,-rpath,'#{venv_root}/lib' #{ENV["LDFLAGS"]}"
+      venv.pip_install resources[2] # pygit2
+    end
 
     # `pip_install_and_link` takes a look at the virtualenv's bin directory
     # before and after installing its argument. New scripts will be symlinked
@@ -78,5 +76,51 @@ class Sno < Formula
     # that the formula points to, because buildpath is the location where the
     # formula's tarball was unpacked.
     venv.pip_install_and_link buildpath
+  end
+
+  test do
+    system bin/"sno", "--version"
+
+    # write a geopackage
+    (testpath/"src.geojson").write <<~EOS
+      {
+        "type": "FeatureCollection",
+        "name": "mylayer",
+        "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:EPSG::4326"}},
+        "features": [{
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [[[100.0, 0.0], [101.0, 0.0], [101.0, 1.0], [100.0, 1.0], [100.0, 0.0]]]
+          }
+        }]
+      }
+    EOS
+    system "ogr2ogr", "-of", "GPKG", "src.gpkg", "src.geojson"
+
+    mkdir "test.sno"
+    Dir.chdir("test.sno") do
+      # this matches test_e2e
+      system bin/"sno", "init", "."
+      system "git", "config", "user.name", "Sno HomeBrew Test"
+      system "git", "config", "user.email", "noreply@koordinates.com"
+      system bin/"sno", "import", "GPKG:../src.gpkg:mylayer"
+
+      system bin/"sno", "log"
+      system bin/"sno", "checkout"
+      system bin/"sno", "switch", "-c", "edit-1"
+      system "sqlite3", "test.gpkg", "
+        SELECT load_extension('mod_spatialite');
+        SELECT EnableGpkgMode();
+        INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
+      "
+      system bin/"sno", "status"
+      system bin/"sno", "diff"
+      system bin/"sno", "commit", "-m", "my-commit"
+      system bin/"sno", "switch", "master"
+      system bin/"sno", "status"
+      system bin/"sno", "merge", "edit-1", "--no-ff"
+      system bin/"sno", "log"
+    end
   end
 end
