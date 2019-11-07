@@ -85,10 +85,11 @@ $ /path/to/sno/sno-docker.sh --version
 
 ## Usage
 
-1. Export a GeoPackage from Koordinates
-   * With a single vector layer
-   * Which has a primary key
-   * Get the whole layer
+See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials and reference.
+
+## Quick Start
+
+1. Export a GeoPackage from [Koordinates](https://koordinates.com/) with any combination of vector layers and tables.
 2. Create a new Sno repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
    ```console
    $ mkdir myproject
@@ -97,8 +98,8 @@ $ /path/to/sno/sno-docker.sh --version
    ```
    Use this repository as the directory to run all the other commands in.
    This will also create a working copy as `myproject/myproject.gpkg` to edit.
-4. Editing in QGIS/etc:
-   * will track changes in the `.sno-*` tables
+4. Editing the working copy in QGIS/etc:
+   * will track changes in the internal `.sno-*` tables
    * additions/edits/deletes of features are supported
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).
@@ -110,17 +111,10 @@ $ /path/to/sno/sno-docker.sh --version
     * `sno branch` & `sno checkout -b` branch management
     * `sno fetch` fetch upstream changes.
     * `sno status` show working copy state.
-    * `sno reset` discard changes in the working copy.
     * `sno merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
+    * `sno switch` switch to existing or new branches.
+    * `sno reset` & `sno restore` discard changes in the working copy.
     * `sno tag ...`
     * `sno remote ...`. Remember simple remotes can just be another local directory.
     * `sno push` / `sno pull`
     * `sno clone` initialise a new repository from a remote URL,
-6. Other git commands will _possibly_ work if run from the `myproject/` folder. eg:
-    * `git reset --soft {commitish}`
-7. If you need a remote, head to https://kxgit-gitea.kx.gd and create a repository. Add it as a remote via:
-   ```console
-   $ git remote add origin https://kxgit-gitea.kx.gd/myuser/myrepo.git
-   # enter your gitea username/password when prompted
-   $ sno push --all --set-upstream origin
-   ```
