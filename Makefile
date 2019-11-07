@@ -21,7 +21,7 @@ requirements-dev.txt: requirements-dev.in requirements.txt requirements-test.txt
 DOCKER_TAG=sno:latest
 
 docker:
-	docker build -t $(DOCKER_TAG) .
+	docker build --pull -t $(DOCKER_TAG) .
 
 # CI Tests via Docker
 

@@ -44,16 +44,20 @@ WORKDIR /app
 
 # Build LibGit2
 ENV LIBGIT2=/venv
-RUN git clone --branch kx-0.28 --single-branch https://github.com/rcoup/libgit2.git /app/vendor/libgit2 \
+ADD https://github.com/koordinates/libgit2/archive/7a39d0d1aad41d92cf0e3f980ddbb7d4ea88373c.tar.gz /app/vendor/libgit2.tar.gz
+RUN mkdir /app/vendor/libgit2 \
     && cd /app/vendor/libgit2 \
+    && tar xzf /app/vendor/libgit2.tar.gz --strip-components=1 \
     && cmake . -DCMAKE_INSTALL_PREFIX=${LIBGIT2} \
     && make \
     && make install
 
 # build pygit2
-RUN git clone --branch kx-0.28 --single-branch https://github.com/rcoup/pygit2.git /app/vendor/pygit2 \
-    && export LDFLAGS="-Wl,-rpath='${LIBGIT2}/lib',--enable-new-dtags $LDFLAGS" \
+ADD https://github.com/koordinates/pygit2/archive/fd9d9d336d9379841a6a3818097e13a9955fc5e5.tar.gz /app/vendor/pygit2.tar.gz
+RUN mkdir /app/vendor/pygit2 \
     && cd /app/vendor/pygit2 \
+    && tar xzf /app/vendor/pygit2.tar.gz --strip-components=1 \
+    && export LDFLAGS="-Wl,-rpath='${LIBGIT2}/lib',--enable-new-dtags $LDFLAGS" \
     && pip install .
 
 # install GDAL

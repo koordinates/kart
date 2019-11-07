@@ -79,8 +79,8 @@ Sources:
 
 ```console
 $ docker build -t sno .
-# in repository/data directory
-$ /path/to/sno/sno-docker.sh sno ...
+# in your repository directory
+$ /path/to/sno/sno-docker.sh --version
 ```
 
 ## Usage
