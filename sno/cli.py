@@ -43,12 +43,15 @@ def print_version(ctx, param, value):
     is_eager=True,
     help="Show version information and exit.",
 )
+@click.option('-v', '--verbose', count=True, help="Repeat for more verbosity")
 @click.pass_context
-def cli(ctx, repo_dir):
+def cli(ctx, repo_dir, verbose):
     ctx.ensure_object(dict)
     ctx.obj["repo_dir"] = repo_dir
 
-    logging.basicConfig(level=logging.DEBUG)
+    # default == WARNING; -v == INFO; -vv == DEBUG
+    log_level = logging.WARNING - min(10 * verbose, 20)
+    logging.basicConfig(level=log_level)
 
 
 # Commands from modules:
