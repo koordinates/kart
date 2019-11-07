@@ -342,10 +342,10 @@ class WorkingCopyGPKG(WorkingCopy):
                 sql = f"""
                     UPDATE gpkg_contents
                     SET
-                        min_x=(SELECT ST_MinX({gpkg.ident(geom_col)}) FROM {gpkg.ident(table)}),
-                        min_y=(SELECT ST_MinY({gpkg.ident(geom_col)}) FROM {gpkg.ident(table)}),
-                        max_x=(SELECT ST_MaxX({gpkg.ident(geom_col)}) FROM {gpkg.ident(table)}),
-                        max_y=(SELECT ST_MaxY({gpkg.ident(geom_col)}) FROM {gpkg.ident(table)}),
+                        min_x=(SELECT ST_MinX(Extent({gpkg.ident(geom_col)})) FROM {gpkg.ident(table)}),
+                        min_y=(SELECT ST_MinY(Extent({gpkg.ident(geom_col)})) FROM {gpkg.ident(table)}),
+                        max_x=(SELECT ST_MaxX(Extent({gpkg.ident(geom_col)})) FROM {gpkg.ident(table)}),
+                        max_y=(SELECT ST_MaxY(Extent({gpkg.ident(geom_col)})) FROM {gpkg.ident(table)}),
                         last_change=?
                     WHERE
                         table_name=?;

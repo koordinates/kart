@@ -163,6 +163,8 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             ).fetchone()[0]
             assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
+            H.verify_gpkg_extent(db, table)
+
 
 @pytest.mark.slow
 def test_init_import_errors(data_archive, tmp_path, cli_runner):

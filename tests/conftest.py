@@ -346,14 +346,14 @@ class TestHelpers:
     TABLE_HEAD_SHA = "03622015ea5a82bc75228de052d9c84bc6f41667"
 
     @classmethod
-    def last_change_time(cls, db):
+    def last_change_time(cls, db, table=POINTS_LAYER):
         """
         Get the last change time from the GeoPackage DB.
         This is the same as the commit time.
         """
         return db.execute(
             f"SELECT last_change FROM gpkg_contents WHERE table_name=?;",
-            [cls.POINTS_LAYER],
+            [table],
         ).fetchone()[0]
 
     @classmethod
@@ -416,6 +416,39 @@ class TestHelpers:
         # nodeid = 'test_import_feature_performance[0.2.0-spec-counties-table]'
         param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-')
         return tuple(param_ids)
+
+    @classmethod
+    def verify_gpkg_extent(cls, db, table):
+        """ Check the aggregate layer extent from the table matches the values in gpkg_contents """
+        r = db.execute(
+            """SELECT column_name FROM "gpkg_geometry_columns" WHERE table_name=?;""",
+            [table]
+        ).fetchone()
+        geom_col = r[0] if r else None
+
+        gpkg_extent = tuple(db.execute(
+            """SELECT min_x,min_y,max_x,max_y FROM "gpkg_contents" WHERE table_name=?;""",
+            [table]
+        ).fetchone())
+
+        if geom_col:
+            layer_extent = tuple(db.execute(
+                f"""
+                WITH _E AS (
+                    SELECT extent("{geom_col}") AS extent
+                    FROM "{table}"
+                )
+                SELECT
+                    ST_MinX(extent),
+                    ST_MinY(extent),
+                    ST_MaxX(extent),
+                    ST_MaxY(extent)
+                FROM _E
+                """
+            ).fetchone())
+            assert gpkg_extent == pytest.approx(layer_extent)
+        else:
+            assert gpkg_extent == (None, None, None, None)
 
 
 @pytest.fixture
