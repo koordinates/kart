@@ -6,10 +6,6 @@ echo "--- Installing test requirements..."
 pip install \
     -r requirements-test.txt
 
-echo "Setting git username/email"
-gosu sno git config --global user.name pytest
-gosu sno git config --global user.email pytest-sno@koordinates.com
-
 # run the actual test suite
 echo "+++ Running test suite..."
 chmod a+wrx ./ ./tests/

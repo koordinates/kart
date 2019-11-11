@@ -11,6 +11,7 @@ import click
 import pygit2
 
 from . import gpkg, checkout, structure
+from .core import check_git_user
 
 
 @click.command("import-gpkg", hidden=True)
@@ -26,6 +27,8 @@ def import_gpkg(ctx, geopackage, table, list_tables):
     click.secho('"import-gpkg" is deprecated and will be removed in future, use "init" instead', fg='yellow')
 
     directory = ctx.obj["repo_dir"] or os.curdir
+
+    check_git_user(repo=None)
 
     import_from = ["GPKG", geopackage, None]
     if table and not list_tables:
@@ -244,6 +247,13 @@ def import_table(ctx, source, directory, do_list, version, method):
     To show available tables in the import data, use
     $ sno import --list GPKG:my.gpkg
     """
+    repo_dir = ctx.obj["repo_dir"] or "."
+    repo = pygit2.Repository(repo_dir)
+    if not repo or not repo.is_bare:
+        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    check_git_user(repo)
+
     source_prefix, source_path, source_table = source
     source_klass = globals()[f"Import{source_prefix}"]
     source_loader = source_klass(
@@ -283,11 +293,6 @@ def import_table(ctx, source, directory, do_list, version, method):
         click.secho(f'\nSpecify a table to import from via "{source_prefix}:{source_path}:MYTABLE"', fg='yellow')
         ctx.exit(1)
 
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
-
     if directory:
         directory = os.path.relpath(directory, os.path.abspath(repo_dir))
         if not directory:
@@ -321,6 +326,8 @@ def init(ctx, import_from, do_checkout, directory):
     """
 
     if import_from:
+        check_git_user(repo=None)
+
         import_prefix, import_path, import_table = import_from
         source_klass = globals()[f"Import{import_prefix}"]
         source_loader = source_klass(

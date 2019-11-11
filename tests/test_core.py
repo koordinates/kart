@@ -2,9 +2,12 @@ import os
 import re
 import subprocess
 
+import click
 import pygit2
 
-from sno.core import walk_tree
+import pytest
+
+from sno.core import walk_tree, check_git_user
 
 
 def test_walk_tree_1(data_archive):
@@ -106,3 +109,33 @@ def test_walk_tree_3(data_archive):
         o = subprocess.check_output(["git", "ls-tree", "-r", "-d", "HEAD"])
         count = len(o.splitlines())
         assert i == count
+
+
+def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path):
+    # this is set by the global git_user_config fixture
+    u_email, u_name = check_git_user(repo=None)
+    assert u_email == git_user_config[0]
+    assert u_name == git_user_config[1]
+
+    # clear home
+    monkeypatch.setenv("HOME", str(tmp_path))
+    prev_home = pygit2.option(pygit2.GIT_OPT_GET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL)
+    try:
+        pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(tmp_path))
+
+        with data_archive('points'):
+            r = pygit2.Repository(".")
+            with pytest.raises(click.ClickException) as e:
+                check_git_user(repo=r)
+            assert "Please tell me who you are" in str(e)
+
+            subprocess.run(['git', 'config', 'user.name', 'Alice'])
+            subprocess.run(['git', 'config', 'user.email', 'alice@example.com'])
+
+            check_git_user(repo=r)
+
+        with pytest.raises(click.ClickException) as e:
+            check_git_user(repo=None)
+        assert "Please tell me who you are" in str(e)
+    finally:
+        pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, prev_home)

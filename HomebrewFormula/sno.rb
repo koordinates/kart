@@ -103,7 +103,7 @@ class Sno < Formula
       # this matches test_e2e
       system bin/"sno", "init", "."
       system "git", "config", "user.name", "Sno HomeBrew Test"
-      system "git", "config", "user.email", "noreply@koordinates.com"
+      system "git", "config", "user.email", "sno-homebrew-test@example.com"
       system bin/"sno", "import", "GPKG:../src.gpkg:mylayer"
 
       system bin/"sno", "log"

@@ -38,6 +38,48 @@ def pytest_addoption(parser):
     )
 
 
+# https://github.com/pytest-dev/pytest/issues/363
+@pytest.fixture(scope="session")
+def monkeypatch_session(request):
+    from _pytest.monkeypatch import MonkeyPatch
+    mpatch = MonkeyPatch()
+    yield mpatch
+    mpatch.undo()
+
+
+@pytest.fixture(scope='session', autouse=True)
+def git_user_config(monkeypatch_session, tmp_path_factory, request):
+    home = tmp_path_factory.mktemp('home')
+
+    # override libgit2's search paths
+    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_SYSTEM, '')
+    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_XDG, '')
+    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(home))
+
+    # setup environment variables in case we call 'git' commands
+    monkeypatch_session.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch_session.setenv("HOME", str(home))
+    monkeypatch_session.setenv("GIT_ATTR_NOSYSTEM", "1")
+    monkeypatch_session.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+    USER_NAME = 'Sno Tester'
+    USER_EMAIL = 'sno-tester@example.com'
+
+    with open(home / '.gitconfig', 'w') as f:
+        f.write(f"[user]\n\tname = {USER_NAME}\n\temail = {USER_EMAIL}\n")
+
+    L.debug("Temporary HOME for git config: %s", home)
+
+    with pytest.raises(IOError):
+        pygit2.Config.get_system_config()
+
+    global_cfg = pygit2.Config.get_global_config()
+    assert global_cfg['user.email'] == USER_EMAIL
+    assert global_cfg['user.name'] == USER_NAME
+
+    return (USER_EMAIL, USER_NAME, home)
+
+
 @contextlib.contextmanager
 def chdir_(path):
     """ Context manager to change the current working directory """

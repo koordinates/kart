@@ -1,5 +1,7 @@
 import os
 
+import pygit2
+from click import ClickException
 from osgeo import gdal, ogr, osr  # noqa
 
 
@@ -65,3 +67,41 @@ def walk_tree(top, path='', topdown=True):
             subtree = (top / name).obj
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
         yield top, path, subtree_names, blob_names
+
+
+def check_git_user(repo=None):
+    """
+    Checks whether a user is defined in either the repo configuration or globally
+
+    If not, errors with a semi-helpful message
+    """
+    if repo:
+        cfg = repo.config
+    else:
+        try:
+            cfg = pygit2.Config.get_global_config()
+        except IOError:
+            # there is no global config
+            cfg = {}
+
+    try:
+        user_email = cfg['user.email']
+        user_name = cfg['user.name']
+        if user_email and user_name:
+            return (user_email, user_name)
+    except KeyError:
+        pass
+
+    msg = [
+        'Please tell me who you are.',
+        '\nRun',
+        '\n  git config --global user.email "you@example.com"',
+        '  git config --global user.name "Your Name"',
+        '\nto set your account\'s default identity.',
+    ]
+    if repo:
+        msg.append('Omit --global to set the identity only in this repository.')
+
+    msg.append('\n(sno uses the same credentials and configuration as git)')
+
+    raise ClickException("\n".join(msg))

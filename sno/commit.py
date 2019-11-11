@@ -1,6 +1,7 @@
 import click
 import pygit2
 
+from .core import check_git_user
 from .diff import Diff
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
@@ -24,6 +25,8 @@ def commit(ctx, message, allow_empty):
     repo = pygit2.Repository(repo_dir)
     if not repo:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
+
+    check_git_user(repo)
 
     commit = repo.head.peel(pygit2.Commit)
     tree = commit.tree

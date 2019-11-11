@@ -7,6 +7,9 @@ Sno: Distributed version-control for datasets
 
 ## Installing
 
+> ##### ℹ️ If you're new to git
+> You need to have [an SSH key added in Github and available on your computer](https://help.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh) to be able to install Sno during the preview period.
+
 ### macOS
 
 You need [Homebrew](https://brew.sh/) installed.
@@ -19,7 +22,7 @@ $ brew install --HEAD sno
 # check it's working
 $ sno --version
 Project Sno v0.1
-GDAL v2.4.1
+GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
@@ -68,7 +71,7 @@ $ deactivate
 # check it's working
 $ sno --version
 Sno v0.1
-GDAL v2.4.1
+GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
@@ -80,12 +83,22 @@ Sources:
 ```console
 $ docker build -t sno .
 # in your repository directory
-$ /path/to/sno/sno-docker.sh --version
+$ /path/to/sno/sno-docker.sh sno --version
+Sno v0.1
+GDAL v2.4.2
+PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
 ## Usage
 
 See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials and reference.
+
+> ##### ℹ️ If you're new to git
+> Configure the identity you will use for Sno commits with:
+> ```console
+> $ git config --global user.email "you@example.com"
+> $ git config --global user.name "Your Name"
+> ```
 
 ## Quick Start
 
