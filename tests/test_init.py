@@ -222,3 +222,51 @@ def test_init_empty(tmp_path, cli_runner, chdir):
         ["init", repo_path]
     )
     assert r.exit_code == 0, r
+
+
+@pytest.mark.slow
+def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopackage):
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    repo_path = tmp_path / "data.sno"
+    repo_path.mkdir()
+
+    r = cli_runner.invoke(
+        ["init", repo_path]
+    )
+    assert r.exit_code == 0, r
+
+    ARCHIVE_PATHS = (
+        ("gpkg-points", "nz-pa-points-topo-150k.gpkg", "nz_pa_points_topo_150k", "pa_sites"),
+        ("gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments", "misc/waca"),
+    )
+
+    for archive, source_gpkg, source_table, import_path in ARCHIVE_PATHS:
+        with data_archive(archive) as source_path:
+            with chdir(repo_path):
+                r = cli_runner.invoke(
+                    ["import", f"GPKG:{source_path / source_gpkg}:{source_table}", import_path]
+                )
+                assert r.exit_code == 0, r
+
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            ["checkout", "--path=wc.gpkg", "HEAD"]
+        )
+        assert r.exit_code == 0, r
+
+        # working copy exists
+        db = geopackage("wc.gpkg")
+
+        expected_tables = set(a[3].replace("/", "__") for a in ARCHIVE_PATHS)
+        db_tables = set(r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table';"))
+        assert expected_tables <= db_tables
+
+        for gpkg_t in ('gpkg_contents', 'gpkg_geometry_columns', 'gpkg_metadata_reference'):
+            table_list = set(r[0] for r in db.execute(f"SELECT DISTINCT table_name FROM {gpkg_t};"))
+            assert expected_tables >= table_list, gpkg_t
+
+        r = cli_runner.invoke(
+            ["diff"]
+        )
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == []

@@ -137,7 +137,7 @@ class DatasetStructure:
 
         self.tree = tree
         self.path = path.strip('/')
-        self.name = self.path.rsplit('/', 1)[-1]
+        self.name = self.path.replace('/', '__')
         self.L = logging.getLogger(self.__class__.__qualname__)
 
     def __repr__(self):
@@ -304,11 +304,18 @@ class DatasetStructure:
             index.add(entry)
 
     def import_meta_items(self, source):
-        return source.build_meta_info(repo_version=self.VERSION_IMPORT)
+        for name, value in source.build_meta_info(repo_version=self.VERSION_IMPORT):
+            viter = value if isinstance(value, (list, tuple)) else [value]
+
+            for v in viter:
+                if v and 'table_name' in v:
+                    v['table_name'] = self.name
+
+            yield (name, value)
 
     def import_iter_meta_blobs(self, repo, source):
         for name, value in self.import_meta_items(source):
-            yield (f"{self.path}/{self.META_PATH}/{name}", value.encode('utf8'))
+            yield (f"{self.path}/{self.META_PATH}/{name}", json.dumps(value).encode('utf8'))
 
     def import_table(self, repo, source):
         table = source.table
@@ -632,10 +639,10 @@ class Dataset1(DatasetStructure):
             yield (name, item)
 
         for colname, colid in source.field_cid_map.items():
-            yield (f'fields/{colname}', json.dumps(colid))
+            yield (f'fields/{colname}', colid)
 
         pk_field = source.primary_key
-        yield ('primary_key', json.dumps(pk_field))
+        yield ('primary_key', pk_field)
 
     def remove_feature(self, pk, index):
         object_path = self.get_feature_path(pk)
