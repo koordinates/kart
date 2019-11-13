@@ -15,15 +15,17 @@ jobs:
     steps:
       - name: Set up
         run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf git@github.com:
           brew update-reset
           brew --env
           brew config
           export HOMEBREW_NO_AUTO_UPDATE=1
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf git@github.com:
 
-      - name: Set up the Tap
+      - name: Brew tap
         run: |
-          brew tap koordinates/sno git@github.com:koordinates/sno.git
+          env
+          git config --list | grep instead
+          brew tap -d koordinates/sno git@github.com:koordinates/sno.git
 
       - name: Brew install
         run: |
