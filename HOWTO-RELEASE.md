@@ -44,8 +44,8 @@ This process only supports a single release branch (master), and works with the 
 
 6. Commit with a message like "Update Homebrew stable release to v1.2.3"
 
-7. If it's a full release (eg. `1.2.3`), update `setup.py` to set `version=` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. Don't do this for alpha/beta/rc pre-releases.
+7. Update `setup.py` to set `version=` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. It should always hang off the next patch version, not the next rc/beta.
 
-8. Commit with a message like "Update development to version v1.2.4.dev0"
+8. Commit with a message like "Set development version as v1.2.4.dev0"
 
 9. Push those commits.
