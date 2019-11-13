@@ -10,12 +10,12 @@ on:
       - .github/workflows/homebrew-stable.yml
 
 jobs:
-  build:
+  install:
     runs-on: [macOS-latest]
     steps:
       - name: Set up
         run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf git@github.com:
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf git@github.com:
           brew update-reset
           brew --env
           brew config
