@@ -5,6 +5,12 @@
 REQ_SOURCES=$(wildcard requirements*.in)
 REQ_TARGETS=$(REQ_SOURCES:.in=.txt)
 
+requirements-upgrade:
+	pip-compile --upgrade --rebuild --output-file requirements.txt requirements.in
+	pip-compile --upgrade --rebuild --output-file requirements-test.txt requirements-test.in
+	pip-compile --upgrade --rebuild --output-file requirements-test.txt requirements-test.in
+	sed -i -E 's/^(pygit2=)/#\1/' *.txt
+
 requirements: $(REQ_TARGETS)
 	# Comment out pygit2, because we install manually afterwards
 	sed -i -E 's/^(pygit2=)/#\1/' *.txt

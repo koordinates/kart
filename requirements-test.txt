@@ -26,7 +26,7 @@ py-cpuinfo==5.0.0         # via pytest-benchmark
 py==1.8.0                 # via pytest
 pycparser==2.19
 #pygit2==0.28.2
-pyparsing==2.4.3          # via packaging
+pyparsing==2.4.5          # via packaging
 pytest-benchmark[aspect]==3.2.2
 pytest-cov==2.8.1
 pytest-helpers-namespace==2019.1.8
@@ -35,7 +35,7 @@ pytest-sugar==0.9.2
 pytest==4.6.6
 rtree==0.8.3
 scandir==1.10.0           # via pathlib2
-six==1.12.0
+six==1.13.0
 statistics==1.0.3.5       # via pytest-benchmark
 termcolor==1.1.0          # via pytest-sugar
 wcwidth==0.1.7            # via pytest
