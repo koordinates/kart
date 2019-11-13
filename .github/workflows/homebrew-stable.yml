@@ -1,0 +1,40 @@
+---
+name: Homebrew Stable
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - HomebrewFormula/**
+      - .github/workflows/homebrew-stable.yml
+
+jobs:
+  build:
+    runs-on: [macOS-latest]
+    steps:
+      - uses: actions/checkout@v1
+
+      - name: Set up Homebrew
+        run: |
+          brew update-reset
+          brew --env
+          brew config
+
+      - name: Set up the Tap
+        run: |
+          mkdir "$(brew --repo)/Library/Taps/koordinates"
+          ln -s "$(pwd)" "$(brew --repo)/Library/Taps/koordinates/homebrew-sno"
+          brew tap --repair
+
+      - name: Brew audit
+        run: brew audit --strict --except=specs HomebrewFormula/sno.rb
+
+      - name: Brew install
+        run: |
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          brew install --only-dependencies koordinates/sno/sno
+          brew install -v --display-times koordinates/sno/sno
+
+      - name: Brew tests
+        run: brew test -v koordinates/sno/sno

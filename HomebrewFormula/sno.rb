@@ -4,6 +4,23 @@ class Sno < Formula
   desc "Distributed version-control for datasets"
   homepage "https://github.com/koordinates/sno"
 
+  stable do
+    url "git@github.com:koordinates/sno.git", :tag => "v0.2.0rc1", :revision => "00ce7bb9c36e6abfd1f92c69752f458661feaec8", :using => :git
+    version "0.2.0-rc.1"
+
+    resource "libgit2" do
+      # kx-0.28 branch
+      url "https://github.com/koordinates/libgit2/archive/7a39d0d1aad41d92cf0e3f980ddbb7d4ea88373c.tar.gz"
+      sha256 "caa6e64e4c09dc9cb728a6cfcc4e7466e6e6ec032f0dea72ca10a2f7aafd8186"
+    end
+
+    resource "pygit2" do
+      # kx-0.28 branch
+      url "https://github.com/koordinates/pygit2/archive/fd9d9d336d9379841a6a3818097e13a9955fc5e5.tar.gz"
+      sha256 "fba9a55a93d27b2091d567a3c238971431bc6b3395dbe004747a765598c0012a"
+    end
+  end
+
   head do
     url "git@github.com:koordinates/sno.git", :branch => "master", :using => :git
 
@@ -28,8 +45,7 @@ class Sno < Formula
   depends_on "python" # Python3
   depends_on "spatialindex"
   depends_on "sqlite"
-  # also required but handled manually:
-  # - libgit2
+  # also required but handled manually: libgit2
 
   def install
     # https://docs.brew.sh/Python-for-Formula-Authors

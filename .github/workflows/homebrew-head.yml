@@ -1,5 +1,5 @@
 ---
-name: Homebrew
+name: Homebrew Dev
 
 on: [push]
 
@@ -29,7 +29,7 @@ jobs:
           # archive the current revision
           git archive --format=tar.gz -o ./sno-HEAD.tar.gz --prefix=sno/ HEAD
           # edit the formula to use the archive instead of git
-          sed -i '' -E "s#^( +url )\"git@github\.com:koordinates/sno\.git.*#\1\"file://$(pwd)/sno-HEAD.tar.gz\"#" HomebrewFormula/sno.rb
+          sed -i '' -E "s#^( +url )\"git@github\.com:koordinates/sno\.git\", :branch => \"master\".*#\1\"file://$(pwd)/sno-HEAD.tar.gz\"#" HomebrewFormula/sno.rb
 
       - name: Brew install
         run: |

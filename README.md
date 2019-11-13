@@ -21,7 +21,7 @@ $ brew install --HEAD sno
 
 # check it's working
 $ sno --version
-Project Sno v0.1
+Project Sno v0.2.0
 GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
@@ -70,7 +70,7 @@ $ deactivate
 
 # check it's working
 $ sno --version
-Sno v0.1
+Sno v0.2.0
 GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
@@ -84,7 +84,7 @@ Sources:
 $ docker build -t sno .
 # in your repository directory
 $ /path/to/sno/sno-docker.sh sno --version
-Sno v0.1
+Sno v0.2.0
 GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
