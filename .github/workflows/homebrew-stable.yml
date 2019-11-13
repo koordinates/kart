@@ -19,19 +19,20 @@ jobs:
           brew --env
           brew config
           export HOMEBREW_NO_AUTO_UPDATE=1
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/".insteadof git@github.com:
+          git config --global credential.helper ""
+          git config --global --add credential.helper store
+          echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" >> ~/.git-credentials
+          git config --global url."https://github.com/".insteadof git@github.com:
 
       - name: Brew tap
         run: |
-          env
-          git config --list | grep instead
-          brew tap -d koordinates/sno git@github.com:koordinates/sno.git
+          brew tap koordinates/sno git@github.com:koordinates/sno.git
 
       - name: Brew install
         run: |
-          brew install -v --display-times sno
+          brew install --display-times sno
 
       - name: Brew tests
         run: |
           brew install --only-dependencies --include-test sno
-          brew test -v sno
+          brew test sno

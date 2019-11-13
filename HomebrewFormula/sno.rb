@@ -5,7 +5,7 @@ class Sno < Formula
   homepage "https://github.com/koordinates/sno"
 
   stable do
-    url "git@github.com:koordinates/sno.git", :tag => "v0.2.0rc1", :revision => "00ce7bb9c36e6abfd1f92c69752f458661feaec8", :using => :git
+    url "git@github.com:koordinates/sno.git", :tag => "v0.2.0-rc1", :revision => "00ce7bb9c36e6abfd1f92c69752f458661feaec8", :using => :git
     version "0.2.0-rc.1"
 
     resource "libgit2" do
