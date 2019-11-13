@@ -14,11 +14,10 @@ This process only supports a single release branch (master), and works with the 
 
 3. Create a [new draft release in github](https://github.com/koordinates/sno/releases/new) and write the release notes. Topic/section suggestions:
    * Overview
-   * Compatibility
-   * Upgrading
+   * Compatibility / Upgrading
    * New features
    * Bugs fixed
-   * Contributors
+   * External Contributors
 
 ### Release
 
@@ -44,7 +43,7 @@ This process only supports a single release branch (master), and works with the 
 
 6. Commit with a message like "Update Homebrew stable release to v1.2.3"
 
-7. Update `setup.py` to set `version=` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. It should always hang off the next patch version, not the next rc/beta.
+7. Update `setup.py` to set `version=` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. If it's an alpha/beta/rc release, then it should be set to the next _release version_ with `.dev0` appended.
 
 8. Commit with a message like "Set development version as v1.2.4.dev0"
 

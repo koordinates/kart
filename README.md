@@ -1,8 +1,8 @@
 Sno: Distributed version-control for datasets
 ---------------------------------------------
 
-[![Docker/Linux](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/sno)
 [![Homebrew/macOS](https://github.com/koordinates/sno/workflows/Homebrew%20Dev/badge.svg)](https://github.com/koordinates/sno/actions)
+[![Docker/Linux](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/sno)
 
 
 ## Installing
@@ -14,10 +14,10 @@ Sno: Distributed version-control for datasets
 
 You need [Homebrew](https://brew.sh/) installed.
 
-#### For just general running/updating
+#### For general running/updating from the latest release (recommended)
 ```console
-$ brew tap --force-auto-update koordinates/sno git@github.com:koordinates/sno.git
-$ brew install --HEAD sno
+$ brew tap koordinates/sno git@github.com:koordinates/sno.git
+$ brew install sno
 
 # check it's working
 $ sno --version
@@ -26,68 +26,29 @@ GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
-#### For developing Sno
+To upgrade:
+```console
+$ brew upgrade sno
 ```
-$ git clone git@github.com:koordinates/sno.git
-$ cd sno
-$ brew install --only-dependencies --HEAD HomebrewFormula/sno.rb
 
-# create our virtualenv
-$ python3 -m venv --clear ./venv
-$ source venv/bin/activate
-
-# install python dependencies
-$ pip install pygdal=="$(gdal-config --version).*"
-$ pip install -r requirements-dev.txt
-
-# get libgit2/pygit2 stuff
-$ mkdir vendor
-$ git clone --branch=kx-0.28 git@github.com:koordinates/libgit2.git vendor/libgit2
-$ git clone --branch=kx-0.28 git@github.com:koordinates/pygit2.git vendor/pygit2
-
-# build libgit2
-$ pushd vendor/libgit2
-$ export LIBGIT2=$VIRTUAL_ENV
-$ cmake . -DCMAKE_INSTALL_PREFIX=$LIBGIT2
-$ make
-$ make install
-$ popd
-
-# build pygit2
-$ pushd vendor/pygit2
-$ export LIBGIT2=$VIRTUAL_ENV
-$ export LDFLAGS="-Wl,-rpath,'$LIBGIT2/lib' $LDFLAGS"
-$ pip install .
-$ popd
-
-# install sno
-$ pip install -e .
-# make sno globally accessible
-$ ln -sf $(pwd)/venv/bin/sno /usr/local/bin/sno
-
-# quit the virtualenv
-$ deactivate
+#### For the latest development work
+```console
+$ brew tap koordinates/sno git@github.com:koordinates/sno.git
+$ brew install --HEAD sno
 
 # check it's working
 $ sno --version
-Sno v0.2.0
+Project Sno v0.3.0.dev0
 GDAL v2.4.2
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
 
-Sources:
-* [pygit2: libgit2 within a virtual environment](https://www.pygit2.org/install.html#libgit2-within-a-virtual-environment)
-
-### Docker
-
+To upgrade:
 ```console
-$ docker build -t sno .
-# in your repository directory
-$ /path/to/sno/sno-docker.sh sno --version
-Sno v0.2.0
-GDAL v2.4.2
-PyGit2 v0.28.2; Libgit2 v0.28.2
+$ brew reinstall sno
 ```
+
+To build a Docker container, install from source, for Sno development see the [Contributing Notes](CONTRIBUTING.md).
 
 ## Usage
 
@@ -100,7 +61,7 @@ See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials a
 > $ git config --global user.name "Your Name"
 > ```
 
-## Quick Start
+#### Quick Start
 
 1. Export a GeoPackage from [Koordinates](https://koordinates.com/) with any combination of vector layers and tables.
 2. Create a new Sno repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
