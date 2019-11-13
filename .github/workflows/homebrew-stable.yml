@@ -19,7 +19,7 @@ jobs:
           brew --env
           brew config
           export HOMEBREW_NO_AUTO_UPDATE=1
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:@github.com/".insteadOf git@github.com:
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}:x-oauth-basic@github.com/".insteadof git@github.com:
 
       - name: Brew tap
         run: |
