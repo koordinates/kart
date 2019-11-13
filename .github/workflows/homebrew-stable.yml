@@ -13,28 +13,23 @@ jobs:
   build:
     runs-on: [macOS-latest]
     steps:
-      - uses: actions/checkout@v1
-
-      - name: Set up Homebrew
+      - name: Set up
         run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf git@github.com:
           brew update-reset
           brew --env
           brew config
+          export HOMEBREW_NO_AUTO_UPDATE=1
 
       - name: Set up the Tap
         run: |
-          mkdir "$(brew --repo)/Library/Taps/koordinates"
-          ln -s "$(pwd)" "$(brew --repo)/Library/Taps/koordinates/homebrew-sno"
-          brew tap --repair
-
-      - name: Brew audit
-        run: brew audit --strict --except=specs HomebrewFormula/sno.rb
+          brew tap koordinates/sno git@github.com:koordinates/sno.git
 
       - name: Brew install
         run: |
-          export HOMEBREW_NO_AUTO_UPDATE=1
-          brew install --only-dependencies koordinates/sno/sno
-          brew install -v --display-times koordinates/sno/sno
+          brew install -v --display-times sno
 
       - name: Brew tests
-        run: brew test -v koordinates/sno/sno
+        run: |
+          brew install --only-dependencies --include-test sno
+          brew test -v sno
