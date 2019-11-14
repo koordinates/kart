@@ -41,7 +41,7 @@ def db(path, **kwargs):
 
 
 def get_meta_info(db, layer, repo_version='0.0.1'):
-    yield ("version", json.dumps({"version": repo_version}))
+    yield ("version", {"version": repo_version})
 
     dbcur = db.cursor()
     table = layer
@@ -115,7 +115,7 @@ def get_meta_info(db, layer, repo_version='0.0.1'):
             ]
             if rtype is dict:
                 value = value[0] if len(value) else None
-            yield (filename, json.dumps(value))
+            yield (filename, value)
     except Exception:
         print(f"Error building meta/{filename}")
         raise

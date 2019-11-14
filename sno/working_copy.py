@@ -231,6 +231,7 @@ class WorkingCopyGPKG(WorkingCopy):
             # our repo copy doesn't include all fields from gpkg_contents
             # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y}
             # should deal with the remaining fields
+
             sql = f"""
                 INSERT INTO gpkg_contents
                     ({','.join([gpkg.ident(k) for k in keys])})
@@ -308,9 +309,9 @@ class WorkingCopyGPKG(WorkingCopy):
             gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
             ["GPKG"],
         )
-        gdal_ds.ExecuteSQL(
-            f"SELECT CreateSpatialIndex({gpkg.ident(dataset.name)}, {gpkg.ident(geom_col)});"
-        )
+        sql = f"SELECT CreateSpatialIndex({gpkg.param_str(dataset.name)}, {gpkg.param_str(geom_col)});"
+        L.debug("Creating spatial index for %s.%s: %s", dataset.name, geom_col, sql)
+        gdal_ds.ExecuteSQL(sql)
         del gdal_ds
         L.info("Created spatial index in %ss", time.time()-t0)
 
