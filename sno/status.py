@@ -60,11 +60,11 @@ def get_branch_status_message(repo):
         n_ahead, n_behind = repo.ahead_behind(commit.id, upstream_head.id)
         if n_ahead == n_behind == 0:
             message += [
-                f"\nYour branch is up to date with '{branch.upstream.shorthand}'."
+                f"Your branch is up to date with '{branch.upstream.shorthand}'."
             ]
         elif n_ahead > 0 and n_behind > 0:
             message += [
-                f"Your branch and '{branch.upstream.shorthand}' have diverged,"
+                f"Your branch and '{branch.upstream.shorthand}' have diverged,",
                 f"and have {n_ahead} and {n_behind} different commits each, respectively.",
                 '  (use "sno pull" to merge the remote branch into yours)',
             ]
