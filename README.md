@@ -66,9 +66,8 @@ See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials a
 1. Export a GeoPackage from [Koordinates](https://koordinates.com/) with any combination of vector layers and tables.
 2. Create a new Sno repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
    ```console
-   $ mkdir myproject
+   $ sno init myproject --import GPKG:kx-foo-layer.gpkg
    $ cd myproject
-   $ sno init --import GPKG:kx-foo-layer.gpkg
    ```
    Use this repository as the directory to run all the other commands in.
    This will also create a working copy as `myproject/myproject.gpkg` to edit.

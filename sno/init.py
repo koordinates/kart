@@ -314,7 +314,7 @@ def import_table(ctx, source, directory, do_list, version, method):
 @click.pass_context
 @click.option("--import", "import_from", type=ImportPath(), help='Import from data: "FORMAT:PATH:TABLE" eg. "GPKG:my.gpkg:my_table"')
 @click.option("--checkout/--no-checkout", "do_checkout", is_flag=True, default=True, help="Whether to checkout a working copy in the repository")
-@click.argument("directory", type=click.Path(exists=True, writable=True, file_okay=False), required=False, default=os.curdir)
+@click.argument("directory", type=click.Path(writable=True, file_okay=False), required=False)
 def init(ctx, import_from, do_checkout, directory):
     """
     Initialise a new repository and optionally import data
@@ -361,6 +361,11 @@ def init(ctx, import_from, do_checkout, directory):
             else:
                 click.secho(f'\nSpecify a table to import from via "{import_prefix}:{import_path}:MYTABLE"', fg='yellow')
                 ctx.exit(1)
+
+    if directory is None:
+        directory = os.curdir
+    elif not Path(directory).exists():
+        Path(directory).mkdir(parents=True)
 
     repo_dir = Path(directory).resolve()
     if any(repo_dir.iterdir()):
