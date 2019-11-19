@@ -354,20 +354,22 @@ class DatasetStructure:
             # iterate features
             t0 = time.monotonic()
             t1 = None
-            for i, source_feature in enumerate(source.iter_features()):
+            count = 0
+            for source_feature in source.iter_features():
                 if not t1:
                     t1 = time.monotonic()
                     click.echo(f"Query ran in {t1-t0:.1f}s")
 
                 self.write_feature(source_feature, repo, index, **import_kwargs)
+                count += 1
 
-                if i and i % 500 == 0:
-                    click.echo(f"  {i+1:,d} features... @{time.monotonic()-t1:.1f}s")
+                if count and count % 500 == 0:
+                    click.echo(f"  {count:,d} features... @{time.monotonic()-t1:.1f}s")
 
             t2 = time.monotonic()
 
-            click.echo(f"Added {i+1:,d} Features to index in {t2-t1:.1f}s")
-            click.echo(f"Overall rate: {((i+1)/(t2-t0)):.0f} features/s)")
+            click.echo(f"Added {count:,d} Features to index in {t2 - (t1 or t0):.1f}s")
+            click.echo(f"Overall rate: {(count/(t2-t0)):.0f} features/s)")
 
             click.echo("Writing tree...")
             tree_id = index.write_tree(repo)
