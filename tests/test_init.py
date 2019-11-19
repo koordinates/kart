@@ -218,10 +218,48 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
+    # empty dir
     r = cli_runner.invoke(
         ["init", repo_path]
     )
     assert r.exit_code == 0, r
+    assert (repo_path / 'HEAD').exists()
+
+    # makes dir tree
+    repo_path = tmp_path / 'foo' / 'bar' / 'wiz.sno'
+    r = cli_runner.invoke(
+        ["init", repo_path]
+    )
+    assert r.exit_code == 0, r
+    assert (repo_path / 'HEAD').exists()
+
+    # current dir
+    repo_path = tmp_path / "planet.sno"
+    repo_path.mkdir()
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            ["init"]
+        )
+        assert r.exit_code == 0, r
+        assert (repo_path / 'HEAD').exists()
+
+    # dir isn't empty
+    repo_path = tmp_path / 'tree'
+    repo_path.mkdir()
+    (repo_path / 'a.file').touch()
+    r = cli_runner.invoke(
+        ["init", repo_path]
+    )
+    assert r.exit_code == 2, r
+    assert not (repo_path / 'HEAD').exists()
+
+    # current dir isn't empty
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            ["init"]
+        )
+        assert r.exit_code == 2, r
+        assert not (repo_path / 'HEAD').exists()
 
 
 @pytest.mark.slow
