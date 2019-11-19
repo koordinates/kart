@@ -85,7 +85,9 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(*GPKG_IMPORTS)
+@pytest.mark.parametrize(GPKG_IMPORTS[0], GPKG_IMPORTS[1] + [
+    pytest.param("gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS_LAYER, id="empty"),
+])
 @pytest.mark.parametrize("method", ["normal", "slow"])
 @pytest.mark.parametrize(*DATASET_VERSIONS)
 def test_import(import_version, method, archive, source_gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage, benchmark, request, monkeypatch):
@@ -113,8 +115,16 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
         repo_path.mkdir()
 
         db = geopackage(f"{data / source_gpkg}")
+        if param_ids[-1] == "empty":
+            with db:
+                print(f"emptying table {table}...")
+                db.execute(f"DELETE FROM {table};")
+
         num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
         benchmark.group = f"test_import - {param_ids[-1]} (N={num_rows})"
+
+        if param_ids[-1] == "empty":
+            assert num_rows == 0
 
         with chdir(repo_path):
             r = cli_runner.invoke(
@@ -153,20 +163,21 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
             # pk_gaps = sorted(set(range(pk_list[0], pk_list[-1] + 1)).difference(pk_list))
             # print("pk_gaps:", pk_gaps)
 
-            # compare the first feature in the repo against the source DB
-            key, feature = next(dataset.features())
-            row = db.execute(f"SELECT * FROM {table} WHERE {pk_field}=?;", [feature[pk_field]]).fetchone()
-            print("First Feature:", key, feature, dict(row))
-            assert feature == dict(row)
+            if num_rows > 0:
+                # compare the first feature in the repo against the source DB
+                key, feature = next(dataset.features())
+                row = db.execute(f"SELECT * FROM {table} WHERE {pk_field}=?;", [feature[pk_field]]).fetchone()
+                print("First Feature:", key, feature, dict(row))
+                assert feature == dict(row)
 
-            # compare a source DB feature against the repo feature
-            row = db.execute(f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};").fetchone()
-            for key, feature in dataset.features():
-                if feature[pk_field] == row[pk_field]:
-                    assert feature == dict(row)
-                    break
-            else:
-                pytest.fail(f"Couldn't find repo feature {pk_field}={row[pk_field]}")
+                # compare a source DB feature against the repo feature
+                row = db.execute(f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};").fetchone()
+                for key, feature in dataset.features():
+                    if feature[pk_field] == row[pk_field]:
+                        assert feature == dict(row)
+                        break
+                else:
+                    pytest.fail(f"Couldn't find repo feature {pk_field}={row[pk_field]}")
 
 
 def test_pk_encoding():
