@@ -642,3 +642,23 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
         if not r.fetchone():
             print("E: Previous PK bad? ({pk_field}=300)")
+
+
+def test_delete_branch(data_working_copy, cli_runner):
+    with data_working_copy("points") as (repo_path, wc):
+        # prevent deleting the current branch
+        r = cli_runner.invoke(["branch", "-d", "master"])
+        assert r.exit_code == 1, r
+        assert "Cannot delete" in r.stdout
+
+        r = cli_runner.invoke(["checkout", "-b", "test"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["branch", "-d", "test"])
+        assert r.exit_code == 1, r
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["branch", "-d", "test"])
+        assert r.exit_code == 0, r
