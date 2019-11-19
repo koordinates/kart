@@ -153,6 +153,14 @@ def branch(ctx, args):
     if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
+    # git's branch protection behaviour doesn't apply if it's a bare repository
+    # attempt to apply it here.
+    sargs = set(args)
+    if sargs & {'-d', '--delete', '-D'}:
+        branch = repo.head.shorthand
+        if branch in sargs:
+            raise click.ClickException(f"Cannot delete the branch '{branch}' which you are currently on.")
+
     _execvp("git", ["git", "-C", repo_dir, "branch"] + list(args))
 
 
