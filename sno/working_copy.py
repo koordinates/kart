@@ -303,7 +303,7 @@ class WorkingCopyGPKG(WorkingCopy):
         geom_col = dataset.geom_column_name
 
         # Create the GeoPackage Spatial Index
-        t0 = time.time()
+        t0 = time.monotonic()
         gdal_ds = gdal.OpenEx(
             str(self.full_path),
             gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
@@ -313,7 +313,7 @@ class WorkingCopyGPKG(WorkingCopy):
         L.debug("Creating spatial index for %s.%s: %s", dataset.name, geom_col, sql)
         gdal_ds.ExecuteSQL(sql)
         del gdal_ds
-        L.info("Created spatial index in %ss", time.time()-t0)
+        L.info("Created spatial index in %ss", time.monotonic()-t0)
 
     def _create_triggers(self, dbcur, table):
         raise NotImplementedError()
@@ -509,7 +509,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                         ({','.join(['?'] * len(col_names))});
                 """
                 feat_count = 0
-                t0 = time.time()
+                t0 = time.monotonic()
                 t0p = t0
 
                 CHUNK_SIZE = 10000
@@ -519,11 +519,11 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
                     nc = feat_count / CHUNK_SIZE
                     if nc % 5 == 0 or not nc.is_integer():
-                        t0a = time.time()
+                        t0a = time.monotonic()
                         L.info("%s features... @%.1fs (+%.1fs, ~%d F/s)", feat_count, t0a-t0, t0a-t0p, (CHUNK_SIZE*5)/(t0a-t0p))
                         t0p = t0a
 
-                t1 = time.time()
+                t1 = time.monotonic()
                 L.info("Added %d features to GPKG in %.1fs", feat_count, t1-t0)
                 L.info("Overall rate: %d features/s", (feat_count / (t1 - t0)))
 

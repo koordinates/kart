@@ -53,9 +53,9 @@ def query(ctx, path, command, params):
     if command == "index":
         USAGE = "index"
 
-        t0 = time.time()
+        t0 = time.monotonic()
         dataset.build_spatial_index(dataset.name)
-        t1 = time.time()
+        t1 = time.monotonic()
         L.debug("Indexed {dataset} in %0.3fs", t1-t0)
         return
 
@@ -75,9 +75,9 @@ def query(ctx, path, command, params):
         else:
             lookup = params[0]
 
-        t0 = time.time()
+        t0 = time.monotonic()
         results = dataset.get_feature(lookup)[1]
-        t1 = time.time()
+        t1 = time.monotonic()
 
     elif command == 'geo-nearest':
         USAGE = "geo-nearest X0,Y0[,X1,Y1] [LIMIT]"
@@ -93,9 +93,9 @@ def query(ctx, path, command, params):
             raise click.BadParameter(USAGE)
 
         index = dataset.get_spatial_index(path)
-        t0 = time.time()
+        t0 = time.monotonic()
         results = [dataset.get_feature(pk)[1] for pk in index.nearest(coordinates, limit)]
-        t1 = time.time()
+        t1 = time.monotonic()
 
     elif command == 'geo-intersects':
         USAGE = "geo-intersects X0,Y0,X1,Y1"
@@ -107,9 +107,9 @@ def query(ctx, path, command, params):
             raise click.BadParameter(USAGE)
 
         index = dataset.get_spatial_index(path)
-        t0 = time.time()
+        t0 = time.monotonic()
         results = [dataset.get_feature(pk)[1] for pk in index.intersection(coordinates)]
-        t1 = time.time()
+        t1 = time.monotonic()
 
     elif command == 'geo-count':
         USAGE = "geo-count X0,Y0,X1,Y1"
@@ -121,9 +121,9 @@ def query(ctx, path, command, params):
             raise click.BadParameter(USAGE)
 
         index = dataset.get_spatial_index(path)
-        t0 = time.time()
+        t0 = time.monotonic()
         results = index.count(coordinates)
-        t1 = time.time()
+        t1 = time.monotonic()
 
     else:
         raise NotImplementedError(f"Unknown command: {command}")
@@ -132,6 +132,6 @@ def query(ctx, path, command, params):
     json_params = {
         'indent': 2 if sys.stdout.isatty() else None,
     }
-    t2 = time.time()
+    t2 = time.monotonic()
     json.dump(results, sys.stdout, default=_json_encode_default, **json_params)
-    L.debug("Output in %0.3fs", time.time()-t2)
+    L.debug("Output in %0.3fs", time.monotonic()-t2)

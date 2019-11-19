@@ -170,7 +170,7 @@ class ImportGPKG:
 
         self.db.create_function(func_name, 1, pk_callback)
 
-        t0 = time.time()
+        t0 = time.monotonic()
         self.dbcur.execute(f"""
             CREATE TEMPORARY TABLE {tbl_name} (
                 sort TEXT PRIMARY KEY,
@@ -188,12 +188,12 @@ class ImportGPKG:
         if limit is not None:
             sql += f" LIMIT {limit:d}"
         self.dbcur.execute(sql)
-        t1 = time.time()
+        t1 = time.monotonic()
         click.echo(f"Build link/sort mapping table in {t1-t0:0.1f}s")
         self.dbcur.execute(f"""
             CREATE INDEX temp.{tbl_hash}_idxm ON {tbl_name}(sort,link);
         """)
-        t2 = time.time()
+        t2 = time.monotonic()
         click.echo(f"Build pk/sort mapping index in {t2-t1:0.1f}s")
 
         # Print the Query Plan
@@ -212,7 +212,7 @@ class ImportGPKG:
                 INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
             ORDER BY {tbl_name}.sort;
         """)
-        click.echo(f"Ran SELECT query in {time.time()-t2:0.1f}s")
+        click.echo(f"Ran SELECT query in {time.monotonic()-t2:0.1f}s")
         return self.dbcur
 
     def iter_features(self):

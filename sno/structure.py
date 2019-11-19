@@ -352,19 +352,19 @@ class DatasetStructure:
             }
 
             # iterate features
-            t0 = time.time()
+            t0 = time.monotonic()
             t1 = None
             for i, source_feature in enumerate(source.iter_features()):
                 if not t1:
-                    t1 = time.time()
+                    t1 = time.monotonic()
                     click.echo(f"Query ran in {t1-t0:.1f}s")
 
                 self.write_feature(source_feature, repo, index, **import_kwargs)
 
                 if i and i % 500 == 0:
-                    click.echo(f"  {i+1:,d} features... @{time.time()-t1:.1f}s")
+                    click.echo(f"  {i+1:,d} features... @{time.monotonic()-t1:.1f}s")
 
-            t2 = time.time()
+            t2 = time.monotonic()
 
             click.echo(f"Added {i+1:,d} Features to index in {t2-t1:.1f}s")
             click.echo(f"Overall rate: {((i+1)/(t2-t0)):.0f} features/s)")
@@ -372,7 +372,7 @@ class DatasetStructure:
             click.echo("Writing tree...")
             tree_id = index.write_tree(repo)
             del index
-            t3 = time.time()
+            t3 = time.monotonic()
             click.echo(f"Tree sha: {tree_id} (in {(t3-t2):.0f}s)")
 
             click.echo("Committing...")
@@ -385,12 +385,12 @@ class DatasetStructure:
                 tree_id,
                 [] if repo.is_empty else [repo.head.target],
             )
-            t4 = time.time()
+            t4 = time.monotonic()
             click.echo(f"Commit: {commit} (in {(t4-t3):.0f}s)")
 
             click.echo(f"Garbage-collecting...")
             subprocess.check_call(["git", "-C", repo.path, "gc"])
-            t5 = time.time()
+            t5 = time.monotonic()
             click.echo(f"GC completed in {(t5-t4):.1f}s")
 
     def fast_import_table(self, repo, source, iter_func=1, max_pack_size='2G', limit=None):
@@ -413,12 +413,12 @@ class DatasetStructure:
                 num_rows = source.row_count
                 click.echo(f"Importing {num_rows:,d} features from {source} to {path}/ ...")
 
-            t0 = time.time()
+            t0 = time.monotonic()
             if iter_func == 2:
                 src_iterator = source.iter_features_sorted(self.get_feature_path, limit=limit)
             else:
                 src_iterator = source.iter_features()
-            t1 = time.time()
+            t1 = time.monotonic()
             click.echo(f"Source setup in {t1-t0:.1f}s")
 
             click.echo("Starting git-fast-import...")
@@ -454,21 +454,21 @@ class DatasetStructure:
                 p.stdin.write(b'\n')
 
             # features
-            t2 = time.time()
+            t2 = time.monotonic()
             for i, (blob_path, blob_data) in enumerate(self.import_iter_feature_blobs(src_iterator, source)):
                 p.stdin.write(f'M 644 inline {blob_path}\ndata {len(blob_data)}\n'.encode('utf8'))
                 p.stdin.write(blob_data)
                 p.stdin.write(b'\n')
 
                 if i and i % 100000 == 0:
-                    click.echo(f"  {i:,d} features... @{time.time()-t2:.1f}s")
+                    click.echo(f"  {i:,d} features... @{time.monotonic()-t2:.1f}s")
 
                 if limit is not None and i == (limit-1):
                     click.secho(f"  Stopping at {limit:,d} features", fg='yellow')
                     break
 
             p.stdin.write(b'\ndone\n')
-            t3 = time.time()
+            t3 = time.monotonic()
             click.echo(f"Added {num_rows:,d} Features to index in {t3-t2:.1f}s")
             click.echo(f"Overall rate: {(num_rows/(t3-t2)):.0f} features/s)")
 
@@ -476,7 +476,7 @@ class DatasetStructure:
             p.wait()
             if p.returncode != 0:
                 raise subprocess.CalledProcessError(f"Error! {p.returncode}", "git-fast-import")
-            t4 = time.time()
+            t4 = time.monotonic()
             click.echo(f"Closed in {(t4-t3):.0f}s")
 
     RTREE_INDEX_EXTENSIONS = ('sno-idxd', 'sno-idxi')
@@ -493,7 +493,7 @@ class DatasetStructure:
             raise ValueError("No geometry to index")
 
         def _indexer():
-            t0 = time.time()
+            t0 = time.monotonic()
 
             c = 0
             for (pk, geom) in self.feature_tuples([self.primary_key, self.geom_column_name]):
@@ -505,7 +505,7 @@ class DatasetStructure:
                 yield (pk, e, None)
 
                 if c % 50000 == 0:
-                    print(f"  {c} features... @{time.time()-t0:.1f}s")
+                    print(f"  {c} features... @{time.monotonic()-t0:.1f}s")
 
         p = rtree.index.Property()
         p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]
@@ -515,13 +515,13 @@ class DatasetStructure:
         p.overwrite = True
         p.dimensionality = 2
 
-        t0 = time.time()
+        t0 = time.monotonic()
         idx = rtree.index.Index(path, _indexer(), properties=p, interleaved=False)
-        t1 = time.time()
+        t1 = time.monotonic()
         b = idx.bounds
         c = idx.count(b)
         del idx
-        t2 = time.time()
+        t2 = time.monotonic()
         print(f"Indexed {c} features ({b}) in {t1-t0:.1f}s; flushed in {t2-t1:.1f}s")
 
     def get_spatial_index(self, path):

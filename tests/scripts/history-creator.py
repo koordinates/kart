@@ -202,7 +202,7 @@ def main():
     num_updates = options.updates * options.scale
     num_deletes = options.deletes * options.scale
 
-    t0 = time.time()
+    t0 = time.monotonic()
     try:
         for i in range(options.commits or 1):
             db.execute("BEGIN")
@@ -229,9 +229,9 @@ def main():
                 ])
 
             if i and (i % 10 == 0):
-                print(f"\t{i+1} @ {(time.time()-t0):0.1f}s ...")
+                print(f"\t{i+1} @ {(time.monotonic()-t0):0.1f}s ...")
     finally:
-        t1 = time.time()
+        t1 = time.monotonic()
         print(f"Completed {options.commits or 1} loops in {(t1-t0):.1f}s ({((options.commits or 1)/(t1-t0)):.1f}/s)")
 
 
