@@ -12,7 +12,7 @@ from .diff import Diff
 from .status import get_branch_status_message, get_diff_status_message
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
-from .cli_util import MutuallyExclusiveOption
+from .cli_util import MutexOption
 
 
 @click.command()
@@ -22,7 +22,7 @@ from .cli_util import MutuallyExclusiveOption
     "-m",
     multiple=True,
     help="Use the given message as the commit message. If multiple `-m` options are given, their values are concatenated as separate paragraphs.",
-    cls=MutuallyExclusiveOption,
+    cls=MutexOption,
     exclusive_with=["message_file"],
 )
 @click.option(
@@ -31,7 +31,7 @@ from .cli_util import MutuallyExclusiveOption
     "-F",
     type=click.File(),
     help="Take the commit message from the given file. Use `-` to read the message from the standard input.",
-    cls=MutuallyExclusiveOption,
+    cls=MutexOption,
     exclusive_with=["message"],
 )
 @click.option(
