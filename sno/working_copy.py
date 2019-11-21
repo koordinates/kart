@@ -580,8 +580,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         return feat_count
 
-    def diff_db_to_tree(self, dataset):
-        """ Generates a diff between a working copy DB and the underlying repository tree """
+    def diff_db_to_tree(self, dataset, pk_filter=None):
+        """
+        Generates a diff between a working copy DB and the underlying repository tree
+
+        Pass a list of PK values to filter results to them
+        """
         with self.session() as db:
             dbcur = db.cursor()
 
@@ -603,7 +607,11 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 ON ({self.TRACKING_TABLE}.pk = {gpkg.ident(table)}.{gpkg.ident(pk_field)})
                 WHERE ({self.TRACKING_TABLE}.table_name = ?)
             """
-            dbcur.execute(diff_sql, (table,))
+            params = [table]
+            if pk_filter:
+                diff_sql += f"\nAND {self.TRACKING_TABLE}.pk IN ({','.join(['?']*len(pk_filter))})"
+                params += [str(pk) for pk in pk_filter]
+            dbcur.execute(diff_sql, params)
 
             candidates_ins = collections.defaultdict(list)
             candidates_upd = {}
@@ -783,7 +791,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             elif d.status == pygit2.GIT_DELTA_MODIFIED:
                                 old_pk = src_ds.decode_pk(os.path.basename(d.old_file.path))
                                 new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
-                                L.warning("reset(): M %s (%s) -> %s (%s)", d.old_file.path, old_pk, d.new_file.path, new_pk)
+                                L.debug("reset(): M %s (%s) -> %s (%s)", d.old_file.path, old_pk, d.new_file.path, new_pk)
                                 self.write_features(dbcur, dest_ds, [new_pk])
                             elif d.status == pygit2.GIT_DELTA_ADDED:
                                 new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
