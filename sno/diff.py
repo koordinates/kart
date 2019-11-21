@@ -1,9 +1,13 @@
 import contextlib
 import copy
+import io
 import json
 import logging
 import re
+import string
 import sys
+import webbrowser
+from pathlib import Path
 
 import click
 import pygit2
@@ -95,6 +99,13 @@ class Diff(object):
     flag_value="json",
     help="Get the diff in JSON format",
     cls=MutexOption, exclusive_with=["html", "text"]
+)
+@click.option(
+    "--html",
+    "output_format",
+    flag_value="html",
+    help="View the diff in a browser",
+    cls=MutexOption, exclusive_with=["json", "text"]
 )
 @click.option(
     "--output",
@@ -348,3 +359,30 @@ def _json_row(row, change, pk_field):
             f['properties'][k] = v
 
     return f
+
+
+@contextlib.contextmanager
+def diff_output_html(*, fp, repo, commit_base, commit_target, **kwargs):
+    json_data = io.StringIO()
+    with diff_output_json(fp=json_data) as json_writer:
+        yield json_writer
+
+    with open(Path(__file__).resolve().with_name('diff-view.html'), 'r', encoding='utf8') as ft:
+        template = string.Template(ft.read())
+
+    title = f"{Path(repo.path).name}: {commit_base.short_id} .. {commit_target.short_id if commit_target else 'working-copy'}"
+
+    if fp:
+        fo = fp
+    else:
+        html_path = Path(repo.path) / 'DIFF.html'
+        fo = open(html_path, 'w+')
+
+    with contextlib.closing(fo):
+        fo.write(template.substitute({
+            'title': title,
+            'geojson_data': json_data.getvalue(),
+        }))
+
+    if not fp:
+        webbrowser.open_new(f'file://{html_path}')
