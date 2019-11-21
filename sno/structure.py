@@ -18,14 +18,21 @@ from . import core, gpkg
 
 
 class RepositoryStructure:
-    def __init__(self, repo):
+    def __init__(self, repo, commit=None):
         self.L = logging.getLogger(__class__.__qualname__)
 
         self.repo = repo
+        self._commit = commit or self.repo.head.peel(pygit2.Commit)
 
     def __getitem__(self, path):
         """ Get a specific dataset by path """
         return self.get_at(path, self.tree)
+
+    def get(self, path):
+        try:
+            return self.get_at(path, self.tree)
+        except KeyError:
+            return None
 
     def get_at(self, path, tree):
         """ Get a specific dataset by path using a specified Tree """
@@ -71,7 +78,7 @@ class RepositoryStructure:
 
     @property
     def tree(self):
-        return self.repo.head.peel(pygit2.Tree)
+        return self._commit.peel(pygit2.Tree)
 
     @property
     def working_copy(self):
@@ -90,7 +97,7 @@ class RepositoryStructure:
         del self._working_copy
 
     def commit(self, wcdiff, message, *, allow_empty=False):
-        tree = self.repo.head.peel(pygit2.Tree)
+        tree = self.tree
         wc = self.working_copy
 
         git_index = pygit2.Index()
