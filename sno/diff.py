@@ -1,7 +1,9 @@
 import contextlib
 import copy
+import json
 import logging
 import re
+import sys
 
 import click
 import pygit2
@@ -86,6 +88,13 @@ class Diff(object):
     default=True,
     help="Get the diff in text format",
     cls=MutexOption, exclusive_with=["html", "json"]
+)
+@click.option(
+    "--json",
+    "output_format",
+    flag_value="json",
+    help="Get the diff in JSON format",
+    cls=MutexOption, exclusive_with=["html", "text"]
 )
 @click.option(
     "--output",
@@ -280,3 +289,62 @@ def _repr_row(row, prefix="", exclude=None):
         m.append("{prefix}{k:>40} = {v}".format(k=k, v=v, prefix=prefix))
 
     return "\n".join(m)
+
+
+@contextlib.contextmanager
+def diff_output_json(*, fp, **kwargs):
+    accumulated = {}
+
+    def _out(dataset, diff):
+        pk_field = dataset.primary_key
+
+        d = {'metaChanges': {}, 'featureChanges': []}
+        for k, (v_old, v_new) in diff["META"].items():
+            d['metaChanges'][k] = [v_old, v_new]
+
+        for k, v_old in diff["D"].items():
+            d['featureChanges'].append([
+                _json_row(v_old, '-', pk_field),
+                None,
+            ])
+
+        for o in diff["I"]:
+            d['featureChanges'].append([
+                None,
+                _json_row(o, '+', pk_field),
+            ])
+
+        for _, (v_old, v_new) in diff["U"].items():
+            d['featureChanges'].append([
+                _json_row(v_old, '-', pk_field),
+                _json_row(v_new, '+', pk_field),
+            ])
+        accumulated[dataset.path] = d
+
+    yield _out
+
+    params = {}
+    if not fp:
+        fp = sys.stdout
+        params['indent'] = 2
+
+    json.dump({"sno.diff/v1": accumulated}, fp, **params)
+
+
+def _json_row(row, change, pk_field):
+    f = {
+        "type": "Feature",
+        "geometry": None,
+        "properties": {},
+        "id": f"{change} {row[pk_field]}",
+    }
+
+    for k in row.keys():
+        v = row[k]
+        if isinstance(v, bytes):
+            g = gpkg.geom_to_ogr(v)
+            f['geometry'] = json.loads(g.ExportToJson())
+        else:
+            f['properties'][k] = v
+
+    return f
