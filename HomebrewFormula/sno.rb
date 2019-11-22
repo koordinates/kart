@@ -21,6 +21,28 @@ class Sno < Formula
     end
   end
 
+  devel do
+    # Use the local repository checkout we're in as a source for installing.
+    # Note that no working-copy changes are installed, only whatever the current revision is.
+    g_path = Pathname.new(__dir__).parent
+    g_branch = `git rev-parse --abbrev-ref HEAD`.chomp
+    g_sha = `git rev-parse --short HEAD`.chomp
+    puts "Kx: devel source is #{g_path} #{g_branch}@#{g_sha}"
+
+    url "file://#{g_path}", :using => :git, :branch => g_branch, :revision => g_sha
+    version "0.0.0+git.#{g_sha}"
+
+    resource "libgit2" do
+      # kx-0.28 branch
+      url "https://github.com/koordinates/libgit2.git", :branch => "kx-0.28", :using => :git
+    end
+
+    resource "pygit2" do
+      # kx-0.28 branch
+      url "https://github.com/koordinates/pygit2.git", :branch => "kx-0.28", :using => :git
+    end
+  end
+
   head do
     url "git@github.com:koordinates/sno.git", :branch => "master", :using => :git
 
