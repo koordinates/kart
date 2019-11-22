@@ -34,6 +34,9 @@ jobs:
         run: |
           brew install --devel --only-dependencies --include-test HomebrewFormula/sno.rb
           brew install -v --devel --display-times HomebrewFormula/sno.rb
+        env:
+          # Hacky workaround for Homebrew env var filtering
+          HOMEBREW_GITHUB_REF: ${{ github.ref }}
 
       - name: Brew test [master]
         if: github.ref == 'refs/heads/master'

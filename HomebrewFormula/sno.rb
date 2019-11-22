@@ -27,6 +27,12 @@ class Sno < Formula
     g_path = Pathname.new(__dir__).parent
     g_branch = `git rev-parse --abbrev-ref HEAD`.chomp
     g_sha = `git rev-parse --short HEAD`.chomp
+    # CI uses detached heads...
+    # Check out a psaudo-branch
+    if (g_branch == "HEAD") && ENV.key?("CI")
+      system("git", "checkout", "-b", "$ci")
+      g_branch = "$ci"
+    end
     puts "Kx: devel source is #{g_path} #{g_branch}@#{g_sha}"
 
     url "file://#{g_path}", :using => :git, :branch => g_branch, :revision => g_sha
