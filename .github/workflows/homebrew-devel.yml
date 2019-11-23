@@ -43,5 +43,5 @@ jobs:
         run: brew test -v --HEAD koordinates/sno/sno
 
       - name: Brew test [non-master]
-        if: github.ref == 'refs/heads/master'
+        if: github.ref != 'refs/heads/master'
         run: brew test -v sno
