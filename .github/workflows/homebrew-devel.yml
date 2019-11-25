@@ -22,6 +22,11 @@ jobs:
       - name: Brew install --head [master]
         if: github.ref == 'refs/heads/master'
         run: |
+          git config --global credential.helper ""
+          git config --global --add credential.helper store
+          echo "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com" >> ~/.git-credentials
+          git config --global url."https://github.com/".insteadof git@github.com:
+
           mkdir "$(brew --repo)/Library/Taps/koordinates"
           ln -s "$(pwd)" "$(brew --repo)/Library/Taps/koordinates/homebrew-sno"
           brew tap --repair
