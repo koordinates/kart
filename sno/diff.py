@@ -91,30 +91,39 @@ class Diff(object):
     flag_value="text",
     default=True,
     help="Get the diff in text format",
-    cls=MutexOption, exclusive_with=["html", "json"]
+    cls=MutexOption, exclusive_with=["html", "json", "geojson"]
 )
 @click.option(
     "--json",
     "output_format",
     flag_value="json",
     help="Get the diff in JSON format",
-    cls=MutexOption, exclusive_with=["html", "text"]
+    hidden=True,
+    cls=MutexOption, exclusive_with=["html", "text", "geojson"]
+)
+@click.option(
+    "--geojson",
+    "output_format",
+    flag_value="geojson",
+    help="Get the diff in GeoJSON format",
+    cls=MutexOption, exclusive_with=["html", "text", "json"]
 )
 @click.option(
     "--html",
     "output_format",
     flag_value="html",
     help="View the diff in a browser",
-    cls=MutexOption, exclusive_with=["json", "text"]
+    hidden=True,
+    cls=MutexOption, exclusive_with=["json", "text", "geojson"]
 )
 @click.option(
     "--output",
-    "output_file",
-    help="Output to a specific file instead of stdout.",
-    type=click.File(mode='w')
+    "output_path",
+    help="Output to a specific file/directory instead of stdout.",
+    type=click.Path(writable=True, allow_dash=True),
 )
 @click.argument('args', nargs=-1)
-def diff(ctx, output_format, output_file, args):
+def diff(ctx, output_format, output_path, args):
     """
     Show changes between commits, commit and working tree, etc
 
@@ -124,6 +133,9 @@ def diff(ctx, output_format, output_file, args):
     """
     from .working_copy import WorkingCopy
     from .structure import RepositoryStructure
+
+    if output_path and output_path != '-':
+        output_path = Path(output_path).expanduser()
 
     repo_dir = ctx.obj["repo_dir"]
     repo = pygit2.Repository(repo_dir)
@@ -173,32 +185,37 @@ def diff(ctx, output_format, output_file, args):
 
     L.debug("commit_base=%s", commit_base.id)
 
+    base_rs = RepositoryStructure(repo, commit_base)
+    all_datasets = {ds.path for ds in base_rs}
+
+    if commit_target is not None:
+        target_rs = RepositoryStructure(repo, commit_target)
+        all_datasets |= {ds.path for ds in target_rs}
+
+    if paths:
+        all_datasets = set(filter(lambda dsp: dsp in paths, all_datasets))
+
     diff_writer = globals()[f"diff_output_{output_format}"]
     writer_params = {
         'repo': repo,
         'commit_base': commit_base,
         'commit_target': commit_target,
-        'fp': output_file,
+        'output_path': output_path,
+        'dataset_count': len(all_datasets),
     }
 
     with diff_writer(**writer_params) as w:
-        base_rs = RepositoryStructure(repo, commit_base)
         if commit_target is None:
             # diff against working copy
-            for dataset in base_rs:
-                if not paths or dataset.path in paths:
-                    diff = working_copy.diff_db_to_tree(
-                        dataset,
-                        pk_filter=(paths.get(dataset.path) or None)
-                    )[dataset]
-                    w(dataset, diff)
+            for dataset_path in all_datasets:
+                dataset = base_rs.get(dataset_path)
+                diff = working_copy.diff_db_to_tree(
+                    dataset,
+                    pk_filter=(paths.get(dataset.path) or None)
+                )[dataset]
+                w(dataset, diff)
         else:
             # commit<>commit diff
-            target_rs = RepositoryStructure(repo, commit_target)
-            all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
-            if paths:
-                all_datasets = set(filter(lambda dsp: dsp in paths, all_datasets))
-
             for dataset_path in all_datasets:
                 base_ds = base_rs.get(dataset_path)
                 target_ds = target_rs.get(dataset_path)
@@ -217,17 +234,23 @@ def diff(ctx, output_format, output_file, args):
 
 
 @contextlib.contextmanager
-def diff_output_text(*, fp, **kwargs):
+def diff_output_text(*, output_path, **kwargs):
+    pecho = {}
+    if output_path:
+        if output_path == "-":
+            pecho['file'] = sys.stdout
+        elif output_path.is_dir():
+            raise click.BadParameter("Directory is not valid for --output + --text", param_hint="--output")
+        else:
+            pecho['file'] = output_path.open('w')
+
+        pecho['color'] = False
+
     def _out(dataset, diff):
         path = dataset.path
         pk_field = dataset.primary_key
         prefix = f'{path}:'
         repr_excl = [pk_field]
-
-        pecho = {}
-        if fp:
-            pecho['file'] = fp
-            pecho['color'] = False
 
         for k, (v_old, v_new) in diff["META"].items():
             click.secho(f"--- {prefix}meta/{k}\n+++ {prefix}meta/{k}", bold=True, **pecho)
@@ -303,7 +326,75 @@ def _repr_row(row, prefix="", exclude=None):
 
 
 @contextlib.contextmanager
-def diff_output_json(*, fp, **kwargs):
+def diff_output_geojson(*, output_path, dataset_count, **kwargs):
+    if dataset_count > 1:
+        # output_path needs to be a directory
+        if not output_path:
+            raise click.BadParameter("Need to specify a directory via --output for --geojson with >1 dataset", param_hint="--output")
+        elif output_path == "-" or output_path.is_file():
+            raise click.BadParameter("A file is not valid for --output + --geojson with >1 dataset", param_hint="--output")
+
+        if not output_path.exists():
+            output_path.mkdir()
+        else:
+            for p in output_path.glob("*.geojson"):
+                p.unlink()
+
+    def _out(dataset, diff):
+        json_params = {}
+        if not output_path:
+            fp = sys.stdout
+            json_params = {'indent': 2}
+        elif output_path == "-":
+            fp = sys.stdout
+        elif output_path.is_dir():
+            fp = (output_path / f"{dataset.name}.geojson").open('w')
+        else:
+            fp = output_path.open('w')
+
+        pk_field = dataset.primary_key
+
+        fc = {
+            "type": "FeatureCollection",
+            "features": []
+        }
+
+        for k, (v_old, v_new) in diff["META"].items():
+            click.secho(f"Warning: meta changes aren't included in GeoJSON output: {k}", fg='yellow', file=sys.stderr)
+
+        for k, v_old in diff["D"].items():
+            fc['features'].append(_json_row(v_old, 'D', pk_field))
+
+        for o in diff["I"]:
+            fc['features'].append(_json_row(o, 'I', pk_field))
+
+        for _, (v_old, v_new) in diff["U"].items():
+            fc['features'].append(_json_row(v_old, 'U-', pk_field))
+            fc['features'].append(_json_row(v_new, 'U+', pk_field))
+
+        json.dump(fc, fp, **json_params)
+
+    yield _out
+
+
+@contextlib.contextmanager
+def diff_output_json(*, output_path, dataset_count, **kwargs):
+    if isinstance(output_path, Path):
+        if output_path.is_dir():
+            raise click.BadParameter("Directory is not valid for --output + --json", param_hint="--output")
+
+    json_params = {}
+
+    if isinstance(output_path, io.IOBase):
+        fp = output_path
+    elif output_path == "-":
+        fp = sys.stdout
+    elif output_path:
+        fp = output_path.open('w')
+    else:
+        fp = sys.stdout
+        json_params['indent'] = 2
+
     accumulated = {}
 
     def _out(dataset, diff):
@@ -315,31 +406,32 @@ def diff_output_json(*, fp, **kwargs):
 
         for k, v_old in diff["D"].items():
             d['featureChanges'].append([
-                _json_row(v_old, '-', pk_field),
+                _json_row(v_old, 'D', pk_field),
                 None,
             ])
 
         for o in diff["I"]:
             d['featureChanges'].append([
                 None,
-                _json_row(o, '+', pk_field),
+                _json_row(o, 'I', pk_field),
             ])
 
         for _, (v_old, v_new) in diff["U"].items():
             d['featureChanges'].append([
-                _json_row(v_old, '-', pk_field),
-                _json_row(v_new, '+', pk_field),
+                _json_row(v_old, 'U-', pk_field),
+                _json_row(v_new, 'U+', pk_field),
             ])
+
+        # sort for reproducibility
+        d['featureChanges'].sort(key=lambda fc: (
+            fc[0]['id'] if fc[0] is not None else '',
+            fc[1]['id'] if fc[1] is not None else '',
+        ))
         accumulated[dataset.path] = d
 
     yield _out
 
-    params = {}
-    if not fp:
-        fp = sys.stdout
-        params['indent'] = 2
-
-    json.dump({"sno.diff/v1": accumulated}, fp, **params)
+    json.dump({"sno.diff/v1": accumulated}, fp, **json_params)
 
 
 def _json_row(row, change, pk_field):
@@ -347,7 +439,7 @@ def _json_row(row, change, pk_field):
         "type": "Feature",
         "geometry": None,
         "properties": {},
-        "id": f"{change} {row[pk_field]}",
+        "id": f"{change}::{row[pk_field]}",
     }
 
     for k in row.keys():
@@ -362,9 +454,13 @@ def _json_row(row, change, pk_field):
 
 
 @contextlib.contextmanager
-def diff_output_html(*, fp, repo, commit_base, commit_target, **kwargs):
+def diff_output_html(*, output_path, repo, commit_base, commit_target, dataset_count, **kwargs):
+    if output_path:
+        if output_path.is_dir():
+            raise click.BadParameter("Directory is not valid for --output + --html", param_hint="--output")
+
     json_data = io.StringIO()
-    with diff_output_json(fp=json_data) as json_writer:
+    with diff_output_json(output_path=json_data, dataset_count=dataset_count) as json_writer:
         yield json_writer
 
     with open(Path(__file__).resolve().with_name('diff-view.html'), 'r', encoding='utf8') as ft:
@@ -372,11 +468,13 @@ def diff_output_html(*, fp, repo, commit_base, commit_target, **kwargs):
 
     title = f"{Path(repo.path).name}: {commit_base.short_id} .. {commit_target.short_id if commit_target else 'working-copy'}"
 
-    if fp:
-        fo = fp
+    if output_path == "-":
+        fo = sys.stdout
+    elif output_path:
+        fo = output_path.open('w')
     else:
         html_path = Path(repo.path) / 'DIFF.html'
-        fo = open(html_path, 'w+')
+        fo = html_path.open('w')
 
     with contextlib.closing(fo):
         fo.write(template.substitute({
@@ -384,5 +482,5 @@ def diff_output_html(*, fp, repo, commit_base, commit_target, **kwargs):
             'geojson_data': json_data.getvalue(),
         }))
 
-    if not fp:
+    if not output_path:
         webbrowser.open_new(f'file://{html_path}')
