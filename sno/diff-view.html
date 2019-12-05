@@ -69,19 +69,19 @@
         }
         #tables .update.old .diff,
         .bg-upd-old {
-            background-color: rgba(253,174,97, 0.3);
+            background-color: rgba(244,165,130, 0.3);
         }
         #tables .update.new .diff,
         .bg-upd-new {
-            background-color: rgba(166,217,106, 0.3);
+            background-color: rgba(146,197,222, 0.3);
         }
         #tables .delete td,
         .bg-del {
-            background-color: rgba(215,25,28, 0.3);
+            background-color: rgba(202,0,32, 0.3);
         }
         #tables .insert td,
         .bg-ins {
-            background-color: rgba(26,150,65, 0.3);
+            background-color: rgba(5,113,176, 0.3);
         }
         #tables .update.old {
             border-bottom: 0;
@@ -111,7 +111,7 @@
     function buildMap() {
         const LABELS = {updateOld: 'Update (previous)', updateNew: 'Update (new)'}
         // from ColorBrewer2
-        const COLORS = {delete: '#d7191c', insert: '#1a9641', updateOld: '#fdae61', updateNew: '#a6d96a'}
+        const COLORS = {delete: '#ca0020', insert: '#0571b0', updateOld: '#f4a582', updateNew: '#92c5de'}
 
         window.layers = {}
         window.featureMap = {}
