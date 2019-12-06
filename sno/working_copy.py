@@ -595,7 +595,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             meta_old = dict(dataset.iter_meta_items(exclude={'fields', 'primary_key'}))
             meta_new = dict(self.read_meta(dataset))
             for name in set(meta_new.keys()) ^ set(meta_old.keys()):
-                meta_diff[name] = (meta_old.get(name), meta_new.get(name))
+                v_old = meta_old.get(name)
+                v_new = meta_new.get(name)
+                if v_old or v_new:
+                    meta_diff[name] = (v_old, v_new)
 
             pk_field = dataset.primary_key
 
