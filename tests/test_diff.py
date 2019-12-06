@@ -1,19 +1,39 @@
+import collections
 import json
+import re
 
+import html5lib
 import pytest
+
+from sno.diff import Diff
 
 
 H = pytest.helpers.helpers()
 
+OUTPUT_FORMATS = ["text", "geojson", "json", "quiet", "html"]
 
-@pytest.mark.parametrize("output_format", ["text", "geojson", "json"])
+
+def _check_html_output(s):
+    parser = html5lib.HTMLParser(strict=True, namespaceHTMLElements=False)
+    # throw errors on invalid HTML
+    document = parser.parse(s)
+    # find the <script> element containing data
+    el = document.find("./head/script[@id='sno-data']")
+    # find the JSON
+    m = re.match(r"\s*const DATA=(.*);\s*$", el.text, flags=re.DOTALL)
+    # validate it
+    json.loads(m.group(1))
+
+
+@pytest.mark.parametrize("output_format", OUTPUT_FORMATS)
 def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
-    """ diff the working copy against the repository (no index!) """
+    """ diff the working copy against HEAD """
     with data_working_copy("points") as (repo, wc):
         # empty
-        r = cli_runner.invoke(["diff"])
+        r = cli_runner.invoke(
+            ["diff", f"--{output_format}", "--output=-", "--exit-code"]
+        )
         assert r.exit_code == 0, r
-        # assert r.stdout.splitlines() == []
 
         # make some changes
         db = geopackage(wc)
@@ -32,9 +52,12 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
             assert cur.rowcount == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
-        assert r.exit_code == 0, r
         print("STDOUT", repr(r.stdout))
-        if output_format == "text":
+        if output_format == "quiet":
+            assert r.exit_code == 1, r
+            assert r.stdout == ""
+        elif output_format == "text":
+            assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
                 "--- nz_pa_points_topo_150k:fid=3",
                 "-                                     geom = POINT(...)",
@@ -58,6 +81,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                 "+++ nz_pa_points_topo_150k:fid=9998",
             ]
         elif output_format == "geojson":
+            assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
@@ -168,6 +192,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                 ],
             }
         elif output_format == "json":
+            assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
                 len(odata["sno.diff/v1"]["nz_pa_points_topo_150k"]["featureChanges"])
@@ -297,16 +322,19 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                     }
                 }
             }
+        elif output_format == "html":
+            _check_html_output(r.stdout)
 
 
-@pytest.mark.parametrize("output_format", ["text", "geojson", "json"])
+@pytest.mark.parametrize("output_format", OUTPUT_FORMATS)
 def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner):
-    """ diff the working copy against the repository (no index!) """
+    """ diff the working copy against HEAD """
     with data_working_copy("polygons") as (repo, wc):
         # empty
-        r = cli_runner.invoke(["diff"])
+        r = cli_runner.invoke(
+            ["diff", f"--{output_format}", "--output=-", "--exit-code"]
+        )
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == []
 
         # make some changes
         db = geopackage(wc)
@@ -325,8 +353,11 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
             assert cur.rowcount == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
-        assert r.exit_code == 0, r
-        if output_format == "text":
+        if output_format == "quiet":
+            assert r.exit_code == 1, r
+            assert r.stdout == ""
+        elif output_format == "text":
+            assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
                 "--- nz_waca_adjustments:id=1452332",
                 "-                           adjusted_nodes = 558",
@@ -348,6 +379,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                 "+++ nz_waca_adjustments:id=9998",
             ]
         elif output_format == "geojson":
+            assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
@@ -555,6 +587,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                 ],
             }
         elif output_format == "json":
+            assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
                 len(odata["sno.diff/v1"]["nz_waca_adjustments"]["featureChanges"]) == 4
@@ -894,16 +927,19 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                     }
                 }
             }
+        elif output_format == "html":
+            _check_html_output(r.stdout)
 
 
-@pytest.mark.parametrize("output_format", ["text", "geojson", "json"])
+@pytest.mark.parametrize("output_format", OUTPUT_FORMATS)
 def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
-    """ diff the working copy against the repository (no index!) """
+    """ diff the working copy against HEAD """
     with data_working_copy("table") as (repo, wc):
         # empty
-        r = cli_runner.invoke(["diff"])
+        r = cli_runner.invoke(
+            ["diff", f"--{output_format}", "--output=-", "--exit-code"]
+        )
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == []
 
         # make some changes
         db = geopackage(wc)
@@ -922,8 +958,11 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
             assert cur.rowcount == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
-        assert r.exit_code == 0, r
-        if output_format == "text":
+        if output_format == "quiet":
+            assert r.exit_code == 1, r
+            assert r.stdout == ""
+        elif output_format == "text":
+            assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
                 "--- countiestbl:OBJECTID=3",
                 "-                                     AREA = 2529.9794",
@@ -959,6 +998,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                 "+++ countiestbl:OBJECTID=9998",
             ]
         elif output_format == "geojson":
+            assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
@@ -1081,6 +1121,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                 ],
             }
         elif output_format == "json":
+            assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["sno.diff/v1"]["countiestbl"]["featureChanges"]) == 4
             assert odata == {
@@ -1216,3 +1257,366 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                     }
                 }
             }
+        elif output_format == "html":
+            _check_html_output(r.stdout)
+
+
+def test_diff_rev_rev(data_archive, cli_runner):
+    """ diff between commits """
+    with data_archive("points"):
+        # empty
+        NOOP_SPECS = (
+            f"{H.POINTS_HEAD_SHA[:6]}..{H.POINTS_HEAD_SHA[:6]}",
+            f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD_SHA}",
+            f"{H.POINTS_HEAD1_SHA}..{H.POINTS_HEAD1_SHA}",
+            "HEAD^1..HEAD^1",
+            f"{H.POINTS_HEAD_SHA}..",
+            f"..{H.POINTS_HEAD_SHA}",
+        )
+        for spec in NOOP_SPECS:
+            r = cli_runner.invoke(["diff", "--exit-code", spec])
+            assert r.exit_code == 0, r
+
+        F_SPECS = (
+            f"{H.POINTS_HEAD1_SHA}..{H.POINTS_HEAD_SHA}",
+            f"{H.POINTS_HEAD1_SHA}..",
+            "HEAD^1..HEAD",
+        )
+        for spec in F_SPECS:
+            r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
+            assert r.exit_code == 1, r
+            odata = json.loads(r.stdout)["sno.diff/v1"]
+            assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
+            assert len(odata[H.POINTS_LAYER]["metaChanges"]) == 0
+
+            CHANGE_IDS = {
+                ("U-::1182", "U+::1182"),
+                ("U-::1181", "U+::1181"),
+                ("U-::1168", "U+::1168"),
+                ("U-::1166", "U+::1166"),
+                ("U-::1095", "U+::1095"),
+            }
+            change_ids = {
+                ((f[0] or {}).get("id"), (f[1] or {}).get("id"))
+                for f in odata[H.POINTS_LAYER]["featureChanges"]
+            }
+            assert change_ids == CHANGE_IDS
+            # this commit _adds_ names
+            change_names = {
+                (f[0]["properties"]["name"], f[1]["properties"]["name"])
+                for f in odata[H.POINTS_LAYER]["featureChanges"]
+            }
+            assert not any(n[0] for n in change_names)
+            assert all(n[1] for n in change_names)
+
+        # same commit in reverse
+        R_SPECS = (
+            f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD1_SHA}",
+            f"..{H.POINTS_HEAD1_SHA}",
+            "HEAD..HEAD^1",
+        )
+        for spec in R_SPECS:
+            r = cli_runner.invoke(
+                [
+                    "diff",
+                    "--exit-code",
+                    "--json",
+                    f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD1_SHA}",
+                ]
+            )
+            assert r.exit_code == 1, r
+            odata = json.loads(r.stdout)["sno.diff/v1"]
+            assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
+            assert len(odata[H.POINTS_LAYER]["metaChanges"]) == 0
+            change_ids = {
+                ((f[0] or {}).get("id"), (f[1] or {}).get("id"))
+                for f in odata[H.POINTS_LAYER]["featureChanges"]
+            }
+            assert change_ids == CHANGE_IDS
+            # so names are _removed_
+            change_names = {
+                (f[0]["properties"]["name"], f[1]["properties"]["name"])
+                for f in odata[H.POINTS_LAYER]["featureChanges"]
+            }
+            assert all(n[0] for n in change_names)
+            assert not any(n[1] for n in change_names)
+
+
+def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
+    """ diff the working copy against commits """
+    # ID  R0  ->  R1  ->  WC
+    # 1   a       a1      a
+    # 2   b       b1      b1
+    # 3   c       c       c1
+    # 4   d       d1      d2
+    # 5   e       e1      e*
+    # 6   f       f*      f+
+    # 7   g       g*      -
+    # 8   -       h+      h1
+    # 9   -       i+      i*
+    # 10  -       j+      j
+    # 11  -       -       k+
+    # 12  l       l*      l1+
+
+    # Legend:
+    #     x     existing
+    #     xN    edit
+    #     x*    delete
+    #     x+    insert
+    #     -     not there
+
+    # Columns: id,value
+
+    R0 = "c4ee0b7c540492bcaff2b27aa5c22a4b08e47d13"
+    R1 = "020da410459f08b69cbad4233c40a6b05706bda0"  # HEAD
+
+    with data_working_copy("editing") as (repo, wc):
+        # empty HEAD -> no working copy changes
+        # r = cli_runner.invoke(["diff", "--exit-code", f"HEAD"])
+        # assert r.exit_code == 0, r
+
+        # make the R1 -> WC changes
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+
+            EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
+            for pk, val in EDITS:
+                cur.execute("UPDATE editing SET value = ? WHERE id = ?;", (val, pk))
+                assert cur.rowcount == 1
+
+            cur.execute("DELETE FROM editing WHERE id IN (5, 9);")
+            assert cur.rowcount == 2
+
+            cur.execute(
+                "INSERT INTO editing (id, value) VALUES (6, 'f'), (11, 'k'), (12, 'l1');"
+            )
+            assert cur.rowcount == 3
+
+        def _extract(diff_json):
+            ds = {}
+            for fo, fn in odata["editing"]["featureChanges"]:
+                pk = fo["properties"]["id"] if fo else fn["properties"]["id"]
+                vo = fo["properties"]["value"] if fo else None
+                vn = fn["properties"]["value"] if fn else None
+                ds[pk] = (vo, vn)
+            return ds
+
+        # changes from HEAD (R1 -> WC)
+        # r = cli_runner.invoke(["diff", "--exit-code", "--json", R1])
+        # assert r.exit_code == 1, r
+        # odata = json.loads(r.stdout)["sno.diff/v1"]
+        # ddata = _extract(odata)
+        # assert ddata == {
+        #     1: ('a1', 'a'),
+        #     3: ('c', 'c1'),
+        #     4: ('d1', 'd2'),
+        #     5: ('e1', None),
+        #     6: (None, 'f'),
+        #     8: ('h', 'h1'),
+        #     9: ('i', None),
+        #     11: (None, 'k'),
+        #     12: (None, 'l1'),
+        # }
+
+        # changes from HEAD^1 (R0 -> WC)
+        r = cli_runner.invoke(["diff", "--exit-code", "--json", R0])
+        assert r.exit_code == 1, r
+        odata = json.loads(r.stdout)["sno.diff/v1"]
+        ddata = _extract(odata)
+        assert ddata == {
+            2: ("b", "b1"),
+            3: ("c", "c1"),
+            4: ("d", "d2"),
+            5: ("e", None),
+            7: ("g", None),
+            8: (None, "h1"),
+            10: (None, "j"),
+            11: (None, "k"),
+            12: ("l", "l1"),
+        }
+
+
+def test_diff_object_union():
+    FakeDataset = collections.namedtuple("Dataset", ["path"])
+
+    ds1 = FakeDataset("ds1")
+    ds2 = FakeDataset("ds2")
+
+    # Diff(self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None)
+    diff1 = Diff(ds1)
+    diff2 = Diff(ds2)
+
+    assert len(diff1) == 0
+    assert len(diff2) == 0
+
+    diff3 = diff1 | diff2
+    assert diff3 is not diff1
+    assert diff3 is not diff2
+    assert set(diff3.datasets()) == {ds1, ds2}
+
+    diff1 |= diff2
+    assert set(diff1.datasets()) == {ds1, ds2}
+
+    diff4 = Diff(ds1)
+    with pytest.raises(ValueError):
+        diff4 | diff1
+
+    with pytest.raises(ValueError):
+        diff4 |= diff1
+
+
+FakeDataset = collections.namedtuple("Dataset", ["path", "primary_key"])
+
+
+def test_diff_object_add():
+
+    ds1 = FakeDataset("ds1", "pk")
+    ds2 = FakeDataset("ds2", "pk")
+
+    NULL_DIFF = {"D": {}, "I": [], "META": {}, "U": {}}
+
+    # Diff(self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None)
+    diff1 = Diff(ds1)
+    diff2 = Diff(ds2)
+
+    assert len(diff1) == 0
+    assert len(diff2) == 0
+
+    diff3 = diff1 + diff2
+    assert diff3 is not diff1
+    assert diff3 is not diff2
+    assert set(diff3.datasets()) == {ds1, ds2}
+
+    diff1 += diff2
+    assert set(diff1.datasets()) == {ds1, ds2}
+
+    diff4 = Diff(
+        ds1,
+        inserts=[{"pk": 20}],
+        updates={"10": ({"pk": 10}, {"pk": 11})},
+        deletes={"30": {"pk": 30}},
+    )
+    diff5 = diff4 + diff1
+    assert diff5[ds1] == {
+        "META": {},
+        "I": [{"pk": 20}],
+        "U": {"10": ({"pk": 10}, {"pk": 11})},
+        "D": {"30": {"pk": 30}},
+    }
+    assert diff5[ds2] == NULL_DIFF
+
+    diff4 += diff1
+    assert diff4[ds1] == {
+        "META": {},
+        "I": [{"pk": 20}],
+        "U": {"10": ({"pk": 10}, {"pk": 11})},
+        "D": {"30": {"pk": 30}},
+    }
+    assert diff4[ds2] == NULL_DIFF
+
+
+# ID  R0  ->  R1  ->  R2
+# 1   a       a1      a
+# 2   b       b1      b1
+# 3   c       c       c1
+# 4   d       d1      d2
+# 5   e       e1      e*
+# 6   f       f*      f+
+# 7   g       g*      -
+# 8   -       h+      h1
+# 9   -       i+      i*
+# 10  -       j+      j
+# 11  -       -       k+
+# 12  l       l*      l1+
+DIFF_R1 = {
+    "I": [{"pk": 8, "v": "h"}, {"pk": 9, "v": "i"}, {"pk": 10, "v": "j"}],
+    "U": {
+        "1": ({"pk": 1, "v": "a"}, {"pk": 1, "v": "a1"}),
+        "2": ({"pk": 2, "v": "b"}, {"pk": 2, "v": "b1"}),
+        "4": ({"pk": 4, "v": "d"}, {"pk": 4, "v": "d1"}),
+        "5": ({"pk": 5, "v": "e"}, {"pk": 5, "v": "e1"}),
+    },
+    "D": {
+        "6": {"pk": 6, "v": "f"},
+        "7": {"pk": 7, "v": "g"},
+        "12": {"pk": 12, "v": "l"},
+    },
+}
+DIFF_R2 = {
+    "I": [{"pk": 6, "v": "f"}, {"pk": 11, "v": "k"}, {"pk": 12, "v": "l1"}],
+    "U": {
+        "1": ({"pk": 1, "v": "a1"}, {"pk": 1, "v": "a"}),
+        "3": ({"pk": 3, "v": "c"}, {"pk": 3, "v": "c1"}),
+        "4": ({"pk": 4, "v": "d1"}, {"pk": 4, "v": "d2"}),
+        "8": ({"pk": 8, "v": "h"}, {"pk": 8, "v": "h1"}),
+    },
+    "D": {"5": {"pk": 5, "v": "e1"}, "9": {"pk": 9, "v": "i"}},
+}
+DIFF_R0_R2 = {
+    "I": [{"pk": 8, "v": "h1"}, {"pk": 10, "v": "j"}, {"pk": 11, "v": "k"}],
+    "U": {
+        "2": ({"pk": 2, "v": "b"}, {"pk": 2, "v": "b1"}),
+        "3": ({"pk": 3, "v": "c"}, {"pk": 3, "v": "c1"}),
+        "4": ({"pk": 4, "v": "d"}, {"pk": 4, "v": "d2"}),
+        "12": ({"pk": 12, "v": "l"}, {"pk": 12, "v": "l1"}),
+    },
+    "D": {"5": {"pk": 5, "v": "e"}, "7": {"pk": 7, "v": "g"}},
+    "META": {},
+}
+
+
+def test_diff_object_add_2():
+    ds = FakeDataset("ds", "pk")
+
+    diff1 = Diff(ds, inserts=DIFF_R1["I"], updates=DIFF_R1["U"], deletes=DIFF_R1["D"])
+    diff2 = Diff(ds, inserts=DIFF_R2["I"], updates=DIFF_R2["U"], deletes=DIFF_R2["D"])
+
+    diff3 = diff1 + diff2
+    assert DIFF_R0_R2["I"] == diff3[ds]["I"]
+    assert DIFF_R0_R2["U"] == diff3[ds]["U"]
+    assert DIFF_R0_R2["D"] == diff3[ds]["D"]
+
+    diff1 += diff2
+    assert DIFF_R0_R2["I"] == diff1[ds]["I"]
+    assert DIFF_R0_R2["U"] == diff1[ds]["U"]
+    assert DIFF_R0_R2["D"] == diff1[ds]["D"]
+
+    assert diff3 == diff1
+
+
+def test_diff_object_eq_reverse():
+    ds = FakeDataset("ds", "pk")
+
+    diff1 = Diff(ds, inserts=DIFF_R1["I"], updates=DIFF_R1["U"], deletes=DIFF_R1["D"])
+    diff2 = Diff(ds, inserts=DIFF_R2["I"], updates=DIFF_R2["U"], deletes=DIFF_R2["D"])
+
+    diff3 = diff1 + diff2
+
+    diff4 = ~diff3
+    assert diff4 != diff3
+    assert diff4 == ~diff3
+    assert len(diff4[ds]["I"]) == len(diff3[ds]["D"])
+    assert len(diff4[ds]["D"]) == len(diff3[ds]["I"])
+    assert len(diff4[ds]["U"]) == len(diff3[ds]["U"])
+    assert list(diff4[ds]["U"].values()) == [
+        (v1, v0) for v0, v1 in diff3[ds]["U"].values()
+    ]
+
+
+def test_diff_object_add_reverse():
+    """
+    Check that ~(A + B) == (~B + ~A)
+    """
+    ds = FakeDataset("ds", "pk")
+
+    diff1 = Diff(ds, inserts=DIFF_R1["I"], updates=DIFF_R1["U"], deletes=DIFF_R1["D"])
+    diff2 = Diff(ds, inserts=DIFF_R2["I"], updates=DIFF_R2["U"], deletes=DIFF_R2["D"])
+
+    diff3 = diff1 + diff2
+
+    r2 = ~diff2
+    r1 = ~diff1
+    r2r1 = r2 + r1
+    i3 = ~diff3
+    assert i3 == r2r1
