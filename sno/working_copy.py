@@ -24,7 +24,7 @@ class WorkingCopy:
                 raise NotImplementedError(f"Working copy version: {version}")
 
             path = repo_cfg['sno.workingcopy.path']
-            if not os.path.isfile(path):
+            if not (Path(repo.path) / path).is_file():
                 raise FileNotFoundError(f"Working copy missing? {path}")
 
             return WorkingCopy_GPKG_1(repo, path)
@@ -34,7 +34,7 @@ class WorkingCopy:
 
     @classmethod
     def new(cls, repo, path, version=1, **kwargs):
-        if os.path.isfile(path):
+        if (Path(repo.path) / path).exists():
             raise FileExistsError(path)
 
         return WorkingCopy_GPKG_1(repo, path, **kwargs)
