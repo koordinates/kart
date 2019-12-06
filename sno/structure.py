@@ -941,7 +941,7 @@ class Dataset1(DatasetStructure):
 
                 _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
 
-                candidates_del[my_pk].append((my_pk, my_obj))
+                candidates_del[str(my_pk)].append((str(my_pk), my_obj))
             elif d.status == pygit2.GIT_DELTA_MODIFIED:
                 my_pk = this.decode_pk(os.path.basename(d.old_file.path))
                 other_pk = other.decode_pk(os.path.basename(d.new_file.path))
@@ -951,7 +951,7 @@ class Dataset1(DatasetStructure):
                 _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
                 _, other_obj = other.get_feature(other_pk, ogr_geoms=False)
 
-                candidates_upd[my_pk] = (my_obj, other_obj)
+                candidates_upd[str(my_pk)] = (my_obj, other_obj)
             elif d.status == pygit2.GIT_DELTA_ADDED:
                 other_pk = other.decode_pk(os.path.basename(d.new_file.path))
 
@@ -959,7 +959,7 @@ class Dataset1(DatasetStructure):
 
                 _, other_obj = other.get_feature(other_pk, ogr_geoms=False)
 
-                candidates_ins[other_pk].append(other_obj)
+                candidates_ins[str(other_pk)].append(other_obj)
             else:
                 # GIT_DELTA_RENAMED
                 # GIT_DELTA_COPIED
