@@ -5,6 +5,7 @@ import re
 import html5lib
 import pytest
 
+import pygit2
 from sno.diff import Diff
 
 
@@ -1620,3 +1621,43 @@ def test_diff_object_add_reverse():
     r2r1 = r2 + r1
     i3 = ~diff3
     assert i3 == r2r1
+
+
+def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
+    # This isn't implemented, but we check it's detected correctly.
+    # commit<>commit diffs where A & B aren't linearly linked
+    # commit<>WC diffs where A & the WC base aren't linearly linked
+    with data_working_copy("points") as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "changes"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == "refs/heads/changes"
+
+        # make some changes
+        db = geopackage(wc)
+        insert(db)
+        insert(db)
+        b_commit_id = insert(db)
+        assert repo.head.target.hex == b_commit_id
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != b_commit_id
+        m_commit_id = insert(db)
+        H.git_graph(request, "pre-merge-master")
+
+        # changes <> master (commit <> commit) diff should fail
+        r = cli_runner.invoke(["diff", "--quiet", f"{m_commit_id}..{b_commit_id}"])
+        assert r.exit_code == 2, r
+        assert "3-way diffs aren't supported" in r.stdout
+
+        # same the other way around
+        r = cli_runner.invoke(["diff", "--quiet", f"{b_commit_id}..{m_commit_id}"])
+        assert r.exit_code == 2, r
+        assert "3-way diffs aren't supported" in r.stdout
+
+        # diff against working copy should fail too
+        r = cli_runner.invoke(["diff", "--quiet", b_commit_id])
+        assert r.exit_code == 2, r
+        assert "3-way diffs aren't supported" in r.stdout

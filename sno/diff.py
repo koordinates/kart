@@ -465,6 +465,18 @@ def diff(ctx, output_format, output_path, exit_code, args):
 
         L.debug("commit_base=%s", commit_base.id)
 
+        # check whether we need to do a 3-way merge
+        c_target = (commit_target or commit_head)
+        merge_base = repo.merge_base(commit_base.oid, c_target.oid)
+        L.debug("Found merge base: %s", merge_base)
+
+        if not merge_base:
+            # there is no relation between the commits
+            raise click.ClickException(f"Commits {commit_base.id} and {c_target.id} aren't related.")
+        elif merge_base != commit_base.id:
+            # this needs a 3-way diff and we don't support them yet
+            raise click.ClickException(f"Sorry, 3-way diffs aren't supported yet.")
+
         base_rs = RepositoryStructure(repo, commit_base)
         all_datasets = {ds.path for ds in base_rs}
 
