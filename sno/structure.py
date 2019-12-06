@@ -30,6 +30,12 @@ class RepositoryStructure:
         """ Get a specific dataset by path """
         return self.get_at(path, self.tree)
 
+    def __eq__(self, other):
+        return (self.repo.path == other.repo.path) and (self._commit.id == other._commit.id)
+
+    def __repr__(self):
+        return f"RepoStructure<{self.repo.path}@{self._commit.id}>"
+
     def get(self, path):
         try:
             return self.get_at(path, self.tree)
