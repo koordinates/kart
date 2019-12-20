@@ -1,16 +1,16 @@
 import click
 
 
-class MutuallyExclusiveOption(click.Option):
+class MutexOption(click.Option):
     """
     Mutually exclusive options
     Source: merge of solutions from https://github.com/pallets/click/issues/257
 
     Usage:
         @click.group()
-        @click.option("--username", prompt=True, cls=Mutex, exclusive_with=["token"])
-        @click.option("--password", prompt=True, hide_input=True, cls=Mutex, exclusive_with=["token"])
-        @click.option("--token", cls=Mutex, exclusive_with=["username","password"])
+        @click.option("--username", prompt=True, cls=MutexOption, exclusive_with=["token"])
+        @click.option("--password", prompt=True, hide_input=True, cls=MutexOption, exclusive_with=["token"])
+        @click.option("--token", cls=MutexOption, exclusive_with=["username","password"])
         def login(ctx=None, username:str=None, password:str=None, token:str=None) -> None:
             print("...do what you like with the params you got...")
     """

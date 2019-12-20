@@ -6,3 +6,4 @@ pytest-sugar
 pytest-helpers-namespace
 pytest-benchmark[aspect]
 pytest-profiling
+html5lib

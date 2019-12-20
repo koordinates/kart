@@ -225,7 +225,7 @@ def main():
             else:
                 subprocess.check_call([
                     'sno', 'commit',
-                    '-m', f'history-creator changed things at {datetime.now():%H:%M:%S}'
+                    '-m', f'history-creator changed things at {datetime.now():%H:%M:%S.%f}'
                 ])
 
             if i and (i % 10 == 0):

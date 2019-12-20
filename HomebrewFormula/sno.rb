@@ -73,6 +73,7 @@ class Sno < Formula
   depends_on "python" # Python3
   depends_on "spatialindex"
   depends_on "sqlite"
+  # also required byt always available: git
   # also required but handled manually: libgit2
 
   def install

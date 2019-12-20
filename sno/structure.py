@@ -1,6 +1,8 @@
 import base64
+import collections
 import functools
 import hashlib
+import itertools
 import json
 import logging
 import os
@@ -14,18 +16,31 @@ import click
 import msgpack
 import pygit2
 
-from . import core, gpkg
+from . import core, gpkg, diff
 
 
 class RepositoryStructure:
-    def __init__(self, repo):
+    def __init__(self, repo, commit=None):
         self.L = logging.getLogger(__class__.__qualname__)
 
         self.repo = repo
+        self._commit = commit or self.repo.head.peel(pygit2.Commit)
 
     def __getitem__(self, path):
         """ Get a specific dataset by path """
         return self.get_at(path, self.tree)
+
+    def __eq__(self, other):
+        return (self.repo.path == other.repo.path) and (self._commit.id == other._commit.id)
+
+    def __repr__(self):
+        return f"RepoStructure<{self.repo.path}@{self._commit.id}>"
+
+    def get(self, path):
+        try:
+            return self.get_at(path, self.tree)
+        except KeyError:
+            return None
 
     def get_at(self, path, tree):
         """ Get a specific dataset by path using a specified Tree """
@@ -71,7 +86,7 @@ class RepositoryStructure:
 
     @property
     def tree(self):
-        return self.repo.head.peel(pygit2.Tree)
+        return self._commit.peel(pygit2.Tree)
 
     @property
     def working_copy(self):
@@ -90,7 +105,7 @@ class RepositoryStructure:
         del self._working_copy
 
     def commit(self, wcdiff, message, *, allow_empty=False):
-        tree = self.repo.head.peel(pygit2.Tree)
+        tree = self.tree
         wc = self.working_copy
 
         git_index = pygit2.Index()
@@ -889,3 +904,89 @@ class Dataset1(DatasetStructure):
 
         if callback:
             callback(self, "INDEX")
+
+    def diff(self, other, pk_filter=None, reverse=False):
+        candidates_ins = collections.defaultdict(list)
+        candidates_upd = {}
+        candidates_del = collections.defaultdict(list)
+
+        params = {}
+        if reverse:
+            params = {'swap': True}
+
+        if other is None:
+            diff_index = self.tree.diff_to_tree(**params)
+            self.L.debug("diff (%s -> None / %s): %s changes", self.tree.id, 'R' if reverse else 'F', len(diff_index))
+        else:
+            diff_index = self.tree.diff_to_tree(other.tree, **params)
+            self.L.debug("diff (%s -> %s / %s): %s changes", self.tree.id, other.tree.id, 'R' if reverse else 'F', len(diff_index))
+
+        if reverse:
+            this, other = other, self
+        else:
+            this, other = self, other
+
+        for d in diff_index.deltas:
+            self.L.debug("diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path)
+
+            if d.old_file and d.old_file.path.startswith('.sno-table/meta/'):
+                continue
+            elif d.new_file and d.new_file.path.startswith('.sno-table/meta/'):
+                continue
+
+            if d.status == pygit2.GIT_DELTA_DELETED:
+                my_pk = this.decode_pk(os.path.basename(d.old_file.path))
+
+                self.L.debug("diff(): D %s (%s)", d.old_file.path, my_pk)
+
+                _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
+
+                candidates_del[str(my_pk)].append((str(my_pk), my_obj))
+            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                my_pk = this.decode_pk(os.path.basename(d.old_file.path))
+                other_pk = other.decode_pk(os.path.basename(d.new_file.path))
+
+                self.L.debug("diff(): M %s (%s) -> %s (%s)", d.old_file.path, my_pk, d.new_file.path, other_pk)
+
+                _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
+                _, other_obj = other.get_feature(other_pk, ogr_geoms=False)
+
+                candidates_upd[str(my_pk)] = (my_obj, other_obj)
+            elif d.status == pygit2.GIT_DELTA_ADDED:
+                other_pk = other.decode_pk(os.path.basename(d.new_file.path))
+
+                self.L.debug("diff(): A %s (%s)", d.new_file.path, other_pk)
+
+                _, other_obj = other.get_feature(other_pk, ogr_geoms=False)
+
+                candidates_ins[str(other_pk)].append(other_obj)
+            else:
+                # GIT_DELTA_RENAMED
+                # GIT_DELTA_COPIED
+                # GIT_DELTA_IGNORED
+                # GIT_DELTA_TYPECHANGE
+                # GIT_DELTA_UNMODIFIED
+                # GIT_DELTA_UNREADABLE
+                # GIT_DELTA_UNTRACKED
+                raise NotImplementedError(f"Delta status: {d.status_char()}")
+
+        # detect renames
+        for h in list(candidates_del.keys()):
+            if h in candidates_ins:
+                track_pk, my_obj = candidates_del[h].pop(0)
+                other_obj = candidates_ins[h].pop(0)
+
+                candidates_upd[track_pk] = (my_obj, other_obj)
+
+                if not candidates_del[h]:
+                    del candidates_del[h]
+                if not candidates_ins[h]:
+                    del candidates_ins[h]
+
+        return diff.Diff(
+            self,
+            meta={},
+            inserts=list(itertools.chain(*candidates_ins.values())),
+            deletes=dict(itertools.chain(*candidates_del.values())),
+            updates=candidates_upd,
+        )

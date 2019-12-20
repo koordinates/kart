@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sno Diff: ${title}</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" type="image/svg" href="https://api.iconify.design/map:snow.svg?height=64" />
+
+    <link rel="stylesheet" href="https://unpkg.com/bootstrap@4.3.1/dist/css/bootstrap-reboot.min.css"/>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css" integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ==" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js" integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew==" crossorigin=""></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.css">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-easybutton@2/src/easy-button.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-groupedlayercontrol@0.6.1/dist/leaflet.groupedlayercontrol.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-groupedlayercontrol@0.6.1/dist/leaflet.groupedlayercontrol.min.js"></script>
+
+    <style>
+        body {
+            padding: 30px;
+        }
+        #map {
+            height: 400px;
+        }
+        #tables {
+            margin-top: 30px;
+        }
+        #tables .dataset {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        #tables table {
+            table-layout: fixed;
+            border: 2px solid black;
+        }
+        #tables tr {
+            vertical-align: top;
+            border: 1px solid #ccc;
+        }
+        #tables tr.feature {
+            margin-top: 20px;
+            border-top: 2px solid black;
+        }
+        #tables th {
+            position: sticky;
+            top: 0;
+            background-color: white;
+        }
+        #tables td,
+        #tables th {
+            white-space: pre;
+            border: 1px solid #ccc;
+            padding: 0 5px;
+        }
+        #tables tr :first-child {
+            padding-left: 9px;
+        }
+        #tables tr.selected {
+            border: 2px solid blue !important;
+        }
+        #tables tr.selected :first-child {
+            border-left-width: 10px;
+            border-left-color: blue !important;
+            padding-left: 5px;
+        }
+        #tables .geometry {
+            cursor: pointer;
+        }
+        #tables .update.old .diff,
+        .bg-upd-old {
+            background-color: rgba(244,165,130, 0.3);
+        }
+        #tables .update.new .diff,
+        .bg-upd-new {
+            background-color: rgba(146,197,222, 0.3);
+        }
+        #tables .delete td,
+        .bg-del {
+            background-color: rgba(202,0,32, 0.3);
+        }
+        #tables .insert td,
+        .bg-ins {
+            background-color: rgba(5,113,176, 0.3);
+        }
+        #tables .update.old {
+            border-bottom: 0;
+        }
+
+        .legend {
+            margin-top: 30px;
+        }
+        .legend span {
+            display: inline-block;
+            padding: 0 10px;
+            margin-left: 10px;
+        }
+
+        .mapZoomAll {
+            content: url('https://api.iconify.design/mdi:arrow-expand-all.svg?height=20');
+            position: relative;
+            left: -4px;
+            top: 2px;
+        }
+    </style>
+    <script id="sno-data">const DATA=${geojson_data};</script>
+    <script type="module">
+        const GEOM = '⭔'
+
+        function buildMap() {
+            const LABELS = {updateOld: 'Update (previous)', updateNew: 'Update (new)'}
+            // from ColorBrewer2
+            const COLORS = {delete: '#ca0020', insert: '#0571b0', updateOld: '#f4a582', updateNew: '#92c5de'}
+
+            window.layers = {}
+            window.featureMap = {}
+            window.selectedFeature = null
+
+            window.map = L.map('map')
+            L.control.scale().addTo(map);
+
+            L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
+                maxZoom: 22,
+                attribution: 'Base map by Carto (CC BY 3.0) with data by OpenStreetMap (ODbL)',
+            }).addTo(map)
+
+            var layerGroup = L.featureGroup()
+            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1'])) {
+                if (!diff.featureChanges.length) {
+                    continue
+                }
+
+                const fc = {
+                    'insert': [],
+                    'updateNew': [],
+                    'updateOld': [],
+                    'delete': [],
+                }
+                layers[dataset] = {}
+                featureMap[dataset] = {}
+
+                for (let [fOld, fNew] of diff.featureChanges) {
+                    if (fOld && fNew) {
+                        fc['updateOld'].push(fOld)
+                        fc['updateNew'].push(fNew)
+                    } else if (fOld) {
+                        fc['delete'].push(fOld)
+                    } else if (fNew) {
+                        fc['insert'].push(fNew)
+                    }
+                }
+
+                let dsGroup = L.featureGroup()
+                for (let [change, features] of Object.entries(fc)) {
+                    if (features.length) {
+                        const layer = L.geoJSON({'type': 'FeatureCollection', 'features': features}, {
+                            style: {
+                                opacity: 0.8,
+                                weight: 2,
+                                color: COLORS[change],
+                                fillOpacity: 0.5,
+                            },
+                            pointToLayer: (feature, latlng) => {
+                                return L.circleMarker(latlng, {radius: 5})
+                            },
+                            onEachFeature: (feature, layer) => {
+                                featureMap[dataset][feature.id] = layer;
+                            }
+                        })
+                        layer.on('click', (e) => {
+                            let feature = e.sourceTarget.feature;
+                            console.log('map-click', dataset, feature, e.layer. e)
+                            selectMapFeature(dataset, feature.id)
+                        })
+                        layer.addTo(dsGroup)
+                        layers[dataset][change] = layer
+                    }
+                }
+                dsGroup.addTo(map)
+                dsGroup.addTo(layerGroup)
+            }
+            map.fitBounds(layerGroup.getBounds())
+
+            const groupedOverlays = {}
+            for (let [dataset, changes] of Object.entries(layers)) {
+                groupedOverlays[dataset] = {}
+                for (let [change, lyr] of Object.entries(changes)) {
+                    const label = LABELS[change] || (change[0].toUpperCase() + change.slice(1));
+                    groupedOverlays[dataset][label] = lyr
+                }
+            }
+            L.control.groupedLayers(null, groupedOverlays, {groupCheckboxes: true}).addTo(map);
+
+            L.easyButton(
+                'mapZoomAll',
+                (btn, map) => {
+                    map.fitBounds(layerGroup.getBounds())
+                    selectMapFeature()
+                }
+            ).addTo(map)
+        }
+
+        function selectMapFeature(dataset, fid) {
+            if (selectedFeature) {
+                selectedFeature[0].classList.remove('selected')
+                selectedFeature[1].setStyle({fillOpacity: 0.5, opacity: 0.8});
+                selectedFeature = null
+            }
+            if (!dataset) {
+                return
+            }
+            let row = document.querySelector('#tables table[data-dataset="' + dataset + '"] tr[data-fid="' + fid + '"]')
+            row.classList.add('selected')
+            let f = featureMap[dataset][fid]
+            if (f) {
+                f.setStyle({fillOpacity: 1, opacity: 1});
+                if (f.getBounds) {
+                    map.fitBounds(f.getBounds())
+                } else {
+                    map.setView(f.getLatLng(), 18)
+                }
+            }
+            selectedFeature = [row, f]
+        }
+
+        function getSchema(diff) {
+            // if schema has changed then it'll show up in every single feature
+            let oldSchema = null
+            let newSchema = null
+            for (let [fOld, fNew] of diff.featureChanges) {
+                if (fOld && !oldSchema) {
+                    oldSchema = Object.keys(fOld.properties)
+                    oldSchema.splice(0, 0, GEOM)
+                }
+                if (fNew && !newSchema) {
+                    newSchema = Object.keys(fNew.properties)
+                    newSchema.splice(0, 0, GEOM)
+                }
+
+                if (newSchema && oldSchema) {
+                    break
+                }
+            }
+            const unionSchema = new Set((oldSchema || []).concat(newSchema))
+            return Array.from(unionSchema)
+        }
+
+        function buildTables() {
+            function isArrayEqual(a, b) {
+                if (!Array.isArray(b) || (a.length != b.length)) {
+                    return false
+                }
+                return a.every((e, i) => {
+                    if (Array.isArray(e)) {
+                        return isArrayEqual(e, b[i])
+                    } else {
+                        return a[i] === b[i]
+                    }
+                })
+            }
+            function isGeomEqual(a, b) {
+                if (!a && !b) {
+                    return true
+                } else if (!a || !b) {
+                    return false
+                } else if (a.type != b.type) {
+                    return false
+                }
+                return isArrayEqual(a.coordinates, b.coordinates)
+            }
+
+            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1'])) {
+                if (!diff.featureChanges.length) {
+                    continue
+                }
+
+                let tableWrapper = document.createElement('div')
+                tableWrapper.classList.add('dataset')
+
+                let table = document.createElement('table')
+                table.dataset.dataset = dataset
+                table.classList.add('table')
+
+                let thead = table.createTHead()
+                let row = thead.insertRow()
+
+                let schema = getSchema(diff)
+
+                for (let col of schema) {
+                    let th = document.createElement("th")
+                    th.appendChild(document.createTextNode(col))
+                    row.appendChild(th)
+                    if (col == GEOM) {
+                        th.classList.add('geometry')
+                    }
+                }
+
+                let tbody = table.createTBody()
+                for (let [fOld, fNew] of diff.featureChanges) {
+                    let change;
+                    if (fOld && fNew) {
+                        change = 'update'
+                    } else if (fOld) {
+                        change = 'delete'
+                    } else {
+                        change = 'insert'
+                    }
+
+                    fOld = fOld || {properties: {}}
+                    fNew = fNew || {properties: {}}
+                    let oldRow = document.createElement('tr')
+                    let newRow = document.createElement('tr')
+                    oldRow.classList.add(change, 'old')
+                    newRow.classList.add(change, 'new')
+                    oldRow.dataset.fid = fOld.id || null
+                    newRow.dataset.fid = fNew.id || null
+
+                    for (let col of schema) {
+                        let oldCell = oldRow.insertCell()
+                        let newCell = newRow.insertCell()
+                        if (col === GEOM) {
+                            oldCell.classList.add('geometry')
+                            newCell.classList.add('geometry')
+                            oldCell.appendChild(document.createTextNode(
+                                (fOld.geometry ? GEOM : '␀')
+                            ))
+                            newCell.appendChild(document.createTextNode(
+                                (fNew.geometry ? GEOM : '␀')
+                            ))
+                            if (!isGeomEqual(fOld.geometry, fNew.geometry)) {
+                                oldCell.classList.add('diff')
+                                newCell.classList.add('diff')
+                            }
+                        } else {
+                            let oldProp = fOld.properties[col]
+                            let newProp = fNew.properties[col]
+                            oldCell.appendChild(document.createTextNode((oldProp == null ? '␀': oldProp)))
+                            newCell.appendChild(document.createTextNode((newProp == null ? '␀': newProp)))
+                            if (oldProp !== newProp) {
+                                oldCell.classList.add('diff')
+                                newCell.classList.add('diff')
+                            }
+                        }
+                    }
+
+                    if (change == 'delete' || change == 'update') {
+                        tbody.appendChild(oldRow)
+                        oldRow.classList.add('feature')
+                    }
+                    if (change == 'insert' || change == 'update') {
+                        tbody.appendChild(newRow)
+                        if (change == 'insert') {
+                            newRow.classList.add('feature')
+                        }
+                    }
+                }
+
+                // click handling
+                table.addEventListener("click", () => {
+                    let td = event.target.closest("td.geometry");
+                    if (td) {
+                        let ds = event.target.closest('[data-dataset]').dataset.dataset
+                        let fid = event.target.closest('tr[data-fid]').dataset.fid
+                        selectMapFeature(ds, fid)
+                    }
+                });
+
+                tableWrapper.appendChild(table)
+
+                let heading = document.createElement('h2')
+                heading.appendChild(document.createTextNode(dataset))
+
+                const tables = document.querySelector("#tables")
+                tables.appendChild(heading)
+                tables.appendChild(tableWrapper)
+
+            }
+        }
+
+        buildMap()
+        buildTables()
+    </script>
+</head>
+<body>
+    <h1><img src="https://api.iconify.design/map:snow.svg?height=48"> ${title}</h1>
+
+    <div id='map'></div>
+
+    <div class="legend">
+        Legend:
+        <span class="bg-del">Delete</span>
+        <span class="bg-ins">Insert</span>
+        <span class="bg-upd-old">Update (previous)</span>
+        <span class="bg-upd-new">Update (new)</span>
+    </div>
+
+    <div id='tables'></div>
+</body>
+</html>

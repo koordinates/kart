@@ -166,6 +166,45 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             H.verify_gpkg_extent(db, table)
 
 
+def test_init_import_name_clash(data_archive, cli_runner, geopackage):
+    """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
+    with data_archive("gpkg-editing") as data:
+        r = cli_runner.invoke(
+            ["init", "--import", f"GPKG:editing.gpkg:editing", "editing"]
+        )
+        repo_path = data / "editing"
+
+        assert r.exit_code == 0, r
+        assert (repo_path / "HEAD").exists()
+
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.is_bare
+        assert not repo.is_empty
+
+        # working copy exists
+        wc = (repo_path / f"editing.gpkg")
+        assert wc.exists() and wc.is_file()
+        print("workingcopy at", wc)
+
+        assert repo.config["sno.workingcopy.version"] == "1"
+        assert repo.config["sno.workingcopy.path"] == "editing.gpkg"
+
+        db = geopackage(wc)
+        wc_rowcount = H.row_count(db, "editing")
+        assert wc_rowcount > 0
+
+        wc_tree_id = db.execute(
+            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+        ).fetchone()[0]
+        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+
+        # make sure we haven't stuffed up the original file
+        db = geopackage("editing.gpkg")
+        assert db.execute("SELECT 1 FROM sqlite_master WHERE name='.sno-meta';").fetchall() == []
+        source_rowcount = db.execute("SELECT COUNT(*) FROM editing;").fetchone()[0]
+        assert source_rowcount == wc_rowcount
+
+
 @pytest.mark.slow
 def test_init_import_errors(data_archive, tmp_path, cli_runner):
     gpkg = "census2016_sdhca_ot_short.gpkg"

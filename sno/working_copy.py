@@ -24,7 +24,7 @@ class WorkingCopy:
                 raise NotImplementedError(f"Working copy version: {version}")
 
             path = repo_cfg['sno.workingcopy.path']
-            if not os.path.isfile(path):
+            if not (Path(repo.path) / path).is_file():
                 raise FileNotFoundError(f"Working copy missing? {path}")
 
             return WorkingCopy_GPKG_1(repo, path)
@@ -34,7 +34,7 @@ class WorkingCopy:
 
     @classmethod
     def new(cls, repo, path, version=1, **kwargs):
-        if os.path.isfile(path):
+        if (Path(repo.path) / path).exists():
             raise FileExistsError(path)
 
         return WorkingCopy_GPKG_1(repo, path, **kwargs)
@@ -580,8 +580,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         return feat_count
 
-    def diff_db_to_tree(self, dataset):
-        """ Generates a diff between a working copy DB and the underlying repository tree """
+    def diff_db_to_tree(self, dataset, pk_filter=None):
+        """
+        Generates a diff between a working copy DB and the underlying repository tree
+
+        Pass a list of PK values to filter results to them
+        """
         with self.session() as db:
             dbcur = db.cursor()
 
@@ -591,7 +595,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             meta_old = dict(dataset.iter_meta_items(exclude={'fields', 'primary_key'}))
             meta_new = dict(self.read_meta(dataset))
             for name in set(meta_new.keys()) ^ set(meta_old.keys()):
-                meta_diff[name] = (meta_old.get(name), meta_new.get(name))
+                v_old = meta_old.get(name)
+                v_new = meta_new.get(name)
+                if v_old or v_new:
+                    meta_diff[name] = (v_old, v_new)
 
             pk_field = dataset.primary_key
 
@@ -603,7 +610,11 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 ON ({self.TRACKING_TABLE}.pk = {gpkg.ident(table)}.{gpkg.ident(pk_field)})
                 WHERE ({self.TRACKING_TABLE}.table_name = ?)
             """
-            dbcur.execute(diff_sql, (table,))
+            params = [table]
+            if pk_filter:
+                diff_sql += f"\nAND {self.TRACKING_TABLE}.pk IN ({','.join(['?']*len(pk_filter))})"
+                params += [str(pk) for pk in pk_filter]
+            dbcur.execute(diff_sql, params)
 
             candidates_ins = collections.defaultdict(list)
             candidates_upd = {}
@@ -783,7 +794,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             elif d.status == pygit2.GIT_DELTA_MODIFIED:
                                 old_pk = src_ds.decode_pk(os.path.basename(d.old_file.path))
                                 new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
-                                L.warning("reset(): M %s (%s) -> %s (%s)", d.old_file.path, old_pk, d.new_file.path, new_pk)
+                                L.debug("reset(): M %s (%s) -> %s (%s)", d.old_file.path, old_pk, d.new_file.path, new_pk)
                                 self.write_features(dbcur, dest_ds, [new_pk])
                             elif d.status == pygit2.GIT_DELTA_ADDED:
                                 new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
