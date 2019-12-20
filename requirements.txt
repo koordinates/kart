@@ -13,4 +13,4 @@ rtree==0.8.3
 six==1.13.0               # via pygit2
 
 # The following packages are considered to be unsafe in a requirements file:
-# setuptools==41.6.0        # via rtree
+# setuptools==42.0.2        # via rtree
