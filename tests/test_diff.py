@@ -1275,6 +1275,7 @@ def test_diff_rev_rev(data_archive, cli_runner):
             f"..{H.POINTS_HEAD_SHA}",
         )
         for spec in NOOP_SPECS:
+            print(f"noop: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", spec])
             assert r.exit_code == 0, r
 
@@ -1284,6 +1285,7 @@ def test_diff_rev_rev(data_archive, cli_runner):
             "HEAD^1..HEAD",
         )
         for spec in F_SPECS:
+            print(f"fwd: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1"]
@@ -1317,12 +1319,13 @@ def test_diff_rev_rev(data_archive, cli_runner):
             "HEAD..HEAD^1",
         )
         for spec in R_SPECS:
+            print(f"rev: {spec}")
             r = cli_runner.invoke(
                 [
                     "diff",
                     "--exit-code",
                     "--json",
-                    f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD1_SHA}",
+                    spec,
                 ]
             )
             assert r.exit_code == 1, r

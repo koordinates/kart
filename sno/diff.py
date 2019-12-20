@@ -473,7 +473,7 @@ def diff(ctx, output_format, output_path, exit_code, args):
         if not merge_base:
             # there is no relation between the commits
             raise click.ClickException(f"Commits {commit_base.id} and {c_target.id} aren't related.")
-        elif merge_base != commit_base.id:
+        elif merge_base not in (commit_base.id, c_target.id):
             # this needs a 3-way diff and we don't support them yet
             raise click.ClickException(f"Sorry, 3-way diffs aren't supported yet.")
 
