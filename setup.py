@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='sno',
-    version='0.2.0',
+    version='0.2.1.dev0',
     description='Distributed version-control for datasets',
     url='http://github.com/koordinates/sno',
     author='Koordinates Limited',
