@@ -10,6 +10,10 @@ Sno: Distributed version-control for datasets
 > ##### ℹ️ If you're new to git
 > You need to have [an SSH key added in Github and available on your computer](https://help.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh) to be able to install Sno during the preview period.
 
+### Upgrading to v0.2
+
+See the [v0.2 release notes](https://github.com/koordinates/sno/releases/tag/v0.2.0) for changes, upgrading, and compatibility notes.
+
 ### macOS
 
 You need [Homebrew](https://brew.sh/) installed.
