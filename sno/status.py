@@ -15,6 +15,10 @@ def status(ctx):
 
     rs = RepositoryStructure(repo)
 
+    if repo.is_empty:
+        click.echo('Empty repository.\n  (use "sno import" to add some data)')
+        return
+
     commit = repo.head.peel(pygit2.Commit)
 
     if repo.head_is_detached:

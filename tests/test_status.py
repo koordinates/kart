@@ -129,3 +129,19 @@ def test_status(
             "    new:       1 feature",
             "    deleted:   2 features",
         ]
+
+
+def test_status_empty(tmp_path, cli_runner, chdir):
+    repo_path = tmp_path / 'wiz.sno'
+    r = cli_runner.invoke(
+        ["init", repo_path]
+    )
+    assert r.exit_code == 0, r
+
+    with chdir(repo_path):
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines() == [
+            'Empty repository.',
+            '  (use "sno import" to add some data)',
+        ]

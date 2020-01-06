@@ -24,7 +24,12 @@ class RepositoryStructure:
         self.L = logging.getLogger(__class__.__qualname__)
 
         self.repo = repo
-        self._commit = commit or self.repo.head.peel(pygit2.Commit)
+        if commit:
+            self._commit = commit
+        elif self.repo.is_empty:
+            self._commit = None
+        else:
+            self._commit = self.repo.head.peel(pygit2.Commit)
 
     def __getitem__(self, path):
         """ Get a specific dataset by path """
