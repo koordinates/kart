@@ -347,3 +347,24 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
         )
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == []
+
+
+@pytest.mark.slow
+def test_init_import_home_resolve(data_archive, tmp_path, cli_runner, chdir, monkeypatch):
+    """ Import from a ~-specified gpkg path """
+    repo_path = tmp_path / "data.sno"
+    repo_path.mkdir()
+
+    r = cli_runner.invoke(
+        ["init", repo_path]
+    )
+    assert r.exit_code == 0, r
+
+    with data_archive("gpkg-points") as source_path:
+        with chdir(repo_path):
+            monkeypatch.setenv("HOME", str(source_path))
+
+            r = cli_runner.invoke(
+                ["import", f"GPKG:~/nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k"]
+            )
+            assert r.exit_code == 0, r

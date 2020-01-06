@@ -76,6 +76,11 @@ class ImportPath(click.Path):
         if prefix not in self.prefixes:
             self.fail(f'invalid prefix: "{prefix}" (choose from {", ".join(self.prefixes)})')
 
+        # resolve GPKG:~/foo.gpkg and GPKG:~me/foo.gpkg
+        # usually this is handled by the shell, but the GPKG: prefix prevents that
+        value = os.path.expanduser(value)
+
+        # pass to Click's normal path resolving & validation
         path = super().convert(value, param, ctx)
         return (prefix, path, suffix)
 
