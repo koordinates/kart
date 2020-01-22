@@ -208,6 +208,8 @@ class WorkingCopyGPKG(WorkingCopy):
 
     def write_meta(self, dataset):
         meta_info = dataset.get_meta_item("gpkg_contents")
+        meta_info['table_name'] = dataset.name
+        meta_info['identifier'] = f"{dataset.name}: {meta_info['identifier']}"
 
         meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
         meta_srs = dataset.get_meta_item("gpkg_spatial_ref_sys")
@@ -272,6 +274,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 params = dict(o.items())
                 params['md_file_id'] = metadata_id_map[o['md_file_id']]
                 params['md_parent_id'] = metadata_id_map.get(o['md_parent_id'], None)
+                params['table_name'] = dataset.name
 
                 keys, values = zip(*params.items())
                 sql = f"""
@@ -294,7 +297,7 @@ class WorkingCopyGPKG(WorkingCopy):
         self.repo.config["sno.workingcopy.version"] = 1
         self.repo.config["sno.workingcopy.path"] = str(new_path)
 
-    def write_full(self, commit, dataset):
+    def write_full(self, commit, dataset, safe=True):
         raise NotImplementedError()
 
     def _create_spatial_index(self, dataset):
@@ -477,7 +480,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 return
             yield itertools.chain((first_el,), chunk_it)
 
-    def write_full(self, commit, *datasets):
+    def write_full(self, commit, *datasets, safe=True):
         """
         Writes a full layer into a working-copy table
 
@@ -485,7 +488,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
-        with self.session(bulk=2) as db:
+        with self.session(bulk=(0 if safe else 2)) as db:
             for dataset in datasets:
                 table = dataset.name
 

@@ -5,6 +5,7 @@ import pytest
 
 import pygit2
 
+from sno.working_copy import WorkingCopy
 
 H = pytest.helpers.helpers()
 
@@ -315,6 +316,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
     ARCHIVE_PATHS = (
         ("gpkg-points", "nz-pa-points-topo-150k.gpkg", "nz_pa_points_topo_150k", "pa_sites"),
         ("gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments", "misc/waca"),
+        ("gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments", "other/waca2"),
     )
 
     for archive, source_gpkg, source_table, import_path in ARCHIVE_PATHS:
@@ -368,3 +370,59 @@ def test_init_import_home_resolve(data_archive, tmp_path, cli_runner, chdir, mon
                 ["import", f"GPKG:~/nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k"]
             )
             assert r.exit_code == 0, r
+
+
+@pytest.mark.slow
+def test_import_existing_wc(data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request, chdir):
+    """ Import a new dataset into a repo with an existing working copy. Dataset should get checked out """
+    with data_working_copy("points") as (repo_path, wcdb):
+        repo = pygit2.Repository(str(repo_path))
+        db = geopackage(wcdb)
+        wc = WorkingCopy.open(repo)
+
+        with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
+            r = cli_runner.invoke(
+                ["import", f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS_LAYER}"]
+            )
+            assert r.exit_code == 0, r
+
+        assert H.row_count(db, "nz_waca_adjustments") > 0
+
+        head_tree = repo.head.peel(pygit2.Tree)
+        wc_tree_id = db.execute(
+            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+        ).fetchone()[0]
+        assert wc_tree_id == head_tree.hex
+        assert wc.assert_db_tree_match(head_tree)
+
+        r = cli_runner.invoke(
+            ["status"]
+        )
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+        with db:
+            dbcur = db.cursor()
+            dbcur.execute("DELETE FROM nz_waca_adjustments WHERE rowid IN (SELECT rowid FROM nz_waca_adjustments ORDER BY id LIMIT 10);")
+            assert dbcur.rowcount == 10
+
+        with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
+            r = cli_runner.invoke(
+                ["import", f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS_LAYER}", "waca2"]
+            )
+            assert r.exit_code == 0, r
+
+        assert H.row_count(db, "waca2") > 0
+
+        head_tree = repo.head.peel(pygit2.Tree)
+        wc_tree_id = db.execute(
+            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+        ).fetchone()[0]
+        assert wc_tree_id == head_tree.hex
+        assert wc.assert_db_tree_match(head_tree)
+
+        r = cli_runner.invoke(
+            ["status"]
+        )
+        assert r.exit_code == 0, r
+        assert r.stdout.splitlines()[-2:] == ['  nz_waca_adjustments/', '    deleted:   10 features']

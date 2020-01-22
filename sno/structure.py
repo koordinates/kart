@@ -90,6 +90,10 @@ class RepositoryStructure:
                         to_examine.append((te_path, te.obj))
 
     @property
+    def head_commit(self):
+        return self._commit
+
+    @property
     def tree(self):
         return self._commit.peel(pygit2.Tree)
 
