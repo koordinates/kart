@@ -21,6 +21,10 @@ build/
 dist/
 venv/
 vendor/
+requirements/.*.installed
+
+Brewfile.lock.json
+.venv.mk
 
 .buildkite/
 

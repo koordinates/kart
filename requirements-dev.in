@@ -1,7 +1,0 @@
--r requirements.txt
--r requirements-test.txt
-
-ipdb
-ipython
-pip-tools
-pipdeptree

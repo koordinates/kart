@@ -2,6 +2,7 @@
 *.py?
 /data
 /venv
+/requirements/.*.installed
 /vendor
 /tests/data/*/
 /tests/data/*.zip
@@ -11,3 +12,5 @@ pytest.xml
 /.pytest*
 /dist
 /build
+Brewfile.lock.json
+.venv.mk

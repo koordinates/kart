@@ -1,0 +1,12 @@
+build-essential
+cmake
+colormake
+gdal-bin
+git-core
+libgdal-dev
+libgdal20
+libspatialindex-dev
+libsqlite3-mod-spatialite
+libssl-dev
+pkg-config
+sqlite3

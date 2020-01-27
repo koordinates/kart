@@ -1,4 +1,4 @@
--r requirements.txt
+-r ../requirements.txt
 
 pytest~=4.3
 pytest-cov

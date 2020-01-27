@@ -33,7 +33,7 @@ class Sno < Formula
       system("git", "checkout", "-b", "$ci")
       g_branch = "$ci"
     end
-    puts "Kx: devel source is #{g_path} #{g_branch}@#{g_sha}"
+    STDERR.puts "sno: devel source is #{g_path} #{g_branch}@#{g_sha}"
 
     url "file://#{g_path}", :using => :git, :branch => g_branch, :revision => g_sha
     version "0.0.0+git.#{g_sha}"
@@ -65,6 +65,7 @@ class Sno < Formula
     end
   end
 
+  # This needs to be kept in sync with Brewfile
   depends_on "cmake" => [:build]
   depends_on "pkg-config" => [:build]
   depends_on "gdal"

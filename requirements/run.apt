@@ -1,0 +1,6 @@
+git-core
+sqlite3
+libgdal20
+gdal-bin
+libsqlite3-mod-spatialite
+libspatialindex-c4v5
