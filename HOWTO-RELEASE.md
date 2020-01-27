@@ -5,7 +5,7 @@ This process only supports a single release branch (master), and works with the 
 
 ### Prerequisites
 
-1. Bump Python dependencies (`make requirements-upgrade`); commit; push; check CI passes.
+1. Bump Python dependencies (`make py-requirements-upgrade`); commit; push; check CI passes.
 
 2. Decide on your version number:
    * The [SemVer format](https://semver.org/) is `1.2.3` or `1.2.3-beta.3` or `1.2.3-rc.1`
