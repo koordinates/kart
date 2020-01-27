@@ -8,6 +8,7 @@ echo "--- Installing test requirements..."
 
 # run the actual test suite
 echo "+++ Running test suite..."
+chmod a+rwx ./ ./tests/
 su sno -c "\
     /venv/bin/pytest \
     --verbose \

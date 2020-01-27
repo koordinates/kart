@@ -82,15 +82,15 @@ py-requirements-upgrade: requirements/.tools.installed
 
 requirements.txt: requirements/requirements.in requirements/licenses.ini
 	$(PIP_COMPILE_CMD) --output-file $@ $<
-	@sed -i -E 's/^(pygit2=)/#\1/' $@  # Comment out pygit2, because we install manually afterwards
+	@sed -E -i '' -e 's/^(pygit2=)/#\1/' $@  # Comment out pygit2, because we install manually afterwards
 
 requirements/test.txt: requirements/test.in requirements.txt
 	$(PIP_COMPILE_CMD) --output-file $@ $<
-	@sed -i -E 's/^(pygit2=)/#\1/' $@  # Comment out pygit2, because we install manually afterwards
+	@sed -E -i '' -e 's/^(pygit2=)/#\1/' $@  # Comment out pygit2, because we install manually afterwards
 
 requirements/dev.txt: requirements/dev.in requirements.txt requirements/test.txt
 	$(PIP_COMPILE_CMD) --output-file $@ $<
-	@sed -i -E 's/^(pygit2=)/#\1/' $@  # Comment out pygit2, because we install manually afterwards
+	@sed -E -i '' -e 's/^(pygit2=)/#\1/' $@  # Comment out pygit2, because we install manually afterwards
 
 # libgit2
 .PHONY: libgit2
