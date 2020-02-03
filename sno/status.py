@@ -9,7 +9,11 @@ from .structure import RepositoryStructure
 def status(ctx):
     """ Show the working copy status """
     repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
+    try:
+        repo = pygit2.Repository(repo_dir)
+    except pygit2.GitError:
+        repo = None
+
     if not repo or not repo.is_bare:
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
