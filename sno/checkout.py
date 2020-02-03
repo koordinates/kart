@@ -104,7 +104,7 @@ def checkout_new(repo_structure, path, *, datasets=None, commit=None):
     wc = WorkingCopy.new(repo_structure.repo, path)
     wc.create()
     for dataset in datasets:
-        wc.write_full(commit, dataset)
+        wc.write_full(commit, dataset, safe=False)
     wc.save_config()
 
 
