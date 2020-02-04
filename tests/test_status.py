@@ -145,3 +145,10 @@ def test_status_empty(tmp_path, cli_runner, chdir):
             'Empty repository.',
             '  (use "sno import" to add some data)',
         ]
+
+
+def test_status_none(tmp_path, cli_runner, chdir):
+    with chdir(tmp_path):
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 2, r
+        assert r.stdout.splitlines()[-1] == 'Error: Invalid value for --repo: Not an existing repository'
