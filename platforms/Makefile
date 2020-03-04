@@ -64,6 +64,14 @@ pyapp-Linux: $(SRC)/vendor/dist/vendor-Linux.tar.gz
 $(pyapp-Darwin):
 	$(MAKE) pyapp-Darwin
 
+.PHONY: app-sign
+app-sign:
+# App Code Signing
+# CODESIGN should start with "Developer ID Application: ..."
+	codesign -vvv --deep --timestamp --strict -s "$(CODESIGN)" --entitlements macos/entitlements.plist -o runtime macos/dist/Sno.app
+	codesign --verify --verbose macos/dist/Sno.app
+#	spctl -vvv --assess --type exec macos/dist/Sno.app
+
 .PHONY: pyapp-Darwin
 pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 	-$(RM) -r $(SRC)/vendor/dist/env/
@@ -80,12 +88,9 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 
-# App Code Signing
-# CODESIGN should start with "Developer ID Application: ..."
-	if [ -n "$(CODESIGN)" ]; then \
-		codesign --deep -s "$(CODESIGN)" --entitlements macos/entitlements.plist -o runtime macos/dist/Sno.app; \
-		codesign --verify --verbose macos/dist/Sno.app; \
-	fi
+ifdef CODESIGN
+	$(MAKE) app-sign
+endif
 
 	macos/dist/Sno.app/Contents/MacOS/sno_cli --version
 
@@ -113,20 +118,24 @@ $(deb) $(rpm): $(pyapp-Linux) | $(docker-fpm)
 macos/build/%.rtf: macos/%.md
 	sed -E 's/%VERSION%/$(VERSION)/' $< | pandoc -s - -o $@
 
+.PHONY: pkg-sign
+pkg-sign:
+	# Installer Signing
+	# PKGSIGN should start with "Developer ID Installer: ..."
+	productsign --sign "$(PKGSIGN)" macos/dist/Sno.pkg $(pkg)
+	pkgutil --check-signature $(pkg)
+
 $(pkg): $(pyapp-Darwin) macos/build/intro.rtf macos/build/summary.rtf
 	packagesbuild \
 		--verbose \
 		--package-version $(VERSION) \
 		macos/Sno.pkgproj
 
-# Installer Signing
-# PKGSIGN should start with "Developer ID Installer: ..."
-	if [ -n "$(PKGSIGN)" ]; then \
-		productsign --sign "$(PKGSIGN)" macos/dist/Sno.pkg $@; \
-		pkgutil --check-signature $@; \
-	else \
-		mv macos/dist/Sno.pkg $@; \
-	fi
+ifdef PKGSIGN
+	$(MAKE) pkg-sign
+else
+	mv macos/dist/Sno.pkg $@
+endif
 
 # Notarization
 # https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow
@@ -154,6 +163,8 @@ pkg-notarize-info:
 .PHONY: pkg-notarize-staple
 pkg-notarize-staple:
 	xcrun stapler staple -v $(pkg)
+	spctl -a -vvv -t install $(pkg)
+	stapler validate $(pkg)
 
 .PHONY: pkg
 pkg: $(pkg)

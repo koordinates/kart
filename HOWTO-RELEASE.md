@@ -35,7 +35,7 @@ This process only supports a single release branch (master). It'll need to be ex
    # make sure your virtualenv is deactivated
    $ realpath $(which sno)
    /Applications/Sno.app/Contents/MacOS/sno_cli
-   $ tests/scripts/e2e-1.sh
+   $ PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
    ```
 
 7. Upload vendor dependencies (requires AWS credentials)
@@ -90,7 +90,7 @@ This process only supports a single release branch (master). It'll need to be ex
    # make sure your virtualenv is deactivated
    $ realpath $(which sno)
    /Applications/Sno.app/Contents/MacOS/sno_cli
-   $ tests/scripts/e2e-1.sh
+   $ PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
    ```
 
 7. Attach the binaries to the Github release:

@@ -3,6 +3,7 @@
 import os
 import platform
 import shutil
+import subprocess
 
 share_toc = Tree('vendor/dist/env/share', prefix='share')
 libexec_root = 'vendor/dist/env/libexec'
@@ -14,7 +15,7 @@ a = Analysis(
     ['platforms/sno_cli.py'],
     pathex=[],
     binaries=[
-        ('vendor/dist/env/bin/git', 'bin/'),
+        ('vendor/dist/env/bin/git', '.'),
         ('vendor/dist/env/lib/*', '.'),
     ],
     datas=[
@@ -78,11 +79,18 @@ app = BUNDLE(
 # Git has about 200 so it's a big size loss
 # Fix it
 if platform.system() == "Darwin":
+
     # fix symlinks/binaries in libexec/git-core/
-    dist_libexec_root = os.path.join(DISTPATH, 'Sno.app', 'Contents', 'Resources', 'libexec')
+    dist_bin_root = os.path.join(DISTPATH, 'Sno.app', 'Contents', 'MacOS')
+    dist_resources_root = os.path.join(DISTPATH, 'Sno.app', 'Contents', 'Resources')
+    dist_libexec_root = os.path.join(dist_resources_root, 'libexec')
+
+    shutil.move(os.path.join(dist_bin_root, 'base_library.zip'), dist_resources_root)
+    os.symlink('../Resources/base_library.zip', os.path.join(dist_bin_root, 'base_library.zip'))
+
     os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
-    os.symlink('../Resources/libexec', os.path.join(DISTPATH, 'Sno.app', 'Contents', 'MacOS', 'libexec'))
-    os.symlink('../../../MacOS/bin/git', os.path.join(dist_libexec_root, 'git-core', 'git'))
+    os.symlink('../Resources/libexec', os.path.join(dist_bin_root, 'libexec'))
+    os.symlink('../../../MacOS/git', os.path.join(dist_libexec_root, 'git-core', 'git'))
 
     for (dir_, dirs, files) in os.walk(libexec_root):
         reldir = os.path.relpath(dir_, libexec_root)
@@ -98,8 +106,17 @@ if platform.system() == "Darwin":
                     os.symlink('git', os.path.join(dist_libexec_root, relpath))
                     continue
                 if not os.path.exists(fpath):
+                    print(f"ignoring broken link {relpath}")
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
+            elif subprocess.check_output(['file', '-b', fpath], text=True).startswith('Mach-O'):
+                print(f"relocating {relpath} to MacOS/")
+                shutil.move(fpath, dist_bin_root)
+                os.symlink(
+                    os.path.join('../../../MacOS', f),
+                    os.path.join(dist_libexec_root, relpath)
+                )
+                continue
 
             os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
             # copy anything else (keeps symlinks too)
