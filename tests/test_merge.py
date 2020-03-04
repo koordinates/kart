@@ -125,6 +125,7 @@ def test_merge_true(
 
         # make some changes
         db = geopackage(wc)
+        dbcur = db.cursor()
         insert(db)
         insert(db)
         b_commit_id = insert(db)
@@ -161,8 +162,8 @@ def test_merge_true(
 
         # check the database state
         num_inserts = len(insert.inserted_fids)
-        r = db.execute(
+        r = dbcur.execute(
             f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} IN ({','.join(['?']*num_inserts)});",
             insert.inserted_fids,
         )
-        assert r.fetchone()[0] == num_inserts
+        assert r[0][0] == num_inserts

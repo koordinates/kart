@@ -60,15 +60,15 @@ def test_dataset_versions():
 
 def _import_check(repo_path, table, source_gpkg, geopackage):
     repo = pygit2.Repository(str(repo_path))
-    tree = (repo.head.peel(pygit2.Tree) / table).obj
+    tree = (repo.head.peel(pygit2.Tree) / table)
 
     dataset = DatasetStructure.instantiate(tree, table)
 
     db = geopackage(source_gpkg)
-    num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+    num_rows = db.cursor().execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
 
     o = subprocess.check_output(["git", "ls-tree", "-r", "-t", "HEAD", table])
-    # print("\n".join(l.decode('utf8') for l in o.splitlines()[:20])))
+    print("\n".join(l.decode('utf8') for l in o.splitlines()[:20]))
 
     if dataset.version.startswith("1."):
         re_paths = r'^\d{6} blob [0-9a-f]{40}\t%s/.sno-table/[0-9a-f]{2}/[0-9a-f]{2}/([^/]+)$' % table
@@ -115,12 +115,13 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
         repo_path.mkdir()
 
         db = geopackage(f"{data / source_gpkg}")
+        dbcur = db.cursor()
         if param_ids[-1] == "empty":
             with db:
                 print(f"emptying table {table}...")
-                db.execute(f"DELETE FROM {table};")
+                dbcur.execute(f"DELETE FROM {table};")
 
-        num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+        num_rows = dbcur.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
         benchmark.group = f"test_import - {param_ids[-1]} (N={num_rows})"
 
         if param_ids[-1] == "empty":
@@ -166,12 +167,12 @@ def test_import(import_version, method, archive, source_gpkg, table, data_archiv
             if num_rows > 0:
                 # compare the first feature in the repo against the source DB
                 key, feature = next(dataset.features())
-                row = db.execute(f"SELECT * FROM {table} WHERE {pk_field}=?;", [feature[pk_field]]).fetchone()
+                row = dbcur.execute(f"SELECT * FROM {table} WHERE {pk_field}=?;", [feature[pk_field]]).fetchone()
                 print("First Feature:", key, feature, dict(row))
                 assert feature == dict(row)
 
                 # compare a source DB feature against the repo feature
-                row = db.execute(f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};").fetchone()
+                row = dbcur.execute(f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};").fetchone()
                 for key, feature in dataset.features():
                     if feature[pk_field] == row[pk_field]:
                         assert feature == dict(row)
@@ -209,7 +210,7 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
     repo = pygit2.Repository(str(repo_path))
 
     path = "mytable"
-    tree = (repo.head.peel(pygit2.Tree) / path).obj
+    tree = (repo.head.peel(pygit2.Tree) / path)
 
     dataset = DatasetStructure.instantiate(tree, path)
     assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
@@ -217,15 +218,16 @@ def test_feature_find_decode_performance(profile, import_version, archive, sourc
 
     with data_archive(archive) as data:
         db = geopackage(f"{data / source_gpkg}")
-        num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+        dbcur = db.cursor()
+        num_rows = dbcur.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
         pk_field = gpkg.pk(db, table)
-        pk = db.execute(f"SELECT {pk_field} FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};").fetchone()[0]
+        pk = dbcur.execute(f"SELECT {pk_field} FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};").fetchone()[0]
 
     if profile == 'get_feature':
         benchmark(dataset.get_feature, pk)
 
     elif profile == 'feature_to_dict':
-        f_obj = (tree / dataset.get_feature_path(pk)).obj
+        f_obj = (tree / dataset.get_feature_path(pk))
         pk_enc = dataset.encode_pk(pk)
 
         benchmark(dataset.repo_feature_to_dict, pk_enc, f_obj)
@@ -369,7 +371,7 @@ def test_fast_import(import_version, iter_func, data_archive, tmp_path, cli_runn
             assert repo.head.name == "refs/heads/master"
             assert repo.head.shorthand == "master"
 
-            dataset.tree = (repo.head.peel(pygit2.Tree) / table).obj
+            dataset.tree = (repo.head.peel(pygit2.Tree) / table)
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1

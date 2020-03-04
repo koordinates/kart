@@ -26,23 +26,24 @@ def _fsck_reset(repo_structure, working_copy, dataset_paths):
             del gdal_ds
 
         with working_copy.session() as db:
-            db.execute("PRAGMA defer_foreign_keys = ON;")
+            dbcur = db.cursor()
+            dbcur.execute("PRAGMA defer_foreign_keys = ON;")
             try:
                 working_copy._drop_triggers(db, table)
 
-                db.execute("""DELETE FROM ".sno-meta" WHERE table_name=?;""", [table])
-                db.execute("""DELETE FROM ".sno-track" WHERE table_name=?;""", [table])
-                db.execute(
+                dbcur.execute("""DELETE FROM ".sno-meta" WHERE table_name=?;""", [table])
+                dbcur.execute("""DELETE FROM ".sno-track" WHERE table_name=?;""", [table])
+                dbcur.execute(
                     "DELETE FROM gpkg_metadata WHERE id IN (SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name=?);",
                     [table],
                 )
-                db.execute("DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [table])
-                db.execute("DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [table])
-                db.execute("DELETE FROM gpkg_contents WHERE table_name=?;", [table])
+                dbcur.execute("DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [table])
+                dbcur.execute("DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [table])
+                dbcur.execute("DELETE FROM gpkg_contents WHERE table_name=?;", [table])
 
-                db.execute(f"DROP TABLE {gpkg.ident(table)};")
+                dbcur.execute(f"DROP TABLE {gpkg.ident(table)};")
             finally:
-                db.execute("PRAGMA defer_foreign_keys = OFF;")
+                dbcur.execute("PRAGMA defer_foreign_keys = OFF;")
 
     commit = repo_structure.repo.head.peel(pygit2.Commit)
     for ds in datasets:
@@ -92,6 +93,7 @@ def fsck(ctx, reset_datasets, fsck_args):
         return _fsck_reset(rs, working_copy, reset_datasets)
 
     with working_copy.session() as db:
+        dbcur = db.cursor()
         tree = repo.head.peel(pygit2.Tree)
 
         # compare repo tree id to what's in the DB
@@ -122,7 +124,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                 )
 
             q = db.execute(f"SELECT COUNT(*) FROM {gpkg.ident(table)};")
-            wc_count = q.fetchone()[0]
+            wc_count = q[0][0]
             click.echo(f"{wc_count} features in {table}")
             ds_count = dataset.feature_count(fast=False)
             if wc_count != ds_count:
@@ -133,7 +135,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                 )
 
             q = db.execute(f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=?;", [table])
-            track_count = q.fetchone()[0]
+            track_count = q[0][0]
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
             wc_diff = working_copy.diff_db_to_tree(dataset)

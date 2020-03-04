@@ -110,8 +110,8 @@ def test_status(
         # local edits
         with db:
             insert(db, commit=False)
-            db.execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid <= 2;")
-            db.execute(f"UPDATE {H.POINTS_LAYER} SET name='test0' WHERE fid <= 5;")
+            db.cursor().execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid <= 2;")
+            db.cursor().execute(f"UPDATE {H.POINTS_LAYER} SET name='test0' WHERE fid <= 5;")
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r

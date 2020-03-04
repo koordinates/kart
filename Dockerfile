@@ -1,106 +1,82 @@
-FROM python:3.7-slim-stretch AS build-stage
+# syntax = docker/dockerfile:experimental
+# Need to build this using: `DOCKER_BUILDKIT=1 docker build ...`
+FROM python:3.7-slim-stretch AS build-stage1
 
-RUN python3 -m venv /venv
-ENV PATH=/venv/bin:${PATH}
-
-RUN apt-get update -q \
-    && DEBIAN_FRONTEND=noninteractive apt-get upgrade -q -y \
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,id=aptc1,target=/var/cache/apt --mount=type=cache,id=aptv1,target=/var/lib/apt \
+    apt-get update -q \
     && DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends \
-        build-essential \
-        cmake \
-        git-core \
-        pkg-config \
-        curl \
-        libssl-dev \
-        gnupg2 \
         dirmngr \
-        libgdal20 \
-        libgdal-dev \
-        sqlite3 \
-        gdal-bin \
-        libsqlite3-mod-spatialite \
-        libspatialindex-dev \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+        gnupg2
 
 ENV TINI_VERSION v0.18.0
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /venv/bin/tini
-ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini.asc /tmp/tini.asc
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini /usr/local/bin/tini
+ADD https://github.com/krallin/tini/releases/download/${TINI_VERSION}/tini.asc /usr/local/share/tini.asc
 RUN mkdir ~/.gnupg \
     && echo "disable-ipv6" >> ~/.gnupg/dirmngr.conf \
-    && gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7 \
-    && gpg --batch --verify /tmp/tini.asc /venv/bin/tini \
-    && chmod +x /venv/bin/tini
+    && gpg --batch --keyserver hkp://pgp.key-server.io --recv-keys 595E85A6B1B4779EA4DAAEC70B588DFF0527A9B7 \
+    && gpg --batch --verify /usr/local/share/tini.asc /usr/local/bin/tini \
+    && chmod +x /usr/local/bin/tini
 
-ENV GOSU_VERSION 1.11
-ADD https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64 /venv/bin/gosu
-ADD https://github.com/tianon/gosu/releases/download/${GOSU_VERSION}/gosu-amd64.asc /tmp/gosu.asc
-RUN gpg --batch --keyserver hkp://p80.pool.sks-keyservers.net:80 --recv-keys B42F6819007F00F88E364FD4036A9C25BF357DD4 \
-    && gpg --batch --verify /tmp/gosu.asc /venv/bin/gosu \
-    && chmod +x /venv/bin/gosu
+# # ###############################################################################
 
-RUN mkdir /app /app/vendor
-WORKDIR /app
+FROM python:3.7-slim-stretch AS build-stage2
 
-# Build LibGit2
-ENV LIBGIT2=/venv
-ADD https://github.com/koordinates/libgit2/archive/7a39d0d1aad41d92cf0e3f980ddbb7d4ea88373c.tar.gz /app/vendor/libgit2.tar.gz
-RUN mkdir /app/vendor/libgit2 \
-    && cd /app/vendor/libgit2 \
-    && tar xzf /app/vendor/libgit2.tar.gz --strip-components=1 \
-    && cmake . -DCMAKE_INSTALL_PREFIX=${LIBGIT2} \
-    && make \
-    && make install
+WORKDIR /src
+ENV VIRTUAL_ENV=/venv
 
-# build pygit2
-ADD https://github.com/koordinates/pygit2/archive/fd9d9d336d9379841a6a3818097e13a9955fc5e5.tar.gz /app/vendor/pygit2.tar.gz
-RUN mkdir /app/vendor/pygit2 \
-    && cd /app/vendor/pygit2 \
-    && tar xzf /app/vendor/pygit2.tar.gz --strip-components=1 \
-    && export LDFLAGS="-Wl,-rpath='${LIBGIT2}/lib',--enable-new-dtags $LDFLAGS" \
-    && pip install .
+RUN python3 -m venv /venv \
+    && /venv/bin/python -m pip install --upgrade pip
+ENV PATH=/venv/bin:$PATH
 
-# install GDAL
-RUN pip install pygdal=="$(gdal-config --version).*"
+COPY vendor/wheelhouse/mod_spatialite.so /venv/lib
+COPY vendor/env/share/gdal/ /venv/share/gdal/
+COPY vendor/env/share/proj/ /venv/share/proj/
 
-COPY requirements.txt /app
-RUN pip install -r requirements.txt
+COPY requirements.txt /src/
+RUN --mount=type=cache,target=/root/.cache \
+    pip install --no-deps -r requirements.txt
 
-COPY . /app
+COPY vendor/wheelhouse/GDAL-*-cp37-cp37m-manylinux2010_x86_64.whl /src
+RUN pip install --no-deps /src/GDAL*.whl
+COPY vendor/wheelhouse/pygit2-*-cp37-cp37m-manylinux2010_x86_64.whl /src
+RUN pip install --no-deps /src/pygit2*.whl
 
-RUN pip install /app
-RUN rm -rf /venv/include /venv/share
+COPY setup.py /src/
+COPY sno/ /src/sno/
+RUN --mount=type=cache,target=/root/.cache \
+    pip install --no-deps . \
+    && sno --version
 
-###############################################################################
+
+# ###############################################################################
 
 FROM python:3.7-slim-stretch AS run-stage
 
 # Try to record a Python traceback on crashes
 ENV PYTHONFAULTHANDLER=true
-ENV PATH=/venv/bin:${PATH}
 
 RUN useradd --create-home sno \
-    && mkdir /data
+    && mkdir /data \
+    && rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-RUN apt-get update -q \
+COPY --from=build-stage1 /usr/local/bin/tini /usr/local/bin/tini
+
+COPY requirements/run.apt /etc/run.apt
+RUN --mount=type=cache,id=aptcr,target=/var/cache/apt --mount=type=cache,id=aptvr,target=/var/lib/apt \
+    apt-get update -q \
     && DEBIAN_FRONTEND=noninteractive apt-get upgrade -q -y \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -q -y --no-install-recommends \
-        git-core \
-        sqlite3 \
-        libgdal20 \
-        gdal-bin \
-        libsqlite3-mod-spatialite \
-        libspatialindex-c4v5 \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && /bin/bash -c "DEBIAN_FRONTEND=noninteractive xargs -a <(awk '/^\s*[^#]/' /etc/run.apt) -r -- apt-get install -q -y --no-install-recommends"
 
-COPY --from=build-stage --chown=sno:sno /venv /venv
+COPY --from=build-stage2 /venv/ /venv/
+
+RUN ln -s /venv/bin/sno /usr/local/bin/sno \
+    && sno --version
 
 USER sno
 WORKDIR /data
 
-# smoke test
-RUN sno --version
-
-ENTRYPOINT ["/venv/bin/tini", "--"]
-CMD ["/venv/bin/sno"]
+ENTRYPOINT ["/usr/local/bin/tini", "--"]
+CMD ["sno"]

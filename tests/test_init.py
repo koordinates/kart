@@ -1,8 +1,8 @@
 import re
-import sqlite3
 
 import pytest
 
+import apsw
 import pygit2
 
 from sno.working_copy import WorkingCopy
@@ -96,9 +96,9 @@ def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
         assert "Feature/Attributes table 'some-layer-that-doesn't-exist' not found in gpkg_contents" in r.stdout
 
         # Not a GeoPackage
-        db = sqlite3.connect(str(tmp_path / "a.gpkg"))
+        db = apsw.Connection(str(tmp_path / "a.gpkg"))
         with db:
-            db.execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val TEXT);")
+            db.cursor().execute("CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val TEXT);")
 
         # not a GeoPackage
         repo_path = tmp_path / "data3.sno"
@@ -159,7 +159,7 @@ def test_init_import(archive, gpkg, table, data_archive, tmp_path, cli_runner, c
             db = geopackage(wc)
             assert H.row_count(db, table) > 0
 
-            wc_tree_id = db.execute(
+            wc_tree_id = db.cursor().execute(
                 """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
@@ -191,18 +191,21 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
         assert repo.config["sno.workingcopy.path"] == "editing.gpkg"
 
         db = geopackage(wc)
+        dbcur = db.cursor()
         wc_rowcount = H.row_count(db, "editing")
         assert wc_rowcount > 0
 
-        wc_tree_id = db.execute(
+        wc_tree_id = dbcur.execute(
             """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
         ).fetchone()[0]
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
         # make sure we haven't stuffed up the original file
-        db = geopackage("editing.gpkg")
-        assert db.execute("SELECT 1 FROM sqlite_master WHERE name='.sno-meta';").fetchall() == []
-        source_rowcount = db.execute("SELECT COUNT(*) FROM editing;").fetchone()[0]
+        dbo = geopackage("editing.gpkg")
+        dbocur = dbo.cursor()
+        dbocur.execute("SELECT 1 FROM sqlite_master WHERE name='.sno-meta';")
+        assert dbocur.fetchall() == []
+        source_rowcount = dbocur.execute("SELECT COUNT(*) FROM editing;").fetchone()[0]
         assert source_rowcount == wc_rowcount
 
 
@@ -335,13 +338,14 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
 
         # working copy exists
         db = geopackage("wc.gpkg")
+        dbcur = db.cursor()
 
         expected_tables = set(a[3].replace("/", "__") for a in ARCHIVE_PATHS)
-        db_tables = set(r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table';"))
+        db_tables = set(r[0] for r in dbcur.execute("SELECT name FROM sqlite_master WHERE type='table';"))
         assert expected_tables <= db_tables
 
         for gpkg_t in ('gpkg_contents', 'gpkg_geometry_columns', 'gpkg_metadata_reference'):
-            table_list = set(r[0] for r in db.execute(f"SELECT DISTINCT table_name FROM {gpkg_t};"))
+            table_list = set(r[0] for r in dbcur.execute(f"SELECT DISTINCT table_name FROM {gpkg_t};"))
             assert expected_tables >= table_list, gpkg_t
 
         r = cli_runner.invoke(

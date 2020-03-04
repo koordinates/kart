@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 
+import certifi
 import click
 import pygit2
 
@@ -15,14 +16,37 @@ def print_version(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
 
+    import apsw
     import osgeo
-    import pkg_resources  # part of setuptools
+    import rtree
 
-    version = pkg_resources.require("sno")[0].version
+    import sno
+    with open(os.path.join(os.path.split(sno.__file__)[0], 'VERSION')) as version_file:
+        version = version_file.read().strip()
 
-    click.echo(f"Sno v{version}")
-    click.echo(f"GDAL v{osgeo._gdal.__version__}")
-    click.echo(f"PyGit2 v{pygit2.__version__}; Libgit2 v{pygit2.LIBGIT2_VERSION}")
+    click.echo(f"Sno v{version}, Copyright (c) Sno Contributors")
+
+    git_version = subprocess.check_output(["git", "--version"]).decode('ascii').strip().split()[-1]
+
+    sidx_version = rtree.index.__c_api_version__.decode('ascii')
+
+    db = apsw.Connection(':memory:')
+    dbcur = db.cursor()
+    db.enableloadextension(True)
+    dbcur.execute("SELECT load_extension(?)", (sno.spatialite_path,))
+    spatialite_version = dbcur.execute("SELECT spatialite_version();").fetchone()[0]
+
+    click.echo((
+        f"≫ GDAL v{osgeo._gdal.__version__}\n"
+        f"≫ PyGit2 v{pygit2.__version__}; "
+        f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
+        f"Git v{git_version}\n"
+        f"≫ APSW v{apsw.apswversion()}; "
+        f"SQLite v{apsw.sqlitelibversion()}; "
+        f"SpatiaLite v{spatialite_version}\n"
+        f"≫ SpatialIndex v{sidx_version}"
+    ))
+
     ctx.exit()
 
 
@@ -188,6 +212,18 @@ def tag(ctx, args):
         raise click.BadParameter("Not an existing repository", param_hint="--repo")
 
     _execvp("git", ["git", "-C", repo_dir, "tag"] + list(args))
+
+
+@cli.command(context_settings=dict(ignore_unknown_options=True))
+@click.pass_context
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def config(ctx, args):
+    """ Get and set repository or global options """
+    repo_dir = ctx.obj["repo_dir"] or "."
+    params = ["git", "config"]
+    if ctx.obj["repo_dir"]:
+        params[1:1] = ["-C", repo_dir]
+    _execvp("git", params + list(args))
 
 
 if __name__ == "__main__":

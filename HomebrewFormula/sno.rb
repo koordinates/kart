@@ -33,7 +33,7 @@ class Sno < Formula
       system("git", "checkout", "-b", "$ci")
       g_branch = "$ci"
     end
-    puts "Kx: devel source is #{g_path} #{g_branch}@#{g_sha}"
+    STDERR.puts "sno: devel source is #{g_path} #{g_branch}@#{g_sha}"
 
     url "file://#{g_path}", :using => :git, :branch => g_branch, :revision => g_sha
     version "0.0.0+git.#{g_sha}"
@@ -65,11 +65,12 @@ class Sno < Formula
     end
   end
 
+  # This needs to be kept in sync with Brewfile
   depends_on "cmake" => [:build]
   depends_on "pkg-config" => [:build]
   depends_on "gdal"
+  depends_on "libpq"
   depends_on "libspatialite"
-  depends_on "libssh2"
   depends_on "python" # Python3
   depends_on "spatialindex"
   depends_on "sqlite"
@@ -92,6 +93,7 @@ class Sno < Formula
       cmake_args << "-DCMAKE_INSTALL_PREFIX=#{venv_root}"
       cmake_args << "-DBUILD_EXAMPLES=NO"
       cmake_args << "-DBUILD_CLAR=NO"
+      cmake_args << "-DUSE_SSH=NO"
 
       mkdir "build" do
         system "cmake", *cmake_args, ".."

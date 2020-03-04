@@ -1,12 +1,14 @@
 ### Directories to ignore
 
+--ignore-directory=is:.benchmarks
+--ignore-directory=is:build
+--ignore-directory=is:coverage
 --ignore-directory=is:data
+--ignore-directory=is:dist
 --ignore-directory=is:tests/data
 --ignore-directory=is:vendor
---ignore-directory=is:coverage
 --ignore-directory=is:venv
 --ignore-directory=match:/\.pytest/
---ignore-directory=is:.benchmarks
 
 ### Files to ignore
 --ignore-file=is:pytest.xml

@@ -3,13 +3,13 @@
 import argparse
 import random
 import re
-import sqlite3
 import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import apsw
 import pygit2
 
 
@@ -52,23 +52,26 @@ def main():
             return
         print(f"\x1b[1;{fg}m", prefix, *content, "\x1b[0;0m", file=sys.stderr)
 
-    def db_debug(*content):
-        if content[0].startswith('-- '):
+    def db_debug(cursor, statement, bindings):
+        if statement[0].startswith('-- '):
             # ignore triggers
             return
-        debug(*content, fg='34', prefix='🌀  ')
+        debug(statement, bindings, fg='34', prefix='🌀  ')
 
-    db = sqlite3.connect(db_path)
-    db.isolation_level = None  # disable stupid DBAPI behaviour
-    db.row_factory = sqlite3.Row
-    db.enable_load_extension(True)
-    db.execute("SELECT load_extension('mod_spatialite');")
-    db.execute("SELECT EnableGpkgMode();")
+    def row_factory(cursor, row):
+        return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
+
+    db = apsw.Connection(str(db_path))
+    db.setrowtrace(row_factory)
     if options.debug:
-        db.set_trace_callback(db_debug)
+        db.setexectrace(db_debug)
+    dbcur = db.cursor()
+    db.enableloadextension(True)
+    dbcur.execute("SELECT load_extension(?)", (str(Path(sys.prefix) / 'lib' / 'mod_spatialite'),))
+    dbcur.execute("SELECT EnableGpkgMode();")
     print(f"Connected to {db_path}")
 
-    all_tables = [r[0] for r in db.execute("SELECT table_name FROM gpkg_contents;")]
+    all_tables = [r[0] for r in dbcur.execute("SELECT table_name FROM gpkg_contents;")]
     if options.tables:
         tables = options.tables
         assert set(tables) <= set(all_tables), f"Couldn't find some of those tables: {set(tables) - set(all_tables)}"
@@ -80,14 +83,14 @@ def main():
     print("Getting row counts...")
     row_counts = {}
     for table in tables:
-        row_counts[table] = db.execute(f'SELECT COUNT(*) FROM "{table}";').fetchone()[0]
+        row_counts[table] = dbcur.execute(f'SELECT COUNT(*) FROM "{table}";').fetchone()[0]
         print(f"\t{table:40}\t{row_counts[table]:9,}")
 
     print("Getting schema information...")
     col_info = {}
     pk_info = {}
     for table in tables:
-        q = db.execute(f'PRAGMA table_info("{table}");')
+        q = dbcur.execute(f'PRAGMA table_info("{table}");')
         cols = {}
         for row in q:
             if row['pk']:
@@ -108,7 +111,7 @@ def main():
         )
         debug(sql, fg=36, prefix="🌀📝")
         dbcur.execute(sql)
-        assert dbcur.rowcount == n
+        assert db.changes() == n
         row_counts[table] += n
 
     def delete(table, n):
@@ -118,7 +121,7 @@ def main():
         sql = f"""DELETE FROM "{table}" WHERE "{pk}" IN (SELECT "{pk}" FROM "{table}" LIMIT {n} OFFSET {offset});"""
         debug(sql, fg=36, prefix="🌀📝")
         dbcur.execute(sql)
-        assert dbcur.rowcount == n
+        assert db.changes() == n
         row_counts[table] -= n
 
     def update(table, n):
@@ -157,7 +160,7 @@ def main():
             )
             debug(sql, params, fg=36, prefix="🌀📝")
             dbcur.execute(sql, params)
-            assert dbcur.rowcount == 1
+            assert db.changes() == 1
 
     def evolve(typ, old):
         if old is None:

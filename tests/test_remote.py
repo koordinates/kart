@@ -40,7 +40,6 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
         assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
 
         branch = repo.branches.local[repo.head.shorthand]
-        assert branch.is_checked_out()
         assert branch.is_head()
         assert branch.upstream_name == "refs/remotes/origin/master"
 
@@ -58,10 +57,11 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
             assert repo.config["sno.workingcopy.path"] == wc.name
 
             db = geopackage(wc)
-            nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+            dbcur = db.cursor()
+            nrows = dbcur.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
             assert nrows > 0
 
-            wc_tree_id = db.execute(
+            wc_tree_id = dbcur.execute(
                 """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';""",
             ).fetchone()[0]
             assert wc_tree_id == repo.head.peel(pygit2.Tree).hex

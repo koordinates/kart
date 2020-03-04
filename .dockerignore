@@ -4,9 +4,11 @@
 **/__pycache__
 **/*.pyc
 **/*.pyo
+*.egg-info/
 
 **/*.pyd
 **/*.so
+!vendor/wheelhouse/*.so
 
 .coverage
 .coverage.*
@@ -20,7 +22,52 @@ pytest.xml
 build/
 dist/
 venv/
-vendor/
+
+vendor/curl/**
+!/vendor/curl/Makefile
+!/vendor/curl/*.tar.gz
+vendor/gdal/**
+!/vendor/gdal/Makefile
+!/vendor/gdal/*.tar.gz
+vendor/geos/**
+!/vendor/geos/Makefile
+!/vendor/geos/*.tar.bz2
+vendor/git/**
+!/vendor/git/Makefile
+!/vendor/git/*.tar.gz
+vendor/jsonc/**
+!/vendor/jsonc/Makefile
+!/vendor/jsonc/*.tar.gz
+vendor/libgit2/**
+!/vendor/libgit2/Makefile
+!/vendor/libgit2/*.tar.gz
+vendor/proj/**
+!/vendor/proj/Makefile
+!/vendor/proj/*.tar.gz
+!/vendor/proj/*.zip
+vendor/pygit2/**
+!/vendor/pygit2/Makefile
+!/vendor/pygit2/*.tar.gz
+vendor/spatialindex/**
+!/vendor/spatialindex/Makefile
+!/vendor/spatialindex/*.tar.gz
+vendor/spatialite/**
+!/vendor/spatialite/Makefile
+!/vendor/spatialite/*.tar.gz
+vendor/sqlite/**
+!/vendor/sqlite/Makefile
+!/vendor/sqlite/*.tar.gz
+vendor/.ccache/
+vendor/env/**
+!vendor/env/share/
+vendor/build/
+
+.github/
+
+requirements/.*.installed
+
+Brewfile.lock.json
+.venv.mk
 
 .buildkite/
 
@@ -31,3 +78,10 @@ HomebrewFormula/
 gitea/
 
 tests/
+
+platforms/windows/
+platforms/macos/build/
+platforms/macos/dist/
+platforms/linux/build/
+platforms/linux/dist/
+platforms/linux/.cache/

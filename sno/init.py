@@ -2,11 +2,11 @@ import functools
 import hashlib
 import json
 import os
-import sqlite3
 import sys
 import time
 from pathlib import Path
 
+import apsw
 import click
 import pygit2
 
@@ -105,7 +105,7 @@ class ImportGPKG:
         try:
             if not dbcur.execute(sql).fetchone():
                 raise ValueError("gpkg_contents table doesn't exist")
-        except (ValueError, sqlite3.DatabaseError) as e:
+        except (ValueError, apsw.SQLError) as e:
             raise ValueError(f"'{self.source}' doesn't appear to be a valid GeoPackage") from e
 
         if self.table:
@@ -138,19 +138,19 @@ class ImportGPKG:
         if not self.table:
             raise ValueError("No table specified")
 
-        self.db.execute("BEGIN")
-        self.dbcur = self.db.cursor()
+        dbcur = self.db.cursor()
+        dbcur.execute("BEGIN")
         return self
 
     def __exit__(self, *exc):
-        del self.dbcur
-        self.db.execute("ROLLBACK")
+        self.db.cursor().execute("ROLLBACK")
 
     @property
     @functools.lru_cache(maxsize=1)
     def row_count(self):
-        self.dbcur.execute(f"SELECT COUNT(*) FROM {gpkg.ident(self.table)};")
-        return self.dbcur.fetchone()[0]
+        dbcur = self.db.cursor()
+        dbcur.execute(f"SELECT COUNT(*) FROM {gpkg.ident(self.table)};")
+        return dbcur.fetchone()[0]
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -165,7 +165,8 @@ class ImportGPKG:
     @property
     @functools.lru_cache(maxsize=1)
     def field_cid_map(self):
-        q = self.db.execute(f"PRAGMA table_info({gpkg.ident(self.table)});")
+        dbcur = self.db.cursor()
+        q = dbcur.execute(f"PRAGMA table_info({gpkg.ident(self.table)});")
         return {r['name']: r['cid'] for r in q}
 
     def iter_features_sorted(self, pk_callback, limit=None):
@@ -174,9 +175,10 @@ class ImportGPKG:
         func_name = f"_sno_sk_{tbl_hash}"
 
         self.db.create_function(func_name, 1, pk_callback)
+        dbcur = self.db.cursor()
 
         t0 = time.monotonic()
-        self.dbcur.execute(f"""
+        dbcur.execute(f"""
             CREATE TEMPORARY TABLE {tbl_name} (
                 sort TEXT PRIMARY KEY,
                 link INTEGER
@@ -192,37 +194,38 @@ class ImportGPKG:
         """
         if limit is not None:
             sql += f" LIMIT {limit:d}"
-        self.dbcur.execute(sql)
+        dbcur.execute(sql)
         t1 = time.monotonic()
         click.echo(f"Build link/sort mapping table in {t1-t0:0.1f}s")
-        self.dbcur.execute(f"""
+        dbcur.execute(f"""
             CREATE INDEX temp.{tbl_hash}_idxm ON {tbl_name}(sort,link);
         """)
         t2 = time.monotonic()
         click.echo(f"Build pk/sort mapping index in {t2-t1:0.1f}s")
 
         # Print the Query Plan
-        # self.dbcur.execute(f"""
+        # dbcur.execute(f"""
         #     EXPLAIN QUERY PLAN
         #     SELECT {gpkg.ident(self.table)}.*
         #     FROM {tbl_name}
         #         INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
         #     ORDER BY {tbl_name}.sort;
         # """)
-        # print("\n".join("\t".join(str(f) for f in r) for r in self.dbcur.fetchall()))
+        # print("\n".join("\t".join(str(f) for f in r) for r in dbcur.fetchall()))
 
-        self.dbcur.execute(f"""
+        dbcur.execute(f"""
             SELECT {gpkg.ident(self.table)}.*
             FROM {tbl_name}
                 INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
             ORDER BY {tbl_name}.sort;
         """)
         click.echo(f"Ran SELECT query in {time.monotonic()-t2:0.1f}s")
-        return self.dbcur
+        return dbcur
 
     def iter_features(self):
-        self.dbcur.execute(f"SELECT * FROM {gpkg.ident(self.table)};")
-        return self.dbcur
+        dbcur = self.db.cursor()
+        dbcur.execute(f"SELECT * FROM {gpkg.ident(self.table)};")
+        return dbcur
 
     def build_meta_info(self, repo_version):
         return gpkg.get_meta_info(self.db, layer=self.table, repo_version=repo_version)

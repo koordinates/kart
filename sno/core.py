@@ -2,10 +2,6 @@ import os
 
 import pygit2
 from click import ClickException
-from osgeo import gdal, ogr, osr  # noqa
-
-
-gdal.UseExceptions()
 
 
 def walk_tree(top, path='', topdown=True):
@@ -24,8 +20,7 @@ def walk_tree(top, path='', topdown=True):
     To get a full path (which begins with top_path) to a blob or subtree in
     top_path, do `os.path.join(top_path, name)`.
 
-    To get a TreeEntry object, do `top_tree / name`
-    To get a Blob or Tree object, do `(top_tree / name).obj`
+    To get a TreeEntry-style Blob or Tree object, do `top_tree / name`
 
     If optional arg `topdown` is true or not specified, the tuple for a
     subtree is generated before the tuples for any of its subtrees
@@ -46,11 +41,11 @@ def walk_tree(top, path='', topdown=True):
     blob_names = []
 
     for entry in top:
-        is_tree = (entry.type == 'tree')
+        is_tree = (entry.type == pygit2.GIT_OBJ_TREE)
 
         if is_tree:
             subtree_names.append(entry.name)
-        elif entry.type == 'blob':
+        elif entry.type == pygit2.GIT_OBJ_BLOB:
             blob_names.append(entry.name)
         else:
             pass
@@ -59,12 +54,12 @@ def walk_tree(top, path='', topdown=True):
         yield top, path, subtree_names, blob_names
         for name in subtree_names:
             subtree_path = os.path.join(path, name)
-            subtree = (top / name).obj
+            subtree = (top / name)
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
     else:
         for name in subtree_names:
             subtree_path = os.path.join(path, name)
-            subtree = (top / name).obj
+            subtree = (top / name)
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
         yield top, path, subtree_names, blob_names
 

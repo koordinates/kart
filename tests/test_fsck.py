@@ -16,8 +16,9 @@ def test_fsck(data_working_copy, geopackage, cli_runner):
         assert H.row_count(db, '.sno-track') == 0
 
         with db:
-            db.execute(f"UPDATE {H.POINTS_LAYER} SET name='fred' WHERE fid=1;")
-            db.execute("""DELETE FROM ".sno-track" WHERE pk='1';""")
+            dbcur = db.cursor()
+            dbcur.execute(f"UPDATE {H.POINTS_LAYER} SET name='fred' WHERE fid=1;")
+            dbcur.execute("""DELETE FROM ".sno-track" WHERE pk='1';""")
 
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 1, r

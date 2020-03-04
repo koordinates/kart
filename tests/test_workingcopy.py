@@ -1,9 +1,9 @@
-import sqlite3
 import subprocess
 from pathlib import Path
 
 import pytest
 
+import apsw
 import pygit2
 
 import sno.checkout
@@ -50,7 +50,7 @@ def test_checkout_workingcopy(
 
         head_tree = repo.head.peel(pygit2.Tree)
 
-        wc_tree_id = db.execute(
+        wc_tree_id = db.cursor().execute(
             """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
         ).fetchone()[0]
         assert wc_tree_id == head_tree.hex
@@ -177,7 +177,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         with db:
             cur = db.cursor()
             cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
@@ -233,10 +233,10 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
             cur = db.cursor()
 
             cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
             cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=30000 WHERE fid=3;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
@@ -257,10 +257,10 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
             cur = db.cursor()
 
             cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
             cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=40000 WHERE fid=4;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["switch", "foo"])
         assert r.exit_code == 1, r
@@ -347,27 +347,27 @@ def test_working_copy_reset(
             cur = db.cursor()
             try:
                 cur.execute(sql, rec)
-            except sqlite3.OperationalError:
+            except apsw.Error:
                 print(sql, rec)
                 raise
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
             cur.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
-            assert cur.rowcount == 4
+            assert db.changes() == 4
             cur.execute(
                 f"UPDATE {layer} SET {upd_field} = ? WHERE {pk_field}>=? AND {pk_field}<?;",
                 [upd_field_value, upd_pk_range[0], upd_pk_range[1]],
             )
-            assert cur.rowcount == 5
+            assert db.changes() == 5
             cur.execute(
                 f"UPDATE {layer} SET {pk_field}=? WHERE {pk_field}=?;",
                 [9998, id_chg_pk],
             )
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
-            change_count = db.execute(
+            change_count = cur.execute(
                 """SELECT COUNT(*) FROM ".sno-track";"""
-            ).fetchone()[0]
+            )[0][0]
             assert change_count == (1 + 4 + 5 + 2)
 
         if via == "reset":
@@ -381,9 +381,9 @@ def test_working_copy_reset(
             r = cli_runner.invoke(["checkout", "HEAD"])
             assert r.exit_code == 1, r
 
-            change_count = db.execute(
+            change_count = cur.execute(
                 """SELECT COUNT(*) FROM ".sno-track";"""
-            ).fetchone()[0]
+            )[0][0]
             assert change_count == (1 + 4 + 5 + 2)
 
             # do again with --force
@@ -392,40 +392,40 @@ def test_working_copy_reset(
         else:
             raise NotImplementedError(f"via={via}")
 
-        change_count = db.execute(
+        change_count = cur.execute(
             """SELECT COUNT(*) FROM ".sno-track";"""
-        ).fetchone()[0]
+        )[0][0]
         assert change_count == 0
 
         h_after = H.db_table_hash(db, layer, pk_field)
         if h_before != h_after:
-            r = db.execute(
+            cur.execute(
                 f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=?;", [rec[pk_field]]
             )
-            if r.fetchone():
+            if cur.fetchone():
                 print(
                     "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
                 )
-            r = db.execute(
+            r = cur.execute(
                 f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk]
             )
-            if r.fetchone()[0] != 4:
+            if r[0][0] != 4:
                 print("E: Deleted rows {pk_field}<{del_pk} still missing")
-            r = db.execute(
+            r = cur.execute(
                 f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;",
                 [upd_field_value],
             )
-            if r.fetchone()[0] != 0:
+            if r[0][0] != 0:
                 print("E: Updated rows not reset")
-            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
-            if r.fetchone():
+            cur.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
+            if cur.fetchone():
                 print(
                     "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
                 )
-            r = db.execute(
+            cur.execute(
                 f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = ?;", [id_chg_pk]
             )
-            if not r.fetchone():
+            if not cur.fetchone():
                 print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
 
         assert h_before == h_after
@@ -444,9 +444,9 @@ def test_geopackage_locking_edit(
             nonlocal is_checked
             if not is_checked:
                 with pytest.raises(
-                    sqlite3.OperationalError, match=r"database is locked"
+                    apsw.BusyError, match=r"database is locked"
                 ):
-                    db.execute("UPDATE gpkg_contents SET table_name=table_name;")
+                    db.cursor().execute("UPDATE gpkg_contents SET table_name=table_name;")
                 is_checked = True
 
             return orig_func(*args, **kwargs)
@@ -532,7 +532,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         with db:
             cur = db.cursor()
             cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=30000 WHERE fid=300;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
@@ -545,25 +545,25 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             cur = db.cursor()
             try:
                 cur.execute(sql, rec)
-            except sqlite3.OperationalError:
+            except apsw.Error:
                 print(sql, rec)
                 raise
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
             cur.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
-            assert cur.rowcount == 4
+            assert db.changes() == 4
             cur.execute(
                 f"UPDATE {layer} SET {upd_field} = ? WHERE {pk_field}>=? AND {pk_field}<?;",
                 [upd_field_value, upd_pk_range[0], upd_pk_range[1]],
             )
-            assert cur.rowcount == 5
+            assert db.changes() == 5
             cur.execute(
                 f"UPDATE {layer} SET {pk_field}=? WHERE {pk_field}=?;",
                 [9998, id_chg_pk],
             )
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
-            changes_pre = [r[0] for r in db.execute(
+            changes_pre = [r[0] for r in cur.execute(
                 'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
             )]
             # .sno-track stores pk as strings
@@ -573,12 +573,12 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         r = cli_runner.invoke(["restore"] + source + pathspec)
         assert r.exit_code == 0, r
 
-        changes_post = [r[0] for r in db.execute(
+        changes_post = [r[0] for r in cur.execute(
             'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
         )]
 
-        r = db.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
-        head_sha = r.fetchone()[0]
+        r = cur.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
+        head_sha = r[0][0]
 
         if pathspec:
             # we restore'd paths other than our test dataset, so all the changes should still be there
@@ -595,8 +595,8 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             if head_sha != H.POINTS_HEAD_SHA:
                 print(f"E: Bad Tree? {head_sha}")
 
-            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
-            if not r.fetchone():
+            r = cur.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
+            if not r[0]:
                 print("E: Previous PK bad? ({pk_field}=300)")
             return
 
@@ -605,42 +605,42 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         if head_sha != new_commit:
             print(f"E: Bad Tree? {head_sha}")
 
-        r = db.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
-        head_sha = r.fetchone()[0]
+        r = cur.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
+        head_sha = r[0][0]
         if head_sha != new_commit:
             print(f"E: Bad Tree? {head_sha}")
 
-        r = db.execute(
+        cur.execute(
             f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=?;", [rec[pk_field]]
         )
-        if r.fetchone():
+        if cur.fetchone():
             print(
                 "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
             )
-        r = db.execute(
+        r = cur.execute(
             f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk]
         )
-        if r.fetchone()[0] != 4:
+        if r[0][0] != 4:
             print("E: Deleted rows {pk_field}<{del_pk} still missing")
-        r = db.execute(
+        r = cur.execute(
             f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;",
             [upd_field_value],
         )
-        if r.fetchone()[0] != 0:
+        if r[0][0] != 0:
             print("E: Updated rows not reset")
-        r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
-        if r.fetchone():
+        cur.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
+        if cur.fetchone():
             print(
                 "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
             )
-        r = db.execute(
+        cur.execute(
             f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = ?;", [id_chg_pk]
         )
-        if not r.fetchone():
+        if not cur.fetchone():
             print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
 
-        r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
-        if not r.fetchone():
+        cur.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
+        if not cur.fetchone():
             print("E: Previous PK bad? ({pk_field}=300)")
 
 

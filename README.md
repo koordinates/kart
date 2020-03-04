@@ -7,52 +7,23 @@ Sno: Distributed version-control for datasets
 
 ## Installing
 
-> ##### ℹ️ If you're new to git
-> You need to have [an SSH key added in Github and available on your computer](https://help.github.com/en/github/authenticating-to-github/connecting-to-github-with-ssh) to be able to install Sno during the preview period.
+### Upgrading to v0.3
 
-### Upgrading to v0.2
-
-See the [v0.2 release notes](https://github.com/koordinates/sno/releases/tag/v0.2.0) for changes, upgrading, and compatibility notes.
+See the [v0.3 release notes](https://github.com/koordinates/sno/releases/tag/v0.3.0) for changes, upgrading, and compatibility notes.
 
 ### macOS
 
-You need [Homebrew](https://brew.sh/) installed.
+Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0)
 
-#### For general running/updating from the latest release (recommended)
-```console
-$ brew tap koordinates/sno git@github.com:koordinates/sno.git
-$ brew install sno
+### Linux
 
-# check it's working
-$ sno --version
-Project Sno v0.2.0
-GDAL v2.4.2
-PyGit2 v0.28.2; Libgit2 v0.28.2
-```
+For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0) and install via `dpkg -i sno_*.deb`.
 
-To upgrade:
-```console
-$ brew upgrade sno
-```
+For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0) and install via `rpm -i sno-*.rpm`.
 
-#### For the latest development work
-```console
-$ brew tap koordinates/sno git@github.com:koordinates/sno.git
-$ brew install --HEAD sno
+### Source
 
-# check it's working
-$ sno --version
-Project Sno v0.3.0.dev0
-GDAL v2.4.2
-PyGit2 v0.28.2; Libgit2 v0.28.2
-```
-
-To upgrade:
-```console
-$ brew reinstall sno
-```
-
-To build a Docker container, install from source, for Sno development see the [Contributing Notes](CONTRIBUTING.md).
+For Sno development see the [Contributing Notes](CONTRIBUTING.md).
 
 ## Usage
 
@@ -61,8 +32,8 @@ See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials a
 > ##### ℹ️ If you're new to git
 > Configure the identity you will use for Sno commits with:
 > ```console
-> $ git config --global user.email "you@example.com"
-> $ git config --global user.name "Your Name"
+> $ sno config --global user.email "you@example.com"
+> $ sno config --global user.name "Your Name"
 > ```
 
 #### Quick Start
@@ -95,3 +66,30 @@ See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials a
     * `sno remote ...`. Remember simple remotes can just be another local directory.
     * `sno push` / `sno pull`
     * `sno clone` initialise a new repository from a remote URL,
+
+## License
+
+#### GPLv2 with linking exception
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License,
+version 2, as published by the Free Software Foundation.
+
+In addition to the permissions in the GNU General Public License,
+the authors give you unlimited permission to link the compiled
+version of this file into combinations with other programs,
+and to distribute those combinations without any restriction
+coming from the use of this file.  (The General Public License
+restrictions do apply in other respects; for example, they cover
+modification of the file, and distribution when not linked into
+a combined executable.)
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; see the file [`COPYING`](COPYING).  If not, write to
+the Free Software Foundation, 51 Franklin Street, Fifth Floor,
+Boston, MA 02110-1301, USA.

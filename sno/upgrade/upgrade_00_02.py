@@ -32,12 +32,12 @@ def upgrade(source, dest, layer):
         raise click.BadParameter(f"'{source}': not an existing repository", param_hint="SOURCE")
 
     try:
-        source_tree = (source_repo.head.peel(pygit2.Tree) / layer).obj
+        source_tree = (source_repo.head.peel(pygit2.Tree) / layer)
     except KeyError:
         raise click.BadParameter(f"'{layer}' not found in source repository", param_hint="SOURCE")
 
     try:
-        version_data = json.loads((source_tree / 'meta' / 'version').obj.data)
+        version_data = json.loads((source_tree / 'meta' / 'version').data)
         version = tuple([int(v) for v in version_data['version'].split('.')])
     except Exception:
         raise click.BadParameter("Error getting source repository version", param_hint="SOURCE")
@@ -69,12 +69,12 @@ def upgrade(source, dest, layer):
             except KeyError:
                 raise ValueError(f"Commit {i} ({source_commit.id}): Haven't seen parent ({parent_id})")
 
-        source_tree = (source_commit.peel(pygit2.Tree) / layer).obj
+        source_tree = (source_commit.peel(pygit2.Tree) / layer)
 
-        sqlite_table_info = json.loads((source_tree / 'meta' / 'sqlite_table_info').obj.data.decode('utf8'))
+        sqlite_table_info = json.loads((source_tree / 'meta' / 'sqlite_table_info').data.decode('utf8'))
         field_cid_map = {r['name']: r['cid'] for r in sqlite_table_info}
 
-        gpkg_geometry_columns = json.loads((source_tree / 'meta' / 'gpkg_geometry_columns').obj.data.decode('utf8'))
+        gpkg_geometry_columns = json.loads((source_tree / 'meta' / 'gpkg_geometry_columns').data.decode('utf8'))
         geom_field = gpkg_geometry_columns['column_name'] if gpkg_geometry_columns else None
 
         pk_field = None
@@ -106,7 +106,7 @@ def upgrade(source, dest, layer):
                         dest_blob = dest_repo.create_blob(version)
 
                     else:
-                        source_blob = (top_tree / blob_name).obj
+                        source_blob = (top_tree / blob_name)
                         dest_blob = dest_repo.create_blob(source_blob.data)
 
                     index.add(pygit2.IndexEntry(
@@ -134,7 +134,7 @@ def upgrade(source, dest, layer):
                 # feature path
                 source_feature_dict = {}
                 for attr in blob_names:
-                    source_blob = (top_tree / attr).obj
+                    source_blob = (top_tree / attr)
                     if attr == geom_field:
                         source_feature_dict[attr] = source_blob.data
                     else:

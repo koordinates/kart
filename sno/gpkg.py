@@ -1,10 +1,13 @@
 import collections
-import json
 import math
-import sqlite3
 import struct
+import sys
+from pathlib import Path
 
+import apsw
 from osgeo import ogr, osr
+
+from sno import spatialite_path
 
 
 def ident(identifier):
@@ -25,18 +28,46 @@ def param_str(value):
     return f"'{escaped}'"
 
 
+class Row(tuple):
+    def __new__(cls, cursor, row):
+        return super(Row, cls).__new__(cls, row)
+
+    def __init__(self, cursor, row):
+        self._desc = tuple(d for d, _ in cursor.getdescription())
+
+    def keys(self):
+        return tuple(self._desc)
+
+    def items(self):
+        return ((k, super().__getitem__(i)) for i, k in enumerate(self._desc))
+
+    def values(self):
+        return self
+
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            try:
+                i = self._desc.index(key)
+                return super().__getitem__(i)
+            except ValueError:
+                raise KeyError(key)
+        else:
+            return super().__getitem__(key)
+
+
 def db(path, **kwargs):
-    db = sqlite3.connect(path, **kwargs)
-    db.row_factory = sqlite3.Row
-    db.execute("PRAGMA foreign_keys = ON;")
+    db = apsw.Connection(str(path), **kwargs)
+    db.setrowtrace(Row)
+    dbcur = db.cursor()
+    dbcur.execute("PRAGMA foreign_keys = ON;")
 
-    current_journal = db.execute("PRAGMA journal_mode").fetchone()[0]
+    current_journal = dbcur.execute("PRAGMA journal_mode").fetchone()[0]
     if current_journal.lower() == "delete":
-        db.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
+        dbcur.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
 
-    db.enable_load_extension(True)
-    db.execute("SELECT load_extension('mod_spatialite');")
-    db.execute("SELECT EnableGpkgMode();")
+    db.enableloadextension(True)
+    dbcur.execute("SELECT load_extension(?)", (spatialite_path,))
+    dbcur.execute("SELECT EnableGpkgMode();")
     return db
 
 
@@ -130,7 +161,7 @@ def pk(db, table):
     # is no primary key column, the first column SHALL be of type INTEGER and
     # SHALL contain unique values for each row.
 
-    q = db.execute(f"PRAGMA table_info({ident(table)});")
+    q = db.cursor().execute(f"PRAGMA table_info({ident(table)});")
     fields = []
     for field in q:
         if field["pk"]:
@@ -144,14 +175,14 @@ def pk(db, table):
 
 
 def geom_cols(db, table):
-    q = db.execute("""
+    q = db.cursor().execute("""
             SELECT column_name
             FROM gpkg_geometry_columns
             WHERE table_name=?
             ORDER BY column_name;
         """, (table,)
     )
-    return tuple(r[0] for r in q.fetchall())
+    return tuple(r[0] for r in q)
 
 
 def geom_to_ogr(gpkg_geom, parse_srs=False):

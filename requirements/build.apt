@@ -1,0 +1,8 @@
+build-essential
+cmake
+git-core
+libssl-dev
+patchelf
+pkg-config
+unzip
+wget

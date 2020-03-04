@@ -42,15 +42,15 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
             cur = db.cursor()
 
             cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=9998 WHERE fid=1;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(
                 f"UPDATE {H.POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid=3;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
         print("STDOUT", repr(r.stdout))
@@ -343,15 +343,15 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
             cur = db.cursor()
 
             cur.execute(H.POLYGONS_INSERT, H.POLYGONS_RECORD)
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(f"UPDATE {H.POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(
                 f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
             )
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(f"DELETE FROM {H.POLYGONS_LAYER} WHERE id=1452332;")
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
         if output_format == "quiet":
@@ -948,15 +948,15 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
             cur = db.cursor()
 
             cur.execute(H.TABLE_INSERT, H.TABLE_RECORD)
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(f'UPDATE {H.TABLE_LAYER} SET "OBJECTID"=9998 WHERE OBJECTID=1;')
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(
                 f"UPDATE {H.TABLE_LAYER} SET name='test', POP2000=9867 WHERE OBJECTID=2;"
             )
-            assert cur.rowcount == 1
+            assert db.changes() == 1
             cur.execute(f'DELETE FROM {H.TABLE_LAYER} WHERE "OBJECTID"=3;')
-            assert cur.rowcount == 1
+            assert db.changes() == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
         if output_format == "quiet":
@@ -1387,15 +1387,15 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
             EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
             for pk, val in EDITS:
                 cur.execute("UPDATE editing SET value = ? WHERE id = ?;", (val, pk))
-                assert cur.rowcount == 1
+                assert db.changes() == 1
 
             cur.execute("DELETE FROM editing WHERE id IN (5, 9);")
-            assert cur.rowcount == 2
+            assert db.changes() == 2
 
             cur.execute(
                 "INSERT INTO editing (id, value) VALUES (6, 'f'), (11, 'k'), (12, 'l1');"
             )
-            assert cur.rowcount == 3
+            assert db.changes() == 3
 
         def _extract(diff_json):
             ds = {}

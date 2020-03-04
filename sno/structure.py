@@ -50,12 +50,12 @@ class RepositoryStructure:
     def get_at(self, path, tree):
         """ Get a specific dataset by path using a specified Tree """
         try:
-            tree_entry = tree[path]
+            o = tree[path]
         except KeyError:
             raise
 
-        if tree_entry.type == 'tree':
-            ds = DatasetStructure.instantiate(tree_entry.obj, path)
+        if isinstance(o, pygit2.Tree):
+            ds = DatasetStructure.instantiate(o, path)
             return ds
 
         raise KeyError(f"No valid dataset found at '{path}'")
@@ -71,23 +71,23 @@ class RepositoryStructure:
         while to_examine:
             path, tree = to_examine.popleft()
 
-            for te in tree:
+            for o in tree:
                 # ignore everything other than directories
-                if te.type == "tree":
+                if isinstance(o, pygit2.Tree):
 
                     if path:
-                        te_path = '/'.join([path, te.name])
+                        te_path = '/'.join([path, o.name])
                     else:
-                        te_path = te.name
+                        te_path = o.name
 
                     try:
-                        ds = DatasetStructure.instantiate(te.obj, te_path)
+                        ds = DatasetStructure.instantiate(o, te_path)
                         yield ds
                     except IntegrityError:
                         self.L.warn("Error loading dataset from %s, ignoring tree", te_path, exc_info=True)
                     except ValueError:
                         # examine inside this directory
-                        to_examine.append((te_path, te.obj))
+                        to_examine.append((te_path, o))
 
     @property
     def head_commit(self):
@@ -211,16 +211,15 @@ class DatasetStructure:
 
         for version_klass in cls.all_versions():
             try:
-                te_version = (tree[version_klass.VERSION_PATH])
+                blob = (tree[version_klass.VERSION_PATH])
             except KeyError:
                 continue
             else:
                 L.debug("Found candidate %sx tree at: %s", version_klass.VERSION_SPECIFIER, path)
 
-            if te_version.type != 'blob':
-                raise IntegrityError(f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({te_version.type})")
+            if not isinstance(blob, pygit2.Blob):
+                raise IntegrityError(f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({blob.type_str})")
 
-            blob = te_version.obj
             try:
                 d = json.loads(blob.data)
             except Exception as e:
@@ -245,20 +244,20 @@ class DatasetStructure:
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
-        return (self.tree / self.META_PATH).obj
+        return (self.tree / self.META_PATH)
 
     @functools.lru_cache()
     def get_meta_item(self, name):
         meta_tree = self.meta_tree
         try:
-            te = meta_tree / name
+            o = meta_tree / name
         except KeyError:
             return None
 
-        if te.type != 'blob':
-            raise ValueError(f"meta/{name} is a {te.type}, expected blob")
+        if not isinstance(o, pygit2.Blob):
+            raise ValueError(f"meta/{name} is a {o.type_str}, expected blob")
 
-        return json.loads(te.obj.data)
+        return json.loads(o.data)
 
     def iter_meta_items(self, exclude=None):
         exclude = set(exclude or [])
@@ -444,6 +443,7 @@ class DatasetStructure:
                 src_iterator = source.iter_features_sorted(self.get_feature_path, limit=limit)
             else:
                 src_iterator = source.iter_features()
+
             t1 = time.monotonic()
             click.echo(f"Source setup in {t1-t0:.1f}s")
 
@@ -610,12 +610,12 @@ class Dataset1(DatasetStructure):
     @functools.lru_cache(maxsize=1)
     def cid_field_map(self):
         cid_map = {}
-        for te in (self.meta_tree / 'fields').obj:
-            if te.type != 'blob':
-                self.L.warn("cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s", te.type, te.name)
+        for te in (self.meta_tree / 'fields'):
+            if not isinstance(te, pygit2.Blob):
+                self.L.warn("cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s", te.type_str, te.name)
                 continue
 
-            cid = json.loads(te.obj.data)
+            cid = json.loads(te.data)
             field_name = te.name
             cid_map[cid] = field_name
         return cid_map
@@ -696,10 +696,10 @@ class Dataset1(DatasetStructure):
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
 
         te = (self.tree / '.sno-table' / pk_hash[:2] / pk_hash[2:4] / pk_enc)
-        if te.type != 'blob':
-            raise IntegrityError(f"Unexpected TreeEntry type={te.type} in feature tree {pk_enc}")
+        if not isinstance(te, pygit2.Blob):
+            raise IntegrityError(f"Unexpected TreeEntry type={te.type_str} in feature tree {pk_enc}")
 
-        return pk_enc, te.obj
+        return pk_enc, te
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
         pk_enc, blob = self._get_feature(pk_value)
@@ -740,7 +740,7 @@ class Dataset1(DatasetStructure):
         return tupleizer
 
     def _features(self, feature_builder, fast):
-        top_tree = (self.tree / '.sno-table').obj
+        top_tree = (self.tree / '.sno-table')
 
         # .sno-table/
         #   [hex(pk-hash):2]/
@@ -752,22 +752,22 @@ class Dataset1(DatasetStructure):
         RE_F = re.compile(fr'(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$')
 
         for l1e in top_tree:
-            if l1e.type != 'tree' or not RE_L.match(l1e.name):
+            if l1e.type != pygit2.GIT_OBJ_TREE or not RE_L.match(l1e.name):
                 continue
 
-            for l2e in l1e.obj:
-                if l2e.type != 'tree' or not RE_L.match(l2e.name):
+            for l2e in l1e:
+                if l2e.type != pygit2.GIT_OBJ_TREE or not RE_L.match(l2e.name):
                     continue
 
-                for fbe in l2e.obj:
+                for fbe in l2e:
                     if not fast:
                         if not RE_F.match(fbe.name):
                             continue
-                        elif fbe.type != 'blob':
-                            self.L.warn("features: Unexpected TreeEntry type=%s in feature tree '%s/%s/%s'", fbe.type, l1e.name, l2e.name, fbe.name)
+                        elif fbe.type != pygit2.GIT_OBJ_BLOB:
+                            self.L.warn("features: Unexpected TreeEntry type=%s in feature tree '%s/%s/%s'", fbe.type_str, l1e.name, l2e.name, fbe.name)
                             continue
 
-                    yield feature_builder(fbe.name, fbe.obj)
+                    yield feature_builder(fbe.name, fbe)
 
     def features(self, *, ogr_geoms=False, **kwargs):
         """ Feature iterator yielding (feature-key, feature-dict) pairs """
@@ -835,8 +835,6 @@ class Dataset1(DatasetStructure):
         )
         index.add(entry)
         return [entry]
-
-        # click.echo(pk_val, feature_path, bin_feature, entry)
 
     def import_iter_feature_blobs(self, resultset, source):
         path = f"{self.path}/.sno-table"

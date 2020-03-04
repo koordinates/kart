@@ -91,48 +91,46 @@ class WorkingCopyGPKG(WorkingCopy):
         if hasattr(self, '_db'):
             # inner - reuse
             L.debug(f"session(bulk={bulk}): existing...")
-            yield self._db
+            with self._db:
+                yield self._db
             L.debug(f"session(bulk={bulk}): existing/done")
         else:
             L.debug(f"session(bulk={bulk}): new...")
             self._db = gpkg.db(
                 self.full_path,
-                isolation_level=None  # autocommit (also means manual transaction management)
             )
+            dbcur = self._db.cursor()
 
             if bulk:
                 L.debug("Invoking bulk mode %s", bulk)
-                orig_journal = self._db.execute("PRAGMA journal_mode;").fetchone()[0]
-                orig_locking = self._db.execute("PRAGMA locking_mode;").fetchone()[0]
+                orig_journal = dbcur.execute("PRAGMA journal_mode;").fetchone()[0]
+                orig_locking = dbcur.execute("PRAGMA locking_mode;").fetchone()[0]
 
-                self._db.execute("PRAGMA synchronous = OFF;")
-                self._db.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
+                dbcur.execute("PRAGMA synchronous = OFF;")
+                dbcur.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
 
                 if bulk >= 2:
-                    self._db.execute("PRAGMA journal_mode = MEMORY;")
-                    self._db.execute("PRAGMA locking_mode = EXCLUSIVE;")
+                    dbcur.execute("PRAGMA journal_mode = MEMORY;")
+                    dbcur.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
             try:
-                self._db.execute("BEGIN")
-                yield self._db
-            except:  # noqa
-                self._db.execute("ROLLBACK")
+                with self._db:
+                    yield self._db
+            except Exception:
                 raise
-            else:
-                self._db.execute("COMMIT")
             finally:
                 if bulk:
                     L.debug("Disabling bulk %s mode (Journal: %s; Locking: %s)", bulk, orig_journal, orig_locking)
-                    self._db.execute("PRAGMA synchronous = ON;")
-                    self._db.execute("PRAGMA cache_size = -2000;")  # default
+                    dbcur.execute("PRAGMA synchronous = ON;")
+                    dbcur.execute("PRAGMA cache_size = -2000;")  # default
 
                     if bulk >= 2:
-                        self._db.execute(f"PRAGMA locking_mode = {orig_locking};")
-                        self._db.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
-                        self._db.execute(f"PRAGMA journal_mode = {orig_journal};")
+                        dbcur.execute(f"PRAGMA locking_mode = {orig_locking};")
+                        dbcur.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
+                        dbcur.execute(f"PRAGMA journal_mode = {orig_journal};")
 
-            del self._db
-            L.debug(f"session(bulk={bulk}): new/done")
+                del self._db
+                L.debug(f"session(bulk={bulk}): new/done")
 
     def _get_columns(self, dataset):
         pk_field = None
@@ -166,15 +164,16 @@ class WorkingCopyGPKG(WorkingCopy):
         del gdal_ds
 
         with self.session() as db:
+            dbcur = db.cursor()
             # Remove placeholder stuff GDAL creates
-            db.execute(
+            dbcur.execute(
                 "DELETE FROM gpkg_geometry_columns WHERE table_name='ogr_empty_table';"
             )
-            db.execute("DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';")
-            db.execute("DROP TABLE IF EXISTS ogr_empty_table;")
+            dbcur.execute("DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';")
+            dbcur.execute("DROP TABLE IF EXISTS ogr_empty_table;")
 
             # Create metadata tables
-            db.execute("""
+            dbcur.execute("""
                 CREATE TABLE IF NOT EXISTS gpkg_metadata (
                     id INTEGER CONSTRAINT m_pk PRIMARY KEY ASC NOT NULL,
                     md_scope TEXT NOT NULL DEFAULT 'dataset',
@@ -183,7 +182,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     metadata TEXT NOT NULL DEFAULT ''
                 );
             """)
-            db.execute("""
+            dbcur.execute("""
                 CREATE TABLE IF NOT EXISTS gpkg_metadata_reference (
                     reference_scope TEXT NOT NULL,
                     table_name TEXT,
@@ -197,7 +196,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 );
             """)
 
-            db.execute(f"""
+            dbcur.execute(f"""
                 CREATE TABLE {self.META_TABLE} (
                     table_name TEXT NOT NULL,
                     key TEXT NOT NULL,
@@ -218,6 +217,7 @@ class WorkingCopyGPKG(WorkingCopy):
         meta_md_ref = dataset.get_meta_item("gpkg_metadata_reference") or {}
 
         with self.session() as db:
+            dbcur = db.cursor()
             # Update GeoPackage core tables
             for o in meta_srs:
                 keys, values = zip(*o.items())
@@ -227,7 +227,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     VALUES
                         ({','.join(['?'] * len(keys))});
                 """
-                db.execute(sql, values)
+                dbcur.execute(sql, values)
 
             keys, values = zip(*meta_info.items())
             # our repo copy doesn't include all fields from gpkg_contents
@@ -240,7 +240,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 VALUES
                     ({','.join(['?'] * len(keys))});
             """
-            db.execute(sql, values)
+            dbcur.execute(sql, values)
 
             if meta_geom:
                 keys, values = zip(*meta_geom.items())
@@ -250,7 +250,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     VALUES
                         ({','.join(['?']*len(keys))});
                 """
-                db.execute(sql, values)
+                dbcur.execute(sql, values)
 
             # Populate metadata tables
             # since there's FKs, need to remap joins
@@ -268,7 +268,7 @@ class WorkingCopyGPKG(WorkingCopy):
                         ({','.join(['?']*len(keys))});
                     """
                 dbcur.execute(sql, values)
-                metadata_id_map[o['id']] = dbcur.lastrowid
+                metadata_id_map[o['id']] = db.last_insert_rowid()
 
             for o in meta_md_ref:
                 params = dict(o.items())
@@ -372,9 +372,10 @@ class WorkingCopyGPKG(WorkingCopy):
                 table
             ))
 
+            rowcount = db.changes()
             assert (
-                dbcur.rowcount == 1
-            ), f"gpkg_contents update: expected 1Δ, got {dbcur.rowcount}"
+                rowcount == 1
+            ), f"gpkg_contents update: expected 1Δ, got {rowcount}"
 
     def get_db_tree(self, table_name='*'):
         with self.session() as db:
@@ -411,7 +412,8 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         super().create()
 
         with self.session() as db:
-            db.execute(f"""
+            dbcur = db.cursor()
+            dbcur.execute(f"""
                 CREATE TABLE {self.TRACKING_TABLE} (
                     table_name TEXT NOT NULL,
                     pk TEXT NULL,
@@ -426,7 +428,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         del self.repo.config["sno.workingcopy"]
 
     def _create_triggers(self, dbcur, table):
-        pkf = gpkg.ident(gpkg.pk(dbcur, table))
+        pkf = gpkg.ident(gpkg.pk(dbcur.getconnection(), table))
         ts = gpkg.param_str(table)
 
         # sqlite doesn't let you do param substitutions in CREATE TRIGGER
@@ -499,7 +501,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 cols, pk_field = self._get_columns(dataset)
                 col_names = cols.keys()
                 col_specs = cols.values()
-                db.execute(f"""
+                dbcur.execute(f"""
                     CREATE TABLE {gpkg.ident(table)}
                     ({', '.join(col_specs)});
                 """)
@@ -518,7 +520,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 CHUNK_SIZE = 10000
                 for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
                     dbcur.executemany(sql_insert_features, rows)
-                    feat_count += dbcur.rowcount
+                    feat_count += db.changes()
 
                     nc = feat_count / CHUNK_SIZE
                     if nc % 5 == 0 or not nc.is_integer():
@@ -535,15 +537,16 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 self._create_spatial_index(dataset)
 
         with self.session() as db:
+            dbcur = db.cursor()
             for dataset in datasets:
                 table = dataset.name
 
                 self.update_gpkg_contents(commit, dataset)
 
                 # Create triggers
-                self._create_triggers(db, table)
+                self._create_triggers(dbcur, table)
 
-            db.execute(
+            dbcur.execute(
                 f"INSERT OR REPLACE INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
                 ('*', 'tree', commit.peel(pygit2.Tree).hex),
             )
@@ -563,7 +566,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         CHUNK_SIZE = 10000
         for rows in self._chunk(dataset.get_feature_tuples(pk_iter, col_names, ignore_missing=ignore_missing), CHUNK_SIZE):
             dbcur.executemany(sql_write_feature, rows)
-            feat_count += dbcur.rowcount
+            feat_count += dbcur.getconnection().changes()
 
         return feat_count
 
@@ -579,7 +582,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         CHUNK_SIZE = 10000
         for rows in self._chunk(zip(pk_iter), CHUNK_SIZE):
             dbcur.executemany(sql_del_feature, rows)
-            feat_count += dbcur.rowcount
+            feat_count += dbcur.getconnection().changes()
 
         return feat_count
 
@@ -692,8 +695,8 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     (str(new_tree),)
                 )
                 assert (
-                    dbcur.rowcount == 1
-                ), f"{self.META_TABLE} update: expected 1Δ, got {dbcur.rowcount}"
+                    db.changes() == 1
+                ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
 
             else:
                 raise NotImplementedError(f"Unexpected action: {action}")
@@ -768,7 +771,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             )
                             dbcur.execute(sql_changed, (table,))
                             pk_list = [r[0] for r in dbcur]
-                            track_count = dbcur.rowcount
+                            track_count = db.changes()
                             count = self.delete_features(dbcur, src_ds, pk_list)
                             L.debug("reset(): dirty: removed %s features, tracking Δ count=%s", count, track_count)
                             count = self.write_features(dbcur, src_ds, pk_list, ignore_missing=True)
@@ -861,8 +864,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             ),
                         )
 
-                    # CTE seems to break dbcur.rowcount
-                    rowcount = dbcur.execute("SELECT changes()").fetchone()[0]
+                    rowcount = db.changes()
                     assert (
                         rowcount == 1
                     ), f"gpkg_contents update: expected 1Δ, got {rowcount}"
@@ -870,7 +872,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             if update_meta:
                 # update the tree id
                 tree = commit.peel(pygit2.Tree)
-                db.execute(
+                dbcur.execute(
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                     (tree.hex,),
                 )
