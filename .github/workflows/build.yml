@@ -20,7 +20,7 @@ jobs:
         id: cache-vendor
         uses: actions/cache@v1.1.0
         with:
-          path: vendor-source-cache
+          path: .cache/vendor-source
           key: vendor-source-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-1
           restore-keys: |
             vendor-source-
@@ -35,10 +35,10 @@ jobs:
       - name: collect sources
         if: steps.cache-vendor.outputs.cache-hit != 'true'
         run: |
-          tar xvf vendor-source-cache/vendor.tar || true
+          tar xvf .cache/vendor-source/vendor.tar || true
           make -C vendor sources
-          mkdir -p vendor-source-cache
-          tar cvf vendor-source-cache/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
+          mkdir -p .cache/vendor-source
+          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
 
       - name: collect pydist
         if: steps.cache-pydist.outputs.cache-hit != 'true'
@@ -112,7 +112,7 @@ jobs:
       - name: cache-source
         uses: actions/cache@v1.1.0
         with:
-          path: .vendor-cache-source
+          path: .cache/vendor-source
           key: vendor-source-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-1
         if: steps.cache-dist.outputs.cache-hit != 'true'
 
@@ -128,7 +128,7 @@ jobs:
       - name: build vendor libraries
         if: steps.cache-dist.outputs.cache-hit != 'true'
         run: |
-          tar xvf .vendor-cache-source/vendor.tar
+          tar xvf .cache/vendor-source/vendor.tar
           make -C vendor build-${{ matrix.platform.name }}
 
       - name: save library bundle
