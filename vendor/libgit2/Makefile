@@ -57,7 +57,10 @@ clean-configure:
 #
 
 $(LIBGIT2_ARCHIVE):
-	wget https://github.com/$(LIBGIT2_REPO)/archive/$(LIBGIT2_REF).tar.gz
+	wget https://github.com/$(LIBGIT2_REPO)/archive/$(LIBGIT2_REF).tar.gz -O $@
+
+.PHONY: archive
+archive: $(LIBGIT2_ARCHIVE)
 
 #
 # Extract Archives

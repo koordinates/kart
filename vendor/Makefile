@@ -9,6 +9,7 @@ endif
 
 export CFLAGS += -O2
 export CXXFLAGS += -O2
+CCACHE_DIR ?= $(abspath .)/.ccache
 
 vendor-Linux-archive = dist/vendor-Linux.tar.gz
 vendor-Darwin-archive = dist/vendor-Darwin.tar.gz
@@ -59,6 +60,7 @@ git: curl
 endif
 
 env:
+	@echo PY3=$(PY3)
 	$(PY3) -m venv --copies env
 	env/bin/pip install -U $(PYDEPS)
 
@@ -82,6 +84,14 @@ packages_clean := $(addsuffix _clean,$(packages))
 
 %_clean:
 	$(MAKE) -C $* clean
+
+packages_archive := $(addsuffix _archive,$(packages))
+
+%_archive:
+	$(MAKE) -C $* archive
+
+.PHONY: sources
+sources: $(packages_archive)
 
 .PHONY: clean
 clean: $(packages_clean)
@@ -134,21 +144,22 @@ build-Darwin: $(libs)
 
 	# GDAL/Proj
 	cp -vf gdal/wheelhouse/$(notdir $(lib-gdal)) $(VENDOR)/wheelhouse/
-	cp -vafr env/share/gdal $(VENDOR_ENV)/share/
-	cp -vafr env/share/proj $(VENDOR_ENV)/share/
+	cp -vaf env/share/gdal $(VENDOR_ENV)/share/
+	cp -vaf env/share/proj $(VENDOR_ENV)/share/
 
 	# PyGit2
 	cp -vf pygit2/wheelhouse/$(notdir $(lib-pygit2)) $(VENDOR)/wheelhouse/
 
 	# Spatialite
-	cp -vfa env/lib/$(notdir $(lib-spatialite)) $(VENDOR_ENV)/lib/
+	cp -vaf env/lib/$(notdir $(lib-spatialite)) $(VENDOR_ENV)/lib/
+	install_name_tool -add_rpath "@loader_path/python3.7/site-packages/osgeo/.dylibs/" $(VENDOR_ENV)/lib/$(notdir $(lib-spatialite))
 
 	cp -vfL env/lib/libspatialindex_c.dylib $(VENDOR_ENV)/lib/
 	cp -vfL env/lib/libspatialindex.6.dylib $(VENDOR_ENV)/lib/
 
-	cp -frav env/share/git-core $(VENDOR_ENV)/share/
-	cp -frav env/libexec/git-core $(VENDOR_ENV)/libexec/
-	cp -frav env/bin/git $(VENDOR_ENV)/bin/
+	cp -vaf env/share/git-core $(VENDOR_ENV)/share/
+	cp -vaf env/libexec/git-core $(VENDOR_ENV)/libexec/
+	cp -vaf env/bin/git $(VENDOR_ENV)/bin/
 
 	tar czf $(vendor-Darwin-archive) -C $(VENDOR) env wheelhouse
 	-$(RM) -r $(VENDOR)
@@ -158,11 +169,13 @@ build-Linux: VENDOR:=build/vendor-Linux
 build-Linux:
 	-$(RM) -r $(VENDOR) $(vendor-Linux-archive)
 	mkdir -p $(VENDOR) dist
-	docker run --rm -it \
+	docker run --rm \
+		$(if $(MANYLINUX_DEBUG),-it) \
 		-v $(abspath .):/src \
 		-w /src \
-		-v $(abspath .)/.ccache:/root/.cache/ccache:cached \
+		-v $(CCACHE_DIR):/root/.cache/ccache:cached \
 		-e CCACHE_DIR=/root/.cache/ccache \
+		-e CCACHE_COMPRESS \
 		pyca/cryptography-manylinux2010:x86_64 \
 		bash -c '/src/build-manylinux.sh /src/$(VENDOR) $(if $(MANYLINUX_DEBUG),; bash)'
 

@@ -68,7 +68,10 @@ clean-configure:
 #
 
 $(GIT_ARCHIVE):
-	wget https://mirrors.edge.kernel.org/pub/software/scm/git/$@
+	wget https://mirrors.edge.kernel.org/pub/software/scm/git/$@ -O $@
+
+.PHONY: archive
+archive: $(GIT_ARCHIVE)
 
 #
 # Extract Archives
@@ -113,9 +116,9 @@ print-lib-deps: print-lib-deps-$(PLATFORM)
 .PHONY: print-lib-deps-Darwin
 print-lib-deps-Darwin:
 	@echo -e "\nExamining library dependencies..."
-	cd src/ && find -executable -type f -name "git*" -exec otool -L {} \;
+	cd src/ && find . -perm -o=x -type f -name "git*" -exec otool -L {} \;
 
 .PHONY: print-lib-deps-Linux
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
-	cd src/  && find -executable -type f -name "git*" -print -exec ldd {} \;
+	cd src/ && find . -perm -o=x -type f -name "git*" -print -exec ldd {} \;

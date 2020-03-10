@@ -2,7 +2,6 @@
 *.py?
 /data
 /venv
-/requirements/.*.installed
 
 vendor/curl/**
 !vendor/curl/Makefile

@@ -1,17 +1,32 @@
 #!/bin/bash
 set -eu
 
-HERE=$(dirname "$(readlink -f "$0")")
+if ! command -v realpath >/dev/null; then
+    # MacOS doesn't have realpath or readlink -f by default
+    function realpath() {
+        python -c 'import os, sys; print os.path.realpath(sys.argv[1])' "$1"
+    }
+fi
+
+function do_error {
+    { echo -e "\n‼️ E2E: Error"; } 2>/dev/null
+}
+trap do_error ERR
+
+HERE=$(dirname "$(realpath "$0")")
 TEST_GPKG=${1-${HERE}/../data/e2e.gpkg}
+echo "Test data is at: ${TEST_GPKG}"
 
 TMP_PATH=$(mktemp -q -d -t "sno-e2e.XXXXXX")
+echo "Using temp folder: ${TMP_PATH}"
 
-function cleanup {
+function do_cleanup {
     rm -rf "$TMP_PATH"
 }
-trap cleanup EXIT
+trap do_cleanup EXIT
 
 SNO_PATH=$(dirname "$(realpath "$(command -v sno)")")
+echo "Sno is at: ${SNO_PATH}"
 
 mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
@@ -37,3 +52,5 @@ sno switch master
 sno status
 sno merge edit-1 --no-ff
 sno log
+
+{ echo -e "\n✅ E2E: Success"; } 2>/dev/null

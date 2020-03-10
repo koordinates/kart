@@ -54,7 +54,10 @@ clean-configure:
 #
 
 $(SQLITE_ARCHIVE):
-	wget https://www.sqlite.org/$(SQLITE_YEAR)/$@
+	wget https://www.sqlite.org/$(SQLITE_YEAR)/$@ -O $@
+
+.PHONY: archive
+archive: $(SQLITE_ARCHIVE)
 
 #
 # Extract Archives

@@ -53,7 +53,10 @@ clean-configure:
 #
 
 $(GEOS_ARCHIVE):
-	wget https://download.osgeo.org/geos/$@
+	wget https://download.osgeo.org/geos/$@ -O $@
+
+.PHONY: archive
+archive: $(GEOS_ARCHIVE)
 
 #
 # Extract Archives

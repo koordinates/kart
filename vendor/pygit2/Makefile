@@ -61,7 +61,10 @@ clean-configure:
 #
 
 $(PYGIT2_ARCHIVE):
-	wget https://github.com/$(PYGIT2_REPO)/archive/$(PYGIT2_REF).tar.gz
+	wget https://github.com/$(PYGIT2_REPO)/archive/$(PYGIT2_REF).tar.gz -O $@
+
+.PHONY: archive
+archive: $(PYGIT2_ARCHIVE)
 
 #
 # Extract Archives
@@ -83,13 +86,13 @@ source: src
 
 .PHONY: install
 install: | src $(libgit2)
-	@echo LDFLAGS=$(LDFLAGS)
+	@echo LDFLAGS=$(LDFLAGS) PY3=$(PY3)
 	pip3.7 install -e src
 	$(MAKE) wheels
 
 .PHONY: wheels
 wheels: | src $(libgit2)
-	@echo LDFLAGS=$(LDFLAGS)
+	@echo LDFLAGS=$(LDFLAGS) PY3=$(PY3)
 	cd src \
 	&& python3 setup.py bdist_wheel -d $(abspath $@)
 	$(MAKE) wheelfix-$(PLATFORM)

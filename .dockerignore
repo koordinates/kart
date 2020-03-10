@@ -64,8 +64,6 @@ vendor/build/
 
 .github/
 
-requirements/.*.installed
-
 Brewfile.lock.json
 .venv.mk
 

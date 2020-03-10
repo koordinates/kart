@@ -56,7 +56,10 @@ clean-configure:
 #
 
 $(CURL_ARCHIVE):
-	wget https://curl.haxx.se/download/$@
+	wget https://curl.haxx.se/download/$@ -O $@
+
+.PHONY: archive
+archive: $(CURL_ARCHIVE)
 
 #
 # Extract Archives

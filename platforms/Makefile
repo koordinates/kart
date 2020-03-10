@@ -21,7 +21,7 @@ docker-fpm = linux/.docker-sno-fpm
 pkg = macos/dist/Sno-$(VERSION).pkg
 
 $(pyinstaller):
-	$(MAKE) -C .. requirements/.tools.installed
+	$(MAKE) -C .. py-tools
 
 .PHONY: all
 all: $(deb) $(rpm)
@@ -52,14 +52,14 @@ pyapp-Linux: $(SRC)/vendor/dist/vendor-Linux.tar.gz
 	mkdir -p linux/.cache
 	docker run \
 		--rm \
-		-it \
+		$(if $(MANYLINUX_DEBUG),-it) \
 		--tmpfs /tmp \
 		-v "$(SRC):/src" \
 		-w /src \
 		-v "$(abspath linux/.cache):/root/.cache" \
 		--entrypoint "/bin/bash" \
 		cdrx/pyinstaller-linux \
-		-i -c '/src/platforms/linux/pyinstaller.sh || bash'
+		-i -c '/src/platforms/linux/pyinstaller.sh $(if $(MANYLINUX_DEBUG),|| bash)'
 
 $(pyapp-Darwin):
 	$(MAKE) pyapp-Darwin
@@ -75,7 +75,7 @@ app-sign:
 .PHONY: pyapp-Darwin
 pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 	-$(RM) -r $(SRC)/vendor/dist/env/
-	$(MAKE) -C $(SRC) sno-app
+	$(MAKE) -C $(SRC) release
 
 	tar xzf $(SRC)/vendor/dist/vendor-Darwin.tar.gz -C $(SRC)/vendor/dist/ env
 

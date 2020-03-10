@@ -1,9 +1,7 @@
 Sno: Distributed version-control for datasets
 ---------------------------------------------
 
-[![Homebrew/macOS](https://github.com/koordinates/sno/workflows/Homebrew%20Dev/badge.svg)](https://github.com/koordinates/sno/actions)
-[![Docker/Linux](https://badge.buildkite.com/621292fbfad27fe132e84c142ad0618d2a50375c29266d83a1.svg)](https://buildkite.com/koordinates/sno)
-
+![Build](https://github.com/koordinates/sno/workflows/Build/badge.svg?event=push)
 
 ## Installing
 

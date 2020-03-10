@@ -58,7 +58,10 @@ clean-configure:
 #
 
 $(JSONC_ARCHIVE):
-	wget https://s3.amazonaws.com/json-c_releases/releases/$@
+	wget https://s3.amazonaws.com/json-c_releases/releases/$@ -O $@
+
+.PHONY: archive
+archive: $(JSONC_ARCHIVE)
 
 #
 # Extract Archives

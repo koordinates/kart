@@ -67,7 +67,10 @@ clean-configure:
 #
 
 $(SPATIALITE_ARCHIVE):
-	wget http://www.gaia-gis.it/gaia-sins/$@
+	wget http://www.gaia-gis.it/gaia-sins/$@ -O $@
+
+.PHONY: archive
+archive: $(SPATIALITE_ARCHIVE)
 
 #
 # Extract Archives
@@ -120,9 +123,19 @@ $(build-spatialite): $(configure-spatialite)
 #
 
 .PHONY: install
+install: INSTALL_PATH:=$(PREFIX)/lib/$(notdir $(build-spatialite))
 install: $(build-spatialite)
 	$(MAKE) -C src install
 	cp -f $< $(PREFIX)/lib/
+ifeq ($(PLATFORM),Darwin)
+	for BN in `otool -LX "$(INSTALL_PATH)" | awk '{print $$1}' | grep "$(PREFIX)/lib/"`; do \
+		install_name_tool \
+			 -change "$$BN" "@rpath/`basename "$$BN"`" \
+			 "$(INSTALL_PATH)"; \
+	done
+	otool -L $(INSTALL_PATH)
+	otool -l $(INSTALL_PATH) | grep -A2 RPATH || true
+endif
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)

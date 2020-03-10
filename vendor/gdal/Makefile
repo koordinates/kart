@@ -77,7 +77,10 @@ clean-configure:
 #
 
 $(GDAL_ARCHIVE):
-	wget https://github.com/OSGeo/gdal/releases/download/v$(GDAL_VERSION)/$@
+	wget https://github.com/OSGeo/gdal/releases/download/v$(GDAL_VERSION)/$@ -O $@
+
+.PHONY: archive
+archive: $(GDAL_ARCHIVE)
 
 #
 # Extract Archives

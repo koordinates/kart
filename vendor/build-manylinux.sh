@@ -48,34 +48,36 @@ else
 
     echo ">>> Building Git ..."
     make git
-    cp -farv env/bin/git "$OUTPUT/env/bin/"
-    cp -farv env/lib/libcurl.*so* "$OUTPUT/env/lib/"
-    cp -farv env/share/git-core "$OUTPUT/env/share/"
-    cp -farv env/libexec/git-core "$OUTPUT/env/libexec/"
+    cp -fav env/bin/git "$OUTPUT/env/bin/"
+    cp -fav env/lib/libcurl.*so* "$OUTPUT/env/lib/"
+    cp -fav env/share/git-core "$OUTPUT/env/share/"
+    cp -fav env/libexec/git-core "$OUTPUT/env/libexec/"
 
     echo ">>> Building GDAL ..."
     make gdal-wheel
-    cp -fv gdal/wheelhouse/GDAL-*.whl "$OUTPUT/wheelhouse/"
-    cp -vafr env/share/gdal "$OUTPUT/env/share/"
-    cp -vafr env/share/proj "$OUTPUT/env/share/"
+    cp -fav gdal/wheelhouse/GDAL-*.whl "$OUTPUT/wheelhouse/"
+    cp -fav env/share/gdal "$OUTPUT/env/share/"
+    cp -fav env/share/proj "$OUTPUT/env/share/"
 
     echo ">>> Building PyGit2 ..."
     make pygit2-wheel
-    cp -fv pygit2/wheelhouse/pygit2-*.whl "$OUTPUT/wheelhouse"
+    cp -fav pygit2/wheelhouse/pygit2-*.whl "$OUTPUT/wheelhouse"
 
     echo ">>> Building spatialite ..."
     make spatialite
     cp -fvL spatialite/src/src/.libs/mod_spatialite.so "$OUTPUT/env/lib/"
     # FIXME: Use the GDAL auditwheel libraries
     patchelf --remove-rpath "$OUTPUT/env/lib/mod_spatialite.so"
-    patchelf --force-rpath --set-rpath "\$ORIGIN/." "$OUTPUT/env/lib/mod_spatialite.so"
-    cp -vfa env/lib/libsqlite3.so* "$OUTPUT/env/lib/"
-    cp -vfa env/lib/libproj.so* "$OUTPUT/env/lib/"
-    cp -vfa env/lib/libgeos_c.so* "$OUTPUT/env/lib/"
-    cp -vfa env/lib/libgeos-*.so "$OUTPUT/env/lib/"
+    patchelf --force-rpath --set-rpath "\$ORIGIN" "$OUTPUT/env/lib/mod_spatialite.so"
+    cp -fav env/lib/libsqlite3.so* "$OUTPUT/env/lib/"
+    cp -fav env/lib/libproj.so* "$OUTPUT/env/lib/"
+    cp -fav env/lib/libgeos_c.so* "$OUTPUT/env/lib/"
+    cp -fav env/lib/libgeos-*.so "$OUTPUT/env/lib/"
 
     echo ">>> Building spatialindex ..."
     make spatialindex
     cp -vfL env/lib/libspatialindex_c.so "$OUTPUT/env/lib/"
     cp -vfL env/lib/libspatialindex.so.6 "$OUTPUT/env/lib/"
+    patchelf --remove-rpath "$OUTPUT/env/lib/libspatialindex_c.so"
+    patchelf --force-rpath --set-rpath "\$ORIGIN" "$OUTPUT/env/lib/libspatialindex_c.so"
 fi

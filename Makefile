@@ -16,10 +16,10 @@ DOCKER_BUILD_ARGs = --pull
 VIRTUAL_ENV ?= venv
 SHELL = /bin/bash  # required for PATH to work
 
-export PREFIX = /usr/local
+export PREFIX ?= /usr/local
 
 # Python dependencies via pip-compile
-BASE_PIP_COMPILE_CMD = CUSTOM_COMPILE_COMMAND="make requirements" pip-compile -v --annotate --no-index --no-emit-trusted-host
+BASE_PIP_COMPILE_CMD = CUSTOM_COMPILE_COMMAND="make py-requirements" pip-compile -v --annotate --no-index --no-emit-trusted-host
 PIP_COMPILE_CMD ?= $(BASE_PIP_COMPILE_CMD)
 PY_REQS = requirements.txt requirements/test.txt requirements/dev.txt
 
@@ -45,70 +45,51 @@ py-venv-upgrade: | $(VIRTUAL_ENV)
 	$(PY3) -m venv $(VIRTUAL_ENV) --upgrade
 	rm requirements/.*.installed
 
+# Python dependency compilation/resolution
+
 .PHONY: py-requirements
-py-requirements: | requirements/.tools.installed
+py-requirements: $(py-install-tools)
 	touch requirements/*.in
-	@$(MAKE) $(PY_REQS)
+	@$(MAKE) $(PY_REQS) py-license-check
 
 .PHONY: py-requirements-upgrade
 py-requirements-upgrade: export PIP_COMPILE_CMD=$(BASE_PIP_COMPILE_CMD) --upgrade
-py-requirements-upgrade: | requirements/.tools.installed
-	touch requirements/*
-	@$(MAKE) $(PY_REQS) py-license-check
+py-requirements-upgrade: py-requirements
 
-requirements.txt: requirements/requirements.in requirements/licenses.ini | requirements/.tools.installed
-	$(PIP_COMPILE_CMD) --output-file $@ requirements/requirements.in
+requirements.txt: requirements/requirements.in requirements/licenses.ini
+requirements/test.txt: requirements/test.in requirements.txt
+requirements/dev.txt: requirements/dev.in requirements.txt requirements/test.txt
+
+requirement%.txt requirements/%.txt:
+	$(MAKE) $(py-install-tools) $(vendor-install)
+	$(PIP_COMPILE_CMD) --output-file $@ $<
 #   Comment out pygit2, because we install manually afterwards
 	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
 	$(RM) $@.~bak
 
-requirements/test.txt: requirements/test.in requirements.txt | requirements/.tools.installed
-	$(PIP_COMPILE_CMD) --output-file $@ requirements/test.in
-#   Comment out pygit2, because we install manually afterwards
-	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
-	$(RM) $@.~bak
+# Python dependency license checking
+.PHONY: py-license-check
+py-license-check: py-deps $(py-install-tools) requirements/licenses.ini
+	liccheck -l CAUTIOUS -s requirements/licenses.ini -r requirements.txt
 
-requirements/dev.txt: requirements/dev.in requirements.txt requirements/test.txt | requirements/.tools.installed
-	$(PIP_COMPILE_CMD) --output-file $@ requirements/dev.in
-#   Comment out pygit2, because we install manually afterwards
-	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
-	$(RM) $@.~bak
+# Python dependency installation
 
-# Vendor Dependencies
+py-install-main = $(VIRTUAL_ENV)/.requirements.installed
+py-install-dev = $(VIRTUAL_ENV)/.dev.installed
+py-install-test = $(VIRTUAL_ENV)/.test.installed
+py-install-tools = $(VIRTUAL_ENV)/.tools.installed
 
-vendor-archive = vendor/dist/vendor-$(PLATFORM).tar.gz
+$(PY_REQS) $(py-install-main): export SPATIALINDEX_C_LIBRARY:=$(abspath $(VIRTUAL_ENV)/lib/libspatialindex_c.$(LIBSUFFIX))
 
-$(vendor-archive):
-	$(MAKE) -C vendor all
+$(py-install-main): requirements.txt $(vendor-install)
+$(py-install-test): requirements/test.txt $(py-install-main)
+$(py-install-dev): requirements/dev.txt $(py-install-main) $(py-install-test)
 
-.PHONY: vendor-install
-vendor-install: $(vendor-archive) | $(VIRTUAL_ENV)
-	-$(RM) -r vendor/dist/wheelhouse
-	tar xvzf $(vendor-archive) -C vendor/dist wheelhouse/
-	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/GDAL-*.whl
-	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/pygit2-*.whl
-	tar xzf $(vendor-archive) --overwrite -C $(VIRTUAL_ENV) --strip-components=1 env/
-
-# Install Python (just release) dependencies
-.PHONY: py-deps
-py-deps: vendor-install requirements/.requirements.installed | $(VIRTUAL_ENV)
-
-# Install Python (development & release) py-deps
-.PHONY: py-deps-dev
-py-deps-dev: py-deps requirements/.dev.installed requirements/.tools.installed
-
-requirements/.requirements.installed: export SPATIALINDEX_C_LIBRARY:=$(abspath $(VIRTUAL_ENV)/lib/libspatialindex_c.$(LIBSUFFIX))
-requirements/.requirements.installed: requirements.txt | $(VIRTUAL_ENV)
-	mkdir -p requirements
-	pip install --no-deps -r requirements.txt
+$(VIRTUAL_ENV)/.%.installed: | $(VIRTUAL_ENV)
+	pip install --no-deps -r $<
 	touch $@
 
-requirements/.dev.installed: requirements/dev.txt requirements/test.txt | $(VIRTUAL_ENV)
-	pip install --no-deps -r requirements/dev.txt -r requirements/test.txt
-	touch $@
-
-requirements/.tools.installed: | $(VIRTUAL_ENV)
-	mkdir -p requirements
+$(py-install-tools): | $(VIRTUAL_ENV)
 	pip install -U \
 		pip-tools \
 		liccheck \
@@ -117,42 +98,68 @@ requirements/.tools.installed: | $(VIRTUAL_ENV)
 		$(WHEELTOOL)
 	touch $@
 
+.PHONY: py-tools
+py-tools: $(py-install-tools)
+
+# Vendor Dependencies
+
+vendor-archive = vendor/dist/vendor-$(PLATFORM).tar.gz
+
+$(vendor-archive):
+	$(MAKE) -C vendor all
+
+vendor-install := $(VIRTUAL_ENV)/.vendor-install
+
+$(vendor-install): $(vendor-archive) | $(VIRTUAL_ENV)
+	-$(RM) -r vendor/dist/wheelhouse
+	tar xvzf $(vendor-archive) -C vendor/dist wheelhouse/
+	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/GDAL-*.whl
+	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/pygit2-*.whl
+	tar xzf $(vendor-archive) -C $(VIRTUAL_ENV) --strip-components=1 env/
+	touch $@
+
+.PHONY: vendor-install
+vendor-install:
+	-$(RM) $(vendor-install)
+	$(MAKE) $(vendor-install)
+
+# Install Python (just release) dependencies
+.PHONY: py-deps
+py-deps: $(vendor-install) $(py-install-main) | $(VIRTUAL_ENV)
+
+# Install Python (development & release) py-deps
+.PHONY: py-deps-dev
+py-deps-dev: py-deps $(py-install-dev) $(py-install-tools)
+
 # App code
 sno-app-release = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/sno
 sno-app-dev = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/sno.egg-link
-ifeq ($(BUILD_TYPE),release)
-	sno-app = $(sno-app-release)
-else
-	sno-app = $(sno-app-dev)
-endif
-sno-app-any = $(or ($(realpath $(sno-app-dev)),$(realpath $(sno-app-release))))
+sno-app-any = $(VIRTUAL_ENV)/bin/sno
 
-.PHONY: sno-app
-sno-app: BUILD_TYPE=release
-sno-app: py-deps $(sno-app)
-
-$(sno-app): setup.py sno | $(VIRTUAL_ENV)
+$(sno-app-release): py-deps setup.py sno | $(VIRTUAL_ENV)
 	-$(RM) dist/*
 	python3 setup.py sdist
 	pip install --force-reinstall --no-deps dist/*.tar.gz
 
-$(sno-app-dev): setup.py | $(VIRTUAL_ENV)
+$(sno-app-dev): py-deps-dev setup.py | $(VIRTUAL_ENV)
 	pip install --force-reinstall --no-deps -e .
+
+$(sno-app-any):
+	$(MAKE) $(sno-app-release)
+
+.PHONY: release
+release: $(sno-app-release)
+
+.PHONY: dev
+dev: $(sno-app-dev)
 
 # Top-level targets
 .PHONY: all
-all: BUILD_TYPE=dev
-all: py-deps-dev $(sno-app-dev)
+all: dev
 
 .PHONY: install
-install: $(sno-app-any)
-	ln -s $(realpath $(VIRTUAL_ENV)/bin/sno) $@
-
-# Dependency license checking
-.PHONY: py-license-check
-py-license-check: py-deps requirements/.tools.installed requirements/licenses.ini
-	liccheck -l CAUTIOUS -s requirements/licenses.ini -r requirements.txt
-
+install: | $(sno-app-any)
+	ln -sf $(realpath $(VIRTUAL_ENV)/bin/sno) $(PREFIX)/bin/sno
 
 # Docker Image
 
@@ -166,7 +173,7 @@ TEST_CLEANUP = find sno tests -name '__pycache__' -print0 | xargs -r0t -- rm -rf
 
 .PHONY: test-cleanup
 test-clean:
-	rm -rf .pytest_* .coverage coverage
+	-$(RM) -r .pytest_* .coverage coverage test-results
 	$(TEST_CLEANUP)
 
 .PHONY: docker-ci-test
@@ -181,8 +188,17 @@ docker-ci-test: test-clean
 	&& $(TEST_CLEANUP) \
 	|| (R=$$?; $(TEST_CLEANUP) && exit $$R)
 
+.PHONY: ci-test
+ci-test:
+	pytest \
+		--verbose \
+		-p no:sugar \
+		--cov-report term \
+		--cov-report html:test-results/coverage/ \
+		--junit-xml=test-results/junit.xml
+
 .PHONY: test
-test:
+test: $(py-install-test)
 	pytest -v --cov-report term --cov-report html:coverage
 
 # Cleanup
@@ -190,7 +206,6 @@ test:
 .PHONY: clean
 clean: test-clean
 	$(RM) $(PREFIX)/bin/sno
-	$(RM) requirements/.*.installed
 	$(RM) -r $(VIRTUAL_ENV)
 
 .PHONY: cleaner

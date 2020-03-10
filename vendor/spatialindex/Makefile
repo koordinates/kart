@@ -16,18 +16,19 @@ SPATIALINDEX_ARCHIVE := spatialindex-src-$(SPATIALINDEX_VERSION).tar.gz
 ifeq ($(PLATFORM),Darwin)
 	CCACHE_PATH = /usr/local/opt/ccache/bin
 	LIBSUFFIX = dylib
+	CMAKE_PARAMS = -DCMAKE_SKIP_INSTALL_RPATH=TRUE -DCMAKE_INSTALL_NAME_DIR="@rpath" -DCMAKE_INSTALL_RPATH=@loader_path
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
+	CMAKE_PARAMS = -DCMAKE_INSTALL_NAME_DIR="$$ORIGIN"
 endif
-
 
 # use ccache if available
 export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 
 build-spatialindex := build/bin/libspatialindex_c.$(LIBSUFFIX)
-configure-spatialindex = build/Makefile
+configure-spatialindex = build/CMakeCache.txt
 
 # default target
 .PHONY: all
@@ -55,7 +56,11 @@ clean-configure:
 #
 
 $(SPATIALINDEX_ARCHIVE):
-	wget https://github.com/libspatialindex/libspatialindex/releases/download/$(SPATIALINDEX_VERSION)/$@
+	wget https://github.com/libspatialindex/libspatialindex/releases/download/$(SPATIALINDEX_VERSION)/$@ -O $@
+
+.PHONY: archive
+archive: $(SPATIALINDEX_ARCHIVE)
+
 #
 # Extract Archives
 #
@@ -75,6 +80,7 @@ $(configure-spatialindex): | src
 	mkdir -p build
 	cd build \
 	&& $(CMAKE) -S $(realpath src) \
+		$(CMAKE_PARAMS) \
 		-DCMAKE_INSTALL_PREFIX=$(PREFIX)
 
 .PHONY: configure
@@ -91,6 +97,12 @@ $(build-spatialindex): $(configure-spatialindex)
 .PHONY: install
 install: $(build-spatialindex)
 	$(MAKE) -C build install
+ifeq ($(PLATFORM),Darwin)
+	install_name_tool \
+		 -change libspatialindex.6.dylib @loader_path/libspatialindex.6.dylib \
+		 $(PREFIX)/lib/libspatialindex_c.$(LIBSUFFIX)
+endif
+
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)

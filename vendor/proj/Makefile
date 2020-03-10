@@ -64,10 +64,13 @@ clean-configure:
 #
 
 $(PROJ_ARCHIVE):
-	wget https://download.osgeo.org/proj/$@
+	wget https://download.osgeo.org/proj/$@ -O $@
 
 $(PROJ_DATUMGRID_ARCHIVES):
-	wget https://download.osgeo.org/proj/$@
+	wget https://download.osgeo.org/proj/$@ -O $@
+
+.PHONY: archive
+archive: $(PROJ_ARCHIVE) $(PROJ_DATUMGRID_ARCHIVES)
 
 #
 # Extract Archives
