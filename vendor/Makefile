@@ -44,7 +44,7 @@ libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-spatialinde
 # default target
 .PHONY: all
 all:
-	$(MAKE) vendor-$(PLATFORM)-archive
+	$(MAKE) $(vendor-$(PLATFORM)-archive)
 
 .PHONY: build
 build: $(libs)
@@ -183,24 +183,8 @@ build-Linux:
 	-$(RM) -r $(VENDOR)
 
 $(vendor-Linux-archive) $(vendor-Darwin-archive):
-	mkdir -p dist
-	wget https://s3-us-west-1.amazonaws.com/build-artifacts.sno.earth/vendor/latest/$(notdir $@) -O $@
-
-.PHONY: download-Linux
-download-Linux:
-	-$(RM) $(vendor-Linux-archive)
-	$(MAKE) $(vendor-Linux-archive)
-
-.PHONY: download-Darwin
-download-Darwin:
-	-$(RM) $(vendor-Darwin-archive)
-	$(MAKE) $(vendor-Darwin-archive)
+	$(MAKE) download
 
 .PHONY: download
 download:
-	$(MAKE) download-$(PLATFORM)
-
-.PHONY: upload
-upload: $(vendor-Linux-archive) $(vendor-Darwin-archive)
-	aws s3 cp --acl public-read $(vendor-Linux-archive) s3://build-artifacts.sno.earth/vendor/latest/$(notdir $(vendor-Linux-archive))
-	aws s3 cp --acl public-read $(vendor-Darwin-archive) s3://build-artifacts.sno.earth/vendor/latest/$(notdir $(vendor-Darwin-archive))
+	./github-download.sh
