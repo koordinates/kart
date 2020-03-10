@@ -43,7 +43,7 @@ jobs:
       - name: collect pydist
         if: steps.cache-pydist.outputs.cache-hit != 'true'
         run: |
-          mkdir .cache/pydist
+          mkdir -p .cache/pydist
           wget ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
 
   vendor-build:
