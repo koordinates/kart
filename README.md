@@ -11,7 +11,9 @@ See the [v0.3 release notes](https://github.com/koordinates/sno/releases/tag/v0.
 
 ### macOS
 
-Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0)
+Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0);
+
+Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/sno/sno`
 
 ### Linux
 
