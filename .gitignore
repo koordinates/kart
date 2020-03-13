@@ -49,3 +49,4 @@ pytest.xml
 /dist
 /build
 *.code-workspace
+.vscode/
