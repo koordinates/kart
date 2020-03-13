@@ -25,7 +25,7 @@ def clone(ctx, do_checkout, url, directory):
         "--bare",
         "--config", "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
         url,
-        repo_dir.resolve()
+        str(repo_dir.resolve())
     ])
 
     repo = pygit2.Repository(str(repo_dir.resolve()))

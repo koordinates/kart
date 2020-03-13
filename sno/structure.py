@@ -266,7 +266,7 @@ class DatasetStructure:
                 if name in exclude:
                     continue
 
-                meta_path = os.path.join(top_path, name)
+                meta_path = '/'.join([top_path, name]) if top_path else name
                 yield (meta_path, self.get_meta_item(meta_path))
 
             subtree_names[:] = [n for n in subtree_names if n not in exclude]
@@ -354,7 +354,7 @@ class DatasetStructure:
             if path in head_tree:
                 raise ValueError(f"{path}/ already exists")
 
-        click.echo(f"Importing {source} to {path}/ ...")
+        click.echo(f"Importing {source} to {path} ...")
 
         with source:
             index = pygit2.Index()
@@ -392,7 +392,7 @@ class DatasetStructure:
             t2 = time.monotonic()
 
             click.echo(f"Added {count:,d} Features to index in {t2 - (t1 or t0):.1f}s")
-            click.echo(f"Overall rate: {(count/(t2-t0)):.0f} features/s)")
+            click.echo(f"Overall rate: {(count/(t2-t0 or 1E-3)):.0f} features/s)")
 
             click.echo("Writing tree...")
             tree_id = index.write_tree(repo)
@@ -496,7 +496,7 @@ class DatasetStructure:
             p.stdin.write(b'\ndone\n')
             t3 = time.monotonic()
             click.echo(f"Added {num_rows:,d} Features to index in {t3-t2:.1f}s")
-            click.echo(f"Overall rate: {(num_rows/(t3-t2)):.0f} features/s)")
+            click.echo(f"Overall rate: {(num_rows/(t3-t2 or 1E-3)):.0f} features/s)")
 
             p.stdin.close()
             p.wait()
@@ -648,7 +648,7 @@ class Dataset1(DatasetStructure):
         pk = self.cast_primary_key(pk)
         pk_enc = self.encode_pk(pk)
         pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
-        return os.path.join('.sno-table', pk_hash[:2], pk_hash[2:4], pk_enc)
+        return '/'.join(['.sno-table', pk_hash[:2], pk_hash[2:4], pk_enc])
 
     def import_meta_items(self, source):
         """
@@ -672,7 +672,7 @@ class Dataset1(DatasetStructure):
 
     def remove_feature(self, pk, index):
         object_path = self.get_feature_path(pk)
-        index.remove(os.path.join(self.path, object_path))
+        index.remove('/'.join([self.path, object_path]))
 
     def repo_feature_to_dict(self, pk, blob, ogr_geoms=False):
         feature = {
@@ -876,14 +876,14 @@ class Dataset1(DatasetStructure):
                 callback(self, "META", object_path=object_path)
 
         for _, obj_old in dataset_diff["D"].items():
-            object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
+            object_path = '/'.join([self.path, self.get_feature_path(obj_old[pk_field])])
             index.remove(object_path)
 
             if callback:
                 callback(self, "D", object_path=object_path, obj_old=obj_old)
 
         for obj in dataset_diff["I"]:
-            object_path = os.path.join(self.path, self.get_feature_path(obj[pk_field]))
+            object_path = '/'.join([self.path, self.get_feature_path(obj[pk_field])])
             bin_feature = self.encode_feature(obj)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(
@@ -895,10 +895,10 @@ class Dataset1(DatasetStructure):
                 callback(self, "I", object_path=object_path, obj_new=obj)
 
         for _, (obj_old, obj_new) in dataset_diff["U"].items():
-            object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
+            object_path = '/'.join([self.path, self.get_feature_path(obj_old[pk_field])])
             index.remove(object_path)
 
-            object_path = os.path.join(self.path, self.get_feature_path(obj_new[pk_field]))
+            object_path = '/'.join([self.path, self.get_feature_path(obj_new[pk_field])])
             bin_feature = self.encode_feature(obj_new)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(

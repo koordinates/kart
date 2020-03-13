@@ -18,7 +18,7 @@ def walk_tree(top, path='', topdown=True):
     blob_names is a list of names for the blobs in top_tree.
 
     To get a full path (which begins with top_path) to a blob or subtree in
-    top_path, do `os.path.join(top_path, name)`.
+    top_path, do `"/".join([top_path, name])`.
 
     To get a TreeEntry-style Blob or Tree object, do `top_tree / name`
 
@@ -53,12 +53,12 @@ def walk_tree(top, path='', topdown=True):
     if topdown:
         yield top, path, subtree_names, blob_names
         for name in subtree_names:
-            subtree_path = os.path.join(path, name)
+            subtree_path = '/'.join([path, name]) if path else name
             subtree = (top / name)
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
     else:
         for name in subtree_names:
-            subtree_path = os.path.join(path, name)
+            subtree_path = '/'.join([path, name]) if path else name
             subtree = (top / name)
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
         yield top, path, subtree_names, blob_names

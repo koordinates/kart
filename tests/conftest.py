@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
 
 import pytest
@@ -144,7 +145,11 @@ def data_archive(request, tmp_path_factory, chdir):
                     raise
         finally:
             if cleanup:
-                shutil.rmtree(extract_dir)
+                time.sleep(1)
+                try:
+                    shutil.rmtree(extract_dir)
+                except PermissionError as e:
+                    L.debug("W: Issue cleaning up temporary folder: %s", e)
 
     return _data_archive
 
@@ -190,6 +195,9 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 assert r.exit_code == 0, r
                 L.debug("Checkout result: %s", r)
 
+            del rs
+            del repo
+
             L.info("data_working_copy: %s %s", repo_dir, wc_path)
             yield repo_dir, wc_path
 
@@ -212,7 +220,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
         nonlocal incr
 
         params = [archive, source_gpkg, table, version]
-        cache_key = f"data_imported:{':'.join(params)}"
+        cache_key = f"data_imported~{'~'.join(params)}"
 
         repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
         if repo_path.exists():
@@ -233,13 +241,16 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 repo = pygit2.Repository(str(import_path))
                 assert repo.is_bare
                 assert repo.is_empty
+                repo.free()
+                del repo
 
                 r = cli_runner.invoke(
                     ["import", f"GPKG:{data / source_gpkg}:{table}", f"--version={version}", "mytable"]
                 )
                 assert r.exit_code == 0, r
 
-            shutil.move(import_path, repo_path)
+            time.sleep(1)
+            shutil.copytree(import_path, repo_path)
             L.info("Created cache at %s", repo_path)
             return str(repo_path)
 
@@ -251,6 +262,7 @@ def geopackage():
     """ Return a SQLite3 (APSW) db connection for the specified DB, with spatialite loaded """
 
     def _geopackage(path, **kwargs):
+        from sno import spatialite_path
         from sno.gpkg import Row
 
         db = apsw.Connection(str(path), **kwargs)
@@ -258,7 +270,7 @@ def geopackage():
         dbcur = db.cursor()
         dbcur.execute("PRAGMA foreign_keys = ON;")
         db.enableloadextension(True)
-        dbcur.execute("SELECT load_extension(?)", (str(Path(sys.prefix) / 'lib' / 'mod_spatialite'),))
+        dbcur.execute("SELECT load_extension(?)", (spatialite_path,))
         dbcur.execute("SELECT EnableGpkgMode();")
         return db
 

@@ -525,12 +525,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     nc = feat_count / CHUNK_SIZE
                     if nc % 5 == 0 or not nc.is_integer():
                         t0a = time.monotonic()
-                        L.info("%s features... @%.1fs (+%.1fs, ~%d F/s)", feat_count, t0a-t0, t0a-t0p, (CHUNK_SIZE*5)/(t0a-t0p))
+                        L.info("%s features... @%.1fs (+%.1fs, ~%d F/s)", feat_count, t0a-t0, t0a-t0p, (CHUNK_SIZE*5)/(t0a-t0p or 0.001))
                         t0p = t0a
 
                 t1 = time.monotonic()
                 L.info("Added %d features to GPKG in %.1fs", feat_count, t1-t0)
-                L.info("Overall rate: %d features/s", (feat_count / (t1 - t0)))
+                L.info("Overall rate: %d features/s", (feat_count / (t1 - t0 or 0.001)))
 
         for dataset in datasets:
             if dataset.has_geometry:
