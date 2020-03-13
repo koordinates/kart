@@ -37,14 +37,14 @@ def print_version(ctx, param, value):
     spatialite_version = dbcur.execute("SELECT spatialite_version();").fetchone()[0]
 
     click.echo((
-        f"≫ GDAL v{osgeo._gdal.__version__}\n"
-        f"≫ PyGit2 v{pygit2.__version__}; "
+        f"» GDAL v{osgeo._gdal.__version__}\n"
+        f"» PyGit2 v{pygit2.__version__}; "
         f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
         f"Git v{git_version}\n"
-        f"≫ APSW v{apsw.apswversion()}; "
+        f"» APSW v{apsw.apswversion()}; "
         f"SQLite v{apsw.sqlitelibversion()}; "
         f"SpatiaLite v{spatialite_version}\n"
-        f"≫ SpatialIndex v{sidx_version}"
+        f"» SpatialIndex v{sidx_version}"
     ))
 
     ctx.exit()

@@ -12,7 +12,7 @@ def test_version(cli_runner):
     r = cli_runner.invoke(["--version"])
     assert r.exit_code == 0, r
     assert re.match(
-        r"^Sno v(\d+\.\d+.*?)\n≫ GDAL v",
+        r"^Sno v(\d+\.\d+.*?)\n» GDAL v",
         r.stdout,
     )
 
