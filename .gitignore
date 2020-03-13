@@ -48,5 +48,4 @@ pytest.xml
 /.pytest*
 /dist
 /build
-Brewfile.lock.json
-.venv.mk
+*.code-workspace
