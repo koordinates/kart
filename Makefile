@@ -90,12 +90,25 @@ $(VIRTUAL_ENV)/.%.installed: | $(VIRTUAL_ENV)
 	touch $@
 
 $(py-install-tools): | $(VIRTUAL_ENV)
-	pip install -U \
+# Pin PyInstaller, upgrading isn't trivial
+
+# For Linux we actually use PyInstaller 3.5: https://github.com/pyinstaller/pyinstaller/issues/4674
+# See platforms/linux/pyinstaller.sh
+
+# Fix PyInstaller 3.6 setup.cfg: https://github.com/pyinstaller/pyinstaller/issues/4609
+ifeq ($(PLATFORM),Darwin)
+	pip install macholib>=1.8
+else ifeq ($(PLATFORM),Windows)
+	pip install pefile>=2017.8.1 pywin32-ctypes>=0.2.0
+endif
+
+	pip install \
 		pip-tools \
 		liccheck \
 		pipdeptree \
 		pyinstaller==3.6.* \
 		$(WHEELTOOL)
+
 	touch $@
 
 .PHONY: py-tools
