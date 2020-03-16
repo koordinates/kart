@@ -1,8 +1,7 @@
 ---
 name: Build
 
-on:
-  push: {}
+on: [push]
 
 env:
   PY3_PKG: python-3.7.6-macosx10.9.pkg
@@ -11,337 +10,245 @@ env:
   HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
 
 jobs:
-  vendor-source:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-
-      - name: cache-vendor
-        id: cache-vendor
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/vendor-source
-          key: vendor-source-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-1
-          restore-keys: |
-            vendor-source-
-
-      - name: cache-pydist
-        id: cache-pydist
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/pydist
-          key: pydist-${{ env.PY3_PKG }}
-
-      - name: collect sources
-        if: steps.cache-vendor.outputs.cache-hit != 'true'
-        run: |
-          tar xvf .cache/vendor-source/vendor.tar || true
-          make -C vendor sources
-          mkdir -p .cache/vendor-source
-          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
-
-      - name: collect pydist
-        if: steps.cache-pydist.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p .cache/pydist
-          wget ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
-
-  vendor-build:
-    name: vendor-${{ matrix.platform.name }}
-    needs: vendor-source
+  posix:
+    name: ${{ matrix.platform.name }}
     runs-on: ${{ matrix.platform.os }}
     strategy:
       fail-fast: false
       matrix:
         platform:
           - name: Linux
+            id: Linux
             os: ubuntu-latest
-          - name: Darwin
+            package-formats: deb rpm
+          - name: macOS
+            id: Darwin
             os: macos-latest
+            package-formats: pkg
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: 1
     steps:
       - uses: actions/checkout@v2
 
+      #
+      # vendor source
+      #
+
+      - name: "vendor-source: cache"
+        id: cache-vendor
+        uses: actions/cache@v1
+        with:
+          path: .cache/vendor-source
+          key: vendor-source-${{ matrix.platform.id }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+
+      - name: "vendor-source: download"
+        if: steps.cache-vendor.outputs.cache-hit != 'true'
+        run: |
+          tar xvf .cache/vendor-source/vendor.tar || true
+          echo 'verbose = off' >> $HOME/.wgetrc
+          make -C vendor sources
+          mkdir -p .cache/vendor-source
+          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
+
+      #
+      # python distribution
+      #
+
+      - name: "🍎 python: cache"
+        id: cache-pydist
+        uses: actions/cache@v1
+        if: runner.os == 'macOS'
+        with:
+          path: .cache/pydist
+          key: pydist-${{ matrix.platform.id}}-${{ env.PY3_PKG }}
+
+      - name: "🍎 python: download"
+        if: runner.os == 'macOS' && steps.cache-pydist.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .cache/pydist
+          wget -nv ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
+
+      - name: "python: pip cache"
+        uses: actions/cache@v1
+        with:
+          path: .cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+            pip-
+
+      #
+      # vendor build
+      #
+
       # get last time's vendor bundle
       # a hit here leads to skipping the rest of this job
 
-      - name: cache-vendor-dist
+      - name: "vendor-dist: cache"
         id: cache-dist
-        uses: actions/cache@v1.1.0
+        uses: actions/cache@v1
         with:
           path: vendor/dist/
-          key: vendor-dist-${{ matrix.platform.name}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
+          key: vendor-dist-${{ matrix.platform.id}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
 
-      # Linux-only setup
-
-      - uses: actions/setup-python@v1
-        if: runner.os != 'macOS' && steps.cache-dist.outputs.cache-hit != 'true'
+      - name: "🐧 python"
+        uses: actions/setup-python@v1
+        if: runner.os != 'macOS'
         with:
           python-version: '3.7'
 
-      # macOS-only setup
-
-      - name: cache-brew
+      - name: "🍎 homebrew cache"
         id: cache-brew
-        uses: actions/cache@v1.1.0
+        uses: actions/cache@v1
+        if: runner.os == 'macOS'
         with:
           path: .cache/brew
-          key: brew-vendor
-          restore-keys: |
-            brew-
-        if: runner.os == 'macOS' && steps.cache-dist.outputs.cache-hit != 'true'
+          key: brew
 
-      - name: cache-pydist
-        id: cache-pydist
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/pydist
-          key: pydist-${{ env.PY3_PKG }}
-        if: runner.os == 'macOS' && steps.cache-dist.outputs.cache-hit != 'true'
-
-      - name: install prerequisites (macOS)
-        if: runner.os == 'macOS' && steps.cache-dist.outputs.cache-hit != 'true'
+      - name: "🍎 prerequisites"
+        if: runner.os == 'macOS'
         run: |
           sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
-          brew install ccache pkg-config
+          brew install ccache pkg-config sqlite3 pandoc
+          brew cask install Packages
 
-      # get our source from the above job
-
-      - name: cache-source
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/vendor-source
-          key: vendor-source-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-1
-        if: steps.cache-dist.outputs.cache-hit != 'true'
-
-      - name: cache-ccache
-        uses: actions/cache@v1.1.0
+      - name: "vendor: ccache"
+        uses: actions/cache@v1
         if: steps.cache-dist.outputs.cache-hit != 'true'
         with:
           path: .ccache
-          key: vendor-${{ matrix.platform.name }}-ccache-${{ job.run_id }}
+          key: vendor-ccache-${{ matrix.platform.id}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
           restore-keys: |
-            vendor-${{ matrix.platform.name }}-ccache-
+            vendor-ccache-${{ matrix.platform.id }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
+            vendor-ccache-${{ matrix.platform.id }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-
+            vendor-ccache-${{ matrix.platform.id }}-
 
-      - name: build vendor libraries
+      - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
         run: |
           tar xvf .cache/vendor-source/vendor.tar
-          make -C vendor build-${{ matrix.platform.name }}
+          echo 'verbose = off' >> $HOME/.wgetrc
+          make -C vendor build-${{ matrix.platform.id }}
 
-      - name: save library bundle
-        uses: actions/upload-artifact@v1
+      - name: "vendor: save library bundle"
+        uses: actions/upload-artifact@v2-preview
         with:
-          name: vendor-${{ matrix.platform.name }}
-          path: vendor/dist/
+          name: vendor-${{ matrix.platform.id }}
+          path: vendor/dist/vendor-${{ matrix.platform.id }}.tar.gz
 
-  app-build:
-    name: app-${{ matrix.platform.name }}
-    needs: vendor-build
-    runs-on: ${{ matrix.platform.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: Linux
-            os: ubuntu-latest
-          - name: Darwin
-            os: macos-latest
-    steps:
-      - uses: actions/checkout@v2
+      #
+      # App Build
+      #
 
-      - name: setup build version
+      - name: "app: version"
         id: version
         run: |
           PKG_VERSION=$(cat sno/VERSION | sed -E "s/(.*)/\1+ci.${GITHUB_SHA::8}/")
           echo "$PKG_VERSION" | tee sno/VERSION
           echo "::set-output name=value::$PKG_VERSION"
 
-      - name: cache-vendor-dist
-        uses: actions/cache@v1.1.0
-        with:
-          path: vendor/dist/
-          key: vendor-dist-${{ matrix.platform.name}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
-
-      # Linux-only setup
-
-      - uses: actions/setup-python@v1
-        if: runner.os != 'macOS'
-        with:
-          python-version: '3.7'
-
-      # macOS-only setup
-
-      - name: cache-pydist
-        id: cache-pydist
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/pydist
-          key: pydist-${{ env.PY3_PKG }}
-        if: runner.os == 'macOS'
-
-      - name: install prerequisites (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
-
-      # end macOS-only
-
-      - name: cache-pip
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}-app
-          restore-keys: |
-            pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}-
-            pip-${{ runner.os }}-
-            pip-
-
-      - name: install dependencies
+      - name: "app: install python dependencies"
         run: |
           make py-deps
 
-      - name: app
+      - name: "app: build"
         run: |
           make release
           venv/bin/sno --version
 
-      - name: install test dependencies
+      #
+      # App tests & checks
+      #
+
+      - name: "app: install test dependencies"
         run: |
           make py-deps-dev
 
-      - name: license check
+      - name: "app: license check"
         run: |
           make py-license-check
 
-      - name: check for un-compiled dependencies
+      - name: "app: check for un-compiled dependencies"
         run: |
           make py-requirements
           git diff requirements.txt requirements/*.txt
           # error for runtime dependencies out of sync
           git diff --exit-code requirements.txt
 
-      - name: unit tests
+      - name: "app: unit tests"
         run: |
           make ci-test
 
-      - name: save test coverage
-        uses: actions/upload-artifact@v1
+      - name: "app: save test coverage"
+        uses: actions/upload-artifact@v2-preview
         with:
-          name: test-results-${{ matrix.platform.name }}
+          name: test-results-${{ matrix.platform.id }}
           path: test-results/
 
-  app-package:
-    name: package-${{ matrix.platform.name }}-${{ matrix.platform.format }}
-    needs: app-build
-    runs-on: ${{ matrix.platform.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: Linux
-            format: deb
-            os: ubuntu-latest
-          - name: Linux
-            format: rpm
-            os: ubuntu-latest
-          - name: Darwin
-            format: pkg
-            os: macos-latest
-    steps:
-      - uses: actions/checkout@v2
+      #
+      # Packaging
+      #
 
-      - name: setup build version
-        id: version
-        run: |
-          PKG_VERSION=$(cat sno/VERSION | sed -E "s/(.*)/\1+ci.${GITHUB_SHA::8}/")
-          echo "$PKG_VERSION" | tee sno/VERSION
-          echo "::set-output name=value::$PKG_VERSION"
-
-      - name: cache-vendor-dist
-        uses: actions/cache@v1.1.0
-        with:
-          path: vendor/dist/
-          key: vendor-dist-${{ matrix.platform.name}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
-
-      # Linux-only setup
-
-      - uses: actions/setup-python@v1
-        if: runner.os != 'macOS'
-        with:
-          python-version: '3.7'
-
-      # macOS-only setup
-
-      - name: cache-pydist
-        id: cache-pydist
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/pydist
-          key: pydist-${{ env.PY3_PKG }}
-        if: runner.os == 'macOS'
-
-      - name: cache-brew
-        id: cache-brew
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/brew
-          key: brew-pkg
-          restore-keys: |
-            brew-
-        if: runner.os == 'macOS'
-
-      - name: install prerequisites (macOS)
+      - name: "🍎 package: assemble"
+        id: package-Darwin
         if: runner.os == 'macOS'
         run: |
-          brew install sqlite3 pandoc
-          brew cask install Packages
-          sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
+          make py-tools
+          make -C platforms pkg
+          ls -la platforms/macos/dist/Sno-${{ steps.version.outputs.value }}.pkg
+          echo "::set-output name=file::platforms/macos/dist/Sno-${{ steps.version.outputs.value }}.pkg"
 
-      # end macOS-only
-
-      - name: cache-pip
-        uses: actions/cache@v1.1.0
-        with:
-          path: .cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}-${{ matrix.platform.format}}
-          restore-keys: |
-            pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}-
-            pip-${{ runner.os }}-
-            pip-
-
-      - name: dependencies install
+      - name: "🐧 package: assemble"
+        id: package-Linux
+        if: runner.os == 'Linux'
         run: |
-          make py-deps
+          make -C platforms deb rpm
+          ls -la platforms/linux/dist/*.rpm platforms/linux/dist/*.deb
 
-      - name: App
-        run: |
-          make release
-          venv/bin/sno --version
+      # Pre-cache cleanup
 
-      - name: Package
-        id: package
+      - name: "package: cleanup"
         run: |
-          make -C platforms ${{ matrix.platform.format }}
-          ls platforms/*/dist/[sS]no[-_]*.${{ matrix.platform.format }}
-          echo "::set-output name=file::$(ls platforms/*/dist/[sS]no[-_]*.${{ matrix.platform.format }})"
+          sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-*.tar.gz" -exec rm -rf {} \;
 
-      - name: Linux package tests
-        if: matrix.platform.name == 'Linux'
-        run: |
-          make -C platforms test-${{ matrix.platform.format}}-all
+      #
+      # Package tests
+      #
 
-      - name: macOS package tests
-        if: matrix.platform.name == 'Darwin'
+      - name: "🍎 package: tests"
+        if: matrix.platform.id == 'Darwin'
         run: |
-          sudo installer -pkg ${{ steps.package.outputs.file }} -dumplog -target /
+          sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
           readlink $(which sno)
           PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
 
-      - name: save package
-        uses: actions/upload-artifact@v1
+      - name: "🐧 package: tests"
+        if: matrix.platform.id == 'Linux'
+        run: |
+          make -C platforms test-deb-all test-rpm-all
+
+      #
+      # Uploading packages
+      #
+
+      - name: "🍎 package: save pkg"
+        uses: actions/upload-artifact@v2-preview
+        if: matrix.platform.id == 'Darwin'
         with:
-          name: Sno-${{ matrix.platform.name }}-${{ matrix.platform.format }}
-          path: ${{ steps.package.outputs.file }}
+          name: ${{ matrix.platform.name }}-pkg
+          path: ${{ steps.package-Darwin.outputs.file }}
+
+      - name: "🐧 package: save deb"
+        uses: actions/upload-artifact@v2-preview
+        if: matrix.platform.id == 'Linux'
+        with:
+          name: ${{ matrix.platform.name }}-deb
+          path: platforms/linux/dist/*.deb
+
+      - name: "🐧 package: save rpm"
+        uses: actions/upload-artifact@v2-preview
+        if: matrix.platform.id == 'Linux'
+        with:
+          name: ${{ matrix.platform.name }}-rpm
+          path: platforms/linux/dist/*.rpm

@@ -68,7 +68,9 @@ clean-configure:
 #
 
 $(GIT_ARCHIVE):
-	wget https://mirrors.edge.kernel.org/pub/software/scm/git/$@ -O $@
+# 	FIXME: kernel.org didn't renew their TLS certificate :/
+# 	wget https://mirrors.edge.kernel.org/pub/software/scm/git/$@ -O $@
+	wget https://mirror.aarnet.edu.au/pub/ftp.kernel.org/software/scm/git/$@ -O $@
 
 .PHONY: archive
 archive: $(GIT_ARCHIVE)
