@@ -334,7 +334,7 @@ def init(ctx, import_from, do_checkout, directory):
     """
     Initialise a new repository and optionally import data
 
-    DIRECTORY must be empty, and should be named with a '.sno' suffix. Defaults to the current directory.
+    DIRECTORY must be empty. Defaults to the current directory.
 
     To show available tables in the import data, use
     $ sno init --import=GPKG:my.gpkg
