@@ -42,7 +42,7 @@ os.environ['PATH'] = prefix + os.pathsep + os.path.join(prefix, 'bin') + os.path
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
 os.environ['PREFIX'] = prefix
 if is_windows:
-    os.environ['PATH'] = os.path.join(prefix, 'PortableGit', 'cmd') + os.pathsep + os.environ['PATH']
+    os.environ['PATH'] = os.path.join(prefix, 'git', 'cmd') + os.pathsep + os.environ['PATH']
 else:
     os.environ['GIT_EXEC_PATH'] = os.path.join(prefix, 'libexec', 'git-core')
     os.environ['GIT_TEMPLATE_DIR'] = os.path.join(prefix, 'share', 'git-core', 'templates')
