@@ -34,12 +34,7 @@ from . import merge
 @click.pass_context
 def pull(ctx, ff, ff_only, repository, refspecs):
     """ Fetch from and integrate with another repository or a local branch """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter(
-            "Not an existing repository", param_hint="--repo"
-        )
+    repo = ctx.obj.repo
 
     if repository is None:
         # matches git-pull behaviour
@@ -68,7 +63,7 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     # do the fetch
     print("Running fetch:", repository, refspecs)
     remote.fetch((refspecs or None))
-    # subprocess.check_call(["git", "-C", ctx.obj['repo_dir'], 'fetch', repository] + list(refspecs))
+    # subprocess.check_call(["git", "-C", ctx.obj.repo_dir, 'fetch', repository] + list(refspecs))
 
     # now merge with FETCH_HEAD
     print("Running merge:", {'ff': ff, 'ff_only': ff_only, 'commit': "FETCH_HEAD"})

@@ -10,6 +10,7 @@ import pygit2
 
 from . import core  # noqa
 from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query, upgrade
+from .sno_context import SnoContext
 
 
 def print_version(ctx, param, value):
@@ -56,7 +57,7 @@ def print_version(ctx, param, value):
     "--repo",
     "repo_dir",
     type=click.Path(file_okay=False, dir_okay=True),
-    default=os.curdir,
+    default=None,
     metavar="PATH",
 )
 @click.option(
@@ -70,8 +71,8 @@ def print_version(ctx, param, value):
 @click.option('-v', '--verbose', count=True, help="Repeat for more verbosity")
 @click.pass_context
 def cli(ctx, repo_dir, verbose):
-    ctx.ensure_object(dict)
-    ctx.obj["repo_dir"] = repo_dir
+    ctx.ensure_object(SnoContext)
+    ctx.obj.repo_dir = repo_dir
 
     # default == WARNING; -v == INFO; -vv == DEBUG
     log_level = logging.WARNING - min(10 * verbose, 20)
@@ -133,10 +134,8 @@ def _execvp(file, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def log(ctx, args):
     """ Show commit logs """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     _execvp("git", ["git", "-C", repo_dir, "log"] + list(args))
 
@@ -146,10 +145,8 @@ def log(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, args):
     """ Update remote refs along with associated objects """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     _execvp("git", ["git", "-C", repo_dir, "push"] + list(args))
 
@@ -159,10 +156,8 @@ def push(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, args):
     """ Download objects and refs from another repository """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     _execvp("git", ["git", "-C", repo_dir, "fetch"] + list(args))
 
@@ -172,10 +167,8 @@ def fetch(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def branch(ctx, args):
     """ List, create, or delete branches """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     # git's branch protection behaviour doesn't apply if it's a bare repository
     # attempt to apply it here.
@@ -193,10 +186,8 @@ def branch(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def remote(ctx, args):
     """ Manage set of tracked repositories """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     _execvp("git", ["git", "-C", repo_dir, "remote"] + list(args))
 
@@ -206,10 +197,8 @@ def remote(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def tag(ctx, args):
     """ Create, list, delete or verify a tag object signed with GPG """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     _execvp("git", ["git", "-C", repo_dir, "tag"] + list(args))
 
@@ -219,9 +208,9 @@ def tag(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """ Get and set repository or global options """
-    repo_dir = ctx.obj["repo_dir"] or "."
+    repo_dir = ctx.obj.repo_dir
     params = ["git", "config"]
-    if ctx.obj["repo_dir"]:
+    if ctx.obj.repo_dir_is_set:
         params[1:1] = ["-C", repo_dir]
     _execvp("git", params + list(args))
 

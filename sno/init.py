@@ -26,7 +26,7 @@ def import_gpkg(ctx, geopackage, table, list_tables):
 
     click.secho('"import-gpkg" is deprecated and will be removed in future, use "init" instead', fg='yellow')
 
-    directory = ctx.obj["repo_dir"] or os.curdir
+    directory = ctx.obj.repo_dir
 
     check_git_user(repo=None)
 
@@ -255,10 +255,8 @@ def import_table(ctx, source, directory, do_list, version, method):
     To show available tables in the import data, use
     $ sno import --list GPKG:my.gpkg
     """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_dir = ctx.obj.repo_dir
+    repo = ctx.obj.repo
 
     check_git_user(repo)
 
