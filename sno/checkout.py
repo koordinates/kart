@@ -245,7 +245,7 @@ def workingcopy_set_path(ctx, new):
         raise click.ClickException("No working copy? Try `sno checkout`")
 
     new = Path(new)
-    # TODO(olsen): This doesn't seem to do anything?
+    # TODO: This doesn't seem to do anything?
     if not new.is_absolute():
         new = os.path.relpath(os.path.join(repo_path, new), repo_path)
 
