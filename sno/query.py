@@ -46,7 +46,7 @@ def query(ctx, path, command, params):
     WARNING: Spatial indexing is a proof of concept.
     Significantly, indexes don't update when the repo changes in any way.
     """
-    repo = pygit2.Repository(ctx.obj["repo_dir"] or os.curdir)
+    repo = ctx.obj.repo
     rs = structure.RepositoryStructure(repo)
     dataset = rs[path]
 

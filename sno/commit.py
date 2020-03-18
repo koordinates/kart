@@ -46,10 +46,7 @@ from .cli_util import MutexOption
 )
 def commit(ctx, message, message_file, allow_empty):
     """ Record changes to the repository """
-    repo_dir = ctx.obj["repo_dir"]
-    repo = pygit2.Repository(repo_dir)
-    if not repo:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo = ctx.obj.repo
 
     check_git_user(repo)
 

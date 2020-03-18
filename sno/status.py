@@ -8,15 +8,7 @@ from .structure import RepositoryStructure
 @click.pass_context
 def status(ctx):
     """ Show the working copy status """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    try:
-        repo = pygit2.Repository(repo_dir)
-    except pygit2.GitError:
-        repo = None
-
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
-
+    repo = ctx.obj.repo
     rs = RepositoryStructure(repo)
 
     if repo.is_empty:
