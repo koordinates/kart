@@ -18,7 +18,7 @@ from .working_copy import WorkingCopy
 @click.argument("refish", default=None, required=False)
 def checkout(ctx, branch, fmt, force, path, datasets, refish):
     """ Switch branches or restore working tree files """
-    repo_dir = ctx.obj.repo_dir
+    repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
     # refish could be:
@@ -79,7 +79,7 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
 
     else:
         if path is None:
-            path = f"{Path(repo_dir).resolve().stem}.gpkg"
+            path = f"{repo_path.resolve().stem}.gpkg"
 
         # new working-copy path
         click.echo(f'Checkout {refish or "HEAD"} to {path} as {fmt} ...')
@@ -237,7 +237,7 @@ def restore(ctx, source, pathspec):
 @click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
 def workingcopy_set_path(ctx, new):
     """ Change the path to the working-copy """
-    repo_dir = ctx.obj.repo_dir
+    repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
     repo_cfg = repo.config
@@ -245,7 +245,8 @@ def workingcopy_set_path(ctx, new):
         raise click.ClickException("No working copy? Try `sno checkout`")
 
     new = Path(new)
+    # TODO(olsen): This doesn't seem to do anything?
     if not new.is_absolute():
-        new = os.path.relpath(os.path.join(repo_dir, new), repo_dir)
+        new = os.path.relpath(os.path.join(repo_path, new), repo_path)
 
     repo.config["sno.workingcopy.path"] = str(new)
