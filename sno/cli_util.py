@@ -21,7 +21,7 @@ class MutexOption(click.Option):
         assert self.exclusive_with, "'exclusive_with' parameter required"
         kwargs["help"] = (
             kwargs.get("help", "")
-            + "Option is mutually exclusive with "
+            + "\nOption is mutually exclusive with "
             + ", ".join(self.exclusive_with)
             + "."
         ).strip()

@@ -27,7 +27,6 @@ class Context(object):
     def has_repo_path(self):
         return self._repo_path is not None
 
-
     @property
     def repo(self):
         """
