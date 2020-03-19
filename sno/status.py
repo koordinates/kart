@@ -1,17 +1,19 @@
+import json
+import sys
+
 import click
 import pygit2
 
 from .cli_util import MutexOption
 from .structure import RepositoryStructure
-from .output_util import merge_outputs, print_output
 
 
-JSON_DEFAULT_ATTRS = {
+EMPTY_REPO_JSON = frozenset({
     "commit": None,
     "branch": None,
     "upstream": None,
     "workingCopy": None,
-}
+}.items())
 
 
 @click.command()
@@ -36,97 +38,48 @@ JSON_DEFAULT_ATTRS = {
 def status(ctx, is_output_json):
     """ Show the working copy status """
     repo = ctx.obj.repo
-    rs = RepositoryStructure(repo)
-
-    if repo.is_empty:
-        if is_output_json:
-            output = JSON_DEFAULT_ATTRS
-        else:
-            output = 'Empty repository.\n  (use "sno import" to add some data)'
+    jdict = get_status_json(repo)
+    if is_output_json:
+        json.dump(jdict, sys.stdout, indent=2)
     else:
-        output = merge_outputs(
-            [
-                get_branch_status(repo, is_output_json),
-                get_working_copy_status(rs, is_output_json)
-            ],
-            is_output_json,
-            json_default_attrs=JSON_DEFAULT_ATTRS,
-            text_join_str="\n")
-
-    print_output(output, is_output_json, json_version_tag="sno.status/v1")
+        click.echo(status_to_text(jdict))
 
 
-def get_branch_status_message(repo):
-    return "\n".join(get_branch_status(repo))
+def get_status_json(repo):
+    output = dict(EMPTY_REPO_JSON)
+    if not repo.is_empty:
+        output.update(get_branch_status_json(repo))
+        output.update(get_working_copy_status_json(repo))
+    return {"sno.status/v1": output}
 
 
-def get_branch_status(repo, is_output_json):
+def get_branch_status_json(repo):
     commit = repo.head.peel(pygit2.Commit)
+    output = {"commit": commit.short_id}
 
     if repo.head_is_detached:
-        if is_output_json:
-            return {"commit": commit.short_id}
-        else:
-            return f"{click.style('HEAD detached at', fg='red')} {commit.short_id}\n"
+        return output
 
     branch = repo.branches[repo.head.shorthand]
+    output["branch"] = branch.shorthand
 
-    if is_output_json:
-        return {
-            "commit": commit.short_id,
-            "branch": branch.shorthand,
-            **get_upstream_status(repo, commit, branch, is_output_json)
-        }
-    else:
-        return (
-            f"On branch {branch.shorthand}\n" +
-            get_upstream_status(repo, commit, branch, is_output_json)
-        )
-
-
-def get_upstream_status(repo, commit, branch, is_output_json):
     upstream = branch.upstream
-    if not upstream:
-        if is_output_json:
-            return {"upstream": None}
-        else:
-            return ""
-
-    upstream_head = upstream.peel(pygit2.Commit)
-    n_ahead, n_behind = repo.ahead_behind(commit.id, upstream_head.id)
-
-    if is_output_json:
-        return {"upstream": upstream.shorthand, "ahead": n_ahead, "behind": n_behind}
-
-    if n_ahead == n_behind == 0:
-        return [f"Your branch is up to date with '{upstream.shorthand}'."]
-    elif n_ahead > 0 and n_behind > 0:
-        return [
-            f"Your branch and '{upstream.shorthand}' have diverged,",
-            f"and have {n_ahead} and {n_behind} different commits each, respectively.",
-            '  (use "sno pull" to merge the remote branch into yours)',
-        ]
-    elif n_ahead > 0:
-        return [
-            f"Your branch is ahead of '{upstream.shorthand}' by {n_ahead} {_pc(n_ahead)}.",
-            '  (use "sno push" to publish your local commits)',
-        ]
-    elif n_behind > 0:
-        return [
-            f"Your branch is behind '{upstream.shorthand}' by {n_behind} {_pc(n_behind)}, "
-            "and can be fast-forwarded.",
-            '  (use "sno pull" to update your local branch)',
-        ]
+    if upstream:
+        upstream_head = upstream.peel(pygit2.Commit)
+        n_ahead, n_behind = repo.ahead_behind(commit.id, upstream_head.id)
+        output["upstream"] = {
+            "branch": upstream.shorthand,
+            "ahead": n_ahead,
+            "behind": n_behind
+        }
+    return output
 
 
-def get_working_copy_status(rs, is_output_json):
+def get_working_copy_status_json(repo):
+    rs = RepositoryStructure(repo)
     working_copy = rs.working_copy
     if not rs.working_copy:
-        if is_output_json:
-            return {}
-        else:
-            return 'No working copy\n  (use "sno checkout" to create a working copy)\n'
-
+        return {}
 
     wc_changes = {}
     for dataset in rs:
@@ -134,21 +87,13 @@ def get_working_copy_status(rs, is_output_json):
         if any(status.values()):
             wc_changes[dataset.path] = status
 
-    if not wc_changes and not is_output_json:
-        return "Nothing to commit, working copy clean\n"
-
-    if is_output_json:
+    if wc_changes:
         return {"workingCopy": get_diff_status_json(wc_changes)}
     else:
-        return ("Changes in working copy:\n"
-                '  (use "sno commit" to commit)\n'
-                '  (use "sno reset" to discard changes)\n\n'
-                + get_diff_status_message(wc_changes))
+        return {"workingCopy": {}}
 
 
 def get_diff_status_json(wc_changes):
-    if not wc_changes:
-        return {}
     result = {}
     for dataset_path, status in wc_changes.items():
         if sum(status.values()):
@@ -163,20 +108,99 @@ def get_diff_status_json(wc_changes):
     return result
 
 
-def get_diff_status_message(wc_changes):
+def status_to_text(jdict):
+    branch_status = branch_status_to_text(jdict["sno.status/v1"])
+    wc_status = working_copy_status_to_text(jdict["sno.status/v1"]["workingCopy"])
+
+    is_empty = not jdict["sno.status/v1"]["commit"]
+    if is_empty:
+        return branch_status
+
+    return "\n".join([branch_status, wc_status])
+
+
+def branch_status_to_text(jdict):
+    commit = jdict["commit"]
+    if not commit:
+        return 'Empty repository.\n  (use "sno import" to add some data)'
+    branch = jdict["branch"]
+    if not branch:
+        return f"{click.style('HEAD detached at', fg='red')} {commit}\n"
+    output = f"On branch {branch}\n"
+
+    upstream = jdict["upstream"]
+    if upstream:
+        output += upstream_status_to_text(upstream)
+    return output
+
+
+def upstream_status_to_text(jdict):
+    upstream_branch = jdict["branch"]
+    n_ahead = jdict["ahead"]
+    n_behind = jdict["behind"]
+
+    if n_ahead == n_behind == 0:
+        return f"Your branch is up to date with '{upstream_branch}'.\n"
+    elif n_ahead > 0 and n_behind > 0:
+        return (
+            f"Your branch and '{upstream_branch}' have diverged,\n"
+            f"and have {n_ahead} and {n_behind} different commits each, respectively.\n"
+            '  (use "sno pull" to merge the remote branch into yours)\n'
+        )
+    elif n_ahead > 0:
+        return (
+            f"Your branch is ahead of '{upstream_branch}' by {n_ahead} {_pc(n_ahead)}.\n"
+            '  (use "sno push" to publish your local commits)\n'
+        )
+    elif n_behind > 0:
+        return (
+            f"Your branch is behind '{upstream_branch}' by {n_behind} {_pc(n_behind)}, "
+            "and can be fast-forwarded.\n"
+            '  (use "sno pull" to update your local branch)\n'
+        )
+
+
+def working_copy_status_to_text(jdict):
+    if jdict is None:
+        return 'No working copy\n  (use "sno checkout" to create a working copy)\n'
+
+    if not jdict:
+        return "Nothing to commit, working copy clean"
+
+    return ("Changes in working copy:\n"
+            '  (use "sno commit" to commit)\n'
+            '  (use "sno reset" to discard changes)\n\n'
+            + diff_status_to_text(jdict))
+
+
+def diff_status_to_text(jdict):
     message = []
-    for dataset_path, status in wc_changes.items():
-        if sum(status.values()):
-            message.append(f"  {dataset_path}/")
-            if status["META"]:
-                message.append(f"    meta")
-            if status["U"]:
-                message.append(f"    modified:  {status['U']} {_pf(status['U'])}")
-            if status["I"]:
-                message.append(f"    new:       {status['I']} {_pf(status['I'])}")
-            if status["D"]:
-                message.append(f"    deleted:   {status['D']} {_pf(status['D'])}")
+    for dataset_path, all_changes in jdict.items():
+        message.append(f"  {dataset_path}/")
+        if all_changes["schemaChanges"] is not None:
+            message.append(f"    meta")
+
+        feature_changes = all_changes["featureChanges"]
+        feature_change_message(message, feature_changes, "modified")
+        feature_change_message(message, feature_changes, "new")
+        feature_change_message(message, feature_changes, "deleted")
     return "\n".join(message)
+
+
+def feature_change_message(message, feature_changes, key):
+    n = feature_changes[key]
+    label = f"    {key}:"
+    col_width = 15
+    if n:
+        message.append(f"{label: <{col_width}}{n} {_pf(n)}")
+
+
+def get_branch_status_message(repo):
+    return branch_status_to_text(get_branch_status_json(repo))
+
+
+def get_diff_status_message(wc_changes):
+    return diff_status_to_text(get_diff_status_json(wc_changes))
 
 
 def _pf(count):
