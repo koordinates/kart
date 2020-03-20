@@ -1,0 +1,4 @@
+gdal==3.0.4
+apsw==3.31.1.post1
+rtree==0.9.4
+psycopg2==2.8.4

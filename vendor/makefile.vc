@@ -1,0 +1,146 @@
+PATH=$(MAKEDIR)\env\Scripts;$(PATH);C:\Program Files\7-zip;
+
+GIT_VER=2.25.1
+LIBGIT_REF=v0.99.0
+PYGIT2_REF=ccf4df153c68d4af7d3d0f4f4f9104afc6f38d43
+PYGIT2_VER=1.1.0
+
+# ==================================================================
+_PS=powershell.exe -NoLogo -Command
+_PSDL=$(_PS) "&{$$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -ErrorAction:Stop
+_PSDLE=}"
+
+CFLAGS=-O2
+CXXFLAGS=-O2
+
+_ARCHIVE=dist/vendor-Windows.zip
+
+!IFNDEF PY3
+PY3=%LOCALAPPDATA%\Programs\Python\Python37\python.exe
+!ENDIF
+
+# default target
+all: $(_ARCHIVE)
+
+clean:
+	-rmdir /Q /S dist env
+	-rmdir /Q /S libgit2\build libgit2\env
+	-rmdir /Q /S pygit2\src\build pygit2\src\dist
+
+cleaner: clean
+	-rmdir /Q /S pygit2\src libgit2\src
+	-del git\MinGit.zip
+	-del spatialite\mod_spatialite.7z
+	-del libgit2\libgit2.zip
+	-del pygit2\pygit2.zip
+
+env:
+	$(PY3) -m venv $@
+	.\env\Scripts\pip install \
+		pipwin \
+		wheel
+
+# Git
+GIT_URL="https://github.com/git-for-windows/git/releases/download/v$(GIT_VER).windows.1/MinGit-$(GIT_VER)-busybox-64-bit.zip"
+git=dist\git
+
+git\MinGit.zip:
+    $(_PSDL) -Uri $(GIT_URL) -OutFile $@ $(_PSDLE)
+
+$(git): git\MinGit.zip
+	if not exist dist mkdir dist
+    $(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath .\dist\git}"
+
+git: $(git)
+
+# Spatialite
+
+SPATIALITE_URL = 'http://www.gaia-gis.it/gaia-sins/windows-bin-NEXTGEN-amd64/mod_spatialite-NG-win-amd64.7z'
+spatialite=dist\env\lib
+
+spatialite\mod_spatialite.7z:
+    $(_PSDL) -Uri $(SPATIALITE_URL) -OutFile $@ $(_PSDLE)
+
+$(spatialite): spatialite\mod_spatialite.7z
+	if not exist dist\env\lib mkdir dist\env\lib
+    7z e -aoa -y -ir!*.dll -o.\dist\env\lib\ %s
+    7z e -aoa -y -ir!*.exe -o.\spatialite\ %s
+	-rmdir /Q dist\env\lib\mod_spatialite-NG-win-amd64
+
+spatialite: $(spatialite)
+
+# VC Redist
+vcredist=dist\Microsoft_VC141_CRT_x64.msm
+# override via /DMSVCREDIST={source-path}
+MSVCREDIST=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Redist\MSVC\14.16.27012\MergeModules
+
+$(vcredist):
+	if not exist dist mkdir dist
+	copy /Y "$(MSVCREDIST)\$(@F)" $@
+
+vcredist: $(vcredist)
+
+PIPWIN_CACHE=$(USERPROFILE)\.pipwin
+$(PIPWIN_CACHE): windows-reqs.txt
+	pipwin refresh
+
+# Python wheels
+wheels: env windows-reqs.txt $(PIPWIN_CACHE)
+	if not exist dist\wheelhouse mkdir dist\wheelhouse
+    pipwin download -d "dist\wheelhouse" -r windows-reqs.txt
+	dir dist\wheelhouse\ | find "whl"
+
+# Libgit2
+LIBGIT2_URL="https://github.com/libgit2/libgit2/archive/$(LIBGIT_REF).zip"
+libgit2_src=libgit2\src
+libgit2=libgit2\env\bin\git2.dll
+
+libgit2\libgit2.zip:
+    $(_PSDL) -Uri $(LIBGIT2_URL) -OutFile $@ $(_PSDLE)
+
+$(libgit2_src): libgit2\libgit2.zip
+	if exist $@~ rmdir /S /Q $@~
+    $(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath $@~}"
+	move $@~\libgit2-* $@
+
+$(libgit2): $(libgit2_src)
+	cmake -S .\libgit2\src -B .\libgit2\build \
+		-G "Visual Studio 15 2017 Win64" \
+		-DCMAKE_INSTALL_PREFIX=$(MAKEDIR)\libgit2\env \
+		-DBUILD_EXAMPLES=NO \
+		-DBUILD_CLAR=NO \
+		-DUSE_SSH=NO
+    cmake \
+		--build .\libgit2\build \
+        --config RelWithDebInfo
+	cmake \
+		--install .\libgit2\build \
+        --config RelWithDebInfo
+
+libgit2: $(libgit2)
+
+# Pygit2
+PYGIT2_URL="https://github.com/libgit2/pygit2/archive/$(PYGIT2_REF).zip"
+pygit2_src=pygit2\src
+pygit2=dist\wheelhouse\pygit2-$(PYGIT2_VER)-cp37-cp37m-win_amd64.whl
+
+pygit2\pygit2.zip:
+    $(_PSDL) -Uri $(PYGIT2_URL) -OutFile $@ $(_PSDLE)
+
+$(pygit2_src): pygit2\pygit2.zip
+	if exist $@~ rmdir /S /Q $@~
+    $(_PS) "&{Expand-Archive -Path %s -DestinationPath $@~}"
+	move $@~\pygit2-* $@
+
+$(pygit2): env $(pygit2_src) $(libgit2)
+	set LIBGIT2=$(MAKEDIR)\libgit2\env
+	if not exist dist\wheelhouse mkdir dist\wheelhouse
+	(cd pygit2\src && $(MAKEDIR)\env\Scripts\python setup.py bdist_wheel -d $(MAKEDIR)\dist\wheelhouse)
+
+pygit2: $(pygit2)
+
+# Archive
+$(_ARCHIVE): $(pygit2) wheels $(git) $(spatialite) $(vcredist)
+    $(_PS) "&{Compress-Archive -Force -DestinationPath $(_ARCHIVE) .\dist\*}"
+
+archive: $(_ARCHIVE)

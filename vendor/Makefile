@@ -2,7 +2,7 @@ export PREFIX := $(abspath env)
 export PATH := $(abspath env/bin):$(PATH)
 
 ifeq ($(OS),Windows_NT)
-	PLATFORM := Windows
+	$(error "On Windows, run `nmake /f makefile.vc` instead.")
 else
 	PLATFORM := $(shell uname -s)
 endif
