@@ -8,14 +8,6 @@ from .cli_util import MutexOption
 from .structure import RepositoryStructure
 
 
-EMPTY_REPO_JSON = frozenset({
-    "commit": None,
-    "branch": None,
-    "upstream": None,
-    "workingCopy": None,
-}.items())
-
-
 @click.command()
 @click.pass_context
 @click.option(
@@ -46,7 +38,12 @@ def status(ctx, is_output_json):
 
 
 def get_status_json(repo):
-    output = dict(EMPTY_REPO_JSON)
+    output = {
+        "commit": None,
+        "branch": None,
+        "upstream": None,
+        "workingCopy": None,
+    }
     if not repo.is_empty:
         output.update(get_branch_status_json(repo))
         output.update(get_working_copy_status_json(repo))
