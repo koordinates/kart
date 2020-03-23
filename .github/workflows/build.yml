@@ -4,10 +4,7 @@ name: Build
 on: [push]
 
 env:
-  PY3_PKG: python-3.7.6-macosx10.9.pkg
-  PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
-  HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
 
 jobs:
   posix:
@@ -28,6 +25,9 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: 1
+      PY3_PKG: python-3.7.6-macosx10.9.pkg
+      PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
+      HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
     steps:
       - uses: actions/checkout@v2
 
@@ -252,3 +252,124 @@ jobs:
         with:
           name: ${{ matrix.platform.name }}-rpm
           path: platforms/linux/dist/*.rpm
+
+  windows:
+    name: Windows
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v2
+
+      #
+      # python distribution
+      #
+
+      - name: "python"
+        run: |
+          $PY3=(Get-Command python).Definition
+          echo "::set-env name=PY3::$PY3"
+
+      - name: "python: pip cache"
+        uses: actions/cache@v1
+        with:
+          path: .cache/pip
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('makefile.vc') }}
+          restore-keys: |
+            pip-${{ runner.os }}-
+            pip-
+
+      #
+      # vendor build
+      #
+
+      # get last time's vendor bundle
+      # a hit here leads to skipping the rest of this job
+
+      - name: "vendor-dist: cache"
+        id: cache-dist
+        uses: actions/cache@v1
+        with:
+          path: vendor/dist/
+          key: vendor-dist-Windows-${{ hashFiles('vendor/makefile.vc') }}
+
+      - name: "vendor: build"
+        if: steps.cache-dist.outputs.cache-hit != 'true'
+        working-directory: vendor
+        run: |
+          nmake /D /NoLogo /F makefile.vc
+
+      - name: "vendor: save library bundle"
+        uses: actions/upload-artifact@v2-preview
+        with:
+          name: vendor-Windows
+          path: vendor/dist/vendor-Windows.zip
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        run: |
+          $PKG_VERSION="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
+          echo "$PKG_VERSION"
+          echo "$PKG_VERSION" > .\sno\VERSION
+          echo "::set-output name=value::$PKG_VERSION"
+
+      - name: "app: install python dependencies"
+        run: |
+          nmake /D /NoLogo /F makefile.vc venv\.requirements.installed
+
+      - name: "app: build"
+        run: |
+          nmake /D /NoLogo /F makefile.vc
+          venv\Scripts\sno.exe --version
+
+      #
+      # App tests & checks
+      #
+
+      - name: "app: install test dependencies"
+        run: |
+          nmake /D /NoLogo /F makefile.vc venv\.test.installed
+
+      - name: "app: unit tests"
+        run: |
+          nmake /D /NoLogo /F makefile.vc ci-test
+
+      - name: "app: save test coverage"
+        uses: actions/upload-artifact@v2-preview
+        with:
+          name: test-results-Windows
+          path: test-results/
+
+      #
+      # Packaging
+      #
+
+      - name: "package: assemble"
+        id: package
+        run: |
+          nmake /D /NoLogo /F makefile.vc package
+          echo "::set-output name=file::platforms/windows/dist/Sno-${{ steps.version.outputs.value }}.msi"
+
+      #
+      # Package tests
+      #
+
+      - name: "package: tests"
+        run: |
+          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\${{ steps.package.outputs.file }} /quiet /norestart /l* install.log'
+          if (Test-Path install.log -PathType leaf) { Get-Content install.log }
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
+          & sno --version
+        # tests\scripts\e2e-1.sh
+
+      #
+      # Uploading packages
+      #
+
+      - name: "package: save"
+        uses: actions/upload-artifact@v2-preview
+        with:
+          name: Windows-msi
+          path: ${{ steps.package.outputs.file }}

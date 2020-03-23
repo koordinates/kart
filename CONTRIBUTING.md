@@ -48,10 +48,13 @@ PyGit2 v0.28.2; Libgit2 v0.28.2
 
 Requirements:
 * Windows 10 64-bit
-* MS Visual Studio 2017
+* MS Visual Studio 2019
 * Python 3.7
 * cmake
 * 7-Zip
+* Git
+
+Run the following from a "Developer Command Prompt for VS 2019"
 
 ```console
 $ git clone git@github.com:koordinates/sno.git
