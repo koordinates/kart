@@ -316,10 +316,12 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          $PKG_VERSION="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
-          echo "$PKG_VERSION"
-          echo "$PKG_VERSION" > .\sno\VERSION
-          echo "::set-output name=value::$PKG_VERSION"
+          $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
+          $IVER="$($VER.Split(".")[1..3] -join '.').0"
+          echo "$VER ($IVER)"
+          echo "$VER" > .\sno\VERSION
+          echo "::set-output name=value::$VER"
+          echo "::set-output name=installer::$IVER"
 
       - name: "app: install python dependencies"
         run: |
@@ -354,9 +356,11 @@ jobs:
 
       - name: "package: assemble"
         id: package
+        env:
+          SNO_INSTALL_VERSION: ${{ steps.version.outputs.installer }}
         run: |
           nmake /D /NoLogo /F makefile.vc package
-          echo "::set-output name=file::platforms/windows/dist/Sno-${{ steps.version.outputs.value }}.msi"
+          echo "::set-output name=file::platforms/windows/dist/Sno-${{ steps.version.outputs.installer }}.msi"
 
       #
       # Package tests
