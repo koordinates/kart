@@ -64,8 +64,7 @@ spatialite\mod_spatialite.7z:
 
 $(spatialite): spatialite\mod_spatialite.7z
 	if not exist dist\env\lib mkdir dist\env\lib
-	7z e -aoa -y -ir!*.dll -o.\dist\env\lib\ %s
-	7z e -aoa -y -ir!*.exe -o.\spatialite\ %s
+	7z e -aoa -y -o.\dist\env\lib\ %s
 	-rmdir /Q dist\env\lib\mod_spatialite-NG-win-amd64
 
 spatialite: $(spatialite)
