@@ -1,7 +1,7 @@
 SHELL = /bin/bash
 
 ifeq ($(OS),Windows_NT)
-	PLATFORM := Windows
+	$(error "On Windows, run `nmake /f makefile.vc` instead.")
 else
 	PLATFORM := $(shell uname -s)
 endif

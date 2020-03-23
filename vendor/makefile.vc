@@ -33,6 +33,7 @@ cleaner: clean
 	-del spatialite\mod_spatialite.7z
 	-del libgit2\libgit2.zip
 	-del pygit2\pygit2.zip
+	-rmdir /Q /S wheelhouse
 
 env:
 	$(PY3) -m venv $@
@@ -45,11 +46,11 @@ GIT_URL="https://github.com/git-for-windows/git/releases/download/v$(GIT_VER).wi
 git=dist\git
 
 git\MinGit.zip:
-    $(_PSDL) -Uri $(GIT_URL) -OutFile $@ $(_PSDLE)
+	$(_PSDL) -Uri $(GIT_URL) -OutFile $@ $(_PSDLE)
 
 $(git): git\MinGit.zip
 	if not exist dist mkdir dist
-    $(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath .\dist\git}"
+	$(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath .\dist\git}"
 
 git: $(git)
 
@@ -59,12 +60,12 @@ SPATIALITE_URL = 'http://www.gaia-gis.it/gaia-sins/windows-bin-NEXTGEN-amd64/mod
 spatialite=dist\env\lib
 
 spatialite\mod_spatialite.7z:
-    $(_PSDL) -Uri $(SPATIALITE_URL) -OutFile $@ $(_PSDLE)
+	$(_PSDL) -Uri $(SPATIALITE_URL) -OutFile $@ $(_PSDLE)
 
 $(spatialite): spatialite\mod_spatialite.7z
 	if not exist dist\env\lib mkdir dist\env\lib
-    7z e -aoa -y -ir!*.dll -o.\dist\env\lib\ %s
-    7z e -aoa -y -ir!*.exe -o.\spatialite\ %s
+	7z e -aoa -y -ir!*.dll -o.\dist\env\lib\ %s
+	7z e -aoa -y -ir!*.exe -o.\spatialite\ %s
 	-rmdir /Q dist\env\lib\mod_spatialite-NG-win-amd64
 
 spatialite: $(spatialite)
@@ -85,10 +86,36 @@ $(PIPWIN_CACHE): windows-reqs.txt
 	pipwin refresh
 
 # Python wheels
-wheels: env windows-reqs.txt $(PIPWIN_CACHE)
+pipwin-wheels: env windows-reqs.txt $(PIPWIN_CACHE)
+	-rmdir /Q /S wheelhouse
+	mkdir wheelhouse
+	pipwin download -d "wheelhouse" -r windows-reqs.txt
+	dir wheelhouse\ | find "whl"
+	7z t wheelhouse\*.whl
+
+wheelhouse:
+	if not exist wheelhouse mkdir wheelhouse
+	powershell ./<<tmpDownloadWheels.ps1
+$$ProgressPreference='SilentlyContinue';
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
+
+$$H=(Get-FileHash -Algorithm SHA1 .\windows-reqs.txt).Hash
+Write-Output ">>> windows-reqs.txt hash is $$H ..."
+$$F="sno-windows-vendor-wheels-$${H}.zip"
+
+$$URL="https://s3-us-west-1.amazonaws.com/build-artifacts.sno.earth/vendor/windows-wheels/$$F"
+Write-Output ">>> Downloading $$URL ..."
+Invoke-WebRequest -ErrorAction:Stop -Uri "$$URL" -OutFile "wheelhouse\$$F"
+
+Write-Output ">>> Expanding $$F ..."
+Expand-Archive -ErrorAction:Stop -Force -Path "wheelhouse\$$F" -DestinationPath wheelhouse
+<<NOKEEP
+	dir wheelhouse\ | find "whl"
+	7z t wheelhouse\*.whl
+
+wheels: wheelhouse
 	if not exist dist\wheelhouse mkdir dist\wheelhouse
-    pipwin download -d "dist\wheelhouse" -r windows-reqs.txt
-	dir dist\wheelhouse\ | find "whl"
+	copy /Y wheelhouse\*.whl dist\wheelhouse
 
 # Libgit2
 LIBGIT2_URL="https://github.com/libgit2/libgit2/archive/$(LIBGIT_REF).zip"
@@ -96,12 +123,12 @@ libgit2_src=libgit2\src
 libgit2=libgit2\env\bin\git2.dll
 
 libgit2\libgit2.zip:
-    $(_PSDL) -Uri $(LIBGIT2_URL) -OutFile $@ $(_PSDLE)
+	$(_PSDL) -Uri $(LIBGIT2_URL) -OutFile $@ $(_PSDLE)
 
 $(libgit2_src): libgit2\libgit2.zip
 	if exist $@~ rmdir /S /Q $@~
-    $(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath $@~}"
-	move $@~\libgit2-* $@
+	$(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath $@~}"
+	move /Y $@~\libgit2-* $@
 
 $(libgit2): $(libgit2_src)
 	cmake -S .\libgit2\src -B .\libgit2\build \
@@ -110,12 +137,12 @@ $(libgit2): $(libgit2_src)
 		-DBUILD_EXAMPLES=NO \
 		-DBUILD_CLAR=NO \
 		-DUSE_SSH=NO
-    cmake \
+	cmake \
 		--build .\libgit2\build \
-        --config RelWithDebInfo
+		--config RelWithDebInfo
 	cmake \
 		--install .\libgit2\build \
-        --config RelWithDebInfo
+		--config RelWithDebInfo
 
 libgit2: $(libgit2)
 
@@ -125,12 +152,12 @@ pygit2_src=pygit2\src
 pygit2=dist\wheelhouse\pygit2-$(PYGIT2_VER)-cp37-cp37m-win_amd64.whl
 
 pygit2\pygit2.zip:
-    $(_PSDL) -Uri $(PYGIT2_URL) -OutFile $@ $(_PSDLE)
+	$(_PSDL) -Uri $(PYGIT2_URL) -OutFile $@ $(_PSDLE)
 
 $(pygit2_src): pygit2\pygit2.zip
 	if exist $@~ rmdir /S /Q $@~
-    $(_PS) "&{Expand-Archive -Path %s -DestinationPath $@~}"
-	move $@~\pygit2-* $@
+	$(_PS) "&{Expand-Archive -Path %s -DestinationPath $@~}"
+	move /Y $@~\pygit2-* $@
 
 $(pygit2): env $(pygit2_src) $(libgit2)
 	set LIBGIT2=$(MAKEDIR)\libgit2\env
@@ -141,6 +168,6 @@ pygit2: $(pygit2)
 
 # Archive
 $(_ARCHIVE): $(pygit2) wheels $(git) $(spatialite) $(vcredist)
-    $(_PS) "&{Compress-Archive -Force -DestinationPath $(_ARCHIVE) .\dist\*}"
+	$(_PS) "&{Compress-Archive -Force -DestinationPath $(_ARCHIVE) .\dist\*}"
 
 archive: $(_ARCHIVE)

@@ -1,0 +1,17 @@
+!IFDEF SNO_INSTALL_VERSION
+MSI=Sno-$(SNO_INSTALL_VERSION).msi
+!ELSE
+MSI=Sno.msi
+!ENDIF
+
+all: windows\dist\$(MSI)
+
+clean:
+	-rmdir /Q /S windows\build windows\dist
+
+windows\dist\sno:
+	powershell -NoLogo windows\BuildPyApp.ps1
+
+windows\dist\$(MSI): windows\dist\sno
+	powershell -NoLogo windows\BuildInstaller.ps1
+

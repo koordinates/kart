@@ -4,7 +4,7 @@ PY_VERSION ?= 3.7
 PY_ID ?= cp37-cp37m
 
 ifeq ($(OS),Windows_NT)
-	PLATFORM := Windows
+	$(error "On Windows, run `nmake /f makefile.vc` instead.")
 else
 	PLATFORM := $(shell uname -s)
 endif
@@ -99,7 +99,7 @@ $(py-install-tools): | $(VIRTUAL_ENV)
 ifeq ($(PLATFORM),Darwin)
 	pip install macholib>=1.8
 else ifeq ($(PLATFORM),Windows)
-	pip install pefile>=2017.8.1 pywin32-ctypes>=0.2.0
+	pip install pefile>=2017.8.1 pywin32-ctypes>=0.2.0 pipwins
 endif
 
 	pip install \
