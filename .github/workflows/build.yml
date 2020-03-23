@@ -255,7 +255,7 @@ jobs:
 
   windows:
     name: Windows
-    runs-on: windows-2019
+    runs-on: windows-2016
     steps:
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1

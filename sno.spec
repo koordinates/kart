@@ -50,7 +50,7 @@ a = Analysis(
 if platform.system() == "Windows":
     a.datas += Tree('vendor/dist/git', prefix='git')
 else:
-    a.binaries += [('vendor/dist/env/bin/git', '.')]
+    a.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
     libexec_root = 'vendor/dist/env/libexec'
     a.datas += Tree('vendor/dist/env/share', prefix='share')
 
