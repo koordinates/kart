@@ -257,6 +257,12 @@ jobs:
     name: Windows
     runs-on: windows-2019
     steps:
+      - name: "msvc setup"
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: 14.0
+
       - uses: actions/checkout@v2
 
       #
