@@ -129,6 +129,8 @@ class WorkingCopyGPKG(WorkingCopy):
                         dbcur.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
                         dbcur.execute(f"PRAGMA journal_mode = {orig_journal};")
 
+                del dbcur
+                self._db.close()
                 del self._db
                 L.debug(f"session(bulk={bulk}): new/done")
 

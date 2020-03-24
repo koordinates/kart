@@ -180,7 +180,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 if force_new:
                     L.info("force_new is set, deleting existing WC: %s", wc_path)
                     del rs.working_copy
-                    assert not rs.working_copy
+                    assert not hasattr(rs, '_working_copy')
                     del wc_path
 
             if not rs.working_copy:

@@ -322,11 +322,10 @@ def import_table(ctx, source, directory, do_list, version, method):
         importer.fast_import_table(repo, source_loader, **params)
 
     rs = structure.RepositoryStructure(repo)
-    wc = rs.working_copy
-    if wc:
+    if rs.working_copy:
         # Update working copy with new dataset
         dataset = rs[directory]
-        wc.write_full(rs.head_commit, dataset)
+        rs.working_copy.write_full(rs.head_commit, dataset)
 
 
 @click.command()
