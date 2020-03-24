@@ -38,21 +38,18 @@ def status(ctx, is_output_json):
 
 
 def get_status_json(repo):
-    output = {
-        "commit": None,
-        "branch": None,
-        "upstream": None,
-        "workingCopy": None,
-    }
-    if not repo.is_empty:
-        output.update(get_branch_status_json(repo))
-        output.update(get_working_copy_status_json(repo))
+    output = get_branch_status_json(repo)
+    output["workingCopy"] = get_working_copy_status_json(repo)
     return {"sno.status/v1": output}
 
 
 def get_branch_status_json(repo):
+    output = {"commit": None, "branch": None, "upstream": None}
+    if repo.is_empty:
+        return output
+
     commit = repo.head.peel(pygit2.Commit)
-    output = {"commit": commit.short_id}
+    output["commit"] = commit.short_id
 
     if repo.head_is_detached:
         return output
@@ -73,10 +70,13 @@ def get_branch_status_json(repo):
 
 
 def get_working_copy_status_json(repo):
+    if repo.is_empty:
+        return None
+
     rs = RepositoryStructure(repo)
     working_copy = rs.working_copy
     if not rs.working_copy:
-        return {}
+        return None
 
     wc_changes = {}
     for dataset in rs:
@@ -85,9 +85,9 @@ def get_working_copy_status_json(repo):
             wc_changes[dataset.path] = status
 
     if wc_changes:
-        return {"workingCopy": get_diff_status_json(wc_changes)}
+        return get_diff_status_json(wc_changes)
     else:
-        return {"workingCopy": {}}
+        return {}
 
 
 def get_diff_status_json(wc_changes):
@@ -113,7 +113,7 @@ def status_to_text(jdict):
     if is_empty:
         return branch_status
 
-    return "\n".join([branch_status, wc_status])
+    return "\n\n".join([branch_status, wc_status])
 
 
 def branch_status_to_text(jdict):
@@ -122,12 +122,12 @@ def branch_status_to_text(jdict):
         return 'Empty repository.\n  (use "sno import" to add some data)'
     branch = jdict["branch"]
     if not branch:
-        return f"{click.style('HEAD detached at', fg='red')} {commit}\n"
-    output = f"On branch {branch}\n"
+        return f"{click.style('HEAD detached at', fg='red')} {commit}"
+    output = f"On branch {branch}"
 
     upstream = jdict["upstream"]
     if upstream:
-        output += upstream_status_to_text(upstream)
+        output = "\n".join([output, upstream_status_to_text(upstream)])
     return output
 
 
@@ -137,23 +137,23 @@ def upstream_status_to_text(jdict):
     n_behind = jdict["behind"]
 
     if n_ahead == n_behind == 0:
-        return f"Your branch is up to date with '{upstream_branch}'.\n"
+        return f"Your branch is up to date with '{upstream_branch}'."
     elif n_ahead > 0 and n_behind > 0:
         return (
             f"Your branch and '{upstream_branch}' have diverged,\n"
             f"and have {n_ahead} and {n_behind} different commits each, respectively.\n"
-            '  (use "sno pull" to merge the remote branch into yours)\n'
+            '  (use "sno pull" to merge the remote branch into yours)'
         )
     elif n_ahead > 0:
         return (
             f"Your branch is ahead of '{upstream_branch}' by {n_ahead} {_pc(n_ahead)}.\n"
-            '  (use "sno push" to publish your local commits)\n'
+            '  (use "sno push" to publish your local commits)'
         )
     elif n_behind > 0:
         return (
             f"Your branch is behind '{upstream_branch}' by {n_behind} {_pc(n_behind)}, "
             "and can be fast-forwarded.\n"
-            '  (use "sno pull" to update your local branch)\n'
+            '  (use "sno pull" to update your local branch)'
         )
 
 

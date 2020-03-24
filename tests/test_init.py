@@ -393,9 +393,10 @@ def test_import_existing_wc(data_archive, data_working_copy, geopackage, cli_run
         assert H.row_count(db, "nz_waca_adjustments") > 0
 
         head_tree = repo.head.peel(pygit2.Tree)
-        wc_tree_id = db.execute(
-            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
-        ).fetchone()[0]
+        with db:
+            dbcur = db.cursor()
+            dbcur.execute("""SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';""")
+            wc_tree_id = dbcur.fetchone()[0]
         assert wc_tree_id == head_tree.hex
         assert wc.assert_db_tree_match(head_tree)
 
@@ -408,7 +409,8 @@ def test_import_existing_wc(data_archive, data_working_copy, geopackage, cli_run
         with db:
             dbcur = db.cursor()
             dbcur.execute("DELETE FROM nz_waca_adjustments WHERE rowid IN (SELECT rowid FROM nz_waca_adjustments ORDER BY id LIMIT 10);")
-            assert dbcur.rowcount == 10
+            dbcur.execute("SELECT changes()")
+            assert dbcur.fetchone()[0] == 10
 
         with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
             r = cli_runner.invoke(
@@ -419,9 +421,10 @@ def test_import_existing_wc(data_archive, data_working_copy, geopackage, cli_run
         assert H.row_count(db, "waca2") > 0
 
         head_tree = repo.head.peel(pygit2.Tree)
-        wc_tree_id = db.execute(
-            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
-        ).fetchone()[0]
+        with db:
+            dbcur = db.cursor()
+            dbcur.execute("""SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';""")
+            wc_tree_id = dbcur.fetchone()[0]
         assert wc_tree_id == head_tree.hex
         assert wc.assert_db_tree_match(head_tree)
 
