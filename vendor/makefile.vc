@@ -136,6 +136,8 @@ $(libgit2_src): libgit2\libgit2.zip
 	if exist $@~ rmdir /S /Q $@~
 	7z x %s -o$@~
 	move /Y $@~\libgit2-* $@
+# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
+#	rmdir /Q /S $@~
 
 $(libgit2): $(libgit2_src)
 	cmake -S .\libgit2\src -B .\libgit2\build \
@@ -165,7 +167,8 @@ $(pygit2_src): pygit2\pygit2.zip
 	if exist $@~ rmdir /S /Q $@~
 	7z x %s -o$@~
 	move /Y $@~\pygit2-* $@
-	rmdir /Q /S $@~
+# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
+#	rmdir /Q /S $@~
 
 $(pygit2): env $(pygit2_src) $(libgit2)
 	set LIBGIT2=$(MAKEDIR)\libgit2\env
