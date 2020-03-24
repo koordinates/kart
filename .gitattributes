@@ -1,0 +1,2 @@
+# this file gets hashed, so we need consistent line endings everywhere
+/vendor/windows-reqs.txt eol=crlf
