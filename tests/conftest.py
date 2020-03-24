@@ -157,7 +157,6 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
-    # raise pytest.skip()
     from sno.structure import RepositoryStructure
     incr = 0
 
