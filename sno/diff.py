@@ -419,10 +419,7 @@ def diff(ctx, output_format, output_path, exit_code, args):
         if output_path and output_path != "-":
             output_path = Path(output_path).expanduser()
 
-        repo_dir = ctx.obj["repo_dir"]
-        repo = pygit2.Repository(repo_dir)
-        if not repo:
-            raise click.BadParameter("Not an existing repository", param_hint="--repo")
+        repo = ctx.obj.repo
 
         paths = {}
         commit_head = repo.head.peel(pygit2.Commit)

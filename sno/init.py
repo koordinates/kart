@@ -27,7 +27,7 @@ def import_gpkg(ctx, geopackage, table, list_tables):
 
     click.secho('"import-gpkg" is deprecated and will be removed in future, use "init" instead', fg='yellow')
 
-    directory = ctx.obj["repo_dir"] or os.curdir
+    repo_path = ctx.obj.repo_path
 
     check_git_user(repo=None)
 
@@ -35,10 +35,10 @@ def import_gpkg(ctx, geopackage, table, list_tables):
     if table and not list_tables:
         import_from[2] = table
 
-    if not list_tables and directory:
-        Path(directory).mkdir(exist_ok=True)
+    if not list_tables and repo_path:
+        repo_path.mkdir(exist_ok=True)
 
-    ctx.invoke(init, directory=directory, import_from=tuple(import_from), do_checkout=False)
+    ctx.invoke(init, directory=str(repo_path), import_from=tuple(import_from), do_checkout=False)
 
 
 class ImportPath(click.Path):
@@ -259,10 +259,8 @@ def import_table(ctx, source, directory, do_list, version, method):
     To show available tables in the import data, use
     $ sno import --list GPKG:my.gpkg
     """
-    repo_dir = ctx.obj["repo_dir"] or "."
-    repo = pygit2.Repository(repo_dir)
-    if not repo or not repo.is_bare:
-        raise click.BadParameter("Not an existing repository", param_hint="--repo")
+    repo_path = ctx.obj.repo_path
+    repo = ctx.obj.repo
 
     check_git_user(repo)
 
@@ -306,7 +304,7 @@ def import_table(ctx, source, directory, do_list, version, method):
         ctx.exit(1)
 
     if directory:
-        directory = os.path.relpath(directory, os.path.abspath(repo_dir))
+        directory = os.path.relpath(directory, os.path.abspath(repo_path))
         if not directory:
             raise click.BadParameter("Invalid import directory", param_hint="directory")
         if is_windows:
@@ -388,14 +386,14 @@ def init(ctx, import_from, do_checkout, directory):
     elif not Path(directory).exists():
         Path(directory).mkdir(parents=True)
 
-    repo_dir = Path(directory).resolve()
-    if any(repo_dir.iterdir()):
+    repo_path = Path(directory).resolve()
+    if any(repo_path.iterdir()):
         raise click.BadParameter(
-            f'"{repo_dir}" isn\'t empty', param_hint="directory"
+            f'"{repo_path}" isn\'t empty', param_hint="directory"
         )
 
     # Create the repository
-    repo = pygit2.init_repository(str(repo_dir), bare=True)
+    repo = pygit2.init_repository(str(repo_path), bare=True)
 
     if import_from:
         importer = structure.DatasetStructure.importer(import_table)
@@ -403,7 +401,7 @@ def init(ctx, import_from, do_checkout, directory):
 
         if do_checkout:
             # Checkout a working copy
-            wc_path = repo_dir / f"{repo_dir.stem}.gpkg"
+            wc_path = repo_path / f"{repo_path.stem}.gpkg"
 
             click.echo(f'Checkout {import_table} to {wc_path} as GPKG ...')
 
@@ -413,4 +411,4 @@ def init(ctx, import_from, do_checkout, directory):
                 commit=repo.head.peel(pygit2.Commit),
             )
     else:
-        click.echo(f"Created an empty repository at {repo_dir} — import some data with `sno import`")
+        click.echo(f"Created an empty repository at {repo_path} — import some data with `sno import`")

@@ -26,8 +26,7 @@ from .structure import RepositoryStructure
 @click.pass_context
 def merge(ctx, ff, ff_only, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
-    repo_dir = ctx.obj["repo_dir"]
-    repo = pygit2.Repository(repo_dir)
+    repo = ctx.obj.repo
 
     if ff_only and not ff:
         raise click.BadParameter(

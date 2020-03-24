@@ -162,7 +162,6 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
-    raise pytest.skip()
     from sno.structure import RepositoryStructure
     incr = 0
 
@@ -437,11 +436,14 @@ class TestHelpers:
             pk = "ROWID"
 
         sql = f"SELECT * FROM {table} ORDER BY {pk};"
-        r = db.execute(sql)
-        h = hashlib.sha1()
-        for row in r:
-            h.update("🔸".join(repr(col) for col in row).encode("utf-8"))
-        return h.hexdigest()
+        with db:
+            cur = db.cursor()
+            cur.execute(sql)
+            r = cur.fetchall()
+            h = hashlib.sha1()
+            for row in r:
+                h.update("🔸".join(repr(col) for col in row).encode("utf-8"))
+            return h.hexdigest()
 
     @classmethod
     def git_graph(cls, request, message, count=10, *paths):
