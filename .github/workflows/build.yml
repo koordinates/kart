@@ -256,6 +256,7 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2016
+    # we use `shell: pwsh` because of https://github.com/actions/virtual-environments/issues/225
     steps:
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
@@ -300,6 +301,7 @@ jobs:
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
         working-directory: vendor
+        shell: pwsh
         run: |
           nmake /D /NoLogo /F makefile.vc
 
@@ -315,6 +317,7 @@ jobs:
 
       - name: "app: version"
         id: version
+        shell: pwsh
         run: |
           $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
           $IVER="$($VER.Split(".")[1..3] -join '.').0"
@@ -324,10 +327,12 @@ jobs:
           echo "::set-output name=installer::$IVER"
 
       - name: "app: install python dependencies"
+        shell: pwsh
         run: |
           nmake /D /NoLogo /F makefile.vc venv\.requirements.installed
 
       - name: "app: build"
+        shell: pwsh
         run: |
           nmake /D /NoLogo /F makefile.vc
           venv\Scripts\sno.exe --version
@@ -337,10 +342,12 @@ jobs:
       #
 
       - name: "app: install test dependencies"
+        shell: pwsh
         run: |
           nmake /D /NoLogo /F makefile.vc venv\.test.installed
 
       - name: "app: unit tests"
+        shell: pwsh
         run: |
           nmake /D /NoLogo /F makefile.vc ci-test
 
@@ -356,6 +363,7 @@ jobs:
 
       - name: "package: assemble"
         id: package
+        shell: pwsh
         env:
           SNO_INSTALL_VERSION: ${{ steps.version.outputs.installer }}
         run: |
@@ -367,6 +375,7 @@ jobs:
       #
 
       - name: "package: tests"
+        shell: pwsh
         run: |
           Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\${{ steps.package.outputs.file }} /quiet /norestart /l* install.log'
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
