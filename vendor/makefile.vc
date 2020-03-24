@@ -96,7 +96,8 @@ wheelhouse:
 # we use `shell: pwsh` because of https://github.com/actions/virtual-environments/issues/225
 	if not exist wheelhouse mkdir wheelhouse
 	pwsh ./<<tmpDownloadWheels.ps1
-$$ProgressPreference='SilentlyContinue';
+$$ErrorActionPreference = 'stop'
+$$ProgressPreference='SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
 
 $$H=(Get-FileHash -Algorithm SHA1 .\windows-reqs.txt).Hash
