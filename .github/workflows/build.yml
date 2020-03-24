@@ -214,22 +214,6 @@ jobs:
           sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-*.tar.gz" -exec rm -rf {} \;
 
       #
-      # Package tests
-      #
-
-      - name: "🍎 package: tests"
-        if: matrix.platform.id == 'Darwin'
-        run: |
-          sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
-          readlink $(which sno)
-          PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
-
-      - name: "🐧 package: tests"
-        if: matrix.platform.id == 'Linux'
-        run: |
-          make -C platforms test-deb-all test-rpm-all
-
-      #
       # Uploading packages
       #
 
@@ -253,6 +237,22 @@ jobs:
         with:
           name: ${{ matrix.platform.name }}-rpm
           path: platforms/linux/dist/*.rpm
+
+      #
+      # Package tests
+      #
+
+      - name: "🍎 package: tests"
+        if: matrix.platform.id == 'Darwin'
+        run: |
+          sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
+          readlink $(which sno)
+          PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
+
+      - name: "🐧 package: tests"
+        if: matrix.platform.id == 'Linux'
+        run: |
+          make -C platforms test-deb-all test-rpm-all
 
   windows:
     name: Windows
@@ -368,6 +368,16 @@ jobs:
           echo "::set-output name=file::platforms\windows\dist\Sno-${{ steps.version.outputs.installer }}.msi"
 
       #
+      # Uploading package
+      #
+
+      - name: "package: save"
+        uses: actions/upload-artifact@v2-preview
+        with:
+          name: Windows-msi
+          path: ${{ steps.package.outputs.file }}
+
+      #
       # Package tests
       #
 
@@ -378,13 +388,3 @@ jobs:
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & sno --version
         # tests\scripts\e2e-1.sh
-
-      #
-      # Uploading packages
-      #
-
-      - name: "package: save"
-        uses: actions/upload-artifact@v2-preview
-        with:
-          name: Windows-msi
-          path: ${{ steps.package.outputs.file }}
