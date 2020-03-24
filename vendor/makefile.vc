@@ -10,6 +10,12 @@ _PS=powershell.exe -NoLogo -Command
 _PSDL=$(_PS) "&{$$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -ErrorAction:Stop
 _PSDLE=}"
 
+# we use `pwsh` because of https://github.com/actions/virtual-environments/issues/225
+# but we don't seem to need it on normal windows installs
+!IFNDEF PWSH
+PWSH=powershell.exe
+!ENDIF
+
 CFLAGS=-O2
 CXXFLAGS=-O2
 
@@ -72,7 +78,7 @@ spatialite: $(spatialite)
 # MS VC++ Redist
 vcredist=dist\Microsoft_VC141_CRT_x64.msm
 # override via /DMSVCREDIST={source-path}
-MSVCREDIST=$(VCToolsRedistDir)\MergeModules
+MSVCREDIST=$(VCTOOLSREDISTDIR)\MergeModules
 
 $(vcredist):
 	if not exist dist mkdir dist
@@ -93,9 +99,9 @@ pipwin-wheels: env windows-reqs.txt $(PIPWIN_CACHE)
 	7z t wheelhouse\*.whl
 
 wheelhouse:
-# we use `shell: pwsh` because of https://github.com/actions/virtual-environments/issues/225
+# we use `pwsh` because of https://github.com/actions/virtual-environments/issues/225
 	if not exist wheelhouse mkdir wheelhouse
-	pwsh ./<<tmpDownloadWheels.ps1
+	$(PWSH) ./<<tmpDownloadWheels.ps1
 $$ErrorActionPreference = 'stop'
 $$ProgressPreference='SilentlyContinue'
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12

@@ -302,6 +302,8 @@ jobs:
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
         working-directory: vendor
+        env:
+          PWSH: pwsh.exe
         run: |
           nmake /D /NoLogo /F makefile.vc
 
