@@ -98,10 +98,7 @@ $(py-install-tools): | $(VIRTUAL_ENV)
 # Fix PyInstaller 3.6 setup.cfg: https://github.com/pyinstaller/pyinstaller/issues/4609
 ifeq ($(PLATFORM),Darwin)
 	pip install macholib>=1.8
-else ifeq ($(PLATFORM),Windows)
-	pip install pefile>=2017.8.1 pywin32-ctypes>=0.2.0 pipwins
 endif
-
 	pip install \
 		pip-tools \
 		liccheck \
