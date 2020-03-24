@@ -321,7 +321,7 @@ jobs:
         id: version
         run: |
           $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
-          $IVER="$($VER.Split(".")[1..3] -join '.').0"
+          $IVER="$($VER.Split(".")[1..3] -join '.')"
           echo "$VER ($IVER)"
           echo "$VER" > .\sno\VERSION
           echo "::set-output name=value::$VER"

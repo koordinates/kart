@@ -13,7 +13,7 @@ if ($Env:SIGNTOOL) {
 
 if ($Env:SNO_INSTALL_VERSION) {
     $INSTALLVER=$Env:SNO_INSTALL_VERSION
-    $MSINAME="Sno-${$INSTALLVER}.msi"
+    $MSINAME="Sno-${INSTALLVER}.msi"
 } else {
     $INSTALLVER='0.0.0'
     $MSINAME='Sno.msi'
