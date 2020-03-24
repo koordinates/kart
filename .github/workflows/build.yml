@@ -22,6 +22,7 @@ jobs:
             id: Darwin
             os: macos-latest
             package-formats: pkg
+    if: "!contains(github.event.head_commit.message, '[ci only windows]')"
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: 1
@@ -256,8 +257,10 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2016
-    # we use `shell: pwsh` because of https://github.com/actions/virtual-environments/issues/225
+    if: "!contains(github.event.head_commit.message, '[ci only posix]')"
     steps:
+      # we use `shell: pwsh` because of https://github.com/actions/virtual-environments/issues/225
+
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
         with:
