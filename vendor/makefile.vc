@@ -93,8 +93,9 @@ pipwin-wheels: env windows-reqs.txt $(PIPWIN_CACHE)
 	7z t wheelhouse\*.whl
 
 wheelhouse:
+# we use `shell: pwsh` because of https://github.com/actions/virtual-environments/issues/225
 	if not exist wheelhouse mkdir wheelhouse
-	powershell ./<<tmpDownloadWheels.ps1
+	pwsh ./<<tmpDownloadWheels.ps1
 $$ProgressPreference='SilentlyContinue';
 [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
 
