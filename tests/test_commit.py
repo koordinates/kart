@@ -102,10 +102,11 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
         tree = repo.head.peel(pygit2.Tree)
         assert dataset.get_feature_path(pk_del) not in tree
 
-        change_count = cur.execute(
+        cur.execute(
             f"SELECT COUNT(*) FROM {wc.TRACKING_TABLE} WHERE table_name=?;",
             [layer]
-        )[0][0]
+        )
+        change_count = cur.fetchone()[0]
         assert change_count == 0, f"Changes still listed in {dataset.TRACKING_TABLE}"
 
         wc = WorkingCopy.open(repo)

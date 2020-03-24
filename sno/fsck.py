@@ -29,7 +29,7 @@ def _fsck_reset(repo_structure, working_copy, dataset_paths):
             dbcur = db.cursor()
             dbcur.execute("PRAGMA defer_foreign_keys = ON;")
             try:
-                working_copy._drop_triggers(db, table)
+                working_copy._drop_triggers(dbcur, table)
 
                 dbcur.execute("""DELETE FROM ".sno-meta" WHERE table_name=?;""", [table])
                 dbcur.execute("""DELETE FROM ".sno-track" WHERE table_name=?;""", [table])
@@ -121,8 +121,8 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            q = db.execute(f"SELECT COUNT(*) FROM {gpkg.ident(table)};")
-            wc_count = q[0][0]
+            dbcur.execute(f"SELECT COUNT(*) FROM {gpkg.ident(table)};")
+            wc_count = dbcur.fetchall()[0][0]
             click.echo(f"{wc_count} features in {table}")
             ds_count = dataset.feature_count(fast=False)
             if wc_count != ds_count:
@@ -132,8 +132,8 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            q = db.execute(f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=?;", [table])
-            track_count = q[0][0]
+            dbcur.execute(f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=?;", [table])
+            track_count = dbcur.fetchall()[0][0]
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
             wc_diff = working_copy.diff_db_to_tree(dataset)
@@ -189,7 +189,8 @@ def fsck(ctx, reset_datasets, fsck_args):
                             fg="red",
                         )
 
-                    row = db.execute(f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;", [feature[pk]]).fetchone()
+                    dbcur.execute(f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;", [feature[pk]])
+                    row = dbcur.fetchone()
                     if dict(row) != feature:
                         s_old = set(feature.items())
                         s_new = set(dict(row).items())
