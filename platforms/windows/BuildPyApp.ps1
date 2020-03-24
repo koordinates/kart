@@ -8,10 +8,7 @@ if ($Env:SIGNTOOL) {
     $SIGNTOOL = $Env:SIGNTOOL
 }
 
-Expand-Archive `
-    -Force `
-    -LiteralPath (Join-Path $SRC 'vendor\dist\vendor-Windows.zip') `
-    -DestinationPath (Join-Path $SRC 'vendor\dist')
+7z x "$(Join-Path $SRC 'vendor\dist\vendor-Windows.zip')" "-o$(Join-Path $SRC 'vendor\dist')" -aoa
 
 Push-Location -Path $SRC
 Get-Location

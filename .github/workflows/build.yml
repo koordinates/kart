@@ -322,7 +322,8 @@ jobs:
         run: |
           $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
           $IVER="$($VER.Split(".")[0..2] -join '.')"
-          echo "$VER ($IVER)"
+          echo "App Version: $VER"
+          echo "Installer Version: $IVER"
           echo "$VER" > .\sno\VERSION
           echo "::set-output name=value::$VER"
           echo "::set-output name=installer::$IVER"

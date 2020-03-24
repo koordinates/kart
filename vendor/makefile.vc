@@ -56,7 +56,7 @@ git\MinGit.zip:
 
 $(git): git\MinGit.zip
 	if not exist dist mkdir dist
-	$(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath .\dist\git}"
+	7z x %s -o$@
 
 git: $(git)
 
@@ -115,7 +115,7 @@ Write-Output ">>> Downloading $$URL ..."
 Invoke-WebRequest -ErrorAction:Stop -Uri "$$URL" -OutFile "wheelhouse\$$F"
 
 Write-Output ">>> Expanding $$F ..."
-Expand-Archive -ErrorAction:Stop -Force -Path "wheelhouse\$$F" -DestinationPath wheelhouse
+& 7z x "wheelhouse\$$F" -owheelhouse -aoa
 <<NOKEEP
 	dir wheelhouse\ | find "whl"
 	7z t wheelhouse\*.whl
@@ -134,7 +134,7 @@ libgit2\libgit2.zip:
 
 $(libgit2_src): libgit2\libgit2.zip
 	if exist $@~ rmdir /S /Q $@~
-	$(_PS) "&{Expand-Archive -ErrorAction:Stop -Path %s -DestinationPath $@~}"
+	7z x %s -o$@~
 	move /Y $@~\libgit2-* $@
 
 $(libgit2): $(libgit2_src)
@@ -163,8 +163,9 @@ pygit2\pygit2.zip:
 
 $(pygit2_src): pygit2\pygit2.zip
 	if exist $@~ rmdir /S /Q $@~
-	$(_PS) "&{Expand-Archive -Path %s -DestinationPath $@~}"
+	7z x %s -o$@~
 	move /Y $@~\pygit2-* $@
+	rmdir /Q /S $@~
 
 $(pygit2): env $(pygit2_src) $(libgit2)
 	set LIBGIT2=$(MAKEDIR)\libgit2\env
@@ -175,6 +176,7 @@ pygit2: $(pygit2)
 
 # Archive
 $(_ARCHIVE): $(pygit2) wheels $(git) $(spatialite) $(vcredist)
-	$(_PS) "&{Compress-Archive -Force -DestinationPath $(_ARCHIVE) .\dist\*}"
+	if exist $@ del $@
+	7z a $@ .\dist\*
 
 archive: $(_ARCHIVE)
