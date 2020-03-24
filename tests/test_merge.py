@@ -162,8 +162,8 @@ def test_merge_true(
 
         # check the database state
         num_inserts = len(insert.inserted_fids)
-        r = dbcur.execute(
+        dbcur.execute(
             f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} IN ({','.join(['?']*num_inserts)});",
             insert.inserted_fids,
         )
-        assert r[0][0] == num_inserts
+        assert dbcur.fetchone()[0] == num_inserts
