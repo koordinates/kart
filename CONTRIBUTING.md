@@ -20,9 +20,11 @@ $ make
 
 # check it's working
 $ venv/bin/sno --version
-Sno v0.2.1.dev0
-GDAL v3.0.3
-PyGit2 v0.28.2; Libgit2 v0.28.2
+Sno v0.3.1.dev0, Copyright (c) Sno Contributors
+» GDAL v3.0.4
+» PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
+» APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
+» SpatialIndex v1.8.5
 ```
 
 ### Linux
@@ -39,31 +41,41 @@ $ make
 
 # check it's working
 $ venv/bin/sno --version
-Sno v0.2.1.dev0
-GDAL v3.0.3
-PyGit2 v0.28.2; Libgit2 v0.28.2
+Sno v0.3.1.dev0, Copyright (c) Sno Contributors
+» GDAL v3.0.4
+» PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
+» APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
+» SpatialIndex v1.8.5
 ```
 
 ### Windows
 
 Requirements:
-* Windows 10 64-bit
-* MS Visual Studio 2019
-* Python 3.7
+* Windows 64-bit 8.1 / Windows Server 64-bit 2016; or newer
+* MS Visual Studio 2017 or newer, with C++ tools installed
+* Python 3.7 from [Python.org](https://python.org)
 * cmake
 * 7-Zip
 * Git
 
-Run the following from a "Developer Command Prompt for VS 2019"
+Run the following from the "x64 Native Tools Command Prompt for VS 2019":
 
 ```console
-$ git clone git@github.com:koordinates/sno.git
-$ cd sno
-$ nmake /F makefile.vc
+> git clone git@github.com:koordinates/sno.git
+> cd sno
+> nmake /F makefile.vc
 
 # check it's working
-$ venv\Scripts\sno --version
-Sno v0.2.1.dev0
-GDAL v3.0.3
-PyGit2 v0.28.2; Libgit2 v0.28.2
+> venv\Scripts\sno --version
+Sno v0.3.1.dev0, Copyright (c) Sno Contributors
+» GDAL v3.0.4
+» PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
+» APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
+» SpatialIndex v1.8.5
 ```
+
+## CI
+
+Continuous integration builds apps, tests, and installers for every commit on supported platforms. Artifacts are published to Github Actions, including vendor library bundles, test results, and unsigned installers.
+
+To only run CI for a particular platform (ie. when debugging CI), add `[ci only posix]` (for macOS + Linux) or `[ci only windows]` to commit messages.
