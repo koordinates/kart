@@ -69,10 +69,10 @@ $(spatialite): spatialite\mod_spatialite.7z
 
 spatialite: $(spatialite)
 
-# VC Redist
+# MS VC++ Redist
 vcredist=dist\Microsoft_VC141_CRT_x64.msm
 # override via /DMSVCREDIST={source-path}
-MSVCREDIST=C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Redist\MSVC\14.16.27012\MergeModules
+MSVCREDIST=$(VCToolsRedistDir)\MergeModules
 
 $(vcredist):
 	if not exist dist mkdir dist
