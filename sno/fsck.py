@@ -65,7 +65,7 @@ def fsck(ctx, reset_datasets, fsck_args):
     repo = ctx.obj.repo
 
     click.echo("Checking repository integrity...")
-    r = subprocess.call(["git", "-C", repo_path, "fsck"] + list(fsck_args))
+    r = subprocess.call(["git", "-C", str(repo_path), "fsck"] + list(fsck_args))
     if r:
         click.Abort()
 

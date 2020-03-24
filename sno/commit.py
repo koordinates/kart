@@ -29,7 +29,7 @@ from .cli_util import MutexOption
     "message_file",
     "--file",
     "-F",
-    type=click.File(),
+    type=click.File(encoding='utf-8'),
     help="Take the commit message from the given file. Use `-` to read the message from the standard input.",
     cls=MutexOption,
     exclusive_with=["message"],
@@ -109,7 +109,7 @@ def get_commit_message(repo, wc_changes):
         "#",
     ]
 
-    with open(Path(repo.path) / "COMMIT_EDITMSG", "w+") as f:
+    with open(Path(repo.path) / "COMMIT_EDITMSG", "w+", encoding='utf-8') as f:
         f.write("\n".join(initial_message) + "\n")
         f.flush()
 

@@ -63,7 +63,7 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     # do the fetch
     print("Running fetch:", repository, refspecs)
     remote.fetch((refspecs or None))
-    # subprocess.check_call(["git", "-C", ctx.obj.repo_path, 'fetch', repository] + list(refspecs))
+    # subprocess.check_call(["git", "-C", str(ctx.obj.repo_path), 'fetch', repository] + list(refspecs))
 
     # now merge with FETCH_HEAD
     print("Running merge:", {'ff': ff, 'ff_only': ff_only, 'commit': "FETCH_HEAD"})

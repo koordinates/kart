@@ -84,7 +84,7 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         # create a tag
         repo.create_reference("refs/tags/version1", repo.head.target)
 
-        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
@@ -156,7 +156,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
             "A branch named 'master' already exists."
         )
 
-        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
@@ -212,7 +212,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
             "A branch named 'master' already exists."
         )
 
-        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 

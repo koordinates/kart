@@ -139,7 +139,7 @@ def log(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "log"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "log"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -150,7 +150,7 @@ def push(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "push"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "push"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -161,7 +161,7 @@ def fetch(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "fetch"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "fetch"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -180,7 +180,7 @@ def branch(ctx, args):
         if branch in sargs:
             raise click.ClickException(f"Cannot delete the branch '{branch}' which you are currently on.")
 
-    _execvp("git", ["git", "-C", repo_path, "branch"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "branch"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -191,7 +191,7 @@ def remote(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "remote"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "remote"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -202,7 +202,7 @@ def tag(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "tag"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "tag"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -213,7 +213,7 @@ def config(ctx, args):
     repo_path = ctx.obj.repo_path
     params = ["git", "config"]
     if ctx.obj.has_repo_path:
-        params[1:1] = ["-C", repo_path]
+        params[1:1] = ["-C", str(repo_path)]
     _execvp("git", params + list(args))
 
 

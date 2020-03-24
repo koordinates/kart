@@ -73,7 +73,7 @@ def test_fetch(
     data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request
 ):
     with data_working_copy("points") as (path1, wc):
-        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
@@ -130,7 +130,7 @@ def test_pull(
         "points"
     ) as (path2, wc2):
         with chdir(path1):
-            subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+            subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
             r = cli_runner.invoke(["remote", "add", "origin", tmp_path])
             assert r.exit_code == 0, r
 
