@@ -1,7 +1,7 @@
 import os
+import re
 import shlex
 import subprocess
-import tempfile
 import time
 
 import pytest
@@ -203,7 +203,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage, 
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
         r = cli_runner.invoke(["commit"])
         assert r.exit_code == 0, r
-        assert editor_cmd == f"nano '{repo_dir}{os.sep}COMMIT_EDITMSG'"
+        assert re.match(rf"nano '?{re.escape(repo_dir)}{os.sep}COMMIT_EDITMSG'?$")
         assert editor_in == (
             "\n"
             "# Please enter the commit message for your changes. Lines starting\n"
@@ -226,7 +226,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage, 
         editor_out = "sqwark 🐧\n"
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == 0, r
-        assert editor_cmd == f"/path/to/some/editor -abc '{repo_dir}{os.sep}COMMIT_EDITMSG'"
+        assert re.match(rf"/path/to/some/editor -abc '?{re.escape(repo_dir)}{os.sep}COMMIT_EDITMSG'?$", editor_cmd)
         assert editor_in == (
             "\n"
             "# Please enter the commit message for your changes. Lines starting\n"
