@@ -271,3 +271,23 @@ def test_commit_message(
         )
         print(last_message())
         assert last_message() == "sqwark 🐧"
+
+
+def test_empty(tmp_path, cli_runner, chdir):
+    repo_path = tmp_path / "one.sno"
+
+    # empty repo
+    r = cli_runner.invoke(["init", repo_path])
+    assert r.exit_code == 0, r
+    with chdir(repo_path):
+        r = cli_runner.invoke(["commit", "--allow-empty"])
+        assert r.exit_code == 2, r
+        assert "Empty repository" in r.stdout
+
+    # empty dir
+    empty_path = tmp_path / "two"
+    empty_path.mkdir()
+    with chdir(empty_path):
+        r = cli_runner.invoke(["commit", "--allow-empty"])
+        assert r.exit_code == 2, r
+        assert "not an existing repository" in r.stdout

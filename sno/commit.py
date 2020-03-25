@@ -54,6 +54,11 @@ def commit(ctx, message, message_file, allow_empty):
     """ Record changes to the repository """
     repo = ctx.obj.repo
 
+    if repo.is_empty:
+        raise click.UsageError(
+            'Empty repository.\n  (use "sno import" to add some data)'
+        )
+
     check_git_user(repo)
 
     commit = repo.head.peel(pygit2.Commit)
