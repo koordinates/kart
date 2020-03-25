@@ -69,6 +69,11 @@
         <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
         <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
         <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="To get started, run `sno` from your command prompt. An introductory tutorial is available at https://sno.earth" />
-        <UIRef Id="WixUI_FeatureTree" />
+        <UI Id="FeatureTree">
+            <UIRef Id="WixUI_FeatureTree" />
+            <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg"  Order="3">1</Publish>
+            <!-- skip the page on the way back too -->
+            <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="WelcomeDlg"  Order="3">1</Publish>
+        </UI>
     </Product>
 </Wix>
