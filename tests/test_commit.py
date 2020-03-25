@@ -8,6 +8,7 @@ import pytest
 
 import pygit2
 
+from sno.commit import FALLBACK_EDITOR
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 
@@ -204,7 +205,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage, 
         r = cli_runner.invoke(["commit"])
         assert r.exit_code == 0, r
         editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
-        assert re.match(rf"nano '?{re.escape(editmsg_path)}'?$", editor_cmd)
+        assert re.match(rf'{FALLBACK_EDITOR} "?{re.escape(editmsg_path)}"?$', editor_cmd)
         assert editor_in == (
             "\n"
             "# Please enter the commit message for your changes. Lines starting\n"
@@ -228,7 +229,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage, 
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == 0, r
         editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
-        assert re.match(rf"/path/to/some/editor -abc '?{re.escape(editmsg_path)}'?$", editor_cmd)
+        assert re.match(rf'/path/to/some/editor -abc "?{re.escape(editmsg_path)}"?$', editor_cmd)
         assert editor_in == (
             "\n"
             "# Please enter the commit message for your changes. Lines starting\n"
