@@ -15,14 +15,25 @@ GPKG_IMPORTS = (
         pytest.param(
             "gpkg-polygons", "nz-waca-adjustments.gpkg", "POLYGONS", id="polygons-pk",
         ),
-    ]
+    ],
 )
 
 
 @pytest.mark.slow
 @pytest.mark.e2e
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner, geopackage, insert, request):
+def test_e2e(
+    archive,
+    gpkg,
+    table_ref,
+    data_archive,
+    tmp_path,
+    chdir,
+    cli_runner,
+    geopackage,
+    insert,
+    request,
+):
     table = getattr(H, f"{table_ref}_LAYER")
     row_count = getattr(H, f"{table_ref}_ROWCOUNT")
 
@@ -55,7 +66,7 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
             # checkout a working copy
             r = cli_runner.invoke(["checkout"])
             assert r.exit_code == 0
-            working_copy = (repo_path / "myproject.gpkg")
+            working_copy = repo_path / "myproject.gpkg"
             assert working_copy.exists()
 
             # check we have the right data in the WC
@@ -75,7 +86,7 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
             insert(db, commit=False)
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0
-            assert re.match(fr'\+\+\+ {table}:\w+=\d+$', r.stdout.splitlines()[0])
+            assert re.match(fr"\+\+\+ {table}:\w+=\d+$", r.stdout.splitlines()[0])
 
             # commit it
             r = cli_runner.invoke(["commit", "-m", "commit-1"])
@@ -95,8 +106,8 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
             # merge it
             r = cli_runner.invoke(["merge", "edit-1", "--no-ff"])
             assert r.exit_code == 0
-            assert 'Fast-forward' not in r.stdout
-            sha_merge1 = r.stdout.splitlines()[-2].split(': ')[1]
+            assert "Fast-forward" not in r.stdout
+            sha_merge1 = r.stdout.splitlines()[-2].split(": ")[1]
             print("Merge SHA:", sha_merge1)
 
             H.git_graph(request, "post edit-1 merge", count=10)
@@ -108,4 +119,7 @@ def test_e2e(archive, gpkg, table_ref, data_archive, tmp_path, chdir, cli_runner
             # push
             r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
             assert r.exit_code == 0
-            assert re.match(r"Branch '?master'? set up to track remote branch '?master'? from '?myremote'?\.$", r.stdout.splitlines()[0])
+            assert re.match(
+                r"Branch '?master'? set up to track remote branch '?master'? from '?myremote'?\.$",
+                r.stdout.splitlines()[0],
+            )

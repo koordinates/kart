@@ -4,7 +4,7 @@ import pygit2
 from click import ClickException
 
 
-def walk_tree(top, path='', topdown=True):
+def walk_tree(top, path="", topdown=True):
     """
     Corollary of os.walk() for git Tree objects:
 
@@ -41,7 +41,7 @@ def walk_tree(top, path='', topdown=True):
     blob_names = []
 
     for entry in top:
-        is_tree = (entry.type == pygit2.GIT_OBJ_TREE)
+        is_tree = entry.type == pygit2.GIT_OBJ_TREE
 
         if is_tree:
             subtree_names.append(entry.name)
@@ -53,13 +53,13 @@ def walk_tree(top, path='', topdown=True):
     if topdown:
         yield top, path, subtree_names, blob_names
         for name in subtree_names:
-            subtree_path = '/'.join([path, name]) if path else name
-            subtree = (top / name)
+            subtree_path = "/".join([path, name]) if path else name
+            subtree = top / name
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
     else:
         for name in subtree_names:
-            subtree_path = '/'.join([path, name]) if path else name
-            subtree = (top / name)
+            subtree_path = "/".join([path, name]) if path else name
+            subtree = top / name
             yield from walk_tree(subtree, subtree_path, topdown=topdown)
         yield top, path, subtree_names, blob_names
 
@@ -80,23 +80,23 @@ def check_git_user(repo=None):
             cfg = {}
 
     try:
-        user_email = cfg['user.email']
-        user_name = cfg['user.name']
+        user_email = cfg["user.email"]
+        user_name = cfg["user.name"]
         if user_email and user_name:
             return (user_email, user_name)
     except KeyError:
         pass
 
     msg = [
-        'Please tell me who you are.',
-        '\nRun',
+        "Please tell me who you are.",
+        "\nRun",
         '\n  git config --global user.email "you@example.com"',
         '  git config --global user.name "Your Name"',
-        '\nto set your account\'s default identity.',
+        "\nto set your account's default identity.",
     ]
     if repo:
-        msg.append('Omit --global to set the identity only in this repository.')
+        msg.append("Omit --global to set the identity only in this repository.")
 
-    msg.append('\n(sno uses the same credentials and configuration as git)')
+    msg.append("\n(sno uses the same credentials and configuration as git)")
 
     raise ClickException("\n".join(msg))

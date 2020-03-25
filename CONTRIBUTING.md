@@ -79,3 +79,12 @@ Sno v0.3.1.dev0, Copyright (c) Sno Contributors
 Continuous integration builds apps, tests, and installers for every commit on supported platforms. Artifacts are published to Github Actions, including vendor library bundles, test results, and unsigned installers.
 
 To only run CI for a particular platform (ie. when debugging CI), add `[ci only posix]` (for macOS + Linux) or `[ci only windows]` to commit messages.
+
+## Code formatting
+
+We use [Black](https://github.com/psf/black) to ensure consistent code formatting. We recommend integrating black with your editor:
+
+* Sublime Text: install [sublack](https://packagecontrol.io/packages/sublack) via Package Control
+* VSCode [instructions](https://code.visualstudio.com/docs/python/editing#_formatting)
+
+We use the default settings, and target python 3.7+.

@@ -43,19 +43,22 @@ def pytest_addoption(parser):
 @pytest.fixture(scope="session")
 def monkeypatch_session(request):
     from _pytest.monkeypatch import MonkeyPatch
+
     mpatch = MonkeyPatch()
     yield mpatch
     mpatch.undo()
 
 
-@pytest.fixture(scope='session', autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 def git_user_config(monkeypatch_session, tmp_path_factory, request):
-    home = tmp_path_factory.mktemp('home')
+    home = tmp_path_factory.mktemp("home")
 
     # override libgit2's search paths
-    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_SYSTEM, '')
-    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_XDG, '')
-    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(home))
+    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_SYSTEM, "")
+    pygit2.option(pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_XDG, "")
+    pygit2.option(
+        pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, str(home)
+    )
 
     # setup environment variables in case we call 'git' commands
     monkeypatch_session.delenv("XDG_CONFIG_HOME", raising=False)
@@ -63,10 +66,10 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
     monkeypatch_session.setenv("GIT_ATTR_NOSYSTEM", "1")
     monkeypatch_session.setenv("GIT_CONFIG_NOSYSTEM", "1")
 
-    USER_NAME = 'Sno Tester'
-    USER_EMAIL = 'sno-tester@example.com'
+    USER_NAME = "Sno Tester"
+    USER_EMAIL = "sno-tester@example.com"
 
-    with open(home / '.gitconfig', 'w') as f:
+    with open(home / ".gitconfig", "w") as f:
         f.write(f"[user]\n\tname = {USER_NAME}\n\temail = {USER_EMAIL}\n")
 
     L.debug("Temporary HOME for git config: %s", home)
@@ -75,8 +78,8 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
         pygit2.Config.get_system_config()
 
     global_cfg = pygit2.Config.get_global_config()
-    assert global_cfg['user.email'] == USER_EMAIL
-    assert global_cfg['user.name'] == USER_NAME
+    assert global_cfg["user.email"] == USER_EMAIL
+    assert global_cfg["user.name"] == USER_NAME
 
     return (USER_EMAIL, USER_NAME, home)
 
@@ -163,6 +166,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
     from sno.structure import RepositoryStructure
+
     incr = 0
 
     @contextlib.contextmanager
@@ -180,17 +184,18 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 if force_new:
                     L.info("force_new is set, deleting existing WC: %s", wc_path)
                     del rs.working_copy
-                    assert not hasattr(rs, '_working_copy')
+                    assert not hasattr(rs, "_working_copy")
                     del wc_path
 
             if not rs.working_copy:
-                wc_path = tmp_path_factory.mktemp(request.node.name, str(incr)) / f"{name}.gpkg"
+                wc_path = (
+                    tmp_path_factory.mktemp(request.node.name, str(incr))
+                    / f"{name}.gpkg"
+                )
                 incr += 1
 
                 L.info("Checking out to %s", wc_path)
-                r = cli_runner.invoke(
-                    ["checkout", f"--path={wc_path}"]
-                )
+                r = cli_runner.invoke(["checkout", f"--path={wc_path}"])
                 assert r.exit_code == 0, r
                 L.debug("Checkout result: %s", r)
 
@@ -212,7 +217,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
     Returns the path to the repository path
     """
-    L = logging.getLogger('data_imported')
+    L = logging.getLogger("data_imported")
     incr = 0
 
     def _data_imported(archive, source_gpkg, table, version):
@@ -232,9 +237,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
             import_path.mkdir()
             with chdir(import_path):
-                r = cli_runner.invoke(
-                    ["init"]
-                )
+                r = cli_runner.invoke(["init"])
                 assert r.exit_code == 0, r
 
                 repo = pygit2.Repository(str(import_path))
@@ -244,7 +247,12 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 del repo
 
                 r = cli_runner.invoke(
-                    ["import", f"GPKG:{data / source_gpkg}:{table}", f"--version={version}", "mytable"]
+                    [
+                        "import",
+                        f"GPKG:{data / source_gpkg}:{table}",
+                        f"--version={version}",
+                        "mytable",
+                    ]
                 )
                 assert r.exit_code == 0, r
 
@@ -408,10 +416,13 @@ class TestHelpers:
         Get the last change time from the GeoPackage DB.
         This is the same as the commit time.
         """
-        return db.cursor().execute(
-            f"SELECT last_change FROM gpkg_contents WHERE table_name=?;",
-            [table],
-        ).fetchone()[0]
+        return (
+            db.cursor()
+            .execute(
+                f"SELECT last_change FROM gpkg_contents WHERE table_name=?;", [table],
+            )
+            .fetchone()[0]
+        )
 
     @classmethod
     def row_count(cls, db, table):
@@ -422,12 +433,14 @@ class TestHelpers:
         """ Delete any existing working copy & associated config """
         repo = pygit2.Repository(repo_path)
         if "sno.workingcopy.path" in repo.config:
-            print(f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}")
-            working_copy = Path(repo.config['sno.workingcopy.path'])
+            print(
+                f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}"
+            )
+            working_copy = Path(repo.config["sno.workingcopy.path"])
             if working_copy.exists():
                 working_copy.unlink()
-            del repo.config['sno.workingcopy.path']
-            del repo.config['sno.workingcopy.version']
+            del repo.config["sno.workingcopy.path"]
+            del repo.config["sno.workingcopy.version"]
 
     @classmethod
     def db_table_hash(cls, db, table, pk=None):
@@ -474,7 +487,7 @@ class TestHelpers:
     def parameter_ids(cls, request):
         """ Get an array of parameter IDs """
         # nodeid = 'test_import_feature_performance[0.2.0-spec-counties-table]'
-        param_ids = re.match(r'.*\[(.+)\]$', request.node.nodeid).group(1).split('-')
+        param_ids = re.match(r".*\[(.+)\]$", request.node.nodeid).group(1).split("-")
         return tuple(param_ids)
 
     @classmethod
@@ -483,18 +496,21 @@ class TestHelpers:
         dbcur = db.cursor()
         r = dbcur.execute(
             """SELECT column_name FROM "gpkg_geometry_columns" WHERE table_name=?;""",
-            [table]
+            [table],
         ).fetchone()
         geom_col = r[0] if r else None
 
-        gpkg_extent = tuple(dbcur.execute(
-            """SELECT min_x,min_y,max_x,max_y FROM "gpkg_contents" WHERE table_name=?;""",
-            [table]
-        ).fetchone())
+        gpkg_extent = tuple(
+            dbcur.execute(
+                """SELECT min_x,min_y,max_x,max_y FROM "gpkg_contents" WHERE table_name=?;""",
+                [table],
+            ).fetchone()
+        )
 
         if geom_col:
-            layer_extent = tuple(dbcur.execute(
-                f"""
+            layer_extent = tuple(
+                dbcur.execute(
+                    f"""
                 WITH _E AS (
                     SELECT extent("{geom_col}") AS extent
                     FROM "{table}"
@@ -506,7 +522,8 @@ class TestHelpers:
                     ST_MaxY(extent)
                 FROM _E
                 """
-            ).fetchone())
+                ).fetchone()
+            )
             assert gpkg_extent == pytest.approx(layer_extent)
         else:
             assert gpkg_extent == (None, None, None, None)
@@ -522,10 +539,14 @@ def insert(request, cli_runner):
 
         if layer is None:
             # autodetect
-            layer = db.cursor().execute(
-                "SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?,?) LIMIT 1",
-                [H.POINTS_LAYER, H.POLYGONS_LAYER, H.TABLE_LAYER],
-            ).fetchone()[0]
+            layer = (
+                db.cursor()
+                .execute(
+                    "SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?,?) LIMIT 1",
+                    [H.POINTS_LAYER, H.POLYGONS_LAYER, H.TABLE_LAYER],
+                )
+                .fetchone()[0]
+            )
 
         if layer == H.POINTS_LAYER:
             rec = H.POINTS_RECORD.copy()

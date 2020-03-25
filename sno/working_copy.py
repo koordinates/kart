@@ -19,11 +19,11 @@ class WorkingCopy:
     def open(cls, repo):
         repo_cfg = repo.config
         if "sno.workingcopy.version" in repo_cfg:
-            version = repo_cfg['sno.workingcopy.version']
-            if repo_cfg.get_int('sno.workingcopy.version') != 1:
+            version = repo_cfg["sno.workingcopy.version"]
+            if repo_cfg.get_int("sno.workingcopy.version") != 1:
                 raise NotImplementedError(f"Working copy version: {version}")
 
-            path = repo_cfg['sno.workingcopy.path']
+            path = repo_cfg["sno.workingcopy.path"]
             if not (Path(repo.path) / path).is_file():
                 raise FileNotFoundError(f"Working copy missing? {path}")
 
@@ -88,7 +88,7 @@ class WorkingCopyGPKG(WorkingCopy):
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.session")
 
-        if hasattr(self, '_db'):
+        if hasattr(self, "_db"):
             # inner - reuse
             L.debug(f"session(bulk={bulk}): existing...")
             with self._db:
@@ -96,9 +96,7 @@ class WorkingCopyGPKG(WorkingCopy):
             L.debug(f"session(bulk={bulk}): existing/done")
         else:
             L.debug(f"session(bulk={bulk}): new...")
-            self._db = gpkg.db(
-                self.full_path,
-            )
+            self._db = gpkg.db(self.full_path,)
             dbcur = self._db.cursor()
 
             if bulk:
@@ -120,13 +118,20 @@ class WorkingCopyGPKG(WorkingCopy):
                 raise
             finally:
                 if bulk:
-                    L.debug("Disabling bulk %s mode (Journal: %s; Locking: %s)", bulk, orig_journal, orig_locking)
+                    L.debug(
+                        "Disabling bulk %s mode (Journal: %s; Locking: %s)",
+                        bulk,
+                        orig_journal,
+                        orig_locking,
+                    )
                     dbcur.execute("PRAGMA synchronous = ON;")
                     dbcur.execute("PRAGMA cache_size = -2000;")  # default
 
                     if bulk >= 2:
                         dbcur.execute(f"PRAGMA locking_mode = {orig_locking};")
-                        dbcur.execute("SELECT name FROM sqlite_master LIMIT 1;")  # unlock
+                        dbcur.execute(
+                            "SELECT name FROM sqlite_master LIMIT 1;"
+                        )  # unlock
                         dbcur.execute(f"PRAGMA journal_mode = {orig_journal};")
 
                 del dbcur
@@ -171,11 +176,14 @@ class WorkingCopyGPKG(WorkingCopy):
             dbcur.execute(
                 "DELETE FROM gpkg_geometry_columns WHERE table_name='ogr_empty_table';"
             )
-            dbcur.execute("DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';")
+            dbcur.execute(
+                "DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';"
+            )
             dbcur.execute("DROP TABLE IF EXISTS ogr_empty_table;")
 
             # Create metadata tables
-            dbcur.execute("""
+            dbcur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS gpkg_metadata (
                     id INTEGER CONSTRAINT m_pk PRIMARY KEY ASC NOT NULL,
                     md_scope TEXT NOT NULL DEFAULT 'dataset',
@@ -183,8 +191,10 @@ class WorkingCopyGPKG(WorkingCopy):
                     mime_type TEXT NOT NULL DEFAULT 'text/xml',
                     metadata TEXT NOT NULL DEFAULT ''
                 );
-            """)
-            dbcur.execute("""
+            """
+            )
+            dbcur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS gpkg_metadata_reference (
                     reference_scope TEXT NOT NULL,
                     table_name TEXT,
@@ -196,21 +206,24 @@ class WorkingCopyGPKG(WorkingCopy):
                     CONSTRAINT crmr_mfi_fk FOREIGN KEY (md_file_id) REFERENCES gpkg_metadata(id),
                     CONSTRAINT crmr_mpi_fk FOREIGN KEY (md_parent_id) REFERENCES gpkg_metadata(id)
                 );
-            """)
+            """
+            )
 
-            dbcur.execute(f"""
+            dbcur.execute(
+                f"""
                 CREATE TABLE {self.META_TABLE} (
                     table_name TEXT NOT NULL,
                     key TEXT NOT NULL,
                     value TEXT NULL,
                     CONSTRAINT {self._meta_name('meta', 'pk')} PRIMARY KEY (table_name, key)
                 );
-            """)
+            """
+            )
 
     def write_meta(self, dataset):
         meta_info = dataset.get_meta_item("gpkg_contents")
-        meta_info['table_name'] = dataset.name
-        meta_info['identifier'] = f"{dataset.name}: {meta_info['identifier']}"
+        meta_info["table_name"] = dataset.name
+        meta_info["identifier"] = f"{dataset.name}: {meta_info['identifier']}"
 
         meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
         meta_srs = dataset.get_meta_item("gpkg_spatial_ref_sys")
@@ -260,7 +273,7 @@ class WorkingCopyGPKG(WorkingCopy):
             metadata_id_map = {}
             for o in meta_md:
                 params = dict(o.items())
-                params.pop('id')
+                params.pop("id")
 
                 keys, values = zip(*params.items())
                 sql = f"""
@@ -270,13 +283,13 @@ class WorkingCopyGPKG(WorkingCopy):
                         ({','.join(['?']*len(keys))});
                     """
                 dbcur.execute(sql, values)
-                metadata_id_map[o['id']] = db.last_insert_rowid()
+                metadata_id_map[o["id"]] = db.last_insert_rowid()
 
             for o in meta_md_ref:
                 params = dict(o.items())
-                params['md_file_id'] = metadata_id_map[o['md_file_id']]
-                params['md_parent_id'] = metadata_id_map.get(o['md_parent_id'], None)
-                params['table_name'] = dataset.name
+                params["md_file_id"] = metadata_id_map[o["md_file_id"]]
+                params["md_parent_id"] = metadata_id_map.get(o["md_parent_id"], None)
+                params["table_name"] = dataset.name
 
                 keys, values = zip(*params.items())
                 sql = f"""
@@ -293,8 +306,11 @@ class WorkingCopyGPKG(WorkingCopy):
 
     def save_config(self, **kwargs):
         new_path = Path(self.path)
-        if (not new_path.is_absolute()) and (str(new_path.parent) != '.'):
-            new_path = Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve())) / new_path.name
+        if (not new_path.is_absolute()) and (str(new_path.parent) != "."):
+            new_path = (
+                Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve()))
+                / new_path.name
+            )
 
         self.repo.config["sno.workingcopy.version"] = 1
         self.repo.config["sno.workingcopy.path"] = str(new_path)
@@ -318,7 +334,7 @@ class WorkingCopyGPKG(WorkingCopy):
         L.debug("Creating spatial index for %s.%s: %s", dataset.name, geom_col, sql)
         gdal_ds.ExecuteSQL(sql)
         del gdal_ds
-        L.info("Created spatial index in %ss", time.monotonic()-t0)
+        L.info("Created spatial index in %ss", time.monotonic() - t0)
 
     def _create_triggers(self, dbcur, table):
         raise NotImplementedError()
@@ -369,17 +385,18 @@ class WorkingCopyGPKG(WorkingCopy):
                         table_name=?;
                 """
 
-            dbcur.execute(sql, (
-                commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
-                table
-            ))
+            dbcur.execute(
+                sql,
+                (
+                    commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
+                    table,
+                ),
+            )
 
             rowcount = db.changes()
-            assert (
-                rowcount == 1
-            ), f"gpkg_contents update: expected 1Δ, got {rowcount}"
+            assert rowcount == 1, f"gpkg_contents update: expected 1Δ, got {rowcount}"
 
-    def get_db_tree(self, table_name='*'):
+    def get_db_tree(self, table_name="*"):
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(
@@ -388,7 +405,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     FROM {self.META_TABLE}
                     WHERE table_name=? AND key=?;
                 """,
-                (table_name, 'tree')
+                (table_name, "tree"),
             )
             row = dbcur.fetchone()
             if not row:
@@ -397,7 +414,7 @@ class WorkingCopyGPKG(WorkingCopy):
             wc_tree_id = row[0]
             return wc_tree_id
 
-    def assert_db_tree_match(self, tree, *, table_name='*'):
+    def assert_db_tree_match(self, tree, *, table_name="*"):
         wc_tree_id = self.get_db_tree(table_name)
         tree_sha = tree.hex
 
@@ -410,18 +427,21 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
     """
     GeoPackage Working Copy for v0.1/v0.2 repositories
     """
+
     def create(self):
         super().create()
 
         with self.session() as db:
             dbcur = db.cursor()
-            dbcur.execute(f"""
+            dbcur.execute(
+                f"""
                 CREATE TABLE {self.TRACKING_TABLE} (
                     table_name TEXT NOT NULL,
                     pk TEXT NULL,
                     CONSTRAINT {self._meta_name('track', 'pk')} PRIMARY KEY (table_name, pk)
                 );
-            """)
+            """
+            )
 
     def delete(self):
         super().delete()
@@ -503,10 +523,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 cols, pk_field = self._get_columns(dataset)
                 col_names = cols.keys()
                 col_specs = cols.values()
-                dbcur.execute(f"""
+                dbcur.execute(
+                    f"""
                     CREATE TABLE {gpkg.ident(table)}
                     ({', '.join(col_specs)});
-                """)
+                """
+                )
 
                 L.info("Creating features...")
                 sql_insert_features = f"""
@@ -527,11 +549,17 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     nc = feat_count / CHUNK_SIZE
                     if nc % 5 == 0 or not nc.is_integer():
                         t0a = time.monotonic()
-                        L.info("%s features... @%.1fs (+%.1fs, ~%d F/s)", feat_count, t0a-t0, t0a-t0p, (CHUNK_SIZE*5)/(t0a-t0p or 0.001))
+                        L.info(
+                            "%s features... @%.1fs (+%.1fs, ~%d F/s)",
+                            feat_count,
+                            t0a - t0,
+                            t0a - t0p,
+                            (CHUNK_SIZE * 5) / (t0a - t0p or 0.001),
+                        )
                         t0p = t0a
 
                 t1 = time.monotonic()
-                L.info("Added %d features to GPKG in %.1fs", feat_count, t1-t0)
+                L.info("Added %d features to GPKG in %.1fs", feat_count, t1 - t0)
                 L.info("Overall rate: %d features/s", (feat_count / (t1 - t0 or 0.001)))
 
         for dataset in datasets:
@@ -550,7 +578,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             dbcur.execute(
                 f"INSERT OR REPLACE INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
-                ('*', 'tree', commit.peel(pygit2.Tree).hex),
+                ("*", "tree", commit.peel(pygit2.Tree).hex),
             )
 
     def write_features(self, dbcur, dataset, pk_iter, *, ignore_missing=False):
@@ -566,7 +594,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         feat_count = 0
         CHUNK_SIZE = 10000
-        for rows in self._chunk(dataset.get_feature_tuples(pk_iter, col_names, ignore_missing=ignore_missing), CHUNK_SIZE):
+        for rows in self._chunk(
+            dataset.get_feature_tuples(
+                pk_iter, col_names, ignore_missing=ignore_missing
+            ),
+            CHUNK_SIZE,
+        ):
             dbcur.executemany(sql_write_feature, rows)
             feat_count += dbcur.getconnection().changes()
 
@@ -600,7 +633,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             table = dataset.name
 
             meta_diff = {}
-            meta_old = dict(dataset.iter_meta_items(exclude={'fields', 'primary_key'}))
+            meta_old = dict(dataset.iter_meta_items(exclude={"fields", "primary_key"}))
             meta_new = dict(self.read_meta(dataset))
             for name in set(meta_new.keys()) ^ set(meta_old.keys()):
                 v_old = meta_old.get(name)
@@ -629,7 +662,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             candidates_del = collections.defaultdict(list)
             for row in dbcur:
                 track_pk = row[0]
-                db_obj = {k: row[k] for k in row.keys() if k != '.__track_pk'}
+                db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
                 try:
                     _, repo_obj = dataset.get_feature(track_pk, ogr_geoms=False)
@@ -689,12 +722,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 )
 
             elif action == "TREE":
-                new_tree = kwargs['tree']
+                new_tree = kwargs["tree"]
                 print(f"Tree sha: {new_tree}")
 
                 dbcur.execute(
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
-                    (str(new_tree),)
+                    (str(new_tree),),
                 )
                 assert (
                     db.changes() == 1
@@ -703,7 +736,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             else:
                 raise NotImplementedError(f"Unexpected action: {action}")
 
-    def reset(self, commit, repo_structure, *, force=False, paths=None, update_meta=True):
+    def reset(
+        self, commit, repo_structure, *, force=False, paths=None, update_meta=True
+    ):
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
         L.debug("c=%s update-meta=%s", str(commit.id), update_meta)
 
@@ -716,7 +751,11 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
 
             if base_tree_id != repo_tree_id:
-                L.debug("Working Copy DB is tree:%s, Repo HEAD has tree:%s", base_tree_id, repo_tree_id)
+                L.debug(
+                    "Working Copy DB is tree:%s, Repo HEAD has tree:%s",
+                    base_tree_id,
+                    repo_tree_id,
+                )
 
             # check for dirty working copy
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
@@ -731,8 +770,16 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             if paths:
                 for path in paths:
-                    src_datasets = {ds.name: ds for ds in src_datasets.values() if os.path.commonpath([ds.path, path]) == path}
-                    dest_datasets = {ds.name: ds for ds in dest_datasets.values() if os.path.commonpath([ds.path, path]) == path}
+                    src_datasets = {
+                        ds.name: ds
+                        for ds in src_datasets.values()
+                        if os.path.commonpath([ds.path, path]) == path
+                    }
+                    dest_datasets = {
+                        ds.name: ds
+                        for ds in dest_datasets.values()
+                        if os.path.commonpath([ds.path, path]) == path
+                    }
 
             ds_names = set(src_datasets.keys()) | set(dest_datasets.keys())
             L.debug("Datasets: %s", ds_names)
@@ -775,11 +822,24 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             pk_list = [r[0] for r in dbcur]
                             track_count = db.changes()
                             count = self.delete_features(dbcur, src_ds, pk_list)
-                            L.debug("reset(): dirty: removed %s features, tracking Δ count=%s", count, track_count)
-                            count = self.write_features(dbcur, src_ds, pk_list, ignore_missing=True)
-                            L.debug("reset(): dirty: wrote %s features, tracking Δ count=%s", count, track_count)
+                            L.debug(
+                                "reset(): dirty: removed %s features, tracking Δ count=%s",
+                                count,
+                                track_count,
+                            )
+                            count = self.write_features(
+                                dbcur, src_ds, pk_list, ignore_missing=True
+                            )
+                            L.debug(
+                                "reset(): dirty: wrote %s features, tracking Δ count=%s",
+                                count,
+                                track_count,
+                            )
 
-                            dbcur.execute(f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,))
+                            dbcur.execute(
+                                f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
+                                (table,),
+                            )
 
                     if update_meta:
                         ctx = self._suspend_triggers(dbcur, table)
@@ -796,16 +856,30 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             # TODO: improve this by grouping by status then calling
                             # write_features/delete_features passing multiple PKs?
                             if d.status == pygit2.GIT_DELTA_DELETED:
-                                old_pk = src_ds.decode_pk(os.path.basename(d.old_file.path))
+                                old_pk = src_ds.decode_pk(
+                                    os.path.basename(d.old_file.path)
+                                )
                                 L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
                                 self.delete_features(dbcur, src_ds, [old_pk])
                             elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                                old_pk = src_ds.decode_pk(os.path.basename(d.old_file.path))
-                                new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
-                                L.debug("reset(): M %s (%s) -> %s (%s)", d.old_file.path, old_pk, d.new_file.path, new_pk)
+                                old_pk = src_ds.decode_pk(
+                                    os.path.basename(d.old_file.path)
+                                )
+                                new_pk = dest_ds.decode_pk(
+                                    os.path.basename(d.new_file.path)
+                                )
+                                L.debug(
+                                    "reset(): M %s (%s) -> %s (%s)",
+                                    d.old_file.path,
+                                    old_pk,
+                                    d.new_file.path,
+                                    new_pk,
+                                )
                                 self.write_features(dbcur, dest_ds, [new_pk])
                             elif d.status == pygit2.GIT_DELTA_ADDED:
-                                new_pk = dest_ds.decode_pk(os.path.basename(d.new_file.path))
+                                new_pk = dest_ds.decode_pk(
+                                    os.path.basename(d.new_file.path)
+                                )
                                 L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)
                                 self.write_features(dbcur, dest_ds, [new_pk])
                             else:
@@ -816,7 +890,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                                 # GIT_DELTA_UNMODIFIED
                                 # GIT_DELTA_UNREADABLE
                                 # GIT_DELTA_UNTRACKED
-                                raise NotImplementedError(f"Delta status: {d.status_char()}")
+                                raise NotImplementedError(
+                                    f"Delta status: {d.status_char()}"
+                                )
 
                     # Update gpkg_contents
                     commit_time = datetime.utcfromtimestamp(commit.commit_time)

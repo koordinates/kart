@@ -10,20 +10,19 @@ H = pytest.helpers.helpers()
 
 @pytest.mark.parametrize(
     "working_copy",
-    [
-        pytest.param(True, id="with-wc"),
-        pytest.param(False, id="without-wc"),
-    ],
+    [pytest.param(True, id="with-wc"), pytest.param(False, id="without-wc"),],
 )
 def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopackage):
     with data_archive("points") as remote_path:
         with chdir(tmp_path):
 
-            r = cli_runner.invoke([
-                "clone",
-                remote_path,
-                ("--checkout" if working_copy else "--no-checkout"),
-            ])
+            r = cli_runner.invoke(
+                [
+                    "clone",
+                    remote_path,
+                    ("--checkout" if working_copy else "--no-checkout"),
+                ]
+            )
 
             repo_path = tmp_path / "points"
             assert repo_path.is_dir()
@@ -31,7 +30,7 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
         r = subprocess.check_output(
             ["git", "-C", str(repo_path), "config", "--local", "--list"]
         )
-        print("git config file:", r.decode('utf-8').splitlines())
+        print("git config file:", r.decode("utf-8").splitlines())
 
         repo = pygit2.Repository(str(repo_path))
         assert repo.is_bare
@@ -48,7 +47,7 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
         assert remote.url == str(remote_path)
         assert remote.fetch_refspecs == ["+refs/heads/*:refs/remotes/origin/*"]
 
-        wc = (repo_path / f"{repo_path.stem}.gpkg")
+        wc = repo_path / f"{repo_path.stem}.gpkg"
         if working_copy:
             assert wc.exists() and wc.is_file()
 
@@ -126,9 +125,10 @@ def test_pull(
     request,
     chdir,
 ):
-    with data_working_copy("points") as (path1, wc1), data_working_copy(
-        "points"
-    ) as (path2, wc2):
+    with data_working_copy("points") as (path1, wc1), data_working_copy("points") as (
+        path2,
+        wc2,
+    ):
         with chdir(path1):
             subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
             r = cli_runner.invoke(["remote", "add", "origin", tmp_path])

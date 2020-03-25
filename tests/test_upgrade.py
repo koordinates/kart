@@ -15,11 +15,13 @@ H = pytest.helpers.helpers()
 )
 def test_upgrade(archive, layer, data_archive, cli_runner, tmp_path, chdir):
     with data_archive(archive) as source_path:
-        r = cli_runner.invoke(["upgrade", "00-02", source_path, tmp_path / 'dest', layer])
+        r = cli_runner.invoke(
+            ["upgrade", "00-02", source_path, tmp_path / "dest", layer]
+        )
         assert r.exit_code == 0, r
         assert r.stdout.splitlines()[-1] == "Upgrade complete"
 
-    with chdir(tmp_path / 'dest'):
+    with chdir(tmp_path / "dest"):
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r
 
@@ -42,4 +44,7 @@ def test_upgrade(archive, layer, data_archive, cli_runner, tmp_path, chdir):
 def test_upgrade_list(cli_runner):
     r = cli_runner.invoke(["upgrade"])
     assert r.exit_code == 0, r
-    assert r.stdout.splitlines()[-1] == "  00-02  Upgrade a v0.0/v0.1 Snowdrop repository to Sno v0.2"
+    assert (
+        r.stdout.splitlines()[-1]
+        == "  00-02  Upgrade a v0.0/v0.1 Snowdrop repository to Sno v0.2"
+    )

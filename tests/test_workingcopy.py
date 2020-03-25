@@ -50,9 +50,13 @@ def test_checkout_workingcopy(
 
         head_tree = repo.head.peel(pygit2.Tree)
 
-        wc_tree_id = db.cursor().execute(
-            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
-        ).fetchone()[0]
+        wc_tree_id = (
+            db.cursor()
+            .execute(
+                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+            )
+            .fetchone()[0]
+        )
         assert wc_tree_id == head_tree.hex
 
         wc = WorkingCopy.open(repo)
@@ -405,9 +409,7 @@ def test_working_copy_reset(
                 print(
                     "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
                 )
-            cur.execute(
-                f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk]
-            )
+            cur.execute(f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk])
             if cur.fetchone()[0] != 4:
                 print("E: Deleted rows {pk_field}<{del_pk} still missing")
             cur.execute(
@@ -442,15 +444,17 @@ def test_geopackage_locking_edit(
         def _wrap(*args, **kwargs):
             nonlocal is_checked
             if not is_checked:
-                with pytest.raises(
-                    apsw.BusyError, match=r"database is locked"
-                ):
-                    db.cursor().execute("UPDATE gpkg_contents SET table_name=table_name;")
+                with pytest.raises(apsw.BusyError, match=r"database is locked"):
+                    db.cursor().execute(
+                        "UPDATE gpkg_contents SET table_name=table_name;"
+                    )
                 is_checked = True
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(sno.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap)
+        monkeypatch.setattr(
+            sno.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap
+        )
 
         r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA])
         assert r.exit_code == 0, r
@@ -480,9 +484,7 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         new_path = Path("other-thingz.gpkg")
         wc.rename(new_path)
         assert new_path.exists()
-        r = cli_runner.invoke(
-            ["workingcopy-set-path", Path("../points") / new_path]
-        )
+        r = cli_runner.invoke(["workingcopy-set-path", Path("../points") / new_path])
         assert r.exit_code == 0, r
         wc = new_path
 
@@ -500,17 +502,10 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
 
 @pytest.mark.parametrize(
     "source",
-    [
-        pytest.param([], id="head"),
-        pytest.param(["-s", H.POINTS_HEAD_SHA], id="prev"),
-    ],
+    [pytest.param([], id="head"), pytest.param(["-s", H.POINTS_HEAD_SHA], id="prev"),],
 )
 @pytest.mark.parametrize(
-    "pathspec",
-    [
-        pytest.param([], id="all"),
-        pytest.param(["bob"], id="exclude"),
-    ],
+    "pathspec", [pytest.param([], id="all"), pytest.param(["bob"], id="exclude"),],
 )
 def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
     with data_working_copy("points", force_new=True) as (repo_dir, wc):
@@ -562,21 +557,42 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             )
             assert db.changes() == 1
 
-            changes_pre = [r[0] for r in cur.execute(
-                'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
-            )]
+            changes_pre = [
+                r[0]
+                for r in cur.execute(
+                    'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
+                )
+            ]
             # .sno-track stores pk as strings
-            assert changes_pre == ['1', '2', '3', '4', '10', '11', '12', '13', '14', '20', '9998', '9999']
+            assert changes_pre == [
+                "1",
+                "2",
+                "3",
+                "4",
+                "10",
+                "11",
+                "12",
+                "13",
+                "14",
+                "20",
+                "9998",
+                "9999",
+            ]
 
         # using `sno restore
         r = cli_runner.invoke(["restore"] + source + pathspec)
         assert r.exit_code == 0, r
 
-        changes_post = [r[0] for r in cur.execute(
-            'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
-        )]
+        changes_post = [
+            r[0]
+            for r in cur.execute(
+                'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
+            )
+        ]
 
-        cur.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
+        cur.execute(
+            f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';"""
+        )
         head_sha = cur.fetchone()[0]
 
         if pathspec:
@@ -589,7 +605,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             return
 
         if source:
-            assert changes_post == ['300', '30000']
+            assert changes_post == ["300", "30000"]
 
             if head_sha != H.POINTS_HEAD_SHA:
                 print(f"E: Bad Tree? {head_sha}")
@@ -604,7 +620,9 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         if head_sha != new_commit:
             print(f"E: Bad Tree? {head_sha}")
 
-        cur.execute(f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';""")
+        cur.execute(
+            f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';"""
+        )
         head_sha = cur.fetchone()[0]
         if head_sha != new_commit:
             print(f"E: Bad Tree? {head_sha}")
@@ -613,25 +631,18 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=?;", [rec[pk_field]]
         )
         if cur.fetchone():
-            print(
-                "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
-            )
-        cur.execute(
-            f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk]
-        )
+            print("E: Newly inserted row is still there ({pk_field}={rec[pk_field]})")
+        cur.execute(f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < ?;", [del_pk])
         if cur.fetchone()[0] != 4:
             print("E: Deleted rows {pk_field}<{del_pk} still missing")
         cur.execute(
-            f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;",
-            [upd_field_value],
+            f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;", [upd_field_value],
         )
         if cur.fetchone()[0] != 0:
             print("E: Updated rows not reset")
         cur.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
         if cur.fetchone():
-            print(
-                "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
-            )
+            print("E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)")
         cur.execute(
             f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = ?;", [id_chg_pk]
         )

@@ -16,9 +16,10 @@ from .structure import RepositoryStructure
 from .cli_util import MutexOption
 
 if is_windows:
-    FALLBACK_EDITOR = 'notepad.exe'
+    FALLBACK_EDITOR = "notepad.exe"
 else:
-    FALLBACK_EDITOR = 'nano'
+    FALLBACK_EDITOR = "nano"
+
 
 @click.command()
 @click.pass_context
@@ -34,7 +35,7 @@ else:
     "message_file",
     "--file",
     "-F",
-    type=click.File(encoding='utf-8'),
+    type=click.File(encoding="utf-8"),
     help="Take the commit message from the given file. Use `-` to read the message from the standard input.",
     cls=MutexOption,
     exclusive_with=["message"],
@@ -115,7 +116,7 @@ def get_commit_message(repo, wc_changes):
     ]
 
     commit_editmsg = str(Path(repo.path) / "COMMIT_EDITMSG")
-    with open(commit_editmsg, "wt+", encoding='utf-8') as f:
+    with open(commit_editmsg, "wt+", encoding="utf-8") as f:
         f.write("\n".join(initial_message) + "\n")
         f.flush()
 
@@ -133,7 +134,7 @@ def get_commit_message(repo, wc_changes):
             f"There was a problem with the editor '{editor}': {e}"
         ) from e
 
-    with open(commit_editmsg, "rt", encoding='utf-8') as f:
+    with open(commit_editmsg, "rt", encoding="utf-8") as f:
         f.seek(0)
         message = f.read()
 

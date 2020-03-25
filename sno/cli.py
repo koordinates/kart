@@ -11,7 +11,19 @@ import pygit2
 
 from . import is_windows
 from . import core  # noqa
-from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query, upgrade
+from . import (
+    checkout,
+    clone,
+    commit,
+    diff,
+    init,
+    fsck,
+    merge,
+    pull,
+    status,
+    query,
+    upgrade,
+)
 from .context import Context
 
 
@@ -24,31 +36,39 @@ def print_version(ctx, param, value):
     import rtree
 
     import sno
-    with open(os.path.join(os.path.split(sno.__file__)[0], 'VERSION')) as version_file:
+
+    with open(os.path.join(os.path.split(sno.__file__)[0], "VERSION")) as version_file:
         version = version_file.read().strip()
 
     click.echo(f"Sno v{version}, Copyright (c) Sno Contributors")
 
-    git_version = subprocess.check_output(["git", "--version"]).decode('ascii').strip().split()[-1]
+    git_version = (
+        subprocess.check_output(["git", "--version"])
+        .decode("ascii")
+        .strip()
+        .split()[-1]
+    )
 
-    sidx_version = rtree.index.__c_api_version__.decode('ascii')
+    sidx_version = rtree.index.__c_api_version__.decode("ascii")
 
-    db = apsw.Connection(':memory:')
+    db = apsw.Connection(":memory:")
     dbcur = db.cursor()
     db.enableloadextension(True)
     dbcur.execute("SELECT load_extension(?)", (sno.spatialite_path,))
     spatialite_version = dbcur.execute("SELECT spatialite_version();").fetchone()[0]
 
-    click.echo((
-        f"» GDAL v{osgeo._gdal.__version__}\n"
-        f"» PyGit2 v{pygit2.__version__}; "
-        f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
-        f"Git v{git_version}\n"
-        f"» APSW v{apsw.apswversion()}; "
-        f"SQLite v{apsw.sqlitelibversion()}; "
-        f"SpatiaLite v{spatialite_version}\n"
-        f"» SpatialIndex v{sidx_version}"
-    ))
+    click.echo(
+        (
+            f"» GDAL v{osgeo._gdal.__version__}\n"
+            f"» PyGit2 v{pygit2.__version__}; "
+            f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
+            f"Git v{git_version}\n"
+            f"» APSW v{apsw.apswversion()}; "
+            f"SQLite v{apsw.sqlitelibversion()}; "
+            f"SpatiaLite v{spatialite_version}\n"
+            f"» SpatialIndex v{sidx_version}"
+        )
+    )
 
     ctx.exit()
 
@@ -70,7 +90,7 @@ def print_version(ctx, param, value):
     is_eager=True,
     help="Show version information and exit.",
 )
-@click.option('-v', '--verbose', count=True, help="Repeat for more verbosity")
+@click.option("-v", "--verbose", count=True, help="Repeat for more verbosity")
 @click.pass_context
 def cli(ctx, repo_dir, verbose):
     ctx.ensure_object(Context)
@@ -179,10 +199,12 @@ def branch(ctx, args):
     # git's branch protection behaviour doesn't apply if it's a bare repository
     # attempt to apply it here.
     sargs = set(args)
-    if sargs & {'-d', '--delete', '-D'}:
+    if sargs & {"-d", "--delete", "-D"}:
         branch = repo.head.shorthand
         if branch in sargs:
-            raise click.ClickException(f"Cannot delete the branch '{branch}' which you are currently on.")
+            raise click.ClickException(
+                f"Cannot delete the branch '{branch}' which you are currently on."
+            )
 
     _execvp("git", ["git", "-C", str(repo_path), "branch"] + list(args))
 

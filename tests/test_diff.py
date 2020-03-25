@@ -1320,14 +1320,7 @@ def test_diff_rev_rev(data_archive, cli_runner):
         )
         for spec in R_SPECS:
             print(f"rev: {spec}")
-            r = cli_runner.invoke(
-                [
-                    "diff",
-                    "--exit-code",
-                    "--json",
-                    spec,
-                ]
-            )
+            r = cli_runner.invoke(["diff", "--exit-code", "--json", spec,])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1"]
             assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
