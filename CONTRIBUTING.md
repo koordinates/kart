@@ -35,3 +35,13 @@ Sno v0.2.1.dev0
 GDAL v3.0.3
 PyGit2 v0.28.2; Libgit2 v0.28.2
 ```
+
+
+## Code formatting
+
+We use [Black](https://github.com/psf/black) to ensure consistent code formatting. We recommend integrating black with your editor:
+
+* Sublime Text: install [sublack](https://packagecontrol.io/packages/sublack) via Package Control
+* VSCode [instructions](https://code.visualstudio.com/docs/python/editing#_formatting)
+
+We use the default settings, and target python 3.7+.
