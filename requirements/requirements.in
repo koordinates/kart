@@ -5,4 +5,3 @@ pygit2==1.1.0
 Rtree~=0.9.4
 apsw-wheels~=3.30.1.post3
 certifi
-arrow

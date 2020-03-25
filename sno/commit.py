@@ -1,10 +1,10 @@
-import arrow
 import json
 import os
 import re
 import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import click
@@ -104,6 +104,7 @@ def commit(ctx, message, message_file, allow_empty, is_output_json):
     new_commit = repo.head.peel(pygit2.Commit)
 
     branch = None if repo.head_is_detached else repo.branches[repo.head.shorthand].shorthand
+    commit_time = datetime.fromtimestamp(commit.commit_time, timezone.utc)
     jdict = {
         "sno.commit/v1": {
             "commit": new_commit.id.hex,
@@ -111,7 +112,7 @@ def commit(ctx, message, message_file, allow_empty, is_output_json):
             "branch": branch,
             "message": commit_msg,
             "changes": get_diff_status_json(wc_changes),
-            "commitTime": machine_iso8601(commit.commit_time),
+            "commitTime": to_short_iso8601(commit_time),
         }
     }
     if is_output_json:
@@ -176,15 +177,19 @@ def commit_output_to_text(jdict):
     commit = jdict["abbrevCommit"]
     message = jdict["message"].replace("\n", " ")
     diff = diff_status_to_text(jdict["changes"])
-    datetime = local_human_iso8601(jdict["commitTime"])
+    datetime = to_long_local_iso8601(from_short_iso8601(jdict["commitTime"]))
     return f"[{branch} {commit}] {message}\n{diff}\n  Date: {datetime}"
 
 
-def machine_iso8601(timestamp):
+def to_short_iso8601(datetime):
     """Returns a string like: 2020-03-26T09:10:11Z"""
-    return arrow.get(timestamp).to('utc').format("YYYY-MM-DDTHH:mm:ss[Z]")
+    return datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def local_human_iso8601(timestamp):
+def from_short_iso8601(s):
+    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+
+
+def to_long_local_iso8601(datetime):
     """Returns a string like: 2020-03-26 21:10:11 +12:00"""
-    return arrow.get(timestamp).to('local').format("YYYY-MM-DD HH:mm:ss Z")
+    return datetime.astimezone(None).strftime("%Y-%m-%d %H:%M:%S %z")
