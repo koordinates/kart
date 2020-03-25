@@ -64,11 +64,6 @@ vendor/build/
 
 .github/
 
-Brewfile.lock.json
-.venv.mk
-
-.buildkite/
-
 tests/
 
 platforms/windows/
