@@ -14,4 +14,3 @@ windows\dist\sno: ..\sno.spec
 
 windows\dist\$(MSI): windows\dist\sno windows\sno.wxs windows\*.ps1 windows\*.bmp windows\*.ico
 	powershell -NoLogo windows\BuildInstaller.ps1
-

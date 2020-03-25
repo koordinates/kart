@@ -56,6 +56,3 @@ add:
 - dump schema
 - dump gpkg_*
 - dump rows to features/*.json
-
-
-

@@ -22,7 +22,7 @@
                 <RegistryValue Id="Path" Root="HKMU" Key="Software\[Manufacturer]\[ProductName]" Name="Path" Value="[APPDIR]" Type="string" />
             </Component>
             <Component Id="CMP_EnvAddPath" Guid="{2a47b421-e16c-479d-b1cd-435ccde79585}">
-                <Environment Id="PathEnvVar" Name="PATH" Action="set" Part="last" Value="[APPDIR]"/>                                                 
+                <Environment Id="PathEnvVar" Name="PATH" Action="set" Part="last" Value="[APPDIR]"/>
             </Component>
        </Directory>
 

@@ -37,7 +37,7 @@ VSVersionInfo(
         StringStruct('OriginalFilename', 'sno.exe'),
         StringStruct('ProductName', 'Sno CLI'),
         StringStruct('ProductVersion', '%VERSION%')])
-      ]), 
+      ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
   ]
 )

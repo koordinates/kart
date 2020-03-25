@@ -188,4 +188,3 @@ test-bin-all: $(pyapp-Linux)
 
 .PHONY: test-all
 test-all: test-bin-all test-deb-all test-rpm-all
-
