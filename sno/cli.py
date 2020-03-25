@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import logging
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import certifi
 import click
 import pygit2
 
+from . import is_windows
 from . import core  # noqa
 from . import checkout, clone, commit, diff, init, fsck, merge, pull, status, query, upgrade
 from .context import Context
@@ -120,15 +121,18 @@ def reset(ctx):
 # straight process-replace commands
 
 
-def _execvp(file, args):
+def _execvp(cmd, args):
     if "_SNO_NO_EXEC" in os.environ:
         # used in testing. This is pretty hackzy
-        p = subprocess.run([file] + args[1:], capture_output=True, encoding="utf-8")
+        p = subprocess.run([cmd] + args[1:], capture_output=True, encoding="utf-8")
         sys.stdout.write(p.stdout)
         sys.stderr.write(p.stderr)
         sys.exit(p.returncode)
-    else:
-        os.execvp(file, args)
+    elif is_windows:
+        p = subprocess.run([cmd] + args[1:])
+        sys.exit(p.returncode)
+    else:  # Posix
+        os.execvp(cmd, args)
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
