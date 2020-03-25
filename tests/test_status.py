@@ -67,7 +67,7 @@ def test_status(
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
 
-        subprocess.run(["git", "init", "--bare", tmp_path], check=True)
+        subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r

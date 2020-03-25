@@ -10,6 +10,7 @@ import apsw
 import click
 import pygit2
 
+from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
 
@@ -72,7 +73,10 @@ class ImportPath(click.Path):
             self.fail(f'expecting a prefix (eg. "GPKG:my.gpkg")')
         prefix, value = value.split(":", 1)
 
-        if ":" not in value:
+        # need to deal with "GPKG:D:\foo\bar.gpkg:table"
+        search_from = 2 if is_windows else 0
+
+        if ":" not in value[search_from:]:
             if self.suffix_required:
                 self.fail(f'expecting a suffix (eg. "GPKG:my.gpkg:mytable")')
             else:
@@ -334,6 +338,8 @@ def import_table(ctx, source, directory, do_list, version, method):
         directory = os.path.relpath(directory, os.path.abspath(repo_path))
         if not directory:
             raise click.BadParameter("Invalid import directory", param_hint="directory")
+        if is_windows:
+            directory = directory.replace("\\", "/")  # git paths use / as a delimiter
     else:
         directory = source_table
 
@@ -347,11 +353,10 @@ def import_table(ctx, source, directory, do_list, version, method):
         importer.fast_import_table(repo, source_loader, **params)
 
     rs = structure.RepositoryStructure(repo)
-    wc = rs.working_copy
-    if wc:
+    if rs.working_copy:
         # Update working copy with new dataset
         dataset = rs[directory]
-        wc.write_full(rs.head_commit, dataset)
+        rs.working_copy.write_full(rs.head_commit, dataset)
 
 
 @click.command()

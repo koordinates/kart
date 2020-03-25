@@ -5,17 +5,23 @@ import platform
 import shutil
 import subprocess
 
-share_toc = Tree('vendor/dist/env/share', prefix='share')
-libexec_root = 'vendor/dist/env/libexec'
-
 with open(os.path.join('sno', 'VERSION')) as version_file:
     sno_version = version_file.read().strip()
+
+if platform.system() == "Windows":
+    with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
+        vr_doc = vr_template.read()
+        sno_version_parts = tuple([int(_v) for _v in sno_version.split('.')[:3]] + [0])
+        vr_doc = vr_doc.replace('%VERSION%', sno_version)
+        vr_doc = vr_doc.replace('%VERTUPLE%', str(sno_version_parts))
+
+        with open(os.path.join(workpath, 'sno_version_info.rc'), 'w', encoding='utf-8') as vr:
+            vr.write(vr_doc)
 
 a = Analysis(
     ['platforms/sno_cli.py'],
     pathex=[],
     binaries=[
-        ('vendor/dist/env/bin/git', '.'),
         ('vendor/dist/env/lib/*', '.'),
     ],
     datas=[
@@ -30,7 +36,9 @@ a = Analysis(
         # via a cython module ???
         'csv',
     ],
-    hookspath=[],
+    hookspath=[
+        'platforms/pyi-hooks',
+    ],
     runtime_hooks=[],
     excludes=[],
     win_no_prefer_redirects=False,
@@ -38,20 +46,36 @@ a = Analysis(
     cipher=None,
     noarchive=False,
 )
-a.datas += share_toc
+
+if platform.system() == "Windows":
+    a.datas += Tree('vendor/dist/git', prefix='git')
+else:
+    a.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
+    libexec_root = 'vendor/dist/env/libexec'
+    a.datas += Tree('vendor/dist/env/share', prefix='share')
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+
+if platform.system() == "Windows":
+    exe_name = 'sno'
+    exe_icon = 'platforms/windows/sno.ico'
+else:
+    exe_name = 'sno_cli'
+    exe_icon = 'platforms/macos/sno.icns'
+
 exe = EXE(
     pyz,
     a.scripts,
     [],
     exclude_binaries=True,
-    name='sno_cli',
+    name=exe_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
     console=True,
+    icon=exe_icon,
+    version=os.path.join(workpath, 'sno_version_info.rc'),
 )
 coll = COLLECT(
     exe,

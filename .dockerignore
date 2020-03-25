@@ -64,17 +64,6 @@ vendor/build/
 
 .github/
 
-Brewfile.lock.json
-.venv.mk
-
-.buildkite/
-
-Dockerfile
-
-data/
-HomebrewFormula/
-gitea/
-
 tests/
 
 platforms/windows/

@@ -44,7 +44,7 @@ def test_e2e(
     remote_path.mkdir()
     with chdir(remote_path):
         # initialise empty repo for remote
-        subprocess.run(["git", "init", "--bare", remote_path], check=True)
+        subprocess.run(["git", "init", "--bare", str(remote_path)], check=True)
 
     with data_archive(archive) as data:
         with chdir(repo_path):

@@ -31,11 +31,8 @@ vendor/wheelhouse/
 vendor/dist/
 vendor/build/
 
-/platforms/windows/
-/platforms/macos/build/
-/platforms/macos/dist/
-/platforms/linux/build/
-/platforms/linux/dist/
+/platforms/*/build/
+/platforms/*/dist/
 /platforms/linux/.cache/
 /platforms/linux/.docker-sno-fpm
 /platforms/linux/sqlite3
@@ -48,5 +45,5 @@ pytest.xml
 /.pytest*
 /dist
 /build
-Brewfile.lock.json
-.venv.mk
+*.code-workspace
+.vscode/

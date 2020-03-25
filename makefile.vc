@@ -1,0 +1,74 @@
+PATH=$(MAKEDIR)\venv\Scripts;$(PATH);C:\Program Files\7-zip;
+
+!IFNDEF PY3
+PY3=%LOCALAPPDATA%\Programs\Python\Python37\python.exe
+!ENDIF
+
+app=venv\Lib\site-packages\sno.egg-link
+
+# default target
+all: $(app)
+
+clean:
+	-del /Q venv\*.installed
+	-rmdir /Q /S venv\lib
+	-rmdir /Q /S venv\
+	-rmdir /Q /S platforms\windows\dist\
+
+cleaner: clean
+	(cd vendor\ && $(MAKE) /NoLogo /F makefile.vc clean)
+	-rmdir /Q /S platforms\windows\build\
+
+cleanest: cleaner
+	(cd vendor\ && $(MAKE) /NoLogo /F makefile.vc cleaner)
+
+venv:
+	$(PY3) -m venv $@
+
+# Dependencies
+
+vendor\dist:
+	(cd vendor\ && $(MAKE) /NoLogo /F makefile.vc)
+
+venv\.requirements.installed: venv vendor\dist
+	FOR %%F in (vendor\dist\wheelhouse\*.whl) DO pip install --no-deps %F
+	pip install --no-deps -r requirements.txt
+	copy /Y vendor\dist\env\lib\* venv
+	echo "">$@
+
+venv\.dev.installed: venv\.requirements.installed
+	pip install --no-deps -r requirements\dev.txt
+	echo "">$@
+
+venv\.test.installed: venv\.requirements.installed
+	pip install --no-deps -r requirements\test.txt
+	echo "">$@
+
+venv\.tools.installed: venv
+	pip install \
+		pyinstaller==3.6.* \
+		pypiwin32
+	echo "">$@
+
+# App
+
+$(app): venv\.requirements.installed
+	pip install -e .
+
+app: $(app)
+
+test: $(app) venv\.test.installed
+	pytest -v --cov-report term --cov-report html:coverage
+
+ci-test:
+	pytest \
+		--verbose \
+		-p no:sugar \
+		--cov-report term \
+		--cov-report html:test-results\coverage/ \
+		--junit-xml=test-results\junit.xml
+
+# Packaging
+
+package: $(app) venv\.tools.installed
+	(cd platforms\ && $(MAKE) /NoLogo /F makefile.vc)

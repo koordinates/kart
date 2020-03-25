@@ -32,4 +32,3 @@ COPY sno/ /src/sno/
 RUN --mount=type=cache,target=/root/.cache \
     pip install --no-deps . \
     && sno --version
-

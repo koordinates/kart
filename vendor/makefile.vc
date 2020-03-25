@@ -1,0 +1,185 @@
+PATH=$(MAKEDIR)\env\Scripts;$(PATH);C:\Program Files\7-zip;
+
+GIT_VER=2.25.1
+LIBGIT_REF=v0.99.0
+PYGIT2_REF=ccf4df153c68d4af7d3d0f4f4f9104afc6f38d43
+PYGIT2_VER=1.1.0
+
+# ==================================================================
+_PS=powershell.exe -NoLogo -Command
+_PSDL=$(_PS) "&{$$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -ErrorAction:Stop
+_PSDLE=}"
+
+# we use `pwsh` because of https://github.com/actions/virtual-environments/issues/225
+# but we don't seem to need it on normal windows installs
+!IFNDEF PWSH
+PWSH=powershell.exe
+!ENDIF
+
+CFLAGS=-O2
+CXXFLAGS=-O2
+
+_ARCHIVE=dist/vendor-Windows.zip
+
+!IFNDEF PY3
+PY3=%LOCALAPPDATA%\Programs\Python\Python37\python.exe
+!ENDIF
+
+# default target
+all: $(_ARCHIVE)
+
+clean:
+	-rmdir /Q /S dist env
+	-rmdir /Q /S libgit2\build libgit2\env
+	-rmdir /Q /S pygit2\src\build pygit2\src\dist
+
+cleaner: clean
+	-rmdir /Q /S pygit2\src libgit2\src
+	-del git\MinGit.zip
+	-del spatialite\mod_spatialite.7z
+	-del libgit2\libgit2.zip
+	-del pygit2\pygit2.zip
+	-rmdir /Q /S wheelhouse
+
+env:
+	$(PY3) -m venv $@
+	.\env\Scripts\pip install \
+		pipwin \
+		wheel
+
+# Git
+GIT_URL="https://github.com/git-for-windows/git/releases/download/v$(GIT_VER).windows.1/MinGit-$(GIT_VER)-busybox-64-bit.zip"
+git=dist\git
+
+git\MinGit.zip:
+	$(_PSDL) -Uri $(GIT_URL) -OutFile $@ $(_PSDLE)
+
+$(git): git\MinGit.zip
+	if not exist dist mkdir dist
+	7z x %s -o$@
+
+git: $(git)
+
+# Spatialite
+
+SPATIALITE_URL = 'http://www.gaia-gis.it/gaia-sins/windows-bin-NEXTGEN-amd64/mod_spatialite-NG-win-amd64.7z'
+spatialite=dist\env\lib
+
+spatialite\mod_spatialite.7z:
+	$(_PSDL) -Uri $(SPATIALITE_URL) -OutFile $@ $(_PSDLE)
+
+$(spatialite): spatialite\mod_spatialite.7z
+	if not exist dist\env\lib mkdir dist\env\lib
+	7z e -aoa -y -o.\dist\env\lib\ %s
+	-rmdir /Q dist\env\lib\mod_spatialite-NG-win-amd64
+
+spatialite: $(spatialite)
+
+# MS VC++ Redist
+vcredist=dist\Microsoft_VC141_CRT_x64.msm
+# override via /DMSVCREDIST={source-path}
+MSVCREDIST=$(VCTOOLSREDISTDIR)\MergeModules
+
+$(vcredist):
+	if not exist dist mkdir dist
+	copy /Y "$(MSVCREDIST)\$(@F)" $@
+
+vcredist: $(vcredist)
+
+PIPWIN_CACHE=$(USERPROFILE)\.pipwin
+$(PIPWIN_CACHE): windows-reqs.txt
+	pipwin refresh
+
+# Python wheels
+pipwin-wheels: env windows-reqs.txt $(PIPWIN_CACHE)
+	-rmdir /Q /S wheelhouse
+	mkdir wheelhouse
+	pipwin download -d "wheelhouse" -r windows-reqs.txt
+	dir wheelhouse\ | find "whl"
+	7z t wheelhouse\*.whl
+
+wheelhouse:
+# we use `pwsh` because of https://github.com/actions/virtual-environments/issues/225
+	if not exist wheelhouse mkdir wheelhouse
+	$(PWSH) ./<<tmpDownloadWheels.ps1
+$$ErrorActionPreference = 'stop'
+$$ProgressPreference='SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
+
+$$H=(Get-FileHash -Algorithm SHA1 .\windows-reqs.txt).Hash
+Write-Output ">>> windows-reqs.txt hash is $$H ..."
+$$F="sno-windows-vendor-wheels-$${H}.zip"
+
+$$URL="https://s3-us-west-1.amazonaws.com/build-artifacts.sno.earth/vendor/windows-wheels/$$F"
+Write-Output ">>> Downloading $$URL ..."
+Invoke-WebRequest -ErrorAction:Stop -Uri "$$URL" -OutFile "wheelhouse\$$F"
+
+Write-Output ">>> Expanding $$F ..."
+& 7z x "wheelhouse\$$F" -owheelhouse -aoa
+<<NOKEEP
+	dir wheelhouse\ | find "whl"
+	7z t wheelhouse\*.whl
+
+wheels: wheelhouse
+	if not exist dist\wheelhouse mkdir dist\wheelhouse
+	copy /Y wheelhouse\*.whl dist\wheelhouse
+
+# Libgit2
+LIBGIT2_URL="https://github.com/libgit2/libgit2/archive/$(LIBGIT_REF).zip"
+libgit2_src=libgit2\src
+libgit2=libgit2\env\bin\git2.dll
+
+libgit2\libgit2.zip:
+	$(_PSDL) -Uri $(LIBGIT2_URL) -OutFile $@ $(_PSDLE)
+
+$(libgit2_src): libgit2\libgit2.zip
+	if exist $@~ rmdir /S /Q $@~
+	7z x %s -o$@~
+	move /Y $@~\libgit2-* $@
+# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
+#	rmdir /Q /S $@~
+
+$(libgit2): $(libgit2_src)
+	cmake -S .\libgit2\src -B .\libgit2\build \
+		-G "Visual Studio 15 2017 Win64" \
+		-DCMAKE_INSTALL_PREFIX=$(MAKEDIR)\libgit2\env \
+		-DBUILD_EXAMPLES=NO \
+		-DBUILD_CLAR=NO \
+		-DUSE_SSH=NO
+	cmake \
+		--build .\libgit2\build \
+		--config RelWithDebInfo
+	cmake \
+		--install .\libgit2\build \
+		--config RelWithDebInfo
+
+libgit2: $(libgit2)
+
+# Pygit2
+PYGIT2_URL="https://github.com/libgit2/pygit2/archive/$(PYGIT2_REF).zip"
+pygit2_src=pygit2\src
+pygit2=dist\wheelhouse\pygit2-$(PYGIT2_VER)-cp37-cp37m-win_amd64.whl
+
+pygit2\pygit2.zip:
+	$(_PSDL) -Uri $(PYGIT2_URL) -OutFile $@ $(_PSDLE)
+
+$(pygit2_src): pygit2\pygit2.zip
+	if exist $@~ rmdir /S /Q $@~
+	7z x %s -o$@~
+	move /Y $@~\pygit2-* $@
+# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
+#	rmdir /Q /S $@~
+
+$(pygit2): env $(pygit2_src) $(libgit2)
+	set LIBGIT2=$(MAKEDIR)\libgit2\env
+	if not exist dist\wheelhouse mkdir dist\wheelhouse
+	(cd pygit2\src && $(MAKEDIR)\env\Scripts\python setup.py bdist_wheel -d $(MAKEDIR)\dist\wheelhouse)
+
+pygit2: $(pygit2)
+
+# Archive
+$(_ARCHIVE): $(pygit2) wheels $(git) $(spatialite) $(vcredist)
+	if exist $@ del $@
+	7z a $@ .\dist\*
+
+archive: $(_ARCHIVE)

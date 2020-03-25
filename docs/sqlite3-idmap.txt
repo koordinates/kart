@@ -72,4 +72,4 @@ feature 125 was edited  (att=c -> ccc)
 feature fid=1 was added (fid= -> 1; att= -> dd)
 feature 127 was edited  (fid=7 -> 9)
 
-### Comparing working copies to 
+### Comparing working copies to

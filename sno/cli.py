@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 import logging
 import os
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 import certifi
 import click
 import pygit2
 
+from . import is_windows
 from . import core  # noqa
 from . import (
     checkout,
@@ -58,14 +59,14 @@ def print_version(ctx, param, value):
 
     click.echo(
         (
-            f"≫ GDAL v{osgeo._gdal.__version__}\n"
-            f"≫ PyGit2 v{pygit2.__version__}; "
+            f"» GDAL v{osgeo._gdal.__version__}\n"
+            f"» PyGit2 v{pygit2.__version__}; "
             f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
             f"Git v{git_version}\n"
-            f"≫ APSW v{apsw.apswversion()}; "
+            f"» APSW v{apsw.apswversion()}; "
             f"SQLite v{apsw.sqlitelibversion()}; "
             f"SpatiaLite v{spatialite_version}\n"
-            f"≫ SpatialIndex v{sidx_version}"
+            f"» SpatialIndex v{sidx_version}"
         )
     )
 
@@ -140,15 +141,18 @@ def reset(ctx):
 # straight process-replace commands
 
 
-def _execvp(file, args):
+def _execvp(cmd, args):
     if "_SNO_NO_EXEC" in os.environ:
         # used in testing. This is pretty hackzy
-        p = subprocess.run([file] + args[1:], capture_output=True, encoding="utf-8")
+        p = subprocess.run([cmd] + args[1:], capture_output=True, encoding="utf-8")
         sys.stdout.write(p.stdout)
         sys.stderr.write(p.stderr)
         sys.exit(p.returncode)
-    else:
-        os.execvp(file, args)
+    elif is_windows:
+        p = subprocess.run([cmd] + args[1:])
+        sys.exit(p.returncode)
+    else:  # Posix
+        os.execvp(cmd, args)
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -159,7 +163,7 @@ def log(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "log"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "log"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -170,7 +174,7 @@ def push(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "push"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "push"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -181,7 +185,7 @@ def fetch(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "fetch"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "fetch"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -202,7 +206,7 @@ def branch(ctx, args):
                 f"Cannot delete the branch '{branch}' which you are currently on."
             )
 
-    _execvp("git", ["git", "-C", repo_path, "branch"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "branch"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -213,7 +217,7 @@ def remote(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "remote"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "remote"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -224,7 +228,7 @@ def tag(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", repo_path, "tag"] + list(args))
+    _execvp("git", ["git", "-C", str(repo_path), "tag"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -235,7 +239,7 @@ def config(ctx, args):
     repo_path = ctx.obj.repo_path
     params = ["git", "config"]
     if ctx.obj.has_repo_path:
-        params[1:1] = ["-C", repo_path]
+        params[1:1] = ["-C", str(repo_path)]
     _execvp("git", params + list(args))
 
 

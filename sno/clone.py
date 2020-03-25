@@ -38,7 +38,7 @@ def clone(ctx, do_checkout, url, directory):
             "--config",
             "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
             url,
-            repo_path.resolve(),
+            str(repo_path.resolve()),
         ]
     )
 
