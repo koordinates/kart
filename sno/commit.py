@@ -1,5 +1,4 @@
-import contextlib
-import logging
+import arrow
 import json
 import os
 import re
@@ -13,33 +12,10 @@ import pygit2
 
 from .core import check_git_user
 from .diff import Diff
-from .status import get_branch_status_message, get_diff_status_message
+from .status import get_branch_status_message, get_diff_status_message, get_diff_status_json, diff_status_to_text
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
 from .cli_util import MutexOption
-
-
-@contextlib.contextmanager
-def _info_to_stdout(logger):
-    old_effective_level = logger.getEffectiveLevel()
-    old_level = logger.level
-
-    def log_at_root(r):
-        return r.name != logger.name or r.levelno >= old_effective_level
-
-    def log_to_stdout(r):
-        return r.name == logger.name and r.levelno == logging.INFO
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.addFilter(log_to_stdout)
-
-    logger.root.handlers[0].addFilter(log_at_root)
-    logger.setLevel(logging.INFO)
-    logger.addHandler(handler)
-    yield logger
-    logger.removeHandler(handler)
-    logger.setLevel(old_level)
-    logger.root.handlers[0].removeFilter(log_at_root)
 
 
 @click.command()
@@ -119,31 +95,32 @@ def commit(ctx, message, message_file, allow_empty, is_output_json):
     elif message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     else:
-        commit_msg = get_commit_message(repo, wc_changes)
+        commit_msg = get_commit_message(repo, wc_changes, quiet=is_output_json)
 
     if not commit_msg:
         raise click.Abort()
 
-    log_tweak = contextlib.nullcontext()
-    if not is_output_json:
-        log_tweak = _info_to_stdout(logging.getLogger("sno.structure"))
+    rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
+    new_commit = repo.head.peel(pygit2.Commit)
 
-    with log_tweak:
-        new_commit = rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
-
+    branch = None if repo.head_is_detached else repo.branches[repo.head.shorthand].shorthand
+    jdict = {
+        "sno.commit/v1": {
+            "commit": new_commit.id.hex,
+            "abbrevCommit": new_commit.short_id,
+            "branch": branch,
+            "message": commit_msg,
+            "changes": get_diff_status_json(wc_changes),
+            "commitTime": machine_iso8601(commit.commit_time),
+        }
+    }
     if is_output_json:
-        json.dump(
-            {
-                "sno.commit/v1": {
-                    "commit": str(new_commit),
-                    "tree": str(repo.head.peel(pygit2.Tree).id)
-                }
-            },
-            sys.stdout,
-            indent=2)
+        json.dump(jdict, sys.stdout, indent=2)
+    else:
+        click.echo(commit_output_to_text(jdict))
 
 
-def get_commit_message(repo, wc_changes):
+def get_commit_message(repo, wc_changes, quiet=False):
     """ Launches the system editor to get a commit message """
     editor = os.environ.get("GIT_EDITOR")
     if not editor:
@@ -173,7 +150,8 @@ def get_commit_message(repo, wc_changes):
         f.write("\n".join(initial_message) + "\n")
         f.flush()
 
-        click.echo("hint: Waiting for your editor to close the file...")
+        if not quiet:
+            click.echo("hint: Waiting for your editor to close the file...")
         try:
             subprocess.check_call(f"{editor} {shlex.quote(f.name)}", shell=True)
         except subprocess.CalledProcessError as e:
@@ -188,5 +166,25 @@ def get_commit_message(repo, wc_changes):
         # - whitespace at start/end
         # - comment lines
         # - blank lines surrounding comment lines
-        message = re.sub(r"^\n*#.*\n", "", message.strip(), flags=re.MULTILINE)
+        message = re.sub(r"^\n*#.*\n", "", message, flags=re.MULTILINE)
         return message.strip()
+
+
+def commit_output_to_text(jdict):
+    jdict = jdict["sno.commit/v1"]
+    branch = jdict["branch"]
+    commit = jdict["abbrevCommit"]
+    message = jdict["message"].replace("\n", " ")
+    diff = diff_status_to_text(jdict["changes"])
+    datetime = local_human_iso8601(jdict["commitTime"])
+    return f"[{branch} {commit}] {message}\n{diff}\n  Date: {datetime}"
+
+
+def machine_iso8601(timestamp):
+    """Returns a string like: 2020-03-26T09:10:11Z"""
+    return arrow.get(timestamp).to('utc').format("YYYY-MM-DDTHH:mm:ss[Z]")
+
+
+def local_human_iso8601(timestamp):
+    """Returns a string like: 2020-03-26 21:10:11 +12:00"""
+    return arrow.get(timestamp).to('local').format("YYYY-MM-DD HH:mm:ss Z")

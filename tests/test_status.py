@@ -19,10 +19,12 @@ def json_status(cli_runner):
     return json.loads(r.stdout)
 
 
-def get_commit(jdict):
+def get_commit_ids(jdict):
     commit = jdict["sno.status/v1"]["commit"]
-    assert commit
-    return commit
+    abbrev_commit = jdict["sno.status/v1"]["abbrevCommit"]
+    assert commit and abbrev_commit
+    assert commit.startswith(abbrev_commit)
+    return commit, abbrev_commit
 
 
 def test_status(
@@ -36,7 +38,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "commit": "2a1b7be",
+                "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
+                "abbrevCommit": "2a1b7be",
                 "branch": "master",
                 "upstream": None,
                 "workingCopy": {},
@@ -53,7 +56,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "commit": "63a9492",
+                "commit": "63a9492dd785b1f04dfc446330fa017f9459db4f",
+                "abbrevCommit": "63a9492",
                 "branch": None,
                 "upstream": None,
                 "workingCopy": {},
@@ -81,10 +85,11 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         jdict = json_status(cli_runner)
-        commit = get_commit(jdict)  # This varies from run to run.
+        commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
             "sno.status/v1": {
                 "commit": commit,
+                "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {
                     "branch": "myremote/master",
@@ -118,7 +123,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "commit": "2a1b7be",
+                "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
+                "abbrevCommit": "2a1b7be",
                 "branch": "master",
                 "upstream": {
                     "branch": "myremote/master",
@@ -143,10 +149,11 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         jdict = json_status(cli_runner)
-        commit = get_commit(jdict)  # This varies from run to run.
+        commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
             "sno.status/v1": {
                 "commit": commit,
+                "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {
                     "branch": "myremote/master",
@@ -170,10 +177,11 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         jdict = json_status(cli_runner)
-        commit = get_commit(jdict)  # This varies from run to run.
+        commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
             "sno.status/v1": {
                 "commit": commit,
+                "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {
                     "branch": "myremote/master",
@@ -206,10 +214,11 @@ def test_status(
         ]
 
         jdict = json_status(cli_runner)
-        commit = get_commit(jdict)  # This varies from run to run.
+        commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
             "sno.status/v1": {
                 "commit": commit,
+                "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {
                     "branch": "myremote/master",
@@ -245,9 +254,10 @@ def test_status_empty(tmp_path, cli_runner, chdir):
 
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "upstream": None,
                 "commit": None,
+                "abbrevCommit": None,
                 "branch": None,
+                "upstream": None,
                 "workingCopy": None
             }
         }
