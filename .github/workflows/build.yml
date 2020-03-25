@@ -387,4 +387,4 @@ jobs:
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & sno --version
-        # tests\scripts\e2e-1.sh
+          & tests\scripts\e2e-1.ps1
