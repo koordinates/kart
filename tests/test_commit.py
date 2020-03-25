@@ -1,12 +1,14 @@
+import os
+import re
 import shlex
 import subprocess
-import tempfile
 import time
 
 import pytest
 
 import pygit2
 
+from sno.commit import FALLBACK_EDITOR
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 
@@ -136,7 +138,9 @@ def test_tag(data_working_copy, cli_runner):
         assert ref.target.hex == H.POINTS_HEAD_SHA
 
 
-def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
+def test_commit_message(
+    data_working_copy, cli_runner, monkeypatch, geopackage, tmp_path
+):
     """ commit message handling """
     editor_in = None
     editor_out = None
@@ -147,7 +151,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
         editor_cmd = cmdline
         print("EDITOR", cmdline)
         editmsg_file = shlex.split(cmdline)[-1]
-        with open(editmsg_file, "r+") as ef:
+        with open(editmsg_file, "r+", encoding="utf-8") as ef:
             editor_in = ef.read()
             if editor_out:
                 ef.seek(0)
@@ -180,16 +184,19 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
         assert r.exit_code == 1, r
 
         # file
-        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8") as f:
+        f_commit_message = str(tmp_path / "commit-message.txt")
+        with open(f_commit_message, mode="w", encoding="utf8") as f:
             f.write("\ni am a message\n\n\n")
             f.flush()
 
-            r = cli_runner.invoke(["commit", "--allow-empty", "-F", f.name])
-            assert r.exit_code == 0, r
-            assert last_message() == "i am a message"
+        r = cli_runner.invoke(["commit", "--allow-empty", "-F", f_commit_message])
+        assert r.exit_code == 0, r
+        assert last_message() == "i am a message"
 
         # E: conflict
-        r = cli_runner.invoke(["commit", "--allow-empty", "-F", f.name, "-m", "foo"])
+        r = cli_runner.invoke(
+            ["commit", "--allow-empty", "-F", f_commit_message, "-m", "foo"]
+        )
         assert r.exit_code == 2, r
         assert "exclusive" in r.stdout
 
@@ -220,7 +227,10 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
         r = cli_runner.invoke(["commit"])
         assert r.exit_code == 0, r
-        assert editor_cmd == f"nano {repo_dir}/COMMIT_EDITMSG"
+        editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
+        assert re.match(
+            rf'{FALLBACK_EDITOR} "?{re.escape(editmsg_path)}"?$', editor_cmd
+        )
         assert editor_in == (
             "\n"
             "# Please enter the commit message for your changes. Lines starting\n"
@@ -243,7 +253,10 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
         editor_out = "sqwark 🐧\n"
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == 0, r
-        assert editor_cmd == f"/path/to/some/editor -abc {repo_dir}/COMMIT_EDITMSG"
+        editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
+        assert re.match(
+            rf'/path/to/some/editor -abc "?{re.escape(editmsg_path)}"?$', editor_cmd
+        )
         assert editor_in == (
             "\n"
             "# Please enter the commit message for your changes. Lines starting\n"

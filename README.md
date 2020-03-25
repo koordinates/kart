@@ -21,6 +21,10 @@ For Debian/Ubuntu-based distributions, download the .deb package from the [relea
 
 For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0) and install via `rpm -i sno-*.rpm`.
 
+### Windows
+
+Until the next release, Windows support is only available in development builds. Download the "Windows-msi" artifact from a [recent `master` Build](https://github.com/koordinates/sno/actions?query=branch%3Amaster+is%3Asuccess+workflow%3ABuild), unzip, and run the installer.
+
 ### Source
 
 For Sno development see the [Contributing Notes](CONTRIBUTING.md).

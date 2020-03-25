@@ -134,6 +134,8 @@ class WorkingCopyGPKG(WorkingCopy):
                         )  # unlock
                         dbcur.execute(f"PRAGMA journal_mode = {orig_journal};")
 
+                del dbcur
+                self._db.close()
                 del self._db
                 L.debug(f"session(bulk={bulk}): new/done")
 
@@ -552,13 +554,13 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             feat_count,
                             t0a - t0,
                             t0a - t0p,
-                            (CHUNK_SIZE * 5) / (t0a - t0p),
+                            (CHUNK_SIZE * 5) / (t0a - t0p or 0.001),
                         )
                         t0p = t0a
 
                 t1 = time.monotonic()
                 L.info("Added %d features to GPKG in %.1fs", feat_count, t1 - t0)
-                L.info("Overall rate: %d features/s", (feat_count / (t1 - t0)))
+                L.info("Overall rate: %d features/s", (feat_count / (t1 - t0 or 0.001)))
 
         for dataset in datasets:
             if dataset.has_geometry:

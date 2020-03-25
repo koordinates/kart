@@ -431,10 +431,6 @@ def test_import_existing_wc(
 ):
     """ Import a new dataset into a repo with an existing working copy. Dataset should get checked out """
     with data_working_copy("points") as (repo_path, wcdb):
-        repo = pygit2.Repository(str(repo_path))
-        db = geopackage(wcdb)
-        wc = WorkingCopy.open(repo)
-
         with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
             r = cli_runner.invoke(
                 [
@@ -443,6 +439,10 @@ def test_import_existing_wc(
                 ]
             )
             assert r.exit_code == 0, r
+
+        repo = pygit2.Repository(str(repo_path))
+        wc = WorkingCopy.open(repo)
+        db = geopackage(wcdb)
 
         assert H.row_count(db, "nz_waca_adjustments") > 0
 

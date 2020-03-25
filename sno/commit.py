@@ -7,12 +7,18 @@ from pathlib import Path
 import click
 import pygit2
 
+from . import is_windows
 from .core import check_git_user
 from .diff import Diff
 from .status import get_branch_status_message, get_diff_status_message
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
 from .cli_util import MutexOption
+
+if is_windows:
+    FALLBACK_EDITOR = "notepad.exe"
+else:
+    FALLBACK_EDITOR = "nano"
 
 
 @click.command()
@@ -29,7 +35,7 @@ from .cli_util import MutexOption
     "message_file",
     "--file",
     "-F",
-    type=click.File(),
+    type=click.File(encoding="utf-8"),
     help="Take the commit message from the given file. Use `-` to read the message from the standard input.",
     cls=MutexOption,
     exclusive_with=["message"],
@@ -89,7 +95,7 @@ def get_commit_message(repo, wc_changes):
     if not editor:
         editor = os.environ.get("VISUAL")
     if not editor:
-        editor = os.environ.get("EDITOR", "nano")
+        editor = os.environ.get("EDITOR", FALLBACK_EDITOR)
 
     initial_message = [
         "",
@@ -109,24 +115,32 @@ def get_commit_message(repo, wc_changes):
         "#",
     ]
 
-    with open(Path(repo.path) / "COMMIT_EDITMSG", "w+") as f:
+    commit_editmsg = str(Path(repo.path) / "COMMIT_EDITMSG")
+    with open(commit_editmsg, "wt+", encoding="utf-8") as f:
         f.write("\n".join(initial_message) + "\n")
         f.flush()
 
-        click.echo("hint: Waiting for your editor to close the file...")
-        try:
-            subprocess.check_call(f"{editor} {shlex.quote(f.name)}", shell=True)
-        except subprocess.CalledProcessError as e:
-            raise click.ClickException(
-                f"There was a problem with the editor '{editor}': {e}"
-            ) from e
+    click.echo("hint: Waiting for your editor to close the file...")
+    if is_windows:
+        # No shlex.quote() on windows
+        # " isn't legal in filenames
+        editor_cmd = f'{editor} "{commit_editmsg}"'
+    else:
+        editor_cmd = f"{editor} {shlex.quote(commit_editmsg)}"
+    try:
+        subprocess.check_call(editor_cmd, shell=True)
+    except subprocess.CalledProcessError as e:
+        raise click.ClickException(
+            f"There was a problem with the editor '{editor}': {e}"
+        ) from e
 
+    with open(commit_editmsg, "rt", encoding="utf-8") as f:
         f.seek(0)
         message = f.read()
 
-        # strip:
-        # - whitespace at start/end
-        # - comment lines
-        # - blank lines surrounding comment lines
-        message = re.sub(r"^\n*#.*\n", "", message.strip(), flags=re.MULTILINE)
-        return message.strip()
+    # strip:
+    # - whitespace at start/end
+    # - comment lines
+    # - blank lines surrounding comment lines
+    message = re.sub(r"^\n*#.*\n", "", message.strip(), flags=re.MULTILINE)
+    return message.strip()
