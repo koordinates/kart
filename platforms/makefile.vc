@@ -9,9 +9,9 @@ all: windows\dist\$(MSI)
 clean:
 	-rmdir /Q /S windows\build windows\dist
 
-windows\dist\sno:
+windows\dist\sno: ..\sno.spec
 	powershell -NoLogo windows\BuildPyApp.ps1
 
-windows\dist\$(MSI): windows\dist\sno
+windows\dist\$(MSI): windows\dist\sno windows\sno.wxs windows\*.ps1 windows\*.bmp windows\*.ico
 	powershell -NoLogo windows\BuildInstaller.ps1
 
