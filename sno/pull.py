@@ -39,10 +39,12 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     if repository is None:
         # matches git-pull behaviour
         if repo.head_is_detached:
-            raise click.UsageError((
-                "You are not currently on a branch. "
-                "Please specify which branch you want to merge with."
-            ))
+            raise click.UsageError(
+                (
+                    "You are not currently on a branch. "
+                    "Please specify which branch you want to merge with."
+                )
+            )
 
         # git-fetch:
         # When no remote is specified, by default the origin remote will be used,
@@ -53,10 +55,13 @@ def pull(ctx, ff, ff_only, repository, refspecs):
             repository = current_branch.upstream.remote_name
         else:
             try:
-                repository = repo.remotes['origin'].name
+                repository = repo.remotes["origin"].name
             except KeyError:
                 # git-pull seems to just exit 0 here...?
-                raise click.BadParameter("Please specify the remote you want to fetch from", param_hint="repository")
+                raise click.BadParameter(
+                    "Please specify the remote you want to fetch from",
+                    param_hint="repository",
+                )
 
     remote = repo.remotes[repository]
 
@@ -66,5 +71,5 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     # subprocess.check_call(["git", "-C", ctx.obj.repo_path, 'fetch', repository] + list(refspecs))
 
     # now merge with FETCH_HEAD
-    print("Running merge:", {'ff': ff, 'ff_only': ff_only, 'commit': "FETCH_HEAD"})
+    print("Running merge:", {"ff": ff, "ff_only": ff_only, "commit": "FETCH_HEAD"})
     ctx.invoke(merge.merge, ff=ff, ff_only=ff_only, commit="FETCH_HEAD")

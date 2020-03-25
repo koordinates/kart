@@ -24,7 +24,10 @@ def import_gpkg(ctx, geopackage, table, list_tables):
     Import a GeoPackage to a new repository (deprecated; use 'init')
     """
 
-    click.secho('"import-gpkg" is deprecated and will be removed in future, use "init" instead', fg='yellow')
+    click.secho(
+        '"import-gpkg" is deprecated and will be removed in future, use "init" instead',
+        fg="yellow",
+    )
 
     repo_path = ctx.obj.repo_path
 
@@ -37,7 +40,12 @@ def import_gpkg(ctx, geopackage, table, list_tables):
     if not list_tables and repo_path:
         repo_path.mkdir(exist_ok=True)
 
-    ctx.invoke(init, directory=str(repo_path), import_from=tuple(import_from), do_checkout=False)
+    ctx.invoke(
+        init,
+        directory=str(repo_path),
+        import_from=tuple(import_from),
+        do_checkout=False,
+    )
 
 
 class ImportPath(click.Path):
@@ -60,21 +68,23 @@ class ImportPath(click.Path):
         self.suffix_required = suffix_required
 
     def convert(self, value, param, ctx):
-        if ':' not in value:
+        if ":" not in value:
             self.fail(f'expecting a prefix (eg. "GPKG:my.gpkg")')
-        prefix, value = value.split(':', 1)
+        prefix, value = value.split(":", 1)
 
-        if ':' not in value:
+        if ":" not in value:
             if self.suffix_required:
                 self.fail(f'expecting a suffix (eg. "GPKG:my.gpkg:mytable")')
             else:
                 suffix = None
         else:
-            value, suffix = value.rsplit(':', 1)
+            value, suffix = value.rsplit(":", 1)
 
         prefix = prefix.upper()
         if prefix not in self.prefixes:
-            self.fail(f'invalid prefix: "{prefix}" (choose from {", ".join(self.prefixes)})')
+            self.fail(
+                f'invalid prefix: "{prefix}" (choose from {", ".join(self.prefixes)})'
+            )
 
         # resolve GPKG:~/foo.gpkg and GPKG:~me/foo.gpkg
         # usually this is handled by the shell, but the GPKG: prefix prevents that
@@ -87,6 +97,7 @@ class ImportPath(click.Path):
 
 class ImportGPKG:
     """ GeoPackage Import Source """
+
     def __init__(self, source, table=None):
         self.source = source
         self.table = table
@@ -106,7 +117,9 @@ class ImportGPKG:
             if not dbcur.execute(sql).fetchone():
                 raise ValueError("gpkg_contents table doesn't exist")
         except (ValueError, apsw.SQLError) as e:
-            raise ValueError(f"'{self.source}' doesn't appear to be a valid GeoPackage") from e
+            raise ValueError(
+                f"'{self.source}' doesn't appear to be a valid GeoPackage"
+            ) from e
 
         if self.table:
             sql = """
@@ -116,7 +129,9 @@ class ImportGPKG:
                     table_name=?
                     AND data_type IN ('features', 'attributes', 'aspatial');"""
             if not dbcur.execute(sql, (self.table,)).fetchone():
-                raise ValueError(f"Feature/Attributes table '{self.table}' not found in gpkg_contents")
+                raise ValueError(
+                    f"Feature/Attributes table '{self.table}' not found in gpkg_contents"
+                )
 
     def list_tables(self):
         db = gpkg.db(self.source)
@@ -167,10 +182,10 @@ class ImportGPKG:
     def field_cid_map(self):
         dbcur = self.db.cursor()
         q = dbcur.execute(f"PRAGMA table_info({gpkg.ident(self.table)});")
-        return {r['name']: r['cid'] for r in q}
+        return {r["name"]: r["cid"] for r in q}
 
     def iter_features_sorted(self, pk_callback, limit=None):
-        tbl_hash = hashlib.md5(self.table.encode('utf8')).hexdigest()
+        tbl_hash = hashlib.md5(self.table.encode("utf8")).hexdigest()
         tbl_name = f"_sno_{tbl_hash}"
         func_name = f"_sno_sk_{tbl_hash}"
 
@@ -178,12 +193,14 @@ class ImportGPKG:
         dbcur = self.db.cursor()
 
         t0 = time.monotonic()
-        dbcur.execute(f"""
+        dbcur.execute(
+            f"""
             CREATE TEMPORARY TABLE {tbl_name} (
                 sort TEXT PRIMARY KEY,
                 link INTEGER
             ) WITHOUT ROWID
-        """)
+        """
+        )
 
         sql = f"""
             INSERT INTO {tbl_name} (sort, link)
@@ -197,9 +214,11 @@ class ImportGPKG:
         dbcur.execute(sql)
         t1 = time.monotonic()
         click.echo(f"Build link/sort mapping table in {t1-t0:0.1f}s")
-        dbcur.execute(f"""
+        dbcur.execute(
+            f"""
             CREATE INDEX temp.{tbl_hash}_idxm ON {tbl_name}(sort,link);
-        """)
+        """
+        )
         t2 = time.monotonic()
         click.echo(f"Build pk/sort mapping index in {t2-t1:0.1f}s")
 
@@ -213,12 +232,14 @@ class ImportGPKG:
         # """)
         # print("\n".join("\t".join(str(f) for f in r) for r in dbcur.fetchall()))
 
-        dbcur.execute(f"""
+        dbcur.execute(
+            f"""
             SELECT {gpkg.ident(self.table)}.*
             FROM {tbl_name}
                 INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
             ORDER BY {tbl_name}.sort;
-        """)
+        """
+        )
         click.echo(f"Ran SELECT query in {time.monotonic()-t2:0.1f}s")
         return dbcur
 
@@ -231,16 +252,22 @@ class ImportGPKG:
         return gpkg.get_meta_info(self.db, layer=self.table, repo_version=repo_version)
 
 
-@click.command('import')
+@click.command("import")
 @click.pass_context
 @click.argument("source", type=ImportPath())
-@click.argument("directory", type=click.Path(file_okay=False, exists=False, resolve_path=True), required=False)
-@click.option("--list", "do_list", is_flag=True, help='List all tables present in the source path')
+@click.argument(
+    "directory",
+    type=click.Path(file_okay=False, exists=False, resolve_path=True),
+    required=False,
+)
+@click.option(
+    "--list", "do_list", is_flag=True, help="List all tables present in the source path"
+)
 @click.option(
     "--version",
     type=click.Choice(structure.DatasetStructure.version_numbers()),
     default=structure.DatasetStructure.version_numbers()[0],
-    hidden=True
+    hidden=True,
 )
 @click.option("--method", hidden=True)
 def import_table(ctx, source, directory, do_list, version, method):
@@ -262,10 +289,7 @@ def import_table(ctx, source, directory, do_list, version, method):
 
     source_prefix, source_path, source_table = source
     source_klass = globals()[f"Import{source_prefix}"]
-    source_loader = source_klass(
-        source=source_path,
-        table=source_table,
-    )
+    source_loader = source_klass(source=source_path, table=source_table,)
 
     try:
         source_loader.check()
@@ -285,18 +309,25 @@ def import_table(ctx, source, directory, do_list, version, method):
 
         if sys.stdout.isatty():
             t_choices = click.Choice(choices=available_tables.keys())
-            t_default = next(iter(available_tables)) if len(available_tables) == 1 else None
-            source_table = click.prompt('\nSelect a table to import', type=t_choices, show_choices=False, default=t_default)
+            t_default = (
+                next(iter(available_tables)) if len(available_tables) == 1 else None
+            )
+            source_table = click.prompt(
+                "\nSelect a table to import",
+                type=t_choices,
+                show_choices=False,
+                default=t_default,
+            )
 
             # re-init & re-check
-            source_loader = source_klass(
-                source=source_path,
-                table=source_table,
-            )
+            source_loader = source_klass(source=source_path, table=source_table,)
             source_loader.check()
 
     if not source_table:
-        click.secho(f'\nSpecify a table to import from via "{source_prefix}:{source_path}:MYTABLE"', fg='yellow')
+        click.secho(
+            f'\nSpecify a table to import from via "{source_prefix}:{source_path}:MYTABLE"',
+            fg="yellow",
+        )
         ctx.exit(1)
 
     if directory:
@@ -325,9 +356,22 @@ def import_table(ctx, source, directory, do_list, version, method):
 
 @click.command()
 @click.pass_context
-@click.option("--import", "import_from", type=ImportPath(), help='Import from data: "FORMAT:PATH:TABLE" eg. "GPKG:my.gpkg:my_table"')
-@click.option("--checkout/--no-checkout", "do_checkout", is_flag=True, default=True, help="Whether to checkout a working copy in the repository")
-@click.argument("directory", type=click.Path(writable=True, file_okay=False), required=False)
+@click.option(
+    "--import",
+    "import_from",
+    type=ImportPath(),
+    help='Import from data: "FORMAT:PATH:TABLE" eg. "GPKG:my.gpkg:my_table"',
+)
+@click.option(
+    "--checkout/--no-checkout",
+    "do_checkout",
+    is_flag=True,
+    default=True,
+    help="Whether to checkout a working copy in the repository",
+)
+@click.argument(
+    "directory", type=click.Path(writable=True, file_okay=False), required=False
+)
 def init(ctx, import_from, do_checkout, directory):
     """
     Initialise a new repository and optionally import data
@@ -343,10 +387,7 @@ def init(ctx, import_from, do_checkout, directory):
 
         import_prefix, import_path, import_table = import_from
         source_klass = globals()[f"Import{import_prefix}"]
-        source_loader = source_klass(
-            source=import_path,
-            table=import_table
-        )
+        source_loader = source_klass(source=import_path, table=import_table)
 
         try:
             source_loader.check()
@@ -363,16 +404,20 @@ def init(ctx, import_from, do_checkout, directory):
 
             if sys.stdout.isatty():
                 t_choices = click.Choice(choices=available_tables.keys())
-                import_table = click.prompt('Please select a table to import', type=t_choices, show_choices=False)
+                import_table = click.prompt(
+                    "Please select a table to import",
+                    type=t_choices,
+                    show_choices=False,
+                )
 
                 # re-init & re-check
-                source_loader = source_klass(
-                    source=import_path,
-                    table=import_table,
-                )
+                source_loader = source_klass(source=import_path, table=import_table,)
                 source_loader.check()
             else:
-                click.secho(f'\nSpecify a table to import from via "{import_prefix}:{import_path}:MYTABLE"', fg='yellow')
+                click.secho(
+                    f'\nSpecify a table to import from via "{import_prefix}:{import_path}:MYTABLE"',
+                    fg="yellow",
+                )
                 ctx.exit(1)
 
     if directory is None:
@@ -382,9 +427,7 @@ def init(ctx, import_from, do_checkout, directory):
 
     repo_path = Path(directory).resolve()
     if any(repo_path.iterdir()):
-        raise click.BadParameter(
-            f'"{repo_path}" isn\'t empty', param_hint="directory"
-        )
+        raise click.BadParameter(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
     # Create the repository
     repo = pygit2.init_repository(str(repo_path), bare=True)
@@ -397,7 +440,7 @@ def init(ctx, import_from, do_checkout, directory):
             # Checkout a working copy
             wc_path = repo_path / f"{repo_path.stem}.gpkg"
 
-            click.echo(f'Checkout {import_table} to {wc_path} as GPKG ...')
+            click.echo(f"Checkout {import_table} to {wc_path} as GPKG ...")
 
             checkout.checkout_new(
                 repo_structure=structure.RepositoryStructure(repo),
@@ -405,4 +448,6 @@ def init(ctx, import_from, do_checkout, directory):
                 commit=repo.head.peel(pygit2.Commit),
             )
     else:
-        click.echo(f"Created an empty repository at {repo_path} — import some data with `sno import`")
+        click.echo(
+            f"Created an empty repository at {repo_path} — import some data with `sno import`"
+        )
