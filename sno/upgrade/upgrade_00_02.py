@@ -14,9 +14,9 @@ from sno.structure import Dataset1
 
 
 @click.command()
-@click.argument('source', type=click.Path(exists=True, file_okay=False), required=True)
-@click.argument('dest', type=click.Path(exists=False, writable=True), required=True)
-@click.argument('layer', required=True)
+@click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
+@click.argument("dest", type=click.Path(exists=False, writable=True), required=True)
+@click.argument("layer", required=True)
 def upgrade(source, dest, layer):
     """
     Upgrade a v0.0/v0.1 Snowdrop repository to Sno v0.2
@@ -29,21 +29,30 @@ def upgrade(source, dest, layer):
 
     source_repo = pygit2.Repository(str(source))
     if not source_repo or not source_repo.is_bare:
-        raise click.BadParameter(f"'{source}': not an existing repository", param_hint="SOURCE")
+        raise click.BadParameter(
+            f"'{source}': not an existing repository", param_hint="SOURCE"
+        )
 
     try:
-        source_tree = (source_repo.head.peel(pygit2.Tree) / layer)
+        source_tree = source_repo.head.peel(pygit2.Tree) / layer
     except KeyError:
-        raise click.BadParameter(f"'{layer}' not found in source repository", param_hint="SOURCE")
+        raise click.BadParameter(
+            f"'{layer}' not found in source repository", param_hint="SOURCE"
+        )
 
     try:
-        version_data = json.loads((source_tree / 'meta' / 'version').data)
-        version = tuple([int(v) for v in version_data['version'].split('.')])
+        version_data = json.loads((source_tree / "meta" / "version").data)
+        version = tuple([int(v) for v in version_data["version"].split(".")])
     except Exception:
-        raise click.BadParameter("Error getting source repository version", param_hint="SOURCE")
+        raise click.BadParameter(
+            "Error getting source repository version", param_hint="SOURCE"
+        )
 
     if version >= (0, 2):
-        raise click.BadParameter(f"Expecting version <0.2, got {version_data['version']}", param_hint="SOURCE")
+        raise click.BadParameter(
+            f"Expecting version <0.2, got {version_data['version']}",
+            param_hint="SOURCE",
+        )
 
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
@@ -52,8 +61,7 @@ def upgrade(source, dest, layer):
 
     # walk _all_ references
     source_walker = source_repo.walk(
-        source_repo.head.target,
-        pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE
+        source_repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE
     )
     for ref in source_repo.listall_reference_objects():
         source_walker.push(ref.resolve().target)
@@ -67,15 +75,23 @@ def upgrade(source, dest, layer):
             try:
                 dest_parents.append(commit_map[parent_id.hex])
             except KeyError:
-                raise ValueError(f"Commit {i} ({source_commit.id}): Haven't seen parent ({parent_id})")
+                raise ValueError(
+                    f"Commit {i} ({source_commit.id}): Haven't seen parent ({parent_id})"
+                )
 
-        source_tree = (source_commit.peel(pygit2.Tree) / layer)
+        source_tree = source_commit.peel(pygit2.Tree) / layer
 
-        sqlite_table_info = json.loads((source_tree / 'meta' / 'sqlite_table_info').data.decode('utf8'))
-        field_cid_map = {r['name']: r['cid'] for r in sqlite_table_info}
+        sqlite_table_info = json.loads(
+            (source_tree / "meta" / "sqlite_table_info").data.decode("utf8")
+        )
+        field_cid_map = {r["name"]: r["cid"] for r in sqlite_table_info}
 
-        gpkg_geometry_columns = json.loads((source_tree / 'meta' / 'gpkg_geometry_columns').data.decode('utf8'))
-        geom_field = gpkg_geometry_columns['column_name'] if gpkg_geometry_columns else None
+        gpkg_geometry_columns = json.loads(
+            (source_tree / "meta" / "gpkg_geometry_columns").data.decode("utf8")
+        )
+        geom_field = (
+            gpkg_geometry_columns["column_name"] if gpkg_geometry_columns else None
+        )
 
         pk_field = None
         for field in sqlite_table_info:
@@ -84,7 +100,7 @@ def upgrade(source, dest, layer):
                 break
         else:
             if sqlite_table_info[0]["type"] == "INTEGER":
-                pk_field = sqlite_table_info[0]['name']
+                pk_field = sqlite_table_info[0]["name"]
             else:
                 raise ValueError("No primary key field found")
 
@@ -92,53 +108,64 @@ def upgrade(source, dest, layer):
             click.echo(f"  {layer}: Geometry={geom_field} PrimaryKey={pk_field}")
 
         dataset = Dataset1(None, layer)
-        version = json.dumps({"version": dataset.VERSION_IMPORT}).encode('utf8')
+        version = json.dumps({"version": dataset.VERSION_IMPORT}).encode("utf8")
 
         feature_count = 0
 
         index = pygit2.Index()
         for top_tree, top_path, subtree_names, blob_names in walk_tree(source_tree):
-            if top_path == 'meta':
+            if top_path == "meta":
                 # copy meta across as-is
                 for blob_name in blob_names:
-                    if blob_name == 'version':
+                    if blob_name == "version":
                         # except version which we update
                         dest_blob = dest_repo.create_blob(version)
 
                     else:
-                        source_blob = (top_tree / blob_name)
+                        source_blob = top_tree / blob_name
                         dest_blob = dest_repo.create_blob(source_blob.data)
 
-                    index.add(pygit2.IndexEntry(
-                        f'{layer}/.sno-table/{top_path}/{blob_name}',
-                        dest_blob,
-                        pygit2.GIT_FILEMODE_BLOB
-                    ))
+                    index.add(
+                        pygit2.IndexEntry(
+                            f"{layer}/.sno-table/{top_path}/{blob_name}",
+                            dest_blob,
+                            pygit2.GIT_FILEMODE_BLOB,
+                        )
+                    )
 
                 for col, cid in field_cid_map.items():
                     dest_blob = dest_repo.create_blob(json.dumps(cid))
-                    index.add(pygit2.IndexEntry(
-                        f'{layer}/.sno-table/meta/fields/{col}',
-                        dest_blob,
-                        pygit2.GIT_FILEMODE_BLOB
-                    ))
+                    index.add(
+                        pygit2.IndexEntry(
+                            f"{layer}/.sno-table/meta/fields/{col}",
+                            dest_blob,
+                            pygit2.GIT_FILEMODE_BLOB,
+                        )
+                    )
 
                 dest_blob = dest_repo.create_blob(json.dumps(pk_field))
-                index.add(pygit2.IndexEntry(
-                    f'{layer}/.sno-table/meta/primary_key',
-                    dest_blob,
-                    pygit2.GIT_FILEMODE_BLOB
-                ))
+                index.add(
+                    pygit2.IndexEntry(
+                        f"{layer}/.sno-table/meta/primary_key",
+                        dest_blob,
+                        pygit2.GIT_FILEMODE_BLOB,
+                    )
+                )
 
-            elif re.match(r'^features/[a-f0-9]{4}/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$', top_path):
+            elif re.match(
+                r"^features/[a-f0-9]{4}/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$",
+                top_path,
+            ):
                 # feature path
                 source_feature_dict = {}
                 for attr in blob_names:
-                    source_blob = (top_tree / attr)
+                    source_blob = top_tree / attr
                     if attr == geom_field:
                         source_feature_dict[attr] = source_blob.data
                     else:
-                        source_feature_dict[attr] = json.loads(source_blob.data.decode('utf8'))
+                        source_feature_dict[attr] = json.loads(
+                            source_blob.data.decode("utf8")
+                        )
 
                 dataset.write_feature(
                     source_feature_dict,
@@ -150,7 +177,7 @@ def upgrade(source, dest, layer):
                 )
                 feature_count += 1
 
-            elif top_path == '' or re.match(r'^features(/[a-f0-9]{4})?$', top_path):
+            elif top_path == "" or re.match(r"^features(/[a-f0-9]{4})?$", top_path):
                 pass
             else:
                 raise ValueError(f"Unexpected path: '{top_path}'")
@@ -168,7 +195,9 @@ def upgrade(source, dest, layer):
         commit_map[source_commit.hex] = dest_commit.hex
 
         commit_time = datetime.fromtimestamp(source_commit.commit_time)
-        click.echo(f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]} ({commit_time}; {source_commit.committer.name}; {feature_count} rows)")
+        click.echo(
+            f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]} ({commit_time}; {source_commit.committer.name}; {feature_count} rows)"
+        )
 
     click.echo(f"{i+1} commits processed.")
 
@@ -188,4 +217,4 @@ def upgrade(source, dest, layer):
     click.secho("\nCompacting repository ...", bold=True)
     subprocess.check_call(["git", "-C", str(dest), "gc"])
 
-    click.secho("\nUpgrade complete", fg='green', bold=True)
+    click.secho("\nUpgrade complete", fg="green", bold=True)

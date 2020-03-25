@@ -65,7 +65,7 @@ def get_branch_status_json(repo):
         output["upstream"] = {
             "branch": upstream.shorthand,
             "ahead": n_ahead,
-            "behind": n_behind
+            "behind": n_behind,
         }
     return output
 
@@ -101,7 +101,7 @@ def get_diff_status_json(wc_changes):
                     "modified": status["U"],
                     "new": status["I"],
                     "deleted": status["D"],
-                }
+                },
             }
     return result
 
@@ -165,10 +165,11 @@ def working_copy_status_to_text(jdict):
     if not jdict:
         return "Nothing to commit, working copy clean"
 
-    return ("Changes in working copy:\n"
-            '  (use "sno commit" to commit)\n'
-            '  (use "sno reset" to discard changes)\n\n'
-            + diff_status_to_text(jdict))
+    return (
+        "Changes in working copy:\n"
+        '  (use "sno commit" to commit)\n'
+        '  (use "sno reset" to discard changes)\n\n' + diff_status_to_text(jdict)
+    )
 
 
 def diff_status_to_text(jdict):

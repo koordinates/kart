@@ -91,11 +91,7 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {
-                    "branch": "myremote/master",
-                    "ahead": 0,
-                    "behind": 0,
-                },
+                "upstream": {"branch": "myremote/master", "ahead": 0, "behind": 0,},
                 "workingCopy": {},
             }
         }
@@ -126,11 +122,7 @@ def test_status(
                 "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
                 "abbrevCommit": "2a1b7be",
                 "branch": "master",
-                "upstream": {
-                    "branch": "myremote/master",
-                    "ahead": 0,
-                    "behind": 1,
-                },
+                "upstream": {"branch": "myremote/master", "ahead": 0, "behind": 1,},
                 "workingCopy": {},
             }
         }
@@ -155,11 +147,7 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {
-                    "branch": "myremote/master",
-                    "ahead": 1,
-                    "behind": 1,
-                },
+                "upstream": {"branch": "myremote/master", "ahead": 1, "behind": 1,},
                 "workingCopy": {},
             }
         }
@@ -183,11 +171,7 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {
-                    "branch": "myremote/master",
-                    "ahead": 2,
-                    "behind": 0,
-                },
+                "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
                 "workingCopy": {},
             }
         }
@@ -196,7 +180,9 @@ def test_status(
         with db:
             insert(db, commit=False)
             db.cursor().execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid <= 2;")
-            db.cursor().execute(f"UPDATE {H.POINTS_LAYER} SET name='test0' WHERE fid <= 5;")
+            db.cursor().execute(
+                f"UPDATE {H.POINTS_LAYER} SET name='test0' WHERE fid <= 5;"
+            )
 
         assert text_status(cli_runner) == [
             "On branch master",
@@ -220,35 +206,25 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {
-                    "branch": "myremote/master",
-                    "ahead": 2,
-                    "behind": 0,
-                },
+                "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
                 "workingCopy": {
                     "nz_pa_points_topo_150k": {
                         "schemaChanges": None,
-                        "featureChanges": {
-                            "modified": 3,
-                            "new": 1,
-                            "deleted": 2,
-                        }
+                        "featureChanges": {"modified": 3, "new": 1, "deleted": 2,},
                     }
-                }
+                },
             }
         }
 
 
 def test_status_empty(tmp_path, cli_runner, chdir):
-    repo_path = tmp_path / 'wiz.sno'
-    r = cli_runner.invoke(
-        ["init", repo_path]
-    )
+    repo_path = tmp_path / "wiz.sno"
+    r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0, r
 
     with chdir(repo_path):
         assert text_status(cli_runner) == [
-            'Empty repository.',
+            "Empty repository.",
             '  (use "sno import" to add some data)',
         ]
 
@@ -267,8 +243,14 @@ def test_status_none(tmp_path, cli_runner, chdir):
     with chdir(tmp_path):
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 2, r
-        assert r.stdout.splitlines()[-1] == 'Error: Current directory is not an existing repository'
+        assert (
+            r.stdout.splitlines()[-1]
+            == "Error: Current directory is not an existing repository"
+        )
 
         r = cli_runner.invoke(["status", "--json"])
         assert r.exit_code == 2, r
-        assert r.stdout.splitlines()[-1] == 'Error: Current directory is not an existing repository'
+        assert (
+            r.stdout.splitlines()[-1]
+            == "Error: Current directory is not an existing repository"
+        )

@@ -10,7 +10,7 @@ class UpgradeCommand(click.MultiCommand):
     def list_commands(self, ctx):
         rv = []
         for filename in self.plugin_path.glob("upgrade_*.py"):
-            rv.append(filename.stem[8:].replace('_', '-'))
+            rv.append(filename.stem[8:].replace("_", "-"))
         rv.sort()
         return rv
 
