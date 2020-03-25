@@ -69,12 +69,6 @@ Brewfile.lock.json
 
 .buildkite/
 
-Dockerfile
-
-data/
-HomebrewFormula/
-gitea/
-
 tests/
 
 platforms/windows/

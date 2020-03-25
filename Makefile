@@ -9,9 +9,6 @@ else
 	PLATFORM := $(shell uname -s)
 endif
 
-DOCKER_TAG = sno:latest
-DOCKER_BUILD_ARGs = --pull
-
 # Python binaries like python, pip in the venv will take precedence.
 VIRTUAL_ENV ?= venv
 SHELL = /bin/bash  # required for PATH to work
@@ -171,32 +168,11 @@ all: dev
 install: | $(sno-app-any)
 	ln -sf $(realpath $(VIRTUAL_ENV)/bin/sno) $(PREFIX)/bin/sno
 
-# Docker Image
+# Testing
 
-.PHONY: docker
-docker:
-	DOCKER_BUILDKIT=1 docker build $(DOCKER_BUILD_ARGS) --progress=plain -t $(DOCKER_TAG) .
-
-# CI Tests via Docker
-
-TEST_CLEANUP = find sno tests -name '__pycache__' -print0 | xargs -r0t -- rm -rf
-
-.PHONY: test-cleanup
-test-clean:
-	-$(RM) -r .pytest_* .coverage coverage test-results
-	$(TEST_CLEANUP)
-
-.PHONY: docker-ci-test
-docker-ci-test: test-clean
-	docker run --rm -it \
-		--volume $(PWD):/src:delegated \
-		--workdir /src \
-		--tmpfs /tmp \
-		--user root \
-		$(DOCKER_TAG) \
-		/src/.buildkite/run-tests.sh \
-	&& $(TEST_CLEANUP) \
-	|| (R=$$?; $(TEST_CLEANUP) && exit $$R)
+.PHONY: test
+test: $(py-install-test)
+	pytest -v --cov-report term --cov-report html:coverage
 
 .PHONY: ci-test
 ci-test:
@@ -206,10 +182,6 @@ ci-test:
 		--cov-report term \
 		--cov-report html:test-results/coverage/ \
 		--junit-xml=test-results/junit.xml
-
-.PHONY: test
-test: $(py-install-test)
-	pytest -v --cov-report term --cov-report html:coverage
 
 # Cleanup
 
