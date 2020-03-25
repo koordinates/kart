@@ -71,7 +71,7 @@ def db(path, **kwargs):
     return db
 
 
-def get_meta_info(db, layer, repo_version='0.0.1'):
+def get_meta_info(db, layer, repo_version="0.0.1"):
     yield ("version", {"version": repo_version})
 
     dbcur = db.cursor()
@@ -175,12 +175,14 @@ def pk(db, table):
 
 
 def geom_cols(db, table):
-    q = db.cursor().execute("""
+    q = db.cursor().execute(
+        """
             SELECT column_name
             FROM gpkg_geometry_columns
             WHERE table_name=?
             ORDER BY column_name;
-        """, (table,)
+        """,
+        (table,),
     )
     return tuple(r[0] for r in q)
 

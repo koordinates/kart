@@ -31,14 +31,22 @@ def _fsck_reset(repo_structure, working_copy, dataset_paths):
             try:
                 working_copy._drop_triggers(dbcur, table)
 
-                dbcur.execute("""DELETE FROM ".sno-meta" WHERE table_name=?;""", [table])
-                dbcur.execute("""DELETE FROM ".sno-track" WHERE table_name=?;""", [table])
+                dbcur.execute(
+                    """DELETE FROM ".sno-meta" WHERE table_name=?;""", [table]
+                )
+                dbcur.execute(
+                    """DELETE FROM ".sno-track" WHERE table_name=?;""", [table]
+                )
                 dbcur.execute(
                     "DELETE FROM gpkg_metadata WHERE id IN (SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name=?);",
                     [table],
                 )
-                dbcur.execute("DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [table])
-                dbcur.execute("DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [table])
+                dbcur.execute(
+                    "DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [table]
+                )
+                dbcur.execute(
+                    "DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [table]
+                )
                 dbcur.execute("DELETE FROM gpkg_contents WHERE table_name=?;", [table])
 
                 dbcur.execute(f"DROP TABLE {gpkg.ident(table)};")
@@ -87,7 +95,9 @@ def fsck(ctx, reset_datasets, fsck_args):
     click.secho(f"✔︎ Working copy: {working_copy_path}", fg="green")
 
     if reset_datasets:
-        click.secho(f"Resetting working copy for {', '.join(reset_datasets)} ...", bold=True)
+        click.secho(
+            f"Resetting working copy for {', '.join(reset_datasets)} ...", bold=True
+        )
         return _fsck_reset(rs, working_copy, reset_datasets)
 
     with working_copy.session() as db:
@@ -109,7 +119,9 @@ def fsck(ctx, reset_datasets, fsck_args):
 
         has_err = False
         for dataset in rs:
-            click.secho(f"\nDataset: '{dataset.path}/' (table: '{dataset.name}')", bold=True)
+            click.secho(
+                f"\nDataset: '{dataset.path}/' (table: '{dataset.name}')", bold=True
+            )
             table = dataset.name
 
             pk = gpkg.pk(db, table)
@@ -132,7 +144,10 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            dbcur.execute(f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=?;", [table])
+            dbcur.execute(
+                f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=?;",
+                [table],
+            )
             track_count = dbcur.fetchall()[0][0]
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
@@ -143,22 +158,22 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="yellow",
                 )
 
-                meta_diff = wc_diff[dataset.path]['META']
+                meta_diff = wc_diff[dataset.path]["META"]
                 if meta_diff:
                     click.secho(f"! META ({len(meta_diff)}):", fg="yellow")
 
                     for path in meta_diff.keys():
                         click.echo(path)
 
-                if sum([len(wc_diff[dataset.path][i]) for i in ['I', 'U', 'D']]):
+                if sum([len(wc_diff[dataset.path][i]) for i in ["I", "U", "D"]]):
                     # has feature changes
-                    for v in wc_diff[dataset.path]['I']:
+                    for v in wc_diff[dataset.path]["I"]:
                         click.echo(f" A  {v[pk]}")
 
-                    for h, v in wc_diff[dataset.path]['D'].items():
+                    for h, v in wc_diff[dataset.path]["D"].items():
                         click.echo(f" D  {v[pk]}")
 
-                    for h, (v_old, v_new) in wc_diff[dataset.path]['U'].items():
+                    for h, (v_old, v_new) in wc_diff[dataset.path]["U"].items():
                         s_old = set(v_old.items())
                         s_new = set(v_new.items())
                         diff_add = dict(s_new - s_old)
@@ -189,7 +204,10 @@ def fsck(ctx, reset_datasets, fsck_args):
                             fg="red",
                         )
 
-                    dbcur.execute(f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;", [feature[pk]])
+                    dbcur.execute(
+                        f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;",
+                        [feature[pk]],
+                    )
                     row = dbcur.fetchone()
                     if dict(row) != feature:
                         s_old = set(feature.items())
@@ -206,7 +224,9 @@ def fsck(ctx, reset_datasets, fsck_args):
 
                         feature_err_count += 1
                         if feature_err_count == 100:
-                            click.secho("! More than 100 errors, stopping for now.", fg="yellow")
+                            click.secho(
+                                "! More than 100 errors, stopping for now.", fg="yellow"
+                            )
                             break
 
         if has_err:

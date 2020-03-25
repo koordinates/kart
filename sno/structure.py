@@ -36,7 +36,9 @@ class RepositoryStructure:
         return self.get_at(path, self.tree)
 
     def __eq__(self, other):
-        return (self.repo.path == other.repo.path) and (self._commit.id == other._commit.id)
+        return (self.repo.path == other.repo.path) and (
+            self._commit.id == other._commit.id
+        )
 
     def __repr__(self):
         return f"RepoStructure<{self.repo.path}@{self._commit.id}>"
@@ -66,7 +68,7 @@ class RepositoryStructure:
 
     def iter_at(self, tree):
         """ Iterate over available datasets in this repository using a specified Tree """
-        to_examine = deque([('', tree)])
+        to_examine = deque([("", tree)])
 
         while to_examine:
             path, tree = to_examine.popleft()
@@ -76,7 +78,7 @@ class RepositoryStructure:
                 if isinstance(o, pygit2.Tree):
 
                     if path:
-                        te_path = '/'.join([path, o.name])
+                        te_path = "/".join([path, o.name])
                     else:
                         te_path = o.name
 
@@ -84,7 +86,11 @@ class RepositoryStructure:
                         ds = DatasetStructure.instantiate(o, te_path)
                         yield ds
                     except IntegrityError:
-                        self.L.warn("Error loading dataset from %s, ignoring tree", te_path, exc_info=True)
+                        self.L.warn(
+                            "Error loading dataset from %s, ignoring tree",
+                            te_path,
+                            exc_info=True,
+                        )
                     except ValueError:
                         # examine inside this directory
                         to_examine.append((te_path, o))
@@ -101,7 +107,7 @@ class RepositoryStructure:
     def working_copy(self):
         from .working_copy import WorkingCopy
 
-        if getattr(self, '_working_copy', None) is None:
+        if getattr(self, "_working_copy", None) is None:
             self._working_copy = WorkingCopy.open(self.repo)
 
         return self._working_copy
@@ -122,7 +128,9 @@ class RepositoryStructure:
 
         with wc.session():
             for ds in self:
-                ds.write_index(wcdiff[ds], git_index, self.repo, callback=wc.commit_callback)
+                ds.write_index(
+                    wcdiff[ds], git_index, self.repo, callback=wc.commit_callback
+                )
 
             print("Writing tree...")
             new_tree = git_index.write_tree(self.repo)
@@ -152,16 +160,16 @@ class IntegrityError(ValueError):
 
 
 class DatasetStructure:
-    DEFAULT_IMPORT_VERSION = '1.0'
-    META_PATH = 'meta'
+    DEFAULT_IMPORT_VERSION = "1.0"
+    META_PATH = "meta"
 
     def __init__(self, tree, path):
         if self.__class__ is DatasetStructure:
             raise TypeError("Use DatasetStructure.instantiate()")
 
         self.tree = tree
-        self.path = path.strip('/')
-        self.name = self.path.replace('/', '__')
+        self.path = path.strip("/")
+        self.name = self.path.replace("/", "__")
         self.L = logging.getLogger(self.__class__.__qualname__)
 
     def __repr__(self):
@@ -171,6 +179,7 @@ class DatasetStructure:
     @functools.lru_cache(maxsize=1)
     def all_versions(cls):
         """ Get all supported Dataset Structure versions """
+
         def _get_subclasses(klass):
             for c in klass.__subclasses__():
                 yield c
@@ -183,7 +192,13 @@ class DatasetStructure:
     def version_numbers(cls):
         versions = [klass.VERSION_IMPORT for klass in cls.all_versions()]
         # default first, then newest to oldest
-        versions.sort(key=lambda v: (v == DatasetStructure.DEFAULT_IMPORT_VERSION, [int(i) for i in v.split('.')]), reverse=True)
+        versions.sort(
+            key=lambda v: (
+                v == DatasetStructure.DEFAULT_IMPORT_VERSION,
+                [int(i) for i in v.split(".")],
+            ),
+            reverse=True,
+        )
         return tuple(versions)
 
     @classmethod
@@ -211,28 +226,38 @@ class DatasetStructure:
 
         for version_klass in cls.all_versions():
             try:
-                blob = (tree[version_klass.VERSION_PATH])
+                blob = tree[version_klass.VERSION_PATH]
             except KeyError:
                 continue
             else:
-                L.debug("Found candidate %sx tree at: %s", version_klass.VERSION_SPECIFIER, path)
+                L.debug(
+                    "Found candidate %sx tree at: %s",
+                    version_klass.VERSION_SPECIFIER,
+                    path,
+                )
 
             if not isinstance(blob, pygit2.Blob):
-                raise IntegrityError(f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({blob.type_str})")
+                raise IntegrityError(
+                    f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({blob.type_str})"
+                )
 
             try:
                 d = json.loads(blob.data)
             except Exception as e:
-                raise IntegrityError(f"{version_klass.__name__}: Couldn't load version file from: {path}/{version_klass.VERSION_PATH}") from e
+                raise IntegrityError(
+                    f"{version_klass.__name__}: Couldn't load version file from: {path}/{version_klass.VERSION_PATH}"
+                ) from e
 
-            version = d.get('version', None)
+            version = d.get("version", None)
             if version and version.startswith(version_klass.VERSION_SPECIFIER):
                 L.debug("Found %s dataset at: %s", version, path)
                 return version_klass(tree, path)
             else:
                 continue
 
-        raise ValueError(f"{path}: Couldn't find any Dataset Structure version that matched")
+        raise ValueError(
+            f"{path}: Couldn't find any Dataset Structure version that matched"
+        )
 
     # useful methods
 
@@ -244,7 +269,7 @@ class DatasetStructure:
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
-        return (self.tree / self.META_PATH)
+        return self.tree / self.META_PATH
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -261,7 +286,9 @@ class DatasetStructure:
 
     def iter_meta_items(self, exclude=None):
         exclude = set(exclude or [])
-        for top_tree, top_path, subtree_names, blob_names in core.walk_tree(self.meta_tree):
+        for top_tree, top_path, subtree_names, blob_names in core.walk_tree(
+            self.meta_tree
+        ):
             for name in blob_names:
                 if name in exclude:
                     continue
@@ -288,9 +315,9 @@ class DatasetStructure:
         if pk_value is not None:
             # https://www.sqlite.org/datatype3.html
             # 3.1. Determination Of Column Affinity
-            if 'INT' in pk_type:
+            if "INT" in pk_type:
                 pk_value = int(pk_value)
-            elif re.search('TEXT|CHAR|CLOB', pk_type):
+            elif re.search("TEXT|CHAR|CLOB", pk_type):
                 pk_value = str(pk_value)
 
         return pk_value
@@ -319,11 +346,7 @@ class DatasetStructure:
         """
         for blob_path, blob_data in self.import_iter_meta_blobs(repo, source):
             blob_id = repo.create_blob(blob_data)
-            entry = pygit2.IndexEntry(
-                blob_path,
-                blob_id,
-                pygit2.GIT_FILEMODE_BLOB
-            )
+            entry = pygit2.IndexEntry(blob_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
             index.add(entry)
 
     def import_meta_items(self, source):
@@ -331,14 +354,17 @@ class DatasetStructure:
             viter = value if isinstance(value, (list, tuple)) else [value]
 
             for v in viter:
-                if v and 'table_name' in v:
-                    v['table_name'] = self.name
+                if v and "table_name" in v:
+                    v["table_name"] = self.name
 
             yield (name, value)
 
     def import_iter_meta_blobs(self, repo, source):
         for name, value in self.import_meta_items(source):
-            yield (f"{self.path}/{self.META_PATH}/{name}", json.dumps(value).encode('utf8'))
+            yield (
+                f"{self.path}/{self.META_PATH}/{name}",
+                json.dumps(value).encode("utf8"),
+            )
 
     def import_table(self, repo, source):
         table = source.table
@@ -368,10 +394,10 @@ class DatasetStructure:
             click.echo(f"Found {row_count:,d} features in {table}")
 
             import_kwargs = {
-                'field_cid_map': source.field_cid_map,
-                'primary_key': source.primary_key,
-                'geom_cols': source.geom_cols,
-                'path': path,
+                "field_cid_map": source.field_cid_map,
+                "primary_key": source.primary_key,
+                "geom_cols": source.geom_cols,
+                "path": path,
             }
 
             # iterate features
@@ -418,7 +444,9 @@ class DatasetStructure:
             t5 = time.monotonic()
             click.echo(f"GC completed in {(t5-t4):.1f}s")
 
-    def fast_import_table(self, repo, source, iter_func=1, max_pack_size='2G', limit=None):
+    def fast_import_table(
+        self, repo, source, iter_func=1, max_pack_size="2G", limit=None
+    ):
 
         table = source.table
         if not table:
@@ -433,14 +461,20 @@ class DatasetStructure:
         with source:
             if limit:
                 num_rows = min(limit, source.row_count)
-                click.echo(f"Importing {num_rows:,d} of {source.row_count:,d} features from {source} to {path}/ ...")
+                click.echo(
+                    f"Importing {num_rows:,d} of {source.row_count:,d} features from {source} to {path}/ ..."
+                )
             else:
                 num_rows = source.row_count
-                click.echo(f"Importing {num_rows:,d} features from {source} to {path}/ ...")
+                click.echo(
+                    f"Importing {num_rows:,d} features from {source} to {path}/ ..."
+                )
 
             t0 = time.monotonic()
             if iter_func == 2:
-                src_iterator = source.iter_features_sorted(self.get_feature_path, limit=limit)
+                src_iterator = source.iter_features_sorted(
+                    self.get_feature_path, limit=limit
+                )
             else:
                 src_iterator = source.iter_features()
 
@@ -450,11 +484,12 @@ class DatasetStructure:
             click.echo("Starting git-fast-import...")
             p = subprocess.Popen(
                 [
-                    "git", "fast-import",
+                    "git",
+                    "fast-import",
                     "--date-format=now",
                     "--done",
                     "--stats",
-                    f"--max-pack-size={max_pack_size}"
+                    f"--max-pack-size={max_pack_size}",
                 ],
                 cwd=repo.path,
                 stdin=subprocess.PIPE,
@@ -464,36 +499,42 @@ class DatasetStructure:
             user = repo.default_signature
 
             header = (
-                'commit refs/heads/master\n'
-                f'committer {user.name} <{user.email}> now\n'
-                f'data <<EOM\nImport from {Path(source.source).name} to {path}/\nEOM\n'
+                "commit refs/heads/master\n"
+                f"committer {user.name} <{user.email}> now\n"
+                f"data <<EOM\nImport from {Path(source.source).name} to {path}/\nEOM\n"
             )
-            p.stdin.write(header.encode('utf8'))
+            p.stdin.write(header.encode("utf8"))
 
             if not repo.is_empty:
                 # start with the existing tree/contents
-                p.stdin.write(b'from refs/heads/master^0\n')
+                p.stdin.write(b"from refs/heads/master^0\n")
 
             for blob_path, blob_data in self.import_iter_meta_blobs(repo, source):
-                p.stdin.write(f'M 644 inline {blob_path}\ndata {len(blob_data)}\n'.encode('utf8'))
+                p.stdin.write(
+                    f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode("utf8")
+                )
                 p.stdin.write(blob_data)
-                p.stdin.write(b'\n')
+                p.stdin.write(b"\n")
 
             # features
             t2 = time.monotonic()
-            for i, (blob_path, blob_data) in enumerate(self.import_iter_feature_blobs(src_iterator, source)):
-                p.stdin.write(f'M 644 inline {blob_path}\ndata {len(blob_data)}\n'.encode('utf8'))
+            for i, (blob_path, blob_data) in enumerate(
+                self.import_iter_feature_blobs(src_iterator, source)
+            ):
+                p.stdin.write(
+                    f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode("utf8")
+                )
                 p.stdin.write(blob_data)
-                p.stdin.write(b'\n')
+                p.stdin.write(b"\n")
 
                 if i and i % 100000 == 0:
                     click.echo(f"  {i:,d} features... @{time.monotonic()-t2:.1f}s")
 
-                if limit is not None and i == (limit-1):
-                    click.secho(f"  Stopping at {limit:,d} features", fg='yellow')
+                if limit is not None and i == (limit - 1):
+                    click.secho(f"  Stopping at {limit:,d} features", fg="yellow")
                     break
 
-            p.stdin.write(b'\ndone\n')
+            p.stdin.write(b"\ndone\n")
             t3 = time.monotonic()
             click.echo(f"Added {num_rows:,d} Features to index in {t3-t2:.1f}s")
             click.echo(f"Overall rate: {(num_rows/(t3-t2)):.0f} features/s)")
@@ -501,11 +542,13 @@ class DatasetStructure:
             p.stdin.close()
             p.wait()
             if p.returncode != 0:
-                raise subprocess.CalledProcessError(f"Error! {p.returncode}", "git-fast-import")
+                raise subprocess.CalledProcessError(
+                    f"Error! {p.returncode}", "git-fast-import"
+                )
             t4 = time.monotonic()
             click.echo(f"Closed in {(t4-t3):.0f}s")
 
-    RTREE_INDEX_EXTENSIONS = ('sno-idxd', 'sno-idxi')
+    RTREE_INDEX_EXTENSIONS = ("sno-idxd", "sno-idxi")
 
     def build_spatial_index(self, path):
         """
@@ -522,7 +565,9 @@ class DatasetStructure:
             t0 = time.monotonic()
 
             c = 0
-            for (pk, geom) in self.feature_tuples([self.primary_key, self.geom_column_name]):
+            for (pk, geom) in self.feature_tuples(
+                [self.primary_key, self.geom_column_name]
+            ):
                 c += 1
                 if geom is None:
                     continue
@@ -585,12 +630,13 @@ class Dataset1(DatasetStructure):
           [hex(pk-hash):2]/
             [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
     """
+
     VERSION_PATH = ".sno-table/meta/version"
     VERSION_SPECIFIER = "1."
-    VERSION_IMPORT = '1.0'
+    VERSION_IMPORT = "1.0"
 
     MSGPACK_EXT_GEOM = 71  # 'G'
-    META_PATH = '.sno-table/meta'
+    META_PATH = ".sno-table/meta"
 
     def _msgpack_unpack_ext(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
@@ -610,9 +656,13 @@ class Dataset1(DatasetStructure):
     @functools.lru_cache(maxsize=1)
     def cid_field_map(self):
         cid_map = {}
-        for te in (self.meta_tree / 'fields'):
+        for te in self.meta_tree / "fields":
             if not isinstance(te, pygit2.Blob):
-                self.L.warn("cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s", te.type_str, te.name)
+                self.L.warn(
+                    "cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s",
+                    te.type_str,
+                    te.name,
+                )
                 continue
 
             cid = json.loads(te.data)
@@ -627,18 +677,18 @@ class Dataset1(DatasetStructure):
 
     @property
     def primary_key(self):
-        return self.get_meta_item('primary_key')
+        return self.get_meta_item("primary_key")
 
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key_type(self):
-        schema = self.get_meta_item('sqlite_table_info')
-        field = next(f for f in schema if f['name'] == self.primary_key)
-        return field['type']
+        schema = self.get_meta_item("sqlite_table_info")
+        field = next(f for f in schema if f["name"] == self.primary_key)
+        return field["type"]
 
     def encode_pk(self, pk):
         pk_enc = msgpack.packb(pk, use_bin_type=True)  # encode pk value via msgpack
-        pk_str = base64.urlsafe_b64encode(pk_enc).decode('utf8')  # filename safe
+        pk_str = base64.urlsafe_b64encode(pk_enc).decode("utf8")  # filename safe
         return pk_str
 
     def decode_pk(self, encoded):
@@ -647,8 +697,10 @@ class Dataset1(DatasetStructure):
     def get_feature_path(self, pk):
         pk = self.cast_primary_key(pk)
         pk_enc = self.encode_pk(pk)
-        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
-        return os.path.join('.sno-table', pk_hash[:2], pk_hash[2:4], pk_enc)
+        pk_hash = hashlib.sha1(
+            pk_enc.encode("utf8")
+        ).hexdigest()  # hash to randomly spread filenames
+        return os.path.join(".sno-table", pk_hash[:2], pk_hash[2:4], pk_enc)
 
     def import_meta_items(self, source):
         """
@@ -665,10 +717,10 @@ class Dataset1(DatasetStructure):
             yield (name, item)
 
         for colname, colid in source.field_cid_map.items():
-            yield (f'fields/{colname}', colid)
+            yield (f"fields/{colname}", colid)
 
         pk_field = source.primary_key
-        yield ('primary_key', pk_field)
+        yield ("primary_key", pk_field)
 
     def remove_feature(self, pk, index):
         object_path = self.get_feature_path(pk)
@@ -680,8 +732,10 @@ class Dataset1(DatasetStructure):
         }
         bin_feature = msgpack.unpackb(
             blob.data,
-            ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
-            raw=False
+            ext_hook=self._msgpack_unpack_ext_ogr
+            if ogr_geoms
+            else self._msgpack_unpack_ext,
+            raw=False,
         )
         for colid, value in bin_feature.items():
             field_name = self.cid_field_map[colid]
@@ -693,11 +747,15 @@ class Dataset1(DatasetStructure):
         pk_value = self.cast_primary_key(pk_value)
 
         pk_enc = self.encode_pk(pk_value)
-        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
+        pk_hash = hashlib.sha1(
+            pk_enc.encode("utf8")
+        ).hexdigest()  # hash to randomly spread filenames
 
-        te = (self.tree / '.sno-table' / pk_hash[:2] / pk_hash[2:4] / pk_enc)
+        te = self.tree / ".sno-table" / pk_hash[:2] / pk_hash[2:4] / pk_enc
         if not isinstance(te, pygit2.Blob):
-            raise IntegrityError(f"Unexpected TreeEntry type={te.type_str} in feature tree {pk_enc}")
+            raise IntegrityError(
+                f"Unexpected TreeEntry type={te.type_str} in feature tree {pk_enc}"
+            )
 
         return pk_enc, te
 
@@ -732,15 +790,23 @@ class Dataset1(DatasetStructure):
         def tupleizer(pk, blob):
             bin_feature = msgpack.unpackb(
                 blob.data,
-                ext_hook=self._msgpack_unpack_ext_ogr if ogr_geoms else self._msgpack_unpack_ext,
+                ext_hook=self._msgpack_unpack_ext_ogr
+                if ogr_geoms
+                else self._msgpack_unpack_ext,
                 raw=False,
-                use_list=False
+                use_list=False,
             )
-            return tuple([self.decode_pk(pk) if c == -1 else bin_feature[c] for c in ftuple_order])
+            return tuple(
+                [
+                    self.decode_pk(pk) if c == -1 else bin_feature[c]
+                    for c in ftuple_order
+                ]
+            )
+
         return tupleizer
 
     def _features(self, feature_builder, fast):
-        top_tree = (self.tree / '.sno-table')
+        top_tree = self.tree / ".sno-table"
 
         # .sno-table/
         #   [hex(pk-hash):2]/
@@ -748,8 +814,10 @@ class Dataset1(DatasetStructure):
         #       [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
         URLSAFE_B64 = r"A-Za-z0-9_\-"
 
-        RE_L = re.compile(r'([0-9a-f]{2})?$')
-        RE_F = re.compile(fr'(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$')
+        RE_L = re.compile(r"([0-9a-f]{2})?$")
+        RE_F = re.compile(
+            fr"(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$"
+        )
 
         for l1e in top_tree:
             if l1e.type != pygit2.GIT_OBJ_TREE or not RE_L.match(l1e.name):
@@ -764,7 +832,13 @@ class Dataset1(DatasetStructure):
                         if not RE_F.match(fbe.name):
                             continue
                         elif fbe.type != pygit2.GIT_OBJ_BLOB:
-                            self.L.warn("features: Unexpected TreeEntry type=%s in feature tree '%s/%s/%s'", fbe.type_str, l1e.name, l2e.name, fbe.name)
+                            self.L.warn(
+                                "features: Unexpected TreeEntry type=%s in feature tree '%s/%s/%s'",
+                                fbe.type_str,
+                                l1e.name,
+                                l2e.name,
+                                fbe.name,
+                            )
                             continue
 
                     yield feature_builder(fbe.name, fbe)
@@ -774,9 +848,9 @@ class Dataset1(DatasetStructure):
         return self._features(
             lambda pk, blob: (
                 pk,
-                self.repo_feature_to_dict(pk, blob, ogr_geoms=ogr_geoms)
+                self.repo_feature_to_dict(pk, blob, ogr_geoms=ogr_geoms),
             ),
-            fast=False
+            fast=False,
         )
 
     def feature_tuples(self, col_names, **kwargs):
@@ -785,12 +859,11 @@ class Dataset1(DatasetStructure):
         return self._features(tupleizer, fast=True)
 
     def feature_count(self, fast=True):
-        return sum(self._features(
-            lambda pk, blob: 1,
-            fast=fast
-        ))
+        return sum(self._features(lambda pk, blob: 1, fast=fast))
 
-    def encode_feature(self, feature, field_cid_map=None, geom_cols=None, primary_key=None):
+    def encode_feature(
+        self, feature, field_cid_map=None, geom_cols=None, primary_key=None
+    ):
         if field_cid_map is None:
             field_cid_map = self.field_cid_map
         if geom_cols is None:
@@ -813,7 +886,17 @@ class Dataset1(DatasetStructure):
 
         return msgpack.packb(bin_feature, use_bin_type=True)
 
-    def write_feature(self, row, repo, index, *, field_cid_map=None, geom_cols=None, primary_key=None, **kwargs):
+    def write_feature(
+        self,
+        row,
+        repo,
+        index,
+        *,
+        field_cid_map=None,
+        geom_cols=None,
+        primary_key=None,
+        **kwargs,
+    ):
         path = f"{self.path}/.sno-table"
 
         if field_cid_map is None:
@@ -824,15 +907,15 @@ class Dataset1(DatasetStructure):
             primary_key = self.primary_key
 
         pk_enc = self.encode_pk(row[primary_key])
-        pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
+        pk_hash = hashlib.sha1(
+            pk_enc.encode("utf8")
+        ).hexdigest()  # hash to randomly spread filenames
 
         feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
 
         bin_feature = self.encode_feature(row, field_cid_map, geom_cols, primary_key)
         blob_id = repo.create_blob(bin_feature)
-        entry = pygit2.IndexEntry(
-            feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-        )
+        entry = pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
         index.add(entry)
         return [entry]
 
@@ -843,7 +926,9 @@ class Dataset1(DatasetStructure):
 
         for row in resultset:
             pk_enc = self.encode_pk(row[pk_field])
-            pk_hash = hashlib.sha1(pk_enc.encode('utf8')).hexdigest()  # hash to randomly spread filenames
+            pk_hash = hashlib.sha1(
+                pk_enc.encode("utf8")
+            ).hexdigest()  # hash to randomly spread filenames
 
             feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
             bin_feature = {}
@@ -876,7 +961,9 @@ class Dataset1(DatasetStructure):
                 callback(self, "META", object_path=object_path)
 
         for _, obj_old in dataset_diff["D"].items():
-            object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
+            object_path = os.path.join(
+                self.path, self.get_feature_path(obj_old[pk_field])
+            )
             index.remove(object_path)
 
             if callback:
@@ -886,28 +973,30 @@ class Dataset1(DatasetStructure):
             object_path = os.path.join(self.path, self.get_feature_path(obj[pk_field]))
             bin_feature = self.encode_feature(obj)
             blob_id = repo.create_blob(bin_feature)
-            entry = pygit2.IndexEntry(
-                object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
+            entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
             index.add(entry)
 
             if callback:
                 callback(self, "I", object_path=object_path, obj_new=obj)
 
         for _, (obj_old, obj_new) in dataset_diff["U"].items():
-            object_path = os.path.join(self.path, self.get_feature_path(obj_old[pk_field]))
+            object_path = os.path.join(
+                self.path, self.get_feature_path(obj_old[pk_field])
+            )
             index.remove(object_path)
 
-            object_path = os.path.join(self.path, self.get_feature_path(obj_new[pk_field]))
+            object_path = os.path.join(
+                self.path, self.get_feature_path(obj_new[pk_field])
+            )
             bin_feature = self.encode_feature(obj_new)
             blob_id = repo.create_blob(bin_feature)
-            entry = pygit2.IndexEntry(
-                object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
+            entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
             index.add(entry)
 
             if callback:
-                callback(self, "U", object_path=object_path, obj_old=obj_old, obj_new=obj_new)
+                callback(
+                    self, "U", object_path=object_path, obj_old=obj_old, obj_new=obj_new
+                )
 
         if callback:
             callback(self, "INDEX")
@@ -919,14 +1008,25 @@ class Dataset1(DatasetStructure):
 
         params = {}
         if reverse:
-            params = {'swap': True}
+            params = {"swap": True}
 
         if other is None:
             diff_index = self.tree.diff_to_tree(**params)
-            self.L.debug("diff (%s -> None / %s): %s changes", self.tree.id, 'R' if reverse else 'F', len(diff_index))
+            self.L.debug(
+                "diff (%s -> None / %s): %s changes",
+                self.tree.id,
+                "R" if reverse else "F",
+                len(diff_index),
+            )
         else:
             diff_index = self.tree.diff_to_tree(other.tree, **params)
-            self.L.debug("diff (%s -> %s / %s): %s changes", self.tree.id, other.tree.id, 'R' if reverse else 'F', len(diff_index))
+            self.L.debug(
+                "diff (%s -> %s / %s): %s changes",
+                self.tree.id,
+                other.tree.id,
+                "R" if reverse else "F",
+                len(diff_index),
+            )
 
         if reverse:
             this, other = other, self
@@ -934,11 +1034,13 @@ class Dataset1(DatasetStructure):
             this, other = self, other
 
         for d in diff_index.deltas:
-            self.L.debug("diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path)
+            self.L.debug(
+                "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
+            )
 
-            if d.old_file and d.old_file.path.startswith('.sno-table/meta/'):
+            if d.old_file and d.old_file.path.startswith(".sno-table/meta/"):
                 continue
-            elif d.new_file and d.new_file.path.startswith('.sno-table/meta/'):
+            elif d.new_file and d.new_file.path.startswith(".sno-table/meta/"):
                 continue
 
             if d.status == pygit2.GIT_DELTA_DELETED:
@@ -953,7 +1055,13 @@ class Dataset1(DatasetStructure):
                 my_pk = this.decode_pk(os.path.basename(d.old_file.path))
                 other_pk = other.decode_pk(os.path.basename(d.new_file.path))
 
-                self.L.debug("diff(): M %s (%s) -> %s (%s)", d.old_file.path, my_pk, d.new_file.path, other_pk)
+                self.L.debug(
+                    "diff(): M %s (%s) -> %s (%s)",
+                    d.old_file.path,
+                    my_pk,
+                    d.new_file.path,
+                    other_pk,
+                )
 
                 _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
                 _, other_obj = other.get_feature(other_pk, ogr_geoms=False)

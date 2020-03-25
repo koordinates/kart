@@ -32,9 +32,13 @@ def edit_polygons_pk(dbcur):
     assert dbcur.getconnection().changes() == 1
     dbcur.execute(f"UPDATE {H.POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test' WHERE id=1443053;")
+    dbcur.execute(
+        f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test' WHERE id=1443053;"
+    )
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"DELETE FROM {H.POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);")
+    dbcur.execute(
+        f"DELETE FROM {H.POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
+    )
     assert dbcur.getconnection().changes() == 5
     pk_del = 1452332
     return pk_del
@@ -53,11 +57,14 @@ def edit_table(dbcur):
     return pk_del
 
 
-@pytest.mark.parametrize("archive,layer", [
-    pytest.param('points', H.POINTS_LAYER, id='points'),
-    pytest.param('polygons', H.POLYGONS_LAYER, id='polygons_pk'),
-    pytest.param('table', H.TABLE_LAYER, id='table'),
-])
+@pytest.mark.parametrize(
+    "archive,layer",
+    [
+        pytest.param("points", H.POINTS_LAYER, id="points"),
+        pytest.param("polygons", H.POLYGONS_LAYER, id="polygons_pk"),
+        pytest.param("table", H.TABLE_LAYER, id="table"),
+    ],
+)
 def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
     """ commit outstanding changes from the working copy """
     param_ids = H.parameter_ids(request)
@@ -66,7 +73,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
         assert r.exit_code == 1, r
-        assert r.stdout.splitlines() == ['Error: No changes to commit']
+        assert r.stdout.splitlines() == ["Error: No changes to commit"]
 
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty", "--allow-empty"])
@@ -103,8 +110,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
         assert dataset.get_feature_path(pk_del) not in tree
 
         cur.execute(
-            f"SELECT COUNT(*) FROM {wc.TRACKING_TABLE} WHERE table_name=?;",
-            [layer]
+            f"SELECT COUNT(*) FROM {wc.TRACKING_TABLE} WHERE table_name=?;", [layer]
         )
         change_count = cur.fetchone()[0]
         assert change_count == 0, f"Changes still listed in {dataset.TRACKING_TABLE}"
@@ -114,7 +120,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r
-        assert r.stdout == ''
+        assert r.stdout == ""
 
 
 def test_tag(data_working_copy, cli_runner):
@@ -125,8 +131,8 @@ def test_tag(data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
         repo = pygit2.Repository(str(repo_dir))
-        assert 'refs/tags/version1' in repo.references
-        ref = repo.lookup_reference_dwim('version1')
+        assert "refs/tags/version1" in repo.references
+        ref = repo.lookup_reference_dwim("version1")
         assert ref.target.hex == H.POINTS_HEAD_SHA
 
 
@@ -141,7 +147,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
         editor_cmd = cmdline
         print("EDITOR", cmdline)
         editmsg_file = shlex.split(cmdline)[-1]
-        with open(editmsg_file, 'r+') as ef:
+        with open(editmsg_file, "r+") as ef:
             editor_in = ef.read()
             if editor_out:
                 ef.seek(0)
@@ -163,32 +169,45 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
             return repo.head.peel(pygit2.Commit).message
 
         # normal
-        r = cli_runner.invoke(["commit", "--allow-empty", "-m", "the messagen\n\n\n\n\n"])
+        r = cli_runner.invoke(
+            ["commit", "--allow-empty", "-m", "the messagen\n\n\n\n\n"]
+        )
         assert r.exit_code == 0, r
-        assert last_message() == 'the messagen'
+        assert last_message() == "the messagen"
 
         # E: empty
         r = cli_runner.invoke(["commit", "--allow-empty", "-m", ""])
         assert r.exit_code == 1, r
 
         # file
-        with tempfile.NamedTemporaryFile(mode='w', encoding='utf8') as f:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf8") as f:
             f.write("\ni am a message\n\n\n")
             f.flush()
 
             r = cli_runner.invoke(["commit", "--allow-empty", "-F", f.name])
             assert r.exit_code == 0, r
-            assert last_message() == 'i am a message'
+            assert last_message() == "i am a message"
 
         # E: conflict
         r = cli_runner.invoke(["commit", "--allow-empty", "-F", f.name, "-m", "foo"])
         assert r.exit_code == 2, r
-        assert 'exclusive' in r.stdout
+        assert "exclusive" in r.stdout
 
         # multiple
-        r = cli_runner.invoke(["commit", "--allow-empty", "-m", "one", "-m", "two\nthree\n", "-m", "four\n\n"])
+        r = cli_runner.invoke(
+            [
+                "commit",
+                "--allow-empty",
+                "-m",
+                "one",
+                "-m",
+                "two\nthree\n",
+                "-m",
+                "four\n\n",
+            ]
+        )
         assert r.exit_code == 0, r
-        assert last_message() == 'one\n\ntwo\nthree\n\nfour'
+        assert last_message() == "one\n\ntwo\nthree\n\nfour"
 
         # default editor
 
@@ -218,7 +237,7 @@ def test_commit_message(data_working_copy, cli_runner, monkeypatch, geopackage):
             "#\n"
         )
         print(last_message())
-        assert last_message() == 'I am a message\nof warning'
+        assert last_message() == "I am a message\nof warning"
 
         monkeypatch.setenv("EDITOR", "/path/to/some/editor -abc")
         editor_out = "sqwark 🐧\n"

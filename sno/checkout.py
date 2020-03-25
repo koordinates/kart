@@ -109,7 +109,11 @@ def checkout_new(repo_structure, path, *, datasets=None, commit=None):
 @click.command()
 @click.pass_context
 @click.option("--create", "-c", help="Create a new branch")
-@click.option("--force-create", "-C", help="Similar to --create except that if <new-branch> already exists, it will be reset to <start-point>")
+@click.option(
+    "--force-create",
+    "-C",
+    help="Similar to --create except that if <new-branch> already exists, it will be reset to <start-point>",
+)
 @click.option("--discard-changes", is_flag=True, help="Discard local changes")
 @click.argument("refish", default=None, required=False)
 def switch(ctx, create, force_create, discard_changes, refish):
@@ -177,9 +181,7 @@ def switch(ctx, create, force_create, discard_changes, refish):
         try:
             branch = repo.branches[refish]
         except KeyError:
-            raise click.BadParameter(
-                f"Branch '{refish}' not found."
-            )
+            raise click.BadParameter(f"Branch '{refish}' not found.")
 
         commit = branch.peel(pygit2.Commit)
         head_ref = branch.name
@@ -198,12 +200,14 @@ def switch(ctx, create, force_create, discard_changes, refish):
 @click.command()
 @click.pass_context
 @click.option(
-    "--source", "-s",
+    "--source",
+    "-s",
     help=(
         "Restore the working tree files with the content from the given tree. "
         "It is common to specify the source tree by naming a commit, branch or "
-        "tag associated with it."),
-    default="HEAD"
+        "tag associated with it."
+    ),
+    default="HEAD",
 )
 @click.argument("pathspec", nargs=-1)
 def restore(ctx, source, pathspec):
@@ -228,7 +232,7 @@ def restore(ctx, source, pathspec):
         repo_structure,
         force=True,
         update_meta=(head_commit.id == commit.id),
-        paths=pathspec
+        paths=pathspec,
     )
 
 
