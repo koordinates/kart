@@ -426,7 +426,7 @@ jobs:
         env:
           SNO_INSTALL_VERSION: ${{ steps.version.outputs.installer }}
           WIN_SIGNCERT: ${{ secrets.WIN_SIGNCERT }}
-          WIN_SIGNCERTPW: ${{ secrets.WIN_SIGNCERT_PW }}
+          SIGNCERTPW: ${{ secrets.WIN_SIGNCERT_PW }}
         run: |
           If ( '${{ github.repository }}' -eq 'koordinates/sno' -and ${{ steps.version.outputs.is_release }} -eq 1 ) {
             $CERTBYTES=[Convert]::FromBase64String($Env:WIN_SIGNCERT)
