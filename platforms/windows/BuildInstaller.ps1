@@ -59,6 +59,7 @@ try {
             /f "$Env:SIGNCERTKEY" `
             /p "$Env:SIGNCERTPW" `
             /d 'Sno Installer' `
+            /fd 'sha256' `
             /tr $TS `
             /v ".\dist\${MSINAME}"
             if ($?) {

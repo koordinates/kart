@@ -38,6 +38,7 @@ try {
                 /f "$Env:SIGNCERTKEY" `
                 /p "$Env:SIGNCERTPW" `
                 /d 'Sno CLI' `
+                /fd 'sha256' `
                 /tr $TS `
                 /v (Join-Path '.\platforms\windows\dist\sno' $BIN)
                 if ($?) {
