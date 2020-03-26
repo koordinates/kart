@@ -3,15 +3,15 @@ $ErrorActionPreference = 'stop'
 
 $SRC = Join-Path $PSScriptRoot '..\..'
 
-$SIGNTOOL='C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe'
 if ($Env:SIGNTOOL) {
-    $SIGNTOOL = $Env:SIGNTOOL
+    $SIGNTOOL=$Env:SIGNTOOL
+} Else {
+    $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
 }
 
 7z x "$(Join-Path $SRC 'vendor\dist\vendor-Windows.zip')" "-o$(Join-Path $SRC 'vendor\dist')" -aoa
 
 Push-Location -Path $SRC
-Get-Location
 try {
     .\venv\Scripts\pyinstaller `
         --clean -y `

@@ -6,9 +6,10 @@ if ($Env:WIX) {
     $WIXBIN = (Join-Path $Env:WIX 'bin\')
 }
 
-$SIGNTOOL='C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe'
 if ($Env:SIGNTOOL) {
-    $SIGNTOOL = $Env:SIGNTOOL
+    $SIGNTOOL=$Env:SIGNTOOL
+} Else {
+    $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
 }
 
 if ($Env:SNO_INSTALL_VERSION) {
