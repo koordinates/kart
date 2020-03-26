@@ -4,7 +4,7 @@ import re
 import shlex
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import click
@@ -117,26 +117,13 @@ def commit(ctx, message, message_file, allow_empty, is_output_json):
         raise click.Abort()
 
     rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
-    new_commit = repo.head.peel(pygit2.Commit)
 
-    branch = (
-        None if repo.head_is_detached else repo.branches[repo.head.shorthand].shorthand
-    )
-    commit_time = datetime.fromtimestamp(commit.commit_time, timezone.utc)
-    jdict = {
-        "sno.commit/v1": {
-            "commit": new_commit.id.hex,
-            "abbrevCommit": new_commit.short_id,
-            "branch": branch,
-            "message": commit_msg,
-            "changes": get_diff_status_json(wc_changes),
-            "commitTime": to_short_iso8601(commit_time),
-        }
-    }
+    new_commit = repo.head.peel(pygit2.Commit)
+    jdict = commit_obj_to_json(new_commit, repo, wc_changes)
     if is_output_json:
         json.dump(jdict, sys.stdout, indent=2)
     else:
-        click.echo(commit_output_to_text(jdict))
+        click.echo(commit_json_to_text(jdict))
 
 
 def get_commit_message(repo, wc_changes, quiet=False):
@@ -197,25 +184,54 @@ def get_commit_message(repo, wc_changes, quiet=False):
     return message.strip()
 
 
-def commit_output_to_text(jdict):
+def commit_obj_to_json(commit, repo, wc_changes):
+    branch = None
+    if not repo.head_is_detached:
+        branch = repo.branches[repo.head.shorthand].shorthand
+    commit_time = datetime.fromtimestamp(commit.commit_time, timezone.utc)
+    commit_time_offset = timedelta(minutes=commit.commit_time_offset)
+    return {
+        "sno.commit/v1": {
+            "commit": commit.id.hex,
+            "abbrevCommit": commit.short_id,
+            "author": commit.author.email,
+            "committer": commit.committer.email,
+            "branch": branch,
+            "message": commit.message,
+            "changes": get_diff_status_json(wc_changes),
+            "commitTime": to_iso8601_utc(commit_time),
+            "commitTimeOffset": to_iso8601_tz(commit_time_offset),
+        }
+    }
+
+
+def commit_json_to_text(jdict):
     jdict = jdict["sno.commit/v1"]
     branch = jdict["branch"]
     commit = jdict["abbrevCommit"]
     message = jdict["message"].replace("\n", " ")
     diff = diff_status_to_text(jdict["changes"])
-    datetime = to_long_local_iso8601(from_short_iso8601(jdict["commitTime"]))
+    datetime = commit_time_to_text(jdict["commitTime"], jdict["commitTimeOffset"])
     return f"[{branch} {commit}] {message}\n{diff}\n  Date: {datetime}"
 
 
-def to_short_iso8601(datetime):
+def to_iso8601_utc(datetime):
     """Returns a string like: 2020-03-26T09:10:11Z"""
-    return datetime.strftime("%Y-%m-%dT%H:%M:%SZ")
+    isoformat = datetime.astimezone(timezone.utc).replace(tzinfo=None).isoformat()
+    return f"{isoformat}Z"
 
 
-def from_short_iso8601(s):
-    return datetime.fromisoformat(s.replace("Z", "+00:00"))
+def to_iso8601_tz(timedelta):
+    """Returns a string like "+05:00" or "-05:00" (ie five hours ahead or behind)."""
+    abs_delta = datetime.utcfromtimestamp(abs(timedelta).seconds).strftime('%H:%M')
+    return f"+{abs_delta}" if abs(timedelta) == timedelta else f"-{abs_delta}"
 
 
-def to_long_local_iso8601(datetime):
-    """Returns a string like: 2020-03-26 21:10:11 +12:00"""
-    return datetime.astimezone(None).strftime("%Y-%m-%d %H:%M:%S %z")
+def commit_time_to_text(iso8601z, iso_offset):
+    """
+    Given an isoformat time in UTC, and a isoformat timezone offset,
+    returns the time in a human readable format, for that timezone.
+    """
+    right_time = datetime.fromisoformat(iso8601z.replace("Z", "+00:00"))
+    right_tzinfo = datetime.fromisoformat(iso8601z.replace("Z", iso_offset))
+    return right_time.astimezone(right_tzinfo.tzinfo).strftime("%c %z")
