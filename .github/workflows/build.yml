@@ -200,6 +200,7 @@ jobs:
       # Packaging
       #
       - name: "🍎 package: setup app signing certificate"
+        id: keychain
         uses: apple-actions/import-codesign-certs@v1
         if: runner.os == 'macOS' && steps.version.outputs.is_release == 1
         with:
@@ -211,6 +212,7 @@ jobs:
         if: runner.os == 'macOS' && steps.version.outputs.is_release == 1
         with:
           create-keychain: false
+          keychain-password: ${{ steps.keychain.outputs.keychain-password }}
           p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
 

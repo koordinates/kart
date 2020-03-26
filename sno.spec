@@ -11,9 +11,10 @@ with open(os.path.join('sno', 'VERSION')) as version_file:
 if platform.system() == "Windows":
     with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
         vr_doc = vr_template.read()
-        sno_version_parts = tuple([int(_v) for _v in sno_version.split('.')[:3]] + [0])
+        sno_version_nums = re.match(r'(\d+\.\d+(?:\.\d+)?)', sno_version).group(1)
+        sno_file_version = tuple(([int(_v) for _v in sno_version_nums.split('.')] + [0, 0])[:4])
         vr_doc = vr_doc.replace('%VERSION%', sno_version)
-        vr_doc = vr_doc.replace('%VERTUPLE%', str(sno_version_parts))
+        vr_doc = vr_doc.replace('%VERTUPLE%', str(sno_file_version))
 
         with open(os.path.join(workpath, 'sno_version_info.rc'), 'w', encoding='utf-8') as vr:
             vr.write(vr_doc)
