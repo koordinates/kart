@@ -46,13 +46,31 @@ try {
     }
 
     if ($Env:SIGNCERTKEY) {
-        Write-Output '>>> Signing Installer ...'
-        & $SIGNTOOL sign `
+        $TS_SERVERS=@(
+            'http://timestamp.digicert.com',
+            'http://timestamp.globalsign.com/scripts/timstamp.dll',
+            'http://timestamp.geotrust.com/tsa',
+            'http://timestamp.comodoca.com/rfc3161'
+        )
+
+        foreach ($TS in $TS_SERVERS) {
+            Write-Output ">>> Signing installer (w/ $TS) ..."
+            & $SIGNTOOL sign `
             /f "$Env:SIGNCERTKEY" `
             /p "$Env:SIGNCERTPW" `
             /d 'Sno Installer' `
-            /t http://timestamp.verisign.com/scripts/timstamp.dll `
+            /tr $TS `
             /v ".\dist\${MSINAME}"
+            if ($?) {
+                break
+            }
+        }
+        if (!$?) {
+            Write-Output "Error signing installer, tried lots of timestamp servers"
+            exit $LastExitCode
+        }
+
+        & $SIGNTOOL verify /pa ".\dist\${MSINAME}"
         if (!$?) {
             exit $LastExitCode
         }

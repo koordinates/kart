@@ -23,15 +23,36 @@ try {
     }
 
     if ($Env:SIGNCERTKEY) {
-        Write-Output '>>> Signing sno.exe ...'
-        & $SIGNTOOL sign `
-            /f "$Env:SIGNCERTKEY" `
-            /p "$Env:SIGNCERTPW" `
-            /d 'Sno CLI' `
-            /t http://timestamp.verisign.com/scripts/timstamp.dll `
-            /v .\platforms\windows\dist\sno\sno.exe
-        if (!$?) {
-            exit $LastExitCode
+        $BINARIES=@('sno.exe', 'git2.dll')
+        $TS_SERVERS=@(
+            'http://timestamp.digicert.com',
+            'http://timestamp.globalsign.com/scripts/timstamp.dll',
+            'http://timestamp.geotrust.com/tsa',
+            'http://timestamp.comodoca.com/rfc3161'
+        )
+
+        foreach ($BIN in $BINARIES) {
+            foreach ($TS in $TS_SERVERS) {
+                Write-Output ">>> Signing $BIN (w/ $TS) ..."
+                & $SIGNTOOL sign `
+                /f "$Env:SIGNCERTKEY" `
+                /p "$Env:SIGNCERTPW" `
+                /d 'Sno CLI' `
+                /tr $TS `
+                /v (Join-Path '.\platforms\windows\dist\sno' $BIN)
+                if ($?) {
+                    break
+                }
+            }
+            if (!$?) {
+                Write-Output "Error signing $BIN, tried lots of timestamp servers"
+                exit $LastExitCode
+            }
+
+            & $SIGNTOOL verify /pa (Join-Path '.\platforms\windows\dist\sno' $BIN)
+            if (!$?) {
+                exit $LastExitCode
+            }
         }
     }
 
