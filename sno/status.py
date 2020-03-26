@@ -44,12 +44,13 @@ def get_status_json(repo):
 
 
 def get_branch_status_json(repo):
-    output = {"commit": None, "branch": None, "upstream": None}
+    output = {"commit": None, "abbrevCommit": None, "branch": None, "upstream": None}
     if repo.is_empty:
         return output
 
     commit = repo.head.peel(pygit2.Commit)
-    output["commit"] = commit.short_id
+    output["commit"] = commit.id.hex
+    output["abbrevCommit"] = commit.short_id
 
     if repo.head_is_detached:
         return output
@@ -117,7 +118,7 @@ def status_to_text(jdict):
 
 
 def branch_status_to_text(jdict):
-    commit = jdict["commit"]
+    commit = jdict["abbrevCommit"]
     if not commit:
         return 'Empty repository.\n  (use "sno import" to add some data)'
     branch = jdict["branch"]

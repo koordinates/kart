@@ -1,6 +1,7 @@
 import contextlib
 import hashlib
 import io
+import json
 import logging
 import os
 import re
@@ -579,10 +580,10 @@ def insert(request, cli_runner):
         func.index += 1
 
         if commit:
-            r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}"])
+            r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}", "--json"])
             assert r.exit_code == 0, r
 
-            commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+            commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
             return commit_id
         else:
             return new_pk

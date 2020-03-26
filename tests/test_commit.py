@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import shlex
@@ -93,9 +94,9 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
 
         print(f"deleted fid={pk_del}")
 
-        r = cli_runner.invoke(["commit", "-m", "test-commit-1"])
+        r = cli_runner.invoke(["commit", "-m", "test-commit-1", "--json"])
         assert r.exit_code == 0, r
-        commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+        commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
         print("commit:", commit_id)
 
         repo = pygit2.Repository(str(repo_dir))

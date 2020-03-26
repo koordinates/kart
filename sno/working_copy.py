@@ -13,6 +13,8 @@ from osgeo import gdal
 
 from . import gpkg, diff
 
+L = logging.getLogger("sno.working_copy")
+
 
 class WorkingCopy:
     @classmethod
@@ -723,7 +725,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             elif action == "TREE":
                 new_tree = kwargs["tree"]
-                print(f"Tree sha: {new_tree}")
+                L.info(f"Tree sha: {new_tree}")
 
                 dbcur.execute(
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",

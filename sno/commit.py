@@ -1,7 +1,10 @@
+import json
 import os
 import re
 import shlex
 import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import click
@@ -10,7 +13,12 @@ import pygit2
 from . import is_windows
 from .core import check_git_user
 from .diff import Diff
-from .status import get_branch_status_message, get_diff_status_message
+from .status import (
+    get_branch_status_message,
+    get_diff_status_message,
+    get_diff_status_json,
+    diff_status_to_text,
+)
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
 from .cli_util import MutexOption
@@ -50,7 +58,24 @@ else:
         "such a commit. This option bypasses the safety"
     ),
 )
-def commit(ctx, message, message_file, allow_empty):
+@click.option(
+    "--text",
+    "is_output_json",
+    flag_value=False,
+    default=True,
+    help="Commit result shown in text format",
+    cls=MutexOption,
+    exclusive_with=["json"],
+)
+@click.option(
+    "--json",
+    "is_output_json",
+    flag_value=True,
+    help="Commit result shown in JSON format",
+    cls=MutexOption,
+    exclusive_with=["text"],
+)
+def commit(ctx, message, message_file, allow_empty, is_output_json):
     """ Record changes to the repository """
     repo = ctx.obj.repo
 
@@ -86,15 +111,22 @@ def commit(ctx, message, message_file, allow_empty):
     elif message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     else:
-        commit_msg = get_commit_message(repo, wc_changes)
+        commit_msg = get_commit_message(repo, wc_changes, quiet=is_output_json)
 
     if not commit_msg:
         raise click.Abort()
 
-    new_commit = rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
+    rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
+
+    new_commit = repo.head.peel(pygit2.Commit)
+    jdict = commit_obj_to_json(new_commit, repo, wc_changes)
+    if is_output_json:
+        json.dump(jdict, sys.stdout, indent=2)
+    else:
+        click.echo(commit_json_to_text(jdict))
 
 
-def get_commit_message(repo, wc_changes):
+def get_commit_message(repo, wc_changes, quiet=False):
     """ Launches the system editor to get a commit message """
     editor = os.environ.get("GIT_EDITOR")
     if not editor:
@@ -125,7 +157,8 @@ def get_commit_message(repo, wc_changes):
         f.write("\n".join(initial_message) + "\n")
         f.flush()
 
-    click.echo("hint: Waiting for your editor to close the file...")
+    if not quiet:
+        click.echo("hint: Waiting for your editor to close the file...")
     if is_windows:
         # No shlex.quote() on windows
         # " isn't legal in filenames
@@ -147,5 +180,58 @@ def get_commit_message(repo, wc_changes):
     # - whitespace at start/end
     # - comment lines
     # - blank lines surrounding comment lines
-    message = re.sub(r"^\n*#.*\n", "", message.strip(), flags=re.MULTILINE)
+    message = re.sub(r"^\n*#.*\n", "", message, flags=re.MULTILINE)
     return message.strip()
+
+
+def commit_obj_to_json(commit, repo, wc_changes):
+    branch = None
+    if not repo.head_is_detached:
+        branch = repo.branches[repo.head.shorthand].shorthand
+    commit_time = datetime.fromtimestamp(commit.commit_time, timezone.utc)
+    commit_time_offset = timedelta(minutes=commit.commit_time_offset)
+    return {
+        "sno.commit/v1": {
+            "commit": commit.id.hex,
+            "abbrevCommit": commit.short_id,
+            "author": commit.author.email,
+            "committer": commit.committer.email,
+            "branch": branch,
+            "message": commit.message,
+            "changes": get_diff_status_json(wc_changes),
+            "commitTime": to_iso8601_utc(commit_time),
+            "commitTimeOffset": to_iso8601_tz(commit_time_offset),
+        }
+    }
+
+
+def commit_json_to_text(jdict):
+    jdict = jdict["sno.commit/v1"]
+    branch = jdict["branch"]
+    commit = jdict["abbrevCommit"]
+    message = jdict["message"].replace("\n", " ")
+    diff = diff_status_to_text(jdict["changes"])
+    datetime = commit_time_to_text(jdict["commitTime"], jdict["commitTimeOffset"])
+    return f"[{branch} {commit}] {message}\n{diff}\n  Date: {datetime}"
+
+
+def to_iso8601_utc(datetime):
+    """Returns a string like: 2020-03-26T09:10:11Z"""
+    isoformat = datetime.astimezone(timezone.utc).replace(tzinfo=None).isoformat()
+    return f"{isoformat}Z"
+
+
+def to_iso8601_tz(timedelta):
+    """Returns a string like "+05:00" or "-05:00" (ie five hours ahead or behind)."""
+    abs_delta = datetime.utcfromtimestamp(abs(timedelta).seconds).strftime('%H:%M')
+    return f"+{abs_delta}" if abs(timedelta) == timedelta else f"-{abs_delta}"
+
+
+def commit_time_to_text(iso8601z, iso_offset):
+    """
+    Given an isoformat time in UTC, and a isoformat timezone offset,
+    returns the time in a human readable format, for that timezone.
+    """
+    right_time = datetime.fromisoformat(iso8601z.replace("Z", "+00:00"))
+    right_tzinfo = datetime.fromisoformat(iso8601z.replace("Z", iso_offset))
+    return right_time.astimezone(right_tzinfo.tzinfo).strftime("%c %z")

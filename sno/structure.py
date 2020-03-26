@@ -18,6 +18,8 @@ import pygit2
 
 from . import core, gpkg, diff
 
+L = logging.getLogger("sno.structure")
+
 
 class RepositoryStructure:
     def __init__(self, repo, commit=None):
@@ -132,13 +134,13 @@ class RepositoryStructure:
                     wcdiff[ds], git_index, self.repo, callback=wc.commit_callback
                 )
 
-            print("Writing tree...")
+            L.info("Writing tree...")
             new_tree = git_index.write_tree(self.repo)
-            print(f"Tree sha: {new_tree}")
+            L.info(f"Tree sha: {new_tree}")
 
             wc.commit_callback(None, "TREE", tree=new_tree)
 
-            print("Committing...")
+            L.info("Committing...")
             user = self.repo.default_signature
             # this will also update the ref (branch) to point to the current commit
             new_commit = self.repo.create_commit(
@@ -149,7 +151,7 @@ class RepositoryStructure:
                 new_tree,  # tree
                 [self.repo.head.target],  # parents
             )
-            print(f"Commit: {new_commit}")
+            L.info(f"Commit: {new_commit}")
 
         # TODO: update reflog
         return new_commit
