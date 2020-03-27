@@ -437,7 +437,7 @@ jobs:
           }
 
           nmake /D /NoLogo /F makefile.vc package
-          echo "::set-output name=file::platforms\windows\dist\Sno-${{ steps.version.outputs.installer }}.msi"
+          echo "::set-output name=file::platforms\windows\dist\Sno-${{ steps.version.outputs.value }}.msi"
 
       #
       # Uploading package
