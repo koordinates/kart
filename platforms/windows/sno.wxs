@@ -9,6 +9,9 @@
         <SetProperty Id="URL" Value="https://sno.earth/" Sequence="execute"  Before="CreateShortcuts" />
         <Icon Id="ICON_Sno" SourceFile="sno.ico" />
 
+        <!--Components-->
+        <CustomActionRef Id="WixBroadcastEnvironmentChange" />
+
         <!--Directory structure-->
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
@@ -26,7 +29,6 @@
             </Component>
        </Directory>
 
-        <!--Components-->
         <DirectoryRef Id="APPDIR">
             <!-- C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Redist\MSVC\14.16.27012\MergeModules -->
             <Merge Id="VCRedist" SourceFile="..\..\vendor\dist\Microsoft_VC141_CRT_x64.msm" DiskId="1" Language="0" />

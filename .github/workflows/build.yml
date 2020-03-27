@@ -424,7 +424,8 @@ jobs:
       - name: "package: assemble"
         id: package
         env:
-          SNO_INSTALL_VERSION: ${{ steps.version.outputs.installer }}
+          SNO_VERSION: ${{ steps.version.outputs.value }}
+          SNO_INSTALLER_VERSION: ${{ steps.version.outputs.installer }}
           WIN_SIGNCERT: ${{ secrets.WIN_SIGNCERT }}
           SIGNCERTPW: ${{ secrets.WIN_SIGNCERT_PW }}
         run: |

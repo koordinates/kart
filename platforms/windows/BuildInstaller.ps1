@@ -12,9 +12,14 @@ if ($Env:SIGNTOOL) {
     $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
 }
 
-if ($Env:SNO_INSTALL_VERSION) {
-    $INSTALLVER=$Env:SNO_INSTALL_VERSION
-    $MSINAME="Sno-${INSTALLVER}.msi"
+if ($Env:SNO_INSTALLER_VERSION) {
+    $INSTALLVER=$Env:SNO_INSTALLER_VERSION
+
+    if ($Env:SNO_VERSION) {
+        $MSINAME="Sno-${Env:SNO_VERSION}.msi"
+    } else {
+        $MSINAME="Sno-${INSTALLVER}.msi"
+    }
 } else {
     $INSTALLVER='0.0.0'
     $MSINAME='Sno.msi'
@@ -40,7 +45,8 @@ try {
     & "${WIXBIN}light" -nologo -v -b .\dist\sno `
         -o ".\dist\${MSINAME}" `
         .\build\sno.wixobj .\build\AppFiles.wixobj `
-        -ext WixUIExtension -cultures:en-us
+        -ext WixUIExtension -cultures:en-us `
+        -ext WixUtilExtension
     if (!$?) {
         exit $LastExitCode
     }
