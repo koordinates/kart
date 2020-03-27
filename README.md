@@ -5,25 +5,27 @@ Sno: Distributed version-control for datasets
 
 ## Installing
 
-### Upgrading to v0.3
+### Upgrading to v0.3.1
 
-See the [v0.3 release notes](https://github.com/koordinates/sno/releases/tag/v0.3.0) for changes, upgrading, and compatibility notes.
+See the [v0.3.1 release notes](https://github.com/koordinates/sno/releases/tag/v0.3.1) for changes, upgrading, and compatibility notes.
+
+### Windows
+
+Download the .msi installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1).
+
+> 💡 If Windows Defender SmartScreen says "it prevented an unrecognized app from starting" after downloading, you'll need to click "Run anyway".
 
 ### macOS
 
-Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0);
+Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1);
 
 Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/sno/sno`
 
 ### Linux
 
-For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0) and install via `dpkg -i sno_*.deb`.
+For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1) and install via `dpkg -i sno_*.deb`.
 
-For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.0) and install via `rpm -i sno-*.rpm`.
-
-### Windows
-
-Until the next release, Windows support is only available in development builds. Download the "Windows-msi" artifact from a [recent `master` Build](https://github.com/koordinates/sno/actions?query=branch%3Amaster+is%3Asuccess+workflow%3ABuild), unzip, and run the installer.
+For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1) and install via `rpm -i sno-*.rpm`.
 
 ### Source
 
@@ -33,7 +35,7 @@ For Sno development see the [Contributing Notes](CONTRIBUTING.md).
 
 See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials and reference.
 
-> ##### ℹ️ If you're new to git
+> ##### 💡 If you're new to git
 > Configure the identity you will use for Sno commits with:
 > ```console
 > $ sno config --global user.email "you@example.com"
