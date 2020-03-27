@@ -47,3 +47,5 @@ pytest.xml
 /build
 *.code-workspace
 .vscode/
+
+*.p12

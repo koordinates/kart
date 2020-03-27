@@ -22,7 +22,7 @@ jobs:
             id: Darwin
             os: macos-latest
             package-formats: pkg
-    if: "!contains(github.event.head_commit.message, '[ci only windows]')"
+    if: "startsWith(github.ref, 'refs/tags/v') || !contains(github.event.head_commit.message, '[ci only windows]')"
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: "1"
@@ -145,9 +145,18 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          PKG_VERSION=$(cat sno/VERSION | sed -E "s/(.*)/\1+ci.${GITHUB_SHA::8}/")
-          echo "$PKG_VERSION" | tee sno/VERSION
-          echo "::set-output name=value::$PKG_VERSION"
+          if [[ "${{ github.repository }}" == "koordinates/sno" ]] && [[ "${{ github.ref }}" =~ ^refs/tags/v(.*) ]]; then
+            VER="${BASH_REMATCH[1]}"
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${GITHUB_SHA::8}/" sno/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "$VER" > sno/VERSION
+          echo "::set-output name=value::$VER"
+          echo "::set-output name=is_release::$IS_RELEASE"
 
       - name: "app: install python dependencies"
         run: |
@@ -190,13 +199,40 @@ jobs:
       #
       # Packaging
       #
+      - name: "🍎 package: setup app signing certificate"
+        id: keychain
+        uses: apple-actions/import-codesign-certs@v1
+        if: runner.os == 'macOS' && steps.version.outputs.is_release == 1
+        with:
+          p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
+          p12-password: ${{ secrets.MACOS_CERT_PW }}
+
+      - name: "🍎 package: setup installer signing certificate"
+        uses: apple-actions/import-codesign-certs@v1
+        if: runner.os == 'macOS' && steps.version.outputs.is_release == 1
+        with:
+          create-keychain: false
+          keychain-password: ${{ steps.keychain.outputs.keychain-password }}
+          p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
+          p12-password: ${{ secrets.MACOS_CERT_PW }}
 
       - name: "🍎 package: assemble"
         id: package-Darwin
         if: runner.os == 'macOS'
+        env:
+          NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
+          NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
+          NOTARIZE_PASSWORD: "@env:NOTARIZE_PW"
         run: |
           make py-tools
-          make -C platforms pkg
+
+          if (( ${{ steps.version.outputs.is_release }} )); then
+            export CODESIGN="${{ secrets.MACOS_CODESIGN_ID }}"
+            export PKGSIGN="${{ secrets.MACOS_PKGSIGN_ID }}"
+            make -C platforms ci-pkg-notarize
+          else
+            make -C platforms pkg
+          fi
           ls -la platforms/macos/dist/Sno-${{ steps.version.outputs.value }}.pkg
           echo "::set-output name=file::platforms/macos/dist/Sno-${{ steps.version.outputs.value }}.pkg"
 
@@ -254,10 +290,26 @@ jobs:
         run: |
           make -C platforms test-deb-all test-rpm-all
 
+      #
+      # Github release
+      #
+
+      - name: release
+        uses: softprops/action-gh-release@v1
+        if: "github.repository == 'koordinates/sno' && steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            platforms/macos/dist/Sno-*.pkg
+            platforms/linux/dist/*.deb
+            platforms/linux/dist/*.rpm
+
   windows:
     name: Windows
     runs-on: windows-2016
-    if: "!contains(github.event.head_commit.message, '[ci only posix]')"
+    if: "startsWith(github.ref, 'refs/tags/v') || !contains(github.event.head_commit.message, '[ci only posix]')"
     steps:
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
@@ -320,13 +372,23 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.subString(0,8))"
-          $IVER="$($VER.Split(".")[0..2] -join '.')"
+          If ('${{ github.ref }}'.StartsWith('refs/tags/v')) {
+            $VER='${{ github.ref }}'.Substring(11)
+            $IS_RELEASE=1
+          } Else {
+            $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.Substring(0,8))"
+            $IS_RELEASE=0
+          }
+          $VER -match '\d+\.\d+(\.\d+)?'
+          $IVER=$Matches.0
+
           echo "App Version: $VER"
           echo "Installer Version: $IVER"
+          echo "Is Release? $IS_RELEASE"
           echo "$VER" > .\sno\VERSION
           echo "::set-output name=value::$VER"
           echo "::set-output name=installer::$IVER"
+          echo "::set-output name=is_release::$IS_RELEASE"
 
       - name: "app: install python dependencies"
         run: |
@@ -362,10 +424,20 @@ jobs:
       - name: "package: assemble"
         id: package
         env:
-          SNO_INSTALL_VERSION: ${{ steps.version.outputs.installer }}
+          SNO_VERSION: ${{ steps.version.outputs.value }}
+          SNO_INSTALLER_VERSION: ${{ steps.version.outputs.installer }}
+          WIN_SIGNCERT: ${{ secrets.WIN_SIGNCERT }}
+          SIGNCERTPW: ${{ secrets.WIN_SIGNCERT_PW }}
         run: |
+          If ( '${{ github.repository }}' -eq 'koordinates/sno' -and ${{ steps.version.outputs.is_release }} -eq 1 ) {
+            $CERTBYTES=[Convert]::FromBase64String($Env:WIN_SIGNCERT)
+            [IO.File]::WriteAllBytes('platforms\windows\codesign.p12', $CERTBYTES)
+
+            $Env:SIGNCERTKEY=(Get-Item platforms\windows\codesign.p12).FullName
+          }
+
           nmake /D /NoLogo /F makefile.vc package
-          echo "::set-output name=file::platforms\windows\dist\Sno-${{ steps.version.outputs.installer }}.msi"
+          echo "::set-output name=file::platforms\windows\dist\Sno-${{ steps.version.outputs.value }}.msi"
 
       #
       # Uploading package
@@ -388,3 +460,16 @@ jobs:
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & sno --version
           & tests\scripts\e2e-1.ps1
+
+      #
+      # Github release
+      #
+
+      - name: release
+        uses: softprops/action-gh-release@v1
+        if: "github.repository == 'koordinates/sno' && steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: ${{ steps.package.outputs.file }}

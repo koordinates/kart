@@ -6,14 +6,20 @@ if ($Env:WIX) {
     $WIXBIN = (Join-Path $Env:WIX 'bin\')
 }
 
-$SIGNTOOL='C:\Program Files (x86)\Windows Kits\10\App Certification Kit\signtool.exe'
 if ($Env:SIGNTOOL) {
-    $SIGNTOOL = $Env:SIGNTOOL
+    $SIGNTOOL=$Env:SIGNTOOL
+} Else {
+    $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
 }
 
-if ($Env:SNO_INSTALL_VERSION) {
-    $INSTALLVER=$Env:SNO_INSTALL_VERSION
-    $MSINAME="Sno-${INSTALLVER}.msi"
+if ($Env:SNO_INSTALLER_VERSION) {
+    $INSTALLVER=$Env:SNO_INSTALLER_VERSION
+
+    if ($Env:SNO_VERSION) {
+        $MSINAME="Sno-${Env:SNO_VERSION}.msi"
+    } else {
+        $MSINAME="Sno-${INSTALLVER}.msi"
+    }
 } else {
     $INSTALLVER='0.0.0'
     $MSINAME='Sno.msi'
@@ -39,19 +45,39 @@ try {
     & "${WIXBIN}light" -nologo -v -b .\dist\sno `
         -o ".\dist\${MSINAME}" `
         .\build\sno.wixobj .\build\AppFiles.wixobj `
-        -ext WixUIExtension -cultures:en-us
+        -ext WixUIExtension -cultures:en-us `
+        -ext WixUtilExtension
     if (!$?) {
         exit $LastExitCode
     }
 
     if ($Env:SIGNCERTKEY) {
-        Write-Output '>>> Signing Installer ...'
-        & $SIGNTOOL sign `
+        $TS_SERVERS=@(
+            'http://timestamp.digicert.com',
+            'http://timestamp.globalsign.com/scripts/timstamp.dll',
+            'http://timestamp.geotrust.com/tsa',
+            'http://timestamp.comodoca.com/rfc3161'
+        )
+
+        foreach ($TS in $TS_SERVERS) {
+            Write-Output ">>> Signing installer (w/ $TS) ..."
+            & $SIGNTOOL sign `
             /f "$Env:SIGNCERTKEY" `
             /p "$Env:SIGNCERTPW" `
             /d 'Sno Installer' `
-            /t http://timestamp.verisign.com/scripts/timstamp.dll `
+            /fd 'sha256' `
+            /tr $TS `
             /v ".\dist\${MSINAME}"
+            if ($?) {
+                break
+            }
+        }
+        if (!$?) {
+            Write-Output "Error signing installer, tried lots of timestamp servers"
+            exit $LastExitCode
+        }
+
+        & $SIGNTOOL verify /pa ".\dist\${MSINAME}"
         if (!$?) {
             exit $LastExitCode
         }

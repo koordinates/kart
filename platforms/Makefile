@@ -20,9 +20,6 @@ rpm = linux/dist/sno-$(VERSION)-1.x86_64.rpm
 docker-fpm = linux/.docker-sno-fpm
 pkg = macos/dist/Sno-$(VERSION).pkg
 
-$(pyinstaller):
-	$(MAKE) -C .. py-tools
-
 .PHONY: all
 all: $(deb) $(rpm)
 
@@ -43,6 +40,9 @@ $(docker-fpm): linux/fpm.Dockerfile
 docker-fpm:
 	-$(RM) $(docker-fpm)
 	$(MAKE) $(docker-fpm)
+
+$(pyinstaller):
+	$(MAKE) -C .. py-tools
 
 $(pyapp-Linux):
 	$(MAKE) pyapp-Linux
@@ -140,7 +140,8 @@ endif
 # Notarization
 # https://developer.apple.com/documentation/xcode/notarizing_macos_software_before_distribution/customizing_the_notarization_workflow
 # NOTARIZE_USER should be the Apple Developer account email
-# NOTARIZE_PASSWORD should be either the password, or "@keychain:AC_PASSWORD" for a keychain stored credential - see the doc above
+# NOTARIZE_PASSWORD should be either the password; or "@keychain:AC_PASSWORD" for a keychain stored credential;
+#   or "@env:ENV_VAR_NAME" - see the doc above
 
 .PHONY: pkg-notarize
 pkg-notarize: $(pkg)
@@ -149,7 +150,10 @@ pkg-notarize: $(pkg)
 		--primary-bundle-id "com.koordinates.Sno.SnoCore" \
 		--username "$(NOTARIZE_USER)" \
 		--password "$(NOTARIZE_PASSWORD)" \
-		--file $(pkg)
+		--file $(pkg) \
+		--output-format xml \
+		| tee macos/build/notarize-app-result.plist
+	echo Notarization-RequestUUID=`$(PLIST_BUDDY) -c "Print notarization-upload:RequestUUID" macos/build/notarize-app-result.plist`
 
 .PHONY: pkg-notarize-check
 pkg-notarize-check:
@@ -158,13 +162,58 @@ pkg-notarize-check:
 # NOTARIZE_REQ should be a RequestUUID from pkg-notarize / pkg-notarize-check output
 .PHONY: pkg-notarize-info
 pkg-notarize-info:
-	xcrun altool --notarization-info $(NOTARIZE_REQ) -u "$(NOTARIZE_USER)" -p "$(NOTARIZE_PASSWORD)"
+	xcrun altool --notarization-info \
+		"$(NOTARIZE_REQ)" \
+		-u "$(NOTARIZE_USER)" \
+		-p "$(NOTARIZE_PASSWORD)" \
+		--output-format xml \
+		| tee macos/build/notarize-info-result.plist
 
 .PHONY: pkg-notarize-staple
 pkg-notarize-staple:
 	xcrun stapler staple -v $(pkg)
 	spctl -a -vvv -t install $(pkg)
 	stapler validate $(pkg)
+
+# Full Notarization Workflow
+# Inspired by https://github.com/adib/DiskImageDistribution/blob/master/BuildScripts/make_disk_image.sh
+.PHONY: ci-pkg-notarize
+ci-pkg-notarize:
+	$(MAKE) pkg-notarize
+
+	export NOTARIZE_REQ=`/usr/libexec/PlistBuddy -c "Print notarization-upload:RequestUUID" macos/build/notarize-app-result.plist`; \
+	echo "Checking notarization status: $$NOTARIZE_REQ ..."; \
+	for (( ; ; )); do \
+		$(MAKE) pkg-notarize-info; \
+		NOTARIZE_STATUS=`/usr/libexec/PlistBuddy -c "Print notarization-info:Status" macos/build/notarize-info-result.plist`; \
+		if [ "$$NOTARIZE_STATUS" = "success" ]; then \
+			echo "Notarization succeeded"; \
+			break; \
+		elif [ "$$NOTARIZE_STATUS" != "in progress" ]; then \
+			echo "Notarization failed: $$NOTARIZE_STATUS"; \
+			exit 1; \
+		fi; \
+		sleep 10; \
+	done
+
+	echo "Stapling notarization result..."; \
+	for (( ; ; )); do \
+		xcrun stapler staple -v $(pkg) || R=$?; \
+		if [[ $$R -eq 0 ]]; then \
+			echo "Stapling succeeded"; \
+			break; \
+		elif [[ $$R -ne 65 ]]; then \
+			echo "Stapling failed: $$R"; \
+			exit 1; \
+		fi; \
+        echo "Waiting for stapling to find record..."; \
+		sleep 10; \
+	done
+
+	@echo "Validating $(pkg) ..."
+	spctl -a -vvv -t install $(pkg)
+	stapler validate $(pkg)
+
 
 .PHONY: pkg
 pkg: $(pkg)
