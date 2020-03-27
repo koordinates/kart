@@ -31,12 +31,12 @@ This process only supports a single release branch (master). It'll need to be ex
 
 9. Write the release notes. Topic/section suggestions:
    * Overview
-   * Compatibility / Upgrading
    * New features
+   * Compatibility / Upgrading
    * Bugs fixed
    * External Contributors
 
-10. Release the new release by :
+10. Release the new release by clicking "Publish release".
 
 ### Cleanup
 
