@@ -209,7 +209,7 @@ def test_status(
                 "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
                 "workingCopy": {
                     "nz_pa_points_topo_150k": {
-                        "schemaChanges": None,
+                        "metaChanges": None,
                         "featureChanges": {"modified": 3, "new": 1, "deleted": 2,},
                     }
                 },

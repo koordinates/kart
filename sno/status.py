@@ -96,7 +96,7 @@ def get_diff_status_json(wc_changes):
     for dataset_path, status in wc_changes.items():
         if sum(status.values()):
             result[dataset_path] = {
-                "schemaChanges": {} if status["META"] else None,
+                "metaChanges": {} if status["META"] else None,
                 "featureChanges": {
                     "modified": status["U"],
                     "new": status["I"],
@@ -176,7 +176,7 @@ def diff_status_to_text(jdict):
     message = []
     for dataset_path, all_changes in jdict.items():
         message.append(f"  {dataset_path}/")
-        if all_changes["schemaChanges"] is not None:
+        if all_changes["metaChanges"] is not None:
             message.append(f"    meta")
 
         feature_changes = all_changes["featureChanges"]
