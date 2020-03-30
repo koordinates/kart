@@ -2,16 +2,13 @@
 import logging
 import os
 import subprocess
-import sys
-from pathlib import Path
 
-import certifi
 import click
 import pygit2
 
-from . import is_windows
 from . import core  # noqa
 from . import (
+    branch,
     checkout,
     clone,
     commit,
@@ -25,6 +22,7 @@ from . import (
     upgrade,
 )
 from .context import Context
+from .exec import execvp
 
 
 def print_version(ctx, param, value):
@@ -103,6 +101,7 @@ def cli(ctx, repo_dir, verbose):
 
 
 # Commands from modules:
+cli.add_command(branch.branch)
 cli.add_command(checkout.checkout)
 cli.add_command(checkout.restore)
 cli.add_command(checkout.switch)
@@ -141,20 +140,6 @@ def reset(ctx):
 # straight process-replace commands
 
 
-def _execvp(cmd, args):
-    if "_SNO_NO_EXEC" in os.environ:
-        # used in testing. This is pretty hackzy
-        p = subprocess.run([cmd] + args[1:], capture_output=True, encoding="utf-8")
-        sys.stdout.write(p.stdout)
-        sys.stderr.write(p.stderr)
-        sys.exit(p.returncode)
-    elif is_windows:
-        p = subprocess.run([cmd] + args[1:])
-        sys.exit(p.returncode)
-    else:  # Posix
-        os.execvp(cmd, args)
-
-
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
@@ -163,7 +148,7 @@ def log(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", str(repo_path), "log"] + list(args))
+    execvp("git", ["git", "-C", str(repo_path), "log"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -174,7 +159,7 @@ def push(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", str(repo_path), "push"] + list(args))
+    execvp("git", ["git", "-C", str(repo_path), "push"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -185,28 +170,7 @@ def fetch(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", str(repo_path), "fetch"] + list(args))
-
-
-@cli.command(context_settings=dict(ignore_unknown_options=True))
-@click.pass_context
-@click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def branch(ctx, args):
-    """ List, create, or delete branches """
-    repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
-
-    # git's branch protection behaviour doesn't apply if it's a bare repository
-    # attempt to apply it here.
-    sargs = set(args)
-    if sargs & {"-d", "--delete", "-D"}:
-        branch = repo.head.shorthand
-        if branch in sargs:
-            raise click.ClickException(
-                f"Cannot delete the branch '{branch}' which you are currently on."
-            )
-
-    _execvp("git", ["git", "-C", str(repo_path), "branch"] + list(args))
+    execvp("git", ["git", "-C", str(repo_path), "fetch"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -217,7 +181,7 @@ def remote(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", str(repo_path), "remote"] + list(args))
+    execvp("git", ["git", "-C", str(repo_path), "remote"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -228,7 +192,7 @@ def tag(ctx, args):
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
-    _execvp("git", ["git", "-C", str(repo_path), "tag"] + list(args))
+    execvp("git", ["git", "-C", str(repo_path), "tag"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -240,7 +204,7 @@ def config(ctx, args):
     params = ["git", "config"]
     if ctx.obj.has_repo_path:
         params[1:1] = ["-C", str(repo_path)]
-    _execvp("git", params + list(args))
+    execvp("git", params + list(args))
 
 
 if __name__ == "__main__":
