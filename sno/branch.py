@@ -35,7 +35,9 @@ def branch(ctx, is_output_json, args):
 
     sargs = set(args)
     if is_output_json:
-        if sargs - {"--list"}:  # sno branch --list --json is allowed.
+        valid_args = {"--list"}  # "sno branch --json" or "sno branch --list --json"
+        invalid_args = sargs - valid_args
+        if invalid_args:
             raise click.UsageError(
                 "Illegal usage: 'sno branch --json' only supports listing branches."
             )
