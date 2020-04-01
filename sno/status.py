@@ -76,8 +76,10 @@ def get_working_copy_status_json(repo):
 
     rs = RepositoryStructure(repo)
     working_copy = rs.working_copy
-    if not rs.working_copy:
+    if not working_copy:
         return None
+
+    output = {"path": working_copy.path, "changes": None}
 
     wc_changes = {}
     for dataset in rs:
@@ -86,16 +88,16 @@ def get_working_copy_status_json(repo):
             wc_changes[dataset.path] = status
 
     if wc_changes:
-        return get_diff_status_json(wc_changes)
-    else:
-        return {}
+        output["changes"] = get_diff_status_json(wc_changes)
+
+    return output
 
 
 def get_diff_status_json(wc_changes):
-    result = {}
+    output = {}
     for dataset_path, status in wc_changes.items():
         if sum(status.values()):
-            result[dataset_path] = {
+            output[dataset_path] = {
                 "metaChanges": {} if status["META"] else None,
                 "featureChanges": {
                     "modified": status["U"],
@@ -103,7 +105,7 @@ def get_diff_status_json(wc_changes):
                     "deleted": status["D"],
                 },
             }
-    return result
+    return output
 
 
 def status_to_text(jdict):
@@ -162,13 +164,14 @@ def working_copy_status_to_text(jdict):
     if jdict is None:
         return 'No working copy\n  (use "sno checkout" to create a working copy)\n'
 
-    if not jdict:
+    if jdict["changes"] is None:
         return "Nothing to commit, working copy clean"
 
     return (
         "Changes in working copy:\n"
         '  (use "sno commit" to commit)\n'
-        '  (use "sno reset" to discard changes)\n\n' + diff_status_to_text(jdict)
+        '  (use "sno reset" to discard changes)\n\n'
+        + diff_status_to_text(jdict["changes"])
     )
 
 

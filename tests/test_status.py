@@ -42,7 +42,7 @@ def test_status(
                 "abbrevCommit": "2a1b7be",
                 "branch": "master",
                 "upstream": None,
-                "workingCopy": {},
+                "workingCopy": {"path": str(wc), "changes": None},
             }
         }
 
@@ -60,7 +60,7 @@ def test_status(
                 "abbrevCommit": "63a9492",
                 "branch": None,
                 "upstream": None,
-                "workingCopy": {},
+                "workingCopy": {"path": str(wc), "changes": None},
             }
         }
 
@@ -92,7 +92,7 @@ def test_status(
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {"branch": "myremote/master", "ahead": 0, "behind": 0,},
-                "workingCopy": {},
+                "workingCopy": {"path": str(wc), "changes": None},
             }
         }
 
@@ -123,7 +123,7 @@ def test_status(
                 "abbrevCommit": "2a1b7be",
                 "branch": "master",
                 "upstream": {"branch": "myremote/master", "ahead": 0, "behind": 1,},
-                "workingCopy": {},
+                "workingCopy": {"path": str(wc), "changes": None},
             }
         }
 
@@ -148,7 +148,7 @@ def test_status(
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {"branch": "myremote/master", "ahead": 1, "behind": 1,},
-                "workingCopy": {},
+                "workingCopy": {"path": str(wc), "changes": None},
             }
         }
 
@@ -172,7 +172,7 @@ def test_status(
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
                 "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
-                "workingCopy": {},
+                "workingCopy": {"path": str(wc), "changes": None},
             }
         }
 
@@ -208,10 +208,13 @@ def test_status(
                 "branch": "master",
                 "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
                 "workingCopy": {
-                    "nz_pa_points_topo_150k": {
-                        "metaChanges": None,
-                        "featureChanges": {"modified": 3, "new": 1, "deleted": 2,},
-                    }
+                    "path": str(wc),
+                    "changes": {
+                        "nz_pa_points_topo_150k": {
+                            "metaChanges": None,
+                            "featureChanges": {"modified": 3, "new": 1, "deleted": 2,},
+                        }
+                    },
                 },
             }
         }
@@ -234,7 +237,7 @@ def test_status_empty(tmp_path, cli_runner, chdir):
                 "abbrevCommit": None,
                 "branch": None,
                 "upstream": None,
-                "workingCopy": None
+                "workingCopy": None,
             }
         }
 
