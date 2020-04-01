@@ -1,6 +1,7 @@
 import os
 import re
 import subprocess
+from pathlib import Path
 
 import click
 import pygit2
@@ -216,3 +217,20 @@ def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path)
         pygit2.option(
             pygit2.GIT_OPT_SET_SEARCH_PATH, pygit2.GIT_CONFIG_LEVEL_GLOBAL, prev_home
         )
+
+
+def test_gdal_proj_data():
+    import sno  # noqa
+    from osgeo import gdal, osr
+
+    # GDAL_DATA
+    assert "GDAL_DATA" in os.environ
+    assert gdal.GetConfigOption("GDAL_DATA") == os.environ["GDAL_DATA"]
+    assert (Path(gdal.GetConfigOption("GDAL_DATA")) / "gdalvrt.xsd").exists()
+
+    # PROJ_LIB
+    assert "PROJ_LIB" in os.environ
+    osr = osr.SpatialReference()
+    osr.ImportFromEPSG(4167)
+    assert osr.ExportToWkt()
+    assert (Path(os.environ["PROJ_LIB"]) / "nzgd2kgrid0005.gsb").exists()
