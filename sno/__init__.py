@@ -59,13 +59,14 @@ else:
 # GDAL Data
 if not is_windows:
     os.environ["GDAL_DATA"] = os.path.join(prefix, "share", "gdal")
-    os.environ["PROJ_DATA"] = os.path.join(prefix, "share", "proj")
+    os.environ["PROJ_LIB"] = os.path.join(prefix, "share", "proj")
 
 # GDAL Error Handling
-from osgeo import gdal, ogr
+from osgeo import gdal, ogr, osr
 
 gdal.UseExceptions()
 ogr.UseExceptions()
+osr.UseExceptions()
 
 # Libgit2 TLS CA Certificates
 # We build libgit2 to prefer the OS certificate store on Windows/macOS, but Linux doesn't have one.
