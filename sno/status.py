@@ -4,34 +4,18 @@ import sys
 import click
 import pygit2
 
-from .cli_util import MutexOption
+from .cli_util import do_json_option
 from .structure import RepositoryStructure
 
 
 @click.command()
 @click.pass_context
-@click.option(
-    "--text",
-    "is_output_json",
-    flag_value=False,
-    default=True,
-    help="Get the status in text format",
-    cls=MutexOption,
-    exclusive_with=["json"],
-)
-@click.option(
-    "--json",
-    "is_output_json",
-    flag_value=True,
-    help="Get the status in JSON format",
-    cls=MutexOption,
-    exclusive_with=["text"],
-)
-def status(ctx, is_output_json):
+@do_json_option
+def status(ctx, do_json):
     """ Show the working copy status """
     repo = ctx.obj.repo
     jdict = get_status_json(repo)
-    if is_output_json:
+    if do_json:
         json.dump(jdict, sys.stdout, indent=2)
     else:
         click.echo(status_to_text(jdict))

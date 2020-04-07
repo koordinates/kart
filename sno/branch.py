@@ -4,37 +4,21 @@ import sys
 import click
 import pygit2
 
-from .cli_util import MutexOption
+from .cli_util import do_json_option
 from .exec import execvp
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
-@click.option(
-    "--text",
-    "is_output_json",
-    flag_value=False,
-    default=True,
-    help="Get the status in text format",
-    cls=MutexOption,
-    exclusive_with=["json"],
-)
-@click.option(
-    "--json",
-    "is_output_json",
-    flag_value=True,
-    help="Get the status in JSON format",
-    cls=MutexOption,
-    exclusive_with=["text"],
-)
+@do_json_option
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def branch(ctx, is_output_json, args):
+def branch(ctx, do_json, args):
     """ List, create, or delete branches """
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
     sargs = set(args)
-    if is_output_json:
+    if do_json:
         valid_args = {"--list"}  # "sno branch --json" or "sno branch --list --json"
         invalid_args = sargs - valid_args
         if invalid_args:

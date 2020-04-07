@@ -21,7 +21,7 @@ from .status import (
 )
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
-from .cli_util import MutexOption
+from .cli_util import MutexOption, do_json_option
 
 if is_windows:
     FALLBACK_EDITOR = "notepad.exe"
@@ -58,24 +58,8 @@ else:
         "such a commit. This option bypasses the safety"
     ),
 )
-@click.option(
-    "--text",
-    "is_output_json",
-    flag_value=False,
-    default=True,
-    help="Commit result shown in text format",
-    cls=MutexOption,
-    exclusive_with=["json"],
-)
-@click.option(
-    "--json",
-    "is_output_json",
-    flag_value=True,
-    help="Commit result shown in JSON format",
-    cls=MutexOption,
-    exclusive_with=["text"],
-)
-def commit(ctx, message, message_file, allow_empty, is_output_json):
+@do_json_option
+def commit(ctx, message, message_file, allow_empty, do_json):
     """ Record changes to the repository """
     repo = ctx.obj.repo
 
@@ -111,7 +95,7 @@ def commit(ctx, message, message_file, allow_empty, is_output_json):
     elif message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     else:
-        commit_msg = get_commit_message(repo, wc_changes, quiet=is_output_json)
+        commit_msg = get_commit_message(repo, wc_changes, quiet=do_json)
 
     if not commit_msg:
         raise click.Abort()
@@ -120,7 +104,7 @@ def commit(ctx, message, message_file, allow_empty, is_output_json):
 
     new_commit = repo.head.peel(pygit2.Commit)
     jdict = commit_obj_to_json(new_commit, repo, wc_changes)
-    if is_output_json:
+    if do_json:
         json.dump(jdict, sys.stdout, indent=2)
     else:
         click.echo(commit_json_to_text(jdict))
