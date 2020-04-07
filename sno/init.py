@@ -13,6 +13,7 @@ import pygit2
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
+from .cli_util import do_json_option
 
 
 @click.command("import-gpkg", hidden=True)
@@ -102,6 +103,8 @@ class ImportPath(click.Path):
 class ImportGPKG:
     """ GeoPackage Import Source """
 
+    prefix = "GPKG"
+
     def __init__(self, source, table=None):
         self.source = source
         self.table = table
@@ -137,7 +140,7 @@ class ImportGPKG:
                     f"Feature/Attributes table '{self.table}' not found in gpkg_contents"
                 )
 
-    def list_tables(self):
+    def get_table_list(self):
         db = gpkg.db(self.source)
         dbcur = db.cursor()
 
@@ -148,10 +151,35 @@ class ImportGPKG:
             WHERE data_type IN ('features', 'attributes', 'aspatial')
             ORDER BY table_name;
         """
-        tables = {}
+        table_list = {}
         for table_name, identifier in dbcur.execute(sql):
-            tables[table_name] = f"{table_name}  -  {identifier}"
-        return tables
+            table_list[table_name] = identifier
+        return table_list
+
+    def print_table_list(self, do_json=False):
+        table_list = self.get_table_list()
+        if do_json:
+            json.dump({"sno.tables/v1": table_list}, sys.stdout, indent=2)
+        else:
+            click.secho(f"GeoPackage tables in '{Path(self.source).name}':", bold=True)
+            for table_name, identifier in table_list.items():
+                click.echo(f"{table_name}  -  {identifier}")
+        return table_list
+
+    def prompt_for_table(self, prompt):
+        table_list = self.print_table_list()
+
+        if not sys.stdout.isatty():
+            click.secho(
+                f'\n{prompt} via "{self.prefix}:{self.source}:MYTABLE"', fg="yellow",
+            )
+            sys.exit(1)
+
+        t_choices = click.Choice(choices=table_list.keys())
+        t_default = next(iter(table_list)) if len(table_list) == 1 else None
+        return click.prompt(
+            f"\n{prompt}", type=t_choices, show_choices=False, default=t_default,
+        )
 
     def __enter__(self):
         if not self.table:
@@ -274,7 +302,8 @@ class ImportGPKG:
     hidden=True,
 )
 @click.option("--method", hidden=True)
-def import_table(ctx, source, directory, do_list, version, method):
+@do_json_option
+def import_table(ctx, source, directory, do_list, do_json, version, method):
     """
     Import data into a repository.
 
@@ -287,7 +316,13 @@ def import_table(ctx, source, directory, do_list, version, method):
     $ sno import --list GPKG:my.gpkg
     """
 
-    if not do_list:
+    if do_json and not do_list:
+        raise click.UsageError(
+            "Illegal usage: 'sno import --json' only supports --list"
+        )
+
+    use_repo_ctx = not do_list
+    if use_repo_ctx:
         repo_path = ctx.obj.repo_path
         repo = ctx.obj.repo
         check_git_user(repo)
@@ -301,39 +336,15 @@ def import_table(ctx, source, directory, do_list, version, method):
     except ValueError as e:
         raise click.BadParameter(str(e), param_hint="source") from e
 
-    if do_list or not source_table:
-        available_tables = source_loader.list_tables()
-
-        # print a list of the GeoPackage tables
-        click.secho(f"GeoPackage tables in '{Path(source_path).name}':", bold=True)
-        for t_label in available_tables.values():
-            click.echo(t_label)
-
-        if do_list:
-            return
-
-        if sys.stdout.isatty():
-            t_choices = click.Choice(choices=available_tables.keys())
-            t_default = (
-                next(iter(available_tables)) if len(available_tables) == 1 else None
-            )
-            source_table = click.prompt(
-                "\nSelect a table to import",
-                type=t_choices,
-                show_choices=False,
-                default=t_default,
-            )
-
-            # re-init & re-check
-            source_loader = source_klass(source=source_path, table=source_table,)
-            source_loader.check()
+    if do_list:
+        source_loader.print_table_list(do_json=do_json)
+        return
 
     if not source_table:
-        click.secho(
-            f'\nSpecify a table to import from via "{source_prefix}:{source_path}:MYTABLE"',
-            fg="yellow",
-        )
-        ctx.exit(1)
+        source_table = source_loader.prompt_for_table("Select a table to import")
+        # re-init & re-check
+        source_loader = source_klass(source=source_path, table=source_table,)
+        source_loader.check()
 
     if directory:
         directory = os.path.relpath(directory, os.path.abspath(repo_path))
@@ -401,30 +412,10 @@ def init(ctx, import_from, do_checkout, directory):
             raise click.BadParameter(str(e), param_hint="import_from") from e
 
         if not import_table:
-            available_tables = source_loader.list_tables()
-
-            # print a list of the GeoPackage tables
-            click.secho(f"GeoPackage tables in '{Path(import_path).name}':", bold=True)
-            for t_label in available_tables.values():
-                click.echo(t_label)
-
-            if sys.stdout.isatty():
-                t_choices = click.Choice(choices=available_tables.keys())
-                import_table = click.prompt(
-                    "Please select a table to import",
-                    type=t_choices,
-                    show_choices=False,
-                )
-
-                # re-init & re-check
-                source_loader = source_klass(source=import_path, table=import_table,)
-                source_loader.check()
-            else:
-                click.secho(
-                    f'\nSpecify a table to import from via "{import_prefix}:{import_path}:MYTABLE"',
-                    fg="yellow",
-                )
-                ctx.exit(1)
+            import_table = source_loader.prompt_for_table("Select a table to import")
+            # re-init & re-check
+            source_loader = source_klass(source=import_path, table=import_table,)
+            source_loader.check()
 
     if directory is None:
         directory = os.curdir
