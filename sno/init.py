@@ -286,10 +286,11 @@ def import_table(ctx, source, directory, do_list, version, method):
     To show available tables in the import data, use
     $ sno import --list GPKG:my.gpkg
     """
-    repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
 
-    check_git_user(repo)
+    if not do_list:
+        repo_path = ctx.obj.repo_path
+        repo = ctx.obj.repo
+        check_git_user(repo)
 
     source_prefix, source_path, source_table = source
     source_klass = globals()[f"Import{source_prefix}"]
