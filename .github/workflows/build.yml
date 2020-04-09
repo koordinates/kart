@@ -429,7 +429,7 @@ jobs:
           WIN_SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
           SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
-          SIGN_AZURE_CLIENTSECRET: ${{ secrets.SIGN_AZURE_CLIENTSECRET }}
+          SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
         run: |
           If ( '${{ github.repository }}' -eq 'koordinates/sno' -and ${{ steps.version.outputs.is_release }} -eq 1 ) {
             dotnet tool install --global AzureSignTool --version 2.0.17
