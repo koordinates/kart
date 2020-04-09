@@ -6,10 +6,11 @@ if ($Env:WIX) {
     $WIXBIN = (Join-Path $Env:WIX 'bin\')
 }
 
-if ($Env:SIGNTOOL) {
-    $SIGNTOOL=$Env:SIGNTOOL
-} Else {
-    $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
+if (-not (Get-Command -erroraction 'silentlycontinue' signtool)) {
+    $Env:PATH += ";${Env:WindowsSdkVerBinPath}\x64\signtool.exe"
+}
+if ($Env:SIGN_AZURE_CERTIFICATE) {
+    Write-Output ">>> Checking for AzureSignTool: " (Get-Command azuresigntool).Path
 }
 
 if ($Env:SNO_INSTALLER_VERSION) {
@@ -51,33 +52,36 @@ try {
         exit $LastExitCode
     }
 
-    if ($Env:SIGNCERTKEY) {
+    if ($Env:SIGN_AZURE_CERTIFICATE) {
         $TS_SERVERS=@(
-            'http://timestamp.digicert.com',
             'http://timestamp.globalsign.com/scripts/timstamp.dll',
+            'http://timestamp.digicert.com',
             'http://timestamp.geotrust.com/tsa',
             'http://timestamp.comodoca.com/rfc3161'
         )
 
         foreach ($TS in $TS_SERVERS) {
-            Write-Output ">>> Signing installer (w/ $TS) ..."
-            & $SIGNTOOL sign `
-            /f "$Env:SIGNCERTKEY" `
-            /p "$Env:SIGNCERTPW" `
-            /d 'Sno Installer' `
-            /fd 'sha256' `
-            /tr $TS `
-            /v ".\dist\${MSINAME}"
+            Write-Output ">>> Signing $MSINAME (w/ $TS) ..."
+            & azuresigntool sign `
+            --azure-key-vault-url="$Env:SIGN_AZURE_VAULT" `
+            --azure-key-vault-client-id="$Env:SIGN_AZURE_CLIENTID" `
+            --azure-key-vault-client-secret="$Env:SIGN_AZURE_CLIENTSECRET" `
+            --azure-key-vault-certificate="$Env:SIGN_AZURE_CERTIFICATE" `
+            --description-url="https://sno.earth" `
+            --description="Sno Installer" `
+            --timestamp-rfc3161="$TS" `
+            --verbose `
+            (Join-Path '.\dist' $MSINAME)
             if ($?) {
                 break
             }
         }
         if (!$?) {
-            Write-Output "Error signing installer, tried lots of timestamp servers"
+            Write-Output "Error signing $MSINAME, tried lots of timestamp servers"
             exit $LastExitCode
         }
 
-        & $SIGNTOOL verify /pa ".\dist\${MSINAME}"
+        & signtool verify /pa (Join-Path '.\dist' $MSINAME)
         if (!$?) {
             exit $LastExitCode
         }
