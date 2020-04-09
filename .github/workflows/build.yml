@@ -426,28 +426,36 @@ jobs:
         env:
           SNO_VERSION: ${{ steps.version.outputs.value }}
           SNO_INSTALLER_VERSION: ${{ steps.version.outputs.installer }}
-          WIN_SIGNCERT: ${{ secrets.WIN_SIGNCERT }}
-          SIGNCERTPW: ${{ secrets.WIN_SIGNCERT_PW }}
+          WIN_SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
+          SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
+          SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
+          SIGN_AZURE_CLIENTSECRET: ${{ secrets.SIGN_AZURE_CLIENTSECRET }}
         run: |
           If ( '${{ github.repository }}' -eq 'koordinates/sno' -and ${{ steps.version.outputs.is_release }} -eq 1 ) {
-            $CERTBYTES=[Convert]::FromBase64String($Env:WIN_SIGNCERT)
-            [IO.File]::WriteAllBytes('platforms\windows\codesign.p12', $CERTBYTES)
+            dotnet tool install --global AzureSignTool --version 2.0.17
 
-            $Env:SIGNCERTKEY=(Get-Item platforms\windows\codesign.p12).FullName
+            $Env:SIGN_AZURE_CERTIFICATE=$Env:WIN_SIGN_AZURE_CERTIFICATE
           }
 
           nmake /D /NoLogo /F makefile.vc package
-          echo "::set-output name=file::platforms\windows\dist\Sno-${{ steps.version.outputs.value }}.msi"
+          echo "::set-output name=msi::platforms\windows\dist\Sno-${{ steps.version.outputs.value }}.msi"
+          echo "::set-output name=msm::platforms\windows\dist\Sno-${{ steps.version.outputs.value }}.msm"
 
       #
       # Uploading package
       #
 
-      - name: "package: save"
+      - name: "package: save msi"
         uses: actions/upload-artifact@v2-preview
         with:
           name: Windows-msi
-          path: ${{ steps.package.outputs.file }}
+          path: ${{ steps.package.outputs.msi }}
+
+      - name: "package: save msm"
+        uses: actions/upload-artifact@v2-preview
+        with:
+          name: Windows-msm-module
+          path: ${{ steps.package.outputs.msm }}
 
       #
       # Package tests
@@ -455,7 +463,7 @@ jobs:
 
       - name: "package: tests"
         run: |
-          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\${{ steps.package.outputs.file }} /quiet /norestart /l* install.log'
+          Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\${{ steps.package.outputs.msi }} /quiet /norestart /l* install.log'
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & sno --version
@@ -472,4 +480,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           draft: true
-          files: ${{ steps.package.outputs.file }}
+          files: |
+            ${{ steps.package.outputs.msi }}
+            ${{ steps.package.outputs.msm }}

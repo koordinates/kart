@@ -7,6 +7,7 @@ MSI=Sno-$(SNO_INSTALLER_VERSION).msi
 !ELSE
 MSI=Sno.msi
 !ENDIF
+MSM=$(MSI:.msi=.msm)
 
 all: windows\dist\$(MSI)
 
@@ -16,5 +17,5 @@ clean:
 windows\dist\sno: ..\sno.spec
 	powershell -NoLogo windows\BuildPyApp.ps1
 
-windows\dist\$(MSI): windows\dist\sno windows\sno.wxs windows\*.ps1 windows\*.bmp windows\*.ico
+windows\dist\$(MSI) windows\dist\$(MSM): windows\dist\sno windows\sno*.wxs windows\*.ps1 windows\*.bmp windows\*.ico
 	powershell -NoLogo windows\BuildInstaller.ps1

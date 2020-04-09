@@ -6,10 +6,11 @@ if ($Env:WIX) {
     $WIXBIN = (Join-Path $Env:WIX 'bin\')
 }
 
-if ($Env:SIGNTOOL) {
-    $SIGNTOOL=$Env:SIGNTOOL
-} Else {
-    $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
+if (-not (Get-Command -erroraction 'silentlycontinue' signtool)) {
+    $Env:PATH += ";${Env:WindowsSdkVerBinPath}\x64\signtool.exe"
+}
+if ($Env:SIGN_AZURE_CERTIFICATE) {
+    Write-Output ">>> Checking for AzureSignTool: " (Get-Command azuresigntool).Path
 }
 
 if ($Env:SNO_INSTALLER_VERSION) {
@@ -24,6 +25,7 @@ if ($Env:SNO_INSTALLER_VERSION) {
     $INSTALLVER='0.0.0'
     $MSINAME='Sno.msi'
 }
+$MSMNAME=$MSINAME.Replace('.msi', '.msm')
 Write-Output ">>> Installer version: $INSTALLVER"
 
 Push-Location -Path $PSScriptRoot
@@ -36,6 +38,11 @@ try {
     }
 
     Write-Output '>>> Wix: Compiling ...'
+    & "${WIXBIN}candle" -nologo -v -arch x64 -dVersion="$INSTALLVER" sno-module.wxs .\build\AppFiles.wxs -o .\build\
+    if (!$?) {
+        exit $LastExitCode
+    }
+
     & "${WIXBIN}candle" -nologo -v -arch x64 -dVersion="$INSTALLVER" sno.wxs .\build\AppFiles.wxs -o .\build\
     if (!$?) {
         exit $LastExitCode
@@ -51,33 +58,45 @@ try {
         exit $LastExitCode
     }
 
-    if ($Env:SIGNCERTKEY) {
+    & "${WIXBIN}light" -nologo -v -b .\dist\sno `
+        -o ".\dist\${MSMNAME}" `
+        .\build\sno-module.wixobj .\build\AppFiles.wixobj `
+        -ext WixUIExtension -cultures:en-us `
+        -ext WixUtilExtension
+    if (!$?) {
+        exit $LastExitCode
+    }
+
+    if ($Env:SIGN_AZURE_CERTIFICATE) {
         $TS_SERVERS=@(
-            'http://timestamp.digicert.com',
             'http://timestamp.globalsign.com/scripts/timstamp.dll',
+            'http://timestamp.digicert.com',
             'http://timestamp.geotrust.com/tsa',
             'http://timestamp.comodoca.com/rfc3161'
         )
 
         foreach ($TS in $TS_SERVERS) {
-            Write-Output ">>> Signing installer (w/ $TS) ..."
-            & $SIGNTOOL sign `
-            /f "$Env:SIGNCERTKEY" `
-            /p "$Env:SIGNCERTPW" `
-            /d 'Sno Installer' `
-            /fd 'sha256' `
-            /tr $TS `
-            /v ".\dist\${MSINAME}"
+            Write-Output ">>> Signing $MSINAME (w/ $TS) ..."
+            & azuresigntool sign `
+            --azure-key-vault-url="$Env:SIGN_AZURE_VAULT" `
+            --azure-key-vault-client-id="$Env:SIGN_AZURE_CLIENTID" `
+            --azure-key-vault-client-secret="$Env:SIGN_AZURE_CLIENTSECRET" `
+            --azure-key-vault-certificate="$Env:SIGN_AZURE_CERTIFICATE" `
+            --description-url="https://sno.earth" `
+            --description="Sno Installer" `
+            --timestamp-rfc3161="$TS" `
+            --verbose `
+            (Join-Path '.\dist' $MSINAME)
             if ($?) {
                 break
             }
         }
         if (!$?) {
-            Write-Output "Error signing installer, tried lots of timestamp servers"
+            Write-Output "Error signing $MSINAME, tried lots of timestamp servers"
             exit $LastExitCode
         }
 
-        & $SIGNTOOL verify /pa ".\dist\${MSINAME}"
+        & signtool verify /pa (Join-Path '.\dist' $MSINAME)
         if (!$?) {
             exit $LastExitCode
         }

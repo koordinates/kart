@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Module Id="Sno" Language="1033" Version="$(var.Version)">
+        <Package Id="{b177ebef-804a-4a31-bc95-67db4398399a}" Manufacturer="Koordinates" Description="Installer module for Sno command line tools."
+            Comments="(c) The Sno Development Community" InstallerVersion="301" />
+
+        <SetProperty Id="URL" Value="https://sno.earth/" Sequence="execute"  Before="CreateShortcuts" />
+        <Icon Id="ICON_Sno" SourceFile="sno.ico" />
+
+        <!--Components-->
+        <CustomActionRef Id="WixBroadcastEnvironmentChange" />
+
+        <!--Directory structure-->
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFiles64Folder">
+                <Directory Id="APPDIR" Name="Sno" />
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="DIR_Shortcuts" Name="Sno" />
+            </Directory>
+            <Component Id="ProductInformation" Guid="{70118EC7-3341-4039-9FA6-33B1F46CD908}">
+                <RegistryValue Id="Version" Root="HKMU" Key="Software\[Manufacturer]\[ProductName]" Name="Version" Value="[ProductVersion]" Type="string" KeyPath="yes" />
+                <RegistryValue Id="Path" Root="HKMU" Key="Software\[Manufacturer]\[ProductName]" Name="Path" Value="[APPDIR]" Type="string" />
+            </Component>
+            <Component Id="CMP_EnvAddPath" Guid="{2a47b421-e16c-479d-b1cd-435ccde79585}">
+                <Environment Id="PathEnvVar" Name="PATH" Action="set" Part="last" Value="[APPDIR]"/>
+            </Component>
+       </Directory>
+
+        <!--Start Menu Shortcuts-->
+        <DirectoryRef Id="DIR_Shortcuts">
+            <Component Id="CMP_Shortcuts" Guid="{11949267-bc68-4997-be76-3554c1154e12}">
+                <Shortcut Id="OnlineDocumentationShortcut" Name="Sno Documentation" Target="[URL]" Icon="ICON_Sno" />
+
+                <Shortcut Id="UninstallShortcut" Name="Uninstall Sno" Description="Uninstalls the Sno command line tools" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]" />
+
+                <RemoveFolder Id="DIR_Shortcuts" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\Sno\SnoCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+
+        <ComponentGroupRef Id="CG_AppFiles" />
+        <ComponentRef Id="ProductInformation" />
+        <ComponentRef Id="CMP_EnvAddPath" />
+        <ComponentRef Id="CMP_Shortcuts" />
+
+        <!-- Uninstall/System -->
+        <Property Id="ARPPRODUCTICON" Value="ICON_Sno" />
+    </Module>
+</Wix>
