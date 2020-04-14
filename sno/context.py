@@ -1,7 +1,8 @@
 from pathlib import Path
 
-import click
 import pygit2
+
+from .exceptions import NotFound, NO_REPOSITORY
 
 
 class Context(object):
@@ -41,11 +42,12 @@ class Context(object):
 
         if not self._repo or not self._repo.is_bare:
             if self.has_repo_path:
-                raise click.BadParameter(
-                    "Not an existing repository", param_hint="--repo"
-                )
+                message = "Not an existing repository"
+                param_hint = "repo"
             else:
-                raise click.UsageError(
-                    "Current directory is not an existing repository"
-                )
+                message = "Current directory is not an existing repository"
+                param_hint = None
+
+            raise NotFound(message, exit_code=NO_REPOSITORY, param_hint=param_hint)
+
         return self._repo

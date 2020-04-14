@@ -13,6 +13,7 @@ from . import (
     clone,
     commit,
     diff,
+    exceptions,
     init,
     fsck,
     merge,
@@ -23,6 +24,9 @@ from . import (
 )
 from .context import Context
 from .exec import execvp
+
+
+click.exceptions.UsageError.exit_code = exceptions.INVALID_ARGUMENT
 
 
 def print_version(ctx, param, value):

@@ -8,6 +8,7 @@ import pygit2
 
 import sno.checkout
 from sno.working_copy import WorkingCopy
+from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 
 
 H = pytest.helpers.helpers()
@@ -155,7 +156,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
 
         # creating a new branch with existing name errors
         r = cli_runner.invoke(["checkout", "-b", "master"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_ARGUMENT, r
         assert r.stdout.splitlines()[-1].endswith(
             "A branch named 'master' already exists."
         )
@@ -268,7 +269,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
             assert db.changes() == 1
 
         r = cli_runner.invoke(["switch", "foo"])
-        assert r.exit_code == 1, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert "Error: You have uncommitted changes in your working copy." in r.stdout
 
         r = cli_runner.invoke(["switch", "foo", "--discard-changes"])
@@ -384,7 +385,7 @@ def test_working_copy_reset(
 
             # this should error
             r = cli_runner.invoke(["checkout", "HEAD"])
-            assert r.exit_code == 1, r
+            assert r.exit_code == INVALID_OPERATION, r
 
             cur.execute("""SELECT COUNT(*) FROM ".sno-track";""")
             change_count = cur.fetchone()[0]
@@ -468,7 +469,7 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
         repo = pygit2.Repository(str(repo_path))
 
         r = cli_runner.invoke(["workingcopy-set-path", "/thingz.gpkg"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_ARGUMENT, r
 
         # relative path 1
         new_path = Path("new-thingz.gpkg")
@@ -658,14 +659,14 @@ def test_delete_branch(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
         # prevent deleting the current branch
         r = cli_runner.invoke(["branch", "-d", "master"])
-        assert r.exit_code == 1, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert "Cannot delete" in r.stdout
 
         r = cli_runner.invoke(["checkout", "-b", "test"])
         assert r.exit_code == 0, r
 
         r = cli_runner.invoke(["branch", "-d", "test"])
-        assert r.exit_code == 1, r
+        assert r.exit_code == INVALID_OPERATION, r
 
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r

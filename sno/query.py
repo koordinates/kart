@@ -1,17 +1,16 @@
 import datetime
 import json
 import logging
-import os
 import re
 import sys
 import time
 import types
 
 import click
-import pygit2
 from osgeo import ogr
 
 from . import structure
+from .exceptions import NotFound
 
 
 L = logging.getLogger("sno.query")
@@ -62,9 +61,7 @@ def query(ctx, path, command, params):
     try:
         dataset.get_spatial_index(dataset.name)
     except OSError:
-        raise click.ClickException(
-            "No spatial index found. Run `sno query {path} index`"
-        )
+        raise NotFound("No spatial index found. Run `sno query {path} index`")
 
     if command == "get":
         USAGE = "get PK"

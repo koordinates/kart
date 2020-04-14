@@ -5,6 +5,7 @@ import click
 import pygit2
 
 from .cli_util import do_json_option
+from .exceptions import InvalidOperation
 from .exec import execvp
 
 
@@ -33,7 +34,7 @@ def branch(ctx, do_json, args):
     if sargs & {"-d", "--delete", "-D"}:
         branch = repo.head.shorthand
         if branch in sargs:
-            raise click.ClickException(
+            raise InvalidOperation(
                 f"Cannot delete the branch '{branch}' which you are currently on."
             )
 

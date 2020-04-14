@@ -5,7 +5,8 @@ import click
 import pygit2
 from osgeo import gdal
 
-from . import core, gpkg
+from . import gpkg
+from .exceptions import NotFound, NO_WORKING_COPY
 from .structure import RepositoryStructure
 
 
@@ -87,8 +88,9 @@ def fsck(ctx, reset_datasets, fsck_args):
 
     working_copy_path = repo.config["sno.workingcopy.path"]
     if not os.path.isfile(working_copy_path):
-        raise click.ClickException(
-            click.style(f"Working copy missing: {working_copy_path}", fg="red")
+        raise NotFound(
+            click.style(f"Working copy missing: {working_copy_path}", fg="red"),
+            exit_code=NO_WORKING_COPY,
         )
     working_copy = rs.working_copy
 

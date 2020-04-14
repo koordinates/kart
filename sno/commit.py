@@ -13,6 +13,7 @@ import pygit2
 from . import is_windows
 from .core import check_git_user
 from .diff import Diff
+from .exceptions import NotFound, SubprocessError, NO_CHANGES, NO_DATA, NO_WORKING_COPY
 from .status import (
     get_branch_status_message,
     get_diff_status_message,
@@ -64,8 +65,9 @@ def commit(ctx, message, message_file, allow_empty, do_json):
     repo = ctx.obj.repo
 
     if repo.is_empty:
-        raise click.UsageError(
-            'Empty repository.\n  (use "sno import" to add some data)'
+        raise NotFound(
+            'Empty repository.\n  (use "sno import" to add some data)',
+            exit_code=NO_DATA,
         )
 
     check_git_user(repo)
@@ -75,7 +77,7 @@ def commit(ctx, message, message_file, allow_empty, do_json):
 
     working_copy = WorkingCopy.open(repo)
     if not working_copy:
-        raise click.UsageError("No working copy, use 'checkout'")
+        raise NotFound("No working copy, use 'checkout'", exit_code=NO_WORKING_COPY)
 
     working_copy.assert_db_tree_match(tree)
 
@@ -88,7 +90,7 @@ def commit(ctx, message, message_file, allow_empty, do_json):
         wc_changes[dataset.path] = diff.counts(dataset)
 
     if not wcdiff and not allow_empty:
-        raise click.ClickException("No changes to commit")
+        raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
     if message_file:
         commit_msg = message_file.read().strip()
@@ -98,7 +100,7 @@ def commit(ctx, message, message_file, allow_empty, do_json):
         commit_msg = get_commit_message(repo, wc_changes, quiet=do_json)
 
     if not commit_msg:
-        raise click.Abort()
+        raise click.UsageError("No commit message")
 
     rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
 
@@ -152,7 +154,7 @@ def get_commit_message(repo, wc_changes, quiet=False):
     try:
         subprocess.check_call(editor_cmd, shell=True)
     except subprocess.CalledProcessError as e:
-        raise click.ClickException(
+        raise SubprocessError(
             f"There was a problem with the editor '{editor}': {e}"
         ) from e
 
