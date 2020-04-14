@@ -139,7 +139,9 @@
                 layers[dataset] = {}
                 featureMap[dataset] = {}
 
-                for (let [fOld, fNew] of diff.featureChanges) {
+                for (let change of diff.featureChanges) {
+                    const fOld = change['-']
+                    const fNew = change['+']
                     if (fOld && fNew) {
                         fc['updateOld'].push(fOld)
                         fc['updateNew'].push(fNew)
@@ -227,7 +229,9 @@
             // if schema has changed then it'll show up in every single feature
             let oldSchema = null
             let newSchema = null
-            for (let [fOld, fNew] of diff.featureChanges) {
+            for (let change of diff.featureChanges) {
+                const fOld = change['-']
+                const fNew = change['+']
                 if (fOld && !oldSchema) {
                     oldSchema = Object.keys(fOld.properties)
                     oldSchema.splice(0, 0, GEOM)
@@ -296,7 +300,9 @@
                 }
 
                 let tbody = table.createTBody()
-                for (let [fOld, fNew] of diff.featureChanges) {
+                for (let fc of diff.featureChanges) {
+                    let fOld = fc['-']
+                    let fNew = fc['+']
                     let change;
                     if (fOld && fNew) {
                         change = 'update'

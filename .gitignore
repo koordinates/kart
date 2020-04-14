@@ -2,6 +2,7 @@
 *.py?
 /data
 /venv
+/pip-wheel-metadata
 
 vendor/curl/**
 !vendor/curl/Makefile

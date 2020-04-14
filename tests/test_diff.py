@@ -204,9 +204,8 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                     "nz_pa_points_topo_150k": {
                         "metaChanges": {},
                         "featureChanges": [
-                            [
-                                None,
-                                {
+                            {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Point",
@@ -221,9 +220,9 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "I::9999",
                                 },
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Point",
@@ -241,10 +240,9 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "D::3",
                                 },
-                                None,
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Point",
@@ -262,7 +260,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U-::1",
                                 },
-                                {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Point",
@@ -280,9 +278,9 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U+::9998",
                                 },
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Point",
@@ -300,7 +298,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U-::2",
                                 },
-                                {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Point",
@@ -318,7 +316,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U+::2",
                                 },
-                            ],
+                            },
                         ],
                     }
                 }
@@ -598,9 +596,8 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                     "nz_waca_adjustments": {
                         "metaChanges": {},
                         "featureChanges": [
-                            [
-                                None,
-                                {
+                            {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "Polygon",
@@ -622,9 +619,9 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                     },
                                     "id": "I::9999999",
                                 },
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "MultiPolygon",
@@ -694,10 +691,9 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                     },
                                     "id": "D::1452332",
                                 },
-                                None,
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "MultiPolygon",
@@ -761,7 +757,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                     },
                                     "id": "U-::1424927",
                                 },
-                                {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "MultiPolygon",
@@ -825,9 +821,9 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                     },
                                     "id": "U+::9998",
                                 },
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "MultiPolygon",
@@ -875,7 +871,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                     },
                                     "id": "U-::1443053",
                                 },
-                                {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": {
                                         "type": "MultiPolygon",
@@ -923,7 +919,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                     },
                                     "id": "U+::1443053",
                                 },
-                            ],
+                            },
                         ],
                     }
                 }
@@ -1130,9 +1126,8 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                     "countiestbl": {
                         "metaChanges": {},
                         "featureChanges": [
-                            [
-                                None,
-                                {
+                            {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": None,
                                     "properties": {
@@ -1150,10 +1145,10 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                         "Shape_Area": 0.565_449_933_741_451,
                                     },
                                     "id": "I::9999",
-                                },
-                            ],
-                            [
-                                {
+                                }
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": None,
                                     "properties": {
@@ -1171,11 +1166,10 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                         "Shape_Leng": 4.876_296_245_235_406,
                                     },
                                     "id": "D::3",
-                                },
-                                None,
-                            ],
-                            [
-                                {
+                                }
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": None,
                                     "properties": {
@@ -1194,7 +1188,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U-::1",
                                 },
-                                {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": None,
                                     "properties": {
@@ -1213,9 +1207,9 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U+::9998",
                                 },
-                            ],
-                            [
-                                {
+                            },
+                            {
+                                '-': {
                                     "type": "Feature",
                                     "geometry": None,
                                     "properties": {
@@ -1234,7 +1228,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U-::2",
                                 },
-                                {
+                                '+': {
                                     "type": "Feature",
                                     "geometry": None,
                                     "properties": {
@@ -1253,7 +1247,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                     },
                                     "id": "U+::2",
                                 },
-                            ],
+                            },
                         ],
                     }
                 }
@@ -1300,13 +1294,13 @@ def test_diff_rev_rev(data_archive, cli_runner):
                 ("U-::1095", "U+::1095"),
             }
             change_ids = {
-                ((f[0] or {}).get("id"), (f[1] or {}).get("id"))
+                (f.get('-', {}).get("id"), f.get('+', {}).get("id"))
                 for f in odata[H.POINTS_LAYER]["featureChanges"]
             }
             assert change_ids == CHANGE_IDS
             # this commit _adds_ names
             change_names = {
-                (f[0]["properties"]["name"], f[1]["properties"]["name"])
+                (f['-']["properties"]["name"], f['+']["properties"]["name"])
                 for f in odata[H.POINTS_LAYER]["featureChanges"]
             }
             assert not any(n[0] for n in change_names)
@@ -1326,13 +1320,13 @@ def test_diff_rev_rev(data_archive, cli_runner):
             assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
             assert len(odata[H.POINTS_LAYER]["metaChanges"]) == 0
             change_ids = {
-                ((f[0] or {}).get("id"), (f[1] or {}).get("id"))
+                (f.get('-', {}).get("id"), f.get('+', {}).get("id"))
                 for f in odata[H.POINTS_LAYER]["featureChanges"]
             }
             assert change_ids == CHANGE_IDS
             # so names are _removed_
             change_names = {
-                (f[0]["properties"]["name"], f[1]["properties"]["name"])
+                (f['-']["properties"]["name"], f['+']["properties"]["name"])
                 for f in odata[H.POINTS_LAYER]["featureChanges"]
             }
             assert all(n[0] for n in change_names)
@@ -1392,11 +1386,13 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
 
         def _extract(diff_json):
             ds = {}
-            for fo, fn in odata["editing"]["featureChanges"]:
-                pk = fo["properties"]["id"] if fo else fn["properties"]["id"]
-                vo = fo["properties"]["value"] if fo else None
-                vn = fn["properties"]["value"] if fn else None
-                ds[pk] = (vo, vn)
+            for f in odata["editing"]["featureChanges"]:
+                old = f.get('-')
+                new = f.get('+')
+                pk = old["properties"]["id"] if old else new["properties"]["id"]
+                v_old = old["properties"]["value"] if old else None
+                v_new = new["properties"]["value"] if new else None
+                ds[pk] = (v_old, v_new)
             return ds
 
         # changes from HEAD (R1 -> WC)
