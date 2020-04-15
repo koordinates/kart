@@ -20,7 +20,6 @@ from .exceptions import (
     NotYetImplemented,
     NotFound,
     NO_WORKING_COPY,
-    NO_COMMIT,
     UNCATEGORIZED_ERROR,
 )
 
@@ -428,73 +427,62 @@ def diff(ctx, output_format, output_path, exit_code, args):
             output_path = Path(output_path).expanduser()
 
         repo = ctx.obj.repo
+        args = list(args)
 
-        paths = {}
-        commit_head = repo.head.peel(pygit2.Commit)
-        commit_base = commit_head
-        commit_target = None  # None for working-copy
-        if len(args):
-            path_list = list(args)
-            commit_parts = re.split(r"(\.{2,3})", args[0])
+        # TODO: handle [--] and [<dataset>[:pk]...] without <commit>
 
-            if len(commit_parts) == 3:
-                try:
-                    commit_base = repo.revparse_single(commit_parts[0] or "HEAD")
-                    commit_target = repo.revparse_single(commit_parts[2] or "HEAD")
-                    L.debug("commit_target=%s", commit_target.id)
-                except KeyError:
-                    raise NotFound(
-                        "Invalid commit spec", param_hint="commit", exit_code=NO_COMMIT
-                    )
-                else:
-                    path_list.pop(0)
-            else:
-                try:
-                    commit_base = repo.revparse_single(commit_parts[0])
-                except KeyError:
-                    raise NotFound(
-                        "Invalid commit spec", param_hint="commit", exit_code=NO_COMMIT
-                    )
-                else:
-                    path_list.pop(0)
+        # Parse <commit> or <commit>...<commit>
+        commit_arg = args.pop(0) if args else "HEAD"
+        commit_parts = re.split(r"(\.{2,3})", commit_arg)
 
-            for p in path_list:
-                pp = p.split(":", maxsplit=1)
-                paths.setdefault(pp[0], [])
-                if len(pp) > 1:
-                    paths[pp[0]].append(pp[1])
-
-        if commit_target is None:
-            L.debug("commit_target=working-copy")
+        if len(commit_parts) == 3:
+            # Two commits specified - base and target. We diff base<>target.
+            base_rs = RepositoryStructure.lookup(repo, commit_parts[0] or "HEAD")
+            target_rs = RepositoryStructure.lookup(repo, commit_parts[2] or "HEAD")
+            working_copy = None
+        else:
+            # When one commit is specified, it is base, and we diff base<>working_copy.
+            # When no commits are specified, base is HEAD, and we do the same.
+            # We diff base<>working_copy by diffing base<>target + target<>working_copy,
+            # and target is set to HEAD.
+            base_rs = RepositoryStructure.lookup(repo, commit_parts[0])
+            target_rs = RepositoryStructure.lookup(repo, "HEAD")
             working_copy = WorkingCopy.open(repo)
             if not working_copy:
                 raise NotFound(
                     "No working copy, use 'checkout'", exit_code=NO_WORKING_COPY
                 )
+            working_copy.assert_db_tree_match(target_rs.tree)
 
-            working_copy.assert_db_tree_match(commit_head.peel(pygit2.Tree))
+        # Parse [<dataset>[:pk]...]
+        paths = {}
+        for p in args:
+            pp = p.split(":", maxsplit=1)
+            paths.setdefault(pp[0], [])
+            if len(pp) > 1:
+                paths[pp[0]].append(pp[1])
 
-        L.debug("commit_base=%s", commit_base.id)
+        base_str = base_rs.id
+        target_str = "working-copy" if working_copy else target_rs.id
+        L.debug('base=%s target=%s', base_str, target_str)
 
         # check whether we need to do a 3-way merge
-        c_target = commit_target or commit_head
-        merge_base = repo.merge_base(commit_base.oid, c_target.oid)
-        L.debug("Found merge base: %s", merge_base)
+        if base_rs.head_commit and target_rs.head_commit:
+            merge_base_id = repo.merge_base(base_rs.id, target_rs.id)
+            L.debug("Found merge base: %s", merge_base_id)
 
-        if not merge_base:
-            # there is no relation between the commits
-            raise InvalidOperation(
-                f"Commits {commit_base.id} and {c_target.id} aren't related."
-            )
-        elif merge_base not in (commit_base.id, c_target.id):
-            # this needs a 3-way diff and we don't support them yet
-            raise NotYetImplemented(f"Sorry, 3-way diffs aren't supported yet.")
+            if not merge_base_id:
+                # there is no relation between the commits
+                raise InvalidOperation(
+                    f"Commits {base_rs.id} and {target_rs.id} aren't related."
+                )
+            elif merge_base_id not in (base_rs.id, target_rs.id):
+                # this needs a 3-way diff and we don't support them yet
+                raise NotYetImplemented(f"Sorry, 3-way diffs aren't supported yet.")
 
-        base_rs = RepositoryStructure(repo, commit_base)
         all_datasets = {ds.path for ds in base_rs}
-
-        target_rs = RepositoryStructure(repo, commit_target or commit_head)
-        all_datasets |= {ds.path for ds in target_rs}
+        if target_rs:
+            all_datasets |= {ds.path for ds in target_rs}
 
         if paths:
             all_datasets = set(filter(lambda dsp: dsp in paths, all_datasets))
@@ -502,14 +490,18 @@ def diff(ctx, output_format, output_path, exit_code, args):
         diff_writer = globals()[f"diff_output_{output_format}"]
         writer_params = {
             "repo": repo,
-            "commit_base": commit_base,
-            "commit_target": commit_target,
+            "base": base_rs,
+            "target": target_rs,
             "output_path": output_path,
             "dataset_count": len(all_datasets),
         }
 
-        same_rs = base_rs == target_rs
-        L.debug("base_rs %s target_rs %s: %s", repr(base_rs), repr(target_rs), same_rs)
+        L.debug(
+            "base_rs %s == target_rs %s: %s",
+            repr(base_rs),
+            repr(target_rs),
+            base_rs == target_rs,
+        )
 
         num_changes = 0
         with diff_writer(**writer_params) as w:
@@ -517,8 +509,8 @@ def diff(ctx, output_format, output_path, exit_code, args):
                 dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
                 diff = Diff(dataset)
 
-                if not same_rs:
-                    # commit<>commit diff
+                if base_rs != target_rs:
+                    # diff += base_rs<>target_rs
                     base_ds = base_rs.get(dataset_path)
                     target_ds = target_rs.get(dataset_path)
 
@@ -533,8 +525,8 @@ def diff(ctx, output_format, output_path, exit_code, args):
                     L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
                     diff += diff_cc
 
-                if commit_target is None:
-                    # diff against working copy
+                if working_copy:
+                    # diff += target_rs<>working_copy
                     target_ds = target_rs.get(dataset_path)
                     diff_wc = working_copy.diff_db_to_tree(
                         target_ds, pk_filter=(paths.get(dataset_path) or None)
@@ -822,9 +814,7 @@ def _json_row(row, change, pk_field):
 
 
 @contextlib.contextmanager
-def diff_output_html(
-    *, output_path, repo, commit_base, commit_target, dataset_count, **kwargs
-):
+def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs):
     if isinstance(output_path, Path):
         if output_path.is_dir():
             raise click.BadParameter(
@@ -842,7 +832,7 @@ def diff_output_html(
     ) as ft:
         template = string.Template(ft.read())
 
-    title = f"{Path(repo.path).name}: {commit_base.short_id} .. {commit_target.short_id if commit_target else 'working-copy'}"
+    title = f"{Path(repo.path).name}: {base.short_id} .. {target.short_id if target else 'working-copy'}"
 
     if output_path == "-":
         fo = sys.stdout
