@@ -119,10 +119,7 @@ class ImportGPKG:
     def __init__(self, source, table=None):
         self.source = source
         self.table = table
-        try:
-            self.db = gpkg.db(self.source)
-        except Exception:
-            raise RuntimeError("aaaaaaargh")
+        self.db = gpkg.db(self.source)
 
     def __str__(self):
         s = f"GeoPackage: {self.source}"
