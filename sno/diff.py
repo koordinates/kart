@@ -20,6 +20,7 @@ from .exceptions import (
     NotYetImplemented,
     NotFound,
     NO_WORKING_COPY,
+    NO_COMMIT,
     UNCATEGORIZED_ERROR,
 )
 
@@ -442,14 +443,18 @@ def diff(ctx, output_format, output_path, exit_code, args):
                     commit_target = repo.revparse_single(commit_parts[2] or "HEAD")
                     L.debug("commit_target=%s", commit_target.id)
                 except KeyError:
-                    raise click.BadParameter("Invalid commit spec", param_hint="commit")
+                    raise NotFound(
+                        "Invalid commit spec", param_hint="commit", exit_code=NO_COMMIT
+                    )
                 else:
                     path_list.pop(0)
             else:
                 try:
                     commit_base = repo.revparse_single(commit_parts[0])
                 except KeyError:
-                    raise click.BadParameter("Invalid commit spec", param_hint="commit")
+                    raise NotFound(
+                        "Invalid commit spec", param_hint="commit", exit_code=NO_COMMIT
+                    )
                 else:
                     path_list.pop(0)
 

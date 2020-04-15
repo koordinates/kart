@@ -155,7 +155,8 @@ def get_commit_message(repo, wc_changes, quiet=False):
         subprocess.check_call(editor_cmd, shell=True)
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
-            f"There was a problem with the editor '{editor}': {e}"
+            f"There was a problem with the editor '{editor}': {e}",
+            called_process_error=e,
         ) from e
 
     with open(commit_editmsg, "rt", encoding="utf-8") as f:
