@@ -616,7 +616,7 @@ def diff_output_text(*, output_path, **kwargs):
     pecho = {'file': fp, 'color': fp.isatty()}
     if isinstance(output_path, Path) and output_path.is_dir():
         raise click.BadParameter(
-            "Directory is not valid for --output + --text", param_hint="--output"
+            "Directory is not valid for --output with --text", param_hint="--output"
         )
 
     def _out(dataset, diff):
@@ -834,7 +834,7 @@ def diff_output_json(*, output_path, dataset_count, **kwargs):
     if isinstance(output_path, Path):
         if output_path.is_dir():
             raise click.BadParameter(
-                "Directory is not valid for --output + --json", param_hint="--output"
+                "Directory is not valid for --output with --json", param_hint="--output"
             )
 
     accumulated = {}
@@ -909,7 +909,7 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
     if isinstance(output_path, Path):
         if output_path.is_dir():
             raise click.BadParameter(
-                "Directory is not valid for --output + --html", param_hint="--output"
+                "Directory is not valid for --output with --html", param_hint="--output"
             )
 
     json_data = io.StringIO()
