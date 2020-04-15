@@ -494,19 +494,16 @@ def diff(ctx, output_format, output_path, exit_code, args):
             "dataset_count": len(all_datasets),
         }
 
+        same_rs = base_rs == target_rs
+        L.debug("base_rs %s target_rs %s: %s", repr(base_rs), repr(target_rs), same_rs)
+
         num_changes = 0
         with diff_writer(**writer_params) as w:
             for dataset_path in all_datasets:
-                dataset = base_rs.get(dataset_path)
+                dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
                 diff = Diff(dataset)
 
-                L.debug(
-                    "base_rs %s target_rs %s: %s",
-                    repr(base_rs),
-                    repr(target_rs),
-                    base_rs == target_rs,
-                )
-                if base_rs != target_rs:
+                if not same_rs:
                     # commit<>commit diff
                     base_ds = base_rs.get(dataset_path)
                     target_ds = target_rs.get(dataset_path)
@@ -519,24 +516,24 @@ def diff(ctx, output_format, output_path, exit_code, args):
                     diff_cc = base_ds.diff(
                         target_ds, pk_filter=(paths.get(dataset_path) or None), **params
                     )
-                    L.debug("commit<>commit diff (%s): %s", dataset.path, repr(diff_cc))
+                    L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
                     diff += diff_cc
 
                 if commit_target is None:
                     # diff against working copy
                     target_ds = target_rs.get(dataset_path)
                     diff_wc = working_copy.diff_db_to_tree(
-                        target_ds, pk_filter=(paths.get(dataset.path) or None)
+                        target_ds, pk_filter=(paths.get(dataset_path) or None)
                     )
                     L.debug(
                         "commit<>working_copy diff (%s): %s",
-                        dataset.path,
+                        dataset_path,
                         repr(diff_wc),
                     )
                     diff += diff_wc
 
                 num_changes += len(diff)
-                L.debug("overall diff (%s): %s", dataset.path, repr(diff))
+                L.debug("overall diff (%s): %s", dataset_path, repr(diff))
                 w(dataset, diff[dataset])
     except click.ClickException as e:
         L.debug("Caught ClickException: %s", e)
