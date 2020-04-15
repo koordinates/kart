@@ -351,79 +351,25 @@ class Diff(object):
         return self._datasets.values()
 
 
-@click.command()
-@click.pass_context
-@click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Get the diff in text format",
-    cls=MutexOption,
-    exclusive_with=["html", "json", "geojson", "quiet"],
-)
-@click.option(
-    "--json",
-    "output_format",
-    flag_value="json",
-    help="Get the diff in JSON format",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["html", "text", "geojson", "quiet"],
-)
-@click.option(
-    "--geojson",
-    "output_format",
-    flag_value="geojson",
-    help="Get the diff in GeoJSON format",
-    cls=MutexOption,
-    exclusive_with=["html", "text", "json", "quiet"],
-)
-@click.option(
-    "--html",
-    "output_format",
-    flag_value="html",
-    help="View the diff in a browser",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "quiet"],
-)
-@click.option(
-    "--quiet",
-    "output_format",
-    flag_value="quiet",
-    help="Disable all output of the program. Implies --exit-code.",
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "html"],
-)
-@click.option(
-    "--exit-code",
-    is_flag=True,
-    help="Make the program exit with codes similar to diff(1). That is, it exits with 1 if there were differences and 0 means no differences.",
-)
-@click.option(
-    "--output",
-    "output_path",
-    help="Output to a specific file/directory instead of stdout.",
-    type=click.Path(writable=True, allow_dash=True),
-)
-@click.argument("args", nargs=-1)
-def diff(ctx, output_format, output_path, exit_code, args):
+def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
     """
-    Show changes between commits, commit and working tree, etc
+    Calculates the appropriate diff from the arguments,
+    and writes it using the given writer contextmanager.
 
-    sno diff [options] [--] [<dataset>[:pk]...]
-    sno diff [options] <commit> [--] [<dataset>[:pk]...]
-    sno diff [options] <commit>..<commit> [--] [<dataset>[:pk]...]
+      ctx: the click context
+      diff_writer: One of the `diff_output_*` contextmanager factories.
+                   When used as a contextmanager, the diff_writer should yield
+                   another callable which accepts (dataset, diff) arguments
+                   and writes the output by the time it exits.
+      output_path: The output path, or a file-like object, or the string '-' to use stdout.
+      exit_code:   If True, the process will exit with code 1 if the diff is non-empty.
+      args:        The arguments given on the command line, including the refs to diff.
     """
     from .working_copy import WorkingCopy
     from .structure import RepositoryStructure
 
-    if output_format == "quiet":
-        exit_code = True
-
     try:
-        if output_path and output_path != "-":
+        if isinstance(output_path, str) and output_path != "-":
             output_path = Path(output_path).expanduser()
 
         repo = ctx.obj.repo
@@ -485,7 +431,6 @@ def diff(ctx, output_format, output_path, exit_code, args):
         if paths:
             all_datasets = set(filter(lambda dsp: dsp in paths, all_datasets))
 
-        diff_writer = globals()[f"diff_output_{output_format}"]
         writer_params = {
             "repo": repo,
             "base": base_rs,
@@ -556,6 +501,81 @@ def diff(ctx, output_format, output_path, exit_code, args):
             sys.exit(1)
 
 
+@click.command()
+@click.pass_context
+@click.option(
+    "--text",
+    "output_format",
+    flag_value="text",
+    default=True,
+    help="Get the diff in text format",
+    cls=MutexOption,
+    exclusive_with=["html", "json", "geojson", "quiet"],
+)
+@click.option(
+    "--json",
+    "output_format",
+    flag_value="json",
+    help="Get the diff in JSON format",
+    hidden=True,
+    cls=MutexOption,
+    exclusive_with=["html", "text", "geojson", "quiet"],
+)
+@click.option(
+    "--geojson",
+    "output_format",
+    flag_value="geojson",
+    help="Get the diff in GeoJSON format",
+    cls=MutexOption,
+    exclusive_with=["html", "text", "json", "quiet"],
+)
+@click.option(
+    "--html",
+    "output_format",
+    flag_value="html",
+    help="View the diff in a browser",
+    hidden=True,
+    cls=MutexOption,
+    exclusive_with=["json", "text", "geojson", "quiet"],
+)
+@click.option(
+    "--quiet",
+    "output_format",
+    flag_value="quiet",
+    help="Disable all output of the program. Implies --exit-code.",
+    cls=MutexOption,
+    exclusive_with=["json", "text", "geojson", "html"],
+)
+@click.option(
+    "--exit-code",
+    is_flag=True,
+    help="Make the program exit with codes similar to diff(1). That is, it exits with 1 if there were differences and 0 means no differences.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    help="Output to a specific file/directory instead of stdout.",
+    type=click.Path(writable=True, allow_dash=True),
+)
+@click.argument("args", nargs=-1)
+def diff(ctx, output_format, output_path, exit_code, args):
+    """
+    Show changes between commits, commit and working tree, etc
+
+    sno diff [options] [--] [<dataset>[:pk]...]
+    sno diff [options] <commit> [--] [<dataset>[:pk]...]
+    sno diff [options] <commit>..<commit> [--] [<dataset>[:pk]...]
+    """
+
+    diff_writer = globals()[f"diff_output_{output_format}"]
+    if output_format == "quiet":
+        exit_code = True
+
+    return diff_with_writer(
+        ctx, diff_writer, output_path=output_path, exit_code=exit_code, args=args,
+    )
+
+
 @contextlib.contextmanager
 def diff_output_quiet(**kwargs):
     """
@@ -569,28 +589,35 @@ def diff_output_quiet(**kwargs):
     """
 
     def _out(dataset, diff):
-        # this isn't a Diff object, it's the interior dataset view
-        # so we can't use len()
-        if any(diff.values()):
-            sys.exit(1)
+        pass
 
     yield _out
 
 
 @contextlib.contextmanager
 def diff_output_text(*, output_path, **kwargs):
-    pecho = {}
-    if output_path:
-        if output_path == "-":
-            pecho["file"] = sys.stdout
-        elif output_path.is_dir():
-            raise click.BadParameter(
-                "Directory is not valid for --output + --text", param_hint="--output"
-            )
-        else:
-            pecho["file"] = output_path.open("w")
+    """
+    Contextmanager.
 
-        pecho["color"] = False
+    Yields a callable which can be called with dataset diffs.
+    The callable takes two arguments:
+        dataset: A sno.structure.DatasetStructure instance representing
+                 either the old or new version of the dataset.
+        diff:    The sno.diff.Diff instance to serialize
+
+    On exit, writes a human-readable diff to the given output file.
+
+    Certain shortcuts are taken to make the diff human readable,
+    so it may not be suitable as a patch to apply.
+    In particular, geometry WKT is abbreviated and null values are represented
+    by a unicode "␀" character.
+    """
+    fp = resolve_output_path(output_path)
+    pecho = {'file': fp, 'color': fp.isatty()}
+    if isinstance(output_path, Path) and output_path.is_dir():
+        raise click.BadParameter(
+            "Directory is not valid for --output + --text", param_hint="--output"
+        )
 
     def _out(dataset, diff):
         path = dataset.path
@@ -731,11 +758,9 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
 
     def _out(dataset, diff):
         json_params = {}
-        if not output_path:
+        if not output_path or output_path == '-':
             fp = sys.stdout
-            json_params = {"indent": 2}
-        elif output_path == "-":
-            fp = sys.stdout
+            json_params = {"indent": 2, "sort_keys": True}
         elif output_path.is_dir():
             fp = (output_path / f"{dataset.name}.geojson").open("w")
         else:
@@ -767,25 +792,50 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
     yield _out
 
 
+def resolve_output_path(output_path):
+    """
+    Takes a path-ish thing, and returns the appropriate writable file-like object.
+    The path-ish thing could be:
+      * a pathlib.Path object
+      * a file-like object
+      * the string '-' or None (both will return sys.stdout)
+    """
+    if isinstance(output_path, io.IOBase):
+        return output_path
+    elif (not output_path) or output_path == "-":
+        return sys.stdout
+    else:
+        return output_path.open("w")
+
+
+def dump_json_diff_output(output, output_path):
+    """
+    Dumps the output to JSON in the output file.
+    """
+    json_params = {}
+    if (not output_path) or output_path == "-":
+        # Prettier output for humans
+        json_params.update({"indent": 2, "sort_keys": True})
+    fp = resolve_output_path(output_path)
+    json.dump(output, fp, **json_params)
+
+
 @contextlib.contextmanager
 def diff_output_json(*, output_path, dataset_count, **kwargs):
+    """
+    Contextmanager.
+    Yields a callable which can be called with dataset diffs
+    (see `diff_output_text` docstring for more on that)
+
+    On exit, writes the diff as JSON to the given output file.
+    If the output file is stdout and isn't piped anywhere,
+    the json is prettified first.
+    """
     if isinstance(output_path, Path):
         if output_path.is_dir():
             raise click.BadParameter(
                 "Directory is not valid for --output + --json", param_hint="--output"
             )
-
-    json_params = {}
-
-    if isinstance(output_path, io.IOBase):
-        fp = output_path
-    elif output_path == "-":
-        fp = sys.stdout
-    elif output_path:
-        fp = output_path.open("w")
-    else:
-        fp = sys.stdout
-        json_params["indent"] = 2
 
     accumulated = {}
 
@@ -821,7 +871,7 @@ def diff_output_json(*, output_path, dataset_count, **kwargs):
 
     yield _out
 
-    json.dump({"sno.diff/v1": accumulated}, fp, **json_params)
+    dump_json_diff_output({"sno.diff/v1": accumulated}, output_path)
 
 
 def _json_row(row, change, pk_field):
@@ -875,19 +925,13 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
 
     title = f"{Path(repo.path).name}: {base.short_id} .. {target.short_id if target else 'working-copy'}"
 
-    if output_path == "-":
-        fo = sys.stdout
-    elif output_path:
-        fo = output_path.open("w")
-    else:
-        html_path = Path(repo.path) / "DIFF.html"
-        fo = html_path.open("w")
+    if not output_path:
+        output_path = Path(repo.path) / "DIFF.html"
+    fo = resolve_output_path(output_path)
 
     fo.write(
         template.substitute({"title": title, "geojson_data": json_data.getvalue()})
     )
     if fo != sys.stdout:
         fo.close()
-
-    if not output_path:
-        webbrowser.open_new(f"file://{html_path}")
+        webbrowser.open_new(f"file://{output_path}")
