@@ -558,6 +558,16 @@ def diff(ctx, output_format, output_path, exit_code, args):
 
 @contextlib.contextmanager
 def diff_output_quiet(**kwargs):
+    """
+    Contextmanager.
+    Yields a callable which can be called with dataset diffs
+    (see `diff_output_text` docstring for more on that)
+
+    Writes nothing to the output. This is useful when you just want to find out
+    whether anything has changed in the diff (you can use the exit code)
+    and don't need output.
+    """
+
     def _out(dataset, diff):
         # this isn't a Diff object, it's the interior dataset view
         # so we can't use len()
@@ -681,6 +691,25 @@ def _repr_row(row, prefix="", exclude=None):
 
 @contextlib.contextmanager
 def diff_output_geojson(*, output_path, dataset_count, **kwargs):
+    """
+    Contextmanager.
+
+    Yields a callable which can be called with dataset diffs
+    (see `diff_output_text` docstring for more on that)
+
+    For features already existed but have changed, two features are written to the output:
+    one for the 'deleted' version of the feature, and one for the 'added' version.
+    This is intended for visualising in a map diff.
+
+    On exit, writes the diff as GeoJSON to the given output file.
+    For repos with more than one dataset, the output path must be a directory.
+    In that case:
+        * any .geojson files already in that directory will be deleted
+        * files will be written to `{layer_name}.geojson in the given directory
+
+    If the output file is stdout and isn't piped anywhere,
+    the json is prettified before writing.
+    """
     if dataset_count > 1:
         # output_path needs to be a directory
         if not output_path:
@@ -816,6 +845,17 @@ def _json_row(row, change, pk_field):
 
 @contextlib.contextmanager
 def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs):
+    """
+    Contextmanager.
+    Yields a callable which can be called with dataset diffs
+    (see `diff_output_text` docstring for more on that)
+
+    On exit, writes an HTML diff to the given output file
+    (defaults to 'DIFF.html' in the repo directory).
+
+    If `-` is given as the output file, the HTML is written to stdout,
+    and no web browser is opened.
+    """
     if isinstance(output_path, Path):
         if output_path.is_dir():
             raise click.BadParameter(
