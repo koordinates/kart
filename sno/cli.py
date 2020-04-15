@@ -17,6 +17,7 @@ from . import (
     fsck,
     merge,
     pull,
+    show,
     status,
     query,
     upgrade,
@@ -109,6 +110,7 @@ cli.add_command(checkout.workingcopy_set_path)
 cli.add_command(clone.clone)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
+cli.add_command(show.show)
 cli.add_command(fsck.fsck)
 cli.add_command(init.import_gpkg)
 cli.add_command(init.import_table)
@@ -121,13 +123,6 @@ cli.add_command(upgrade.upgrade)
 
 
 # aliases/shortcuts
-
-
-@cli.command()
-@click.pass_context
-def show(ctx):
-    """ Show the current commit """
-    ctx.invoke(log, args=["-1"])
 
 
 @cli.command()
