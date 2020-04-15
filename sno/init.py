@@ -14,6 +14,13 @@ from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
 from .cli_util import do_json_option
+from .exceptions import (
+    InvalidOperation,
+    NotFound,
+    INVALID_ARGUMENT,
+    NO_IMPORT_SOURCE,
+    NO_TABLE,
+)
 
 
 @click.command("import-gpkg", hidden=True)
@@ -88,7 +95,8 @@ class ImportPath(click.Path):
         prefix = prefix.upper()
         if prefix not in self.prefixes:
             self.fail(
-                f'invalid prefix: "{prefix}" (choose from {", ".join(self.prefixes)})'
+                f'invalid prefix: "{prefix}" (choose from {", ".join(self.prefixes)})',
+                exit_code=INVALID_ARGUMENT,
             )
 
         # resolve GPKG:~/foo.gpkg and GPKG:~me/foo.gpkg
@@ -98,6 +106,9 @@ class ImportPath(click.Path):
         # pass to Click's normal path resolving & validation
         path = super().convert(value, param, ctx)
         return (prefix, path, suffix)
+
+    def fail(self, message, param=None, ctx=None, exit_code=NO_IMPORT_SOURCE):
+        raise NotFound(message, exit_code=exit_code)
 
 
 class ImportGPKG:
@@ -124,8 +135,9 @@ class ImportGPKG:
             if not dbcur.execute(sql).fetchone():
                 raise ValueError("gpkg_contents table doesn't exist")
         except (ValueError, apsw.SQLError) as e:
-            raise ValueError(
-                f"'{self.source}' doesn't appear to be a valid GeoPackage"
+            raise NotFound(
+                f"'{self.source}' doesn't appear to be a valid GeoPackage",
+                exit_code=NO_IMPORT_SOURCE,
             ) from e
 
         if self.table:
@@ -136,8 +148,9 @@ class ImportGPKG:
                     table_name=?
                     AND data_type IN ('features', 'attributes', 'aspatial');"""
             if not dbcur.execute(sql, (self.table,)).fetchone():
-                raise ValueError(
-                    f"Feature/Attributes table '{self.table}' not found in gpkg_contents"
+                raise NotFound(
+                    f"Feature/Attributes table '{self.table}' not found in gpkg_contents",
+                    exit_code=NO_TABLE,
                 )
 
     def get_table_list(self):
@@ -333,8 +346,9 @@ def import_table(ctx, source, directory, do_list, do_json, version, method):
 
     try:
         source_loader.check()
-    except ValueError as e:
-        raise click.BadParameter(str(e), param_hint="source") from e
+    except NotFound as e:
+        e.param_hint = "source"
+        raise
 
     if do_list:
         source_loader.print_table_list(do_json=do_json)
@@ -408,8 +422,9 @@ def init(ctx, import_from, do_checkout, directory):
 
         try:
             source_loader.check()
-        except ValueError as e:
-            raise click.BadParameter(str(e), param_hint="import_from") from e
+        except NotFound as e:
+            e.param_hint = "import_from"
+            raise
 
         if not import_table:
             import_table = source_loader.prompt_for_table("Select a table to import")
@@ -424,7 +439,7 @@ def init(ctx, import_from, do_checkout, directory):
 
     repo_path = Path(directory).resolve()
     if any(repo_path.iterdir()):
-        raise click.BadParameter(f'"{repo_path}" isn\'t empty', param_hint="directory")
+        raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
     # Create the repository
     repo = pygit2.init_repository(str(repo_path), bare=True)

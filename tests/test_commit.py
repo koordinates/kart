@@ -13,6 +13,8 @@ from sno.commit import FALLBACK_EDITOR
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 
+from sno.exceptions import INVALID_ARGUMENT, NO_CHANGES, NO_DATA, NO_REPOSITORY
+
 
 H = pytest.helpers.helpers()
 
@@ -75,7 +77,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
     with data_working_copy(archive) as (repo_dir, wc_path):
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
-        assert r.exit_code == 1, r
+        assert r.exit_code == NO_CHANGES, r
         assert r.stdout.splitlines() == ["Error: No changes to commit"]
 
         # empty
@@ -182,7 +184,7 @@ def test_commit_message(
 
         # E: empty
         r = cli_runner.invoke(["commit", "--allow-empty", "-m", ""])
-        assert r.exit_code == 1, r
+        assert r.exit_code == INVALID_ARGUMENT, r
 
         # file
         f_commit_message = str(tmp_path / "commit-message.txt")
@@ -198,7 +200,7 @@ def test_commit_message(
         r = cli_runner.invoke(
             ["commit", "--allow-empty", "-F", f_commit_message, "-m", "foo"]
         )
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_ARGUMENT, r
         assert "exclusive" in r.stdout
 
         # multiple
@@ -282,7 +284,7 @@ def test_empty(tmp_path, cli_runner, chdir):
     assert r.exit_code == 0, r
     with chdir(repo_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_DATA, r
         assert "Empty repository" in r.stdout
 
     # empty dir
@@ -290,5 +292,5 @@ def test_empty(tmp_path, cli_runner, chdir):
     empty_path.mkdir()
     with chdir(empty_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_REPOSITORY, r
         assert "not an existing repository" in r.stdout

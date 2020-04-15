@@ -7,11 +7,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-import click
 import pygit2
 from osgeo import gdal
 
 from . import gpkg, diff
+from .exceptions import InvalidOperation
 
 L = logging.getLogger("sno.working_copy")
 
@@ -763,7 +763,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
             is_dirty = dbcur.fetchone()[0]
             if is_dirty and not force:
-                raise click.ClickException(
+                raise InvalidOperation(
                     "You have uncommitted changes in your working copy. Commit or use --force to discard."
                 )
 

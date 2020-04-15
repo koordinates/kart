@@ -4,6 +4,7 @@ from pathlib import Path
 import click
 import pygit2
 
+from .exceptions import InvalidOperation, NotFound, NO_WORKING_COPY
 from .structure import RepositoryStructure
 from .working_copy import WorkingCopy
 
@@ -66,7 +67,7 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
     wc = repo_structure.working_copy
     if wc:
         if path is not None:
-            raise click.ClickException(
+            raise InvalidOperation(
                 f"This repository already has a working copy at: {wc.path}",
             )
 
@@ -221,7 +222,7 @@ def restore(ctx, source, pathspec):
     repo_structure = RepositoryStructure(repo)
     working_copy = repo_structure.working_copy
     if not working_copy:
-        raise click.ClickException("You don't have a working copy")
+        raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 
     head_commit = repo.head.peel(pygit2.Commit)
 
@@ -246,7 +247,7 @@ def workingcopy_set_path(ctx, new):
 
     repo_cfg = repo.config
     if "sno.workingcopy.path" not in repo_cfg:
-        raise click.ClickException("No working copy? Try `sno checkout`")
+        raise NotFound("No working copy? Try `sno checkout`", exit_code=NO_WORKING_COPY)
 
     new = Path(new)
     # TODO: This doesn't seem to do anything?

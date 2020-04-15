@@ -15,6 +15,14 @@ import pygit2
 
 from . import gpkg
 from .cli_util import MutexOption
+from .exceptions import (
+    InvalidOperation,
+    NotYetImplemented,
+    NotFound,
+    NO_WORKING_COPY,
+    NO_COMMIT,
+    UNCATEGORIZED_ERROR,
+)
 
 
 L = logging.getLogger("sno.diff")
@@ -435,14 +443,18 @@ def diff(ctx, output_format, output_path, exit_code, args):
                     commit_target = repo.revparse_single(commit_parts[2] or "HEAD")
                     L.debug("commit_target=%s", commit_target.id)
                 except KeyError:
-                    raise click.BadParameter("Invalid commit spec", param_hint="commit")
+                    raise NotFound(
+                        "Invalid commit spec", param_hint="commit", exit_code=NO_COMMIT
+                    )
                 else:
                     path_list.pop(0)
             else:
                 try:
                     commit_base = repo.revparse_single(commit_parts[0])
                 except KeyError:
-                    raise click.BadParameter("Invalid commit spec", param_hint="commit")
+                    raise NotFound(
+                        "Invalid commit spec", param_hint="commit", exit_code=NO_COMMIT
+                    )
                 else:
                     path_list.pop(0)
 
@@ -456,7 +468,9 @@ def diff(ctx, output_format, output_path, exit_code, args):
             L.debug("commit_target=working-copy")
             working_copy = WorkingCopy.open(repo)
             if not working_copy:
-                raise click.UsageError("No working copy, use 'checkout'")
+                raise NotFound(
+                    "No working copy, use 'checkout'", exit_code=NO_WORKING_COPY
+                )
 
             working_copy.assert_db_tree_match(commit_head.peel(pygit2.Tree))
 
@@ -469,12 +483,12 @@ def diff(ctx, output_format, output_path, exit_code, args):
 
         if not merge_base:
             # there is no relation between the commits
-            raise click.ClickException(
+            raise InvalidOperation(
                 f"Commits {commit_base.id} and {c_target.id} aren't related."
             )
         elif merge_base not in (commit_base.id, c_target.id):
             # this needs a 3-way diff and we don't support them yet
-            raise click.ClickException(f"Sorry, 3-way diffs aren't supported yet.")
+            raise NotYetImplemented(f"Sorry, 3-way diffs aren't supported yet.")
 
         base_rs = RepositoryStructure(repo, commit_base)
         all_datasets = {ds.path for ds in base_rs}
@@ -537,14 +551,14 @@ def diff(ctx, output_format, output_path, exit_code, args):
                 w(dataset, diff[dataset])
     except click.ClickException as e:
         L.debug("Caught ClickException: %s", e)
-        if exit_code:
-            e.exit_code = 2
+        if exit_code and e.exit_code == 1:
+            e.exit_code = UNCATEGORIZED_ERROR
         raise
     except Exception as e:
         L.debug("Caught non-ClickException: %s", e)
         if exit_code:
             click.secho(f"Error: {e}", fg="red", file=sys.stderr)
-            raise SystemExit(2) from e
+            raise SystemExit(UNCATEGORIZED_ERROR) from e
         else:
             raise
     else:

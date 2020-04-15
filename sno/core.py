@@ -1,7 +1,5 @@
-import os
-
 import pygit2
-from click import ClickException
+from .exceptions import NotFound, NO_USER
 
 
 def walk_tree(top, path="", topdown=True):
@@ -99,4 +97,4 @@ def check_git_user(repo=None):
 
     msg.append("\n(sno uses the same credentials and configuration as git)")
 
-    raise ClickException("\n".join(msg))
+    raise NotFound("\n".join(msg), exit_code=NO_USER)

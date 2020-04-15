@@ -1,7 +1,7 @@
 import click
-import pygit2
 
 from . import merge
+from .exceptions import NotFound, NO_BRANCH
 
 
 @click.command()
@@ -39,11 +39,12 @@ def pull(ctx, ff, ff_only, repository, refspecs):
     if repository is None:
         # matches git-pull behaviour
         if repo.head_is_detached:
-            raise click.UsageError(
+            raise NotFound(
                 (
                     "You are not currently on a branch. "
                     "Please specify which branch you want to merge with."
-                )
+                ),
+                exit_code=NO_BRANCH,
             )
 
         # git-fetch:

@@ -6,6 +6,12 @@ import apsw
 import pygit2
 
 from sno.working_copy import WorkingCopy
+from sno.exceptions import (
+    INVALID_ARGUMENT,
+    INVALID_OPERATION,
+    NO_IMPORT_SOURCE,
+    NO_TABLE,
+)
 
 H = pytest.helpers.helpers()
 
@@ -79,7 +85,7 @@ def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_run
         r = cli_runner.invoke(
             [f"--repo={repo_path}", "import-gpkg", data / gpkg, table]
         )
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert re.search(
             r"^Error: Invalid value for directory: \".*\" isn't empty",
             r.stdout,
@@ -99,7 +105,7 @@ def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
                 "some-layer-that-doesn't-exist",
             ]
         )
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_TABLE, r
         assert (
             "Feature/Attributes table 'some-layer-that-doesn't-exist' not found in gpkg_contents"
             in r.stdout
@@ -117,7 +123,7 @@ def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
         r = cli_runner.invoke(
             [f"--repo={repo_path}", "import-gpkg", tmp_path / "a.gpkg", "mytable"]
         )
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_IMPORT_SOURCE, r
         assert "a.gpkg' doesn't appear to be a valid GeoPackage" in r.stdout
 
 
@@ -238,15 +244,15 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         repo_path.mkdir()
 
         r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_ARGUMENT, r
         assert 'invalid prefix: "FRED" (choose from GPKG)' in r.stdout
 
         r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_IMPORT_SOURCE, r
         assert 'File "thingz.gpkg" does not exist.' in r.stdout
 
         r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:no-existey"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_TABLE, r
         assert (
             "Feature/Attributes table 'no-existey' not found in gpkg_contents"
             in r.stdout
@@ -257,7 +263,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         r = cli_runner.invoke(
             ["init", "--import", f"gpkg:{data/gpkg}:{table}", repo_path]
         )
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert "isn't empty" in r.stdout
 
         # import
@@ -281,7 +287,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         r = cli_runner.invoke(
             ["init", "--import", f"gpkg:{data / gpkg}:{table}", repo_path]
         )
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert "isn't empty" in r.stdout
 
 
@@ -314,13 +320,13 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     repo_path.mkdir()
     (repo_path / "a.file").touch()
     r = cli_runner.invoke(["init", repo_path])
-    assert r.exit_code == 2, r
+    assert r.exit_code == INVALID_OPERATION, r
     assert not (repo_path / "HEAD").exists()
 
     # current dir isn't empty
     with chdir(repo_path):
         r = cli_runner.invoke(["init"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert not (repo_path / "HEAD").exists()
 
 

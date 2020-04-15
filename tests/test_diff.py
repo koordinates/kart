@@ -7,6 +7,7 @@ import pytest
 
 import pygit2
 from sno.diff import Diff
+from sno.exceptions import NOT_YET_IMPLEMENTED
 
 
 H = pytest.helpers.helpers()
@@ -1645,15 +1646,15 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
 
         # changes <> master (commit <> commit) diff should fail
         r = cli_runner.invoke(["diff", "--quiet", f"{m_commit_id}..{b_commit_id}"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stdout
 
         # same the other way around
         r = cli_runner.invoke(["diff", "--quiet", f"{b_commit_id}..{m_commit_id}"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stdout
 
         # diff against working copy should fail too
         r = cli_runner.invoke(["diff", "--quiet", b_commit_id])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stdout

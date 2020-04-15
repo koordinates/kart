@@ -3,6 +3,8 @@ import subprocess
 
 import pytest
 
+from sno.exceptions import NO_REPOSITORY
+
 
 H = pytest.helpers.helpers()
 
@@ -146,14 +148,14 @@ def test_branches_empty(tmp_path, cli_runner, chdir):
 def test_branches_none(tmp_path, cli_runner, chdir):
     with chdir(tmp_path):
         r = cli_runner.invoke(["branch"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stdout.splitlines()[-1]
             == "Error: Current directory is not an existing repository"
         )
 
         r = cli_runner.invoke(["branch", "--json"])
-        assert r.exit_code == 2, r
+        assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stdout.splitlines()[-1]
             == "Error: Current directory is not an existing repository"
