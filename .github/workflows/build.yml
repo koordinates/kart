@@ -203,7 +203,7 @@ jobs:
       - name: "🍎 package: setup app signing certificate"
         id: keychain
         uses: apple-actions/import-codesign-certs@v1
-        if: runner.os == 'macOS' && steps.version.outputs.is_release == 1
+        if: runner.os == 'macOS' && github.repository == 'koordinates/sno'
         with:
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
@@ -227,8 +227,11 @@ jobs:
         run: |
           make py-tools
 
-          if (( ${{ steps.version.outputs.is_release }} )); then
+          if [ "${{ github.repository }}" == "koordinates/sno" ]; then
             export CODESIGN="${{ secrets.MACOS_CODESIGN_ID }}"
+          fi
+
+          if (( ${{ steps.version.outputs.is_release }} )); then
             export PKGSIGN="${{ secrets.MACOS_PKGSIGN_ID }}"
             make -C platforms ci-pkg-notarize
           else
