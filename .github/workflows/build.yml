@@ -22,7 +22,7 @@ jobs:
             id: Darwin
             os: macos-latest
             package-formats: pkg
-    if: "startsWith(github.ref, 'refs/tags/v') || !contains(github.event.head_commit.message, '[ci only windows]')"
+    if: "startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || !contains(github.event.head_commit.message, '[ci only windows]')"
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: "1"
@@ -310,7 +310,7 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2016
-    if: "startsWith(github.ref, 'refs/tags/v') || !contains(github.event.head_commit.message, '[ci only posix]')"
+    if: "startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || !contains(github.event.head_commit.message, '[ci only posix]')"
     steps:
       - name: "msvc setup"
         uses: ilammy/msvc-dev-cmd@v1
