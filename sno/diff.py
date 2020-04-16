@@ -480,9 +480,7 @@ def diff(ctx, output_format, output_path, exit_code, args):
                 # this needs a 3-way diff and we don't support them yet
                 raise NotYetImplemented(f"Sorry, 3-way diffs aren't supported yet.")
 
-        all_datasets = {ds.path for ds in base_rs}
-        if target_rs:
-            all_datasets |= {ds.path for ds in target_rs}
+        all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
 
         if paths:
             all_datasets = set(filter(lambda dsp: dsp in paths, all_datasets))
