@@ -110,6 +110,7 @@ jobs:
       - name: "🍎 prerequisites"
         if: runner.os == 'macOS'
         run: |
+          brew update
           sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
           brew install ccache pkg-config sqlite3 pandoc
           brew cask install Packages
