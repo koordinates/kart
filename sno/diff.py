@@ -31,7 +31,7 @@ class Conflict(Exception):
     pass
 
 
-class Diff(object):
+class Diff:
     def __init__(
         self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None
     ):
@@ -812,12 +812,24 @@ def dump_json_diff_output(output, output_path):
     """
     Dumps the output to JSON in the output file.
     """
-    json_params = {}
-    if (not output_path) or output_path == "-":
-        # Prettier output for humans
-        json_params.update({"indent": 2, "sort_keys": True})
+
+    pretty = (not output_path) or output_path == "-"
     fp = resolve_output_path(output_path)
-    json.dump(output, fp, **json_params)
+
+    json_params = {}
+    if pretty:
+        json_params.update({"indent": 2, "sort_keys": True})
+    if pretty and sys.stdout.isatty():
+        # Add syntax highlighting
+        from pygments import highlight
+        from pygments.lexers import JsonLexer
+        from pygments.formatters import TerminalFormatter
+
+        dumped = json.dumps(output, **json_params)
+        highlighted = highlight(dumped.encode(), JsonLexer(), TerminalFormatter())
+        fp.write(highlighted)
+    else:
+        json.dump(output, fp, **json_params)
 
 
 @contextlib.contextmanager

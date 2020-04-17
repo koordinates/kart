@@ -13,6 +13,7 @@ msgpack==0.6.2            # via -r requirements/requirements.in
 psycopg2-binary==2.8.4    # via -r requirements/requirements.in
 pycparser==2.19           # via cffi
 #pygit2==1.1.0             # via -r requirements/requirements.in
+pygments==2.6.1           # via -r requirements/requirements.in
 rtree==0.9.4              # via -r requirements/requirements.in
 
 # The following packages are considered to be unsafe in a requirements file:
