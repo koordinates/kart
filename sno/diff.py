@@ -768,21 +768,24 @@ def diff_output_json(*, output_path, dataset_count, **kwargs):
             d["metaChanges"][k] = [v_old, v_new]
 
         for k, v_old in diff["D"].items():
-            d["featureChanges"].append([_json_row(v_old, "D", pk_field), None])
+            d["featureChanges"].append({'-': _json_row(v_old, "D", pk_field)})
 
         for o in diff["I"]:
-            d["featureChanges"].append([None, _json_row(o, "I", pk_field)])
+            d["featureChanges"].append({'+': _json_row(o, "I", pk_field)})
 
         for _, (v_old, v_new) in diff["U"].items():
             d["featureChanges"].append(
-                [_json_row(v_old, "U-", pk_field), _json_row(v_new, "U+", pk_field)]
+                {
+                    '-': _json_row(v_old, "U-", pk_field),
+                    '+': _json_row(v_new, "U+", pk_field),
+                }
             )
 
         # sort for reproducibility
         d["featureChanges"].sort(
             key=lambda fc: (
-                fc[0]["id"] if fc[0] is not None else "",
-                fc[1]["id"] if fc[1] is not None else "",
+                fc['-']["id"] if '-' in fc else "",
+                fc['+']["id"] if '+' in fc else "",
             )
         )
         accumulated[dataset.path] = d
