@@ -1,5 +1,6 @@
 import base64
 import collections
+import contextlib
 import functools
 import hashlib
 import itertools
@@ -23,6 +24,7 @@ L = logging.getLogger("sno.structure")
 
 
 class RepositoryStructure:
+    @staticmethod
     def lookup(repo, key):
         L.debug(f"key={key}")
         try:
@@ -165,32 +167,49 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
-    def commit(self, wcdiff, message, *, allow_empty=False):
+    def commit(
+        self,
+        wcdiff,
+        message,
+        *,
+        author=None,
+        committer=None,
+        allow_empty=False,
+        update_working_copy_head=True,
+    ):
         tree = self.tree
-        wc = self.working_copy
 
         git_index = pygit2.Index()
         git_index.read_tree(tree)
 
-        with wc.session():
+        wc = self.working_copy
+        commit_callback = None
+        if update_working_copy_head and wc:
+            context = wc.session()
+            commit_callback = wc.commit_callback
+        else:
+            # This happens when commit is called from `sno apply` in a bare repo
+            context = contextlib.nullcontext()
+        with context:
             for ds in self:
                 ds.write_index(
-                    wcdiff[ds], git_index, self.repo, callback=wc.commit_callback
+                    wcdiff[ds], git_index, self.repo, callback=commit_callback
                 )
 
             L.info("Writing tree...")
             new_tree = git_index.write_tree(self.repo)
             L.info(f"Tree sha: {new_tree}")
 
-            wc.commit_callback(None, "TREE", tree=new_tree)
+            if commit_callback:
+                commit_callback(None, "TREE", tree=new_tree)
 
             L.info("Committing...")
             user = self.repo.default_signature
             # this will also update the ref (branch) to point to the current commit
             new_commit = self.repo.create_commit(
                 "HEAD",  # reference_name
-                user,  # author
-                user,  # committer
+                author or user,  # author
+                committer or user,  # committer
                 message,  # message
                 new_tree,  # tree
                 [self.repo.head.target],  # parents

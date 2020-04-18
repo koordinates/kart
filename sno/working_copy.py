@@ -141,6 +141,13 @@ class WorkingCopyGPKG(WorkingCopy):
                 del self._db
                 L.debug(f"session(bulk={bulk}): new/done")
 
+    def is_dirty(self):
+        with self.session(bulk=1) as db:
+            dbcur = db.cursor()
+
+            dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
+            return dbcur.fetchone()[0]
+
     def _get_columns(self, dataset):
         pk_field = None
         cols = {}
@@ -760,8 +767,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 )
 
             # check for dirty working copy
-            dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
-            is_dirty = dbcur.fetchone()[0]
+            is_dirty = self.is_dirty()
             if is_dirty and not force:
                 raise InvalidOperation(
                     "You have uncommitted changes in your working copy. Commit or use --force to discard."
