@@ -146,7 +146,8 @@ def reset(ctx):
 def log(ctx, args):
     """ Show commit logs """
     repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
+    # ensure repo exists, fail nicely
+    repo = ctx.obj.repo  # noqa
 
     execvp("git", ["git", "-C", str(repo_path), "log"] + list(args))
 
@@ -157,7 +158,8 @@ def log(ctx, args):
 def push(ctx, args):
     """ Update remote refs along with associated objects """
     repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
+    # ensure repo exists, fail nicely
+    repo = ctx.obj.repo  # noqa
 
     execvp("git", ["git", "-C", str(repo_path), "push"] + list(args))
 
@@ -168,7 +170,8 @@ def push(ctx, args):
 def fetch(ctx, args):
     """ Download objects and refs from another repository """
     repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
+    # ensure repo exists, fail nicely
+    repo = ctx.obj.repo  # noqa
 
     execvp("git", ["git", "-C", str(repo_path), "fetch"] + list(args))
 
@@ -179,7 +182,8 @@ def fetch(ctx, args):
 def remote(ctx, args):
     """ Manage set of tracked repositories """
     repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
+    # ensure repo exists, fail nicely
+    repo = ctx.obj.repo  # noqa
 
     execvp("git", ["git", "-C", str(repo_path), "remote"] + list(args))
 
@@ -190,7 +194,8 @@ def remote(ctx, args):
 def tag(ctx, args):
     """ Create, list, delete or verify a tag object signed with GPG """
     repo_path = ctx.obj.repo_path
-    repo = ctx.obj.repo
+    # ensure repo exists, fail nicely
+    repo = ctx.obj.repo  # noqa
 
     execvp("git", ["git", "-C", str(repo_path), "tag"] + list(args))
 
