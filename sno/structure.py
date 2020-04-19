@@ -111,6 +111,10 @@ class RepositoryStructure:
                         # examine inside this directory
                         to_examine.append((te_path, o))
 
+    def get_for_index_entry(self, index_entry):
+        dataset_path = index_entry.path.split(r"/.sno-table/", maxsplit=1)[0]
+        return self.get(dataset_path)
+
     @property
     def id(self):
         if self._commit is not None:
@@ -715,6 +719,12 @@ class Dataset1(DatasetStructure):
         schema = self.get_meta_item("sqlite_table_info")
         field = next(f for f in schema if f["name"] == self.primary_key)
         return field["type"]
+
+    def index_entry_to_pk(self, index_entry):
+        feature_path = index_entry.path.split("/.sno-table/", maxsplit=1)[1]
+        if feature_path.startswith("meta/"):
+            return 'meta'
+        return self.decode_pk(os.path.basename(feature_path))
 
     def encode_pk(self, pk):
         pk_enc = msgpack.packb(pk, use_bin_type=True)  # encode pk value via msgpack

@@ -1,6 +1,7 @@
 import click
 import pygit2
 
+from .exceptions import NotYetImplemented
 from .structure import RepositoryStructure
 
 
@@ -67,9 +68,12 @@ def merge(ctx, ff, ff_only, commit):
         )
         if merge_index.conflicts:
             print("Merge conflicts!")
-            for path, (ancestor, ours, theirs) in merge_index.conflicts:
-                print(f"Conflict: {path:60} {ancestor} | {ours} | {theirs}")
-            ctx.exit(1)
+            repo_structure = RepositoryStructure(repo)
+            for (ancestor, ours, theirs) in merge_index.conflicts:
+                dataset = repo_structure.get_for_index_entry(ours)
+                pk = dataset.index_entry_to_pk(ours)
+                print(f"Conflict: {dataset.path}:{pk}")
+            raise NotYetImplemented("Sorry, merging conflicts isn't supported yet")
 
         print("No conflicts!")
         merge_tree_id = merge_index.write_tree(repo)
