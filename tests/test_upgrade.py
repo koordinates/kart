@@ -8,9 +8,9 @@ H = pytest.helpers.helpers()
 @pytest.mark.parametrize(
     "archive,layer",
     [
-        pytest.param("points0.snow", H.POINTS_LAYER, id="points"),
-        pytest.param("polygons0.snow", H.POLYGONS_LAYER, id="polygons-pk"),
-        pytest.param("table0.snow", H.TABLE_LAYER, id="table"),
+        pytest.param("points0.snow", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons0.snow", H.POLYGONS.LAYER, id="polygons-pk"),
+        pytest.param("table0.snow", H.TABLE.LAYER, id="table"),
     ],
 )
 def test_upgrade(archive, layer, data_archive, cli_runner, tmp_path, chdir):
@@ -25,7 +25,7 @@ def test_upgrade(archive, layer, data_archive, cli_runner, tmp_path, chdir):
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r
 
-        if layer == H.POINTS_LAYER:
+        if layer == H.POINTS.LAYER:
             assert r.stdout.splitlines() == [
                 "commit a91ac9bf11cf6a07647fdc8700dbcfab95685804",
                 "Author: Robert Coup <robert@coup.net.nz>",

@@ -20,29 +20,29 @@ H = pytest.helpers.helpers()
 
 
 def edit_points(dbcur):
-    dbcur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
+    dbcur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+    dbcur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POINTS_LAYER} SET name='test' WHERE fid=2;")
+    dbcur.execute(f"UPDATE {H.POINTS.LAYER} SET name='test' WHERE fid=2;")
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid IN (3,30,31,32,33);")
+    dbcur.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid IN (3,30,31,32,33);")
     assert dbcur.getconnection().changes() == 5
     pk_del = 3
     return pk_del
 
 
 def edit_polygons_pk(dbcur):
-    dbcur.execute(H.POLYGONS_INSERT, H.POLYGONS_RECORD)
+    dbcur.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
+    dbcur.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
     assert dbcur.getconnection().changes() == 1
     dbcur.execute(
-        f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test' WHERE id=1443053;"
+        f"UPDATE {H.POLYGONS.LAYER} SET survey_reference='test' WHERE id=1443053;"
     )
     assert dbcur.getconnection().changes() == 1
     dbcur.execute(
-        f"DELETE FROM {H.POLYGONS_LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
+        f"DELETE FROM {H.POLYGONS.LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
     )
     assert dbcur.getconnection().changes() == 5
     pk_del = 1452332
@@ -50,13 +50,13 @@ def edit_polygons_pk(dbcur):
 
 
 def edit_table(dbcur):
-    dbcur.execute(H.TABLE_INSERT, H.TABLE_RECORD)
+    dbcur.execute(H.TABLE.INSERT, H.TABLE.RECORD)
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.TABLE_LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
+    dbcur.execute(f"UPDATE {H.TABLE.LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.TABLE_LAYER} SET name='test' WHERE OBJECTID=2;")
+    dbcur.execute(f"UPDATE {H.TABLE.LAYER} SET name='test' WHERE OBJECTID=2;")
     assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"DELETE FROM {H.TABLE_LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
+    dbcur.execute(f"DELETE FROM {H.TABLE.LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
     assert dbcur.getconnection().changes() == 5
     pk_del = 3
     return pk_del
@@ -65,9 +65,9 @@ def edit_table(dbcur):
 @pytest.mark.parametrize(
     "archive,layer",
     [
-        pytest.param("points", H.POINTS_LAYER, id="points"),
-        pytest.param("polygons", H.POLYGONS_LAYER, id="polygons_pk"),
-        pytest.param("table", H.TABLE_LAYER, id="table"),
+        pytest.param("points", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons_pk"),
+        pytest.param("table", H.TABLE.LAYER, id="table"),
     ],
 )
 def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
@@ -138,7 +138,7 @@ def test_tag(data_working_copy, cli_runner):
         repo = pygit2.Repository(str(repo_dir))
         assert "refs/tags/version1" in repo.references
         ref = repo.lookup_reference_dwim("version1")
-        assert ref.target.hex == H.POINTS_HEAD_SHA
+        assert ref.target.hex == H.POINTS.HEAD_SHA
 
 
 def test_commit_message(

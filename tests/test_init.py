@@ -20,12 +20,12 @@ GPKG_IMPORTS = (
     "archive,gpkg,table",
     [
         pytest.param(
-            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS_LAYER, id="points"
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="points"
         ),
         pytest.param(
             "gpkg-polygons",
             "nz-waca-adjustments.gpkg",
-            H.POLYGONS_LAYER,
+            H.POLYGONS.LAYER,
             id="polygons-pk",
         ),
         pytest.param(
@@ -441,7 +441,7 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS_LAYER}",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS.LAYER}",
                 ]
             )
             assert r.exit_code == 0, r
@@ -478,7 +478,7 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS_LAYER}",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS.LAYER}",
                     "waca2",
                 ]
             )

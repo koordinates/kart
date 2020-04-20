@@ -13,7 +13,7 @@ GPKG_IMPORTS = (
             "gpkg-points", "nz-pa-points-topo-150k.gpkg", "POINTS", id="points"
         ),
         pytest.param(
-            "gpkg-polygons", "nz-waca-adjustments.gpkg", "POLYGONS", id="polygons-pk",
+            "gpkg-polygons", "nz-waca-adjustments.gpkg", "POLYGONS", id="polygons"
         ),
     ],
 )
@@ -34,8 +34,9 @@ def test_e2e(
     insert,
     request,
 ):
-    table = getattr(H, f"{table_ref}_LAYER")
-    row_count = getattr(H, f"{table_ref}_ROWCOUNT")
+    metadata = H.metadata(table_ref)
+    table = metadata.LAYER
+    row_count = metadata.ROWCOUNT
 
     repo_path = tmp_path / "myproject.sno"
     repo_path.mkdir()

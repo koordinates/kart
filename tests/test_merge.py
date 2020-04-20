@@ -2,6 +2,7 @@ import pytest
 
 import pygit2
 
+from sno.exceptions import NOT_YET_IMPLEMENTED
 
 H = pytest.helpers.helpers()
 
@@ -10,7 +11,7 @@ H = pytest.helpers.helpers()
     "archive",
     [
         pytest.param("points", id="points"),
-        pytest.param("polygons", id="polygons-pk"),
+        pytest.param("polygons", id="polygons"),
         pytest.param("table", id="table"),
     ],
 )
@@ -55,7 +56,7 @@ def test_merge_fastforward(
     "archive",
     [
         pytest.param("points", id="points"),
-        pytest.param("polygons", id="polygons-pk"),
+        pytest.param("polygons", id="polygons"),
         pytest.param("table", id="table"),
     ],
 )
@@ -104,11 +105,9 @@ def test_merge_fastforward_noff(
 @pytest.mark.parametrize(
     "archive,layer,pk_field",
     [
-        pytest.param("points", H.POINTS_LAYER, H.POINTS_LAYER_PK, id="points"),
-        pytest.param(
-            "polygons", H.POLYGONS_LAYER, H.POLYGONS_LAYER_PK, id="polygons-pk"
-        ),
-        pytest.param("table", H.TABLE_LAYER, H.TABLE_LAYER_PK, id="table"),
+        pytest.param("points", H.POINTS.LAYER, H.POINTS.LAYER_PK, id="points"),
+        pytest.param("polygons", H.POLYGONS.LAYER, H.POLYGONS.LAYER_PK, id="polygons"),
+        pytest.param("table", H.TABLE.LAYER, H.TABLE.LAYER_PK, id="table"),
     ],
 )
 def test_merge_true(
@@ -167,3 +166,67 @@ def test_merge_true(
             insert.inserted_fids,
         )
         assert dbcur.fetchone()[0] == num_inserts
+
+
+@pytest.mark.parametrize(
+    "archive,layer,sample_pks",
+    [
+        pytest.param("points", H.POINTS.LAYER, H.POINTS.SAMPLE_PKS, id="points"),
+        pytest.param(
+            "polygons", H.POLYGONS.LAYER, H.POLYGONS.SAMPLE_PKS, id="polygons"
+        ),
+        pytest.param("table", H.TABLE.LAYER, H.TABLE.SAMPLE_PKS, id="table"),
+    ],
+)
+def test_merge_conflicts(
+    archive,
+    layer,
+    sample_pks,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    update,
+    request,
+):
+    with data_working_copy(archive) as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+        base_commit_id = repo.head.target.hex
+
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "alternate"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == "refs/heads/alternate"
+
+        db = geopackage(wc)
+        update(db, sample_pks[0], "aaa")
+        update(db, sample_pks[1], "aaa")
+        update(db, sample_pks[2], "aaa")
+        alternate_commit_id = update(db, sample_pks[3], "aaa")
+        assert repo.head.target.hex == alternate_commit_id
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != alternate_commit_id
+
+        update(db, sample_pks[1], "aaa")
+        update(db, sample_pks[2], "mmm")
+        update(db, sample_pks[3], "mmm")
+        master_commit_id = update(db, sample_pks[4], "mmm")
+
+        r = cli_runner.invoke(["merge", "alternate"])
+
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r
+        assert "conflict" in r.stdout
+        assert base_commit_id in r.stdout
+        assert alternate_commit_id in r.stdout
+        assert master_commit_id in r.stdout
+
+        # Only modified in alternate:
+        assert f"{layer}:{sample_pks[0]}" not in r.stdout
+        # Modified exactly the same in both branches:
+        assert f"{layer}:{sample_pks[1]}" not in r.stdout
+        # These two are merge conflicts:
+        assert f"{layer}:{sample_pks[2]}" in r.stdout
+        assert f"{layer}:{sample_pks[3]}" in r.stdout
+        # Only modified in master
+        assert f"{layer}:{sample_pks[3]}" in r.stdout

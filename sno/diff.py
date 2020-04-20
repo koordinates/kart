@@ -1,19 +1,14 @@
 import collections
-import contextlib
 import copy
-import io
-import json
 import logging
 import re
-import string
 import sys
-import webbrowser
 from pathlib import Path
 
 import click
 
-from . import gpkg
 from .cli_util import MutexOption
+from .diff_output import *  # noqa - used from globals()
 from .exceptions import (
     InvalidOperation,
     NotYetImplemented,
@@ -21,7 +16,6 @@ from .exceptions import (
     NO_WORKING_COPY,
     UNCATEGORIZED_ERROR,
 )
-from .output_util import dump_json_output, resolve_output_path
 
 
 L = logging.getLogger("sno.diff")
@@ -351,6 +345,36 @@ class Diff:
         return self._datasets.values()
 
 
+def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
+    dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
+    diff = Diff(dataset)
+
+    if base_rs != target_rs:
+        # diff += base_rs<>target_rs
+        base_ds = base_rs.get(dataset_path)
+        target_ds = target_rs.get(dataset_path)
+
+        params = {}
+        if not base_ds:
+            base_ds, target_ds = target_ds, base_ds
+            params["reverse"] = True
+
+        diff_cc = base_ds.diff(target_ds, pk_filter=(pk_filter or None), **params)
+        L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
+        diff += diff_cc
+
+    if working_copy:
+        # diff += target_rs<>working_copy
+        target_ds = target_rs.get(dataset_path)
+        diff_wc = working_copy.diff_db_to_tree(target_ds, pk_filter=(pk_filter or None))
+        L.debug(
+            "commit<>working_copy diff (%s): %s", dataset_path, repr(diff_wc),
+        )
+        diff += diff_wc
+
+    return diff
+
+
 def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
     """
     Calculates the appropriate diff from the arguments,
@@ -401,12 +425,12 @@ def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
             working_copy.assert_db_tree_match(target_rs.tree)
 
         # Parse [<dataset>[:pk]...]
-        paths = {}
+        pk_filters = {}
         for p in args:
             pp = p.split(":", maxsplit=1)
-            paths.setdefault(pp[0], [])
+            pk_filters.setdefault(pp[0], [])
             if len(pp) > 1:
-                paths[pp[0]].append(pp[1])
+                pk_filters[pp[0]].append(pp[1])
 
         base_str = base_rs.id
         target_str = "working-copy" if working_copy else target_rs.id
@@ -428,8 +452,8 @@ def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
 
         all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
 
-        if paths:
-            all_datasets = set(filter(lambda dsp: dsp in paths, all_datasets))
+        if pk_filters:
+            all_datasets = set(filter(lambda dsp: dsp in pk_filters, all_datasets))
 
         writer_params = {
             "repo": repo,
@@ -449,41 +473,18 @@ def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
         num_changes = 0
         with diff_writer(**writer_params) as w:
             for dataset_path in all_datasets:
-                dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
-                diff = Diff(dataset)
-
-                if base_rs != target_rs:
-                    # diff += base_rs<>target_rs
-                    base_ds = base_rs.get(dataset_path)
-                    target_ds = target_rs.get(dataset_path)
-
-                    params = {}
-                    if not base_ds:
-                        base_ds, target_ds = target_ds, base_ds
-                        params["reverse"] = True
-
-                    diff_cc = base_ds.diff(
-                        target_ds, pk_filter=(paths.get(dataset_path) or None), **params
-                    )
-                    L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
-                    diff += diff_cc
-
-                if working_copy:
-                    # diff += target_rs<>working_copy
-                    target_ds = target_rs.get(dataset_path)
-                    diff_wc = working_copy.diff_db_to_tree(
-                        target_ds, pk_filter=(paths.get(dataset_path) or None)
-                    )
-                    L.debug(
-                        "commit<>working_copy diff (%s): %s",
-                        dataset_path,
-                        repr(diff_wc),
-                    )
-                    diff += diff_wc
-
+                diff = get_dataset_diff(
+                    base_rs,
+                    target_rs,
+                    working_copy,
+                    dataset_path,
+                    pk_filters.get(dataset_path),
+                )
+                [dataset] = diff.datasets()
                 num_changes += len(diff)
                 L.debug("overall diff (%s): %s", dataset_path, repr(diff))
                 w(dataset, diff[dataset])
+
     except click.ClickException as e:
         L.debug("Caught ClickException: %s", e)
         if exit_code and e.exit_code == 1:
@@ -574,334 +575,3 @@ def diff(ctx, output_format, output_path, exit_code, args):
     return diff_with_writer(
         ctx, diff_writer, output_path=output_path, exit_code=exit_code, args=args,
     )
-
-
-@contextlib.contextmanager
-def diff_output_quiet(**kwargs):
-    """
-    Contextmanager.
-    Yields a callable which can be called with dataset diffs
-    (see `diff_output_text` docstring for more on that)
-
-    Writes nothing to the output. This is useful when you just want to find out
-    whether anything has changed in the diff (you can use the exit code)
-    and don't need output.
-    """
-
-    def _out(dataset, diff):
-        pass
-
-    yield _out
-
-
-@contextlib.contextmanager
-def diff_output_text(*, output_path, **kwargs):
-    """
-    Contextmanager.
-
-    Yields a callable which can be called with dataset diffs.
-    The callable takes two arguments:
-        dataset: A sno.structure.DatasetStructure instance representing
-                 either the old or new version of the dataset.
-        diff:    The sno.diff.Diff instance to serialize
-
-    On exit, writes a human-readable diff to the given output file.
-
-    Certain shortcuts are taken to make the diff human readable,
-    so it may not be suitable as a patch to apply.
-    In particular, geometry WKT is abbreviated and null values are represented
-    by a unicode "␀" character.
-    """
-    fp = resolve_output_path(output_path)
-    pecho = {'file': fp, 'color': fp.isatty()}
-    if isinstance(output_path, Path) and output_path.is_dir():
-        raise click.BadParameter(
-            "Directory is not valid for --output with --text", param_hint="--output"
-        )
-
-    def _out(dataset, diff):
-        path = dataset.path
-        pk_field = dataset.primary_key
-        prefix = f"{path}:"
-        repr_excl = [pk_field]
-
-        for k, (v_old, v_new) in diff["META"].items():
-            click.secho(
-                f"--- {prefix}meta/{k}\n+++ {prefix}meta/{k}", bold=True, **pecho
-            )
-
-            s_old = set(v_old.items())
-            s_new = set(v_new.items())
-
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = set(diff_del.keys()) | set(diff_add.keys())
-
-            for k in all_keys:
-                if k in diff_del:
-                    click.secho(
-                        _repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl),
-                        fg="red",
-                        **pecho,
-                    )
-                if k in diff_add:
-                    click.secho(
-                        _repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl),
-                        fg="green",
-                        **pecho,
-                    )
-
-        prefix = f"{path}:{pk_field}="
-
-        for k, v_old in diff["D"].items():
-            click.secho(f"--- {prefix}{k}", bold=True, **pecho)
-            click.secho(
-                _repr_row(v_old, prefix="- ", exclude=repr_excl), fg="red", **pecho
-            )
-
-        for o in diff["I"]:
-            click.secho(f"+++ {prefix}{o[pk_field]}", bold=True, **pecho)
-            click.secho(
-                _repr_row(o, prefix="+ ", exclude=repr_excl), fg="green", **pecho
-            )
-
-        for _, (v_old, v_new) in diff["U"].items():
-            click.secho(
-                f"--- {prefix}{v_old[pk_field]}\n+++ {prefix}{v_new[pk_field]}",
-                bold=True,
-                **pecho,
-            )
-
-            s_old = set(v_old.items())
-            s_new = set(v_new.items())
-
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
-
-            for k in all_keys:
-                if k in diff_del:
-                    rk = _repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
-                    if rk:
-                        click.secho(rk, fg="red", **pecho)
-                if k in diff_add:
-                    rk = _repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
-                    if rk:
-                        click.secho(rk, fg="green", **pecho)
-
-    yield _out
-
-
-def _repr_row(row, prefix="", exclude=None):
-    m = []
-    exclude = exclude or set()
-    for k in sorted(row.keys()):
-        if k.startswith("__") or k in exclude:
-            continue
-
-        v = row[k]
-
-        if isinstance(v, bytes):
-            g = gpkg.geom_to_ogr(v)
-            geom_typ = g.GetGeometryName()
-            if g.IsEmpty():
-                v = f"{geom_typ} EMPTY"
-            else:
-                v = f"{geom_typ}(...)"
-            del g
-
-        v = "␀" if v is None else v
-        m.append("{prefix}{k:>40} = {v}".format(k=k, v=v, prefix=prefix))
-
-    return "\n".join(m)
-
-
-@contextlib.contextmanager
-def diff_output_geojson(*, output_path, dataset_count, **kwargs):
-    """
-    Contextmanager.
-
-    Yields a callable which can be called with dataset diffs
-    (see `diff_output_text` docstring for more on that)
-
-    For features already existed but have changed, two features are written to the output:
-    one for the 'deleted' version of the feature, and one for the 'added' version.
-    This is intended for visualising in a map diff.
-
-    On exit, writes the diff as GeoJSON to the given output file.
-    For repos with more than one dataset, the output path must be a directory.
-    In that case:
-        * any .geojson files already in that directory will be deleted
-        * files will be written to `{layer_name}.geojson in the given directory
-
-    If the output file is stdout and isn't piped anywhere,
-    the json is prettified before writing.
-    """
-    if dataset_count > 1:
-        # output_path needs to be a directory
-        if not output_path:
-            raise click.BadParameter(
-                "Need to specify a directory via --output for --geojson with >1 dataset",
-                param_hint="--output",
-            )
-        elif output_path == "-" or output_path.is_file():
-            raise click.BadParameter(
-                "A file is not valid for --output + --geojson with >1 dataset",
-                param_hint="--output",
-            )
-
-        if not output_path.exists():
-            output_path.mkdir()
-        else:
-            for p in output_path.glob("*.geojson"):
-                p.unlink()
-
-    def _out(dataset, diff):
-        if not output_path or output_path == '-':
-            fp = sys.stdout
-        elif output_path.is_dir():
-            fp = (output_path / f"{dataset.name}.geojson").open("w")
-        else:
-            fp = output_path.open("w")
-
-        pk_field = dataset.primary_key
-
-        fc = {"type": "FeatureCollection", "features": []}
-
-        for k, (v_old, v_new) in diff["META"].items():
-            click.secho(
-                f"Warning: meta changes aren't included in GeoJSON output: {k}",
-                fg="yellow",
-                file=sys.stderr,
-            )
-
-        for k, v_old in diff["D"].items():
-            fc["features"].append(_json_row(v_old, "D", pk_field))
-
-        for o in diff["I"]:
-            fc["features"].append(_json_row(o, "I", pk_field))
-
-        for _, (v_old, v_new) in diff["U"].items():
-            fc["features"].append(_json_row(v_old, "U-", pk_field))
-            fc["features"].append(_json_row(v_new, "U+", pk_field))
-
-        dump_json_output(fc, fp)
-
-    yield _out
-
-
-@contextlib.contextmanager
-def diff_output_json(*, output_path, dataset_count, **kwargs):
-    """
-    Contextmanager.
-    Yields a callable which can be called with dataset diffs
-    (see `diff_output_text` docstring for more on that)
-
-    On exit, writes the diff as JSON to the given output file.
-    If the output file is stdout and isn't piped anywhere,
-    the json is prettified first.
-    """
-    if isinstance(output_path, Path):
-        if output_path.is_dir():
-            raise click.BadParameter(
-                "Directory is not valid for --output with --json", param_hint="--output"
-            )
-
-    accumulated = {}
-
-    def _out(dataset, diff):
-        pk_field = dataset.primary_key
-
-        d = {"metaChanges": {}, "featureChanges": []}
-        for k, (v_old, v_new) in diff["META"].items():
-            d["metaChanges"][k] = [v_old, v_new]
-
-        for k, v_old in diff["D"].items():
-            d["featureChanges"].append({'-': _json_row(v_old, "D", pk_field)})
-
-        for o in diff["I"]:
-            d["featureChanges"].append({'+': _json_row(o, "I", pk_field)})
-
-        for _, (v_old, v_new) in diff["U"].items():
-            d["featureChanges"].append(
-                {
-                    '-': _json_row(v_old, "U-", pk_field),
-                    '+': _json_row(v_new, "U+", pk_field),
-                }
-            )
-
-        # sort for reproducibility
-        d["featureChanges"].sort(
-            key=lambda fc: (
-                fc['-']["id"] if '-' in fc else "",
-                fc['+']["id"] if '+' in fc else "",
-            )
-        )
-        accumulated[dataset.path] = d
-
-    yield _out
-
-    dump_json_output({"sno.diff/v1": accumulated}, output_path)
-
-
-def _json_row(row, change, pk_field):
-    f = {
-        "type": "Feature",
-        "geometry": None,
-        "properties": {},
-        "id": f"{change}::{row[pk_field]}",
-    }
-
-    for k in row.keys():
-        v = row[k]
-        if isinstance(v, bytes):
-            g = gpkg.geom_to_ogr(v)
-            f["geometry"] = json.loads(g.ExportToJson())
-        else:
-            f["properties"][k] = v
-
-    return f
-
-
-@contextlib.contextmanager
-def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs):
-    """
-    Contextmanager.
-    Yields a callable which can be called with dataset diffs
-    (see `diff_output_text` docstring for more on that)
-
-    On exit, writes an HTML diff to the given output file
-    (defaults to 'DIFF.html' in the repo directory).
-
-    If `-` is given as the output file, the HTML is written to stdout,
-    and no web browser is opened.
-    """
-    if isinstance(output_path, Path):
-        if output_path.is_dir():
-            raise click.BadParameter(
-                "Directory is not valid for --output with --html", param_hint="--output"
-            )
-
-    json_data = io.StringIO()
-    with diff_output_json(
-        output_path=json_data, dataset_count=dataset_count
-    ) as json_writer:
-        yield json_writer
-
-    with open(
-        Path(__file__).resolve().with_name("diff-view.html"), "r", encoding="utf8"
-    ) as ft:
-        template = string.Template(ft.read())
-
-    title = f"{Path(repo.path).name}: {base.short_id} .. {target.short_id if target else 'working-copy'}"
-
-    if not output_path:
-        output_path = Path(repo.path) / "DIFF.html"
-    fo = resolve_output_path(output_path)
-
-    fo.write(
-        template.substitute({"title": title, "geojson_data": json_data.getvalue()})
-    )
-    if fo != sys.stdout:
-        fo.close()
-        webbrowser.open_new(f"file://{output_path.resolve()}")

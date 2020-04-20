@@ -735,7 +735,7 @@ class Dataset1(DatasetStructure):
     def index_entry_to_pk(self, index_entry):
         feature_path = index_entry.path.split("/.sno-table/", maxsplit=1)[1]
         if feature_path.startswith("meta/"):
-            return 'meta'
+            return 'META'
         return self.decode_pk(os.path.basename(feature_path))
 
     def encode_pk(self, pk):

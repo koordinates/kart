@@ -36,7 +36,7 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
         assert repo.is_bare
         assert not repo.is_empty
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
 
         branch = repo.branches.local[repo.head.shorthand]
         assert branch.is_head()
@@ -51,7 +51,7 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
         if working_copy:
             assert wc.exists() and wc.is_file()
 
-            table = H.POINTS_LAYER
+            table = H.POINTS.LAYER
             assert repo.config["sno.workingcopy.version"] == "1"
             assert repo.config["sno.workingcopy.path"] == wc.name
 

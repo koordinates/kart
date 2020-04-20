@@ -23,8 +23,8 @@ def indexed_dataset(data_archive, cli_runner):
 @pytest.mark.parametrize(
     "archive,table",
     [
-        pytest.param("points", H.POINTS_LAYER, id="points"),
-        pytest.param("polygons", H.POLYGONS_LAYER, id="polygons"),
+        pytest.param("points", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons"),
     ],
 )
 def test_build_spatial_index(archive, table, data_archive, cli_runner):
@@ -40,8 +40,8 @@ def test_build_spatial_index(archive, table, data_archive, cli_runner):
 
 
 def test_query_cli_get(indexed_dataset, cli_runner):
-    with indexed_dataset("points", H.POINTS_LAYER):
-        r = cli_runner.invoke(["query", H.POINTS_LAYER, "get", "1"])
+    with indexed_dataset("points", H.POINTS.LAYER):
+        r = cli_runner.invoke(["query", H.POINTS.LAYER, "get", "1"])
         assert r.exit_code == 0, r
 
         assert json.loads(r.stdout) == {
@@ -58,8 +58,8 @@ def test_query_cli_get(indexed_dataset, cli_runner):
 
 
 def test_query_cli_geo_nearest(indexed_dataset, cli_runner):
-    with indexed_dataset("points", H.POINTS_LAYER):
-        r = cli_runner.invoke(["query", H.POINTS_LAYER, "geo-nearest", "177,-38"])
+    with indexed_dataset("points", H.POINTS.LAYER):
+        r = cli_runner.invoke(["query", H.POINTS.LAYER, "geo-nearest", "177,-38"])
         assert r.exit_code == 0, r
 
         data = json.loads(r.stdout)
@@ -78,7 +78,7 @@ def test_query_cli_geo_nearest(indexed_dataset, cli_runner):
         }
         assert data[0] == EXPECTED
 
-        r = cli_runner.invoke(["query", H.POINTS_LAYER, "geo-nearest", "177,-38", "4"])
+        r = cli_runner.invoke(["query", H.POINTS.LAYER, "geo-nearest", "177,-38", "4"])
         assert r.exit_code == 0, r
         data = json.loads(r.stdout)
         assert isinstance(data, list)
@@ -87,9 +87,9 @@ def test_query_cli_geo_nearest(indexed_dataset, cli_runner):
 
 
 def test_query_cli_geo_count(indexed_dataset, cli_runner):
-    with indexed_dataset("points", H.POINTS_LAYER):
+    with indexed_dataset("points", H.POINTS.LAYER):
         r = cli_runner.invoke(
-            ["query", H.POINTS_LAYER, "geo-count", "177,-38,177.1,-37.9"]
+            ["query", H.POINTS.LAYER, "geo-count", "177,-38,177.1,-37.9"]
         )
         assert r.exit_code == 0, r
 
@@ -99,9 +99,9 @@ def test_query_cli_geo_count(indexed_dataset, cli_runner):
 def test_query_cli_geo_intersects(indexed_dataset, cli_runner):
     x0, y0, x1, y1 = 177, -38, 177.1, -37.9
 
-    with indexed_dataset("points", H.POINTS_LAYER):
+    with indexed_dataset("points", H.POINTS.LAYER):
         r = cli_runner.invoke(
-            ["query", H.POINTS_LAYER, "geo-intersects", f"{x0},{y0},{x1},{y1}"]
+            ["query", H.POINTS.LAYER, "geo-intersects", f"{x0},{y0},{x1},{y1}"]
         )
         assert r.exit_code == 0, r
 
