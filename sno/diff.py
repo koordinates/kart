@@ -11,7 +11,6 @@ import webbrowser
 from pathlib import Path
 
 import click
-import pygit2
 
 from . import gpkg
 from .cli_util import MutexOption
@@ -22,6 +21,7 @@ from .exceptions import (
     NO_WORKING_COPY,
     UNCATEGORIZED_ERROR,
 )
+from .output_util import dump_json_output, resolve_output_path
 
 
 L = logging.getLogger("sno.diff")
@@ -792,46 +792,6 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
     yield _out
 
 
-def resolve_output_path(output_path):
-    """
-    Takes a path-ish thing, and returns the appropriate writable file-like object.
-    The path-ish thing could be:
-      * a pathlib.Path object
-      * a file-like object
-      * the string '-' or None (both will return sys.stdout)
-    """
-    if isinstance(output_path, io.IOBase):
-        return output_path
-    elif (not output_path) or output_path == "-":
-        return sys.stdout
-    else:
-        return output_path.open("w")
-
-
-def dump_json_diff_output(output, output_path):
-    """
-    Dumps the output to JSON in the output file.
-    """
-
-    pretty = (not output_path) or output_path == "-"
-    fp = resolve_output_path(output_path)
-
-    json_params = {}
-    if pretty:
-        json_params.update({"indent": 2, "sort_keys": True})
-    if pretty and sys.stdout.isatty():
-        # Add syntax highlighting
-        from pygments import highlight
-        from pygments.lexers import JsonLexer
-        from pygments.formatters import TerminalFormatter
-
-        dumped = json.dumps(output, **json_params)
-        highlighted = highlight(dumped.encode(), JsonLexer(), TerminalFormatter())
-        fp.write(highlighted)
-    else:
-        json.dump(output, fp, **json_params)
-
-
 @contextlib.contextmanager
 def diff_output_json(*, output_path, dataset_count, **kwargs):
     """
@@ -883,7 +843,7 @@ def diff_output_json(*, output_path, dataset_count, **kwargs):
 
     yield _out
 
-    dump_json_diff_output({"sno.diff/v1": accumulated}, output_path)
+    dump_json_output({"sno.diff/v1": accumulated}, output_path)
 
 
 def _json_row(row, change, pk_field):

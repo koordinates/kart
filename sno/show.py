@@ -1,5 +1,4 @@
 import contextlib
-import functools
 import json
 from datetime import datetime, timezone, timedelta
 from io import StringIO
@@ -9,6 +8,7 @@ import pygit2
 
 from .cli_util import MutexOption
 from .exceptions import NotFound, NO_COMMIT
+from .output_util import dump_json_output, resolve_output_path
 from .timestamps import to_iso8601_utc, to_iso8601_tz
 from . import diff
 
@@ -78,7 +78,7 @@ def patch_output_text(*, target, output_path, **kwargs):
     by a unicode "␀" character.
     """
     commit = target.head_commit
-    fp = diff.resolve_output_path(output_path)
+    fp = resolve_output_path(output_path)
     pecho = {'file': fp, 'color': fp.isatty()}
     with diff.diff_output_text(output_path=fp, **kwargs) as diff_writer:
         author = commit.author
@@ -145,4 +145,4 @@ def patch_output_json(*, target, output_path, **kwargs):
         "message": commit.message,
     }
 
-    diff.dump_json_diff_output(output, original_output_path)
+    dump_json_output(output, original_output_path)
