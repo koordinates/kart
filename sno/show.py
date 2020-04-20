@@ -9,7 +9,7 @@ import pygit2
 from .cli_util import MutexOption
 from .exceptions import NotFound, NO_COMMIT
 from .output_util import dump_json_output, resolve_output_path
-from .timestamps import to_iso8601_utc, to_iso8601_tz
+from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff
 
 
@@ -140,8 +140,8 @@ def patch_output_json(*, target, output_path, **kwargs):
     output['sno.patch/v1'] = {
         'authorName': author.name,
         'authorEmail': author.email,
-        "authorTime": to_iso8601_utc(author_time),
-        "authorTimeOffset": to_iso8601_tz(author_time_offset),
+        "authorTime": datetime_to_iso8601_utc(author_time),
+        "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
         "message": commit.message,
     }
 

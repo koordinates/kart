@@ -20,7 +20,11 @@ from .status import (
     get_diff_status_json,
     diff_status_to_text,
 )
-from .timestamps import to_iso8601_utc, to_iso8601_tz, commit_time_to_text
+from .timestamps import (
+    datetime_to_iso8601_utc,
+    timedelta_to_iso8601_tz,
+    commit_time_to_text,
+)
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
 from .cli_util import MutexOption, do_json_option
@@ -187,8 +191,8 @@ def commit_obj_to_json(commit, repo, wc_changes):
             "branch": branch,
             "message": commit.message,
             "changes": get_diff_status_json(wc_changes),
-            "commitTime": to_iso8601_utc(commit_time),
-            "commitTimeOffset": to_iso8601_tz(commit_time_offset),
+            "commitTime": datetime_to_iso8601_utc(commit_time),
+            "commitTimeOffset": timedelta_to_iso8601_tz(commit_time_offset),
         }
     }
 

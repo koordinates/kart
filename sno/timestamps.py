@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
-def to_iso8601_utc(datetime):
+def datetime_to_iso8601_utc(datetime):
     """
     Accepts a datetime.datetime object with UTC timezone.
     Returns a string like: 2020-03-26T09:10:11Z
@@ -10,7 +10,7 @@ def to_iso8601_utc(datetime):
     return f"{isoformat}Z"
 
 
-def to_iso8601_tz(timedelta):
+def timedelta_to_iso8601_tz(timedelta):
     """
     Accepts a datetime.timedelta object.
     Returns a string like "+05:00" or "-05:00" (ie five hours ahead or behind).
@@ -24,6 +24,6 @@ def commit_time_to_text(iso8601z, iso_offset):
     Given an isoformat time in UTC, and a isoformat timezone offset,
     returns the time in a human readable format, for that timezone.
     """
-    right_time = datetime.fromisoformat(iso8601z.replace("Z", "+00:00"))
+    right_time = iso8601_utc_to_datetime(iso8601z)
     right_tzinfo = datetime.fromisoformat(iso8601z.replace("Z", iso_offset))
     return right_time.astimezone(right_tzinfo.tzinfo).strftime("%c %z")
