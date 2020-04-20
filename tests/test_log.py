@@ -22,17 +22,3 @@ def test_log(data_archive, cli_runner):
             "",
             "    Import from nz-pa-points-topo-150k.gpkg",
         ]
-
-
-def test_show(data_archive, cli_runner):
-    """ review commit history """
-    with data_archive("points"):
-        r = cli_runner.invoke(["show"])
-        assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == [
-            "commit 2a1b7be8bdef32aea1510668e3edccbc6d454852",
-            "Author: Robert Coup <robert@coup.net.nz>",
-            "Date:   Thu Jun 20 15:28:33 2019 +0100",
-            "",
-            "    Improve naming on Coromandel East coast",
-        ]

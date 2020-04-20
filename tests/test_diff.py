@@ -12,7 +12,8 @@ from sno.exceptions import NOT_YET_IMPLEMENTED
 
 H = pytest.helpers.helpers()
 
-OUTPUT_FORMATS = ["text", "geojson", "json", "quiet", "html"]
+DIFF_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet", "html"]
+SHOW_OUTPUT_FORMATS = ["text", "json"]
 
 
 def _check_html_output(s):
@@ -27,7 +28,7 @@ def _check_html_output(s):
     json.loads(m.group(1))
 
 
-@pytest.mark.parametrize("output_format", OUTPUT_FORMATS)
+@pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
     with data_working_copy("points") as (repo, wc):
@@ -326,7 +327,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
             _check_html_output(r.stdout)
 
 
-@pytest.mark.parametrize("output_format", OUTPUT_FORMATS)
+@pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
     with data_working_copy("polygons") as (repo, wc):
@@ -929,7 +930,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
             _check_html_output(r.stdout)
 
 
-@pytest.mark.parametrize("output_format", OUTPUT_FORMATS)
+@pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
     with data_working_copy("table") as (repo, wc):
@@ -1654,3 +1655,73 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         r = cli_runner.invoke(["diff", "--quiet", b_commit_id])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stdout
+
+
+@pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
+def test_show_points_HEAD(output_format, data_archive, cli_runner):
+    """
+    Show a patch; ref defaults to HEAD
+    """
+    with data_archive("points"):
+        r = cli_runner.invoke(["show", f"--{output_format}", "HEAD"])
+        assert r.exit_code == 0, r
+
+        if output_format == 'text':
+            assert r.stdout.splitlines() == [
+                'commit 2a1b7be8bdef32aea1510668e3edccbc6d454852',
+                'Author: Robert Coup <robert@coup.net.nz>',
+                'Date:   Thu Jun 20 15:28:33 2019 +0100',
+                '',
+                '    Improve naming on Coromandel East coast',
+                '',
+                '--- nz_pa_points_topo_150k:fid=1168',
+                '+++ nz_pa_points_topo_150k:fid=1168',
+                '-                                     name = ␀',
+                '+                                     name = Tairua',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Tairua',
+                '--- nz_pa_points_topo_150k:fid=1166',
+                '+++ nz_pa_points_topo_150k:fid=1166',
+                '-                                     name = ␀',
+                '+                                     name = Oturu',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Oturu',
+                '--- nz_pa_points_topo_150k:fid=1095',
+                '+++ nz_pa_points_topo_150k:fid=1095',
+                '-                               macronated = N',
+                '+                               macronated = Y',
+                '-                                     name = ␀',
+                '+                                     name = Harataunga (Rākairoa)',
+                '',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Harataunga (Rakairoa)',
+                '',
+                '--- nz_pa_points_topo_150k:fid=1181',
+                '+++ nz_pa_points_topo_150k:fid=1181',
+                '-                               macronated = N',
+                '+                               macronated = Y',
+                '-                                     name = ␀',
+                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+                '--- nz_pa_points_topo_150k:fid=1182',
+                '+++ nz_pa_points_topo_150k:fid=1182',
+                '-                               macronated = N',
+                '+                               macronated = Y',
+                '-                                     name = ␀',
+                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+            ]
+        elif output_format == 'json':
+            j = json.loads(r.stdout)
+            # check the diff's present, but this test doesn't need to have hundreds of lines
+            # to know exactly what it is (we have diff tests above)
+            assert 'sno.diff/v1' in j
+            assert j['sno.patch/v1'] == {
+                'authorEmail': 'robert@coup.net.nz',
+                'authorName': 'Robert Coup',
+                'authorTime': '2019-06-20T14:28:33Z',
+                'authorTimeOffset': '+01:00',
+                'message': 'Improve naming on Coromandel East coast',
+            }
