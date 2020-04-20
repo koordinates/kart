@@ -934,4 +934,4 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
     )
     if fo != sys.stdout:
         fo.close()
-        webbrowser.open_new(f"file://{output_path}")
+        webbrowser.open_new(f"file://{output_path.resolve()}")
