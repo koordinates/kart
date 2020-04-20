@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import shlex
@@ -14,6 +13,7 @@ from . import is_windows
 from .core import check_git_user
 from .diff import Diff
 from .exceptions import NotFound, SubprocessError, NO_CHANGES, NO_DATA, NO_WORKING_COPY
+from .output_util import dump_json_output
 from .status import (
     get_branch_status_message,
     get_diff_status_message,
@@ -108,7 +108,7 @@ def commit(ctx, message, message_file, allow_empty, do_json):
     new_commit = repo.head.peel(pygit2.Commit)
     jdict = commit_obj_to_json(new_commit, repo, wc_changes)
     if do_json:
-        json.dump(jdict, sys.stdout, indent=2)
+        dump_json_output(jdict, sys.stdout)
     else:
         click.echo(commit_json_to_text(jdict))
 

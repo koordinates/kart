@@ -1,4 +1,3 @@
-import json
 import sys
 
 import click
@@ -7,6 +6,7 @@ import pygit2
 from .cli_util import do_json_option
 from .exceptions import InvalidOperation
 from .exec import execvp
+from .output_util import dump_json_output
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
@@ -26,7 +26,7 @@ def branch(ctx, do_json, args):
             raise click.UsageError(
                 "Illegal usage: 'sno branch --json' only supports listing branches."
             )
-        json.dump(list_branches_json(repo), sys.stdout, indent=2)
+        dump_json_output(list_branches_json(repo), sys.stdout)
         return
 
     # git's branch protection behaviour doesn't apply if it's a bare repository

@@ -1,10 +1,10 @@
-import json
 import sys
 
 import click
 import pygit2
 
 from .cli_util import do_json_option
+from .output_util import dump_json_output
 from .structure import RepositoryStructure
 
 
@@ -16,7 +16,7 @@ def status(ctx, do_json):
     repo = ctx.obj.repo
     jdict = get_status_json(repo)
     if do_json:
-        json.dump(jdict, sys.stdout, indent=2)
+        dump_json_output(jdict, sys.stdout)
     else:
         click.echo(status_to_text(jdict))
 

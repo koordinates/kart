@@ -757,10 +757,8 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
                 p.unlink()
 
     def _out(dataset, diff):
-        json_params = {}
         if not output_path or output_path == '-':
             fp = sys.stdout
-            json_params = {"indent": 2, "sort_keys": True}
         elif output_path.is_dir():
             fp = (output_path / f"{dataset.name}.geojson").open("w")
         else:
@@ -787,7 +785,7 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
             fc["features"].append(_json_row(v_old, "U-", pk_field))
             fc["features"].append(_json_row(v_new, "U+", pk_field))
 
-        json.dump(fc, fp, **json_params)
+        dump_json_output(fc, fp)
 
     yield _out
 
