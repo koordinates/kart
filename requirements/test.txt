@@ -26,6 +26,7 @@ psycopg2-binary==2.8.4    # via -r requirements/../requirements.txt
 py-cpuinfo==5.0.0         # via pytest-benchmark
 py==1.8.1                 # via pytest
 pycparser==2.19           # via -r requirements/../requirements.txt, cffi
+pygments==2.6.1           # via -r requirements/../requirements.txt
 pyparsing==2.4.6          # via packaging
 pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.in
 pytest-cov==2.8.1         # via -r requirements/test.in

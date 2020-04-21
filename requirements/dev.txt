@@ -38,7 +38,7 @@ ptyprocess==0.6.0         # via pexpect
 py-cpuinfo==5.0.0         # via -r requirements/test.txt, pytest-benchmark
 py==1.8.1                 # via -r requirements/test.txt, pytest
 pycparser==2.19           # via -r requirements/../requirements.txt, -r requirements/test.txt, cffi
-pygments==2.5.2           # via ipython
+pygments==2.6.1           # via -r requirements/../requirements.txt, -r requirements/test.txt, ipython
 pyparsing==2.4.6          # via -r requirements/test.txt, packaging
 pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.txt
 pytest-cov==2.8.1         # via -r requirements/test.txt

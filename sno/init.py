@@ -21,6 +21,7 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
+from .output_util import dump_json_output
 
 
 @click.command("import-gpkg", hidden=True)
@@ -172,7 +173,7 @@ class ImportGPKG:
     def print_table_list(self, do_json=False):
         table_list = self.get_table_list()
         if do_json:
-            json.dump({"sno.tables/v1": table_list}, sys.stdout, indent=2)
+            dump_json_output({"sno.tables/v1": table_list}, sys.stdout)
         else:
             click.secho(f"GeoPackage tables in '{Path(self.source).name}':", bold=True)
             for table_name, identifier in table_list.items():

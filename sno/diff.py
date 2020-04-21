@@ -11,7 +11,6 @@ import webbrowser
 from pathlib import Path
 
 import click
-import pygit2
 
 from . import gpkg
 from .cli_util import MutexOption
@@ -22,6 +21,7 @@ from .exceptions import (
     NO_WORKING_COPY,
     UNCATEGORIZED_ERROR,
 )
+from .output_util import dump_json_output, resolve_output_path
 
 
 L = logging.getLogger("sno.diff")
@@ -31,7 +31,7 @@ class Conflict(Exception):
     pass
 
 
-class Diff(object):
+class Diff:
     def __init__(
         self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None
     ):
@@ -757,10 +757,8 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
                 p.unlink()
 
     def _out(dataset, diff):
-        json_params = {}
         if not output_path or output_path == '-':
             fp = sys.stdout
-            json_params = {"indent": 2, "sort_keys": True}
         elif output_path.is_dir():
             fp = (output_path / f"{dataset.name}.geojson").open("w")
         else:
@@ -787,37 +785,9 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
             fc["features"].append(_json_row(v_old, "U-", pk_field))
             fc["features"].append(_json_row(v_new, "U+", pk_field))
 
-        json.dump(fc, fp, **json_params)
+        dump_json_output(fc, fp)
 
     yield _out
-
-
-def resolve_output_path(output_path):
-    """
-    Takes a path-ish thing, and returns the appropriate writable file-like object.
-    The path-ish thing could be:
-      * a pathlib.Path object
-      * a file-like object
-      * the string '-' or None (both will return sys.stdout)
-    """
-    if isinstance(output_path, io.IOBase):
-        return output_path
-    elif (not output_path) or output_path == "-":
-        return sys.stdout
-    else:
-        return output_path.open("w")
-
-
-def dump_json_diff_output(output, output_path):
-    """
-    Dumps the output to JSON in the output file.
-    """
-    json_params = {}
-    if (not output_path) or output_path == "-":
-        # Prettier output for humans
-        json_params.update({"indent": 2, "sort_keys": True})
-    fp = resolve_output_path(output_path)
-    json.dump(output, fp, **json_params)
 
 
 @contextlib.contextmanager
@@ -871,7 +841,7 @@ def diff_output_json(*, output_path, dataset_count, **kwargs):
 
     yield _out
 
-    dump_json_diff_output({"sno.diff/v1": accumulated}, output_path)
+    dump_json_output({"sno.diff/v1": accumulated}, output_path)
 
 
 def _json_row(row, change, pk_field):
