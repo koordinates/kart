@@ -364,6 +364,8 @@ class TestHelpers:
     }
     POINTS_HEAD_SHA = "2a1b7be8bdef32aea1510668e3edccbc6d454852"
     POINTS_HEAD1_SHA = "63a9492dd785b1f04dfc446330fa017f9459db4f"
+    POINTS_HEAD_TREE_SHA = "81f330e76b854e7448523307ff78bd6b83cadf21"
+    POINTS_HEAD1_TREE_SHA = "007ee9ab7f00b70a4199120cb274753c28e8ab92"
     POINTS_ROWCOUNT = 2143
 
     # Test Dataset (gpkg-polygons / polygons)
