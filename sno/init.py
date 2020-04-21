@@ -403,7 +403,14 @@ def import_table(ctx, source, directory, do_list, do_json, version, method):
 @click.argument(
     "directory", type=click.Path(writable=True, file_okay=False), required=False
 )
-def init(ctx, import_from, do_checkout, directory):
+@click.option(
+    "--version",
+    type=click.Choice(structure.DatasetStructure.version_numbers()),
+    default=structure.DatasetStructure.version_numbers()[0],
+    hidden=True,
+)
+@click.option("--method", hidden=True)
+def init(ctx, import_from, do_checkout, directory, version, method):
     """
     Initialise a new repository and optionally import data
 
@@ -445,8 +452,14 @@ def init(ctx, import_from, do_checkout, directory):
     repo = pygit2.init_repository(str(repo_path), bare=True)
 
     if import_from:
-        importer = structure.DatasetStructure.importer(import_table)
-        importer.import_table(repo, source_loader)
+        importer = structure.DatasetStructure.importer(import_table, version=version)
+        params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
+        if params:
+            click.echo(f"Import parameters: {params}")
+        if method == "slow":
+            importer.import_table(repo, source_loader, **params)
+        else:
+            importer.fast_import_table(repo, source_loader, **params)
 
         if do_checkout:
             # Checkout a working copy
