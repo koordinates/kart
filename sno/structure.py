@@ -28,21 +28,35 @@ class RepositoryStructure:
         try:
             obj = repo.revparse_single(key)
         except KeyError:
-            raise NotFound(f"Lookup failed for {key}", exit_code=NO_COMMIT)
+            raise NotFound(f"{key} is not a commit or tree", exit_code=NO_COMMIT)
 
         try:
-            return RepositoryStructure(repo, commit=obj)
+            return RepositoryStructure(repo, commit=obj.peel(pygit2.Commit))
         except pygit2.InvalidSpecError:
-            raise NotFound(f"{key} is not a commit", exit_code=NO_COMMIT)
+            pass
 
-    def __init__(self, repo, commit=None):
+        try:
+            return RepositoryStructure(repo, tree=obj.peel(pygit2.Tree))
+        except pygit2.InvalidSpecError:
+            pass
+
+        raise NotFound(
+            f"{key} is a {obj.type_str}, not a commit or tree", exit_code=NO_COMMIT
+        )
+
+    def __init__(self, repo, commit=None, tree=None):
         self.L = logging.getLogger(__class__.__qualname__)
         self.repo = repo
 
+        # If _commit is not None, self.tree -> self._commit.tree, so _tree is not set.
         if commit is not None:
             self._commit = commit
+        elif tree is not None:
+            self._commit = None
+            self._tree = tree
         elif self.repo.is_empty:
             self._commit = None
+            self._tree = None
         else:
             self._commit = self.repo.head.peel(pygit2.Commit)
 
@@ -117,15 +131,13 @@ class RepositoryStructure:
 
     @property
     def id(self):
-        if self._commit is not None:
-            return self._commit.id
-        return None
+        obj = self._commit or self._tree
+        return obj.id if obj else None
 
     @property
     def short_id(self):
-        if self._commit is not None:
-            return self._commit.short_id
-        return None
+        obj = self._commit or self._tree
+        return obj.short_id if obj else None
 
     @property
     def head_commit(self):
@@ -135,7 +147,7 @@ class RepositoryStructure:
     def tree(self):
         if self._commit is not None:
             return self._commit.peel(pygit2.Tree)
-        return None
+        return self._tree
 
     @property
     def working_copy(self):
