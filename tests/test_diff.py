@@ -1257,56 +1257,67 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
             _check_html_output(r.stdout)
 
 
-@pytest.mark.parametrize("use_tree_hashes", [False, True])
-def test_diff_rev_rev(data_archive, cli_runner, use_tree_hashes):
-    """ diff between commits """
+@pytest.mark.parametrize(
+    "hashes",
+    [
+        {"HEAD": H.POINTS_HEAD_SHA, "HEAD1": H.POINTS_HEAD1_SHA},
+        {"HEAD": H.POINTS_HEAD_TREE_SHA, "HEAD1": H.POINTS_HEAD1_TREE_SHA},
+    ],
+)
+def test_diff_rev_noop(data_archive, cli_runner, hashes):
+    """diff between trees / commits - no-op"""
+    HEAD_SHA = hashes["HEAD"]
+    HEAD1_SHA = hashes["HEAD1"]
+
+    NOOP_SPECS = (
+        f"{HEAD_SHA[:6]}..{HEAD_SHA[:6]}",
+        f"{HEAD_SHA}..{HEAD_SHA}",
+        f"{HEAD1_SHA}..{HEAD1_SHA}",
+        "HEAD^1..HEAD^1",
+        f"{HEAD_SHA}..",
+        f"..{HEAD_SHA}",
+    )
+
     with data_archive("points"):
-        if use_tree_hashes:
-            # Find tree hashes for HEAD and HEAD1
-            repo = pygit2.Repository('.')
-            POINTS_HEAD_TREE_SHA = (
-                repo.revparse_single(H.POINTS_HEAD_SHA).peel(pygit2.Tree).id.hex
-            )
-            POINTS_HEAD1_TREE_SHA = (
-                repo.revparse_single(H.POINTS_HEAD1_SHA).peel(pygit2.Tree).id.hex
-            )
-
-        # empty
-        if use_tree_hashes:
-            NOOP_SPECS = (
-                f"{POINTS_HEAD_TREE_SHA[:6]}..{POINTS_HEAD_TREE_SHA[:6]}",
-                f"{POINTS_HEAD_TREE_SHA}..{POINTS_HEAD_TREE_SHA}",
-                f"{POINTS_HEAD1_TREE_SHA}..{POINTS_HEAD1_TREE_SHA}",
-                f"{POINTS_HEAD_TREE_SHA}..",
-                f"..{POINTS_HEAD_TREE_SHA}",
-            )
-        else:
-            NOOP_SPECS = (
-                f"{H.POINTS_HEAD_SHA[:6]}..{H.POINTS_HEAD_SHA[:6]}",
-                f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD_SHA}",
-                f"{H.POINTS_HEAD1_SHA}..{H.POINTS_HEAD1_SHA}",
-                "HEAD^1..HEAD^1",
-                f"{H.POINTS_HEAD_SHA}..",
-                f"..{H.POINTS_HEAD_SHA}",
-            )
-
         for spec in NOOP_SPECS:
             print(f"noop: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", spec])
             assert r.exit_code == 0, r
 
-        if use_tree_hashes:
-            F_SPECS = (
-                f"{POINTS_HEAD1_TREE_SHA}..{POINTS_HEAD_TREE_SHA}",
-                f"{POINTS_HEAD1_TREE_SHA}..",
-            )
-        else:
-            F_SPECS = (
-                f"{H.POINTS_HEAD1_SHA}..{H.POINTS_HEAD_SHA}",
-                f"{H.POINTS_HEAD1_SHA}..",
-                "HEAD^1..HEAD",
-            )
 
+@pytest.mark.parametrize(
+    "hashes",
+    [
+        {"HEAD": H.POINTS_HEAD_SHA, "HEAD1": H.POINTS_HEAD1_SHA},
+        {"HEAD": H.POINTS_HEAD_TREE_SHA, "HEAD1": H.POINTS_HEAD1_TREE_SHA},
+    ],
+)
+def test_diff_rev_rev(data_archive, cli_runner, hashes):
+    """diff between trees / commits - no-op"""
+
+    HEAD_SHA = hashes["HEAD"]
+    HEAD1_SHA = hashes["HEAD1"]
+
+    F_SPECS = (
+        f"{HEAD1_SHA}..{HEAD_SHA}",
+        f"{HEAD1_SHA}..",
+    )
+
+    R_SPECS = (
+        f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD1_SHA}",
+        f"..{H.POINTS_HEAD1_SHA}",
+        "HEAD..HEAD^1",
+    )
+
+    CHANGE_IDS = {
+        ("U-::1182", "U+::1182"),
+        ("U-::1181", "U+::1181"),
+        ("U-::1168", "U+::1168"),
+        ("U-::1166", "U+::1166"),
+        ("U-::1095", "U+::1095"),
+    }
+
+    with data_archive("points"):
         for spec in F_SPECS:
             print(f"fwd: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
@@ -1314,14 +1325,6 @@ def test_diff_rev_rev(data_archive, cli_runner, use_tree_hashes):
             odata = json.loads(r.stdout)["sno.diff/v1"]
             assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
             assert len(odata[H.POINTS_LAYER]["metaChanges"]) == 0
-
-            CHANGE_IDS = {
-                ("U-::1182", "U+::1182"),
-                ("U-::1181", "U+::1181"),
-                ("U-::1168", "U+::1168"),
-                ("U-::1166", "U+::1166"),
-                ("U-::1095", "U+::1095"),
-            }
             change_ids = {
                 (f.get('-', {}).get("id"), f.get('+', {}).get("id"))
                 for f in odata[H.POINTS_LAYER]["featureChanges"]
@@ -1334,19 +1337,6 @@ def test_diff_rev_rev(data_archive, cli_runner, use_tree_hashes):
             }
             assert not any(n[0] for n in change_names)
             assert all(n[1] for n in change_names)
-
-        # same commit in reverse
-        if use_tree_hashes:
-            R_SPECS = (
-                f"{POINTS_HEAD_TREE_SHA}..{POINTS_HEAD1_TREE_SHA}",
-                f"..{POINTS_HEAD1_TREE_SHA}",
-            )
-        else:
-            R_SPECS = (
-                f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD1_SHA}",
-                f"..{H.POINTS_HEAD1_SHA}",
-                "HEAD..HEAD^1",
-            )
 
         for spec in R_SPECS:
             print(f"rev: {spec}")
