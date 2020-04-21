@@ -70,11 +70,10 @@ def _fsck_reset(repo_structure, working_copy, dataset_paths):
 @click.argument("fsck_args", nargs=-1, type=click.UNPROCESSED)
 def fsck(ctx, reset_datasets, fsck_args):
     """ Verifies the connectivity and validity of the objects in the database """
-    repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
     click.echo("Checking repository integrity...")
-    r = subprocess.call(["git", "-C", str(repo_path), "fsck"] + list(fsck_args))
+    r = subprocess.call(["git", "-C", repo.path, "fsck"] + list(fsck_args))
     if r:
         click.Abort()
 

@@ -94,7 +94,7 @@ def print_version(ctx, param, value):
 def cli(ctx, repo_dir, verbose):
     ctx.ensure_object(Context)
     if repo_dir:
-        ctx.obj.repo_path = repo_dir
+        ctx.obj.user_repo_path = repo_dir
 
     # default == WARNING; -v == INFO; -vv == DEBUG
     log_level = logging.WARNING - min(10 * verbose, 20)
@@ -140,11 +140,7 @@ def reset(ctx):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def log(ctx, args):
     """ Show commit logs """
-    repo_path = ctx.obj.repo_path
-    # ensure repo exists, fail nicely
-    repo = ctx.obj.repo  # noqa
-
-    execvp("git", ["git", "-C", str(repo_path), "log"] + list(args))
+    execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -152,11 +148,7 @@ def log(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, args):
     """ Update remote refs along with associated objects """
-    repo_path = ctx.obj.repo_path
-    # ensure repo exists, fail nicely
-    repo = ctx.obj.repo  # noqa
-
-    execvp("git", ["git", "-C", str(repo_path), "push"] + list(args))
+    execvp("git", ["git", "-C", ctx.obj.repo.path, "push"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -164,11 +156,7 @@ def push(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, args):
     """ Download objects and refs from another repository """
-    repo_path = ctx.obj.repo_path
-    # ensure repo exists, fail nicely
-    repo = ctx.obj.repo  # noqa
-
-    execvp("git", ["git", "-C", str(repo_path), "fetch"] + list(args))
+    execvp("git", ["git", "-C", ctx.obj.repo.path, "fetch"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -176,11 +164,7 @@ def fetch(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def remote(ctx, args):
     """ Manage set of tracked repositories """
-    repo_path = ctx.obj.repo_path
-    # ensure repo exists, fail nicely
-    repo = ctx.obj.repo  # noqa
-
-    execvp("git", ["git", "-C", str(repo_path), "remote"] + list(args))
+    execvp("git", ["git", "-C", ctx.obj.repo.path, "remote"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -188,11 +172,7 @@ def remote(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def tag(ctx, args):
     """ Create, list, delete or verify a tag object signed with GPG """
-    repo_path = ctx.obj.repo_path
-    # ensure repo exists, fail nicely
-    repo = ctx.obj.repo  # noqa
-
-    execvp("git", ["git", "-C", str(repo_path), "tag"] + list(args))
+    execvp("git", ["git", "-C", ctx.obj.repo.path, "tag"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -200,10 +180,9 @@ def tag(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """ Get and set repository or global options """
-    repo_path = ctx.obj.repo_path
     params = ["git", "config"]
-    if ctx.obj.has_repo_path:
-        params[1:1] = ["-C", str(repo_path)]
+    if ctx.obj.user_repo_path:
+        params[1:1] = ["-C", ctx.obj.user_repo_path]
     execvp("git", params + list(args))
 
 

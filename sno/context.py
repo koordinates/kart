@@ -6,33 +6,26 @@ from .exceptions import NotFound, NO_REPOSITORY
 
 
 class Context(object):
-    DEFAULT_REPO_PATH = Path()
+    CURRENT_DIRECTORY = Path()
 
     def __init__(self):
-        self._repo_path = None
+        """The current repo_path string as set by the user, or None."""
+        self.user_repo_path = None
 
     @property
     def repo_path(self):
-        """The path of the repository. Defaults to the current directory."""
-        return self._repo_path or self.DEFAULT_REPO_PATH
-
-    @repo_path.setter
-    def repo_path(self, repo_path):
-        if isinstance(repo_path, str):
-            repo_path = Path(repo_path)
-        self._repo_path = repo_path
-        if hasattr(self, "_repo"):
-            del self._repo
-
-    @property
-    def has_repo_path(self):
-        return self._repo_path is not None
+        """The impled repo path as a Path - defaults to current directory."""
+        if self.user_repo_path is None:
+            return self.CURRENT_DIRECTORY
+        else:
+            return Path(self.user_repo_path)
 
     @property
     def repo(self):
         """
-        Returns the sno repository at repo_path.
-        Raises an error if there isn't a valid repo at repo_path.
+        Returns the sno repository at self.repo_path
+        Raises an error if there isn't a sno repository there.
+        Accessing Context.repo.path ensures you have the path to an existing sno repository.
         """
         if not hasattr(self, "_repo"):
             try:
@@ -41,7 +34,7 @@ class Context(object):
                 self._repo = None
 
         if not self._repo or not self._repo.is_bare:
-            if self.has_repo_path:
+            if self.user_repo_path:
                 message = "Not an existing repository"
                 param_hint = "repo"
             else:

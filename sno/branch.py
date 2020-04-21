@@ -15,7 +15,6 @@ from .output_util import dump_json_output
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def branch(ctx, do_json, args):
     """ List, create, or delete branches """
-    repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
     sargs = set(args)
@@ -38,7 +37,7 @@ def branch(ctx, do_json, args):
                 f"Cannot delete the branch '{branch}' which you are currently on."
             )
 
-    execvp("git", ["git", "-C", str(repo_path), "branch"] + list(args))
+    execvp("git", ["git", "-C", repo.path, "branch"] + list(args))
 
 
 def list_branches_json(repo):
