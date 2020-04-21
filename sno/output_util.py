@@ -8,7 +8,6 @@ def dump_json_output(output, output_path, pretty=True):
     Dumps the output to JSON in the output file.
     """
 
-    pretty = (not output_path) or output_path == "-" or output_path == sys.stdout
     fp = resolve_output_path(output_path)
 
     json_params = {}
