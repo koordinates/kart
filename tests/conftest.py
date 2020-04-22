@@ -345,76 +345,102 @@ def helpers():
 
 
 class TestHelpers:
+
     # Test Dataset (gpkg-points / points)
-    POINTS_LAYER = "nz_pa_points_topo_150k"
-    POINTS_LAYER_PK = "fid"
-    POINTS_INSERT = f"""
-        INSERT INTO {POINTS_LAYER}
-                        (fid, geom, t50_fid, name_ascii, macronated, name)
-                    VALUES
-                        (:fid, GeomFromEWKT(:geom), :t50_fid, :name_ascii, :macronated, :name);
-    """
-    POINTS_RECORD = {
-        "fid": 9999,
-        "geom": "POINT(0 0)",
-        "t50_fid": 9_999_999,
-        "name_ascii": "Te Motu-a-kore",
-        "macronated": False,
-        "name": "Te Motu-a-kore",
-    }
-    POINTS_HEAD_SHA = "2a1b7be8bdef32aea1510668e3edccbc6d454852"
-    POINTS_HEAD1_SHA = "63a9492dd785b1f04dfc446330fa017f9459db4f"
-    POINTS_HEAD_TREE_SHA = "81f330e76b854e7448523307ff78bd6b83cadf21"
-    POINTS_HEAD1_TREE_SHA = "007ee9ab7f00b70a4199120cb274753c28e8ab92"
-    POINTS_ROWCOUNT = 2143
+    class POINTS:
+        LAYER = "nz_pa_points_topo_150k"
+        LAYER_PK = "fid"
+        INSERT = f"""
+            INSERT INTO {LAYER}
+                            (fid, geom, t50_fid, name_ascii, macronated, name)
+                        VALUES
+                            (:fid, GeomFromEWKT(:geom), :t50_fid, :name_ascii, :macronated, :name);
+        """
+        RECORD = {
+            "fid": 9999,
+            "geom": "POINT(0 0)",
+            "t50_fid": 9_999_999,
+            "name_ascii": "Te Motu-a-kore",
+            "macronated": False,
+            "name": "Te Motu-a-kore",
+        }
+        HEAD_SHA = "2a1b7be8bdef32aea1510668e3edccbc6d454852"
+        HEAD1_SHA = "63a9492dd785b1f04dfc446330fa017f9459db4f"
+        HEAD_TREE_SHA = "81f330e76b854e7448523307ff78bd6b83cadf21"
+        HEAD1_TREE_SHA = "007ee9ab7f00b70a4199120cb274753c28e8ab92"
+        ROWCOUNT = 2143
+        TEXT_FIELD = "name"
+        SAMPLE_PKS = list(range(1, 11))
 
     # Test Dataset (gpkg-polygons / polygons)
-    POLYGONS_LAYER = "nz_waca_adjustments"
-    POLYGONS_LAYER_PK = "id"
-    POLYGONS_INSERT = f"""
-        INSERT INTO {POLYGONS_LAYER}
-                        (id, geom, date_adjusted, survey_reference, adjusted_nodes)
-                    VALUES
-                        (:id, GeomFromEWKT(:geom), :date_adjusted, :survey_reference, :adjusted_nodes);
-    """
-    POLYGONS_RECORD = {
-        "id": 9_999_999,
-        "geom": "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))",
-        "date_adjusted": "2019-07-05T13:04:00+01:00",
-        "survey_reference": "Null Island™ 🗺",
-        "adjusted_nodes": 123,
-    }
-    POLYGONS_HEAD_SHA = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
-    POLYGONS_ROWCOUNT = 228
+    class POLYGONS:
+        LAYER = "nz_waca_adjustments"
+        LAYER_PK = "id"
+        INSERT = f"""
+            INSERT INTO {LAYER}
+                            (id, geom, date_adjusted, survey_reference, adjusted_nodes)
+                        VALUES
+                            (:id, GeomFromEWKT(:geom), :date_adjusted, :survey_reference, :adjusted_nodes);
+        """
+        RECORD = {
+            "id": 9_999_999,
+            "geom": "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))",
+            "date_adjusted": "2019-07-05T13:04:00+01:00",
+            "survey_reference": "Null Island™ 🗺",
+            "adjusted_nodes": 123,
+        }
+        HEAD_SHA = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
+        ROWCOUNT = 228
+        TEXT_FIELD = "survey_reference"
+        SAMPLE_PKS = [
+            1424927,
+            1443053,
+            1452332,
+            1456853,
+            1456912,
+            1457297,
+            1457355,
+            1457612,
+            1457636,
+            1458553,
+        ]
 
     # Test Dataset (gpkg-spec / table)
-
-    TABLE_LAYER = "countiestbl"
-    TABLE_LAYER_PK = "OBJECTID"
-    TABLE_INSERT = f"""
-        INSERT INTO {TABLE_LAYER}
-                        (OBJECTID, NAME, STATE_NAME, STATE_FIPS, CNTY_FIPS, FIPS, AREA, POP1990, POP2000, POP90_SQMI, Shape_Leng, Shape_Area)
-                    VALUES
-                        (:OBJECTID, :NAME, :STATE_NAME, :STATE_FIPS, :CNTY_FIPS, :FIPS, :AREA, :POP1990, :POP2000, :POP90_SQMI, :Shape_Leng, :Shape_Area);
-    """
-    TABLE_RECORD = {
-        "OBJECTID": 9999,
-        "NAME": "Lake of the Gruffalo",
-        "STATE_NAME": "Minnesota",
-        "STATE_FIPS": "27",
-        "CNTY_FIPS": "077",
-        "FIPS": "27077",
-        "AREA": 1784.0634,
-        "POP1990": 4076,
-        "POP2000": 4651,
-        "POP90_SQMI": 2,
-        "Shape_Leng": 4.055_459_982_439_92,
-        "Shape_Area": 0.565_449_933_741_451,
-    }
-    TABLE_HEAD_SHA = "03622015ea5a82bc75228de052d9c84bc6f41667"
+    class TABLE:
+        LAYER = "countiestbl"
+        LAYER_PK = "OBJECTID"
+        INSERT = f"""
+            INSERT INTO {LAYER}
+                            (OBJECTID, NAME, STATE_NAME, STATE_FIPS, CNTY_FIPS, FIPS, AREA, POP1990, POP2000, POP90_SQMI, Shape_Leng, Shape_Area)
+                        VALUES
+                            (:OBJECTID, :NAME, :STATE_NAME, :STATE_FIPS, :CNTY_FIPS, :FIPS, :AREA, :POP1990, :POP2000, :POP90_SQMI, :Shape_Leng, :Shape_Area);
+        """
+        RECORD = {
+            "OBJECTID": 9999,
+            "NAME": "Lake of the Gruffalo",
+            "STATE_NAME": "Minnesota",
+            "STATE_FIPS": "27",
+            "CNTY_FIPS": "077",
+            "FIPS": "27077",
+            "AREA": 1784.0634,
+            "POP1990": 4076,
+            "POP2000": 4651,
+            "POP90_SQMI": 2,
+            "Shape_Leng": 4.055_459_982_439_92,
+            "Shape_Area": 0.565_449_933_741_451,
+        }
+        HEAD_SHA = "03622015ea5a82bc75228de052d9c84bc6f41667"
+        ROWCOUNT = 3141
+        TEXT_FIELD = "NAME"
+        SAMPLE_PKS = list(range(1, 11))
 
     @classmethod
-    def last_change_time(cls, db, table=POINTS_LAYER):
+    def metadata(cls, l):
+        metadatas = (cls.POINTS, cls.POLYGONS, cls.TABLE)
+        return next((m for m in metadatas if m.LAYER == l or m.__name__ == l))
+
+    @classmethod
+    def last_change_time(cls, db, table=POINTS.LAYER):
         """
         Get the last change time from the GeoPackage DB.
         This is the same as the commit time.
@@ -532,6 +558,18 @@ class TestHelpers:
             assert gpkg_extent == (None, None, None, None)
 
 
+def _find_layer(db):
+    H = pytest.helpers.helpers()
+    return (
+        db.cursor()
+        .execute(
+            "SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?,?) LIMIT 1",
+            [H.POINTS.LAYER, H.POLYGONS.LAYER, H.TABLE.LAYER],
+        )
+        .fetchone()[0]
+    )
+
+
 @pytest.fixture
 def insert(request, cli_runner):
     H = pytest.helpers.helpers()
@@ -540,34 +578,13 @@ def insert(request, cli_runner):
         if reset_index is not None:
             func.index = reset_index
 
-        if layer is None:
-            # autodetect
-            layer = (
-                db.cursor()
-                .execute(
-                    "SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?,?) LIMIT 1",
-                    [H.POINTS_LAYER, H.POLYGONS_LAYER, H.TABLE_LAYER],
-                )
-                .fetchone()[0]
-            )
+        layer = layer or _find_layer(db)
 
-        if layer == H.POINTS_LAYER:
-            rec = H.POINTS_RECORD.copy()
-            pk_field = H.POINTS_LAYER_PK
-            sql = H.POINTS_INSERT
-            pk_start = 98000
-        elif layer == H.POLYGONS_LAYER:
-            rec = H.POLYGONS_RECORD.copy()
-            pk_field = H.POLYGONS_LAYER_PK
-            sql = H.POLYGONS_INSERT
-            pk_start = 98000
-        elif layer == H.TABLE_LAYER:
-            rec = H.TABLE_RECORD.copy()
-            pk_field = H.TABLE_LAYER_PK
-            sql = H.TABLE_INSERT
-            pk_start = 98000
-        else:
-            raise NotImplementedError(f"Layer {layer}")
+        metadata = H.metadata(layer)
+        rec = metadata.RECORD.copy()
+        pk_field = metadata.LAYER_PK
+        sql = metadata.INSERT
+        pk_start = 98000
 
         # th
         new_pk = pk_start + func.index
@@ -592,5 +609,32 @@ def insert(request, cli_runner):
 
     func.index = 0
     func.inserted_fids = []
+
+    return func
+
+
+@pytest.fixture
+def update(request, cli_runner):
+    H = pytest.helpers.helpers()
+
+    def func(db, pk, update_str, layer=None, commit=True):
+        layer = layer or _find_layer(db)
+        metadata = H.metadata(layer)
+        pk_field = metadata.LAYER_PK
+        text_field = metadata.TEXT_FIELD
+
+        with db:
+            sql = f"""UPDATE {layer} SET {text_field} = :update_str WHERE {pk_field} = {pk}"""
+            db.cursor().execute(sql, {"update_str": update_str})
+            assert db.changes() == 1
+
+        if commit:
+            r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "--json"])
+            assert r.exit_code == 0, r
+
+            commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
+            return commit_id
+        else:
+            return pk
 
     return func

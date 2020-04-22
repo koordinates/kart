@@ -18,12 +18,12 @@ GPKG_IMPORTS = (
     "archive,source_gpkg,table",
     [
         pytest.param(
-            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS_LAYER, id="points"
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="points"
         ),
         pytest.param(
             "gpkg-polygons",
             "nz-waca-adjustments.gpkg",
-            H.POLYGONS_LAYER,
+            H.POLYGONS.LAYER,
             id="polygons-pk",
         ),
         pytest.param(
@@ -95,7 +95,7 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     GPKG_IMPORTS[1]
     + [
         pytest.param(
-            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS_LAYER, id="empty"
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
         ),
     ],
 )
@@ -299,8 +299,8 @@ def test_import_multiple(
     assert repo.is_empty
 
     LAYERS = (
-        ("gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS_LAYER),
-        ("gpkg-polygons", "nz-waca-adjustments.gpkg", H.POLYGONS_LAYER),
+        ("gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER),
+        ("gpkg-polygons", "nz-waca-adjustments.gpkg", H.POLYGONS.LAYER),
     )
 
     datasets = []
@@ -409,7 +409,7 @@ def test_write_feature_performance(
 def test_fast_import(
     import_version, iter_func, data_archive, tmp_path, cli_runner, chdir, monkeypatch
 ):
-    table = H.POINTS_LAYER
+    table = H.POINTS.LAYER
     with data_archive("gpkg-points") as data:
         # list tables
         repo_path = tmp_path / "data.sno"

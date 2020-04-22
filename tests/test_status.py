@@ -181,9 +181,9 @@ def test_status(
         # local edits
         with db:
             insert(db, commit=False)
-            db.cursor().execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid <= 2;")
+            db.cursor().execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid <= 2;")
             db.cursor().execute(
-                f"UPDATE {H.POINTS_LAYER} SET name='test0' WHERE fid <= 5;"
+                f"UPDATE {H.POINTS.LAYER} SET name='test0' WHERE fid <= 5;"
             )
 
         assert text_status(cli_runner) == [
@@ -195,7 +195,7 @@ def test_status(
             '  (use "sno commit" to commit)',
             '  (use "sno reset" to discard changes)',
             "",
-            f"  {H.POINTS_LAYER}/",
+            f"  {H.POINTS.LAYER}/",
             "    modified:  3 features",
             "    new:       1 feature",
             "    deleted:   2 features",

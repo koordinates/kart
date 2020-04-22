@@ -17,11 +17,11 @@ H = pytest.helpers.helpers()
 @pytest.mark.parametrize(
     "archive,table,commit_sha",
     [
-        pytest.param("points", H.POINTS_LAYER, H.POINTS_HEAD_SHA, id="points"),
+        pytest.param("points", H.POINTS.LAYER, H.POINTS.HEAD_SHA, id="points"),
         pytest.param(
-            "polygons", H.POLYGONS_LAYER, H.POLYGONS_HEAD_SHA, id="polygons-pk"
+            "polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons-pk"
         ),
-        pytest.param("table", H.TABLE_LAYER, H.TABLE_HEAD_SHA, id="table"),
+        pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
 def test_checkout_workingcopy(
@@ -71,12 +71,12 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the previous commit
-        r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA[:8]])
+        r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         repo = pygit2.Repository(str(repo_dir))
-        assert repo.head.target.hex == H.POINTS_HEAD1_SHA
+        assert repo.head.target.hex == H.POINTS.HEAD1_SHA
         assert repo.head_is_detached
         assert repo.head.name == "HEAD"
 
@@ -103,49 +103,49 @@ def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path
         # checkout the HEAD commit
         r = cli_runner.invoke(["checkout", "HEAD"])
         assert r.exit_code == 0, r
-        assert r_head() == ("refs/heads/master", H.POINTS_HEAD_SHA)
+        assert r_head() == ("refs/heads/master", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the HEAD-but-1 commit
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
-        assert r_head() == ("HEAD", H.POINTS_HEAD1_SHA)
+        assert r_head() == ("HEAD", H.POINTS.HEAD1_SHA)
         assert repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the master HEAD via branch-name
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
-        assert r_head() == ("refs/heads/master", H.POINTS_HEAD_SHA)
+        assert r_head() == ("refs/heads/master", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout a short-sha commit
-        r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA[:8]])
+        r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
-        assert r_head() == ("HEAD", H.POINTS_HEAD1_SHA)
+        assert r_head() == ("HEAD", H.POINTS.HEAD1_SHA)
         assert repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the master HEAD via refspec
         r = cli_runner.invoke(["checkout", "refs/heads/master"])
         assert r.exit_code == 0, r
-        assert r_head() == ("refs/heads/master", H.POINTS_HEAD_SHA)
+        assert r_head() == ("refs/heads/master", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the tag
         r = cli_runner.invoke(["checkout", "version1"])
         assert r.exit_code == 0, r
-        assert r_head() == ("HEAD", H.POINTS_HEAD_SHA)
+        assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the remote branch
         r = cli_runner.invoke(["checkout", "myremote/master"])
         assert r.exit_code == 0, r
-        assert r_head() == ("HEAD", H.POINTS_HEAD_SHA)
+        assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
         assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
@@ -175,32 +175,32 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         repo = pygit2.Repository(str(repo_path))
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
 
         # make some changes
         db = geopackage(wc)
         with db:
             cur = db.cursor()
-            cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
+            cur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert db.changes() == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
-        assert repo.head.peel(pygit2.Commit).hex != H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex != H.POINTS.HEAD_SHA
 
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
 
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
 
         # new branch from remote
         r = cli_runner.invoke(["checkout", "-b", "test99", "myremote/master"])
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/master"
 
@@ -231,41 +231,41 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         repo = pygit2.Repository(str(repo_path))
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
 
         # make some changes
         db = geopackage(wc)
         with db:
             cur = db.cursor()
 
-            cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
+            cur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert db.changes() == 1
 
-            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=30000 WHERE fid=3;")
+            cur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=3;")
             assert db.changes() == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
         new_commit = repo.head.peel(pygit2.Commit).hex
-        assert new_commit != H.POINTS_HEAD_SHA
+        assert new_commit != H.POINTS.HEAD_SHA
 
         r = cli_runner.invoke(["switch", "master"])
         assert r.exit_code == 0, r
 
-        assert H.row_count(db, H.POINTS_LAYER) == H.POINTS_ROWCOUNT
+        assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
 
         # make some changes
         with db:
             cur = db.cursor()
 
-            cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
+            cur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert db.changes() == 1
 
-            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=40000 WHERE fid=4;")
+            cur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=40000 WHERE fid=4;")
             assert db.changes() == 1
 
         r = cli_runner.invoke(["switch", "foo"])
@@ -275,7 +275,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "foo", "--discard-changes"])
         assert r.exit_code == 0, r
 
-        assert H.row_count(db, H.POINTS_LAYER) == H.POINTS_ROWCOUNT + 1
+        assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT + 1
 
         assert repo.head.name == "refs/heads/foo"
         assert repo.head.peel(pygit2.Commit).hex == new_commit
@@ -285,19 +285,19 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS_HEAD_SHA
+        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/master"
 
-        assert H.row_count(db, H.POINTS_LAYER) == H.POINTS_ROWCOUNT
+        assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
 
 @pytest.mark.parametrize(
     "archive,layer",
     [
-        pytest.param("points", H.POINTS_LAYER, id="points"),
-        pytest.param("polygons", H.POLYGONS_LAYER, id="polygons-pk"),
-        pytest.param("table", H.TABLE_LAYER, id="table"),
+        pytest.param("points", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons-pk"),
+        pytest.param("table", H.TABLE.LAYER, id="table"),
     ],
 )
 @pytest.mark.parametrize(
@@ -316,17 +316,17 @@ def test_working_copy_reset(
     We can do this via `sno reset` or `sno checkout --force HEAD`
     """
     raise pytest.skip()  # apsw.SQLError: SQLError: Safety level may not be changed inside a transaction
-    if layer == H.POINTS_LAYER:
-        pk_field = H.POINTS_LAYER_PK
-        rec = H.POINTS_RECORD
-        sql = H.POINTS_INSERT
+    if layer == H.POINTS.LAYER:
+        pk_field = H.POINTS.LAYER_PK
+        rec = H.POINTS.RECORD
+        sql = H.POINTS.INSERT
         del_pk = 5
         upd_field = "t50_fid"
         upd_field_value = 888_888
         upd_pk_range = (10, 15)
         id_chg_pk = 20
-    elif layer == H.POLYGONS_LAYER:
-        pk_field = H.POLYGONS_LAYER_PK
+    elif layer == H.POLYGONS.LAYER:
+        pk_field = H.POLYGONS.LAYER_PK
         rec = H.POLYGONS_RECORD
         sql = H.POLYGONS_INSERT
         del_pk = 1_456_912
@@ -334,8 +334,8 @@ def test_working_copy_reset(
         upd_field_value = "test"
         upd_pk_range = (1_459_750, 1_460_312)
         id_chg_pk = 1_460_583
-    elif layer == H.TABLE_LAYER:
-        pk_field = H.TABLE_LAYER_PK
+    elif layer == H.TABLE.LAYER:
+        pk_field = H.TABLE.LAYER_PK
         rec = H.TABLE_RECORD
         sql = H.TABLE_INSERT
         del_pk = 5
@@ -457,7 +457,7 @@ def test_geopackage_locking_edit(
             sno.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap
         )
 
-        r = cli_runner.invoke(["checkout", H.POINTS_HEAD1_SHA])
+        r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r
         assert is_checked
 
@@ -503,17 +503,17 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
 
 @pytest.mark.parametrize(
     "source",
-    [pytest.param([], id="head"), pytest.param(["-s", H.POINTS_HEAD_SHA], id="prev"),],
+    [pytest.param([], id="head"), pytest.param(["-s", H.POINTS.HEAD_SHA], id="prev"),],
 )
 @pytest.mark.parametrize(
     "pathspec", [pytest.param([], id="all"), pytest.param(["bob"], id="exclude"),],
 )
 def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
     with data_working_copy("points", force_new=True) as (repo_dir, wc):
-        layer = H.POINTS_LAYER
-        pk_field = H.POINTS_LAYER_PK
-        rec = H.POINTS_RECORD
-        sql = H.POINTS_INSERT
+        layer = H.POINTS.LAYER
+        pk_field = H.POINTS.LAYER_PK
+        rec = H.POINTS.RECORD
+        sql = H.POINTS.INSERT
         del_pk = 5
         upd_field = "t50_fid"
         upd_field_value = 888_888
@@ -526,15 +526,15 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         # make some changes
         with db:
             cur = db.cursor()
-            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=30000 WHERE fid=300;")
+            cur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=300;")
             assert db.changes() == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
         new_commit = repo.head.peel(pygit2.Commit).hex
-        assert new_commit != H.POINTS_HEAD_SHA
-        print(f"Original commit={H.POINTS_HEAD_SHA} New commit={new_commit}")
+        assert new_commit != H.POINTS.HEAD_SHA
+        print(f"Original commit={H.POINTS.HEAD_SHA} New commit={new_commit}")
 
         with db:
             cur = db.cursor()
@@ -608,7 +608,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         if source:
             assert changes_post == ["300", "30000"]
 
-            if head_sha != H.POINTS_HEAD_SHA:
+            if head_sha != H.POINTS.HEAD_SHA:
                 print(f"E: Bad Tree? {head_sha}")
 
             cur.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")

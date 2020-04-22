@@ -43,15 +43,15 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
         with db:
             cur = db.cursor()
 
-            cur.execute(H.POINTS_INSERT, H.POINTS_RECORD)
+            cur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert db.changes() == 1
-            cur.execute(f"UPDATE {H.POINTS_LAYER} SET fid=9998 WHERE fid=1;")
+            cur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
             assert db.changes() == 1
             cur.execute(
-                f"UPDATE {H.POINTS_LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
+                f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
             assert db.changes() == 1
-            cur.execute(f"DELETE FROM {H.POINTS_LAYER} WHERE fid=3;")
+            cur.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid=3;")
             assert db.changes() == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
@@ -342,15 +342,15 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
         with db:
             cur = db.cursor()
 
-            cur.execute(H.POLYGONS_INSERT, H.POLYGONS_RECORD)
+            cur.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
             assert db.changes() == 1
-            cur.execute(f"UPDATE {H.POLYGONS_LAYER} SET id=9998 WHERE id=1424927;")
+            cur.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
             assert db.changes() == 1
             cur.execute(
-                f"UPDATE {H.POLYGONS_LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
+                f"UPDATE {H.POLYGONS.LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
             )
             assert db.changes() == 1
-            cur.execute(f"DELETE FROM {H.POLYGONS_LAYER} WHERE id=1452332;")
+            cur.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id=1452332;")
             assert db.changes() == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
@@ -945,15 +945,15 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
         with db:
             cur = db.cursor()
 
-            cur.execute(H.TABLE_INSERT, H.TABLE_RECORD)
+            cur.execute(H.TABLE.INSERT, H.TABLE.RECORD)
             assert db.changes() == 1
-            cur.execute(f'UPDATE {H.TABLE_LAYER} SET "OBJECTID"=9998 WHERE OBJECTID=1;')
+            cur.execute(f'UPDATE {H.TABLE.LAYER} SET "OBJECTID"=9998 WHERE OBJECTID=1;')
             assert db.changes() == 1
             cur.execute(
-                f"UPDATE {H.TABLE_LAYER} SET name='test', POP2000=9867 WHERE OBJECTID=2;"
+                f"UPDATE {H.TABLE.LAYER} SET name='test', POP2000=9867 WHERE OBJECTID=2;"
             )
             assert db.changes() == 1
-            cur.execute(f'DELETE FROM {H.TABLE_LAYER} WHERE "OBJECTID"=3;')
+            cur.execute(f'DELETE FROM {H.TABLE.LAYER} WHERE "OBJECTID"=3;')
             assert db.changes() == 1
 
         r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
@@ -1259,24 +1259,22 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
 
 
 @pytest.mark.parametrize(
-    "hashes",
+    "head_sha,head1_sha",
     [
-        {"HEAD": H.POINTS_HEAD_SHA, "HEAD1": H.POINTS_HEAD1_SHA},
-        {"HEAD": H.POINTS_HEAD_TREE_SHA, "HEAD1": H.POINTS_HEAD1_TREE_SHA},
+        pytest.param(H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA, id="commit_hash"),
+        pytest.param(H.POINTS.HEAD_TREE_SHA, H.POINTS.HEAD1_TREE_SHA, id="tree_hash"),
     ],
 )
-def test_diff_rev_noop(data_archive, cli_runner, hashes):
+def test_diff_rev_noop(head_sha, head1_sha, data_archive, cli_runner):
     """diff between trees / commits - no-op"""
-    HEAD_SHA = hashes["HEAD"]
-    HEAD1_SHA = hashes["HEAD1"]
 
     NOOP_SPECS = (
-        f"{HEAD_SHA[:6]}..{HEAD_SHA[:6]}",
-        f"{HEAD_SHA}..{HEAD_SHA}",
-        f"{HEAD1_SHA}..{HEAD1_SHA}",
+        f"{head_sha[:6]}..{head_sha[:6]}",
+        f"{head_sha}..{head_sha}",
+        f"{head1_sha}..{head1_sha}",
         "HEAD^1..HEAD^1",
-        f"{HEAD_SHA}..",
-        f"..{HEAD_SHA}",
+        f"{head_sha}..",
+        f"..{head_sha}",
     )
 
     with data_archive("points"):
@@ -1287,26 +1285,24 @@ def test_diff_rev_noop(data_archive, cli_runner, hashes):
 
 
 @pytest.mark.parametrize(
-    "hashes",
+    "head_sha,head1_sha",
     [
-        {"HEAD": H.POINTS_HEAD_SHA, "HEAD1": H.POINTS_HEAD1_SHA},
-        {"HEAD": H.POINTS_HEAD_TREE_SHA, "HEAD1": H.POINTS_HEAD1_TREE_SHA},
+        pytest.param(H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA, id="commit_hash"),
+        pytest.param(H.POINTS.HEAD_TREE_SHA, H.POINTS.HEAD1_TREE_SHA, id="tree_hash"),
     ],
 )
-def test_diff_rev_rev(data_archive, cli_runner, hashes):
+def test_diff_rev_rev(head_sha, head1_sha, data_archive, cli_runner):
     """diff between trees / commits - no-op"""
 
-    HEAD_SHA = hashes["HEAD"]
-    HEAD1_SHA = hashes["HEAD1"]
-
     F_SPECS = (
-        f"{HEAD1_SHA}..{HEAD_SHA}",
-        f"{HEAD1_SHA}..",
+        f"{head1_sha}..{head_sha}",
+        f"{head1_sha}..",
+        "HEAD^1..HEAD",
     )
 
     R_SPECS = (
-        f"{H.POINTS_HEAD_SHA}..{H.POINTS_HEAD1_SHA}",
-        f"..{H.POINTS_HEAD1_SHA}",
+        f"{head_sha}..{head1_sha}",
+        f"..{head1_sha}",
         "HEAD..HEAD^1",
     )
 
@@ -1324,17 +1320,18 @@ def test_diff_rev_rev(data_archive, cli_runner, hashes):
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1"]
-            assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
-            assert len(odata[H.POINTS_LAYER]["metaChanges"]) == 0
+            assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
+            assert len(odata[H.POINTS.LAYER]["metaChanges"]) == 0
+
             change_ids = {
                 (f.get('-', {}).get("id"), f.get('+', {}).get("id"))
-                for f in odata[H.POINTS_LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["featureChanges"]
             }
             assert change_ids == CHANGE_IDS
             # this commit _adds_ names
             change_names = {
                 (f['-']["properties"]["name"], f['+']["properties"]["name"])
-                for f in odata[H.POINTS_LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["featureChanges"]
             }
             assert not any(n[0] for n in change_names)
             assert all(n[1] for n in change_names)
@@ -1344,17 +1341,17 @@ def test_diff_rev_rev(data_archive, cli_runner, hashes):
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1"]
-            assert len(odata[H.POINTS_LAYER]["featureChanges"]) == 5
-            assert len(odata[H.POINTS_LAYER]["metaChanges"]) == 0
+            assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
+            assert len(odata[H.POINTS.LAYER]["metaChanges"]) == 0
             change_ids = {
                 (f.get('-', {}).get("id"), f.get('+', {}).get("id"))
-                for f in odata[H.POINTS_LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["featureChanges"]
             }
             assert change_ids == CHANGE_IDS
             # so names are _removed_
             change_names = {
                 (f['-']["properties"]["name"], f['+']["properties"]["name"])
-                for f in odata[H.POINTS_LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["featureChanges"]
             }
             assert all(n[0] for n in change_names)
             assert not any(n[1] for n in change_names)
