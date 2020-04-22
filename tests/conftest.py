@@ -286,9 +286,9 @@ def geopackage():
 
 
 class SnoCliRunner(CliRunner):
-    def __init__(self, *args, in_pdb=False, **kwargs):
+    def __init__(self, *args, in_pdb=False, mix_stderr=False, **kwargs):
         self._in_pdb = in_pdb
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, mix_stderr=mix_stderr, **kwargs)
 
     def invoke(self, args=None, **kwargs):
         from sno.cli import cli

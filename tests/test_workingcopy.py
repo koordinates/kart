@@ -157,7 +157,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         # creating a new branch with existing name errors
         r = cli_runner.invoke(["checkout", "-b", "master"])
         assert r.exit_code == INVALID_ARGUMENT, r
-        assert r.stdout.splitlines()[-1].endswith(
+        assert r.stderr.splitlines()[-1].endswith(
             "A branch named 'master' already exists."
         )
 
@@ -660,7 +660,7 @@ def test_delete_branch(data_working_copy, cli_runner):
         # prevent deleting the current branch
         r = cli_runner.invoke(["branch", "-d", "master"])
         assert r.exit_code == INVALID_OPERATION, r
-        assert "Cannot delete" in r.stdout
+        assert "Cannot delete" in r.stderr
 
         r = cli_runner.invoke(["checkout", "-b", "test"])
         assert r.exit_code == 0, r

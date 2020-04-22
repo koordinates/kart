@@ -249,13 +249,13 @@ def test_status_none(tmp_path, cli_runner, chdir):
         r = cli_runner.invoke(["status"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
-            r.stdout.splitlines()[-1]
+            r.stderr.splitlines()[-1]
             == "Error: Current directory is not an existing repository"
         )
 
         r = cli_runner.invoke(["status", "--json"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
-            r.stdout.splitlines()[-1]
+            r.stderr.splitlines()[-1]
             == "Error: Current directory is not an existing repository"
         )

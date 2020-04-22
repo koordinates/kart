@@ -78,7 +78,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
         assert r.exit_code == NO_CHANGES, r
-        assert r.stdout.splitlines() == ["Error: No changes to commit"]
+        assert r.stderr.splitlines() == ["Error: No changes to commit"]
 
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty", "--allow-empty"])
@@ -201,7 +201,7 @@ def test_commit_message(
             ["commit", "--allow-empty", "-F", f_commit_message, "-m", "foo"]
         )
         assert r.exit_code == INVALID_ARGUMENT, r
-        assert "exclusive" in r.stdout
+        assert "exclusive" in r.stderr
 
         # multiple
         r = cli_runner.invoke(
@@ -285,7 +285,7 @@ def test_empty(tmp_path, cli_runner, chdir):
     with chdir(repo_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == NO_DATA, r
-        assert "Empty repository" in r.stdout
+        assert "Empty repository" in r.stderr
 
     # empty dir
     empty_path = tmp_path / "two"
@@ -293,4 +293,4 @@ def test_empty(tmp_path, cli_runner, chdir):
     with chdir(empty_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == NO_REPOSITORY, r
-        assert "not an existing repository" in r.stdout
+        assert "not an existing repository" in r.stderr
