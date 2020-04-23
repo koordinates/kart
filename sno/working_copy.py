@@ -142,9 +142,8 @@ class WorkingCopyGPKG(WorkingCopy):
                 L.debug(f"session(bulk={bulk}): new/done")
 
     def is_dirty(self):
-        with self.session(bulk=1) as db:
+        with self.session() as db:
             dbcur = db.cursor()
-
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
             return dbcur.fetchone()[0]
 
@@ -746,10 +745,29 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 raise NotImplementedError(f"Unexpected action: {action}")
 
     def reset(
-        self, commit, repo_structure, *, force=False, paths=None, update_meta=True
+        self,
+        target_tree_or_commit,
+        repo_structure,
+        *,
+        force=False,
+        paths=None,
+        update_meta=True,
     ):
+        """
+        Resets the working copy to the given tree (or the tree pointed to by the given commit)
+        """
+
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        L.debug("c=%s update-meta=%s", str(commit.id), update_meta)
+        commit = None
+        if isinstance(target_tree_or_commit, pygit2.Commit):
+            commit = target_tree_or_commit
+            target_tree = commit.tree
+        else:
+            commit = None
+            target_tree = target_tree_or_commit
+        L.debug(
+            f"c={commit.id if commit else 'none'} t={target_tree.hex} update-meta={update_meta}",
+        )
 
         with self.session(bulk=1) as db:
             dbcur = db.cursor()
@@ -759,12 +777,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             L.debug("base_tree_id: %s", base_tree_id)
             repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
 
-            if base_tree_id != repo_tree_id:
-                L.debug(
-                    "Working Copy DB is tree:%s, Repo HEAD has tree:%s",
-                    base_tree_id,
-                    repo_tree_id,
-                )
+            L.debug(
+                "Working Copy DB is tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree:%s",
+                base_tree_id,
+                repo_tree_id,
+                target_tree,
+            )
 
             # check for dirty working copy
             is_dirty = self.is_dirty()
@@ -774,7 +792,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 )
 
             src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
-            dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(commit.tree)}
+            dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(target_tree)}
 
             if paths:
                 for path in paths:
@@ -903,7 +921,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                                 )
 
                     # Update gpkg_contents
-                    commit_time = datetime.utcfromtimestamp(commit.commit_time)
+                    if commit:
+                        change_time = datetime.utcfromtimestamp(commit.commit_time)
+                    else:
+                        change_time = datetime.utcnow()
                     if geom_col is not None:
                         # FIXME: Why doesn't Extent(geom) work here as an aggregate?
                         dbcur.execute(
@@ -927,7 +948,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                                 table_name=?;
                             """,
                             (
-                                commit_time.strftime(
+                                change_time.strftime(
                                     "%Y-%m-%dT%H:%M:%S.%fZ"
                                 ),  # GPKG Spec Req.15
                                 table,
@@ -943,7 +964,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                                 table_name=?;
                             """,
                             (
-                                commit_time.strftime(
+                                change_time.strftime(
                                     "%Y-%m-%dT%H:%M:%S.%fZ"
                                 ),  # GPKG Spec Req.15
                                 table,
@@ -957,10 +978,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             if update_meta:
                 # update the tree id
-                tree = commit.peel(pygit2.Tree)
                 dbcur.execute(
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
-                    (tree.hex,),
+                    (target_tree.hex,),
                 )
 
     def status(self, dataset):

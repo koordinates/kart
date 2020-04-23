@@ -167,6 +167,29 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
+    def create_tree_from_diff(self, diff, orig_tree=None, callback=None):
+        """
+        Given a tree and a diff, returns a new tree created by applying the diff.
+
+        Doesn't create any commits or modify the working copy at all.
+
+        If orig_tree is None, the diff is applied from that tree.
+        Otherwise, uses the tree at the head of the repo.
+        """
+        if orig_tree is None:
+            orig_tree = self.tree
+
+        git_index = pygit2.Index()
+        git_index.read_tree(orig_tree)
+
+        for ds in self.iter_at(orig_tree):
+            ds.write_index(diff[ds], git_index, self.repo, callback=callback)
+
+        L.info("Writing tree...")
+        new_tree_oid = git_index.write_tree(self.repo)
+        L.info(f"Tree sha: {new_tree_oid}")
+        return new_tree_oid
+
     def commit(
         self,
         wcdiff,
@@ -191,17 +214,10 @@ class RepositoryStructure:
             # This happens when commit is called from `sno apply` in a bare repo
             context = contextlib.nullcontext()
         with context:
-            for ds in self:
-                ds.write_index(
-                    wcdiff[ds], git_index, self.repo, callback=commit_callback
-                )
-
-            L.info("Writing tree...")
-            new_tree = git_index.write_tree(self.repo)
-            L.info(f"Tree sha: {new_tree}")
+            new_tree_oid = self.create_tree_from_diff(wcdiff, callback=commit_callback)
 
             if commit_callback:
-                commit_callback(None, "TREE", tree=new_tree)
+                commit_callback(None, "TREE", tree=new_tree_oid)
 
             L.info("Committing...")
             user = self.repo.default_signature
@@ -211,7 +227,7 @@ class RepositoryStructure:
                 author or user,  # author
                 committer or user,  # committer
                 message,  # message
-                new_tree,  # tree
+                new_tree_oid,  # tree
                 [self.repo.head.target],  # parents
             )
             L.info(f"Commit: {new_commit}")

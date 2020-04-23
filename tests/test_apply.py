@@ -59,8 +59,39 @@ def test_apply_with_working_copy(data_working_copy, geopackage, cli_runner):
             cur = db.cursor()
             cur.execute(
                 f"""
-                SELECT name FROM {H.POINTS_LAYER} WHERE {H.POINTS_LAYER_PK} = 1095;
-            """
+                SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;
+                """
+            )
+            name = cur.fetchone()[0]
+            assert name is None
+
+
+def test_apply_with_no_working_copy_with_no_commit(data_archive, cli_runner):
+    with data_archive("points"):
+        r = cli_runner.invoke(
+            ["apply", "--no-commit", patches / 'updates-only.snopatch']
+        )
+        assert r.exit_code == 45
+        assert '--no-commit requires a working copy' in r.stdout
+
+
+def test_apply_with_working_copy_with_no_commit(
+    data_working_copy, geopackage, cli_runner
+):
+    with data_working_copy("points") as (repo_dir, wc_path):
+        r = cli_runner.invoke(
+            ["apply", "--no-commit", patches / 'updates-only.snopatch']
+        )
+        assert r.exit_code == 0
+        assert r.stdout.startswith('Updating ')
+        # check it was actually applied to the working copy
+        db = geopackage(wc_path)
+        with db:
+            cur = db.cursor()
+            cur.execute(
+                f"""
+                SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;
+                """
             )
             name = cur.fetchone()[0]
             assert name is None

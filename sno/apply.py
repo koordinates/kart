@@ -136,11 +136,11 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         )
         click.echo(f"Commit {oid.hex}")
 
-        if wc:
-            click.echo(f"Updating {wc.path} ...")
-            commit = repo.get(oid)
-            wc.reset(commit, rs)
-
     else:
-        # TODO: update working copy to the new tree...
-        raise NotImplementedError
+        oid = rs.create_tree_from_diff(diff)
+
+    if wc:
+        # oid refers to either a commit or tree
+        wc_target = repo.get(oid)
+        click.echo(f"Updating {wc.path} ...")
+        wc.reset(wc_target, rs)
