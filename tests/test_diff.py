@@ -1666,17 +1666,17 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         # changes <> master (commit <> commit) diff should fail
         r = cli_runner.invoke(["diff", "--quiet", f"{m_commit_id}..{b_commit_id}"])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
-        assert "3-way diffs aren't supported" in r.stdout
+        assert "3-way diffs aren't supported" in r.stderr
 
         # same the other way around
         r = cli_runner.invoke(["diff", "--quiet", f"{b_commit_id}..{m_commit_id}"])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
-        assert "3-way diffs aren't supported" in r.stdout
+        assert "3-way diffs aren't supported" in r.stderr
 
         # diff against working copy should fail too
         r = cli_runner.invoke(["diff", "--quiet", b_commit_id])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
-        assert "3-way diffs aren't supported" in r.stdout
+        assert "3-way diffs aren't supported" in r.stderr
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
