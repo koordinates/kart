@@ -2,7 +2,7 @@ import pytest
 
 import pygit2
 
-from sno.exceptions import NOT_YET_IMPLEMENTED
+from sno.exceptions import INVALID_OPERATION
 
 H = pytest.helpers.helpers()
 
@@ -215,7 +215,7 @@ def test_merge_conflicts(
 
         r = cli_runner.invoke(["merge", "alternate"])
 
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert "conflict" in r.stdout
         assert base_commit_id in r.stdout
         assert alternate_commit_id in r.stdout
