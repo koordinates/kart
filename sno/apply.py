@@ -48,7 +48,7 @@ def ungeojson_feature(dataset, d):
         "such a commit. This option bypasses the safety"
     ),
 )
-@click.argument("patch_file", type=click.File('r'))
+@click.argument("patch_file", type=click.File('r', encoding="utf-8"))
 def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
     """
     Applies and commits the given JSON patch (as created by `sno show --json`)
