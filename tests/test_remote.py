@@ -12,8 +12,10 @@ H = pytest.helpers.helpers()
     "working_copy",
     [pytest.param(True, id="with-wc"), pytest.param(False, id="without-wc"),],
 )
-def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopackage):
-    with data_archive("points") as remote_path:
+def test_clone(
+    working_copy, data_archive_readonly, tmp_path, cli_runner, chdir, geopackage
+):
+    with data_archive_readonly("points") as remote_path:
         with chdir(tmp_path):
 
             r = cli_runner.invoke(
@@ -69,7 +71,13 @@ def test_clone(working_copy, data_archive, tmp_path, cli_runner, chdir, geopacka
 
 
 def test_fetch(
-    data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request
+    data_archive_readonly,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    insert,
+    tmp_path,
+    request,
 ):
     with data_working_copy("points") as (path1, wc):
         subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
@@ -116,7 +124,7 @@ def test_fetch(
 
 
 def test_pull(
-    data_archive,
+    data_archive_readonly,
     data_working_copy,
     geopackage,
     cli_runner,

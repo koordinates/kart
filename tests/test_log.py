@@ -4,9 +4,9 @@ import pytest
 H = pytest.helpers.helpers()
 
 
-def test_log(data_archive, cli_runner):
+def test_log(data_archive_readonly, cli_runner):
     """ review commit history """
-    with data_archive("points"):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
