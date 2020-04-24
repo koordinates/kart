@@ -2,7 +2,7 @@ import pytest
 
 import pygit2
 
-from sno.exceptions import NOT_YET_IMPLEMENTED
+from sno.exceptions import INVALID_OPERATION
 
 H = pytest.helpers.helpers()
 
@@ -138,10 +138,9 @@ def test_merge_true(
 
         # fastforward merge should fail
         r = cli_runner.invoke(["merge", "--ff-only", "changes"])
-        assert r.exit_code == 1, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert (
-            r.stdout.splitlines()[-1]
-            == "Can't resolve as a fast-forward merge and --ff-only specified"
+            "Can't resolve as a fast-forward merge and --ff-only specified" in r.stderr
         )
 
         r = cli_runner.invoke(["merge", "--ff", "changes"])
@@ -169,26 +168,18 @@ def test_merge_true(
 
 
 @pytest.mark.parametrize(
-    "archive,layer,sample_pks",
+    "data",
     [
-        pytest.param("points", H.POINTS.LAYER, H.POINTS.SAMPLE_PKS, id="points"),
-        pytest.param(
-            "polygons", H.POLYGONS.LAYER, H.POLYGONS.SAMPLE_PKS, id="polygons"
-        ),
-        pytest.param("table", H.TABLE.LAYER, H.TABLE.SAMPLE_PKS, id="table"),
+        pytest.param(H.POINTS, id="points",),
+        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(H.TABLE, id="table"),
     ],
 )
 def test_merge_conflicts(
-    archive,
-    layer,
-    sample_pks,
-    data_working_copy,
-    geopackage,
-    cli_runner,
-    update,
-    request,
+    data, data_working_copy, geopackage, cli_runner, update, request,
 ):
-    with data_working_copy(archive) as (repo_path, wc):
+    sample_pks = data.SAMPLE_PKS
+    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         base_commit_id = repo.head.target.hex
 
@@ -215,18 +206,41 @@ def test_merge_conflicts(
 
         r = cli_runner.invoke(["merge", "alternate"])
 
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
+        assert r.exit_code == INVALID_OPERATION, r
         assert "conflict" in r.stdout
         assert base_commit_id in r.stdout
         assert alternate_commit_id in r.stdout
         assert master_commit_id in r.stdout
 
+        assert "Use an interactive terminal to resolve merge conflicts" in r.stderr
+
+        def feature_name(pk):
+            return f"{data.LAYER}:{data.LAYER_PK}={pk}"
+
         # Only modified in alternate:
-        assert f"{layer}:{sample_pks[0]}" not in r.stdout
+        assert feature_name(sample_pks[0]) not in r.stdout
         # Modified exactly the same in both branches:
-        assert f"{layer}:{sample_pks[1]}" not in r.stdout
+        assert feature_name(sample_pks[1]) not in r.stdout
         # These two are merge conflicts:
-        assert f"{layer}:{sample_pks[2]}" in r.stdout
-        assert f"{layer}:{sample_pks[3]}" in r.stdout
+        assert feature_name(sample_pks[2]) in r.stdout
+        assert feature_name(sample_pks[3]) in r.stdout
         # Only modified in master
-        assert f"{layer}:{sample_pks[3]}" in r.stdout
+        assert feature_name(sample_pks[4]) not in r.stdout
+
+        r = cli_runner.invoke(["merge", "alternate"], input="o\nt\n")
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != alternate_commit_id
+        assert repo.head.target.hex != master_commit_id
+
+        r = cli_runner.invoke(["diff", master_commit_id])
+        assert r.exit_code == 0, r
+
+        # Diff merged in from alternate automatically
+        assert feature_name(sample_pks[0]) in r.stdout
+        # Diff merged in from alternate explicitly with "t" for theirs
+        assert feature_name(sample_pks[3]) in r.stdout
+
+        # The other features are not changed by the merge
+        assert feature_name(sample_pks[1]) not in r.stdout
+        assert feature_name(sample_pks[2]) not in r.stdout
+        assert feature_name(sample_pks[4]) not in r.stdout

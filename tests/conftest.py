@@ -348,6 +348,7 @@ class TestHelpers:
 
     # Test Dataset (gpkg-points / points)
     class POINTS:
+        ARCHIVE = "points"
         LAYER = "nz_pa_points_topo_150k"
         LAYER_PK = "fid"
         INSERT = f"""
@@ -374,6 +375,7 @@ class TestHelpers:
 
     # Test Dataset (gpkg-polygons / polygons)
     class POLYGONS:
+        ARCHIVE = "polygons"
         LAYER = "nz_waca_adjustments"
         LAYER_PK = "id"
         INSERT = f"""
@@ -407,6 +409,7 @@ class TestHelpers:
 
     # Test Dataset (gpkg-spec / table)
     class TABLE:
+        ARCHIVE = "table"
         LAYER = "countiestbl"
         LAYER_PK = "OBJECTID"
         INSERT = f"""
