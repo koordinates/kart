@@ -13,7 +13,9 @@ from .working_copy import WorkingCopy
 @click.pass_context
 @click.option("branch", "-b", help="Name for new branch")
 @click.option("fmt", "--format", type=click.Choice(["GPKG"]), default="GPKG")
-@click.option("--force", "-f", is_flag=True)
+@click.option(
+    "--force", "-f", is_flag=True, help="Discard current working copy if necessary"
+)
 @click.option("--path", type=click.Path(writable=True, dir_okay=False))
 @click.option("datasets", "--dataset", "-d", multiple=True)
 @click.argument("refish", default=None, required=False)
