@@ -41,11 +41,11 @@ def iso8601_tz_to_timedelta(iso8601_tz):
     return r
 
 
-def commit_time_to_text(iso8601z, iso_offset):
+def commit_time_to_text(iso8601z, iso8601_tz):
     """
     Given an isoformat time in UTC, and a isoformat timezone offset,
     returns the time in a human readable format, for that timezone.
     """
-    right_time = iso8601_utc_to_datetime(iso8601z)
-    right_tzinfo = datetime.fromisoformat(iso8601z.replace("Z", iso_offset))
-    return right_time.astimezone(right_tzinfo.tzinfo).strftime("%c %z")
+    dt = iso8601_utc_to_datetime(iso8601z)
+    tz = timezone(iso8601_tz_to_timedelta(iso8601_tz))
+    return dt.astimezone(tz).strftime("%c %z")

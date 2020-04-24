@@ -66,10 +66,8 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
         raise NotFound("--no-commit requires a working copy", exit_code=NO_WORKING_COPY)
 
-    if wc and wc.is_dirty():
-        raise InvalidOperation(
-            "You have uncommitted changes in your working copy. Commit or discard first"
-        )
+    if wc:
+        wc.check_not_dirty()
 
     diff = Diff(None)
     for ds_name, ds_diff_dict in json_diff.items():

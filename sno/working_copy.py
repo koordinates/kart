@@ -147,6 +147,13 @@ class WorkingCopyGPKG(WorkingCopy):
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
             return dbcur.fetchone()[0]
 
+    def check_not_dirty(
+        self,
+        message="You have uncommitted changes in your working copy. Commit or discard first",
+    ):
+        if self.is_dirty():
+            raise InvalidOperation(message)
+
     def _get_columns(self, dataset):
         pk_field = None
         cols = {}
@@ -785,9 +792,8 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             )
 
             # check for dirty working copy
-            is_dirty = self.is_dirty()
-            if is_dirty and not force:
-                raise InvalidOperation(
+            if not force:
+                self.check_not_dirty(
                     "You have uncommitted changes in your working copy. Commit or use --force to discard."
                 )
 

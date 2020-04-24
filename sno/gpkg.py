@@ -241,6 +241,12 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
     return geom
 
 
+# can't represent 'POINT EMPTY' in WKB.
+# The GPKG spec says we should use POINT(NaN, NaN) instead.
+# Here's the WKB of that.
+GPKG_WKB_POINT_EMPTY = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
+
+
 def ogr_to_geom(ogr_geom):
     """
     Given an OGR geometry object,
@@ -298,10 +304,7 @@ def ogr_to_geom(ogr_geom):
         pieces.append(struct.pack('<dddd', *ogr_geom.GetEnvelope()))
 
     if empty and ogr_geom_type == ogr.wkbPoint:
-        # can't represent 'POINT EMPTY' in WKB.
-        # spec says we should use POINT(NaN, NaN) instead.
-        # Here's the WKB of that.
-        wkb = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
+        wkb = GPKG_WKB_POINT_EMPTY
     else:
         # force little-endian
         wkb = ogr_geom.ExportToWkb(ogr.wkbNDR)
