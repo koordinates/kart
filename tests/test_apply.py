@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pygit2
@@ -8,18 +9,19 @@ H = pytest.helpers.helpers()
 patches = Path(__file__).parent / "data" / "patches"
 
 
-def test_apply_invalid_patch(data_archive, cli_runner):
+@pytest.mark.parametrize('input', ['{}', 'this isnt json'])
+def test_apply_invalid_patch(input, data_archive, cli_runner):
     with data_archive("points"):
-        r = cli_runner.invoke(["apply", patches / 'invalid.snopatch'])
+        r = cli_runner.invoke(["apply", '-'], input=input)
         assert r.exit_code == 1, r
-        assert 'Failed to parse JSON patch file' in r.stdout
+        assert 'Failed to parse JSON patch file' in r.stderr
 
 
 def test_apply_empty_patch(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(["apply", patches / 'points-empty.snopatch'])
         assert r.exit_code == 44, r
-        assert 'No changes to commit' in r.stdout
+        assert 'No changes to commit' in r.stderr
 
 
 def _test_apply_points(repo_dir, cli_runner):
@@ -72,7 +74,7 @@ def test_apply_with_no_working_copy_with_no_commit(data_archive, cli_runner):
             ["apply", "--no-commit", patches / 'updates-only.snopatch']
         )
         assert r.exit_code == 45
-        assert '--no-commit requires a working copy' in r.stdout
+        assert '--no-commit requires a working copy' in r.stderr
 
 
 def test_apply_with_working_copy_with_no_commit(
@@ -95,3 +97,14 @@ def test_apply_with_working_copy_with_no_commit(
             )
             name = cur.fetchone()[0]
             assert name is None
+
+        # Check that the working copy is now dirty, and that the `sno diff --json`
+        # output is the same as our original patch file had.
+        r = cli_runner.invoke(['diff', '--json'])
+        assert r.exit_code == 0
+        working_copy_diff = json.loads(r.stdout)['sno.diff/v1']
+
+        with open(patches / 'updates-only.snopatch', encoding='utf-8') as patch_file:
+            patch_diff = json.load(patch_file)['sno.diff/v1']
+
+        assert working_copy_diff == patch_diff

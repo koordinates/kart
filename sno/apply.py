@@ -141,4 +141,4 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         # oid refers to either a commit or tree
         wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")
-        wc.reset(wc_target, rs)
+        wc.reset(wc_target, rs, update_meta=False)

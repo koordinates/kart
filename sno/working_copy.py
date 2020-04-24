@@ -142,6 +142,10 @@ class WorkingCopyGPKG(WorkingCopy):
                 L.debug(f"session(bulk={bulk}): new/done")
 
     def is_dirty(self):
+        """
+        Returns True if there are uncommitted changes in the working copy,
+        or False otherwise.
+        """
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
@@ -151,6 +155,10 @@ class WorkingCopyGPKG(WorkingCopy):
         self,
         message="You have uncommitted changes in your working copy. Commit or discard first",
     ):
+        """
+        Checks the working copy has no changes in it.
+        Otherwise, raises InvalidOperation
+        """
         if self.is_dirty():
             raise InvalidOperation(message)
 
@@ -762,6 +770,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
     ):
         """
         Resets the working copy to the given tree (or the tree pointed to by the given commit)
+
+        If there are uncommitted changes, raises InvalidOperation, unless force=True is given
+        (in which case the changes are discarded)
+
+        If update_meta=True (the default) the tree ID in the .sno-meta table gets set
+        to the new tree ID. Otherwise it is unchanged.
         """
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
@@ -792,6 +806,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             )
 
             # check for dirty working copy
+            is_dirty = self.is_dirty()
             if not force:
                 self.check_not_dirty(
                     "You have uncommitted changes in your working copy. Commit or use --force to discard."

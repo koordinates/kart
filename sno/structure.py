@@ -173,7 +173,7 @@ class RepositoryStructure:
 
         Doesn't create any commits or modify the working copy at all.
 
-        If orig_tree is None, the diff is applied from that tree.
+        If orig_tree is not None, the diff is applied from that tree.
         Otherwise, uses the tree at the head of the repo.
         """
         if orig_tree is None:

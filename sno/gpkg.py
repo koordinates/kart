@@ -223,13 +223,12 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
         raise ValueError("Invalid envelope contents indicator")
 
     wkb = gpkg_geom[wkb_offset:]
-    geom = ogr.CreateGeometryFromWkb(wkb)
 
-    if geom.GetGeometryType() == ogr.wkbPoint:
-        nan = float('nan')
-        if geom.GetX() == nan and geom.GetY() == nan:
-            # spec uses POINT(nan nan) to represent POINT EMPTY
-            geom = ogr.CreateGeometryFromWkt('POINT EMPTY')
+    # note: the GPKG spec represents 'POINT EMPTY' as 'POINT(nan nan)' (in WKB form)
+    # However, OGR loads the WKB for POINT(nan nan) as an empty geometry.
+    # It has the WKB of `POINT(nan nan)` but the WKT of `POINT EMPTY`.
+    # We just leave it as-is.
+    geom = ogr.CreateGeometryFromWkb(wkb)
 
     if parse_srs:
         srid = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
