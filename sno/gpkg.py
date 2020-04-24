@@ -248,34 +248,23 @@ GPKG_WKB_POINT_EMPTY = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x0
 
 def ogr_to_geom(ogr_geom):
     """
-    Given an OGR geometry object,
-    construct a GPKG geometry value.
+    Given an OGR geometry object, construct a GPKG geometry value.
     http://www.geopackage.org/spec/#gpb_format
 
     Arbitrarily, this only produces little-endian geometries.
+    Geometries produced don't include envelopes.
     """
     wkb = ogr_geom.ExportToWkb()
 
-    # always produce little endian
-    flags = 1
     ogr_geom_type = ogr_geom.GetGeometryType()
 
-    # magic number and version
-    pieces = [b'GP\x00']
-
     # Flags
+    # always produce little endian
+    flags = 1
     empty = ogr_geom.IsEmpty()
-    has_z = ogr.GT_HasZ(ogr_geom_type)
     if empty:
         # no envelope.
         flags |= 0x10
-    elif has_z:
-        # XYZ envelope
-        flags |= 0x04
-    else:
-        # XY envelope
-        flags |= 0x02
-    pieces.append(struct.pack('<B', flags))
 
     # srs_id
     srid = 0
@@ -286,21 +275,6 @@ def ogr_to_geom(ogr_geom):
             srid = int(srs.GetAuthorityCode("PROJCS"))
         elif srs.IsGeographic():
             srid = int(srs.GetAuthorityCode("GEOGCS"))
-    pieces.append(struct.pack('<i', srid))
-
-    # TODO: XYZM/XYM envelope.
-    # not sure how to sanely get envelopes with M values from OGR :/
-    # so we just write a XY/XYZ envelope for now.
-    # NOTE: if you change the logic here, change flags above!
-    if empty:
-        # don't write an envelope.
-        # note: ogr_geom.GetEnvelope() seems to return (0, 0, 0, 0) for empty geometries,
-        # so if we decide to change this, be wary of that.
-        pass
-    elif has_z:
-        pieces.append(struct.pack('<dddddd', *ogr_geom.GetEnvelope3D()))
-    else:
-        pieces.append(struct.pack('<dddd', *ogr_geom.GetEnvelope()))
 
     if empty and ogr_geom_type == ogr.wkbPoint:
         wkb = GPKG_WKB_POINT_EMPTY
@@ -308,9 +282,7 @@ def ogr_to_geom(ogr_geom):
         # force little-endian
         wkb = ogr_geom.ExportToWkb(ogr.wkbNDR)
 
-    pieces.append(wkb)
-
-    return b''.join(pieces)
+    return struct.pack('<ccBBi', b'G', b'P', 0, flags, srid) + wkb
 
 
 def geom_envelope(gpkg_geom):
