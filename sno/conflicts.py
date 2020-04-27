@@ -1,3 +1,4 @@
+import logging
 import sys
 from collections import namedtuple
 
@@ -6,6 +7,9 @@ import click
 from .diff_output import repr_row
 from .exceptions import InvalidOperation, NotYetImplemented
 from .structure import RepositoryStructure
+
+
+L = logging.getLogger("sno.conflicts")
 
 
 CommitWithReference = namedtuple("CommitWithReference", ("commit", "reference"))
@@ -56,11 +60,6 @@ def _safe_get_dataset_for_index_entry(repo_structure, index_entry):
         return None
 
 
-def _get_pk_for_index_entry(dataset, index_entry):
-    """Uses a dataset to decode the primary key that a pygit2.IndexEntry refers to"""
-    return dataset.index_entry_to_pk(index_entry)
-
-
 def _safe_get_feature(dataset, pk):
     """Gets the dataset's feature with a particular primary key, or None"""
     try:
@@ -99,26 +98,28 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     args3 = aot(ancestor, ours, theirs)
     commits3 = aot(getattr(arg, "commit", arg) for arg in args3)
     refs3 = aot(getattr(arg, "reference", None) for arg in args3)
-    labels3 = aot(_get_long_label(*x) for x in zip(commits3, refs3))
+    labels3 = aot(_get_long_label(c, r) for c, r in zip(commits3, refs3))
     repo_structures3 = aot(RepositoryStructure(repo, commit=c) for c in commits3)
 
     conflict_pks = {}
-    for index_entries in merge_index.conflicts:
-        datasets = aot(
-            _safe_get_dataset_for_index_entry(*x)
-            for x in zip(repo_structures3, index_entries)
+    for index_entries3 in merge_index.conflicts:
+        datasets3 = aot(
+            _safe_get_dataset_for_index_entry(rs, ie)
+            for rs, ie in zip(repo_structures3, index_entries3)
         )
-        dataset = first_true(datasets)
+        dataset = first_true(datasets3)
         dataset_path = dataset.path
-        if None in datasets:
-            for i in range(3):
-                presence = "present" if datasets[i] is not None else "absent"
-                click.echo(f"{labels3[i]}: {dataset_path} is {presence}")
+        if None in datasets3:
+            for label, ds in zip(labels3, datasets3):
+                presence = "present" if ds is not None else "absent"
+                click.echo(f"{label}: {dataset_path} is {presence}")
             raise NotYetImplemented(
                 "Sorry, resolving conflicts where datasets are added or removed isn't supported yet"
             )
 
-        pks3 = aot(_get_pk_for_index_entry(*x) for x in zip(datasets, index_entries))
+        pks3 = aot(
+            ds.index_entry_to_pk(ie) for ds, ie in zip(datasets3, index_entries3)
+        )
         if "META" in pks3:
             click.echo(f"Merge conflict found in metadata for {dataset_path}")
             raise NotYetImplemented(
@@ -129,8 +130,8 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
             click.echo(
                 f"Merge conflict found where primary keys have changed in {dataset_path}"
             )
-            for i in range(3):
-                click.echo(f"{labels3[i]}: {dataset_path}:{pks3[i]}")
+            for label, pk in zip(labels3, pks3):
+                click.echo(f"{label}: {dataset_path}:{pk}")
             raise NotYetImplemented(
                 "Sorry, resolving conflicts where primary keys have changed isn't supported yet"
             )
@@ -169,7 +170,7 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
         ours_ds = datasets3.ours
         for pk in sorted(pks):
             feature_name = f"{dataset_path}:{ours_ds.primary_key}={pk}"
-            features3 = aot(_safe_get_feature(d, pk) for d in datasets)
+            features3 = aot(_safe_get_feature(d, pk) for d in datasets3)
             print_conflict(feature_name, features3, labels3)
 
             if not (dry_run or empty_input):
@@ -184,7 +185,7 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     # Conflicts are resolved, time to commit
     assert not merge_index.conflicts
     merge_tree_id = merge_index.write_tree(repo)
-    click.echo(f"Merge tree: {merge_tree_id}")
+    L.debug(f"Merge tree: {merge_tree_id}")
 
     user = repo.default_signature
     merge_message = "Merge '{}'".format(
@@ -198,13 +199,8 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
         merge_tree_id,
         [commits3.ours.id, commits3.theirs.id],
     )
-    click.echo(f"Merge commit: {commit_id}")
+    click.echo(f"Merge committed as: {commit_id}")
     return commit_id
-
-
-_prefixes3 = ("- ", "+ ", "+ ")
-_big_prefixes3 = ("---", "+++", "+++")
-_cols3 = ("red", "green", "green")
 
 
 def print_conflict(feature_label, features3, labels3):
@@ -215,12 +211,13 @@ def print_conflict(feature_label, features3, labels3):
     labels3 - AncestorOursTheirs tuple containing the label for each version.
     """
     click.secho(f"\n=========== {feature_label} ==========", bold=True)
-    for i in range(3):
-        click.secho(
-            f"{_big_prefixes3[i]} {AncestorOursTheirs.names[i]:>9}: {labels3[i]}"
-        )
-        if features3[i] is not None:
-            click.secho(repr_row(features3[i], prefix=_prefixes3[i]), fg=_cols3[i])
+    for name, label, feature in zip(AncestorOursTheirs.names, labels3, features3):
+        prefix = "---" if name == "ancestor" else "+++"
+        click.secho(f"{prefix} {name:>9}: {label}")
+        if feature is not None:
+            prefix = "- " if name == "ancestor" else "+ "
+            fg = "red" if name == "ancestor" else "green"
+            click.secho(repr_row(feature, prefix=prefix), fg=fg)
 
 
 _aot_choice = click.Choice(choices=AncestorOursTheirs.chars)

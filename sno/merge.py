@@ -1,8 +1,13 @@
+import logging
+
 import click
 
 from .conflicts import resolve_merge_conflicts, CommitWithReference
 from .exceptions import InvalidOperation
 from .structure import RepositoryStructure
+
+
+L = logging.getLogger("sno.merge")
 
 
 @click.command()
@@ -86,7 +91,7 @@ def merge(ctx, ff, ff_only, dry_run, commit):
         else:
             click.echo("No conflicts!")
             merge_tree_id = merge_index.write_tree(repo)
-            click.echo(f"Merge tree: {merge_tree_id}")
+            L.debug(f"Merge tree: {merge_tree_id}")
 
             user = repo.default_signature
             merge_message = "Merge '{}'".format(
@@ -101,7 +106,7 @@ def merge(ctx, ff, ff_only, dry_run, commit):
                     merge_tree_id,
                     [c_ours.id, c_theirs.id],
                 )
-                click.echo(f"Merge commit: {commit_id}")
+                click.echo(f"Merge committed as: {commit_id}")
 
     if not dry_run:
         # update our working copy
