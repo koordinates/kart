@@ -5,7 +5,7 @@ from collections import namedtuple
 import click
 
 from .diff_output import repr_row
-from .exceptions import InvalidOperation, NotYetImplemented
+from .exceptions import InvalidOperation, NotYetImplemented, MERGE_CONFLICT
 from .structure import RepositoryStructure
 
 
@@ -20,19 +20,21 @@ def first_true(iterable):
     return next(filter(None, iterable))
 
 
-def is_interactive_terminal():
+class InputMode:
+    DEFAULT = 0
+    INTERACTIVE = 1
+    NO_INPUT = 2
+
+
+def get_input_mode():
     if sys.stdin.isatty() and sys.stdout.isatty():
-        return True
+        return InputMode.INTERACTIVE
     elif sys.stdin.isatty() and not sys.stdout.isatty():
-        raise InvalidOperation(
-            "Redirecting stdout but not stdin breaks the interactive prompts"
-        )
-    return False
-
-
-def interactive_pause(prompt):
-    """Like click.pause() but waits for the Enter key specifically."""
-    click.prompt(prompt, prompt_suffix="", default="", show_default=False)
+        return InputMode.NO_INPUT
+    elif is_empty_stream(sys.stdin):
+        return InputMode.NO_INPUT
+    else:
+        return InputMode.DEFAULT
 
 
 def is_empty_stream(stream):
@@ -42,6 +44,11 @@ def is_empty_stream(stream):
             return True
         stream.seek(pos)
     return False
+
+
+def interactive_pause(prompt):
+    """Like click.pause() but waits for the Enter key specifically."""
+    click.prompt(prompt, prompt_suffix="", default="", show_default=False)
 
 
 def _get_long_label(commit, reference):
@@ -151,18 +158,17 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     # At this point, the failure should be dealt with so we can start resolving conflicts interactively.
     # We don't want to fail during conflict resolution, since then we would lose all the user's work.
     # TODO: Support other way(s) of resolving conflicts.
-    empty_input = False
+    input_mode = get_input_mode()
     if dry_run:
         click.echo("Printing conflicts but not resolving due to --dry-run")
-    elif is_interactive_terminal():
+    elif input_mode == InputMode.INTERACTIVE:
         interactive_pause(
             "Press enter to begin resolving merge conflicts, or Ctrl+C to abort at any time..."
         )
-    elif is_empty_stream(sys.stdin):
+    elif input_mode == InputMode.NO_INPUT:
         click.echo(
             "Printing conflicts but not resolving - run from an interactive terminal to resolve"
         )
-        empty_input = True
 
     # For each conflict, print and maybe resolve it.
     for dataset_path, pks in sorted(conflict_pks.items()):
@@ -173,14 +179,19 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
             features3 = aot(_safe_get_feature(d, pk) for d in datasets3)
             print_conflict(feature_name, features3, labels3)
 
-            if not (dry_run or empty_input):
+            if not dry_run and input_mode != InputMode.NO_INPUT:
                 index_path = f"{dataset_path}/{ours_ds.get_feature_path(pk)}"
                 resolve_conflict_interactive(feature_name, merge_index, index_path)
 
     if dry_run:
-        return None
-    elif empty_input:
-        raise InvalidOperation("Use an interactive terminal to resolve merge conflicts")
+        raise InvalidOperation(
+            "Run without --dry-run to resolve merge conflicts", exit_code=MERGE_CONFLICT
+        )
+    elif input_mode == InputMode.NO_INPUT:
+        raise InvalidOperation(
+            "Use an interactive terminal to resolve merge conflicts",
+            exit_code=MERGE_CONFLICT,
+        )
 
     # Conflicts are resolved, time to commit
     assert not merge_index.conflicts

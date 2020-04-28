@@ -2,7 +2,7 @@ import pytest
 
 import pygit2
 
-from sno.exceptions import INVALID_OPERATION
+from sno.exceptions import INVALID_OPERATION, MERGE_CONFLICT
 
 H = pytest.helpers.helpers()
 
@@ -91,7 +91,7 @@ def test_merge_fastforward_noff(
 
         H.git_graph(request, "post-merge")
 
-        merge_commit_id = r.stdout.splitlines()[-2].split(": ")[1]
+        merge_commit_id = r.stdout.splitlines()[-1].split(": ")[1]
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == merge_commit_id
@@ -147,7 +147,7 @@ def test_merge_true(
         assert r.exit_code == 0, r
         H.git_graph(request, "post-merge")
 
-        merge_commit_id = r.stdout.splitlines()[-2].split(": ")[1]
+        merge_commit_id = r.stdout.splitlines()[-1].split(": ")[1]
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == merge_commit_id
@@ -206,7 +206,7 @@ def test_merge_conflicts(
 
         r = cli_runner.invoke(["merge", "alternate"])
 
-        assert r.exit_code == INVALID_OPERATION, r
+        assert r.exit_code == MERGE_CONFLICT, r
         assert "conflict" in r.stdout
         assert base_commit_id in r.stdout
         assert alternate_commit_id in r.stdout
