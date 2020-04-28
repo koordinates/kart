@@ -2,8 +2,9 @@ import logging
 
 import click
 
-from .conflicts import resolve_merge_conflicts, CommitWithReference
+from .conflicts import resolve_merge_conflicts
 from .exceptions import InvalidOperation
+from .structs import CommitWithReference
 from .structure import RepositoryStructure
 
 
@@ -45,23 +46,25 @@ def merge(ctx, ff, ff_only, dry_run, commit):
         )
 
     # accept ref-ish things (refspec, branch, commit)
-    c_theirs, r_theirs = repo.resolve_refish(commit)
-    c_ours, r_ours = repo.resolve_refish("HEAD")
+    theirs = CommitWithReference.resolve_refish(repo, commit)
+    ours = CommitWithReference.resolve_refish(repo, "HEAD")
 
-    click.echo(f"Merging {c_theirs.id} to {c_ours.id} ...")
-    ancestor_id = repo.merge_base(c_theirs.id, c_ours.id)
+    click.echo(f"Merging {theirs} to {ours} ...")
+    ancestor_id = repo.merge_base(theirs.commit.id, ours.commit.id)
     click.echo(f"Found common ancestor: {ancestor_id}")
 
     if not ancestor_id:
-        raise InvalidOperation(f"Commits {c_theirs.id} and {c_ours.id} aren't related.")
+        raise InvalidOperation(
+            f"Commits {theirs.commit.id} and {ours.commit.id} aren't related."
+        )
 
     # We're up-to-date if we're trying to merge our own common ancestor.
-    if ancestor_id == c_theirs.id:
+    if ancestor_id == theirs.commit.id:
         click.echo("Already merged!")
         return
 
     # We're fastforwardable if we're our own common ancestor.
-    can_ff = ancestor_id == c_ours.id
+    can_ff = ancestor_id == ours.commit.id
 
     if ff_only and not can_ff:
         raise InvalidOperation(
@@ -70,22 +73,22 @@ def merge(ctx, ff, ff_only, dry_run, commit):
 
     if can_ff and ff:
         # do fast-forward merge
-        click.echo(f"Can fast-forward to {c_theirs.id}")
+        click.echo(f"Can fast-forward to {theirs.commit.id}")
         if not dry_run:
-            repo.head.set_target(c_theirs.id, "merge: Fast-forward")
-        commit_id = c_theirs.id
+            repo.head.set_target(theirs.commit.id, "merge: Fast-forward")
+        commit_id = theirs.commit.id
     else:
         c_ancestor = repo[ancestor_id]
         merge_index = repo.merge_trees(
-            ancestor=c_ancestor.tree, ours=c_ours.tree, theirs=c_theirs.tree
+            ancestor=c_ancestor.tree, ours=ours.commit.tree, theirs=theirs.commit.tree
         )
         if merge_index.conflicts:
             commit_id = resolve_merge_conflicts(
                 repo,
                 merge_index,
                 ancestor=c_ancestor,
-                ours=CommitWithReference(c_ours, r_ours),
-                theirs=CommitWithReference(c_theirs, r_theirs),
+                ours=ours,
+                theirs=theirs,
                 dry_run=dry_run,
             )
         else:
@@ -94,9 +97,7 @@ def merge(ctx, ff, ff_only, dry_run, commit):
             L.debug(f"Merge tree: {merge_tree_id}")
 
             user = repo.default_signature
-            merge_message = "Merge '{}'".format(
-                r_theirs.shorthand if r_theirs else c_theirs.id
-            )
+            merge_message = f"Merge '{theirs.shorthand}'"
             if not dry_run:
                 commit_id = repo.create_commit(
                     repo.head.name,
@@ -104,7 +105,7 @@ def merge(ctx, ff, ff_only, dry_run, commit):
                     user,
                     merge_message,
                     merge_tree_id,
-                    [c_ours.id, c_theirs.id],
+                    [ours.id, theirs.id],
                 )
                 click.echo(f"Merge committed as: {commit_id}")
 

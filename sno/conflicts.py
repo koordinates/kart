@@ -1,18 +1,15 @@
 import logging
 import sys
-from collections import namedtuple
 
 import click
 
 from .diff_output import repr_row
 from .exceptions import InvalidOperation, NotYetImplemented, MERGE_CONFLICT
+from .structs import AncestorOursTheirs, CommitWithReference
 from .structure import RepositoryStructure
 
 
 L = logging.getLogger("sno.conflicts")
-
-
-CommitWithReference = namedtuple("CommitWithReference", ("commit", "reference"))
 
 
 def first_true(iterable):
@@ -51,14 +48,6 @@ def interactive_pause(prompt):
     click.prompt(prompt, prompt_suffix="", default="", show_default=False)
 
 
-def _get_long_label(commit, reference):
-    """Given a commit and a reference (can be None), returns a label"""
-    if reference is not None:
-        return f'"{reference.shorthand}" ({commit.id.hex})'
-    else:
-        return f"({commit.id.hex})"
-
-
 def _safe_get_dataset_for_index_entry(repo_structure, index_entry):
     """Gets the dataset that a pygit2.IndexEntry refers to, or None"""
     try:
@@ -74,14 +63,6 @@ def _safe_get_feature(dataset, pk):
         return feature
     except KeyError:
         return None
-
-
-# We have three versions of lots of objects - the 3 versions are ancestor, ours, theirs.
-# This namedtuple helps us keep track of them all.
-AncestorOursTheirs = namedtuple("AncestorOursTheirs", ("ancestor", "ours", "theirs"))
-
-AncestorOursTheirs.names = AncestorOursTheirs._fields
-AncestorOursTheirs.chars = tuple(n[0] for n in AncestorOursTheirs.names)
 
 
 def aot(*args):
@@ -102,11 +83,15 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     """
 
     # We have three versions of lots of objects - ancestor, ours, theirs.
-    args3 = aot(ancestor, ours, theirs)
-    commits3 = aot(getattr(arg, "commit", arg) for arg in args3)
-    refs3 = aot(getattr(arg, "reference", None) for arg in args3)
-    labels3 = aot(_get_long_label(c, r) for c, r in zip(commits3, refs3))
-    repo_structures3 = aot(RepositoryStructure(repo, commit=c) for c in commits3)
+    commit_with_refs3 = aot(
+        CommitWithReference(ancestor),
+        CommitWithReference(ours),
+        CommitWithReference(theirs),
+    )
+    commits3 = aot(cwr.commit for cwr in commit_with_refs3)
+    repo_structures3 = aot(
+        RepositoryStructure(repo, commit=c.commit) for c in commit_with_refs3
+    )
 
     conflict_pks = {}
     for index_entries3 in merge_index.conflicts:
@@ -117,9 +102,9 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
         dataset = first_true(datasets3)
         dataset_path = dataset.path
         if None in datasets3:
-            for label, ds in zip(labels3, datasets3):
+            for cwr, ds in zip(commit_with_refs3, datasets3):
                 presence = "present" if ds is not None else "absent"
-                click.echo(f"{label}: {dataset_path} is {presence}")
+                click.echo(f"{cwr}: {dataset_path} is {presence}")
             raise NotYetImplemented(
                 "Sorry, resolving conflicts where datasets are added or removed isn't supported yet"
             )
@@ -137,8 +122,8 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
             click.echo(
                 f"Merge conflict found where primary keys have changed in {dataset_path}"
             )
-            for label, pk in zip(labels3, pks3):
-                click.echo(f"{label}: {dataset_path}:{pk}")
+            for cwr, pk in zip(commit_with_refs3, pks3):
+                click.echo(f"{cwr}: {dataset_path}:{pk}")
             raise NotYetImplemented(
                 "Sorry, resolving conflicts where primary keys have changed isn't supported yet"
             )
@@ -177,7 +162,7 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
         for pk in sorted(pks):
             feature_name = f"{dataset_path}:{ours_ds.primary_key}={pk}"
             features3 = aot(_safe_get_feature(d, pk) for d in datasets3)
-            print_conflict(feature_name, features3, labels3)
+            print_conflict(feature_name, features3, commit_with_refs3)
 
             if not dry_run and input_mode != InputMode.NO_INPUT:
                 index_path = f"{dataset_path}/{ours_ds.get_feature_path(pk)}"
@@ -199,9 +184,7 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     L.debug(f"Merge tree: {merge_tree_id}")
 
     user = repo.default_signature
-    merge_message = "Merge '{}'".format(
-        refs3.theirs.shorthand if refs3.theirs else commits3.theirs.id.hex
-    )
+    merge_message = f"Merge '{theirs.shorthand}'"
     commit_id = repo.create_commit(
         repo.head.name,
         user,
@@ -214,17 +197,20 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     return commit_id
 
 
-def print_conflict(feature_label, features3, labels3):
+def print_conflict(feature_name, features3, commit_with_refs3):
     """
     Prints 3 versions of a feature.
-    feature_label - the name of the feature.
+    feature_name - the name of the feature.
     features3 - AncestorOursTheirs tuple containing three versions of a feature.
-    labels3 - AncestorOursTheirs tuple containing the label for each version.
+    commit_with_refs3 - AncestorOursTheirs tuple containing a CommitWithReference
+        for each of the three versions.
     """
-    click.secho(f"\n=========== {feature_label} ==========", bold=True)
-    for name, label, feature in zip(AncestorOursTheirs.names, labels3, features3):
+    click.secho(f"\n=========== {feature_name} ==========", bold=True)
+    for name, feature, cwr in zip(
+        AncestorOursTheirs.names, features3, commit_with_refs3
+    ):
         prefix = "---" if name == "ancestor" else "+++"
-        click.secho(f"{prefix} {name:>9}: {label}")
+        click.secho(f"{prefix} {name:>9}: {cwr}")
         if feature is not None:
             prefix = "- " if name == "ancestor" else "+ "
             fg = "red" if name == "ancestor" else "green"
@@ -238,9 +224,9 @@ def resolve_conflict_interactive(feature_name, merge_index, index_path):
     """
     Resolves the conflict at merge_index.conflicts[index_path] by asking
     the user version they prefer - ancestor, ours or theirs.
+    feature_name - the name of the feature at index_path.
     merge_index - a pygit2.Index with conflicts.
     index_path - a path where merge_index has a conflict.
-    feature_name - the name of the feature at index_path.
     """
     char = click.prompt(
         f"For {feature_name} accept which version - ancestor, ours or theirs",
