@@ -112,6 +112,6 @@ def merge(ctx, ff, ff_only, dry_run, commit):
         # update our working copy
         repo_structure = RepositoryStructure(repo)
         wc = repo_structure.working_copy
-        click.echo(f"Updating {wc.path} ...")
+        L.info(f"Updating {wc.path} ...")
         commit = repo[commit_id]
         wc.reset(commit, repo_structure)
