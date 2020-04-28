@@ -108,7 +108,7 @@ def test_e2e(
             r = cli_runner.invoke(["merge", "edit-1", "--no-ff"])
             assert r.exit_code == 0
             assert "Fast-forward" not in r.stdout
-            sha_merge1 = r.stdout.splitlines()[-2].split(": ")[1]
+            sha_merge1 = r.stdout.splitlines()[-1].split(": ")[1]
             print("Merge SHA:", sha_merge1)
 
             H.git_graph(request, "post edit-1 merge", count=10)
