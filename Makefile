@@ -94,13 +94,13 @@ $(py-install-tools): | $(VIRTUAL_ENV)
 
 # Fix PyInstaller 3.6 setup.cfg: https://github.com/pyinstaller/pyinstaller/issues/4609
 ifeq ($(PLATFORM),Darwin)
-	pip install macholib>=1.8
+	pip install 'macholib>=1.8'
 endif
 	pip install \
 		pip-tools \
 		liccheck \
 		pipdeptree \
-		pyinstaller==3.6.* \
+		'pyinstaller==3.6.*' \
 		$(WHEELTOOL)
 
 	touch $@
