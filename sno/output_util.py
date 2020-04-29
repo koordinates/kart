@@ -13,7 +13,7 @@ def dump_json_output(output, output_path, pretty=True):
     json_params = {}
     if pretty:
         json_params.update({"indent": 2, "sort_keys": True})
-    if pretty and sys.stdout.isatty():
+    if pretty and fp == sys.stdout and fp.isatty():
         # Add syntax highlighting
         from pygments import highlight
         from pygments.lexers import JsonLexer
