@@ -96,7 +96,9 @@ $(py-install-tools): | $(VIRTUAL_ENV)
 ifeq ($(PLATFORM),Darwin)
 	pip install 'macholib>=1.8'
 endif
+	# note: pip is pinned here, because https://github.com/dhatim/python-license-check/issues/40
 	pip install \
+		'pip~=20.0.0' \
 		pip-tools \
 		liccheck \
 		pipdeptree \
