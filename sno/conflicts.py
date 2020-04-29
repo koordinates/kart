@@ -50,6 +50,8 @@ def interactive_pause(prompt):
 
 def _safe_get_dataset_for_index_entry(repo_structure, index_entry):
     """Gets the dataset that a pygit2.IndexEntry refers to, or None"""
+    if index_entry is None:
+        return None
     try:
         return repo_structure.get_for_index_entry(index_entry)
     except KeyError:
@@ -106,7 +108,7 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
                 presence = "present" if ds is not None else "absent"
                 click.echo(f"{cwr}: {dataset_path} is {presence}")
             raise NotYetImplemented(
-                "Sorry, resolving conflicts where datasets are added or removed isn't supported yet"
+                "Sorry, resolving conflicts where features are added or removed isn't supported yet"
             )
 
         pks3 = aot(

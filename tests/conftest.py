@@ -577,7 +577,7 @@ def _find_layer(db):
 def insert(request, cli_runner):
     H = pytest.helpers.helpers()
 
-    def func(db, layer=None, commit=True, reset_index=None):
+    def func(db, layer=None, commit=True, reset_index=None, insert_str=None):
         if reset_index is not None:
             func.index = reset_index
 
@@ -592,6 +592,8 @@ def insert(request, cli_runner):
         # th
         new_pk = pk_start + func.index
         rec[pk_field] = new_pk
+        if insert_str:
+            rec[metadata.TEXT_FIELD] = insert_str
 
         with db:
             cur = db.cursor()

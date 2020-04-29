@@ -2,7 +2,7 @@ import pytest
 
 import pygit2
 
-from sno.exceptions import INVALID_OPERATION, MERGE_CONFLICT
+from sno.exceptions import INVALID_OPERATION, NOT_YET_IMPLEMENTED, MERGE_CONFLICT
 
 H = pytest.helpers.helpers()
 
@@ -175,9 +175,7 @@ def test_merge_true(
         pytest.param(H.TABLE, id="table"),
     ],
 )
-def test_merge_conflicts(
-    data, data_working_copy, geopackage, cli_runner, update, request,
-):
+def test_merge_conflicts(data, data_working_copy, geopackage, cli_runner, update):
     sample_pks = data.SAMPLE_PKS
     with data_working_copy(data.ARCHIVE) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
@@ -192,7 +190,9 @@ def test_merge_conflicts(
         update(db, sample_pks[0], "aaa")
         update(db, sample_pks[1], "aaa")
         update(db, sample_pks[2], "aaa")
-        alternate_commit_id = update(db, sample_pks[3], "aaa")
+        update(db, sample_pks[3], "aaa")
+        alternate_commit_id = update(db, sample_pks[4], "aaa")
+
         assert repo.head.target.hex == alternate_commit_id
 
         r = cli_runner.invoke(["checkout", "master"])
@@ -202,7 +202,8 @@ def test_merge_conflicts(
         update(db, sample_pks[1], "aaa")
         update(db, sample_pks[2], "mmm")
         update(db, sample_pks[3], "mmm")
-        master_commit_id = update(db, sample_pks[4], "mmm")
+        update(db, sample_pks[4], "mmm")
+        master_commit_id = update(db, sample_pks[5], "mmm")
 
         r = cli_runner.invoke(["merge", "alternate"])
 
@@ -219,15 +220,19 @@ def test_merge_conflicts(
 
         # Only modified in alternate:
         assert feature_name(sample_pks[0]) not in r.stdout
+
         # Modified exactly the same in both branches:
         assert feature_name(sample_pks[1]) not in r.stdout
-        # These two are merge conflicts:
+
+        # These three are merge conflicts:
         assert feature_name(sample_pks[2]) in r.stdout
         assert feature_name(sample_pks[3]) in r.stdout
-        # Only modified in master
-        assert feature_name(sample_pks[4]) not in r.stdout
+        assert feature_name(sample_pks[4]) in r.stdout
 
-        r = cli_runner.invoke(["merge", "alternate"], input="o\nt\n")
+        # Only modified in master:
+        assert feature_name(sample_pks[5]) not in r.stdout
+
+        r = cli_runner.invoke(["merge", "alternate"], input="a\no\nt\n")
         assert r.exit_code == 0, r
         assert repo.head.target.hex != alternate_commit_id
         assert repo.head.target.hex != master_commit_id
@@ -235,12 +240,54 @@ def test_merge_conflicts(
         r = cli_runner.invoke(["diff", master_commit_id])
         assert r.exit_code == 0, r
 
-        # Diff merged in from alternate automatically
+        # Changed: their version is merged in from alternate automatically:
         assert feature_name(sample_pks[0]) in r.stdout
-        # Diff merged in from alternate explicitly with "t" for theirs
-        assert feature_name(sample_pks[3]) in r.stdout
 
-        # The other features are not changed by the merge
+        # Not changed: our version is the same as their version:
         assert feature_name(sample_pks[1]) not in r.stdout
-        assert feature_name(sample_pks[2]) not in r.stdout
-        assert feature_name(sample_pks[4]) not in r.stdout
+        # Changed: reverted to ancestor using "a":
+        assert feature_name(sample_pks[2]) in r.stdout
+        # Not changed: we kept our version using "o":
+        assert feature_name(sample_pks[3]) not in r.stdout
+        # Changed: accepted their version using "t":
+        assert feature_name(sample_pks[4]) in r.stdout
+        # Not changed: our version is merged in automatically:
+        assert feature_name(sample_pks[5]) not in r.stdout
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pytest.param(H.POINTS, id="points",),
+        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(H.TABLE, id="table"),
+    ],
+)
+def test_unsupported_merge_conflicts(
+    data, data_working_copy, geopackage, cli_runner, insert
+):
+    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
+        repo = pygit2.Repository(str(repo_path))
+
+        # new branch
+        r = cli_runner.invoke(["checkout", "-b", "alternate"])
+        assert r.exit_code == 0, r
+        assert repo.head.name == "refs/heads/alternate"
+
+        db = geopackage(wc)
+        alternate_commit_id = insert(db, reset_index=1, insert_str="aaa")
+
+        assert repo.head.target.hex == alternate_commit_id
+
+        r = cli_runner.invoke(["checkout", "master"])
+        assert r.exit_code == 0, r
+        assert repo.head.target.hex != alternate_commit_id
+
+        master_commit_id = insert(db, reset_index=1, insert_str="mmm")
+
+        r = cli_runner.invoke(["merge", "alternate"])
+        assert r.exit_code == NOT_YET_IMPLEMENTED
+        assert (
+            "resolving conflicts where features are added or removed isn't supported yet"
+            in r.stderr
+        )
