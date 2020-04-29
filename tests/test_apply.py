@@ -24,34 +24,84 @@ def test_apply_empty_patch(data_archive, cli_runner):
         assert 'No changes to commit' in r.stderr
 
 
-def _test_apply_points(repo_dir, cli_runner):
-    r = cli_runner.invoke(["apply", patches / 'updates-only.snopatch'])
-    assert r.exit_code == 0, r
-
-    repo = pygit2.Repository(str(repo_dir))
-    commit = repo.head.peel(pygit2.Commit)
-
-    # the author details all come from the patch, including timestamp
-    assert commit.message == 'Change the Coromandel'
-    assert commit.author.name == 'Someone'
-    assert commit.author.time == 1561040913
-    assert commit.author.offset == 60
-
-    # the committer timestamp doesn't come from the patch
-    assert commit.committer.time > commit.author.time
-    return r
-
-
-def test_apply_with_no_working_copy(data_archive, cli_runner):
+@pytest.mark.parametrize(
+    'patch_filename,message,author',
+    [
+        (
+            'updates-only.snopatch',
+            'Change the Coromandel',
+            {'name': 'Someone', 'time': 1561040913, 'offset': 60},
+        ),
+    ],
+)
+def test_apply_with_no_working_copy(
+    data_archive, cli_runner, patch_filename, message, author
+):
     with data_archive("points") as repo_dir:
-        r = _test_apply_points(repo_dir, cli_runner)
+        patch_path = patches / patch_filename
+        r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r
+
+        repo = pygit2.Repository(str(repo_dir))
+        commit = repo.head.peel(pygit2.Commit)
+
+        # the author details all come from the patch, including timestamp
+        assert commit.message == message
+        assert commit.author.name == author['name']
+        assert commit.author.time == author['time']
+        assert commit.author.offset == author['offset']
+
+        # the committer timestamp doesn't come from the patch
+        assert commit.committer.time > commit.author.time
         bits = r.stdout.split()
         assert bits[0] == 'Commit'
 
+        # Check that the `sno show --json` output is the same as our original patch file had.
+        r = cli_runner.invoke(['show', '--json'])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+        original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
-def test_apply_with_working_copy(data_working_copy, geopackage, cli_runner):
+        assert patch['sno.patch/v1'] == original_patch['sno.patch/v1']
+        assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
+
+
+@pytest.mark.parametrize(
+    'patch_filename,message,author,workingcopy_verify_names',
+    [
+        (
+            'updates-only.snopatch',
+            'Change the Coromandel',
+            {'name': 'Someone', 'time': 1561040913, 'offset': 60},
+            {1095: None},
+        )
+    ],
+)
+def test_apply_with_working_copy(
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    patch_filename,
+    message,
+    author,
+    workingcopy_verify_names,
+):
     with data_working_copy("points") as (repo_dir, wc_path):
-        r = _test_apply_points(repo_dir, cli_runner)
+        patch_path = patches / patch_filename
+        r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r
+
+        repo = pygit2.Repository(str(repo_dir))
+        commit = repo.head.peel(pygit2.Commit)
+
+        # the author details all come from the patch, including timestamp
+        assert commit.message == message
+        assert commit.author.name == author['name']
+        assert commit.author.time == author['time']
+        assert commit.author.offset == author['offset']
+
+        # the committer timestamp doesn't come from the patch
+        assert commit.committer.time > commit.author.time
         bits = r.stdout.split()
         assert bits[0] == 'Commit'
         assert bits[2] == 'Updating'
@@ -59,13 +109,23 @@ def test_apply_with_working_copy(data_working_copy, geopackage, cli_runner):
         db = geopackage(wc_path)
         with db:
             cur = db.cursor()
+            ids = f"({','.join(str(x) for x in workingcopy_verify_names.keys())})"
             cur.execute(
                 f"""
-                SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;
+                SELECT {H.POINTS.LAYER_PK}, name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} IN {ids};
                 """
             )
-            name = cur.fetchone()[0]
-            assert name is None
+            names = dict(cur.fetchall())
+            assert names == workingcopy_verify_names
+
+        # Check that the `sno show --json` output is the same as our original patch file had.
+        r = cli_runner.invoke(['show', '--json'])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+        original_patch = json.load(patch_path.open('r', encoding='utf-8'))
+
+        assert patch['sno.patch/v1'] == original_patch['sno.patch/v1']
+        assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
 
 
 def test_apply_with_no_working_copy_with_no_commit(data_archive, cli_runner):
@@ -77,34 +137,30 @@ def test_apply_with_no_working_copy_with_no_commit(data_archive, cli_runner):
         assert '--no-commit requires a working copy' in r.stderr
 
 
+@pytest.mark.parametrize(
+    'patch_filename,message', [('updates-only.snopatch', 'Change the Coromandel',)],
+)
 def test_apply_with_working_copy_with_no_commit(
-    data_working_copy, geopackage, cli_runner
+    data_working_copy, geopackage, cli_runner, patch_filename, message,
 ):
     with data_working_copy("points") as (repo_dir, wc_path):
-        r = cli_runner.invoke(
-            ["apply", "--no-commit", patches / 'updates-only.snopatch']
-        )
-        assert r.exit_code == 0
-        assert r.stdout.startswith('Updating ')
-        # check it was actually applied to the working copy
-        db = geopackage(wc_path)
-        with db:
-            cur = db.cursor()
-            cur.execute(
-                f"""
-                SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;
-                """
-            )
-            name = cur.fetchone()[0]
-            assert name is None
+        patch_path = patches / patch_filename
+        r = cli_runner.invoke(["apply", "--no-commit", patch_path])
+        assert r.exit_code == 0, r
 
-        # Check that the working copy is now dirty, and that the `sno diff --json`
-        # output is the same as our original patch file had.
+        repo = pygit2.Repository(str(repo_dir))
+
+        # no commit was made
+        commit = repo.head.peel(pygit2.Commit)
+        assert commit.message != message
+
+        bits = r.stdout.split()
+        assert bits[0] == 'Updating'
+
+        # Check that the working copy diff is the same as the original patch file
         r = cli_runner.invoke(['diff', '--json'])
         assert r.exit_code == 0
-        working_copy_diff = json.loads(r.stdout)['sno.diff/v1']
+        patch = json.loads(r.stdout)
+        original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
-        with open(patches / 'updates-only.snopatch', encoding='utf-8') as patch_file:
-            patch_diff = json.load(patch_file)['sno.diff/v1']
-
-        assert working_copy_diff == patch_diff
+        assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
