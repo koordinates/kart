@@ -131,8 +131,8 @@ if platform.system() == "Darwin":
                     # this symlinks to git: rewrite it
                     os.symlink('git', os.path.join(dist_libexec_root, relpath))
                     continue
-                if not os.path.exists(fpath):
-                    print(f"ignoring broken link {relpath}")
+                if not os.path.exists(fpath) and not os.path.exists(os.path.join(dist_bin_root, link_path)):
+                    print(f"ignoring broken link {relpath} -> {link_path}")
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
             elif subprocess.check_output(['file', '-b', fpath], text=True).startswith('Mach-O'):
