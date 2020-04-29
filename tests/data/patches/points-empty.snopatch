@@ -7,7 +7,7 @@
     }
   },
   "sno.patch/v1": {
-    "authorEmail": "robert@coup.net.nz",
+    "authorEmail": "robert@example.com",
     "authorName": "Robert Coup",
     "authorTime": "2019-06-20T14:28:33Z",
     "authorTimeOffset": "+01:00",

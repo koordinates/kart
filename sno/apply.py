@@ -105,7 +105,6 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
             metadata = patch['sno.patch/v1']
         except KeyError:
             # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
-            # TODO: maybe commit as current user with current timestamp? or maybe don't bother.
             raise click.UsageError(
                 "Patch contains no author information, and --no-commit was not supplied"
             )
