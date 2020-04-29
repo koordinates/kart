@@ -99,7 +99,7 @@ def test_merge_fastforward_noff(
         assert len(c.parents) == 2
         assert c.parents[0].hex == h
         assert c.parents[1].hex == commit_id
-        assert c.message == "Merge 'changes'"
+        assert c.message == 'Merge branch "changes" into master'
 
 
 @pytest.mark.parametrize(
@@ -156,7 +156,7 @@ def test_merge_true(
         assert c.parents[0].hex == m_commit_id
         assert c.parents[1].hex == b_commit_id
         assert c.parents[0].parents[0].hex == h
-        assert c.message == "Merge 'changes'"
+        assert c.message == 'Merge branch "changes" into master'
 
         # check the database state
         num_inserts = len(insert.inserted_fids)

@@ -38,7 +38,7 @@ class CommitWithReference:
 
     def __repr__(self):
         if self.reference is not None:
-            return f"<CommitWithReference commit={self.commit.id.hex} reference={self.reference.shorthand}>"
+            return f"<CommitWithReference commit={self.commit.id.hex} reference={self.reference.name}>"
         else:
             return f"<CommitWithReference commit={self.commit.id.hex} reference=None>"
 
@@ -54,6 +54,17 @@ class CommitWithReference:
     def shorthand(self):
         if self.reference is not None:
             return self.reference.shorthand
+        return self.id.hex
+
+    @property
+    def shorthand_with_type(self):
+        if self.reference is not None:
+            if self.reference.name.startswith("refs/heads/"):
+                return f'branch "{self.reference.shorthand}"'
+            elif self.reference.name.startswith("refs/tags/"):
+                return f'tag "{self.reference.shorthand}"'
+            else:
+                return f'"{self.reference.shorthand}"'
         return self.id.hex
 
     @staticmethod

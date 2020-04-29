@@ -180,23 +180,9 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
             exit_code=MERGE_CONFLICT,
         )
 
-    # Conflicts are resolved, time to commit
+    # Conflicts are resolved
     assert not merge_index.conflicts
-    merge_tree_id = merge_index.write_tree(repo)
-    L.debug(f"Merge tree: {merge_tree_id}")
-
-    user = repo.default_signature
-    merge_message = f"Merge '{theirs.shorthand}'"
-    commit_id = repo.create_commit(
-        repo.head.name,
-        user,
-        user,
-        merge_message,
-        merge_tree_id,
-        [commits3.ours.id, commits3.theirs.id],
-    )
-    click.echo(f"Merge committed as: {commit_id}")
-    return commit_id
+    return merge_index
 
 
 def print_conflict(feature_name, features3, commit_with_refs3):
