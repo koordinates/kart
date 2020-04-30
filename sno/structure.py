@@ -378,23 +378,6 @@ class DatasetStructure:
         for k, f in self.features():
             yield tuple(f[c] for c in col_names)
 
-    def import_meta(self, repo, index, source):
-        """
-            layer-name/
-              meta/
-                version
-                sqlite_table_info
-                gpkg_contents
-                gpkg_geometry_columns
-                gpkg_spatial_ref_sys
-                [gpkg_metadata]
-                [gpkg_metadata_reference]
-        """
-        for blob_path, blob_data in self.import_iter_meta_blobs(repo, source):
-            blob_id = repo.create_blob(blob_data)
-            entry = pygit2.IndexEntry(blob_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-            index.add(entry)
-
     def import_meta_items(self, source):
         for name, value in source.build_meta_info(repo_version=self.VERSION_IMPORT):
             viter = value if isinstance(value, (list, tuple)) else [value]
@@ -411,84 +394,6 @@ class DatasetStructure:
                 f"{self.path}/{self.META_PATH}/{name}",
                 json.dumps(value).encode("utf8"),
             )
-
-    def import_table(self, repo, source):
-        table = source.table
-        if not table:
-            raise ValueError("No table specified")
-
-        path = self.path
-
-        if repo.is_empty:
-            head_tree = None
-        else:
-            head_tree = repo.head.peel(pygit2.Tree)
-            if path in head_tree:
-                raise ValueError(f"{path}/ already exists")
-
-        click.echo(f"Importing {source} to {path} ...")
-
-        with source:
-            index = pygit2.Index()
-            if head_tree:
-                index.read_tree(head_tree)
-
-            click.echo("Writing meta bits...")
-            self.import_meta(repo, index, source)
-
-            row_count = source.row_count
-            click.echo(f"Found {row_count:,d} features in {table}")
-
-            import_kwargs = {
-                "field_cid_map": source.field_cid_map,
-                "primary_key": source.primary_key,
-                "geom_cols": source.geom_cols,
-                "path": path,
-            }
-
-            # iterate features
-            t0 = time.monotonic()
-            t1 = None
-            count = 0
-            for source_feature in source.iter_features():
-                if not t1:
-                    t1 = time.monotonic()
-                    click.echo(f"Query ran in {t1-t0:.1f}s")
-
-                self.write_feature(source_feature, repo, index, **import_kwargs)
-                count += 1
-
-                if count and count % 500 == 0:
-                    click.echo(f"  {count:,d} features... @{time.monotonic()-t1:.1f}s")
-
-            t2 = time.monotonic()
-
-            click.echo(f"Added {count:,d} Features to index in {t2 - (t1 or t0):.1f}s")
-            click.echo(f"Overall rate: {(count/(t2-t0 or 1E-3)):.0f} features/s)")
-
-            click.echo("Writing tree...")
-            tree_id = index.write_tree(repo)
-            del index
-            t3 = time.monotonic()
-            click.echo(f"Tree sha: {tree_id} (in {(t3-t2):.0f}s)")
-
-            click.echo("Committing...")
-            user = repo.default_signature
-            commit = repo.create_commit(
-                "refs/heads/master",
-                user,
-                user,
-                f"Import from {Path(source.source).name} to /{path}/",
-                tree_id,
-                [] if repo.is_empty else [repo.head.target],
-            )
-            t4 = time.monotonic()
-            click.echo(f"Commit: {commit} (in {(t4-t3):.0f}s)")
-
-            click.echo(f"Garbage-collecting...")
-            subprocess.check_call(["git", "-C", repo.path, "gc"])
-            t5 = time.monotonic()
-            click.echo(f"GC completed in {(t5-t4):.1f}s")
 
     def fast_import_table(
         self, repo, source, iter_func=1, max_pack_size="2G", limit=None
@@ -949,6 +854,10 @@ class Dataset1(DatasetStructure):
         primary_key=None,
         **kwargs,
     ):
+        """
+        This function is only used by `sno upgrade` when upgrading pre-v0.2 repositories.
+        It should be removed eventually.
+        """
         path = f"{self.path}/.sno-table"
 
         if field_cid_map is None:

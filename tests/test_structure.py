@@ -99,11 +99,9 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
         ),
     ],
 )
-@pytest.mark.parametrize("method", ["normal", "slow"])
 @pytest.mark.parametrize(*DATASET_VERSIONS)
 def test_import(
     import_version,
-    method,
     archive,
     source_gpkg,
     table,
@@ -119,9 +117,8 @@ def test_import(
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
 
-    # wrap the DatasetStructure import method with benchmarking
-    method_name = "fast_import_table" if method == "fast" else "import_table"
-    orig_import_func = getattr(DatasetStructure, method_name)
+    # wrap the DatasetStructure import with benchmarking
+    orig_import_func = DatasetStructure.fast_import_table
 
     def _benchmark_import(*args, **kwargs):
         # one round/iteration isn't very statistical, but hopefully crude idea
@@ -129,7 +126,7 @@ def test_import(
             orig_import_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
-    monkeypatch.setattr(DatasetStructure, method_name, _benchmark_import)
+    monkeypatch.setattr(DatasetStructure, 'fast_import_table', _benchmark_import)
 
     with data_archive(archive) as data:
         # list tables
@@ -162,7 +159,6 @@ def test_import(
                     "import",
                     f"GPKG:{data / source_gpkg}:{table}",
                     f"--version={import_version}",
-                    f"--method={method}",
                     table,
                 ]
             )
@@ -283,9 +279,8 @@ def test_feature_find_decode_performance(
 
 @pytest.mark.slow
 @pytest.mark.parametrize("import_version", ["1.0"])
-@pytest.mark.parametrize("method", ["normal", "slow"])
 def test_import_multiple(
-    method, import_version, data_archive, chdir, cli_runner, tmp_path, geopackage
+    import_version, data_archive, chdir, cli_runner, tmp_path, geopackage
 ):
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
@@ -312,7 +307,6 @@ def test_import_multiple(
                         "import",
                         f"GPKG:{data / source_gpkg}:{table}",
                         f"--version={import_version}",
-                        f"--method={method}",
                         table,
                     ]
                 )
@@ -332,7 +326,6 @@ def test_import_multiple(
                                 "import",
                                 f"GPKG:{data / source_gpkg}:{table}",
                                 f"--version={import_version}",
-                                f"--method={method}",
                                 table,
                             ]
                         )
