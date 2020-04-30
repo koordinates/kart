@@ -36,7 +36,10 @@ else
 	CURL_PREFIX=/usr
 endif
 
-export INSTALL_SYMLINKS=1
+CONFIG_FLAGS += CURL_CONFIG=$(CURL_PREFIX)/bin/curl-config
+CONFIG_FLAGS += NO_GETTEXT=YesPlease
+CONFIG_FLAGS += V=1
+CONFIG_FLAGS += INSTALL_SYMLINKS=1
 
 build-git := src/git
 configure-git = src/config.status
@@ -58,7 +61,7 @@ cleaner: clean
 	$(MAKE) clean-configure
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest:
 	-$(RM) -r src/
 
 .PHONY: clean-configure
@@ -92,10 +95,8 @@ src: $(GIT_ARCHIVE)
 source: src
 
 $(configure-git): export PKG_CONFIG_PATH=/dev/null
-$(configure-git): export CURL_CONFIG=$(CURL_PREFIX)/bin/curl-config
-$(configure-git): export NO_GETTEXT=YesPlease
 $(configure-git): | src $(libs)
-	cd src/ && ./configure \
+	cd src/ && $(CONFIG_FLAGS) ./configure \
 		--prefix=$(PREFIX) \
 		--without-tcltk \
 		--without-python \
@@ -104,8 +105,9 @@ $(configure-git): | src $(libs)
 .PHONY: configure
 configure: clean-configure $(configure-git)
 
+$(build-git): export PKG_CONFIG_PATH=/dev/null
 $(build-git): $(configure-git)
-	$(MAKE) -C src -j 2 all strip
+	$(MAKE) -C src -j 2 $(CONFIG_FLAGS) all strip
 	$(MAKE) print-lib-deps-$(PLATFORM)
 
 #
@@ -114,7 +116,7 @@ $(build-git): $(configure-git)
 
 .PHONY: install
 install: $(build-git)
-	$(MAKE) -C src install
+	$(MAKE) -C src $(CONFIG_FLAGS) install
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)
