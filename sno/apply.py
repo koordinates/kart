@@ -85,15 +85,16 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         updates = {}
         deletes = {}
         dataset = rs.get(ds_name)
+        pk_name = dataset.primary_key
         for change in feature_changes:
             old = ungeojson_feature(dataset, change.get('-'))
             new = ungeojson_feature(dataset, change.get('+'))
             if old and new:
                 # update
-                assert old['fid'] == new['fid']
-                updates[old['fid']] = (old, new)
+                assert old[pk_name] == new[pk_name]
+                updates[old[pk_name]] = (old, new)
             elif old:
-                deletes[old['fid']] = old
+                deletes[old[pk_name]] = old
             else:
                 inserts.append(new)
         diff += Diff(dataset, inserts=inserts, updates=updates, deletes=deletes)
