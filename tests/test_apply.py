@@ -164,3 +164,26 @@ def test_apply_with_working_copy_with_no_commit(
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
         assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
+
+
+def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
+    with data_archive("au-census"):
+        r = cli_runner.invoke(["show", "--json", "master"])
+        assert r.exit_code == 0, r
+        patch_text = r.stdout
+        patch_json = json.loads(patch_text)
+        assert set(patch_json['sno.diff/v1'].keys()) == {
+            'census2016_sdhca_ot_ra_short',
+            'census2016_sdhca_ot_sos_short',
+        }
+
+        # note: repo's current branch is 'branch1' which doesn't have the commit on it,
+        # so the patch applies cleanly.
+        r = cli_runner.invoke(["apply", "-"], input=patch_text)
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["show", "--json"])
+        assert r.exit_code == 0, r
+        new_patch_json = json.loads(r.stdout)
+
+        assert new_patch_json == patch_json
