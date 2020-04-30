@@ -315,9 +315,8 @@ class ImportGPKG:
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
 )
-@click.option("--method", hidden=True)
 @do_json_option
-def import_table(ctx, source, directory, do_list, do_json, version, method):
+def import_table(ctx, source, directory, do_list, do_json, version):
     """
     Import data into a repository.
 
@@ -374,10 +373,7 @@ def import_table(ctx, source, directory, do_list, do_json, version, method):
     params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
     if params:
         click.echo(f"Import parameters: {params}")
-    if method == "slow":
-        importer.import_table(repo, source_loader, **params)
-    else:
-        importer.fast_import_table(repo, source_loader, **params)
+    importer.fast_import_table(repo, source_loader, **params)
 
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
@@ -410,8 +406,7 @@ def import_table(ctx, source, directory, do_list, do_json, version, method):
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
 )
-@click.option("--method", hidden=True)
-def init(ctx, import_from, do_checkout, directory, version, method):
+def init(ctx, import_from, do_checkout, directory, version):
     """
     Initialise a new repository and optionally import data
 
@@ -457,10 +452,7 @@ def init(ctx, import_from, do_checkout, directory, version, method):
         params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
         if params:
             click.echo(f"Import parameters: {params}")
-        if method == "slow":
-            importer.import_table(repo, source_loader, **params)
-        else:
-            importer.fast_import_table(repo, source_loader, **params)
+        importer.fast_import_table(repo, source_loader, **params)
 
         if do_checkout:
             # Checkout a working copy
