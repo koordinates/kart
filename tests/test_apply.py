@@ -10,15 +10,15 @@ patches = Path(__file__).parent / "data" / "patches"
 
 
 @pytest.mark.parametrize('input', ['{}', 'this isnt json'])
-def test_apply_invalid_patch(input, data_archive, cli_runner):
-    with data_archive("points"):
+def test_apply_invalid_patch(input, data_archive_readonly, cli_runner):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["apply", '-'], input=input)
         assert r.exit_code == 1, r
         assert 'Failed to parse JSON patch file' in r.stderr
 
 
-def test_apply_empty_patch(data_archive, cli_runner):
-    with data_archive("points"):
+def test_apply_empty_patch(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["apply", patches / 'points-empty.snopatch'])
         assert r.exit_code == 44, r
         assert 'No changes to commit' in r.stderr
@@ -128,8 +128,8 @@ def test_apply_with_working_copy(
         assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
 
 
-def test_apply_with_no_working_copy_with_no_commit(data_archive, cli_runner):
-    with data_archive("points"):
+def test_apply_with_no_working_copy_with_no_commit(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(
             ["apply", "--no-commit", patches / 'updates-only.snopatch']
         )
