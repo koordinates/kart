@@ -27,14 +27,19 @@ export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
 
 ifeq ($(PLATFORM),Linux)
-CURL_PREFIX = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config curl --variable=prefix)
-libcurl := $(PREFIX)/lib/libcurl.$(LIBSUFFIX)
-libs += $(libcurl)
-CONFIG_FLAGS += --with-curl=$(CURL_PREFIX)
-export LDFLAGS += -Wl,-rpath=$$ORIGIN/../../lib
+	CURL_PREFIX = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config curl --variable=prefix)
+	libcurl := $(PREFIX)/lib/libcurl.$(LIBSUFFIX)
+	libs += $(libcurl)
+	export LDFLAGS += -Wl,-rpath=$$ORIGIN/../../lib
+else
+	# on macOS, force to the OS builtin libcurl
+	CURL_PREFIX=/usr
 endif
 
-export INSTALL_SYMLINKS=1
+CONFIG_FLAGS += CURL_CONFIG=$(CURL_PREFIX)/bin/curl-config
+CONFIG_FLAGS += NO_GETTEXT=YesPlease
+CONFIG_FLAGS += V=1
+CONFIG_FLAGS += INSTALL_SYMLINKS=1
 
 build-git := src/git
 configure-git = src/config.status
@@ -56,7 +61,7 @@ cleaner: clean
 	$(MAKE) clean-configure
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest:
 	-$(RM) -r src/
 
 .PHONY: clean-configure
@@ -91,17 +96,18 @@ source: src
 
 $(configure-git): export PKG_CONFIG_PATH=/dev/null
 $(configure-git): | src $(libs)
-	cd src/ && ./configure \
+	cd src/ && $(CONFIG_FLAGS) ./configure \
 		--prefix=$(PREFIX) \
 		--without-tcltk \
 		--without-python \
-		$(CONFIG_FLAGS)
+		--with-curl=$(CURL_PREFIX)
 
 .PHONY: configure
 configure: clean-configure $(configure-git)
 
+$(build-git): export PKG_CONFIG_PATH=/dev/null
 $(build-git): $(configure-git)
-	$(MAKE) -C src -j 2 all strip
+	$(MAKE) -C src -j 2 $(CONFIG_FLAGS) all strip
 	$(MAKE) print-lib-deps-$(PLATFORM)
 
 #
@@ -110,7 +116,7 @@ $(build-git): $(configure-git)
 
 .PHONY: install
 install: $(build-git)
-	$(MAKE) -C src install
+	$(MAKE) -C src $(CONFIG_FLAGS) install
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)
