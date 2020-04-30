@@ -1265,7 +1265,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
         pytest.param(H.POINTS.HEAD_TREE_SHA, H.POINTS.HEAD1_TREE_SHA, id="tree_hash"),
     ],
 )
-def test_diff_rev_noop(head_sha, head1_sha, data_archive, cli_runner):
+def test_diff_rev_noop(head_sha, head1_sha, data_archive_readonly, cli_runner):
     """diff between trees / commits - no-op"""
 
     NOOP_SPECS = (
@@ -1277,7 +1277,7 @@ def test_diff_rev_noop(head_sha, head1_sha, data_archive, cli_runner):
         f"..{head_sha}",
     )
 
-    with data_archive("points"):
+    with data_archive_readonly("points"):
         for spec in NOOP_SPECS:
             print(f"noop: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", spec])
@@ -1291,7 +1291,7 @@ def test_diff_rev_noop(head_sha, head1_sha, data_archive, cli_runner):
         pytest.param(H.POINTS.HEAD_TREE_SHA, H.POINTS.HEAD1_TREE_SHA, id="tree_hash"),
     ],
 )
-def test_diff_rev_rev(head_sha, head1_sha, data_archive, cli_runner):
+def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
     """diff between trees / commits - no-op"""
 
     F_SPECS = (
@@ -1314,7 +1314,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive, cli_runner):
         ("U-::1095", "U+::1095"),
     }
 
-    with data_archive("points"):
+    with data_archive_readonly("points"):
         for spec in F_SPECS:
             print(f"fwd: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
@@ -1680,11 +1680,11 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
-def test_show_points_HEAD(output_format, data_archive, cli_runner):
+def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
     """
     Show a patch; ref defaults to HEAD
     """
-    with data_archive("points"):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["show", f"--{output_format}", "HEAD"])
         assert r.exit_code == 0, r
 

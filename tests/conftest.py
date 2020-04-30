@@ -7,7 +7,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tarfile
 import time
 from pathlib import Path
@@ -101,8 +100,36 @@ def chdir():
     return chdir_
 
 
+def cleanup_dir(d):
+    try:
+        shutil.rmtree(d)
+    except PermissionError as e:
+        L.debug("Issue cleaning up temporary folder (%s): %s", d, e)
+
+
+def get_archive_path(name):
+    return Path(__file__).parent / "data" / f"{name}.tgz"
+
+
+def extract_archive(name, extract_dir):
+    archive_name = f"{name}.tgz"
+    archive_path = get_archive_path(name)
+    with tarfile.open(archive_path) as archive:
+        archive.extractall(extract_dir)
+
+    L.info("Extracted %s to %s", archive_name, extract_dir)
+
+    # data archive should have a single dir at the top-level, matching the archive name.
+    assert (
+        len(os.listdir(extract_dir)) == 1
+    ), f"Expected {name}/ as the only top-level item in {archive_name}"
+    d = extract_dir / name
+    assert d.is_dir(), f"Expected {name}/ as the only top-level item in {archive_name}"
+    return d
+
+
 @pytest.fixture
-def data_archive(request, tmp_path_factory, chdir):
+def data_archive(request, tmp_path_factory):
     """
     Extract a .tgz data archive to a temporary folder.
 
@@ -110,52 +137,64 @@ def data_archive(request, tmp_path_factory, chdir):
 
     Context-manager produces the directory path and sets the current working directory.
     """
-    incr = 0
 
     @contextlib.contextmanager
-    def _data_archive(name):
-        nonlocal incr
-
-        extract_dir = tmp_path_factory.mktemp(request.node.name, str(incr))
-        incr += 1
+    def ctx(name):
+        extract_dir = tmp_path_factory.mktemp(request.node.name, numbered=True)
         cleanup = True
         try:
-            archive_name = f"{name}.tgz"
-            archive_path = Path(__file__).parent / "data" / archive_name
-            with tarfile.open(archive_path) as archive:
-                archive.extractall(extract_dir)
-
-            L.info("Extracted %s to %s", archive_name, extract_dir)
-
-            # data archive should have a single dir at the top-level, matching the archive name.
-            assert (
-                len(os.listdir(extract_dir)) == 1
-            ), f"Expected {name}/ as the only top-level item in {archive_name}"
-            d = extract_dir / name
-            assert (
-                d.is_dir()
-            ), f"Expected {name}/ as the only top-level item in {archive_name}"
-
-            with chdir(d):
+            d = extract_archive(name, extract_dir)
+            with chdir_(d):
                 try:
                     yield d
-                except Exception:
+                finally:
                     if request.config.getoption("--preserve-data"):
                         L.info(
                             "Not cleaning up %s because --preserve-data was specified",
                             extract_dir,
                         )
                         cleanup = False
-                    raise
         finally:
             if cleanup:
                 time.sleep(1)
-                try:
-                    shutil.rmtree(extract_dir)
-                except PermissionError as e:
-                    L.debug("W: Issue cleaning up temporary folder: %s", e)
+                cleanup_dir(extract_dir)
 
-    return _data_archive
+    return ctx
+
+
+_archive_hashes = {}
+
+
+@pytest.fixture()
+def data_archive_readonly(request, pytestconfig):
+    """
+    Extract a .tgz data archive to a temporary folder, and CACHE it in the pytest cache.
+    Don't use this if you're going to write to the dir!
+    If you don't need to write to the extracted archive, use this in preference to data_archive.
+
+    Context-manager produces the directory path and sets the current working directory.
+    """
+
+    @contextlib.contextmanager
+    def ctx(name):
+        if name not in _archive_hashes:
+            # Store extracted data in a content-addressed cache,
+            # so if the archives change we don't have to manually `pytest --cache-clear`
+            archive_path = get_archive_path(name)
+            with archive_path.open('rb') as f:
+                _archive_hashes[name] = hashlib.md5(f.read()).hexdigest()
+
+        root = Path(request.config.cache.makedir('data_archive_readonly'))
+        path = root / _archive_hashes[name]
+        if path.exists():
+            L.info("Found cache at %s", path)
+        else:
+            extract_archive(name, path)
+        path /= name
+        with chdir_(path):
+            yield path
+
+    yield ctx
 
 
 @pytest.fixture
