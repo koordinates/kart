@@ -93,6 +93,7 @@ source: src
 
 $(configure-git): export PKG_CONFIG_PATH=/dev/null
 $(configure-git): export CURL_CONFIG=$(CURL_PREFIX)/bin/curl-config
+$(configure-git): export NO_GETTEXT=YesPlease
 $(configure-git): | src $(libs)
 	cd src/ && ./configure \
 		--prefix=$(PREFIX) \
