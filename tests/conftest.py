@@ -104,12 +104,16 @@ def cleanup_dir(d):
     try:
         shutil.rmtree(d)
     except PermissionError as e:
-        L.debug("W: Issue cleaning up temporary folder: %s", e)
+        L.debug("Issue cleaning up temporary folder (%s): %s", d, e)
+
+
+def get_archive_path(name):
+    return Path(__file__).parent / "data" / f"{name}.tgz"
 
 
 def extract_archive(name, extract_dir):
     archive_name = f"{name}.tgz"
-    archive_path = Path(__file__).parent / "data" / archive_name
+    archive_path = get_archive_path(name)
     with tarfile.open(archive_path) as archive:
         archive.extractall(extract_dir)
 
@@ -158,6 +162,9 @@ def data_archive(request, tmp_path_factory):
     return ctx
 
 
+_archive_hashes = {}
+
+
 @pytest.fixture()
 def data_archive_readonly(request, pytestconfig):
     """
@@ -170,13 +177,20 @@ def data_archive_readonly(request, pytestconfig):
 
     @contextlib.contextmanager
     def ctx(name):
+        if name not in _archive_hashes:
+            # Store extracted data in a content-addressed cache,
+            # so if the archives change we don't have to manually `pytest --cache-clear`
+            archive_path = get_archive_path(name)
+            with archive_path.open('rb') as f:
+                _archive_hashes[name] = hashlib.md5(f.read()).hexdigest()
+
         root = Path(request.config.cache.makedir('data_archive_readonly'))
-        path = root / name
+        path = root / _archive_hashes[name]
         if path.exists():
             L.info("Found cache at %s", path)
         else:
-            d = extract_archive(name, root)
-            assert d == path
+            extract_archive(name, path)
+        path /= name
         with chdir_(path):
             yield path
 
