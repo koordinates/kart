@@ -1,13 +1,14 @@
 Set-StrictMode -Version 2.0
 $ErrorActionPreference = 'stop'
 
-$SRC = Join-Path $PSScriptRoot '..\..'
-
-if ($Env:SIGNTOOL) {
-    $SIGNTOOL=$Env:SIGNTOOL
-} Else {
-    $SIGNTOOL=(Join-Path $Env:WindowsSdkVerBinPath 'x64\signtool.exe')
+if (-not (Get-Command -erroraction 'silentlycontinue' signtool)) {
+    $Env:PATH += ";${Env:WindowsSdkVerBinPath}\x64\signtool.exe"
 }
+if ($Env:SIGN_AZURE_CERTIFICATE) {
+    Write-Output ">>> Checking for AzureSignTool: " (Get-Command azuresigntool).Path
+}
+
+$SRC = Join-Path $PSScriptRoot '..\..'
 
 7z x "$(Join-Path $SRC 'vendor\dist\vendor-Windows.zip')" "-o$(Join-Path $SRC 'vendor\dist')" -aoa
 
@@ -22,11 +23,11 @@ try {
         exit $LastExitCode
     }
 
-    if ($Env:SIGNCERTKEY) {
+    if ($Env:SIGN_AZURE_CERTIFICATE) {
         $BINARIES=@('sno.exe', 'git2.dll')
         $TS_SERVERS=@(
-            'http://timestamp.digicert.com',
             'http://timestamp.globalsign.com/scripts/timstamp.dll',
+            'http://timestamp.digicert.com',
             'http://timestamp.geotrust.com/tsa',
             'http://timestamp.comodoca.com/rfc3161'
         )
@@ -34,13 +35,16 @@ try {
         foreach ($BIN in $BINARIES) {
             foreach ($TS in $TS_SERVERS) {
                 Write-Output ">>> Signing $BIN (w/ $TS) ..."
-                & $SIGNTOOL sign `
-                /f "$Env:SIGNCERTKEY" `
-                /p "$Env:SIGNCERTPW" `
-                /d 'Sno CLI' `
-                /fd 'sha256' `
-                /tr $TS `
-                /v (Join-Path '.\platforms\windows\dist\sno' $BIN)
+                & azuresigntool sign `
+                --azure-key-vault-url="$Env:SIGN_AZURE_VAULT" `
+                --azure-key-vault-client-id="$Env:SIGN_AZURE_CLIENTID" `
+                --azure-key-vault-client-secret="$Env:SIGN_AZURE_CLIENTSECRET" `
+                --azure-key-vault-certificate="$Env:SIGN_AZURE_CERTIFICATE" `
+                --description-url="https://sno.earth" `
+                --description="Sno CLI" `
+                --timestamp-rfc3161="$TS" `
+                --verbose `
+                (Join-Path '.\platforms\windows\dist\sno' $BIN)
                 if ($?) {
                     break
                 }
@@ -50,7 +54,7 @@ try {
                 exit $LastExitCode
             }
 
-            & $SIGNTOOL verify /pa (Join-Path '.\platforms\windows\dist\sno' $BIN)
+            & signtool verify /pa (Join-Path '.\platforms\windows\dist\sno' $BIN)
             if (!$?) {
                 exit $LastExitCode
             }
