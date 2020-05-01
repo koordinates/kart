@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pygit2
 import pytest
+from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
 
 
 H = pytest.helpers.helpers()
@@ -24,19 +25,47 @@ def test_apply_empty_patch(data_archive_readonly, cli_runner):
         assert 'No changes to commit' in r.stderr
 
 
-@pytest.mark.parametrize(
-    'patch_filename,message,author',
-    [
-        (
-            'updates-only.snopatch',
-            'Change the Coromandel',
-            {'name': 'Someone', 'time': 1561040913, 'offset': 60},
-        ),
-    ],
-)
-def test_apply_with_no_working_copy(
-    data_archive, cli_runner, patch_filename, message, author
-):
+def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
+    patch_data = json.dumps(
+        {'sno.diff/v1': {'wrong-name': {'featureChanges': [], 'metaChanges': [],}}}
+    )
+    with data_archive("points"):
+        r = cli_runner.invoke(["apply", '-'], input=patch_data)
+        assert r.exit_code == NO_TABLE, r
+        assert (
+            "Patch contains dataset 'wrong-name' which is not in this repository"
+            in r.stderr
+        )
+
+
+def test_apply_twice(data_archive, cli_runner):
+    patch_path = patches / 'points-1U-1D-1I.snopatch'
+    with data_archive("points"):
+        r = cli_runner.invoke(["apply", str(patch_path)])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["apply", str(patch_path)])
+        assert r.exit_code == PATCH_DOES_NOT_APPLY
+
+        assert (
+            'nz_pa_points_topo_150k: Trying to delete nonexistent feature: 1241'
+            in r.stdout
+        )
+        assert (
+            'nz_pa_points_topo_150k: Trying to create feature that already exists: 9999'
+            in r.stdout
+        )
+        assert (
+            'nz_pa_points_topo_150k: Trying to update already-changed feature: 1795'
+            in r.stdout
+        )
+        assert 'Patch does not apply' in r.stderr
+
+
+def test_apply_with_no_working_copy(data_archive, cli_runner):
+    patch_filename = 'updates-only.snopatch'
+    message = 'Change the Coromandel'
+    author = {'name': 'Someone', 'time': 1561040913, 'offset': 60}
     with data_archive("points") as repo_dir:
         patch_path = patches / patch_filename
         r = cli_runner.invoke(["apply", patch_path])
@@ -66,26 +95,13 @@ def test_apply_with_no_working_copy(
         assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
 
 
-@pytest.mark.parametrize(
-    'patch_filename,message,author,workingcopy_verify_names',
-    [
-        (
-            'updates-only.snopatch',
-            'Change the Coromandel',
-            {'name': 'Someone', 'time': 1561040913, 'offset': 60},
-            {1095: None},
-        )
-    ],
-)
 def test_apply_with_working_copy(
-    data_working_copy,
-    geopackage,
-    cli_runner,
-    patch_filename,
-    message,
-    author,
-    workingcopy_verify_names,
+    data_working_copy, geopackage, cli_runner,
 ):
+    patch_filename = 'updates-only.snopatch'
+    message = 'Change the Coromandel'
+    author = {'name': 'Someone', 'time': 1561040913, 'offset': 60}
+    workingcopy_verify_names = {1095: None}
     with data_working_copy("points") as (repo_dir, wc_path):
         patch_path = patches / patch_filename
         r = cli_runner.invoke(["apply", patch_path])
@@ -137,12 +153,11 @@ def test_apply_with_no_working_copy_with_no_commit(data_archive_readonly, cli_ru
         assert '--no-commit requires a working copy' in r.stderr
 
 
-@pytest.mark.parametrize(
-    'patch_filename,message', [('updates-only.snopatch', 'Change the Coromandel',)],
-)
 def test_apply_with_working_copy_with_no_commit(
-    data_working_copy, geopackage, cli_runner, patch_filename, message,
+    data_working_copy, geopackage, cli_runner
 ):
+    patch_filename = 'updates-only.snopatch'
+    message = 'Change the Coromandel'
     with data_working_copy("points") as (repo_dir, wc_path):
         patch_path = patches / patch_filename
         r = cli_runner.invoke(["apply", "--no-commit", patch_path])

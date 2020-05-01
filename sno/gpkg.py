@@ -1,8 +1,6 @@
 import collections
 import math
 import struct
-import sys
-from pathlib import Path
 
 import apsw
 from osgeo import ogr, osr

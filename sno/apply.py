@@ -10,10 +10,10 @@ import pygit2
 from .diff import Diff
 from .exceptions import (
     NO_CHANGES,
+    NO_TABLE,
     NO_WORKING_COPY,
     NotFound,
     NotYetImplemented,
-    InvalidOperation,
 )
 from .gpkg import ogr_to_geom
 from .structure import RepositoryStructure
@@ -71,6 +71,13 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
 
     diff = Diff(None)
     for ds_name, ds_diff_dict in json_diff.items():
+        dataset = rs.get(ds_name)
+        if dataset is None:
+            raise NotFound(
+                f"Patch contains dataset '{ds_name}' which is not in this repository",
+                exit_code=NO_TABLE,
+            )
+
         meta_changes = ds_diff_dict.get('metaChanges', {})
         if meta_changes:
             raise NotYetImplemented(
@@ -84,7 +91,6 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         inserts = []
         updates = {}
         deletes = {}
-        dataset = rs.get(ds_name)
         pk_name = dataset.primary_key
         for change in feature_changes:
             old = ungeojson_feature(dataset, change.get('-'))

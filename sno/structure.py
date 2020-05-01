@@ -18,7 +18,7 @@ import msgpack
 import pygit2
 
 from . import core, gpkg, diff
-from .exceptions import NotFound, NO_COMMIT
+from .exceptions import NotFound, InvalidOperation, NO_COMMIT, PATCH_DOES_NOT_APPLY
 
 L = logging.getLogger("sno.structure")
 
@@ -945,6 +945,7 @@ class Dataset1(DatasetStructure):
     def write_index(self, dataset_diff, index, repo, callback=None):
         pk_field = self.primary_key
 
+        conflicts = False
         for k, (obj_old, obj_new) in dataset_diff["META"].items():
             object_path = f"{self.meta_path}/{k}"
             value = json.dumps(obj_new).encode("utf8")
@@ -953,48 +954,95 @@ class Dataset1(DatasetStructure):
             idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
             index.add(idx_entry)
 
-            if callback:
-                callback(self, "META", object_path=object_path)
-
         for _, obj_old in dataset_diff["D"].items():
-            object_path = "/".join(
-                [self.path, self.get_feature_path(obj_old[pk_field])]
-            )
+            pk = obj_old[pk_field]
+            object_path = "/".join([self.path, self.get_feature_path(pk)])
+            if object_path not in index:
+                conflicts = True
+                click.echo(f"{self.path}: Trying to delete nonexistent feature: {pk}")
+                continue
             index.remove(object_path)
 
-            if callback:
-                callback(self, "D", object_path=object_path, obj_old=obj_old)
-
-        for obj in dataset_diff["I"]:
-            object_path = "/".join([self.path, self.get_feature_path(obj[pk_field])])
-            bin_feature = self.encode_feature(obj)
-            blob_id = repo.create_blob(bin_feature)
-            entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-            index.add(entry)
-
-            if callback:
-                callback(self, "I", object_path=object_path, obj_new=obj)
-
-        for _, (obj_old, obj_new) in dataset_diff["U"].items():
-            object_path = "/".join(
-                [self.path, self.get_feature_path(obj_old[pk_field])]
-            )
-            index.remove(object_path)
-
-            object_path = "/".join(
-                [self.path, self.get_feature_path(obj_new[pk_field])]
-            )
+        for obj_new in dataset_diff["I"]:
+            pk = obj_new[pk_field]
+            object_path = "/".join([self.path, self.get_feature_path(pk)])
+            if object_path in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to create feature that already exists: {pk}"
+                )
+                continue
             bin_feature = self.encode_feature(obj_new)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
             index.add(entry)
 
-            if callback:
+        geom_column_name = self.geom_column_name
+        for _, (obj_old, obj_new) in dataset_diff["U"].items():
+            old_pk = obj_old[pk_field]
+            old_object_path = "/".join([self.path, self.get_feature_path(old_pk)])
+            if old_object_path not in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update nonexistent feature: {old_pk}"
+                )
+                continue
+
+            _, existing_feature = self.get_feature(old_pk, ogr_geoms=False)
+            if geom_column_name:
+                # FIXME: actually compare the geometries here.
+                # Turns out this is quite hard - geometries are hard to compare sanely.
+                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
+                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
+                existing_feature.pop(geom_column_name)
+                obj_old = obj_old.copy()
+                obj_old.pop(geom_column_name)
+            if existing_feature != obj_old:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update already-changed feature: {old_pk}"
+                )
+                continue
+
+            index.remove(old_object_path)
+            new_pk = obj_new[pk_field]
+            new_object_path = "/".join([self.path, self.get_feature_path(new_pk)])
+            bin_feature = self.encode_feature(obj_new)
+            blob_id = repo.create_blob(bin_feature)
+            entry = pygit2.IndexEntry(
+                new_object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+            )
+            index.add(entry)
+
+        if conflicts:
+            raise InvalidOperation(
+                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+            )
+        if callback:
+            for _, obj_old in dataset_diff["D"].items():
+                object_path = "/".join(
+                    [self.path, self.get_feature_path(obj_old[pk_field])]
+                )
+                callback(self, "D", object_path=object_path, obj_old=obj_old)
+
+            for obj_new in dataset_diff["I"]:
+                object_path = "/".join(
+                    [self.path, self.get_feature_path(obj_new[pk_field])]
+                )
+                callback(self, "I", object_path=object_path, obj_new=obj_new)
+
+            for _, (obj_old, obj_new) in dataset_diff["U"].items():
+                new_object_path = "/".join(
+                    [self.path, self.get_feature_path(obj_new[pk_field])]
+                )
                 callback(
-                    self, "U", object_path=object_path, obj_old=obj_old, obj_new=obj_new
+                    self,
+                    "U",
+                    object_path=new_object_path,
+                    obj_old=obj_old,
+                    obj_new=obj_new,
                 )
 
-        if callback:
             callback(self, "INDEX")
 
     def diff(self, other, pk_filter=None, reverse=False):
