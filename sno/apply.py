@@ -128,7 +128,7 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
             ),
             allow_empty=allow_empty,
             # Don't call WorkingCopy.commit_callback(), because it *assumes* the working
-            # copy already has changes being committed. In this case the working copy
+            # copy already has the changes being committed. In this case the working copy
             # does *not* have the changes yet. We tackle updating the working copy below.
             update_working_copy_head=False,
         )
@@ -141,4 +141,4 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         # oid refers to either a commit or tree
         wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")
-        wc.reset(wc_target, rs, update_meta=False)
+        wc.reset(wc_target, rs, update_meta=commit)
