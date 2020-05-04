@@ -202,3 +202,48 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
         new_patch_json = json.loads(r.stdout)
 
         assert new_patch_json == patch_json
+
+
+@pytest.mark.slow
+def test_apply_benchmark(
+    data_working_copy, geopackage, benchmark, cli_runner, monkeypatch
+):
+    from sno import apply
+
+    with data_working_copy('points') as (repo_dir, wc_path):
+        # Create a branch we can use later; don't switch to it
+        r = cli_runner.invoke(["branch", "-c", "savepoint"])
+        assert r.exit_code == 0, r
+
+        # Generate a large change and commit it
+        db = geopackage(wc_path)
+        cursor = db.cursor()
+        cursor.execute(
+            "UPDATE nz_pa_points_topo_150k SET name = 'bulk_' || Coalesce(name, 'null')"
+        )
+        r = cli_runner.invoke(["commit", "-m", "rename everything"])
+        assert r.exit_code == 0, r
+
+        # Make it into a patch
+        r = cli_runner.invoke(["show", "--json"])
+        assert r.exit_code == 0, r
+        patch_text = r.stdout
+        patch_json = json.loads(patch_text)
+        assert patch_json['sno.patch/v1']['message'] == "rename everything"
+
+        # Now switch to our savepoint branch and apply the patch
+        r = cli_runner.invoke(["checkout", "savepoint"])
+        assert r.exit_code == 0, r
+
+        # wrap the apply command with benchmarking
+        orig_apply_patch = apply.apply_patch
+
+        def _benchmark_apply(*args, **kwargs):
+            # one round/iteration isn't very statistical, but hopefully crude idea
+            return benchmark.pedantic(
+                orig_apply_patch, args=args, kwargs=kwargs, rounds=1, iterations=1
+            )
+
+        monkeypatch.setattr(apply, 'apply_patch', _benchmark_apply)
+
+        cli_runner.invoke(["apply", "-"], input=patch_text)

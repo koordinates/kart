@@ -33,33 +33,13 @@ def ungeojson_feature(dataset, d):
     return r
 
 
-@click.command()
-@click.pass_context
-@click.option(
-    "--commit/--no-commit", "commit", default=True, help="Commit changes",
-)
-@click.option(
-    "--allow-empty",
-    is_flag=True,
-    default=False,
-    help=(
-        "Usually recording a commit that has the exact same tree as its sole "
-        "parent commit is a mistake, and the command prevents you from making "
-        "such a commit. This option bypasses the safety"
-    ),
-)
-@click.argument("patch_file", type=click.File('r', encoding="utf-8"))
-def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
-    """
-    Applies and commits the given JSON patch (as created by `sno show --json`)
-    """
+def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     try:
         patch = json.load(patch_file)
         json_diff = patch['sno.diff/v1']
     except (KeyError, json.JSONDecodeError):
         raise click.FileError("Failed to parse JSON patch file")
 
-    repo = ctx.obj.repo
     rs = RepositoryStructure(repo)
     wc = WorkingCopy.open(repo)
     if not commit and not wc:
@@ -148,3 +128,26 @@ def apply(ctx, *, commit, patch_file, allow_empty, **kwargs):
         wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")
         wc.reset(wc_target, rs, update_meta=commit)
+
+
+@click.command()
+@click.pass_context
+@click.option(
+    "--commit/--no-commit", "commit", default=True, help="Commit changes",
+)
+@click.option(
+    "--allow-empty",
+    is_flag=True,
+    default=False,
+    help=(
+        "Usually recording a commit that has the exact same tree as its sole "
+        "parent commit is a mistake, and the command prevents you from making "
+        "such a commit. This option bypasses the safety"
+    ),
+)
+@click.argument("patch_file", type=click.File('r', encoding="utf-8"))
+def apply(ctx, **kwargs):
+    """
+    Applies and commits the given JSON patch (as created by `sno show --json`)
+    """
+    apply_patch(repo=ctx.obj.repo, **kwargs)
