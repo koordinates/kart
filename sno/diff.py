@@ -375,7 +375,9 @@ def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
     return diff
 
 
-def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
+def diff_with_writer(
+    ctx, diff_writer, *, output_path='-', exit_code, args, json_style="pretty"
+):
     """
     Calculates the appropriate diff from the arguments,
     and writes it using the given writer contextmanager.
@@ -461,6 +463,7 @@ def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
             "target": target_rs,
             "output_path": output_path,
             "dataset_count": len(all_datasets),
+            "json_style": json_style,
         }
 
         L.debug(
@@ -558,8 +561,16 @@ def diff_with_writer(ctx, diff_writer, *, output_path='-', exit_code, args):
     help="Output to a specific file/directory instead of stdout.",
     type=click.Path(writable=True, allow_dash=True),
 )
+@click.option(
+    "--json-style",
+    type=click.Choice(["extracompact", "compact", "pretty"]),
+    default="pretty",
+    help="How to format the output. Only used with --json or --geojson",
+    cls=MutexOption,
+    exclusive_with=["html", "text", "quiet"],
+)
 @click.argument("args", nargs=-1)
-def diff(ctx, output_format, output_path, exit_code, args):
+def diff(ctx, output_format, output_path, exit_code, json_style, args):
     """
     Show changes between commits, commit and working tree, etc
 
@@ -573,5 +584,10 @@ def diff(ctx, output_format, output_path, exit_code, args):
         exit_code = True
 
     return diff_with_writer(
-        ctx, diff_writer, output_path=output_path, exit_code=exit_code, args=args,
+        ctx,
+        diff_writer,
+        output_path=output_path,
+        exit_code=exit_code,
+        args=args,
+        json_style=json_style,
     )

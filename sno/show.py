@@ -34,8 +34,16 @@ from . import diff
     cls=MutexOption,
     exclusive_with=["text"],
 )
+@click.option(
+    "--json-style",
+    type=click.Choice(["extracompact", "compact", "pretty"]),
+    default="pretty",
+    help="How to format the output. Only used with --json",
+    cls=MutexOption,
+    exclusive_with=["text"],
+)
 @click.argument("refish", default='HEAD', required=False)
-def show(ctx, *, refish, output_format, **kwargs):
+def show(ctx, *, refish, output_format, json_style, **kwargs):
     """
     Show the given commit, or HEAD
     """
@@ -50,7 +58,11 @@ def show(ctx, *, refish, output_format, **kwargs):
     patch_writer = globals()[f"patch_output_{output_format}"]
 
     return diff.diff_with_writer(
-        ctx, patch_writer, exit_code=False, args=[f"{refish}^..{refish}"],
+        ctx,
+        patch_writer,
+        exit_code=False,
+        args=[f"{refish}^..{refish}"],
+        json_style=json_style,
     )
 
 
@@ -99,7 +111,7 @@ def patch_output_text(*, target, output_path, **kwargs):
 
 
 @contextlib.contextmanager
-def patch_output_json(*, target, output_path, **kwargs):
+def patch_output_json(*, target, output_path, json_style, **kwargs):
     """
     Contextmanager.
 
@@ -125,7 +137,9 @@ def patch_output_json(*, target, output_path, **kwargs):
     buf = StringIO()
 
     output_path, original_output_path = buf, output_path
-    with diff.diff_output_json(output_path=output_path, **kwargs) as diff_writer:
+    with diff.diff_output_json(
+        output_path=output_path, json_style=json_style, **kwargs
+    ) as diff_writer:
         yield diff_writer
 
     # At this point, the diff_writer has been used, meaning the StringIO has
@@ -145,4 +159,4 @@ def patch_output_json(*, target, output_path, **kwargs):
         "message": commit.message,
     }
 
-    dump_json_output(output, original_output_path)
+    dump_json_output(output, original_output_path, json_style=json_style)

@@ -153,7 +153,7 @@ def repr_row(row, prefix="", exclude=None):
 
 
 @contextlib.contextmanager
-def diff_output_geojson(*, output_path, dataset_count, **kwargs):
+def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
     """
     Contextmanager.
 
@@ -221,13 +221,13 @@ def diff_output_geojson(*, output_path, dataset_count, **kwargs):
             fc["features"].append(_json_row(v_old, "U-", pk_field))
             fc["features"].append(_json_row(v_new, "U+", pk_field))
 
-        dump_json_output(fc, fp)
+        dump_json_output(fc, fp, json_style=json_style)
 
     yield _out
 
 
 @contextlib.contextmanager
-def diff_output_json(*, output_path, dataset_count, **kwargs):
+def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwargs):
     """
     Contextmanager.
     Yields a callable which can be called with dataset diffs
@@ -277,7 +277,9 @@ def diff_output_json(*, output_path, dataset_count, **kwargs):
 
     yield _out
 
-    dump_json_output({"sno.diff/v1": accumulated}, output_path)
+    dump_json_output(
+        {"sno.diff/v1": accumulated}, output_path, json_style=json_style
+    )
 
 
 def _json_row(row, change, pk_field):
