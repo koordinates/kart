@@ -1,5 +1,6 @@
 import base64
 import collections
+import contextlib
 import functools
 import hashlib
 import itertools
@@ -17,12 +18,13 @@ import msgpack
 import pygit2
 
 from . import core, gpkg, diff
-from .exceptions import NotFound, NO_COMMIT
+from .exceptions import NotFound, InvalidOperation, NO_COMMIT, PATCH_DOES_NOT_APPLY
 
 L = logging.getLogger("sno.structure")
 
 
 class RepositoryStructure:
+    @staticmethod
     def lookup(repo, key):
         L.debug(f"key={key}")
         try:
@@ -165,34 +167,67 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
-    def commit(self, wcdiff, message, *, allow_empty=False):
+    def create_tree_from_diff(self, diff, orig_tree=None, callback=None):
+        """
+        Given a tree and a diff, returns a new tree created by applying the diff.
+
+        Doesn't create any commits or modify the working copy at all.
+
+        If orig_tree is not None, the diff is applied from that tree.
+        Otherwise, uses the tree at the head of the repo.
+        """
+        if orig_tree is None:
+            orig_tree = self.tree
+
+        git_index = pygit2.Index()
+        git_index.read_tree(orig_tree)
+
+        for ds in self.iter_at(orig_tree):
+            ds.write_index(diff[ds], git_index, self.repo, callback=callback)
+
+        L.info("Writing tree...")
+        new_tree_oid = git_index.write_tree(self.repo)
+        L.info(f"Tree sha: {new_tree_oid}")
+        return new_tree_oid
+
+    def commit(
+        self,
+        wcdiff,
+        message,
+        *,
+        author=None,
+        committer=None,
+        allow_empty=False,
+        update_working_copy_head=True,
+    ):
         tree = self.tree
-        wc = self.working_copy
 
         git_index = pygit2.Index()
         git_index.read_tree(tree)
 
-        with wc.session():
-            for ds in self:
-                ds.write_index(
-                    wcdiff[ds], git_index, self.repo, callback=wc.commit_callback
-                )
+        wc = self.working_copy
+        commit_callback = None
+        if update_working_copy_head and wc:
+            context = wc.session()
+            commit_callback = wc.commit_callback
+        else:
+            # This happens when commit is called from `sno apply` in a bare repo
+            context = contextlib.nullcontext()
+        with context:
+            new_tree_oid = self.create_tree_from_diff(wcdiff, callback=commit_callback)
 
-            L.info("Writing tree...")
-            new_tree = git_index.write_tree(self.repo)
-            L.info(f"Tree sha: {new_tree}")
-
-            wc.commit_callback(None, "TREE", tree=new_tree)
+            if commit_callback:
+                commit_callback(None, "TREE", tree=new_tree_oid)
 
             L.info("Committing...")
             user = self.repo.default_signature
             # this will also update the ref (branch) to point to the current commit
             new_commit = self.repo.create_commit(
                 "HEAD",  # reference_name
-                user,  # author
-                user,  # committer
+                author or user,  # author
+                committer or user,  # committer
                 message,  # message
-                new_tree,  # tree
+                new_tree_oid,  # tree
                 [self.repo.head.target],  # parents
             )
             L.info(f"Commit: {new_commit}")
@@ -910,6 +945,7 @@ class Dataset1(DatasetStructure):
     def write_index(self, dataset_diff, index, repo, callback=None):
         pk_field = self.primary_key
 
+        conflicts = False
         for k, (obj_old, obj_new) in dataset_diff["META"].items():
             object_path = f"{self.meta_path}/{k}"
             value = json.dumps(obj_new).encode("utf8")
@@ -918,48 +954,95 @@ class Dataset1(DatasetStructure):
             idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
             index.add(idx_entry)
 
-            if callback:
-                callback(self, "META", object_path=object_path)
-
         for _, obj_old in dataset_diff["D"].items():
-            object_path = "/".join(
-                [self.path, self.get_feature_path(obj_old[pk_field])]
-            )
+            pk = obj_old[pk_field]
+            object_path = "/".join([self.path, self.get_feature_path(pk)])
+            if object_path not in index:
+                conflicts = True
+                click.echo(f"{self.path}: Trying to delete nonexistent feature: {pk}")
+                continue
             index.remove(object_path)
 
-            if callback:
-                callback(self, "D", object_path=object_path, obj_old=obj_old)
-
-        for obj in dataset_diff["I"]:
-            object_path = "/".join([self.path, self.get_feature_path(obj[pk_field])])
-            bin_feature = self.encode_feature(obj)
-            blob_id = repo.create_blob(bin_feature)
-            entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-            index.add(entry)
-
-            if callback:
-                callback(self, "I", object_path=object_path, obj_new=obj)
-
-        for _, (obj_old, obj_new) in dataset_diff["U"].items():
-            object_path = "/".join(
-                [self.path, self.get_feature_path(obj_old[pk_field])]
-            )
-            index.remove(object_path)
-
-            object_path = "/".join(
-                [self.path, self.get_feature_path(obj_new[pk_field])]
-            )
+        for obj_new in dataset_diff["I"]:
+            pk = obj_new[pk_field]
+            object_path = "/".join([self.path, self.get_feature_path(pk)])
+            if object_path in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to create feature that already exists: {pk}"
+                )
+                continue
             bin_feature = self.encode_feature(obj_new)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
             index.add(entry)
 
-            if callback:
+        geom_column_name = self.geom_column_name
+        for _, (obj_old, obj_new) in dataset_diff["U"].items():
+            old_pk = obj_old[pk_field]
+            old_object_path = "/".join([self.path, self.get_feature_path(old_pk)])
+            if old_object_path not in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update nonexistent feature: {old_pk}"
+                )
+                continue
+
+            _, existing_feature = self.get_feature(old_pk, ogr_geoms=False)
+            if geom_column_name:
+                # FIXME: actually compare the geometries here.
+                # Turns out this is quite hard - geometries are hard to compare sanely.
+                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
+                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
+                existing_feature.pop(geom_column_name)
+                obj_old = obj_old.copy()
+                obj_old.pop(geom_column_name)
+            if existing_feature != obj_old:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update already-changed feature: {old_pk}"
+                )
+                continue
+
+            index.remove(old_object_path)
+            new_pk = obj_new[pk_field]
+            new_object_path = "/".join([self.path, self.get_feature_path(new_pk)])
+            bin_feature = self.encode_feature(obj_new)
+            blob_id = repo.create_blob(bin_feature)
+            entry = pygit2.IndexEntry(
+                new_object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+            )
+            index.add(entry)
+
+        if conflicts:
+            raise InvalidOperation(
+                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+            )
+        if callback:
+            for _, obj_old in dataset_diff["D"].items():
+                object_path = "/".join(
+                    [self.path, self.get_feature_path(obj_old[pk_field])]
+                )
+                callback(self, "D", object_path=object_path, obj_old=obj_old)
+
+            for obj_new in dataset_diff["I"]:
+                object_path = "/".join(
+                    [self.path, self.get_feature_path(obj_new[pk_field])]
+                )
+                callback(self, "I", object_path=object_path, obj_new=obj_new)
+
+            for _, (obj_old, obj_new) in dataset_diff["U"].items():
+                new_object_path = "/".join(
+                    [self.path, self.get_feature_path(obj_new[pk_field])]
+                )
                 callback(
-                    self, "U", object_path=object_path, obj_old=obj_old, obj_new=obj_new
+                    self,
+                    "U",
+                    object_path=new_object_path,
+                    obj_old=obj_old,
+                    obj_new=obj_new,
                 )
 
-        if callback:
             callback(self, "INDEX")
 
     def diff(self, other, pk_filter=None, reverse=False):

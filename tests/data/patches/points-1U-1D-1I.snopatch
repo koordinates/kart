@@ -1,0 +1,94 @@
+{
+  "sno.diff/v1": {
+    "nz_pa_points_topo_150k": {
+      "featureChanges": [
+        {
+          "+": {
+            "geometry": {
+              "coordinates": [
+                175.32362640934545,
+                -36.521647772063794
+              ],
+              "type": "Point"
+            },
+            "id": "U+::9999",
+            "properties": {
+              "fid": 9999,
+              "macronated": null,
+              "name": null,
+              "name_ascii": "new",
+              "t50_fid": null
+            },
+            "type": "Feature"
+          }
+        },
+        {
+          "-": {
+            "geometry": {
+              "coordinates": [
+                175.34506381520103,
+                -36.471886042078644
+              ],
+              "type": "Point"
+            },
+            "id": "U-::1241",
+            "properties": {
+              "fid": 1241,
+              "macronated": "N",
+              "name": null,
+              "name_ascii": null,
+              "t50_fid": 2427486
+            },
+            "type": "Feature"
+          }
+        },
+        {
+          "+": {
+            "geometry": {
+              "coordinates": [
+                174.21906512190301,
+                -35.2478555375096
+              ],
+              "type": "Point"
+            },
+            "id": "U+::1795",
+            "properties": {
+              "fid": 1795,
+              "macronated": "N",
+              "name": null,
+              "name_ascii": "updated",
+              "t50_fid": 2428041
+            },
+            "type": "Feature"
+          },
+          "-": {
+            "geometry": {
+              "coordinates": [
+                174.21906512190301,
+                -35.2478555375096
+              ],
+              "type": "Point"
+            },
+            "id": "U-::1795",
+            "properties": {
+              "fid": 1795,
+              "macronated": "N",
+              "name": null,
+              "name_ascii": null,
+              "t50_fid": 2428041
+            },
+            "type": "Feature"
+          }
+        }
+      ],
+      "metaChanges": {}
+    }
+  },
+  "sno.patch/v1": {
+    "authorEmail": "craig@destigter.nz",
+    "authorName": "Craig de Stigter",
+    "authorTime": "2020-04-30T23:36:58Z",
+    "authorTimeOffset": "+12:00",
+    "message": "A patch"
+  }
+}

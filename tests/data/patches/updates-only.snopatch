@@ -1,0 +1,54 @@
+{
+  "sno.diff/v1": {
+    "nz_pa_points_topo_150k": {
+      "featureChanges": [
+        {
+          "-": {
+            "geometry": {
+              "coordinates": [
+                175.54948977028008,
+                -36.675330575884495
+              ],
+              "type": "Point"
+            },
+            "id": "U-::1095",
+            "properties": {
+              "fid": 1095,
+              "macronated": "Y",
+              "name": "Harataunga (Rākairoa)\n",
+              "name_ascii": "Harataunga (Rakairoa)\n",
+              "t50_fid": 2427339
+            },
+            "type": "Feature"
+          },
+          "+": {
+            "geometry": {
+              "coordinates": [
+                175.54948977028008,
+                -36.675330575884495
+              ],
+              "type": "Point"
+            },
+            "id": "U+::1095",
+            "properties": {
+              "fid": 1095,
+              "macronated": "N",
+              "name": null,
+              "name_ascii": null,
+              "t50_fid": 2427339
+            },
+            "type": "Feature"
+          }
+        }
+      ],
+      "metaChanges": {}
+    }
+  },
+  "sno.patch/v1": {
+    "authorEmail": "someone@example.com",
+    "authorName": "Someone",
+    "authorTime": "2019-06-20T14:28:33Z",
+    "authorTimeOffset": "+01:00",
+    "message": "Change the Coromandel"
+  }
+}

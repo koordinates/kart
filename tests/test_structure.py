@@ -92,8 +92,8 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
 @pytest.mark.slow
 @pytest.mark.parametrize(
     GPKG_IMPORTS[0],
-    GPKG_IMPORTS[1]
-    + [
+    [
+        *GPKG_IMPORTS[1],
         pytest.param(
             "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
         ),

@@ -257,10 +257,14 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
     Returns the path to the repository path
     """
+    from sno.structure import DatasetStructure
+
     L = logging.getLogger("data_imported")
     incr = 0
 
-    def _data_imported(archive, source_gpkg, table, version):
+    def _data_imported(
+        archive, source_gpkg, table, version=DatasetStructure.DEFAULT_IMPORT_VERSION
+    ):
         nonlocal incr
 
         params = [archive, source_gpkg, table, version]

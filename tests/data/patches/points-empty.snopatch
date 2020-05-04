@@ -1,0 +1,16 @@
+{
+  "sno.diff/v1": {
+    "nz_pa_points_topo_150k": {
+      "featureChanges": [
+      ],
+      "metaChanges": {}
+    }
+  },
+  "sno.patch/v1": {
+    "authorEmail": "robert@example.com",
+    "authorName": "Robert Coup",
+    "authorTime": "2019-06-20T14:28:33Z",
+    "authorTimeOffset": "+01:00",
+    "message": "Improve naming on Coromandel East coast"
+  }
+}

@@ -39,6 +39,7 @@ vendor/build/
 /platforms/linux/sqlite3
 
 /tests/data/*/
+!/tests/data/patches
 /tests/data/*.zip
 /coverage
 pytest.xml

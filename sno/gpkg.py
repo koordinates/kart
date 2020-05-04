@@ -1,8 +1,6 @@
 import collections
 import math
 import struct
-import sys
-from pathlib import Path
 
 import apsw
 from osgeo import ogr, osr
@@ -222,7 +220,13 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
     else:
         raise ValueError("Invalid envelope contents indicator")
 
-    geom = ogr.CreateGeometryFromWkb(gpkg_geom[wkb_offset:])
+    wkb = gpkg_geom[wkb_offset:]
+
+    # note: the GPKG spec represents 'POINT EMPTY' as 'POINT(nan nan)' (in WKB form)
+    # However, OGR loads the WKB for POINT(nan nan) as an empty geometry.
+    # It has the WKB of `POINT(nan nan)` but the WKT of `POINT EMPTY`.
+    # We just leave it as-is.
+    geom = ogr.CreateGeometryFromWkb(wkb)
 
     if parse_srs:
         srid = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
@@ -232,6 +236,51 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
             geom.AssignSpatialReference(srs)
 
     return geom
+
+
+# can't represent 'POINT EMPTY' in WKB.
+# The GPKG spec says we should use POINT(NaN, NaN) instead.
+# Here's the WKB of that.
+GPKG_WKB_POINT_EMPTY = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
+
+
+def ogr_to_geom(ogr_geom):
+    """
+    Given an OGR geometry object, construct a GPKG geometry value.
+    http://www.geopackage.org/spec/#gpb_format
+
+    Arbitrarily, this only produces little-endian geometries.
+    Geometries produced don't include envelopes.
+    """
+    wkb = ogr_geom.ExportToWkb()
+
+    ogr_geom_type = ogr_geom.GetGeometryType()
+
+    # Flags
+    # always produce little endian
+    flags = 1
+    empty = ogr_geom.IsEmpty()
+    if empty:
+        # no envelope.
+        flags |= 0x10
+
+    # srs_id
+    srid = 0
+    srs = ogr_geom.GetSpatialReference()
+    if srs:
+        srs.AutoIdentifyEPSG()
+        if srs.IsProjected():
+            srid = int(srs.GetAuthorityCode("PROJCS"))
+        elif srs.IsGeographic():
+            srid = int(srs.GetAuthorityCode("GEOGCS"))
+
+    if empty and ogr_geom_type == ogr.wkbPoint:
+        wkb = GPKG_WKB_POINT_EMPTY
+    else:
+        # force little-endian
+        wkb = ogr_geom.ExportToWkb(ogr.wkbNDR)
+
+    return struct.pack('<ccBBi', b'G', b'P', 0, flags, srid) + wkb
 
 
 def geom_envelope(gpkg_geom):
@@ -274,7 +323,12 @@ def geom_envelope(gpkg_geom):
 
     if envelope_typ == 0:
         # parse the full geometry then get it's envelope
-        return geom_to_ogr(gpkg_geom).GetEnvelope()
+        ogr_geom = geom_to_ogr(gpkg_geom)
+        if ogr_geom.IsEmpty():
+            # envelope is apparently (0, 0, 0, 0), thanks OGR :/
+            return None
+        else:
+            return ogr_geom.GetEnvelope()
     elif envelope_typ <= 4:
         # we only care about 2D envelopes here
         envelope = struct.unpack_from(f"{'<' if is_le else '>'}dddd", gpkg_geom, 8)

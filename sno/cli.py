@@ -8,6 +8,7 @@ import pygit2
 
 from . import core  # noqa
 from . import (
+    apply,
     branch,
     checkout,
     clone,
@@ -102,6 +103,7 @@ def cli(ctx, repo_dir, verbose):
 
 
 # Commands from modules:
+cli.add_command(apply.apply)
 cli.add_command(branch.branch)
 cli.add_command(checkout.checkout)
 cli.add_command(checkout.restore)
@@ -110,13 +112,13 @@ cli.add_command(checkout.workingcopy_set_path)
 cli.add_command(clone.clone)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
-cli.add_command(show.show)
 cli.add_command(fsck.fsck)
 cli.add_command(init.import_gpkg)
 cli.add_command(init.import_table)
 cli.add_command(init.init)
 cli.add_command(merge.merge)
 cli.add_command(pull.pull)
+cli.add_command(show.show)
 cli.add_command(status.status)
 cli.add_command(query.query)
 cli.add_command(upgrade.upgrade)
