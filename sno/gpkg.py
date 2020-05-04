@@ -1,3 +1,4 @@
+import binascii
 import collections
 import math
 import struct
@@ -185,14 +186,11 @@ def geom_cols(db, table):
     return tuple(r[0] for r in q)
 
 
-def geom_to_ogr(gpkg_geom, parse_srs=False):
+def _validate_geom(gpkg_geom):
     """
-    Parse GeoPackage geometry values to an OGR Geometry object
-    http://www.geopackage.org/spec/#gpb_format
+    Validates some basic things about the given GPKG geometry.
+    Returns the `flags` byte.
     """
-    if gpkg_geom is None:
-        return None
-
     if not isinstance(gpkg_geom, bytes):
         raise TypeError("Expected bytes")
 
@@ -202,10 +200,66 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
     if version != 0:
         raise NotImplementedError("Expected GeoPackage v1 geometry, got %d", version)
 
-    is_le = (flags & 0b0000001) != 0  # Endian-ness
-
     if flags & (0b00100000):  # GeoPackageBinary type
         raise NotImplementedError("ExtendedGeoPackageBinary")
+    return flags
+
+
+def geom_to_wkb(gpkg_geom):
+    """
+    Parse GeoPackage geometry values.
+
+    Returns little-endian WKB.
+    """
+    if gpkg_geom is None:
+        return None
+    flags = _validate_geom(gpkg_geom)
+
+    is_le = (flags & 0b0000001) != 0  # Endian-ness
+
+    envelope_typ = (flags & 0b000001110) >> 1
+    wkb_offset = 8
+    if envelope_typ == 1:
+        wkb_offset += 32
+    elif envelope_typ in (2, 3):
+        wkb_offset += 48
+    elif envelope_typ == 4:
+        wkb_offset += 64
+    elif envelope_typ == 0:
+        pass
+    else:
+        raise ValueError("Invalid envelope contents indicator")
+
+    wkb = gpkg_geom[wkb_offset:]
+
+    if not is_le:
+        # Force little-endian
+        geom = ogr.CreateGeometryFromWkb(wkb)
+        wkb = geom.ExportToWkb(ogr.wkbNDR)
+    return wkb
+
+
+def geom_to_hex_wkb(gpkg_geom):
+    """
+    Returns the hex-encoded little-endian WKB for the given geometry.
+    """
+    wkb = geom_to_wkb(gpkg_geom)
+    if wkb is None:
+        return None
+    else:
+        return binascii.hexlify(wkb).decode('ascii').upper()
+
+
+def geom_to_ogr(gpkg_geom, parse_srs=False):
+    """
+    Parse GeoPackage geometry values to an OGR Geometry object
+    http://www.geopackage.org/spec/#gpb_format
+    """
+    if gpkg_geom is None:
+        return None
+
+    flags = _validate_geom(gpkg_geom)
+    is_le = (flags & 0b0000001) != 0  # Endian-ness
 
     envelope_typ = (flags & 0b000001110) >> 1
     wkb_offset = 8
@@ -238,6 +292,19 @@ def geom_to_ogr(gpkg_geom, parse_srs=False):
     return geom
 
 
+def wkb_to_geom(wkb):
+    ogr_geom = ogr.CreateGeometryFromWkb(wkb)
+    return ogr_to_geom(ogr_geom)
+
+
+def hex_wkb_to_geom(hex_wkb):
+    if hex_wkb is None:
+        return None
+
+    wkb = binascii.unhexlify(hex_wkb)
+    return wkb_to_geom(wkb)
+
+
 # can't represent 'POINT EMPTY' in WKB.
 # The GPKG spec says we should use POINT(NaN, NaN) instead.
 # Here's the WKB of that.
@@ -252,6 +319,9 @@ def ogr_to_geom(ogr_geom):
     Arbitrarily, this only produces little-endian geometries.
     Geometries produced don't include envelopes.
     """
+    if ogr_geom is None:
+        return None
+
     wkb = ogr_geom.ExportToWkb()
 
     ogr_geom_type = ogr_geom.GetGeometryType()

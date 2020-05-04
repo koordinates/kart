@@ -4,13 +4,7 @@
       "featureChanges": [
         {
           "-": {
-            "geometry": {
-              "coordinates": [
-                175.54948977028008,
-                -36.675330575884495
-              ],
-              "type": "Point"
-            },
+            "geometry": "0101000000DD1A926B95F16540D5B4783B715642C0",
             "id": "U-::1095",
             "properties": {
               "fid": 1095,
@@ -22,13 +16,7 @@
             "type": "Feature"
           },
           "+": {
-            "geometry": {
-              "coordinates": [
-                175.54948977028008,
-                -36.675330575884495
-              ],
-              "type": "Point"
-            },
+            "geometry": "0101000000DD1A926B95F16540D5B4783B715642C0",
             "id": "U+::1095",
             "properties": {
               "fid": 1095,
