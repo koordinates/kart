@@ -313,14 +313,17 @@ WKB_POINT_EMPTY_LE = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\
 
 
 def ogr_to_gpkg_geom(
-    ogr_geom, _little_endian=True, _little_endian_wkb=True, _add_envelope=False
+    ogr_geom, *, _little_endian=True, _little_endian_wkb=True, _add_envelope=False
 ):
     """
     Given an OGR geometry object, construct a GPKG geometry value.
     http://www.geopackage.org/spec/#gpb_format
 
-    Arbitrarily, this only produces little-endian geometries.
-    Geometries produced don't include envelopes.
+    Normally:
+        * this only produces little-endian geometries.
+        * Geometries produced don't include envelopes.
+
+    Underscore-prefixed kwargs are for use by the tests, don't use them elsewhere.
     """
     if ogr_geom is None:
         return None

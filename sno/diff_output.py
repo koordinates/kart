@@ -294,8 +294,7 @@ def _json_row(row, change, pk_field):
         "id": f"{change}::{row[pk_field]}",
     }
 
-    for k in row.keys():
-        v = row[k]
+    for k, v in row.items():
         if isinstance(v, bytes):
             f["geometry"] = gpkg.gpkg_geom_to_hex_wkb(v)
         else:
@@ -305,6 +304,9 @@ def _json_row(row, change, pk_field):
 
 
 def _geojson_row(row, change, pk_field):
+    """
+    Turns a row into a dict representing a GeoJSON feature.
+    """
     f = {
         "type": "Feature",
         "geometry": None,
