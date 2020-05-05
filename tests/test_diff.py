@@ -1747,3 +1747,12 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
                 'authorTimeOffset': '+01:00',
                 'message': 'Improve naming on Coromandel East coast',
             }
+
+
+def test_show_json_format(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points"):
+        r = cli_runner.invoke(["show", f"--json", "--json-style=compact", "HEAD"])
+
+        assert r.exit_code == 0, r
+        # output is compact, no indentation
+        assert '"sno.diff/v1": {"' in r.stdout

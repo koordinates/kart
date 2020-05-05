@@ -2,28 +2,31 @@ import io
 import json
 import sys
 
+JSON_PARAMS = {
+    "compact": {},
+    "pretty": {"indent": 2, "sort_keys": True},
+    "extracompact": {"separators": (',', ':')},
+}
 
-def dump_json_output(output, output_path, pretty=True):
+
+def dump_json_output(output, output_path, json_style="pretty"):
     """
     Dumps the output to JSON in the output file.
     """
 
     fp = resolve_output_path(output_path)
 
-    json_params = {}
-    if pretty:
-        json_params.update({"indent": 2, "sort_keys": True})
-    if pretty and fp == sys.stdout and fp.isatty():
+    if json_style == 'pretty' and fp == sys.stdout and fp.isatty():
         # Add syntax highlighting
         from pygments import highlight
         from pygments.lexers import JsonLexer
         from pygments.formatters import TerminalFormatter
 
-        dumped = json.dumps(output, **json_params)
+        dumped = json.dumps(output, **JSON_PARAMS[json_style])
         highlighted = highlight(dumped.encode(), JsonLexer(), TerminalFormatter())
         fp.write(highlighted)
     else:
-        json.dump(output, fp, **json_params)
+        json.dump(output, fp, **JSON_PARAMS[json_style])
 
 
 def resolve_output_path(output_path):
