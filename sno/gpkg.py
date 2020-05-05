@@ -210,7 +210,7 @@ def gpkg_geom_to_wkb(gpkg_geom):
     """
     Parse GeoPackage geometry values.
 
-    Returns little-endian WKB.
+    Returns little-endian ISO WKB (as bytes), or `None` if gpkg_geom is `None`.
     http://www.geopackage.org/spec/#gpb_format
     """
     if gpkg_geom is None:
@@ -235,7 +235,7 @@ def gpkg_geom_to_wkb(gpkg_geom):
     if wkb[0] == 0:
         # Force little-endian
         geom = ogr.CreateGeometryFromWkb(wkb)
-        wkb = geom.ExportToWkb(ogr.wkbNDR)
+        wkb = geom.ExportToIsoWkb(ogr.wkbNDR)
     return wkb
 
 
@@ -341,16 +341,7 @@ def ogr_to_gpkg_geom(
         elif srs.IsGeographic():
             srid = int(srs.GetAuthorityCode("GEOGCS"))
 
-    if ogr_geom.IsEmpty() and ogr_geom.GetGeometryType() == ogr.wkbPoint:
-        # Can't represent POINT EMPTY in WKB easily.
-        # In fact, OGR's .ExportToWkb() produces 'POINT(0 0)'...
-        # https://github.com/OSGeo/gdal/issues/2472
-        # So we use the GPKG approach instead, which is equivalent to 'POINT(NaN NaN)'
-        wkb = WKB_POINT_EMPTY_LE
-        if not _little_endian_wkb:
-            wkb = ogr.CreateGeometryFromWkb(wkb).ExportToWkb(ogr.wkbXDR)
-    else:
-        wkb = ogr_geom.ExportToWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
+    wkb = ogr_geom.ExportToIsoWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
 
     header = struct.pack(
         f'{"<" if _little_endian else ">"}ccBBi', b'G', b'P', 0, flags, srid

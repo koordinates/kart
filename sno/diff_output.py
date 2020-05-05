@@ -278,10 +278,16 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
 
     yield _out
 
-    dump_json_output({"sno.diff/v1+hexwkb": accumulated}, output_path, json_style=json_style)
+    dump_json_output(
+        {"sno.diff/v1+hexwkb": accumulated}, output_path, json_style=json_style
+    )
 
 
 def _json_row(row, change, pk_field):
+    """
+    Turns a row into a dict for serialization as JSON.
+    The geometry is serialized as hexWKB.
+    """
     f = {
         "geometry": None,
         "properties": {},

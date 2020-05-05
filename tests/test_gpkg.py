@@ -56,7 +56,7 @@ def test_wkt_gpkg_wkt_roundtrip(wkt):
     ogr_geom = gpkg_geom_to_ogr(gpkg_geom, parse_srs=True)
     assert ogr_geom.Equals(
         orig_ogr_geom
-    ), f'{ogr_geom.ExportToWkt()} != {orig_ogr_geom.ExportToWkt()}'
+    ), f'{ogr_geom.ExportToIsoWkt()} != {orig_ogr_geom.ExportToIsoWkt()}'
 
     orig_srs = orig_ogr_geom.GetSpatialReference()
     srs = ogr_geom.GetSpatialReference()
