@@ -14,7 +14,7 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from .gpkg import hex_wkb_to_geom
+from .gpkg import hex_wkb_to_gpkg_geom
 from .structure import RepositoryStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 from .working_copy import WorkingCopy
@@ -26,7 +26,7 @@ def unjson_feature(dataset, d):
     r = copy.deepcopy(d['properties'])
     if dataset.geom_column_name:
         # add geometry in
-        r[dataset.geom_column_name] = hex_wkb_to_geom(d['geometry'])
+        r[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(d['geometry'])
     return r
 
 

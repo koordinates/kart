@@ -633,7 +633,7 @@ class Dataset1(DatasetStructure):
 
     def _msgpack_unpack_ext_ogr(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
-            return gpkg.geom_to_ogr(data)
+            return gpkg.gpkg_geom_to_ogr(data)
         else:
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)

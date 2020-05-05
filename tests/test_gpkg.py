@@ -3,7 +3,7 @@ import re
 import pytest
 from osgeo import ogr, osr
 
-from sno.gpkg import ogr_to_geom, geom_to_ogr
+from sno.gpkg import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 
 SRID_RE = re.compile(r'^SRID=(\d+);(.*)$')
 
@@ -47,8 +47,8 @@ def ewkt_to_ogr(wkt):
 )
 def test_roundtrip_geometry_conversion(wkt):
     orig_ogr_geom = ewkt_to_ogr(wkt)
-    gpkg_geom = ogr_to_geom(orig_ogr_geom)
-    ogr_geom = geom_to_ogr(gpkg_geom, parse_srs=True)
+    gpkg_geom = ogr_to_gpkg_geom(orig_ogr_geom)
+    ogr_geom = gpkg_geom_to_ogr(gpkg_geom, parse_srs=True)
     assert ogr_geom.Equals(
         orig_ogr_geom
     ), f'{ogr_geom.ExportToWkt()} != {orig_ogr_geom.ExportToWkt()}'
