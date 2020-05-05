@@ -308,7 +308,8 @@ def hex_wkb_to_gpkg_geom(hex_wkb, **kwargs):
 # can't represent 'POINT EMPTY' in WKB.
 # The GPKG spec says we should use POINT(NaN, NaN) instead.
 # Here's the WKB of that.
-GPKG_WKB_POINT_EMPTY = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
+# We can't use WKT here: https://github.com/OSGeo/gdal/issues/2472
+WKB_POINT_EMPTY_LE = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
 
 
 def ogr_to_gpkg_geom(
@@ -340,7 +341,16 @@ def ogr_to_gpkg_geom(
         elif srs.IsGeographic():
             srid = int(srs.GetAuthorityCode("GEOGCS"))
 
-    wkb = ogr_geom.ExportToWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
+    if ogr_geom.IsEmpty() and ogr_geom.GetGeometryType() == ogr.wkbPoint:
+        # Can't represent POINT EMPTY in WKB easily.
+        # In fact, OGR's .ExportToWkb() produces 'POINT(0 0)'...
+        # https://github.com/OSGeo/gdal/issues/2472
+        # So we use the GPKG approach instead, which is equivalent to 'POINT(NaN NaN)'
+        wkb = WKB_POINT_EMPTY_LE
+        if not _little_endian_wkb:
+            wkb = ogr.CreateGeometryFromWkb(wkb).ExportToWkb(ogr.wkbXDR)
+    else:
+        wkb = ogr_geom.ExportToWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
 
     header = struct.pack(
         f'{"<" if _little_endian else ">"}ccBBi', b'G', b'P', 0, flags, srid
