@@ -13,6 +13,9 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff
 
 
+EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
 @click.command()
 @click.pass_context
 @click.option(
@@ -51,17 +54,21 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
     repo = ctx.obj.repo
     try:
         obj = repo.revparse_single(refish)
-        obj.peel(pygit2.Commit)
+        commit = obj.peel(pygit2.Commit)
     except (KeyError, pygit2.InvalidSpecError):
         raise NotFound(f"{refish} is not a commit", exit_code=NO_COMMIT)
 
+    if commit.parents:
+        parent = f"{refish}^"
+    else:
+        parent = EMPTY_TREE_SHA
     patch_writer = globals()[f"patch_output_{output_format}"]
 
     return diff.diff_with_writer(
         ctx,
         patch_writer,
         exit_code=False,
-        args=[f"{refish}^..{refish}"],
+        args=[f"{parent}..{refish}"],
         json_style=json_style,
     )
 

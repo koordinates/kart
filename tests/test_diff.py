@@ -1749,6 +1749,41 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
             }
 
 
+@pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
+def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner):
+    """Make sure we can show the initial commit"""
+    initial_commit = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
+
+    with data_archive_readonly("polygons"):
+        r = cli_runner.invoke(["show", f"--{output_format}", initial_commit])
+        assert r.exit_code == 0, r
+
+        if output_format == 'text':
+            assert r.stdout.splitlines()[0:11] == [
+                'commit 1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec',
+                'Author: Robert Coup <robert@coup.net.nz>',
+                'Date:   Mon Jul 22 12:05:39 2019 +0100',
+                '',
+                '    Import from nz-waca-adjustments.gpkg',
+                '',
+                '+++ nz_waca_adjustments:id=1424927',
+                '+                           adjusted_nodes = 1122',
+                '+                            date_adjusted = 2011-03-25T07:30:45Z',
+                '+                                     geom = MULTIPOLYGON(...)',
+                '+                         survey_reference = ␀',
+            ]
+        elif output_format == 'json':
+            j = json.loads(r.stdout)
+            assert "sno.diff/v1" in j
+            assert j["sno.patch/v1"] == {
+                "authorEmail": "robert@coup.net.nz",
+                "authorName": "Robert Coup",
+                "authorTime": "2019-07-22T11:05:39Z",
+                "authorTimeOffset": "+01:00",
+                "message": "Import from nz-waca-adjustments.gpkg",
+            }
+
+
 def test_show_json_format(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
         r = cli_runner.invoke(["show", f"--json", "--json-style=compact", "HEAD"])
