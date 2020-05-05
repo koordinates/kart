@@ -217,7 +217,7 @@ def gpkg_geom_to_wkb(gpkg_geom):
         return None
     flags = _validate_gpkg_geom(gpkg_geom)
 
-    envelope_typ = (flags & 0b000001110) >> 1
+    envelope_typ = (flags & 0b00001110) >> 1
     wkb_offset = 8
     if envelope_typ == 1:
         wkb_offset += 32
@@ -292,17 +292,17 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_srs=False):
     return geom
 
 
-def wkb_to_gpkg_geom(wkb):
+def wkb_to_gpkg_geom(wkb, **kwargs):
     ogr_geom = ogr.CreateGeometryFromWkb(wkb)
-    return ogr_to_gpkg_geom(ogr_geom)
+    return ogr_to_gpkg_geom(ogr_geom, **kwargs)
 
 
-def hex_wkb_to_gpkg_geom(hex_wkb):
+def hex_wkb_to_gpkg_geom(hex_wkb, **kwargs):
     if hex_wkb is None:
         return None
 
     wkb = binascii.unhexlify(hex_wkb)
-    return wkb_to_gpkg_geom(wkb)
+    return wkb_to_gpkg_geom(wkb, **kwargs)
 
 
 # can't represent 'POINT EMPTY' in WKB.
@@ -311,7 +311,9 @@ def hex_wkb_to_gpkg_geom(hex_wkb):
 GPKG_WKB_POINT_EMPTY = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
 
 
-def ogr_to_gpkg_geom(ogr_geom):
+def ogr_to_gpkg_geom(
+    ogr_geom, _little_endian=True, _little_endian_wkb=True, _add_envelope=False
+):
     """
     Given an OGR geometry object, construct a GPKG geometry value.
     http://www.geopackage.org/spec/#gpb_format
@@ -322,17 +324,11 @@ def ogr_to_gpkg_geom(ogr_geom):
     if ogr_geom is None:
         return None
 
-    wkb = ogr_geom.ExportToWkb()
-
-    ogr_geom_type = ogr_geom.GetGeometryType()
-
     # Flags
     # always produce little endian
-    flags = 1
-    empty = ogr_geom.IsEmpty()
-    if empty:
-        # no envelope.
-        flags |= 0x10
+    flags = 0x1
+    if _add_envelope:
+        flags |= 0x2
 
     # srs_id
     srid = 0
@@ -344,13 +340,18 @@ def ogr_to_gpkg_geom(ogr_geom):
         elif srs.IsGeographic():
             srid = int(srs.GetAuthorityCode("GEOGCS"))
 
-    if empty and ogr_geom_type == ogr.wkbPoint:
-        wkb = GPKG_WKB_POINT_EMPTY
-    else:
-        # force little-endian
-        wkb = ogr_geom.ExportToWkb(ogr.wkbNDR)
+    wkb = ogr_geom.ExportToWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
 
-    return struct.pack('<ccBBi', b'G', b'P', 0, flags, srid) + wkb
+    header = struct.pack(
+        f'{"<" if _little_endian else ">"}ccBBi', b'G', b'P', 0, flags, srid
+    )
+    envelope = b''
+    if _add_envelope:
+        envelope = struct.pack(
+            f'{"<" if _little_endian else ">"}dddd', *ogr_geom.GetEnvelope()
+        )
+
+    return header + envelope + wkb
 
 
 def geom_envelope(gpkg_geom):
