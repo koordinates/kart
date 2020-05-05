@@ -198,11 +198,15 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
-                len(odata["sno.diff/v1"]["nz_pa_points_topo_150k"]["featureChanges"])
+                len(
+                    odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
+                        "featureChanges"
+                    ]
+                )
                 == 4
             )
             assert odata == {
-                'sno.diff/v1': {
+                'sno.diff/v1+hexwkb': {
                     'nz_pa_points_topo_150k': {
                         'featureChanges': [
                             {
@@ -552,10 +556,13 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
-                len(odata["sno.diff/v1"]["nz_waca_adjustments"]["featureChanges"]) == 4
+                len(
+                    odata["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["featureChanges"]
+                )
+                == 4
             )
             assert odata == {
-                'sno.diff/v1': {
+                'sno.diff/v1+hexwkb': {
                     'nz_waca_adjustments': {
                         'featureChanges': [
                             {
@@ -827,9 +834,11 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
         elif output_format == "json":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
-            assert len(odata["sno.diff/v1"]["countiestbl"]["featureChanges"]) == 4
+            assert (
+                len(odata["sno.diff/v1+hexwkb"]["countiestbl"]["featureChanges"]) == 4
+            )
             assert odata == {
-                "sno.diff/v1": {
+                "sno.diff/v1+hexwkb": {
                     "countiestbl": {
                         "metaChanges": {},
                         "featureChanges": [
@@ -1018,7 +1027,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             print(f"fwd: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
             assert r.exit_code == 1, r
-            odata = json.loads(r.stdout)["sno.diff/v1"]
+            odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
             assert len(odata[H.POINTS.LAYER]["metaChanges"]) == 0
 
@@ -1039,7 +1048,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             print(f"rev: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
             assert r.exit_code == 1, r
-            odata = json.loads(r.stdout)["sno.diff/v1"]
+            odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
             assert len(odata[H.POINTS.LAYER]["metaChanges"]) == 0
             change_ids = {
@@ -1121,7 +1130,7 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
         # changes from HEAD (R1 -> WC)
         # r = cli_runner.invoke(["diff", "--exit-code", "--json", R1])
         # assert r.exit_code == 1, r
-        # odata = json.loads(r.stdout)["sno.diff/v1"]
+        # odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
         # ddata = _extract(odata)
         # assert ddata == {
         #     1: ('a1', 'a'),
@@ -1138,7 +1147,7 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
         # changes from HEAD^1 (R0 -> WC)
         r = cli_runner.invoke(["diff", "--exit-code", "--json", R0])
         assert r.exit_code == 1, r
-        odata = json.loads(r.stdout)["sno.diff/v1"]
+        odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
         ddata = _extract(odata)
         assert ddata == {
             2: ("b", "b1"),
@@ -1438,7 +1447,7 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
             j = json.loads(r.stdout)
             # check the diff's present, but this test doesn't need to have hundreds of lines
             # to know exactly what it is (we have diff tests above)
-            assert 'sno.diff/v1' in j
+            assert 'sno.diff/v1+hexwkb' in j
             assert j['sno.patch/v1'] == {
                 'authorEmail': 'robert@coup.net.nz',
                 'authorName': 'Robert Coup',
@@ -1473,7 +1482,7 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
             ]
         elif output_format == 'json':
             j = json.loads(r.stdout)
-            assert "sno.diff/v1" in j
+            assert 'sno.diff/v1+hexwkb' in j
             assert j["sno.patch/v1"] == {
                 "authorEmail": "robert@coup.net.nz",
                 "authorName": "Robert Coup",
@@ -1489,4 +1498,4 @@ def test_show_json_format(data_archive_readonly, cli_runner):
 
         assert r.exit_code == 0, r
         # output is compact, no indentation
-        assert '"sno.diff/v1": {"' in r.stdout
+        assert '"sno.diff/v1+hexwkb": {"' in r.stdout

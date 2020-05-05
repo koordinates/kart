@@ -27,7 +27,7 @@ def test_apply_empty_patch(data_archive_readonly, cli_runner):
 
 def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
     patch_data = json.dumps(
-        {'sno.diff/v1': {'wrong-name': {'featureChanges': [], 'metaChanges': [],}}}
+        {'sno.diff/v1+hexwkb': {'wrong-name': {'featureChanges': [], 'metaChanges': [],}}}
     )
     with data_archive("points"):
         r = cli_runner.invoke(["apply", '-'], input=patch_data)
@@ -92,7 +92,7 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
         assert patch['sno.patch/v1'] == original_patch['sno.patch/v1']
-        assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
+        assert patch['sno.diff/v1+hexwkb'] == original_patch['sno.diff/v1+hexwkb']
 
 
 def test_apply_with_working_copy(
@@ -141,7 +141,7 @@ def test_apply_with_working_copy(
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
         assert patch['sno.patch/v1'] == original_patch['sno.patch/v1']
-        assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
+        assert patch['sno.diff/v1+hexwkb'] == original_patch['sno.diff/v1+hexwkb']
 
 
 def test_apply_with_no_working_copy_with_no_commit(data_archive_readonly, cli_runner):
@@ -178,7 +178,7 @@ def test_apply_with_working_copy_with_no_commit(
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
-        assert patch['sno.diff/v1'] == original_patch['sno.diff/v1']
+        assert patch['sno.diff/v1+hexwkb'] == original_patch['sno.diff/v1+hexwkb']
 
 
 def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
@@ -187,7 +187,7 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
         assert r.exit_code == 0, r
         patch_text = r.stdout
         patch_json = json.loads(patch_text)
-        assert set(patch_json['sno.diff/v1'].keys()) == {
+        assert set(patch_json['sno.diff/v1+hexwkb'].keys()) == {
             'census2016_sdhca_ot_ra_short',
             'census2016_sdhca_ot_sos_short',
         }

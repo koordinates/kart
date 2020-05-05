@@ -33,7 +33,7 @@ def unjson_feature(dataset, d):
 def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     try:
         patch = json.load(patch_file)
-        json_diff = patch['sno.diff/v1']
+        json_diff = patch['sno.diff/v1+hexwkb']
     except (KeyError, json.JSONDecodeError):
         raise click.FileError("Failed to parse JSON patch file")
 

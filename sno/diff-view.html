@@ -125,7 +125,7 @@
             }).addTo(map)
 
             var layerGroup = L.featureGroup()
-            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1'])) {
+            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1+hexwkb'])) {
                 if (!diff.featureChanges.length) {
                     continue
                 }
@@ -273,7 +273,7 @@
                 return isArrayEqual(a.coordinates, b.coordinates)
             }
 
-            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1'])) {
+            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1+hexwkb'])) {
                 if (!diff.featureChanges.length) {
                     continue
                 }
