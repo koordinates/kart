@@ -213,22 +213,14 @@ def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
             )
 
         for k, v_old in diff["D"].items():
-            fc["features"].append(
-                _json_row(v_old, "D", pk_field, geom_encoder=_geom_geojson)
-            )
+            fc["features"].append(_geojson_row(v_old, "D", pk_field))
 
         for o in diff["I"]:
-            fc["features"].append(
-                _json_row(o, "I", pk_field, geom_encoder=_geom_geojson)
-            )
+            fc["features"].append(_geojson_row(o, "I", pk_field))
 
         for _, (v_old, v_new) in diff["U"].items():
-            fc["features"].append(
-                _json_row(v_old, "U-", pk_field, geom_encoder=_geom_geojson)
-            )
-            fc["features"].append(
-                _json_row(v_new, "U+", pk_field, geom_encoder=_geom_geojson)
-            )
+            fc["features"].append(_geojson_row(v_old, "U-", pk_field))
+            fc["features"].append(_geojson_row(v_new, "U+", pk_field))
 
         dump_json_output(fc, fp, json_style=json_style)
 
@@ -262,28 +254,16 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
             d["metaChanges"][k] = [v_old, v_new]
 
         for k, v_old in diff["D"].items():
-            d["featureChanges"].append(
-                {
-                    '-': _json_row(
-                        v_old, "D", pk_field, geom_encoder=gpkg.gpkg_geom_to_hex_wkb
-                    )
-                }
-            )
+            d["featureChanges"].append({'-': _json_row(v_old, "D", pk_field)})
 
         for o in diff["I"]:
-            d["featureChanges"].append(
-                {'+': _json_row(o, "I", pk_field, geom_encoder=gpkg.gpkg_geom_to_hex_wkb)}
-            )
+            d["featureChanges"].append({'+': _json_row(o, "I", pk_field)})
 
         for _, (v_old, v_new) in diff["U"].items():
             d["featureChanges"].append(
                 {
-                    '-': _json_row(
-                        v_old, "U-", pk_field, geom_encoder=gpkg.gpkg_geom_to_hex_wkb
-                    ),
-                    '+': _json_row(
-                        v_new, "U+", pk_field, geom_encoder=gpkg.gpkg_geom_to_hex_wkb
-                    ),
+                    '-': _json_row(v_old, "U-", pk_field),
+                    '+': _json_row(v_new, "U+", pk_field),
                 }
             )
 
@@ -303,12 +283,24 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     )
 
 
-def _geom_geojson(v):
-    g = gpkg.gpkg_geom_to_ogr(v)
-    return json.loads(g.ExportToJson())
+def _json_row(row, change, pk_field):
+    f = {
+        "geometry": None,
+        "properties": {},
+        "id": f"{change}::{row[pk_field]}",
+    }
+
+    for k in row.keys():
+        v = row[k]
+        if isinstance(v, bytes):
+            f["geometry"] = gpkg.gpkg_geom_to_hex_wkb(v)
+        else:
+            f["properties"][k] = v
+
+    return f
 
 
-def _json_row(row, change, pk_field, *, geom_encoder):
+def _geojson_row(row, change, pk_field):
     f = {
         "type": "Feature",
         "geometry": None,
@@ -319,8 +311,8 @@ def _json_row(row, change, pk_field, *, geom_encoder):
     for k in row.keys():
         v = row[k]
         if isinstance(v, bytes):
-            hex_wkb = geom_encoder(v)
-            f["geometry"] = hex_wkb
+            g = gpkg.gpkg_geom_to_ogr(v)
+            f['geometry'] = json.loads(g.ExportToJson())
         else:
             f["properties"][k] = v
 

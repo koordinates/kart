@@ -216,7 +216,6 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                         'name_ascii': 'Te Motu-a-kore',
                                         't50_fid': 9999999,
                                     },
-                                    'type': 'Feature',
                                 }
                             },
                             {
@@ -230,7 +229,6 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                         'name_ascii': 'Tauwhare Pa',
                                         't50_fid': 2426273,
                                     },
-                                    'type': 'Feature',
                                 }
                             },
                             {
@@ -244,7 +242,6 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                         'name_ascii': None,
                                         't50_fid': 2426271,
                                     },
-                                    'type': 'Feature',
                                 },
                                 '-': {
                                     'geometry': '010100000097F3EF201223664087D715268E0043C0',
@@ -256,7 +253,6 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                         'name_ascii': None,
                                         't50_fid': 2426271,
                                     },
-                                    'type': 'Feature',
                                 },
                             },
                             {
@@ -270,7 +266,6 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                         'name_ascii': None,
                                         't50_fid': None,
                                     },
-                                    'type': 'Feature',
                                 },
                                 '-': {
                                     'geometry': '0101000000E702F16784226640ADE666D77CFE42C0',
@@ -282,7 +277,6 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
                                         'name_ascii': None,
                                         't50_fid': 2426272,
                                     },
-                                    'type': 'Feature',
                                 },
                             },
                         ],
@@ -574,7 +568,6 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                         'id': 9999999,
                                         'survey_reference': 'Null Island™ 🗺',
                                     },
-                                    'type': 'Feature',
                                 }
                             },
                             {
@@ -587,7 +580,6 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                         'id': 1452332,
                                         'survey_reference': None,
                                     },
-                                    'type': 'Feature',
                                 }
                             },
                             {
@@ -600,7 +592,6 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                         'id': 9998,
                                         'survey_reference': None,
                                     },
-                                    'type': 'Feature',
                                 },
                                 '-': {
                                     'geometry': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
@@ -611,7 +602,6 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                         'id': 1424927,
                                         'survey_reference': None,
                                     },
-                                    'type': 'Feature',
                                 },
                             },
                             {
@@ -624,7 +614,6 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                         'id': 1443053,
                                         'survey_reference': 'test',
                                     },
-                                    'type': 'Feature',
                                 },
                                 '-': {
                                     'geometry': '0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0',
@@ -635,7 +624,6 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                         'id': 1443053,
                                         'survey_reference': None,
                                     },
-                                    'type': 'Feature',
                                 },
                             },
                         ],
@@ -847,7 +835,6 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                         "featureChanges": [
                             {
                                 '+': {
-                                    "type": "Feature",
                                     "geometry": None,
                                     "properties": {
                                         "OBJECTID": 9999,
@@ -868,7 +855,6 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                             },
                             {
                                 '-': {
-                                    "type": "Feature",
                                     "geometry": None,
                                     "properties": {
                                         "OBJECTID": 3,
@@ -889,7 +875,6 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                             },
                             {
                                 '-': {
-                                    "type": "Feature",
                                     "geometry": None,
                                     "properties": {
                                         "OBJECTID": 1,
@@ -908,7 +893,6 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                     "id": "U-::1",
                                 },
                                 '+': {
-                                    "type": "Feature",
                                     "geometry": None,
                                     "properties": {
                                         "OBJECTID": 9998,
@@ -929,7 +913,6 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                             },
                             {
                                 '-': {
-                                    "type": "Feature",
                                     "geometry": None,
                                     "properties": {
                                         "OBJECTID": 2,
@@ -948,7 +931,6 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
                                     "id": "U-::2",
                                 },
                                 '+': {
-                                    "type": "Feature",
                                     "geometry": None,
                                     "properties": {
                                         "OBJECTID": 2,

@@ -12,8 +12,7 @@
               "name": null,
               "name_ascii": "new",
               "t50_fid": null
-            },
-            "type": "Feature"
+            }
           }
         },
         {
@@ -26,8 +25,7 @@
               "name": null,
               "name_ascii": null,
               "t50_fid": 2427486
-            },
-            "type": "Feature"
+            }
           }
         },
         {
@@ -40,8 +38,7 @@
               "name": null,
               "name_ascii": "updated",
               "t50_fid": 2428041
-            },
-            "type": "Feature"
+            }
           },
           "-": {
             "geometry": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
@@ -52,8 +49,7 @@
               "name": null,
               "name_ascii": null,
               "t50_fid": 2428041
-            },
-            "type": "Feature"
+            }
           }
         }
       ],

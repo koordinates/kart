@@ -12,8 +12,7 @@
               "name": "Harataunga (Rākairoa)\n",
               "name_ascii": "Harataunga (Rakairoa)\n",
               "t50_fid": 2427339
-            },
-            "type": "Feature"
+            }
           },
           "+": {
             "geometry": "0101000000DD1A926B95F16540D5B4783B715642C0",
@@ -24,8 +23,7 @@
               "name": null,
               "name_ascii": null,
               "t50_fid": 2427339
-            },
-            "type": "Feature"
+            }
           }
         }
       ],
