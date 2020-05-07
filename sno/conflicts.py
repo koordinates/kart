@@ -1,7 +1,11 @@
+from collections import namedtuple
+import json
 import logging
+import re
 import sys
 
 import click
+import pygit2
 
 from .diff_output import repr_row
 from .exceptions import InvalidOperation, NotYetImplemented, MERGE_CONFLICT
@@ -10,6 +14,152 @@ from .structure import RepositoryStructure
 
 
 L = logging.getLogger("sno.conflicts")
+
+
+class ConflictIndex:
+    """
+    Like a pygit2.Index, but every conflict has a short key independent of its path,
+    and the entire index including conflicts can be serialised to a tree.
+    Conflicts are easier to modify than in a pygit2.Index (where they are backed by C iterators).
+    When serialised to a tree, conflicts will be added in a special .conflicts/ directory.
+    """
+
+    # We could use pygit2.IndexEntry everywhere but it has unhelpful __eq__ and __repr__ behaviour.
+    # So we have this equivalent struct.
+    Entry = namedtuple("Entry", ("path", "id", "mode"))
+
+    def __init__(self, index, serialised=False):
+        self.entries = {}
+        self.conflicts = {}
+
+        if serialised and index.conflicts:
+            raise RuntimeError(
+                "pygit2.Index.conflicts should be empty if index has been serialised"
+            )
+
+        for entry in index:
+            if entry.path.startswith(".conflicts/"):
+                if not serialised:
+                    raise RuntimeError(
+                        ".conflicts/ directory shouldn't exist if index has not been serialised"
+                    )
+                key, conflict_part = self._deserialise_conflict_part(entry)
+                self.conflicts.setdefault(key, AncestorOursTheirs.EMPTY)
+                self.add_conflict(key, self.conflicts.get(key) | conflict_part)
+            else:
+                self.add(entry)
+
+        if index.conflicts:
+            for key, conflict3 in enumerate(index.conflicts):
+                self.add_conflict(str(key), conflict3)
+
+    def __eq__(self, other):
+        if not isinstance(other, ConflictIndex):
+            return False
+        return self.entries == other.entries and self.conflicts == other.conflicts
+
+    def __repr__(self):
+        contents = json.dumps(
+            {"entries": self.entries, "conflicts": self.conflicts},
+            default=lambda o: str(o),
+            indent=2,
+        )
+        return f'<ConflictIndex {contents}>'
+
+    def add(self, index_entry):
+        index_entry = self._ensure_entry(index_entry)
+        self.entries[index_entry.path] = index_entry
+
+    def remove(self, path):
+        del self.entries[path]
+
+    def __iter__(self):
+        return iter(self.entries.values())
+
+    def __getitem__(self, path):
+        return self.entries[path]
+
+    def __setitem__(self, path, index_entry):
+        assert path == index_entry.path
+        self.entries[path] = index_entry
+
+    def add_conflict(self, key, conflict):
+        if not isinstance(key, str):
+            raise TypeError("conflict key must be str", type(key))
+        self.conflicts[key] = self._ensure_conflict(conflict)
+
+    def remove_conflict(self, key):
+        del self.conflicts[key]
+
+    def _serialise_conflict(self, key, conflict):
+        result = []
+        for version, entry in zip(AncestorOursTheirs.NAMES, conflict):
+            if not entry:
+                continue
+            result_path = f".conflicts/{key}/{version}/{entry.path}"
+            result.append(self.Entry(result_path, entry.id, entry.mode))
+        return result
+
+    _PATTERN = re.compile(
+        r"^.conflicts/(?P<key>.+?)/(?P<version>ancestor|ours|theirs)/(?P<path>.+)$"
+    )
+
+    def _deserialise_conflict_part(self, index_entry):
+        match = self._PATTERN.match(index_entry.path)
+        if not match:
+            raise RuntimeError(f"Couldn't deserialise conflict: {index_entry.path}")
+
+        key = match.group("key")
+        version = match.group("version")
+        result_path = match.group("path")
+        result_entry = self.Entry(result_path, index_entry.id, index_entry.mode)
+        result = AncestorOursTheirs.partial(**{version: result_entry})
+        return key, result
+
+    def conflicts_as_entries(self):
+        for key, conflict3 in self.conflicts.items():
+            for index_entry in self._serialise_conflict(key, conflict3):
+                yield index_entry
+
+    @classmethod
+    def read(cls, path):
+        index = pygit2.Index(path)
+        return ConflictIndex(index, serialised=True)
+
+    def write(self, path):
+        index = pygit2.Index(path)
+        index.clear()
+
+        for e in self.entries.values():
+            index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
+        for e in self.conflicts_as_entries():
+            index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
+        return index.write()
+
+    def _ensure_entry(self, entry):
+        if entry is None or isinstance(entry, self.Entry):
+            return entry
+        elif isinstance(entry, pygit2.IndexEntry):
+            return self.Entry(entry.path, entry.id, entry.mode)
+        else:
+            raise TypeError(
+                "Expected entry to be type Entry or IndexEntry", type(entry)
+            )
+
+    def _ensure_conflict(self, conflict):
+        if isinstance(conflict, AncestorOursTheirs):
+            return conflict
+        elif isinstance(conflict, tuple):
+            return AncestorOursTheirs(
+                self._ensure_entry(conflict[0]),
+                self._ensure_entry(conflict[1]),
+                self._ensure_entry(conflict[2]),
+            )
+        else:
+            raise TypeError(
+                "Expected conflict to be type AncestorOursTheirs or tuple",
+                type(conflict),
+            )
 
 
 def first_true(iterable):
@@ -67,14 +217,6 @@ def _safe_get_feature(dataset, pk):
         return None
 
 
-def aot(*args):
-    """Creates an AncestorOursTheirs - from 3 positional args, an array, a tuple, or a generator."""
-    if len(args) == 1:
-        return AncestorOursTheirs(*tuple(args[0]))
-    else:
-        return AncestorOursTheirs(*args)
-
-
 def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=False):
     """
     Supports resolution of basic merge conflicts, fails in more complex unsupported cases.
@@ -84,8 +226,12 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
     ancestor, ours, theirs - each is a either a pygit2.Commit, or a CommitWithReference.
     """
 
+    # Shortcut used often below
+    def aot(generator_or_tuple):
+        return AncestorOursTheirs(*generator_or_tuple)
+
     # We have three versions of lots of objects - ancestor, ours, theirs.
-    commit_with_refs3 = aot(
+    commit_with_refs3 = AncestorOursTheirs(
         CommitWithReference(ancestor),
         CommitWithReference(ours),
         CommitWithReference(theirs),
@@ -195,7 +341,7 @@ def print_conflict(feature_name, features3, commit_with_refs3):
     """
     click.secho(f"\n=========== {feature_name} ==========", bold=True)
     for name, feature, cwr in zip(
-        AncestorOursTheirs.names, features3, commit_with_refs3
+        AncestorOursTheirs.NAMES, features3, commit_with_refs3
     ):
         prefix = "---" if name == "ancestor" else "+++"
         click.secho(f"{prefix} {name:>9}: {cwr}")
@@ -205,7 +351,7 @@ def print_conflict(feature_name, features3, commit_with_refs3):
             click.secho(repr_row(feature, prefix=prefix), fg=fg)
 
 
-_aot_choice = click.Choice(choices=AncestorOursTheirs.chars)
+_aot_choice = click.Choice(choices=AncestorOursTheirs.CHARS)
 
 
 def resolve_conflict_interactive(feature_name, merge_index, index_path):
@@ -220,7 +366,7 @@ def resolve_conflict_interactive(feature_name, merge_index, index_path):
         f"For {feature_name} accept which version - ancestor, ours or theirs",
         type=_aot_choice,
     )
-    choice = AncestorOursTheirs.chars.index(char)
+    choice = AncestorOursTheirs.CHARS.index(char)
     index_entries3 = merge_index.conflicts[index_path]
     del merge_index.conflicts[index_path]
     merge_index.add(index_entries3[choice])
