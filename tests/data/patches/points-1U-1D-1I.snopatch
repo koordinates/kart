@@ -1,16 +1,10 @@
 {
-  "sno.diff/v1": {
+  "sno.diff/v1+hexwkb": {
     "nz_pa_points_topo_150k": {
       "featureChanges": [
         {
           "+": {
-            "geometry": {
-              "coordinates": [
-                175.32362640934545,
-                -36.521647772063794
-              ],
-              "type": "Point"
-            },
+            "geometry": "01010000005788C5255BEA6540CB85AC5AC54242C0",
             "id": "U+::9999",
             "properties": {
               "fid": 9999,
@@ -18,19 +12,12 @@
               "name": null,
               "name_ascii": "new",
               "t50_fid": null
-            },
-            "type": "Feature"
+            }
           }
         },
         {
           "-": {
-            "geometry": {
-              "coordinates": [
-                175.34506381520103,
-                -36.471886042078644
-              ],
-              "type": "Point"
-            },
+            "geometry": "0101000000492A45C30AEB6540551507C3663C42C0",
             "id": "U-::1241",
             "properties": {
               "fid": 1241,
@@ -38,19 +25,12 @@
               "name": null,
               "name_ascii": null,
               "t50_fid": 2427486
-            },
-            "type": "Feature"
+            }
           }
         },
         {
           "+": {
-            "geometry": {
-              "coordinates": [
-                174.21906512190301,
-                -35.2478555375096
-              ],
-              "type": "Point"
-            },
+            "geometry": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
             "id": "U+::1795",
             "properties": {
               "fid": 1795,
@@ -58,17 +38,10 @@
               "name": null,
               "name_ascii": "updated",
               "t50_fid": 2428041
-            },
-            "type": "Feature"
+            }
           },
           "-": {
-            "geometry": {
-              "coordinates": [
-                174.21906512190301,
-                -35.2478555375096
-              ],
-              "type": "Point"
-            },
+            "geometry": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
             "id": "U-::1795",
             "properties": {
               "fid": 1795,
@@ -76,8 +49,7 @@
               "name": null,
               "name_ascii": null,
               "t50_fid": 2428041
-            },
-            "type": "Feature"
+            }
           }
         }
       ],

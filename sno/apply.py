@@ -4,7 +4,6 @@ from datetime import datetime
 
 import click
 
-from osgeo import ogr
 import pygit2
 
 from .diff import Diff
@@ -15,28 +14,26 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from .gpkg import ogr_to_geom
+from .gpkg import hex_wkb_to_gpkg_geom
 from .structure import RepositoryStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 from .working_copy import WorkingCopy
 
 
-def ungeojson_feature(dataset, d):
+def unjson_feature(dataset, d):
     if d is None:
         return d
     r = copy.deepcopy(d['properties'])
     if dataset.geom_column_name:
         # add geometry in
-        r[dataset.geom_column_name] = ogr_to_geom(
-            ogr.CreateGeometryFromJson(json.dumps(d['geometry']))
-        )
+        r[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(d['geometry'])
     return r
 
 
 def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     try:
         patch = json.load(patch_file)
-        json_diff = patch['sno.diff/v1']
+        json_diff = patch['sno.diff/v1+hexwkb']
     except (KeyError, json.JSONDecodeError):
         raise click.FileError("Failed to parse JSON patch file")
 
@@ -73,8 +70,8 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         deletes = {}
         pk_name = dataset.primary_key
         for change in feature_changes:
-            old = ungeojson_feature(dataset, change.get('-'))
-            new = ungeojson_feature(dataset, change.get('+'))
+            old = unjson_feature(dataset, change.get('-'))
+            new = unjson_feature(dataset, change.get('+'))
             if old and new:
                 # update
                 assert old[pk_name] == new[pk_name]

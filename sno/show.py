@@ -129,7 +129,7 @@ def patch_output_json(*, target, output_path, json_style, **kwargs):
     the json is prettified first.
 
     The patch JSON contains two top-level keys:
-        "sno.diff/v1": contains a JSON diff. See `sno.diff.diff_output_json` docstring.
+        "sno.diff/v1+hexwkb": contains a JSON diff. See `sno.diff.diff_output_json` docstring.
         "sno.patch/v1": contains metadata about the commit this patch represents:
           {
             "authorEmail": "joe@example.com",

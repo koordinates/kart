@@ -1,8 +1,10 @@
 import contextlib
 import io
 import json
+import os
 import string
 import sys
+import tempfile
 import webbrowser
 from pathlib import Path
 
@@ -138,7 +140,7 @@ def repr_row(row, prefix="", exclude=None):
         v = row[k]
 
         if isinstance(v, bytes):
-            g = gpkg.geom_to_ogr(v)
+            g = gpkg.gpkg_geom_to_ogr(v)
             geom_typ = g.GetGeometryName()
             if g.IsEmpty():
                 v = f"{geom_typ} EMPTY"
@@ -153,7 +155,7 @@ def repr_row(row, prefix="", exclude=None):
 
 
 @contextlib.contextmanager
-def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
+def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kwargs):
     """
     Contextmanager.
 
@@ -195,6 +197,8 @@ def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
     def _out(dataset, diff):
         if not output_path or output_path == '-':
             fp = sys.stdout
+        elif isinstance(output_path, io.StringIO):
+            fp = output_path
         elif output_path.is_dir():
             fp = (output_path / f"{dataset.name}.geojson").open("w")
         else:
@@ -212,14 +216,14 @@ def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
             )
 
         for k, v_old in diff["D"].items():
-            fc["features"].append(_json_row(v_old, "D", pk_field))
+            fc["features"].append(_geojson_row(v_old, "D", pk_field))
 
         for o in diff["I"]:
-            fc["features"].append(_json_row(o, "I", pk_field))
+            fc["features"].append(_geojson_row(o, "I", pk_field))
 
         for _, (v_old, v_new) in diff["U"].items():
-            fc["features"].append(_json_row(v_old, "U-", pk_field))
-            fc["features"].append(_json_row(v_new, "U+", pk_field))
+            fc["features"].append(_geojson_row(v_old, "U-", pk_field))
+            fc["features"].append(_geojson_row(v_new, "U+", pk_field))
 
         dump_json_output(fc, fp, json_style=json_style)
 
@@ -278,11 +282,34 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     yield _out
 
     dump_json_output(
-        {"sno.diff/v1": accumulated}, output_path, json_style=json_style
+        {"sno.diff/v1+hexwkb": accumulated}, output_path, json_style=json_style
     )
 
 
 def _json_row(row, change, pk_field):
+    """
+    Turns a row into a dict for serialization as JSON.
+    The geometry is serialized as hexWKB.
+    """
+    f = {
+        "geometry": None,
+        "properties": {},
+        "id": f"{change}::{row[pk_field]}",
+    }
+
+    for k, v in row.items():
+        if isinstance(v, bytes):
+            f["geometry"] = gpkg.gpkg_geom_to_hex_wkb(v)
+        else:
+            f["properties"][k] = v
+
+    return f
+
+
+def _geojson_row(row, change, pk_field):
+    """
+    Turns a row into a dict representing a GeoJSON feature.
+    """
     f = {
         "type": "Feature",
         "geometry": None,
@@ -293,8 +320,8 @@ def _json_row(row, change, pk_field):
     for k in row.keys():
         v = row[k]
         if isinstance(v, bytes):
-            g = gpkg.geom_to_ogr(v)
-            f["geometry"] = json.loads(g.ExportToJson())
+            g = gpkg.gpkg_geom_to_ogr(v)
+            f['geometry'] = json.loads(g.ExportToJson())
         else:
             f["properties"][k] = v
 
@@ -319,13 +346,6 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
             raise click.BadParameter(
                 "Directory is not valid for --output with --html", param_hint="--output"
             )
-
-    json_data = io.StringIO()
-    with diff_output_json(
-        output_path=json_data, dataset_count=dataset_count
-    ) as json_writer:
-        yield json_writer
-
     with open(
         Path(__file__).resolve().with_name("diff-view.html"), "r", encoding="utf8"
     ) as ft:
@@ -333,13 +353,30 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
 
     title = f"{Path(repo.path).name}: {base.short_id} .. {target.short_id if target else 'working-copy'}"
 
-    if not output_path:
-        output_path = Path(repo.path) / "DIFF.html"
-    fo = resolve_output_path(output_path)
+    with tempfile.TemporaryDirectory() as tempdir:
+        tempdir = Path(tempdir)
+        # Write a bunch of geojson files to a temporary directory
+        with diff_output_geojson(
+            output_path=tempdir, dataset_count=dataset_count, json_style="extracompact",
+        ) as json_writer:
+            yield json_writer
 
-    fo.write(
-        template.substitute({"title": title, "geojson_data": json_data.getvalue()})
-    )
+        if not output_path:
+            output_path = Path(repo.path) / "DIFF.html"
+        fo = resolve_output_path(output_path)
+
+        # Read all the geojson back in, and stick them in a dict
+        all_datasets_geojson = {}
+        for filename in os.listdir(tempdir):
+            with open(tempdir / filename) as json_file:
+                all_datasets_geojson[os.path.splitext(filename)[0]] = json.load(
+                    json_file
+                )
+        fo.write(
+            template.substitute(
+                {"title": title, "geojson_data": json.dumps(all_datasets_geojson)}
+            )
+        )
     if fo != sys.stdout:
         fo.close()
         webbrowser.open_new(f"file://{output_path.resolve()}")

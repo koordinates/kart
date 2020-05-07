@@ -125,8 +125,8 @@
             }).addTo(map)
 
             var layerGroup = L.featureGroup()
-            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1'])) {
-                if (!diff.featureChanges.length) {
+            for (let [dataset, diff] of Object.entries(DATA)) {
+                if (!diff.features.length) {
                     continue
                 }
 
@@ -139,16 +139,18 @@
                 layers[dataset] = {}
                 featureMap[dataset] = {}
 
-                for (let change of diff.featureChanges) {
-                    const fOld = change['-']
-                    const fNew = change['+']
-                    if (fOld && fNew) {
-                        fc['updateOld'].push(fOld)
-                        fc['updateNew'].push(fNew)
-                    } else if (fOld) {
-                        fc['delete'].push(fOld)
-                    } else if (fNew) {
-                        fc['insert'].push(fNew)
+                for (let change of diff.features) {
+                    const id = change['id']
+                    if (id.startsWith('U+::')) {
+                        fc['updateNew'].push(change)
+                    } else if (id.startsWith('U-::')) {
+                        fc['updateOld'].push(change)
+                    } else if (id.startsWith('D::')) {
+                        fc['delete'].push(change)
+                    } else if (id.startsWith('I::')) {
+                        fc['insert'].push(change)
+                    } else {
+                        console.log('unknown ID format: ' + id)
                     }
                 }
 
@@ -224,14 +226,40 @@
             }
             selectedFeature = [row, f]
         }
+        function getFeaturesByRealId(diff) {
+            let featuresByRealId = {}
+            for (let fc of diff.features) {
+                const id = fc['id']
+                const realId = id.split('::')[1]
+                if (id.startsWith('U')) {
+                    if (!featuresByRealId[realId]) {
+                        featuresByRealId[realId] = [null, null]
+                    }
+                    if (id.startsWith('U+::')) {
+                        // 'new'
+                        featuresByRealId[realId][1] = fc
+                    } else {
+                        // 'old'
+                        featuresByRealId[realId][0] = fc
+                    }
+                } else if (id.startsWith('D::')) {
+                    featuresByRealId[realId] = [fc, null]
+                } else if (id.startsWith('I::')) {
+                    featuresByRealId[realId] = [fc, null]
+                } else {
+                    console.log('unknown ID format: ' + id)
+                    continue
+                }
+            }
+            return featuresByRealId
+        }
 
-        function getSchema(diff) {
+        function getSchema(featuresByRealId) {
             // if schema has changed then it'll show up in every single feature
             let oldSchema = null
             let newSchema = null
-            for (let change of diff.featureChanges) {
-                const fOld = change['-']
-                const fNew = change['+']
+            for (let [realId, change] of Object.entries(featuresByRealId)) {
+                let [fOld, fNew] = change
                 if (fOld && !oldSchema) {
                     oldSchema = Object.keys(fOld.properties)
                     oldSchema.splice(0, 0, GEOM)
@@ -273,8 +301,8 @@
                 return isArrayEqual(a.coordinates, b.coordinates)
             }
 
-            for (let [dataset, diff] of Object.entries(DATA['sno.diff/v1'])) {
-                if (!diff.featureChanges.length) {
+            for (let [dataset, diff] of Object.entries(DATA)) {
+                if (!diff.features.length) {
                     continue
                 }
 
@@ -288,7 +316,8 @@
                 let thead = table.createTHead()
                 let row = thead.insertRow()
 
-                let schema = getSchema(diff)
+                let features = getFeaturesByRealId(diff)
+                let schema = getSchema(features)
 
                 for (let col of schema) {
                     let th = document.createElement("th")
@@ -300,10 +329,9 @@
                 }
 
                 let tbody = table.createTBody()
-                for (let fc of diff.featureChanges) {
-                    let fOld = fc['-']
-                    let fNew = fc['+']
-                    let change;
+                for (let [realId, fc] of Object.entries(features)) {
+                    let [fOld, fNew] = fc
+                    let change
                     if (fOld && fNew) {
                         change = 'update'
                     } else if (fOld) {
@@ -311,7 +339,6 @@
                     } else {
                         change = 'insert'
                     }
-
                     fOld = fOld || {properties: {}}
                     fNew = fNew || {properties: {}}
                     let oldRow = document.createElement('tr')
