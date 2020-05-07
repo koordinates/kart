@@ -1128,21 +1128,21 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
             return ds
 
         # changes from HEAD (R1 -> WC)
-        # r = cli_runner.invoke(["diff", "--exit-code", "--json", R1])
-        # assert r.exit_code == 1, r
-        # odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
-        # ddata = _extract(odata)
-        # assert ddata == {
-        #     1: ('a1', 'a'),
-        #     3: ('c', 'c1'),
-        #     4: ('d1', 'd2'),
-        #     5: ('e1', None),
-        #     6: (None, 'f'),
-        #     8: ('h', 'h1'),
-        #     9: ('i', None),
-        #     11: (None, 'k'),
-        #     12: (None, 'l1'),
-        # }
+        r = cli_runner.invoke(["diff", "--exit-code", "--json", R1])
+        assert r.exit_code == 1, r
+        odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
+        ddata = _extract(odata)
+        assert ddata == {
+            1: ('a1', 'a'),
+            3: ('c', 'c1'),
+            4: ('d1', 'd2'),
+            5: ('e1', None),
+            6: (None, 'f'),
+            8: ('h', 'h1'),
+            9: ('i', None),
+            11: (None, 'k'),
+            12: (None, 'l1'),
+        }
 
         # changes from HEAD^1 (R0 -> WC)
         r = cli_runner.invoke(["diff", "--exit-code", "--json", R0])
