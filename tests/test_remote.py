@@ -8,6 +8,13 @@ import pygit2
 H = pytest.helpers.helpers()
 
 
+def test_clone_empty_repo(tmp_path, cli_runner, chdir):
+    src = tmp_path / "src"
+    subprocess.check_call(["git", "init", "--bare", str(src)])
+    r = cli_runner.invoke(["clone", str(src), tmp_path / "dest"])
+    assert r.exit_code == 0
+
+
 @pytest.mark.parametrize(
     "working_copy",
     [pytest.param(True, id="with-wc"), pytest.param(False, id="without-wc"),],
