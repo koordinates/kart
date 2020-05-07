@@ -1,13 +1,14 @@
 import contextlib
 import io
 import json
+import os
 import string
 import sys
+import tempfile
 import webbrowser
 from pathlib import Path
 
 import click
-from osgeo import ogr
 
 from . import gpkg
 from .output_util import dump_json_output, resolve_output_path
@@ -154,7 +155,7 @@ def repr_row(row, prefix="", exclude=None):
 
 
 @contextlib.contextmanager
-def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
+def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kwargs):
     """
     Contextmanager.
 
@@ -196,6 +197,8 @@ def diff_output_geojson(*, output_path, dataset_count, json_style, **kwargs):
     def _out(dataset, diff):
         if not output_path or output_path == '-':
             fp = sys.stdout
+        elif isinstance(output_path, io.StringIO):
+            fp = output_path
         elif output_path.is_dir():
             fp = (output_path / f"{dataset.name}.geojson").open("w")
         else:
@@ -343,13 +346,6 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
             raise click.BadParameter(
                 "Directory is not valid for --output with --html", param_hint="--output"
             )
-
-    json_data = io.StringIO()
-    with diff_output_json(
-        output_path=json_data, dataset_count=dataset_count
-    ) as json_writer:
-        yield json_writer
-
     with open(
         Path(__file__).resolve().with_name("diff-view.html"), "r", encoding="utf8"
     ) as ft:
@@ -357,13 +353,30 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
 
     title = f"{Path(repo.path).name}: {base.short_id} .. {target.short_id if target else 'working-copy'}"
 
-    if not output_path:
-        output_path = Path(repo.path) / "DIFF.html"
-    fo = resolve_output_path(output_path)
+    with tempfile.TemporaryDirectory() as tempdir:
+        tempdir = Path(tempdir)
+        # Write a bunch of geojson files to a temporary directory
+        with diff_output_geojson(
+            output_path=tempdir, dataset_count=dataset_count, json_style="extracompact",
+        ) as json_writer:
+            yield json_writer
 
-    fo.write(
-        template.substitute({"title": title, "geojson_data": json_data.getvalue()})
-    )
+        if not output_path:
+            output_path = Path(repo.path) / "DIFF.html"
+        fo = resolve_output_path(output_path)
+
+        # Read all the geojson back in, and stick them in a dict
+        all_datasets_geojson = {}
+        for filename in os.listdir(tempdir):
+            with open(tempdir / filename) as json_file:
+                all_datasets_geojson[os.path.splitext(filename)[0]] = json.load(
+                    json_file
+                )
+        fo.write(
+            template.substitute(
+                {"title": title, "geojson_data": json.dumps(all_datasets_geojson)}
+            )
+        )
     if fo != sys.stdout:
         fo.close()
         webbrowser.open_new(f"file://{output_path.resolve()}")
