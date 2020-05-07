@@ -91,6 +91,13 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
         checkout_new(repo_structure, path, datasets=datasets, commit=commit)
 
 
+def checkout_empty_repo(repo, path):
+    wc = WorkingCopy.new(repo, path)
+    wc.create()
+    wc.save_config()
+    return wc
+
+
 def checkout_new(repo_structure, path, *, datasets=None, commit=None):
     if not datasets:
         datasets = list(repo_structure)
@@ -102,11 +109,9 @@ def checkout_new(repo_structure, path, *, datasets=None, commit=None):
 
     click.echo(f"Commit: {commit.hex}")
 
-    wc = WorkingCopy.new(repo_structure.repo, path)
-    wc.create()
+    wc = checkout_empty_repo(repo_structure.repo, path)
     for dataset in datasets:
         wc.write_full(commit, dataset, safe=False)
-    wc.save_config()
 
 
 @click.command()
