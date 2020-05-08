@@ -51,15 +51,31 @@ class CommitWithReference:
         return self.id.hex
 
     @property
+    def reference_type(self):
+        if self.reference is None:
+            return None
+        elif self.reference.name.startswith("refs/heads/"):
+            return "branch"
+        elif self.reference.name.startswith("refs/tags/"):
+            return "tag"
+        return None
+
+    @property
     def shorthand_with_type(self):
         if self.reference is not None:
-            if self.reference.name.startswith("refs/heads/"):
-                return f'branch "{self.reference.shorthand}"'
-            elif self.reference.name.startswith("refs/tags/"):
-                return f'tag "{self.reference.shorthand}"'
+            ref_type = self.reference_type
+            if ref_type:
+                return f'{ref_type} "{self.reference.shorthand}"'
             else:
                 return f'"{self.reference.shorthand}"'
         return self.id.hex
+
+    def as_json(self):
+        result = {"commit": self.commit.id.hex}
+        ref_type = self.reference_type
+        if ref_type is not None:
+            result[ref_type] = self.reference.shorthand
+        return result
 
     @staticmethod
     def resolve(repo, refish):
