@@ -150,7 +150,7 @@ jobs:
             VER="${BASH_REMATCH[1]}"
             IS_RELEASE=1
           else
-            VER=$(sed -E "s/(.*)/\1+ci.${GITHUB_SHA::8}/" sno/VERSION)
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" sno/VERSION)
             IS_RELEASE=0
           fi
           echo "App Version: $VER"
