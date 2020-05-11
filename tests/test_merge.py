@@ -1,3 +1,4 @@
+import json
 import pytest
 
 import pygit2
@@ -86,12 +87,12 @@ def test_merge_fastforward_noff(
         assert repo.head.target.hex != commit_id
 
         # force creation of a merge commit
-        r = cli_runner.invoke(["merge", "--no-ff", "changes"])
+        r = cli_runner.invoke(["merge", "changes", "--no-ff", "--json"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-merge")
 
-        merge_commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+        merge_commit_id = json.loads(r.stdout)["sno.merge/v1"]["mergeCommit"]
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == merge_commit_id
@@ -143,11 +144,11 @@ def test_merge_true(
             "Can't resolve as a fast-forward merge and --ff-only specified" in r.stderr
         )
 
-        r = cli_runner.invoke(["merge", "--ff", "changes"])
+        r = cli_runner.invoke(["merge", "changes", "--ff", "--json"])
         assert r.exit_code == 0, r
         H.git_graph(request, "post-merge")
 
-        merge_commit_id = r.stdout.splitlines()[-1].split(": ")[1]
+        merge_commit_id = json.loads(r.stdout)["sno.merge/v1"]["mergeCommit"]
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == merge_commit_id

@@ -1,9 +1,10 @@
+import json
 import pytest
 
 import pygit2
 
 from sno.conflicts import ConflictIndex
-from sno.exceptions import NOT_YET_IMPLEMENTED, MERGE_CONFLICT
+from sno.exceptions import NOT_YET_IMPLEMENTED
 
 H = pytest.helpers.helpers()
 
@@ -16,11 +17,16 @@ H = pytest.helpers.helpers()
         pytest.param(H.TABLE, id="table"),
     ],
 )
-def test_merge_conflicts(data, data_working_copy, geopackage, cli_runner, update):
+@pytest.mark.parametrize(
+    "output_format", ["text", "json"],
+)
+def test_merge_conflicts_dryrun(
+    data, output_format, data_working_copy, geopackage, cli_runner, update, insert
+):
     sample_pks = data.SAMPLE_PKS
     with data_working_copy(data.ARCHIVE) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
-        base_commit_id = repo.head.target.hex
+        ancestor_commit_id = repo.head.target.hex
 
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "alternate"])
@@ -32,7 +38,8 @@ def test_merge_conflicts(data, data_working_copy, geopackage, cli_runner, update
         update(db, sample_pks[1], "aaa")
         update(db, sample_pks[2], "aaa")
         update(db, sample_pks[3], "aaa")
-        alternate_commit_id = update(db, sample_pks[4], "aaa")
+        update(db, sample_pks[4], "aaa")
+        alternate_commit_id = insert(db, reset_index=1, insert_str="insert_aaa")
 
         assert repo.head.target.hex == alternate_commit_id
 
@@ -44,94 +51,40 @@ def test_merge_conflicts(data, data_working_copy, geopackage, cli_runner, update
         update(db, sample_pks[2], "mmm")
         update(db, sample_pks[3], "mmm")
         update(db, sample_pks[4], "mmm")
-        master_commit_id = update(db, sample_pks[5], "mmm")
+        update(db, sample_pks[5], "mmm")
+        master_commit_id = insert(db, reset_index=1, insert_str="insert_mmm")
+        assert repo.head.target.hex == master_commit_id
 
-        r = cli_runner.invoke(["merge", "alternate"])
+        r = cli_runner.invoke(["merge", "alternate", "--dry-run", f"--{output_format}"])
 
-        assert r.exit_code == MERGE_CONFLICT, r
-        assert "conflict" in r.stdout
-        assert base_commit_id in r.stdout
-        assert alternate_commit_id in r.stdout
-        assert master_commit_id in r.stdout
-
-        assert "Use an interactive terminal to resolve merge conflicts" in r.stderr
-
-        def feature_name(pk):
-            return f"{data.LAYER}:{data.LAYER_PK}={pk}"
-
-        # Only modified in alternate:
-        assert feature_name(sample_pks[0]) not in r.stdout
-
-        # Modified exactly the same in both branches:
-        assert feature_name(sample_pks[1]) not in r.stdout
-
-        # These three are merge conflicts:
-        assert feature_name(sample_pks[2]) in r.stdout
-        assert feature_name(sample_pks[3]) in r.stdout
-        assert feature_name(sample_pks[4]) in r.stdout
-
-        # Only modified in master:
-        assert feature_name(sample_pks[5]) not in r.stdout
-
-        r = cli_runner.invoke(["merge", "alternate"], input="a\no\nt\n")
         assert r.exit_code == 0, r
-        assert repo.head.target.hex != alternate_commit_id
-        assert repo.head.target.hex != master_commit_id
-
-        r = cli_runner.invoke(["diff", master_commit_id])
-        assert r.exit_code == 0, r
-
-        # Changed: their version is merged in from alternate automatically:
-        assert feature_name(sample_pks[0]) in r.stdout
-
-        # Not changed: our version is the same as their version:
-        assert feature_name(sample_pks[1]) not in r.stdout
-        # Changed: reverted to ancestor using "a":
-        assert feature_name(sample_pks[2]) in r.stdout
-        # Not changed: we kept our version using "o":
-        assert feature_name(sample_pks[3]) not in r.stdout
-        # Changed: accepted their version using "t":
-        assert feature_name(sample_pks[4]) in r.stdout
-        # Not changed: our version is merged in automatically:
-        assert feature_name(sample_pks[5]) not in r.stdout
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        pytest.param(H.POINTS, id="points",),
-        pytest.param(H.POLYGONS, id="polygons",),
-        pytest.param(H.TABLE, id="table"),
-    ],
-)
-def test_unsupported_merge_conflicts(
-    data, data_working_copy, geopackage, cli_runner, insert
-):
-    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
-
-        # new branch
-        r = cli_runner.invoke(["checkout", "-b", "alternate"])
-        assert r.exit_code == 0, r
-        assert repo.head.name == "refs/heads/alternate"
-
-        db = geopackage(wc)
-        alternate_commit_id = insert(db, reset_index=1, insert_str="aaa")
-
-        assert repo.head.target.hex == alternate_commit_id
-
-        r = cli_runner.invoke(["checkout", "master"])
-        assert r.exit_code == 0, r
-        assert repo.head.target.hex != alternate_commit_id
-
-        master_commit_id = insert(db, reset_index=1, insert_str="mmm")
-
-        r = cli_runner.invoke(["merge", "alternate"])
-        assert r.exit_code == NOT_YET_IMPLEMENTED
-        assert (
-            "resolving conflicts where features are added or removed isn't supported yet"
-            in r.stderr
-        )
+        if output_format == "text":
+            assert r.stdout.split("\n") == [
+                'Merging branch "alternate" into master',
+                "Conflicts found:",
+                "",
+                f"{data.LAYER}:",
+                "  Feature conflicts:",
+                "    edit/edit: 3",
+                "    other: 1",
+                "",
+                "(Not actually merging due to --dry-run)",
+                "",
+            ]
+        else:
+            jdict = json.loads(r.stdout)
+            assert jdict == {
+                "sno.merge/v1": {
+                    "ancestor": {"commit": ancestor_commit_id},
+                    "ours": {"branch": "master", "commit": master_commit_id,},
+                    "theirs": {"branch": "alternate", "commit": alternate_commit_id,},
+                    "dryRun": True,
+                    "message": "Merge branch \"alternate\" into master",
+                    "conflicts": {
+                        data.LAYER: {"featureConflicts": {"edit/edit": 3, "other": 1}},
+                    },
+                },
+            }
 
 
 def test_conflict_index_roundtrip(data_working_copy, geopackage, cli_runner, update):
