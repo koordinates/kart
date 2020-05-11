@@ -1,5 +1,9 @@
 from collections import namedtuple
 
+import pygit2
+
+from .exceptions import NotFound, NO_COMMIT
+
 
 class CommitWithReference:
     """
@@ -7,7 +11,7 @@ class CommitWithReference:
     When struct is passed around in place of sole commit, then any code that uses the commit is able to give a better
     human-readable name to describe it.
     Example:
-    >>> cwr = CommitWithReference.resolve_refish(repo, "master")
+    >>> cwr = CommitWithReference.resolve(repo, "master")
     >>> cwr.commit.id
     fa003dadb153248d282230a05add62cdb012f926
     >>> cwr.reference.shortname
@@ -16,19 +20,9 @@ class CommitWithReference:
     '"master" (fa003dadb153248d282230a05add62cdb012f926)'
     """
 
-    def __init__(self, c, r=None):
-        if type(c) == tuple:
-            assert len(c) == 2
-            assert r is None
-            self.commit = c[0]
-            self.reference = c[1]
-        elif type(c) == CommitWithReference:
-            assert r is None
-            self.commit = c.commit
-            self.reference = c.reference
-        else:
-            self.commit = c
-            self.reference = r
+    def __init__(self, commit, reference=None):
+        self.commit = commit
+        self.reference = reference
 
     def __str__(self):
         if self.reference is not None:
@@ -68,8 +62,32 @@ class CommitWithReference:
         return self.id.hex
 
     @staticmethod
-    def resolve_refish(repo, refish):
-        return CommitWithReference(repo.resolve_refish(refish))
+    def resolve(repo, refish):
+        """
+        Alias for resolve_refish that returns a CommitWithReference, and,
+        which raises NO_COMMIT if no commit is found with that ID / at that branch / etc.
+
+        Refish could be:
+        - a CommitWithReference or Commit object
+        - branch name
+        - tag name
+        - remote branch
+        - 'HEAD', 'HEAD~1', 'HEAD^', etc
+        - '84e684e7c283163a2abe0388603705cc7fa02fc1' or '84e684e' - commit ref
+        - 'refs/tags/1.2.3' some other refspec
+        but not: branch ID or blob ID
+        """
+        if isinstance(refish, CommitWithReference):
+            return refish
+        elif isinstance(refish, pygit2.Commit):
+            return CommitWithReference(refish)
+
+        try:
+            obj, reference = repo.resolve_refish(refish)
+            commit = obj.peel(pygit2.Commit)
+            return CommitWithReference(commit, reference)
+        except (KeyError, pygit2.InvalidSpecError):
+            raise NotFound(f"No commit found at {refish}", exit_code=NO_COMMIT)
 
 
 # pygit2 always has this order - we use it too for consistency,

@@ -46,8 +46,8 @@ def merge(ctx, ff, ff_only, dry_run, commit):
         )
 
     # accept ref-ish things (refspec, branch, commit)
-    theirs = CommitWithReference.resolve_refish(repo, commit)
-    ours = CommitWithReference.resolve_refish(repo, "HEAD")
+    theirs = CommitWithReference.resolve(repo, commit)
+    ours = CommitWithReference.resolve(repo, "HEAD")
 
     click.echo(f"Merging {theirs} to {ours} ...")
     ancestor_id = repo.merge_base(theirs.id, ours.id)

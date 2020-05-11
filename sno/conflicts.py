@@ -223,7 +223,7 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
 
     repo - a pygit2.Repository
     merge_index - a pygit2.Index containing the attempted merge and merge conflicts.
-    ancestor, ours, theirs - each is a either a pygit2.Commit, or a CommitWithReference.
+    ancestor, ours, theirs - each is a refish, commit, or CommitWithReference.
     """
 
     # Shortcut used often below
@@ -232,9 +232,9 @@ def resolve_merge_conflicts(repo, merge_index, ancestor, ours, theirs, dry_run=F
 
     # We have three versions of lots of objects - ancestor, ours, theirs.
     commit_with_refs3 = AncestorOursTheirs(
-        CommitWithReference(ancestor),
-        CommitWithReference(ours),
-        CommitWithReference(theirs),
+        CommitWithReference.resolve(repo, ancestor),
+        CommitWithReference.resolve(repo, ours),
+        CommitWithReference.resolve(repo, theirs),
     )
     commits3 = aot(cwr.commit for cwr in commit_with_refs3)
     repo_structures3 = aot(

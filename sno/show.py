@@ -4,11 +4,10 @@ from datetime import datetime, timezone, timedelta
 from io import StringIO
 
 import click
-import pygit2
 
 from .cli_util import MutexOption
-from .exceptions import NotFound, NO_COMMIT
 from .output_util import dump_json_output, resolve_output_path
+from .structs import CommitWithReference
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff
 
@@ -50,13 +49,9 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
     """
     Show the given commit, or HEAD
     """
-    # Ensure we were given a reference to a commit, and not a tree or something
     repo = ctx.obj.repo
-    try:
-        obj = repo.revparse_single(refish)
-        commit = obj.peel(pygit2.Commit)
-    except (KeyError, pygit2.InvalidSpecError):
-        raise NotFound(f"{refish} is not a commit", exit_code=NO_COMMIT)
+    # Ensures we were given a reference to a commit, and not a tree or something
+    commit = CommitWithReference.resolve(repo, refish).commit
 
     if commit.parents:
         parent = f"{refish}^"
