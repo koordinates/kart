@@ -303,8 +303,9 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 r = cli_runner.invoke(
                     [
                         "import",
-                        f"GPKG:{data / source_gpkg}:{table}",
+                        f"GPKG:{data / source_gpkg}",
                         f"--version={version}",
+                        f"--table={table}",
                         "mytable",
                     ]
                 )

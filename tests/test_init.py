@@ -51,8 +51,8 @@ def test_init_import_list(
         assert r.exit_code == 1, r
         lines = r.stdout.splitlines()
         assert len(lines) >= 2
-        assert lines[0] == f"GeoPackage tables in '{gpkg}':"
-        assert any(re.match(fr"^{table}\s+- ", l) for l in lines[1:])
+        assert lines[0] == "Tables found:"
+        assert any(re.match(fr"^  {table}\s+- ", l) for l in lines[1:])
 
 
 @pytest.mark.slow
@@ -67,7 +67,9 @@ def test_init_import(
         repo_path.mkdir()
 
         with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--import", f"gpkg:{data / gpkg}:{table}"])
+            r = cli_runner.invoke(
+                ["init", "--import", f"gpkg:{data / gpkg}", f"--table={table}"]
+            )
             assert r.exit_code == 0, r
             assert (repo_path / "HEAD").exists()
 
@@ -108,7 +110,7 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
     """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
     with data_archive("gpkg-editing") as data:
         r = cli_runner.invoke(
-            ["init", "--import", f"GPKG:editing.gpkg:editing", "editing"]
+            ["init", "--import", f"GPKG:editing.gpkg", "--table=editing", "editing"]
         )
         repo_path = data / "editing"
 
@@ -157,24 +159,26 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         repo_path.mkdir()
 
         r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
-        assert r.exit_code == INVALID_ARGUMENT, r
-        assert 'invalid prefix: "FRED" (choose from GPKG)' in r.stderr
+        assert r.exit_code == NO_IMPORT_SOURCE, r
+        assert (
+            "fred:thingz' doesn't appear to be valid (tried formats: GPKG,SHP,TAB)"
+            in r.stderr
+        )
 
         r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
         assert r.exit_code == NO_IMPORT_SOURCE, r
-        assert "File 'thingz.gpkg' does not exist." in r.stderr
+        assert "Couldn't find 'thingz.gpkg'" in r.stderr
 
-        r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:no-existey"])
-        assert r.exit_code == NO_TABLE, r
-        assert (
-            "Feature/Attributes table 'no-existey' not found in gpkg_contents"
-            in r.stderr
+        r = cli_runner.invoke(
+            ["init", "--import", f"gpkg:{data/gpkg}", f"--table=no-existey"]
         )
+        assert r.exit_code == NO_TABLE, r
+        assert "Invalid value for --table: Table 'no-existey' not found" in r.stderr
 
         # not empty
         (repo_path / "a.file").touch()
         r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data/gpkg}:{table}", repo_path]
+            ["init", "--import", f"gpkg:{data/gpkg}", f"--table={table}", repo_path]
         )
         assert r.exit_code == INVALID_OPERATION, r
         assert "isn't empty" in r.stderr
@@ -187,7 +191,8 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
             [
                 "init",
                 "--import",
-                f"gpkg:{data / gpkg}:{table}",
+                f"gpkg:{data / gpkg}",
+                f"--table={table}",
                 repo_path,
                 "--no-checkout",
             ]
@@ -198,7 +203,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
 
         # existing repo/dir
         r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data / gpkg}:{table}", repo_path]
+            ["init", "--import", f"gpkg:{data / gpkg}", f"--table={table}", repo_path]
         )
         assert r.exit_code == INVALID_OPERATION, r
         assert "isn't empty" in r.stderr
@@ -279,7 +284,8 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
                 r = cli_runner.invoke(
                     [
                         "import",
-                        f"GPKG:{source_path / source_gpkg}:{source_table}",
+                        f"GPKG:{source_path / source_gpkg}",
+                        f"--table={source_table}",
                         import_path,
                     ]
                 )
@@ -332,7 +338,11 @@ def test_init_import_home_resolve(
             monkeypatch.setenv("HOME", str(source_path))
 
             r = cli_runner.invoke(
-                ["import", f"GPKG:~/nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k"]
+                [
+                    "import",
+                    "GPKG:~/nz-pa-points-topo-150k.gpkg",
+                    "--table=nz_pa_points_topo_150k",
+                ]
             )
             assert r.exit_code == 0, r
 
@@ -354,7 +364,8 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS.LAYER}",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"--table={H.POLYGONS.LAYER}",
                 ]
             )
             assert r.exit_code == 0, r
@@ -391,7 +402,8 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS.LAYER}",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"--table={H.POLYGONS.LAYER}",
                     "waca2",
                 ]
             )

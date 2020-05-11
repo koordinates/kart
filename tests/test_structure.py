@@ -7,7 +7,7 @@ import pygit2
 import pytest
 
 from sno import gpkg
-from sno.init import ImportGPKG
+from sno.init import OgrImporter
 from sno.structure import DatasetStructure, Dataset1
 
 
@@ -157,7 +157,8 @@ def test_import(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{data / source_gpkg}:{table}",
+                    f"GPKG:{data / source_gpkg}",
+                    f"--table={table}",
                     f"--version={import_version}",
                     table,
                 ]
@@ -187,19 +188,37 @@ def test_import(
             if num_rows > 0:
                 # compare the first feature in the repo against the source DB
                 key, feature = next(dataset.features())
-                row = dbcur.execute(
-                    f"SELECT * FROM {table} WHERE {pk_field}=?;", [feature[pk_field]]
-                ).fetchone()
-                print("First Feature:", key, feature, dict(row))
-                assert feature == dict(row)
+
+                def normalise(row):
+                    row = dict(row)
+                    if 'geom' in row:
+                        # We import via OGR, which strips envelopes by default
+                        row['geom'] = gpkg.ogr_to_gpkg_geom(
+                            gpkg.gpkg_geom_to_ogr(row['geom'], parse_srs=True),
+                        )
+                    return row
+
+                row = normalise(
+                    dbcur.execute(
+                        f"SELECT * FROM {table} WHERE {pk_field}=?;",
+                        [feature[pk_field]],
+                    ).fetchone()
+                )
+                feature = normalise(feature)
+                print("First Feature:", key, feature, row)
+                assert feature == row
 
                 # compare a source DB feature against the repo feature
-                row = dbcur.execute(
-                    f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
-                ).fetchone()
+                row = normalise(
+                    dbcur.execute(
+                        f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
+                    ).fetchone()
+                )
+
                 for key, feature in dataset.features():
                     if feature[pk_field] == row[pk_field]:
-                        assert feature == dict(row)
+                        feature = normalise(feature)
+                        assert feature == row
                         break
                 else:
                     pytest.fail(
@@ -305,9 +324,9 @@ def test_import_multiple(
                 r = cli_runner.invoke(
                     [
                         "import",
-                        f"GPKG:{data / source_gpkg}:{table}",
+                        f"GPKG:{data / source_gpkg}",
                         f"--version={import_version}",
-                        table,
+                        f"--table={table}",
                     ]
                 )
                 assert r.exit_code == 0, r
@@ -324,9 +343,9 @@ def test_import_multiple(
                         r = cli_runner.invoke(
                             [
                                 "import",
-                                f"GPKG:{data / source_gpkg}:{table}",
+                                f"GPKG:{data / source_gpkg}",
                                 f"--version={import_version}",
-                                table,
+                                f"--table={table}",
                             ]
                         )
 
@@ -374,7 +393,7 @@ def test_write_feature_performance(
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = ImportGPKG(data / source_gpkg, table)
+            source = OgrImporter.open(data / source_gpkg, table=table)
             with source:
                 dataset = DatasetStructure.for_version(import_version)(None, table)
                 feature_iter = itertools.cycle(source.iter_features())
@@ -411,7 +430,7 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = ImportGPKG(data / "nz-pa-points-topo-150k.gpkg", table)
+            source = OgrImporter.open(data / "nz-pa-points-topo-150k.gpkg", table=table)
 
             dataset = DatasetStructure.for_version(import_version)(None, table)
             dataset.fast_import_table(repo, source)
