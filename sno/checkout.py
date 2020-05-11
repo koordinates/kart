@@ -4,8 +4,15 @@ from pathlib import Path
 import click
 import pygit2
 
-from .exceptions import InvalidOperation, NotFound, NO_WORKING_COPY
+from .exceptions import (
+    InvalidOperation,
+    NotFound,
+    NO_BRANCH,
+    NO_COMMIT,
+    NO_WORKING_COPY,
+)
 from .structure import RepositoryStructure
+from .structs import CommitWithReference
 from .working_copy import WorkingCopy
 
 
@@ -33,15 +40,13 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
     # - 'c0ffee' commit ref
     # - 'refs/tags/1.2.3' some other refspec
 
-    base_commit = repo.head.peel(pygit2.Commit)
-    head_ref = None
-
     if refish:
-        commit, ref = repo.resolve_refish(refish)
-        head_ref = ref.name if ref else commit.id
+        resolved = CommitWithReference.resolve(repo, refish)
     else:
-        commit = base_commit
-        head_ref = repo.head.name
+        resolved = CommitWithReference.resolve(repo, "HEAD")
+
+    commit = resolved.commit
+    head_ref = resolved.reference.name if resolved.reference else commit.id
 
     if branch:
         if branch in repo.branches:
@@ -159,9 +164,10 @@ def switch(ctx, create, force_create, discard_changes, refish):
         # - 'refs/tags/1.2.3' some other refspec
         start_point = refish
         if start_point:
-            commit, ref = repo.resolve_refish(start_point)
+            resolved = CommitWithReference.resolve(repo, start_point)
         else:
-            commit = repo.head.peel(pygit2.Commit)
+            resolved = CommitWithReference.resolve(repo, "HEAD")
+        commit = resolved.commit
 
         if new_branch in repo.branches and not force_create:
             raise click.BadParameter(
@@ -189,7 +195,7 @@ def switch(ctx, create, force_create, discard_changes, refish):
         try:
             branch = repo.branches[refish]
         except KeyError:
-            raise click.BadParameter(f"Branch '{refish}' not found.")
+            raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
 
         commit = branch.peel(pygit2.Commit)
         head_ref = branch.name
@@ -232,14 +238,17 @@ def restore(ctx, source, pathspec):
         raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 
     head_commit = repo.head.peel(pygit2.Commit)
-
-    commit, ref = repo.resolve_refish(source)
+    try:
+        commit_or_tree, ref = repo.resolve_refish(source)
+        commit_or_tree.peel(pygit2.Tree)
+    except (KeyError, pygit2.InvalidSpecError):
+        raise NotFound(f"{source} is not a commit or tree", exit_code=NO_COMMIT)
 
     working_copy.reset(
-        commit,
+        commit_or_tree,
         repo_structure,
         force=True,
-        update_meta=(head_commit.id == commit.id),
+        update_meta=(head_commit.id == commit_or_tree.id),
         paths=pathspec,
     )
 

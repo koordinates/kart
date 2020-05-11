@@ -72,6 +72,8 @@ class RepositoryStructure:
     def __repr__(self):
         if self._commit is not None:
             return f"RepoStructure<{self.repo.path}@{self._commit.id}>"
+        elif self._tree is not None:
+            return f"RepoStructure<{self.repo.path}@tree={self._tree.id}>"
         else:
             return f"RepoStructure<{self.repo.path} <empty>>"
 
