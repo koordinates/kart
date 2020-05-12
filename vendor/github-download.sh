@@ -2,6 +2,7 @@
 set -e
 
 # Helper script to download vendor-* archives from Github CI.
+# Usage ./github-download.sh {PLATFORM} {BRANCH}
 
 if ! command -v jq >/dev/null; then
     echo "❗️This script requires 'jq' (and ideally 'hub') installed"
@@ -11,8 +12,17 @@ fi
 REPO=koordinates/sno
 WORKFLOW=build.yml
 
+if [ -n "${1-}" ]; then
+    PLATFORM=$1
+elif [ "${OS}" = "Windows_NT" ]; then
+    PLATFORM=Windows
+else
+    PLATFORM=$(uname -s)
+fi
+echo "Platform: ${PLATFORM}"
+
 CURRENT_BRANCH=$(git branch --show-current)
-BRANCH=${1:-${CURRENT_BRANCH:-master}}
+BRANCH=${2:-${CURRENT_BRANCH:-master}}
 echo "Branch: ${BRANCH}"
 
 echo "Finding most recent CI Run for '${BRANCH}'..."
@@ -21,19 +31,21 @@ RUN=$(jq .workflow_runs[0] <<<"$RUN_SET")
 if [ -z "$RUN" ] || [ "$RUN" = "null" ]; then
     echo "❗️Couldn't find a recent successful CI build for '$BRANCH'"
     if [ "$BRANCH" != "master" ]; then
-        echo "Try with '$0 master'?"
+        echo "Try with '$0 ${PLATFORM} master'?"
     fi
     exit 1
 fi
 RUN_ID=$(jq -r .id <<< "$RUN")
 echo "CI Run: ${RUN_ID}"
 
-echo "Finding vendor-* artifacts from CI Run..."
+PLATFORM_ARTIFACT="vendor-${PLATFORM}"
+
+echo "Finding '${PLATFORM_ARTIFACT}' artifact from CI Run..."
 ARTIFACT_SET=$(curl -sS "https://api.github.com/repos/${REPO}/actions/runs/${RUN_ID}/artifacts")
-ARTIFACT_URLS=$(jq -r '.artifacts | map(select(any(.name; startswith("vendor-")))|.archive_download_url)[]' <<<"$ARTIFACT_SET")
-ARTIFACT_IDS=$(jq -r '.artifacts | map(select(any(.name; startswith("vendor-")))|.id)[]' <<<"$ARTIFACT_SET")
+ARTIFACT_URLS=$(jq -r ".artifacts | map(select(any(.name; startswith(\"${PLATFORM_ARTIFACT}\")))|.archive_download_url)[]" <<<"$ARTIFACT_SET")
+ARTIFACT_IDS=$(jq -r ".artifacts | map(select(any(.name; startswith(\"${PLATFORM_ARTIFACT}\")))|.id)[]" <<<"$ARTIFACT_SET")
 if [ -z "$ARTIFACT_IDS" ]; then
-    echo "❗️Couldn't find any vendor-* artifacts. Check $(jq -r .html_url <<< "$RUN") ?"
+    echo "❗️Couldn't find a ${PLATFORM_ARTIFACT} artifact. Check $(jq -r .html_url <<< "$RUN") ?"
     exit 1
 fi
 
@@ -46,11 +58,11 @@ cd "$(dirname "$0")"
 mkdir -p dist/
 if command -v hub >/dev/null; then
     # if 'hub' is installed, use its authenticated access to the API
-    echo "Using 'hub' to download artifacts via the Github API..."
+    echo "Using 'hub' to download artifact via the Github API..."
     for URL in $ARTIFACT_URLS; do
         echo "Downloading... $URL"
         hub api "$URL" > dist/tmp.zip
-        unzip -d dist/ dist/tmp.zip
+        unzip -o -d dist/ dist/tmp.zip
         rm dist/tmp.zip
     done
 else
@@ -58,7 +70,10 @@ else
     CHECK_SUITE_ID=$(jq -r .check_suite_url <<<"$RUN" | awk -F / '{print $NF}')
     echo "CI Check Suite: ${CHECK_SUITE_ID}"
 
-    echo -e "\n⚠️  Please download the following URLs in your browser; extract the ZIPs; and put the vendor-*.tar.gz into $(pwd -P)/dist/"
+    echo -e "\n⚠️  Please download the following URL in your browser; extract the ZIP; and put the ${PLATFORM_ARTIFACT}.tar.gz into $(pwd -P)/dist/"
+    if [ "$PLATFORM" == "Darwin" ]; then
+        echo "⚠️  On macOS Finder can be overly clever, use \`unzip {downloaded}.zip\` instead to get the ${PLATFORM_ARTIFACT}.tar.gz file."
+    fi
     for ID in $ARTIFACT_IDS; do
         echo "https://github.com/${REPO}/suites/${CHECK_SUITE_ID}/artifacts/${ID}"
     done

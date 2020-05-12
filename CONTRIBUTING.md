@@ -12,6 +12,7 @@ Requirements (install via Homebrew/somehow):
 * Python 3.7
 * wget
 * cmake
+* jq
 
 ```console
 $ git clone git@github.com:koordinates/sno.git

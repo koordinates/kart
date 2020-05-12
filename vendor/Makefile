@@ -182,8 +182,11 @@ build-Linux:
 	tar czf $(vendor-Linux-archive) -C $(VENDOR) env wheelhouse
 	-$(RM) -r $(VENDOR)
 
-$(vendor-Linux-archive) $(vendor-Darwin-archive):
-	$(MAKE) download
+$(vendor-Darwin-archive):
+	./github-download.sh Darwin
+
+$(vendor-Linux-archive):
+	./github-download.sh Linux
 
 .PHONY: download
 download:
