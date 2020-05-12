@@ -1,12 +1,56 @@
+import contextlib
 import json
 import pytest
 
 import pygit2
 
 from sno.conflicts import ConflictIndex
-from sno.exceptions import NOT_YET_IMPLEMENTED
+from sno.structs import CommitWithReference
+from sno.repo_files import (
+    MERGE_HEAD,
+    MERGE_MSG,
+    MERGE_LABELS,
+    MERGE_INDEX,
+    repo_file_exists,
+    repo_file_path,
+    read_repo_file,
+)
 
 H = pytest.helpers.helpers()
+
+
+@pytest.fixture
+def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
+    @contextlib.contextmanager
+    def ctx(data):
+        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
+            repo = pygit2.Repository(str(repo_path))
+            sample_pks = data.SAMPLE_PKS
+
+            cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
+            cli_runner.invoke(["checkout", "-b", "theirs_branch"])
+
+            db = geopackage(wc)
+            update(db, sample_pks[0], "theirs_version")
+            update(db, sample_pks[1], "ours_theirs_version")
+            update(db, sample_pks[2], "theirs_version")
+            update(db, sample_pks[3], "theirs_version")
+            update(db, sample_pks[4], "theirs_version")
+            insert(db, reset_index=1, insert_str="insert_theirs")
+
+            cli_runner.invoke(["checkout", "ancestor_branch"])
+            cli_runner.invoke(["checkout", "-b", "ours_branch"])
+
+            update(db, sample_pks[1], "ours_theirs_version")
+            update(db, sample_pks[2], "ours_version")
+            update(db, sample_pks[3], "ours_version")
+            update(db, sample_pks[4], "ours_version")
+            update(db, sample_pks[5], "ours_version")
+            insert(db, reset_index=1, insert_str="insert_ours")
+
+            yield repo
+
+    return ctx
 
 
 @pytest.mark.parametrize(
@@ -20,117 +64,97 @@ H = pytest.helpers.helpers()
 @pytest.mark.parametrize(
     "output_format", ["text", "json"],
 )
-def test_merge_conflicts_dryrun(
-    data, output_format, data_working_copy, geopackage, cli_runner, update, insert
+@pytest.mark.parametrize(
+    "dry_run", [pytest.param(False, id="",), pytest.param(True, id="dryrun",),],
+)
+def test_merge_conflicts(
+    data, output_format, dry_run, create_conflicts, cli_runner,
 ):
-    sample_pks = data.SAMPLE_PKS
-    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
-        ancestor_commit_id = repo.head.target.hex
+    with create_conflicts(data) as repo:
+        ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
+        ours = CommitWithReference.resolve(repo, "ours_branch")
+        theirs = CommitWithReference.resolve(repo, "theirs_branch")
 
-        # new branch
-        r = cli_runner.invoke(["checkout", "-b", "alternate"])
+        cmd = ["merge", "theirs_branch", f"--{output_format}"]
+        if dry_run:
+            cmd += ["--dry-run"]
+
+        r = cli_runner.invoke(cmd)
         assert r.exit_code == 0, r
-        assert repo.head.name == "refs/heads/alternate"
 
-        db = geopackage(wc)
-        update(db, sample_pks[0], "aaa")
-        update(db, sample_pks[1], "aaa")
-        update(db, sample_pks[2], "aaa")
-        update(db, sample_pks[3], "aaa")
-        update(db, sample_pks[4], "aaa")
-        alternate_commit_id = insert(db, reset_index=1, insert_str="insert_aaa")
-
-        assert repo.head.target.hex == alternate_commit_id
-
-        r = cli_runner.invoke(["checkout", "master"])
-        assert r.exit_code == 0, r
-        assert repo.head.target.hex != alternate_commit_id
-
-        update(db, sample_pks[1], "aaa")
-        update(db, sample_pks[2], "mmm")
-        update(db, sample_pks[3], "mmm")
-        update(db, sample_pks[4], "mmm")
-        update(db, sample_pks[5], "mmm")
-        master_commit_id = insert(db, reset_index=1, insert_str="insert_mmm")
-        assert repo.head.target.hex == master_commit_id
-
-        r = cli_runner.invoke(["merge", "alternate", "--dry-run", f"--{output_format}"])
-
-        assert r.exit_code == 0, r
         if output_format == "text":
-            assert r.stdout.split("\n") == [
-                'Merging branch "alternate" into master',
-                "Conflicts found:",
-                "",
-                f"{data.LAYER}:",
-                "  Feature conflicts:",
-                "    edit/edit: 3",
-                "    other: 1",
-                "",
-                "(Not actually merging due to --dry-run)",
-                "",
-            ]
+            dry_run_message = (
+                ["(Not actually merging due to --dry-run)", ""] if dry_run else [""]
+            )
+
+            assert (
+                r.stdout.split("\n")
+                == [
+                    'Merging branch "theirs_branch" into ours_branch',
+                    "Conflicts found:",
+                    "",
+                    f"{data.LAYER}:",
+                    "  Feature conflicts:",
+                    "    edit/edit: 3",
+                    "    other: 1",
+                    "",
+                ]
+                + dry_run_message
+            )
+
         else:
             jdict = json.loads(r.stdout)
             assert jdict == {
                 "sno.merge/v1": {
-                    "ancestor": {"commit": ancestor_commit_id},
-                    "ours": {"branch": "master", "commit": master_commit_id,},
-                    "theirs": {"branch": "alternate", "commit": alternate_commit_id,},
-                    "dryRun": True,
-                    "message": "Merge branch \"alternate\" into master",
+                    "branch": "ours_branch",
+                    "ancestor": ancestor.id.hex,
+                    "ours": ours.id.hex,
+                    "theirs": theirs.id.hex,
+                    "dryRun": dry_run,
+                    "message": "Merge branch \"theirs_branch\" into ours_branch",
                     "conflicts": {
                         data.LAYER: {"featureConflicts": {"edit/edit": 3, "other": 1}},
                     },
                 },
             }
 
+        if not dry_run:
+            assert read_repo_file(repo, MERGE_HEAD) == theirs.id.hex + "\n"
+            assert (
+                read_repo_file(repo, MERGE_MSG)
+                == "Merge branch \"theirs_branch\" into ours_branch\n"
+            )
+            assert (
+                read_repo_file(repo, MERGE_LABELS)
+                == f'({ancestor.id.hex})\n"ours_branch" ({ours.id.hex})\n"theirs_branch" ({theirs.id.hex})\n'
+            )
+            conflict_index = ConflictIndex.read(repo_file_path(repo, MERGE_INDEX))
+            assert len(conflict_index.conflicts) == 4
+            cli_runner.invoke(["merge", "--abort"])
 
-def test_conflict_index_roundtrip(data_working_copy, geopackage, cli_runner, update):
+        assert not repo_file_exists(repo, MERGE_HEAD)
+        assert not repo_file_exists(repo, MERGE_MSG)
+        assert not repo_file_exists(repo, MERGE_LABELS)
+        assert not repo_file_exists(repo, MERGE_INDEX)
+
+
+def test_conflict_index_roundtrip(create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    sample_pks = H.POLYGONS.SAMPLE_PKS
-    with data_working_copy(H.POLYGONS.ARCHIVE) as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
-        repo = pygit2.Repository(str(repo_path))
-        base_commit_id = repo.head.target.hex
+    with create_conflicts(H.POLYGONS) as repo:
+        ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
+        ours = CommitWithReference.resolve(repo, "ours_branch")
+        theirs = CommitWithReference.resolve(repo, "theirs_branch")
 
-        # new branch
-        r = cli_runner.invoke(["checkout", "-b", "alternate"])
-        assert r.exit_code == 0, r
-        assert repo.head.name == "refs/heads/alternate"
+        ancestor_id = repo.merge_base(ours.id, theirs.id)
+        assert ancestor_id.hex == ancestor.id.hex
 
-        db = geopackage(wc)
-        update(db, sample_pks[0], "aaa")
-        update(db, sample_pks[1], "aaa")
-        update(db, sample_pks[2], "aaa")
-        update(db, sample_pks[3], "aaa")
-        alternate_commit_id = update(db, sample_pks[4], "aaa")
-
-        assert repo.head.target.hex == alternate_commit_id
-
-        r = cli_runner.invoke(["checkout", "master"])
-        assert r.exit_code == 0, r
-        assert repo.head.target.hex != alternate_commit_id
-
-        update(db, sample_pks[1], "aaa")
-        update(db, sample_pks[2], "mmm")
-        update(db, sample_pks[3], "mmm")
-        update(db, sample_pks[4], "mmm")
-        master_commit_id = update(db, sample_pks[5], "mmm")
-
-        ancestor_id = repo.merge_base(alternate_commit_id, master_commit_id)
-        assert ancestor_id.hex == base_commit_id
-
-        merge_index = repo.merge_trees(
-            repo[ancestor_id], repo[alternate_commit_id], repo[master_commit_id]
-        )
+        merge_index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
         assert merge_index.conflicts
 
         # Create a ConflictIndex object, and roundtrip it into a tree and back.
         orig = ConflictIndex(merge_index)
-        orig.write("conflict.index")
-        r1 = ConflictIndex.read("conflict.index")
+        orig.write("test.conflict.index")
+        r1 = ConflictIndex.read("test.conflict.index")
         assert r1 is not orig
         assert r1 == orig
 
@@ -141,6 +165,6 @@ def test_conflict_index_roundtrip(data_working_copy, geopackage, cli_runner, upd
         assert r1 != orig
 
         # Roundtrip again
-        r1.write("conflict.index")
-        r2 = ConflictIndex.read("conflict.index")
+        r1.write("test.conflict.index")
+        r2 = ConflictIndex.read("test.conflict.index")
         assert r2 == r1
