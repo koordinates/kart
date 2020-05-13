@@ -6,17 +6,26 @@ import click
 from .cli_util import do_json_option
 from .conflicts import (
     ConflictIndex,
+    abort_merging_state,
     move_repo_to_merging_state,
     summarise_conflicts_json,
     output_json_conflicts_as_text,
 )
-from .exceptions import InvalidOperation, NotYetImplemented
+from .exceptions import InvalidOperation
 from .output_util import dump_json_output
+from .repo_files import is_ongoing_merge
 from .structs import CommitWithReference
 from .structure import RepositoryStructure
 
 
 L = logging.getLogger("sno.merge")
+
+
+def merge_abort(ctx, param, value):
+    if value:
+        repo = ctx.obj.repo
+        abort_merging_state(repo)
+        ctx.exit()
 
 
 @click.command()
@@ -42,17 +51,31 @@ L = logging.getLogger("sno.merge")
     is_flag=True,
     help="Don't perform a merge - just show what would be done",
 )
+@click.option(
+    '--abort',
+    is_flag=True,
+    callback=merge_abort,
+    expose_value=False,
+    is_eager=True,
+    help="Abandon an ongoing merge, revert repository to the state before the merge began",
+)
 @click.argument("commit", required=True, metavar="COMMIT")
 @do_json_option
 @click.pass_context
 def merge(ctx, ff, ff_only, dry_run, do_json, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
+
     repo = ctx.obj.repo
+    if is_ongoing_merge(repo):
+        raise InvalidOperation("A merge is already ongoing")
+
     merge_jdict = do_merge(repo, ff, ff_only, dry_run, commit)
     no_op = merge_jdict.get("noOp", False) or merge_jdict.get("dryRun", False)
+    conflicts = merge_jdict.get("conflicts", None)
 
-    if not no_op:
+    if not no_op and not conflicts:
         # Update working copy.
+        # TODO - maybe lock the working copy during a merge?
         repo_structure = RepositoryStructure(repo)
         wc = repo_structure.working_copy
         if wc:
@@ -82,11 +105,14 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     if not ancestor_id:
         raise InvalidOperation(f"Commits {theirs.id} and {ours.id} aren't related.")
 
+    ancestor = CommitWithReference.resolve(repo, ancestor_id)
+
     merge_message = f"Merge {theirs.shorthand_with_type} into {ours.shorthand}"
     merge_jdict = {
-        "ancestor": {"commit": ancestor_id.hex},
-        "ours": ours.as_json(),
-        "theirs": theirs.as_json(),
+        "branch": ours.shorthand,
+        "ancestor": ancestor.id.hex,
+        "ours": ours.id.hex,
+        "theirs": theirs.id.hex,
         "message": merge_message,
         "conflicts": None,
     }
@@ -118,9 +144,8 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
             repo.head.set_target(theirs.id, f"{merge_message}: Fast-forward")
         return merge_jdict
 
-    c_ancestor = repo[ancestor_id]
     merge_index = repo.merge_trees(
-        ancestor=c_ancestor.tree, ours=ours.tree, theirs=theirs.tree
+        ancestor=ancestor.tree, ours=ours.tree, theirs=theirs.tree
     )
 
     if merge_index.conflicts:
@@ -128,7 +153,12 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
         merge_jdict["conflicts"] = summarise_conflicts_json(repo, conflict_index)
         if not dry_run:
             move_repo_to_merging_state(
-                repo, conflict_index, ancestor=c_ancestor, ours=ours, theirs=theirs
+                repo,
+                conflict_index,
+                merge_message,
+                ancestor=ancestor,
+                ours=ours,
+                theirs=theirs,
             )
         return merge_jdict
 
@@ -188,4 +218,5 @@ def output_merge_json_as_text(jdict):
         click.echo("(Not actually merging due to --dry-run)")
     else:
         # TODO: explain how to resolve conflicts, when this is possible
-        raise NotYetImplemented("Sorry, resolving conflicts is not yet supported")
+        click.echo("Sorry, resolving merge conflicts is not yet supported", err=True)
+        click.echo("Use `sno merge --abort` to abort this merge", err=True)

@@ -9,7 +9,7 @@ import pytest
 
 import pygit2
 
-from sno.commit import FALLBACK_EDITOR
+from sno.repo_files import fallback_editor
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 
@@ -232,7 +232,7 @@ def test_commit_message(
         assert r.exit_code == 0, r
         editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
         assert re.match(
-            rf'{FALLBACK_EDITOR} "?{re.escape(editmsg_path)}"?$', editor_cmd
+            rf'{fallback_editor()} "?{re.escape(editmsg_path)}"?$', editor_cmd
         )
         assert editor_in == (
             "\n"

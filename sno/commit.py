@@ -1,7 +1,5 @@
-import os
 import re
-import shlex
-import subprocess
+
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -9,11 +7,16 @@ from pathlib import Path
 import click
 import pygit2
 
-from . import is_windows
 from .core import check_git_user
 from .diff import Diff
-from .exceptions import NotFound, SubprocessError, NO_CHANGES, NO_DATA, NO_WORKING_COPY
+from .exceptions import NotFound, NO_CHANGES, NO_DATA, NO_WORKING_COPY
 from .output_util import dump_json_output
+from .repo_files import (
+    COMMIT_EDITMSG,
+    write_repo_file,
+    read_repo_file,
+    user_edit_repo_file,
+)
 from .status import (
     get_branch_status_message,
     get_diff_status_message,
@@ -28,11 +31,6 @@ from .timestamps import (
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
 from .cli_util import MutexOption, do_json_option
-
-if is_windows:
-    FALLBACK_EDITOR = "notepad.exe"
-else:
-    FALLBACK_EDITOR = "nano"
 
 
 @click.command()
@@ -119,12 +117,6 @@ def commit(ctx, message, message_file, allow_empty, do_json):
 
 def get_commit_message(repo, wc_changes, quiet=False):
     """ Launches the system editor to get a commit message """
-    editor = os.environ.get("GIT_EDITOR")
-    if not editor:
-        editor = os.environ.get("VISUAL")
-    if not editor:
-        editor = os.environ.get("EDITOR", FALLBACK_EDITOR)
-
     initial_message = [
         "",
         "# Please enter the commit message for your changes. Lines starting",
@@ -143,30 +135,11 @@ def get_commit_message(repo, wc_changes, quiet=False):
         "#",
     ]
 
-    commit_editmsg = str(Path(repo.path) / "COMMIT_EDITMSG")
-    with open(commit_editmsg, "wt+", encoding="utf-8") as f:
-        f.write("\n".join(initial_message) + "\n")
-        f.flush()
-
+    write_repo_file(repo, COMMIT_EDITMSG, "\n".join(initial_message) + "\n")
     if not quiet:
         click.echo("hint: Waiting for your editor to close the file...")
-    if is_windows:
-        # No shlex.quote() on windows
-        # " isn't legal in filenames
-        editor_cmd = f'{editor} "{commit_editmsg}"'
-    else:
-        editor_cmd = f"{editor} {shlex.quote(commit_editmsg)}"
-    try:
-        subprocess.check_call(editor_cmd, shell=True)
-    except subprocess.CalledProcessError as e:
-        raise SubprocessError(
-            f"There was a problem with the editor '{editor}': {e}",
-            called_process_error=e,
-        ) from e
-
-    with open(commit_editmsg, "rt", encoding="utf-8") as f:
-        f.seek(0)
-        message = f.read()
+    user_edit_repo_file(repo, COMMIT_EDITMSG)
+    message = read_repo_file(repo, COMMIT_EDITMSG)
 
     # strip:
     # - whitespace at start/end

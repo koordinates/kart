@@ -70,13 +70,6 @@ class CommitWithReference:
                 return f'"{self.reference.shorthand}"'
         return self.id.hex
 
-    def as_json(self):
-        result = {"commit": self.commit.id.hex}
-        ref_type = self.reference_type
-        if ref_type is not None:
-            result[ref_type] = self.reference.shorthand
-        return result
-
     @staticmethod
     def resolve(repo, refish):
         """
@@ -84,7 +77,7 @@ class CommitWithReference:
         which raises NO_COMMIT if no commit is found with that ID / at that branch / etc.
 
         Refish could be:
-        - a CommitWithReference or Commit object
+        - a pygit2 OID object
         - branch name
         - tag name
         - remote branch
@@ -93,11 +86,8 @@ class CommitWithReference:
         - 'refs/tags/1.2.3' some other refspec
         but not: branch ID or blob ID
         """
-        if isinstance(refish, CommitWithReference):
-            return refish
-        elif isinstance(refish, pygit2.Commit):
-            return CommitWithReference(refish)
-
+        if isinstance(refish, pygit2.Oid):
+            refish = refish.hex
         try:
             obj, reference = repo.resolve_refish(refish)
             commit = obj.peel(pygit2.Commit)
