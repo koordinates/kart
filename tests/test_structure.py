@@ -211,8 +211,11 @@ def test_import(
                 dst_driver_name=source_ogr_driver,
                 layer_name=table,
             )
+            # only one table? don't need to specify --table
+            extra_import_args = []
         else:
             source_filename = data / source_gpkg
+            extra_import_args = [f'--table={table}']
 
         with chdir(repo_path):
             r = cli_runner.invoke(["init"])

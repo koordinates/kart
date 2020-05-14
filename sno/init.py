@@ -158,19 +158,22 @@ class OgrImporter:
         return names
 
     def prompt_for_table(self, prompt):
-        table_list = list(self.print_table_list().keys())
+        table_list = list(self.get_tables().keys())
 
-        if not sys.stdout.isatty():
-            click.secho(
-                f'\n{prompt} via `--table MYTABLE`', fg="yellow",
+        if len(table_list) == 1:
+            return table_list[0]
+        else:
+            self.print_table_list()
+            if not sys.stdout.isatty():
+                click.secho(
+                    f'\n{prompt} via `--table MYTABLE`', fg="yellow",
+                )
+                sys.exit(1)
+            t_choices = click.Choice(choices=table_list)
+            t_default = table_list[0] if len(table_list) == 1 else None
+            return click.prompt(
+                f"\n{prompt}", type=t_choices, show_choices=False, default=t_default,
             )
-            sys.exit(1)
-
-        t_choices = click.Choice(choices=table_list)
-        t_default = table_list[0] if len(table_list) == 1 else None
-        return click.prompt(
-            f"\n{prompt}", type=t_choices, show_choices=False, default=t_default,
-        )
 
     def __str__(self):
         s = str(self.source)
