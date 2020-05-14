@@ -308,7 +308,7 @@ class ImportGPKG(OgrImporter):
     def iter_features(self):
         """
         Overrides the super implementation for performance reasons
-        (it turns out that OGR feature iterators are quite slow!)
+        (it turns out that OGR feature iterators for GPKG are quite slow!)
         """
         db = gpkg.db(self.ogr_source)
         dbcur = db.cursor()

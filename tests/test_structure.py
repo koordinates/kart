@@ -1,8 +1,10 @@
 import itertools
 import json
+import os
 import re
 import subprocess
 
+from osgeo import ogr
 import pygit2
 import pytest
 
@@ -89,6 +91,53 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     return dataset
 
 
+def _ogr2ogr(*, src_path, dst_path, dst_driver_name, layer_name):
+    """
+    Converts a datasource from one format to another.
+    Only converts the given named layer.
+
+    We don't seem to have the OGR binaries in our build of GDAL, so here's a
+    hacky substitute.
+    """
+    src = ogr.Open(src_path, 0)
+
+    dst_driver = ogr.GetDriverByName(dst_driver_name)
+
+    if os.path.exists(dst_path):
+        dst_driver.DeleteDataSource(dst_path)
+
+    src_layer = src.GetLayerByName(layer_name)
+    dst = dst_driver.CreateDataSource(dst_path)
+    dst_layer = dst.CreateLayer(src_layer.GetName(), geom_type=src_layer.GetGeomType())
+
+    src_layer_defn = src_layer.GetLayerDefn()
+    for i in range(0, src_layer_defn.GetFieldCount()):
+        field_defn = src_layer_defn.GetFieldDefn(i)
+        if (
+            dst_driver_name == 'MapInfo File'
+            and field_defn.GetTypeName() == 'Integer64'
+        ):
+            # TAB doesn't handle int64
+            field_defn.SetType(ogr.OFTInteger)
+        dst_layer.CreateField(field_defn)
+
+    dst_layer_defn = dst_layer.GetLayerDefn()
+
+    for src_feature in src_layer:
+        dst_feature = ogr.Feature(dst_layer_defn)
+
+        for i in range(0, dst_layer_defn.GetFieldCount()):
+            field_defn = dst_layer_defn.GetFieldDefn(i)
+            dst_feature.SetField(
+                dst_layer_defn.GetFieldDefn(i).GetNameRef(), src_feature.GetField(i)
+            )
+
+        geom = src_feature.GetGeometryRef()
+        if geom is not None:
+            dst_feature.SetGeometry(geom.Clone())
+        dst_layer.CreateFeature(dst_feature)
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(
     GPKG_IMPORTS[0],
@@ -100,6 +149,11 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     ],
 )
 @pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(
+    'source_format,source_ogr_driver',
+    [('GPKG', 'GPKG'), ('SHP', 'ESRI Shapefile'), ('TAB', 'MapInfo File')],
+    ids=['GPKG', 'SHP', 'TAB'],
+)
 def test_import(
     import_version,
     archive,
@@ -113,6 +167,8 @@ def test_import(
     benchmark,
     request,
     monkeypatch,
+    source_format,
+    source_ogr_driver,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
@@ -146,6 +202,18 @@ def test_import(
         if param_ids[-1] == "empty":
             assert num_rows == 0
 
+        if source_format != 'GPKG':
+            # convert to a new format using OGR
+            source_filename = tmp_path / f"data.{source_format.lower()}"
+            _ogr2ogr(
+                src_path=str(data / source_gpkg),
+                dst_path=str(source_filename),
+                dst_driver_name=source_ogr_driver,
+                layer_name=table,
+            )
+        else:
+            source_filename = data / source_gpkg
+
         with chdir(repo_path):
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
@@ -157,9 +225,9 @@ def test_import(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{data / source_gpkg}",
-                    f"--table={table}",
+                    str(source_filename),
                     f"--version={import_version}",
+                    *extra_import_args,
                     table,
                 ]
             )
