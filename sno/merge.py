@@ -8,8 +8,8 @@ from .conflicts import (
     ConflictIndex,
     abort_merging_state,
     move_repo_to_merging_state,
-    summarise_conflicts_json,
-    output_json_conflicts_as_text,
+    list_conflicts,
+    output_conflicts_as_text,
 )
 from .exceptions import InvalidOperation
 from .output_util import dump_json_output
@@ -150,7 +150,9 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
 
     if merge_index.conflicts:
         conflict_index = ConflictIndex(merge_index)
-        merge_jdict["conflicts"] = summarise_conflicts_json(repo, conflict_index)
+        merge_jdict["conflicts"] = list_conflicts(
+            repo, conflict_index, 0, ancestor=ancestor, ours=ours, theirs=theirs
+        )
         if not dry_run:
             move_repo_to_merging_state(
                 repo,
@@ -212,7 +214,7 @@ def output_merge_json_as_text(jdict):
         return
 
     click.echo("Conflicts found:\n")
-    output_json_conflicts_as_text(conflicts)
+    output_conflicts_as_text(conflicts)
 
     if dry_run:
         click.echo("(Not actually merging due to --dry-run)")

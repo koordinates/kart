@@ -77,6 +77,16 @@ class RepositoryStructure:
         else:
             return f"RepoStructure<{self.repo.path} <empty>>"
 
+    def decode_path(self, path):
+        """
+        Given a path in the sno repository - eg "table_A/.sno-table/49/3e/Bg==" -
+        returns a tuple in either of the following forms:
+        1. (table, "feature", primary_key_field, primary_key)
+        2. (table, "meta", metadata_file_path)
+        """
+        table, table_path = path.split("/.sno-table/", 1)
+        return (table,) + self.get(table).decode_path(table_path)
+
     def get(self, path):
         try:
             return self.get_at(path, self.tree)
@@ -128,10 +138,6 @@ class RepositoryStructure:
                     except ValueError:
                         # examine inside this directory
                         to_examine.append((te_path, o))
-
-    def get_for_index_entry(self, index_entry):
-        dataset_path = index_entry.path.split(r"/.sno-table/", maxsplit=1)[0]
-        return self.get(dataset_path)
 
     @property
     def id(self):
@@ -674,12 +680,6 @@ class Dataset1(DatasetStructure):
         field = next(f for f in schema if f["name"] == self.primary_key)
         return field["type"]
 
-    def index_entry_to_pk(self, index_entry):
-        feature_path = index_entry.path.split("/.sno-table/", maxsplit=1)[1]
-        if feature_path.startswith("meta/"):
-            return 'META'
-        return self.decode_pk(os.path.basename(feature_path))
-
     def encode_pk(self, pk):
         pk_enc = msgpack.packb(pk, use_bin_type=True)  # encode pk value via msgpack
         pk_str = base64.urlsafe_b64encode(pk_enc).decode("utf8")  # filename safe
@@ -695,6 +695,20 @@ class Dataset1(DatasetStructure):
             pk_enc.encode("utf8")
         ).hexdigest()  # hash to randomly spread filenames
         return "/".join([".sno-table", pk_hash[:2], pk_hash[2:4], pk_enc])
+
+    def decode_path(self, path):
+        """
+        Given a path in this layer of the sno repository - eg ".sno-table/49/3e/Bg==" -
+        returns a tuple in either of the following forms:
+        1. ("feature", primary_key_field, primary_key)
+        2. ("meta", metadata_file_path)
+        """
+        if path.startswith(".sno-table/"):
+            path = path[len(".sno-table/"):]
+        if path.startswith("meta/"):
+            return ("meta", path[len("meta/"):])
+        pk = self.decode_pk(os.path.basename(path))
+        return ("feature", self.primary_key, pk)
 
     def import_meta_items(self, source):
         """

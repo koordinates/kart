@@ -4,7 +4,7 @@ import pytest
 
 import pygit2
 
-from sno.conflicts import ConflictIndex
+from sno.conflicts import ConflictIndex, ConflictOutputFormat, list_conflicts
 from sno.structs import CommitWithReference
 from sno.repo_files import (
     MERGE_HEAD,
@@ -95,8 +95,8 @@ def test_merge_conflicts(
                     "",
                     f"{data.LAYER}:",
                     "  Feature conflicts:",
+                    "    add/add: 1",
                     "    edit/edit: 3",
-                    "    other: 1",
                     "",
                 ]
                 + dry_run_message
@@ -113,7 +113,9 @@ def test_merge_conflicts(
                     "dryRun": dry_run,
                     "message": "Merge branch \"theirs_branch\" into ours_branch",
                     "conflicts": {
-                        data.LAYER: {"featureConflicts": {"edit/edit": 3, "other": 1}},
+                        data.LAYER: {
+                            "featureConflicts": {"add/add": 1, "edit/edit": 3}
+                        },
                     },
                 },
             }
@@ -168,3 +170,52 @@ def test_conflict_index_roundtrip(create_conflicts, cli_runner):
         r1.write("test.conflict.index")
         r2 = ConflictIndex.read("test.conflict.index")
         assert r2 == r1
+
+
+def test_list_conflicts(create_conflicts, cli_runner):
+    f = ConflictOutputFormat
+
+    # Difficult to create conflict indexes directly - easier to create them by doing a merge:
+    with create_conflicts(H.POLYGONS) as repo:
+        ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
+        ours = CommitWithReference.resolve(repo, "ours_branch")
+        theirs = CommitWithReference.resolve(repo, "theirs_branch")
+
+        merge_index = repo.merge_trees(
+            ancestor=ancestor.tree, ours=ours.tree, theirs=theirs.tree
+        )
+        cindex = ConflictIndex(merge_index)
+
+        kwargs = {"ancestor": ancestor, "ours": ours, "theirs": theirs}
+        short_summary = list_conflicts(repo, cindex, f.SHORT_SUMMARY, **kwargs)
+
+        assert short_summary == {
+            "nz_waca_adjustments": {"featureConflicts": {"add/add": 1, "edit/edit": 3}},
+        }
+
+        flat_short_summary = list_conflicts(
+            repo, cindex, f.SHORT_SUMMARY, **kwargs, flat=True
+        )
+        assert flat_short_summary == 4
+
+        summary = list_conflicts(repo, cindex, f.SUMMARY, **kwargs,)
+        assert summary == {
+            "nz_waca_adjustments": {
+                "featureConflicts": {
+                    "add/add": ["nz_waca_adjustments:id=98001"],
+                    "edit/edit": [
+                        "nz_waca_adjustments:id=1452332",
+                        "nz_waca_adjustments:id=1456853",
+                        "nz_waca_adjustments:id=1456912",
+                    ],
+                }
+            },
+        }
+
+        flat_summary = list_conflicts(repo, cindex, f.SUMMARY, **kwargs, flat=True)
+        assert flat_summary == [
+            "nz_waca_adjustments:id=98001",
+            "nz_waca_adjustments:id=1452332",
+            "nz_waca_adjustments:id=1456853",
+            "nz_waca_adjustments:id=1456912",
+        ]
