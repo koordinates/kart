@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
+import click
 from click.testing import CliRunner
 
 import apsw
@@ -37,6 +38,15 @@ def pytest_addoption(parser):
         default=False,
         help="Allow calling pytest.set_trace() within Click commands",
     )
+
+
+def pytest_report_header(config):
+    if config._benchmarksession.disabled:
+        click.secho(
+            "\nSkipping benchmarks in tests. Use --benchmark-enable to run them.",
+            bold=True,
+            fg='yellow',
+        )
 
 
 # https://github.com/pytest-dev/pytest/issues/363
