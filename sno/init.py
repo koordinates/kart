@@ -180,7 +180,7 @@ class OgrImporter:
             return table_list[0]
         else:
             self.print_table_list()
-            if not sys.stdin.isatty():
+            if get_input_mode() == InputMode.NO_INPUT:
                 raise NotFound(
                     "No table specified", exit_code=NO_TABLE, param_hint="--table"
                 )

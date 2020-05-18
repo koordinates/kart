@@ -5,6 +5,7 @@ import pygit2
 
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
+    INVALID_ARGUMENT,
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
     NO_TABLE,
@@ -56,6 +57,50 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
         assert len(lines) >= 2
         assert "to nz_pa_points_topo_150k/ ..." in lines[0]
         assert "Commit: " in lines[-1]
+
+
+def test_init_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner):
+    with data_archive_readonly("gpkg-au-census") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                data / "census2016_sdhca_ot_short.gpkg",
+                tmp_path / "emptydir",
+            ],
+            input="census2016_sdhca_ot_ced_short\n",
+        )
+        # Table was specified interactively via prompt
+        assert r.exit_code == 0, r
+        assert "Tables found:" in r.stdout
+        assert (
+            "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
+            in r.stdout
+        )
+        assert "to census2016_sdhca_ot_ced_short/ ..." in r.stdout
+        assert "Commit: " in r.stdout
+
+
+def test_init_import_table_with_prompt_with_no_input(
+    data_archive_readonly, tmp_path, cli_runner
+):
+    with data_archive_readonly("gpkg-au-census") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                data / "census2016_sdhca_ot_short.gpkg",
+                tmp_path / "emptydir",
+            ],
+        )
+        # Table was specified interactively via prompt
+        assert r.exit_code == NO_TABLE, r
+        assert "Tables found:" in r.stdout
+        assert (
+            "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
+            in r.stdout
+        )
+        assert "Invalid value for --table: No table specified" in r.stderr
 
 
 @pytest.mark.slow

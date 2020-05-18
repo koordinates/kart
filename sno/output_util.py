@@ -43,3 +43,29 @@ def resolve_output_path(output_path):
         return sys.stdout
     else:
         return output_path.open("w")
+
+
+class InputMode:
+    DEFAULT = 0
+    INTERACTIVE = 1
+    NO_INPUT = 2
+
+
+def get_input_mode():
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        return InputMode.INTERACTIVE
+    elif sys.stdin.isatty() and not sys.stdout.isatty():
+        return InputMode.NO_INPUT
+    elif is_empty_stream(sys.stdin):
+        return InputMode.NO_INPUT
+    else:
+        return InputMode.DEFAULT
+
+
+def is_empty_stream(stream):
+    if stream.seekable():
+        pos = stream.tell()
+        if stream.read(1) == "":
+            return True
+        stream.seek(pos)
+    return False
