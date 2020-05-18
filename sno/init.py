@@ -227,8 +227,7 @@ class OgrImporter:
     @property
     @functools.lru_cache(maxsize=1)
     def row_count(self):
-        # note: choose FAST method if possible ( i recall them being different with MITAB especially)
-        return self.ogrlayer.GetFeatureCount()
+        return self.ogrlayer.GetFeatureCount(force=False)
 
     @property
     @functools.lru_cache(maxsize=1)
