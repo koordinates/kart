@@ -4,7 +4,7 @@ import os
 import re
 import subprocess
 
-from osgeo import ogr
+from osgeo import gdal, ogr
 import pygit2
 import pytest
 
@@ -89,57 +89,6 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     assert num_features == num_rows
 
     return dataset
-
-
-def _ogr2ogr(*, src_path, dst_path, dst_driver_name, layer_name):
-    """
-    Converts a datasource from one format to another.
-    Only converts the given named layer.
-
-    We don't seem to have the OGR binaries in our build of GDAL, so here's a
-    hacky substitute.
-    """
-    src = ogr.Open(src_path, 0)
-
-    dst_driver = ogr.GetDriverByName(dst_driver_name)
-
-    if os.path.exists(dst_path):
-        dst_driver.DeleteDataSource(dst_path)
-
-    src_layer = src.GetLayerByName(layer_name)
-    dst = dst_driver.CreateDataSource(dst_path)
-    dst_layer = dst.CreateLayer(
-        src_layer.GetName(),
-        srs=src_layer.GetSpatialRef(),
-        geom_type=src_layer.GetGeomType(),
-    )
-
-    src_layer_defn = src_layer.GetLayerDefn()
-    for i in range(0, src_layer_defn.GetFieldCount()):
-        field_defn = src_layer_defn.GetFieldDefn(i)
-        if (
-            dst_driver_name == 'MapInfo File'
-            and field_defn.GetTypeName() == 'Integer64'
-        ):
-            # TAB doesn't handle int64
-            field_defn.SetType(ogr.OFTInteger)
-        dst_layer.CreateField(field_defn)
-
-    dst_layer_defn = dst_layer.GetLayerDefn()
-
-    for src_feature in src_layer:
-        dst_feature = ogr.Feature(dst_layer_defn)
-
-        for i in range(0, dst_layer_defn.GetFieldCount()):
-            field_defn = dst_layer_defn.GetFieldDefn(i)
-            dst_feature.SetField(
-                dst_layer_defn.GetFieldDefn(i).GetNameRef(), src_feature.GetField(i)
-            )
-
-        geom = src_feature.GetGeometryRef()
-        if geom is not None:
-            dst_feature.SetGeometry(geom.Clone())
-        dst_layer.CreateFeature(dst_feature)
 
 
 def normalise_feature(row):
@@ -342,11 +291,11 @@ def test_import_from_non_gpkg(
 
         # convert to a new format using OGR
         source_filename = tmp_path / f"data.{source_format.lower()}"
-        _ogr2ogr(
-            src_path=str(data / source_gpkg),
-            dst_path=str(source_filename),
-            dst_driver_name=source_ogr_driver,
-            layer_name=table,
+        gdal.VectorTranslate(
+            str(source_filename),
+            gdal.OpenEx(str(data / source_gpkg)),
+            format=source_ogr_driver,
+            layers=[table],
         )
         with chdir(repo_path):
             r = cli_runner.invoke(["init"])
