@@ -24,40 +24,6 @@ from .exceptions import (
 from .output_util import dump_json_output
 
 
-@click.command("import-gpkg", hidden=True)
-@click.pass_context
-@click.argument("geopackage", type=click.Path(exists=True, dir_okay=False))
-@click.argument("table", required=False)
-@click.option("--list-tables", is_flag=True)
-def import_gpkg(ctx, geopackage, table, list_tables):
-    """
-    Import a GeoPackage to a new repository (deprecated; use 'init')
-    """
-
-    click.secho(
-        '"import-gpkg" is deprecated and will be removed in future, use "init" instead',
-        fg="yellow",
-    )
-
-    repo_path = ctx.obj.repo_path
-
-    check_git_user(repo=None)
-
-    import_from = ["GPKG", geopackage, None]
-    if table and not list_tables:
-        import_from[2] = table
-
-    if not list_tables and repo_path:
-        repo_path.mkdir(exist_ok=True)
-
-    ctx.invoke(
-        init,
-        directory=str(repo_path),
-        import_from=tuple(import_from),
-        do_checkout=False,
-    )
-
-
 class ImportPath(click.Path):
     def __init__(self, prefixes=("GPKG",), suffix_required=False, **kwargs):
         params = {
