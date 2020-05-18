@@ -43,6 +43,21 @@ class OgrImporter:
     Imports from an OGR source, currently from a whitelist of formats.
     """
 
+    OGR_TYPE_TO_SQLITE_TYPE = {
+        # NOTE: we don't handle OGR's *List (array) fields at all.
+        # If you write them to GPKG using OGR, you end up with TEXT.
+        # We also don't handle  ogr's "Time" fields, because they end up as TEXT in GPKG,
+        # which we can't roundtrip. Tackle when we get someone actually using those types...
+        'Integer': 'MEDIUMINT',
+        'Integer64': 'INTEGER',
+        'Real': 'FLOAT',
+        'String': 'TEXT',
+        'Binary': 'BLOB',
+        'Date': 'DATE',
+        'DateTime': 'DATETIME',
+    }
+    OGR_SUBTYPE_TO_SQLITE_TYPE = {ogr.OFSTBoolean: 'BOOLEAN', ogr.OFSTInt16: 'SMALLINT'}
+
     @classmethod
     def adapt_source_for_ogr(cls, source):
         # Accept Path objects
@@ -218,16 +233,34 @@ class OgrImporter:
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
-        return self.ogrlayer.GetFIDColumn()
+        # For some drivers, OGR returns '' here.
+        # https://trac.osgeo.org/gdal/ticket/2694
+        # In those cases, the name seems to always be 'FID'
+        return self.ogrlayer.GetFIDColumn() or 'FID'
 
     @property
     @functools.lru_cache(maxsize=1)
     def geom_cols(self):
         ld = self.ogrlayer.GetLayerDefn()
         cols = []
-        for i in range(ld.GetGeomFieldCount()):
+        num_fields = ld.GetGeomFieldCount()
+        if num_fields == 0:
+            # aspatial dataset
+            return []
+        elif num_fields == 1:
+            # Some OGR drivers don't support named geometry fields;
+            # the dataset either has a geometry or doesn't.
+            # In situations where there _is_ a field, it doesn't necessarily have a name.
+            # So here we pick 'geom' as the default name.
+            return [ld.GetGeomFieldDefn(0).GetName() or 'geom']
+        for i in range(num_fields):
+            # Where there are multiple geom fields, they have names
             cols.append(ld.GetGeomFieldDefn(i).GetName())
         return cols
+
+    @property
+    def is_spatial(self):
+        return bool(self.geom_cols)
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -238,17 +271,21 @@ class OgrImporter:
         yield self.primary_key, 0
         start = 1
 
-        gc = self.ogrlayer.GetGeometryColumn()
-        if gc:
+        # OGR
+        if self.geom_cols:
+            gc = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
             yield gc, 1
             start += 1
 
+        # The FID field may or may not be in this list, depending on the OGR driver.
+        # either way, the @ungenerator(dict) removes dupes...
         for i in range(ld.GetFieldCount()):
             field = ld.GetFieldDefn(i)
             name = field.GetName()
             yield name, i + start
 
     @property
+    @functools.lru_cache(maxsize=1)
     @ungenerator(dict)
     def field_adapter_map(self):
         ld = self.ogrlayer.GetLayerDefn()
@@ -295,9 +332,143 @@ class OgrImporter:
         for ogr_feature in self._iter_ogr_features():
             yield self._ogr_feature_to_dict(ogr_feature)
 
-    def build_meta_info(self, repo_version):
-        # TODO: what _is_ this, do we need it?
-        return []
+    def _get_meta_srid(self):
+        srs = self.ogrlayer.GetSpatialRef()
+        if srs is None:
+            return 0
+        srs.AutoIdentifyEPSG()
+        if srs.IsProjected():
+            return int(srs.GetAuthorityCode("PROJCS"))
+        elif srs.IsGeographic():
+            return int(srs.GetAuthorityCode("GEOGCS"))
+        else:
+            # TODO: another type of SRS? Need examples.
+            raise ValueError(
+                "Unknown SRS type; please create an issue with details "
+                "( https://github.com/koordinates/sno/issues/new )"
+            )
+
+    def get_meta_contents(self):
+        ogr_metadata = self.ogrlayer.GetMetadata()
+        return {
+            'table_name': self.table,
+            'data_type': 'features' if self.is_spatial else 'attributes',
+            'identifier': ogr_metadata.get('IDENTIFIER') or '',
+            'description': ogr_metadata.get('DESCRIPTION') or '',
+            'srs_id': self._get_meta_srid(),
+        }
+
+    def _get_meta_geometry_type(self):
+        ogr_geom_type = self.ogrlayer.GetGeomType()
+        return (
+            # normalise the geometry type names the way the GPKG spec likes it:
+            # http://www.geopackage.org/spec/#geometry_types
+            ogr.GeometryTypeToName(
+                # remove Z/M components
+                ogr.GT_Flatten(ogr_geom_type)
+            )
+            # 'Line String' --> 'LineString'
+            .replace(' ', '')
+            # --> 'LINESTRING'
+            .upper()
+        )
+
+    def get_meta_geometry_columns(self):
+        if not self.is_spatial:
+            return None
+
+        ogr_geom_type = self.ogrlayer.GetGeomType()
+
+        return {
+            "table_name": self.table,
+            "column_name": self.ogrlayer.GetGeometryColumn() or self.geom_cols[0],
+            "geometry_type_name": self._get_meta_geometry_type(),
+            "srs_id": self._get_meta_srid(),
+            "z": int(ogr.GT_HasZ(ogr_geom_type)),
+            "m": int(ogr.GT_HasM(ogr_geom_type)),
+        }
+
+    @ungenerator(list)
+    def get_meta_table_info(self):
+        ld = self.ogrlayer.GetLayerDefn()
+        for name, cid in self.field_cid_map.items():
+            default = None
+            field_index = ld.GetFieldIndex(name)
+            if field_index < 0:
+                # some datasources don't have FID and geometry fields in the fields list
+                if name == self.primary_key:
+                    nullable = False
+                    type_name = 'INTEGER'
+                else:
+                    nullable = True
+                    type_name = self._get_meta_geometry_type()
+            else:
+                fd = ld.GetFieldDefn(field_index)
+                nullable = fd.IsNullable()
+                default = fd.GetDefault()
+                subtype = fd.GetSubType()
+                if subtype == ogr.OFSTNone:
+                    type_name = self.OGR_TYPE_TO_SQLITE_TYPE[fd.GetTypeName()]
+                else:
+                    type_name = self.OGR_SUBTYPE_TO_SQLITE_TYPE[subtype]
+
+            yield {
+                "cid": cid,
+                "name": name,
+                "type": type_name,
+                "notnull": int(nullable),
+                "dflt_value": default,
+                "pk": int(name == self.primary_key),
+            }
+
+    @ungenerator(list)
+    def get_meta_spatial_ref_sys(self):
+        yield {
+            'srs_name': 'Undefined cartesian SRS',
+            'srs_id': -1,
+            'organization': 'NONE',
+            'organization_coordsys_id': -1,
+            'definition': 'undefined',
+            'description': 'undefined cartesian coordinate reference system',
+        }
+        yield {
+            'srs_name': 'Undefined geographic SRS',
+            'srs_id': 0,
+            'organization': 'NONE',
+            'organization_coordsys_id': 0,
+            'definition': 'undefined',
+            'description': 'undefined geographic coordinate reference system',
+        }
+        yield {
+            'srs_name': 'WGS 84 geodetic',
+            'srs_id': 4326,
+            'organization': 'EPSG',
+            'organization_coordsys_id': 4326,
+            'definition': 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]',
+            'description': 'longitude/latitude coordinates in decimal degrees on the WGS 84 spheroid',
+        }
+        srs = self.ogrlayer.GetSpatialRef()
+        srid = self._get_meta_srid()
+        if srid not in (0, -1, 4326):
+            yield {
+                'srs_name': srs.GetName(),
+                'srs_id': srid,
+                'organization': 'EPSG',
+                'organization_coordsys_id': srid,
+                'definition': srs.ExportToWkt(),
+                'description': None,
+            }
+
+    def build_meta_info(self):
+        """
+        Imitates the ImportGPKG implementation, and we just use the gpkg field/table names
+        for compatibility, because there's no particular need to change it...
+        Keep both implementations in sync!
+        """
+        yield "gpkg_contents", self.get_meta_contents()
+        yield "gpkg_geometry_columns", self.get_meta_geometry_columns()
+        yield "sqlite_table_info", self.get_meta_table_info()
+        yield "gpkg_spatial_ref_sys", self.get_meta_spatial_ref_sys()
 
 
 class ImportGPKG(OgrImporter):
@@ -318,9 +489,13 @@ class ImportGPKG(OgrImporter):
         dbcur.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
         return dbcur
 
-    def build_meta_info(self, repo_version):
+    def build_meta_info(self):
+        """
+        Returns metadata from the gpkg_* tables about this GPKG.
+        Keep this in sync with the OgrImporter implementation
+        """
         db = gpkg.db(self.ogr_source)
-        return gpkg.get_meta_info(db, layer=self.table, repo_version=repo_version)
+        yield from gpkg.get_meta_info(db, layer=self.table)
 
 
 def list_import_formats(ctx, param, value):

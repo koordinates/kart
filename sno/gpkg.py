@@ -70,9 +70,11 @@ def db(path, **kwargs):
     return db
 
 
-def get_meta_info(db, layer, repo_version="0.0.1"):
-    yield ("version", {"version": repo_version})
-
+def get_meta_info(db, layer):
+    """
+    Returns metadata from the gpkg_* tables about this GPKG.
+    Keep this in sync with OgrImporter.build_meta_info for other datasource types.
+    """
     dbcur = db.cursor()
     table = layer
 
