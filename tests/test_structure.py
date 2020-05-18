@@ -108,7 +108,11 @@ def _ogr2ogr(*, src_path, dst_path, dst_driver_name, layer_name):
 
     src_layer = src.GetLayerByName(layer_name)
     dst = dst_driver.CreateDataSource(dst_path)
-    dst_layer = dst.CreateLayer(src_layer.GetName(), geom_type=src_layer.GetGeomType())
+    dst_layer = dst.CreateLayer(
+        src_layer.GetName(),
+        srs=src_layer.GetSpatialRef(),
+        geom_type=src_layer.GetGeomType(),
+    )
 
     src_layer_defn = src_layer.GetLayerDefn()
     for i in range(0, src_layer_defn.GetFieldCount()):
@@ -138,6 +142,16 @@ def _ogr2ogr(*, src_path, dst_path, dst_driver_name, layer_name):
         dst_layer.CreateFeature(dst_feature)
 
 
+def normalise_feature(row):
+    row = dict(row)
+    if 'geom' in row:
+        # We import via OGR, which strips envelopes by default
+        row['geom'] = gpkg.ogr_to_gpkg_geom(
+            gpkg.gpkg_geom_to_ogr(row['geom'], parse_srs=True),
+        )
+    return row
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(
     GPKG_IMPORTS[0],
@@ -149,11 +163,6 @@ def _ogr2ogr(*, src_path, dst_path, dst_driver_name, layer_name):
     ],
 )
 @pytest.mark.parametrize(*DATASET_VERSIONS)
-@pytest.mark.parametrize(
-    'source_format,source_ogr_driver',
-    [('GPKG', 'GPKG'), ('SHP', 'ESRI Shapefile'), ('TAB', 'MapInfo File')],
-    ids=['GPKG', 'SHP', 'TAB'],
-)
 def test_import(
     import_version,
     archive,
@@ -167,8 +176,6 @@ def test_import(
     benchmark,
     request,
     monkeypatch,
-    source_format,
-    source_ogr_driver,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
@@ -202,21 +209,6 @@ def test_import(
         if param_ids[-1] == "empty":
             assert num_rows == 0
 
-        if source_format != 'GPKG':
-            # convert to a new format using OGR
-            source_filename = tmp_path / f"data.{source_format.lower()}"
-            _ogr2ogr(
-                src_path=str(data / source_gpkg),
-                dst_path=str(source_filename),
-                dst_driver_name=source_ogr_driver,
-                layer_name=table,
-            )
-            # only one table? don't need to specify --table
-            extra_import_args = []
-        else:
-            source_filename = data / source_gpkg
-            extra_import_args = [f'--table={table}']
-
         with chdir(repo_path):
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
@@ -228,9 +220,9 @@ def test_import(
             r = cli_runner.invoke(
                 [
                     "import",
-                    str(source_filename),
+                    str(data / source_gpkg),
                     f"--version={import_version}",
-                    *extra_import_args,
+                    f'--table={table}',
                     table,
                 ]
             )
@@ -260,27 +252,18 @@ def test_import(
                 # compare the first feature in the repo against the source DB
                 key, feature = next(dataset.features())
 
-                def normalise(row):
-                    row = dict(row)
-                    if 'geom' in row:
-                        # We import via OGR, which strips envelopes by default
-                        row['geom'] = gpkg.ogr_to_gpkg_geom(
-                            gpkg.gpkg_geom_to_ogr(row['geom'], parse_srs=True),
-                        )
-                    return row
-
-                row = normalise(
+                row = normalise_feature(
                     dbcur.execute(
                         f"SELECT * FROM {table} WHERE {pk_field}=?;",
                         [feature[pk_field]],
                     ).fetchone()
                 )
-                feature = normalise(feature)
+                feature = normalise_feature(feature)
                 print("First Feature:", key, feature, row)
                 assert feature == row
 
                 # compare a source DB feature against the repo feature
-                row = normalise(
+                row = normalise_feature(
                     dbcur.execute(
                         f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
                     ).fetchone()
@@ -288,13 +271,133 @@ def test_import(
 
                 for key, feature in dataset.features():
                     if feature[pk_field] == row[pk_field]:
-                        feature = normalise(feature)
+                        feature = normalise_feature(feature)
                         assert feature == row
                         break
                 else:
                     pytest.fail(
                         f"Couldn't find repo feature {pk_field}={row[pk_field]}"
                     )
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    GPKG_IMPORTS[0],
+    [
+        # Exclude the table one, because SHP can't handle tables very well
+        *GPKG_IMPORTS[1][:3],
+        pytest.param(
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
+        ),
+    ],
+)
+@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(
+    'source_format,source_ogr_driver',
+    [
+        ('SHP', 'ESRI Shapefile'),
+        # https://github.com/koordinates/sno/issues/86
+        # This test starts by converting a GPKG into a TAB, and then imports then TAB.
+        # But the TAB ended up with very broken SRS info, and then during import GDAL
+        # failed to find an EPSG code for the projection.
+        # We can't currently work around this so we're disabling it.
+        # A future release might add handling via an option (--srs=epsg:4167 for example)
+        # ('TAB', 'MapInfo File')
+    ],
+    ids=['SHP'],
+)
+def test_import_from_non_gpkg(
+    import_version,
+    archive,
+    source_gpkg,
+    table,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
+    request,
+    source_format,
+    source_ogr_driver,
+):
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    param_ids = H.parameter_ids(request)
+
+    with data_archive(archive) as data:
+        # list tables
+        repo_path = tmp_path / "data.sno"
+        repo_path.mkdir()
+
+        db = geopackage(f"{data / source_gpkg}")
+        dbcur = db.cursor()
+        if param_ids[-1] == "empty":
+            with db:
+                print(f"emptying table {table}...")
+                dbcur.execute(f"DELETE FROM {table};")
+
+        num_rows = dbcur.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+
+        if param_ids[-1] == "empty":
+            assert num_rows == 0
+
+        # convert to a new format using OGR
+        source_filename = tmp_path / f"data.{source_format.lower()}"
+        _ogr2ogr(
+            src_path=str(data / source_gpkg),
+            dst_path=str(source_filename),
+            dst_driver_name=source_ogr_driver,
+            layer_name=table,
+        )
+        with chdir(repo_path):
+            r = cli_runner.invoke(["init"])
+            assert r.exit_code == 0, r
+
+            repo = pygit2.Repository(str(repo_path))
+            assert repo.is_bare
+            assert repo.is_empty
+
+            # Import from SHP/TAB/something into sno
+            r = cli_runner.invoke(
+                ["import", str(source_filename), f"--version={import_version}", table]
+            )
+            assert r.exit_code == 0, r
+
+            assert not repo.is_empty
+            assert repo.head.name == "refs/heads/master"
+            assert repo.head.shorthand == "master"
+
+            # has a single commit
+            assert len([c for c in repo.walk(repo.head.target)]) == 1
+
+            dataset = _import_check(
+                repo_path, table, f"{data / source_gpkg}", geopackage
+            )
+
+            assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
+            assert dataset.version == import_version
+
+            if num_rows > 0:
+                # compare the first feature in the repo against the source DB
+                key, got_feature = next(dataset.features())
+                fid = dataset.decode_pk(key)
+
+                src_ds = ogr.Open(str(source_filename))
+                src_layer = src_ds.GetLayer(0)
+                assert src_layer.GetFeatureCount() == num_rows
+
+                f = src_layer.GetFeature(fid)
+                expected_feature = {
+                    f.GetFieldDefnRef(i).GetName(): f.GetField(i)
+                    for i in range(f.GetFieldCount())
+                }
+                expected_feature['FID'] = f.GetFID()
+                if src_layer.GetGeomType() != ogr.wkbNone:
+                    g = f.GetGeometryRef()
+                    if g:
+                        g.AssignSpatialReference(src_layer.GetSpatialRef())
+                    expected_feature['geom'] = gpkg.ogr_to_gpkg_geom(g)
+
+                assert normalise_feature(got_feature) == expected_feature
 
 
 def test_pk_encoding():

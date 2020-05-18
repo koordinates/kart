@@ -31,7 +31,8 @@ from .utils import ungenerator
 FORMAT_TO_OGR_MAP = {
     'GPKG': 'GPKG',
     'SHP': 'ESRI Shapefile',
-    'TAB': 'MapInfo File',
+    # https://github.com/koordinates/sno/issues/86
+    # 'TAB': 'MapInfo File',
 }
 # The set of format prefixes where a local path is expected
 # (as opposed to a URL / something else)
@@ -179,11 +180,10 @@ class OgrImporter:
             return table_list[0]
         else:
             self.print_table_list()
-            if not sys.stdout.isatty():
-                click.secho(
-                    f'\n{prompt} via `--table MYTABLE`', fg="yellow",
+            if not sys.stdin.isatty():
+                raise NotFound(
+                    "No table specified", exit_code=NO_TABLE, param_hint="--table"
                 )
-                sys.exit(1)
             t_choices = click.Choice(choices=table_list)
             t_default = table_list[0] if len(table_list) == 1 else None
             return click.prompt(
@@ -469,6 +469,9 @@ class OgrImporter:
         yield "gpkg_geometry_columns", self.get_meta_geometry_columns()
         yield "sqlite_table_info", self.get_meta_table_info()
         yield "gpkg_spatial_ref_sys", self.get_meta_spatial_ref_sys()
+        # TODO: The GPKG impl of this method reads internal XML metadata
+        # (gpkg_metadata_reference, gpkg_metadata)
+        # The OGR impl should probably read and store XML metadata from nearby files.
 
 
 class ImportGPKG(OgrImporter):

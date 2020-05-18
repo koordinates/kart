@@ -5,7 +5,6 @@ import pygit2
 
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
-    INVALID_ARGUMENT,
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
     NO_TABLE,
@@ -41,18 +40,22 @@ GPKG_IMPORTS = (
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(*GPKG_IMPORTS)
-def test_init_import_list(
-    archive, gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage
-):
-    with data_archive(archive) as data:
-        # list tables
-        r = cli_runner.invoke(["init", "--import", f"gPkG:{data / gpkg}"])
-        assert r.exit_code == 1, r
+def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_runner):
+    with data_archive_readonly("gpkg-points") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                data / "nz-pa-points-topo-150k.gpkg",
+                tmp_path / "emptydir",
+            ]
+        )
+        # You don't have to specify a table if there's only one.
+        assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
         assert len(lines) >= 2
-        assert lines[0] == "Tables found:"
-        assert any(re.match(fr"^  {table}\s+- ", l) for l in lines[1:])
+        assert "to nz_pa_points_topo_150k/ ..." in lines[0]
+        assert "Commit: " in lines[-1]
 
 
 @pytest.mark.slow
@@ -160,10 +163,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
 
         r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
         assert r.exit_code == NO_IMPORT_SOURCE, r
-        assert (
-            "fred:thingz' doesn't appear to be valid (tried formats: GPKG,SHP,TAB)"
-            in r.stderr
-        )
+        assert "fred:thingz' doesn't appear to be valid" in r.stderr
 
         r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
         assert r.exit_code == NO_IMPORT_SOURCE, r
