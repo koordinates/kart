@@ -196,65 +196,6 @@ class ImportGPKG:
         q = dbcur.execute(f"PRAGMA table_info({gpkg.ident(self.table)});")
         return {r["name"]: r["cid"] for r in q}
 
-    def iter_features_sorted(self, pk_callback, limit=None):
-        tbl_hash = hashlib.md5(self.table.encode("utf8")).hexdigest()
-        tbl_name = f"_sno_{tbl_hash}"
-        func_name = f"_sno_sk_{tbl_hash}"
-
-        self.db.create_function(func_name, 1, pk_callback)
-        dbcur = self.db.cursor()
-
-        t0 = time.monotonic()
-        dbcur.execute(
-            f"""
-            CREATE TEMPORARY TABLE {tbl_name} (
-                sort TEXT PRIMARY KEY,
-                link INTEGER
-            ) WITHOUT ROWID
-        """
-        )
-
-        sql = f"""
-            INSERT INTO {tbl_name} (sort, link)
-            SELECT
-                {func_name}({gpkg.ident(self.primary_key)}),
-                {gpkg.ident(self.primary_key)}
-            FROM {gpkg.ident(self.table)}
-        """
-        if limit is not None:
-            sql += f" LIMIT {limit:d}"
-        dbcur.execute(sql)
-        t1 = time.monotonic()
-        click.echo(f"Build link/sort mapping table in {t1-t0:0.1f}s")
-        dbcur.execute(
-            f"""
-            CREATE INDEX temp.{tbl_hash}_idxm ON {tbl_name}(sort,link);
-        """
-        )
-        t2 = time.monotonic()
-        click.echo(f"Build pk/sort mapping index in {t2-t1:0.1f}s")
-
-        # Print the Query Plan
-        # dbcur.execute(f"""
-        #     EXPLAIN QUERY PLAN
-        #     SELECT {gpkg.ident(self.table)}.*
-        #     FROM {tbl_name}
-        #         INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
-        #     ORDER BY {tbl_name}.sort;
-        # """)
-        # print("\n".join("\t".join(str(f) for f in r) for r in dbcur.fetchall()))
-
-        dbcur.execute(
-            f"""
-            SELECT {gpkg.ident(self.table)}.*
-            FROM {tbl_name}
-                INNER JOIN {gpkg.ident(self.table)} ON ({tbl_name}.link={gpkg.ident(self.table)}.{gpkg.ident(self.primary_key)})
-            ORDER BY {tbl_name}.sort;
-        """
-        )
-        click.echo(f"Ran SELECT query in {time.monotonic()-t2:0.1f}s")
-        return dbcur
-
     def iter_features(self):
         dbcur = self.db.cursor()
         dbcur.execute(f"SELECT * FROM {gpkg.ident(self.table)};")

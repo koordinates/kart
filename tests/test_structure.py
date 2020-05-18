@@ -398,10 +398,7 @@ def test_write_feature_performance(
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*DATASET_VERSIONS)
-@pytest.mark.parametrize("iter_func", ["sorted", "normal"])
-def test_fast_import(
-    import_version, iter_func, data_archive, tmp_path, cli_runner, chdir, monkeypatch
-):
+def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
     table = H.POINTS.LAYER
     with data_archive("gpkg-points") as data:
         # list tables
@@ -417,11 +414,6 @@ def test_fast_import(
             source = ImportGPKG(data / "nz-pa-points-topo-150k.gpkg", table)
 
             dataset = DatasetStructure.for_version(import_version)(None, table)
-
-            iter_func_id = 2 if iter_func == "sorted" else 1
-            monkeypatch.setenv(
-                "SNO_IMPORT_OPTIONS", json.dumps({"iter_func": iter_func_id})
-            )
             dataset.fast_import_table(repo, source)
 
             assert not repo.is_empty
