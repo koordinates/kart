@@ -1,8 +1,6 @@
 import re
 
 import pytest
-
-import apsw
 import pygit2
 
 from sno.working_copy import WorkingCopy
@@ -40,91 +38,6 @@ GPKG_IMPORTS = (
         ),
     ],
 )
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize(*GPKG_IMPORTS)
-def test_import_geopackage(archive, gpkg, table, data_archive, tmp_path, cli_runner):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    with data_archive(archive) as data:
-        # list tables
-        repo_path = tmp_path / "data.sno"
-        r = cli_runner.invoke(["import-gpkg", f"--list-tables", data / gpkg])
-        assert r.exit_code == 1, r
-        lines = r.stdout.splitlines()
-        assert len(lines) >= 2
-        assert (
-            lines[0]
-            == '"import-gpkg" is deprecated and will be removed in future, use "init" instead'
-        )
-        assert lines[1] == f"GeoPackage tables in '{gpkg}':"
-        assert any(re.match(fr"^{table}\s+- ", l) for l in lines[2:])
-
-        # successful import
-        r = cli_runner.invoke(
-            [f"--repo={repo_path}", "import-gpkg", data / gpkg, table]
-        )
-        assert r.exit_code == 0, r
-        assert (repo_path / "HEAD").exists()
-
-        repo = pygit2.Repository(str(repo_path))
-        assert repo.is_bare
-        assert not repo.is_empty
-
-        assert repo.head.name == "refs/heads/master"
-        assert repo.head.shorthand == "master"
-
-        # has a single commit
-        assert len([c for c in repo.walk(repo.head.target)]) == 1
-
-        # has no working copy
-        wc = repo_path / f"{repo_path.stem}.gpkg"
-        assert not wc.exists()
-
-        # existing
-        r = cli_runner.invoke(
-            [f"--repo={repo_path}", "import-gpkg", data / gpkg, table]
-        )
-        assert r.exit_code == INVALID_OPERATION, r
-        assert re.search(
-            r"^Error: Invalid value for directory: \".*\" isn't empty",
-            r.stderr,
-            re.MULTILINE,
-        )
-
-
-def test_import_geopackage_errors(data_archive, tmp_path, cli_runner):
-    with data_archive("gpkg-points") as data:
-        # missing/bad table name
-        repo_path = tmp_path / "data2.sno"
-        r = cli_runner.invoke(
-            [
-                f"--repo={repo_path}",
-                "import-gpkg",
-                data / "nz-pa-points-topo-150k.gpkg",
-                "some-layer-that-doesn't-exist",
-            ]
-        )
-        assert r.exit_code == NO_TABLE, r
-        assert (
-            "Feature/Attributes table 'some-layer-that-doesn't-exist' not found in gpkg_contents"
-            in r.stderr
-        )
-
-        # Not a GeoPackage
-        db = apsw.Connection(str(tmp_path / "a.gpkg"))
-        with db:
-            db.cursor().execute(
-                "CREATE TABLE mytable (pk INT NOT NULL PRIMARY KEY, val TEXT);"
-            )
-
-        # not a GeoPackage
-        repo_path = tmp_path / "data3.sno"
-        r = cli_runner.invoke(
-            [f"--repo={repo_path}", "import-gpkg", tmp_path / "a.gpkg", "mytable"]
-        )
-        assert r.exit_code == NO_IMPORT_SOURCE, r
-        assert "a.gpkg' doesn't appear to be a valid GeoPackage" in r.stderr
 
 
 @pytest.mark.slow
