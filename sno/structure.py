@@ -438,9 +438,7 @@ class DatasetStructure:
                 json.dumps(value).encode("utf8"),
             )
 
-    def fast_import_table(
-        self, repo, source, iter_func=1, max_pack_size="2G", limit=None
-    ):
+    def fast_import_table(self, repo, source, max_pack_size="2G", limit=None):
 
         table = source.table
         if not table:
@@ -465,12 +463,7 @@ class DatasetStructure:
                 )
 
             t0 = time.monotonic()
-            if iter_func == 2:
-                src_iterator = source.iter_features_sorted(
-                    self.get_feature_path, limit=limit
-                )
-            else:
-                src_iterator = source.iter_features()
+            src_iterator = source.iter_features()
 
             t1 = time.monotonic()
             click.echo(f"Source setup in {t1-t0:.1f}s")
@@ -704,9 +697,9 @@ class Dataset1(DatasetStructure):
         2. ("meta", metadata_file_path)
         """
         if path.startswith(".sno-table/"):
-            path = path[len(".sno-table/"):]
+            path = path[len(".sno-table/") :]
         if path.startswith("meta/"):
-            return ("meta", path[len("meta/"):])
+            return ("meta", path[len("meta/") :])
         pk = self.decode_pk(os.path.basename(path))
         return ("feature", self.primary_key, pk)
 
