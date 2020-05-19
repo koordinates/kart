@@ -420,41 +420,16 @@ class OgrImporter:
 
     @ungenerator(list)
     def get_meta_spatial_ref_sys(self):
-        yield {
-            'srs_name': 'Undefined cartesian SRS',
-            'srs_id': -1,
-            'organization': 'NONE',
-            'organization_coordsys_id': -1,
-            'definition': 'undefined',
-            'description': 'undefined cartesian coordinate reference system',
-        }
-        yield {
-            'srs_name': 'Undefined geographic SRS',
-            'srs_id': 0,
-            'organization': 'NONE',
-            'organization_coordsys_id': 0,
-            'definition': 'undefined',
-            'description': 'undefined geographic coordinate reference system',
-        }
-        yield {
-            'srs_name': 'WGS 84 geodetic',
-            'srs_id': 4326,
-            'organization': 'EPSG',
-            'organization_coordsys_id': 4326,
-            'definition': 'GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]]',
-            'description': 'longitude/latitude coordinates in decimal degrees on the WGS 84 spheroid',
-        }
         srs = self.ogrlayer.GetSpatialRef()
         srid = self._get_meta_srid()
-        if srid not in (0, -1, 4326):
-            yield {
-                'srs_name': srs.GetName(),
-                'srs_id': srid,
-                'organization': 'EPSG',
-                'organization_coordsys_id': srid,
-                'definition': srs.ExportToWkt(),
-                'description': None,
-            }
+        yield {
+            'srs_name': srs.GetName(),
+            'srs_id': srid,
+            'organization': 'EPSG',
+            'organization_coordsys_id': srid,
+            'definition': srs.ExportToWkt(),
+            'description': None,
+        }
 
     def build_meta_info(self):
         """
