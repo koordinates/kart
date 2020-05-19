@@ -14,7 +14,7 @@ from .conflicts import (
 from .exceptions import InvalidOperation
 from .output_util import dump_json_output
 from .repo_files import is_ongoing_merge
-from .structs import CommitWithReference
+from .structs import AncestorOursTheirs, CommitWithReference
 from .structure import RepositoryStructure
 
 
@@ -144,15 +144,16 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
             repo.head.set_target(theirs.id, f"{merge_message}: Fast-forward")
         return merge_jdict
 
-    merge_index = repo.merge_trees(
-        ancestor=ancestor.tree, ours=ours.tree, theirs=theirs.tree
-    )
+    commit_with_ref3 = AncestorOursTheirs(ancestor, ours, theirs)
+    tree3 = commit_with_ref3.map(lambda c: c.tree)
+    merge_index = repo.merge_trees(**tree3.as_dict())
 
     if merge_index.conflicts:
         conflict_index = ConflictIndex(merge_index)
-        merge_jdict["conflicts"] = list_conflicts(
-            repo, conflict_index, 0, ancestor=ancestor, ours=ours, theirs=theirs
+        repo_structures3 = commit_with_ref3.map(
+            lambda c: RepositoryStructure(repo, c.commit)
         )
+        merge_jdict["conflicts"] = list_conflicts(conflict_index, repo_structures3)
         if not dry_run:
             move_repo_to_merging_state(
                 repo,

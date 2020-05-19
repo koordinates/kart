@@ -129,5 +129,14 @@ class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_
         )
         return result
 
+    def map(self, fn, skip_nones=True):
+        actual_fn = fn
+        if skip_nones:
+            actual_fn = lambda x: fn(x) if x else None
+        return AncestorOursTheirs(*map(actual_fn, self))
+
+    def as_dict(self):
+        return dict(zip(self.NAMES, self))
+
 
 AncestorOursTheirs.EMPTY = AncestorOursTheirs(None, None, None)
