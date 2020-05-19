@@ -103,6 +103,119 @@ def test_init_import_table_with_prompt_with_no_input(
         assert "Invalid value for --table: No table specified" in r.stderr
 
 
+def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):
+    with data_archive_readonly("types") as data:
+        repo_path = tmp_path / "repo"
+        r = cli_runner.invoke(["init", "--import", data / "types.gpkg", repo_path],)
+        assert r.exit_code == 0, r
+
+        # There's a bunch of wacky types in here, let's check them
+        repo = pygit2.Repository(str(repo_path))
+        wc = WorkingCopy.open(repo)
+        with wc.session() as db:
+            table_info = [
+                dict(row) for row in db.cursor().execute("PRAGMA table_info('types');")
+            ]
+        assert table_info == [
+            {
+                'cid': 0,
+                'name': 'fid',
+                'type': 'INTEGER',
+                'notnull': 1,
+                'dflt_value': None,
+                'pk': 1,
+            },
+            {
+                'cid': 1,
+                'name': 'int16',
+                'type': 'SMALLINT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 2,
+                'name': 'int32',
+                'type': 'MEDIUMINT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 3,
+                'name': 'int64',
+                'type': 'INTEGER',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 4,
+                'name': 'boolean',
+                'type': 'BOOLEAN',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 5,
+                'name': 'double',
+                'type': 'REAL',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 6,
+                'name': 'float32',
+                'type': 'FLOAT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 7,
+                'name': 'string',
+                'type': 'TEXT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 8,
+                'name': 'blob',
+                'type': 'BLOB',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 9,
+                'name': 'date',
+                'type': 'DATE',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 10,
+                'name': 'datetime',
+                'type': 'DATETIME',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 11,
+                'name': 'time',
+                'type': 'TEXT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+        ]
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
 def test_init_import(

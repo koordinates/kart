@@ -1,10 +1,8 @@
 import functools
-import hashlib
 import json
 import os
 import re
 import sys
-import time
 from pathlib import Path
 
 import click
