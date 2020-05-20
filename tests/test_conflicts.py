@@ -4,8 +4,13 @@ import pytest
 
 import pygit2
 
-from sno.conflicts import ConflictIndex, ConflictOutputFormat, list_conflicts
-from sno.structs import CommitWithReference
+from sno.conflicts import (
+    ConflictIndex,
+    ConflictOutputFormat,
+    list_conflicts,
+)
+from sno.structs import AncestorOursTheirs, CommitWithReference
+from sno.structure import RepositoryStructure
 from sno.repo_files import (
     MERGE_HEAD,
     MERGE_MSG,
@@ -176,46 +181,208 @@ def test_list_conflicts(create_conflicts, cli_runner):
     f = ConflictOutputFormat
 
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS) as repo:
-        ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
-        ours = CommitWithReference.resolve(repo, "ours_branch")
-        theirs = CommitWithReference.resolve(repo, "theirs_branch")
+    with create_conflicts(H.POINTS) as repo:
+        branch3 = AncestorOursTheirs("ancestor_branch", "ours_branch", "theirs_branch")
+        repo_struct3 = branch3.map(lambda b: RepositoryStructure.lookup(repo, b))
+        trees3 = repo_struct3.map(lambda rs: rs.tree)
 
-        merge_index = repo.merge_trees(
-            ancestor=ancestor.tree, ours=ours.tree, theirs=theirs.tree
-        )
+        merge_index = repo.merge_trees(**trees3.as_dict())
         cindex = ConflictIndex(merge_index)
 
-        kwargs = {"ancestor": ancestor, "ours": ours, "theirs": theirs}
-        short_summary = list_conflicts(repo, cindex, f.SHORT_SUMMARY, **kwargs)
+        short_summary = list_conflicts(cindex, repo_struct3, f.SHORT_SUMMARY)
 
         assert short_summary == {
-            "nz_waca_adjustments": {"featureConflicts": {"add/add": 1, "edit/edit": 3}},
+            "nz_pa_points_topo_150k": {
+                "featureConflicts": {"add/add": 1, "edit/edit": 3}
+            },
         }
 
         flat_short_summary = list_conflicts(
-            repo, cindex, f.SHORT_SUMMARY, **kwargs, flat=True
+            cindex, repo_struct3, f.SHORT_SUMMARY, flat=True
         )
         assert flat_short_summary == 4
 
-        summary = list_conflicts(repo, cindex, f.SUMMARY, **kwargs,)
+        summary = list_conflicts(cindex, repo_struct3, f.SUMMARY)
         assert summary == {
-            "nz_waca_adjustments": {
+            "nz_pa_points_topo_150k": {
                 "featureConflicts": {
-                    "add/add": ["nz_waca_adjustments:id=98001"],
+                    "add/add": ["nz_pa_points_topo_150k:fid=98001"],
                     "edit/edit": [
-                        "nz_waca_adjustments:id=1452332",
-                        "nz_waca_adjustments:id=1456853",
-                        "nz_waca_adjustments:id=1456912",
+                        "nz_pa_points_topo_150k:fid=3",
+                        "nz_pa_points_topo_150k:fid=4",
+                        "nz_pa_points_topo_150k:fid=5",
                     ],
                 }
             },
         }
 
-        flat_summary = list_conflicts(repo, cindex, f.SUMMARY, **kwargs, flat=True)
+        flat_summary = list_conflicts(cindex, repo_struct3, f.SUMMARY, flat=True)
         assert flat_summary == [
-            "nz_waca_adjustments:id=98001",
-            "nz_waca_adjustments:id=1452332",
-            "nz_waca_adjustments:id=1456853",
-            "nz_waca_adjustments:id=1456912",
+            "nz_pa_points_topo_150k:fid=3",
+            "nz_pa_points_topo_150k:fid=4",
+            "nz_pa_points_topo_150k:fid=5",
+            "nz_pa_points_topo_150k:fid=98001",
         ]
+
+        # Just keep one conflict - make the following output a bit shorter.
+        cindex.conflicts = {"0": cindex.conflicts["0"]}
+
+        def layout_row(row):
+            def layout_field(field):
+                key, val = field.split(" = ", 1)
+                return f"{key:>40} = {val}"
+
+            return "\n".join(layout_field(f) for f in row)
+
+        text_output = list_conflicts(cindex, repo_struct3, f.FULL_TEXT_DIFF)
+        assert text_output == {
+            "nz_pa_points_topo_150k": {
+                "featureConflicts": {
+                    "edit/edit": {
+                        "nz_pa_points_topo_150k:fid=4": {
+                            "ancestor": layout_row(
+                                [
+                                    "fid = 4",
+                                    "geom = POINT(...)",
+                                    "macronated = N",
+                                    "name = \u2400",
+                                    "name_ascii = \u2400",
+                                    "t50_fid = 2426274",
+                                ]
+                            ),
+                            "ours": layout_row(
+                                [
+                                    "fid = 4",
+                                    "geom = POINT(...)",
+                                    "macronated = N",
+                                    "name = ours_version",
+                                    "name_ascii = \u2400",
+                                    "t50_fid = 2426274",
+                                ]
+                            ),
+                            "theirs": layout_row(
+                                [
+                                    "fid = 4",
+                                    "geom = POINT(...)",
+                                    "macronated = N",
+                                    "name = theirs_version",
+                                    "name_ascii = \u2400",
+                                    "t50_fid = 2426274",
+                                ]
+                            ),
+                        }
+                    }
+                }
+            }
+        }
+
+        json_output = list_conflicts(cindex, repo_struct3, f.FULL_JSON_DIFF)
+        assert json_output == {
+            "nz_pa_points_topo_150k": {
+                "featureConflicts": {
+                    "edit/edit": {
+                        "nz_pa_points_topo_150k:fid=4": {
+                            "ancestor": {
+                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "properties": {
+                                    "fid": 4,
+                                    "macronated": "N",
+                                    "name": None,
+                                    "name_ascii": None,
+                                    "t50_fid": 2426274,
+                                },
+                                "id": 4,
+                            },
+                            "ours": {
+                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "properties": {
+                                    "fid": 4,
+                                    "t50_fid": 2426274,
+                                    "name_ascii": None,
+                                    "macronated": "N",
+                                    "name": "ours_version",
+                                },
+                                "id": 4,
+                            },
+                            "theirs": {
+                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "properties": {
+                                    "fid": 4,
+                                    "t50_fid": 2426274,
+                                    "name_ascii": None,
+                                    "macronated": "N",
+                                    "name": "theirs_version",
+                                },
+                                "id": 4,
+                            },
+                        }
+                    }
+                }
+            }
+        }
+
+        geojson_output = list_conflicts(cindex, repo_struct3, f.FULL_GEOJSON_DIFF)
+        assert geojson_output == {
+            "nz_pa_points_topo_150k": {
+                "featureConflicts": {
+                    "edit/edit": {
+                        "nz_pa_points_topo_150k:fid=4": {
+                            "ancestor": {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    "coordinates": [
+                                        177.28247012123683,
+                                        -38.09148422044983,
+                                    ],
+                                },
+                                "properties": {
+                                    "fid": 4,
+                                    "macronated": "N",
+                                    "name": None,
+                                    "name_ascii": None,
+                                    "t50_fid": 2426274,
+                                },
+                                "id": 4,
+                            },
+                            "ours": {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    "coordinates": [
+                                        177.28247012123683,
+                                        -38.09148422044983,
+                                    ],
+                                },
+                                "properties": {
+                                    "fid": 4,
+                                    "t50_fid": 2426274,
+                                    "name_ascii": None,
+                                    "macronated": "N",
+                                    "name": "ours_version",
+                                },
+                                "id": 4,
+                            },
+                            "theirs": {
+                                "type": "Feature",
+                                "geometry": {
+                                    "type": "Point",
+                                    "coordinates": [
+                                        177.28247012123683,
+                                        -38.09148422044983,
+                                    ],
+                                },
+                                "properties": {
+                                    "fid": 4,
+                                    "t50_fid": 2426274,
+                                    "name_ascii": None,
+                                    "macronated": "N",
+                                    "name": "theirs_version",
+                                },
+                                "id": 4,
+                            },
+                        }
+                    }
+                }
+            }
+        }

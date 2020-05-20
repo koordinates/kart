@@ -78,13 +78,13 @@ def diff_output_text(*, output_path, **kwargs):
             for k in all_keys:
                 if k in diff_del:
                     click.secho(
-                        repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl),
+                        text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl),
                         fg="red",
                         **pecho,
                     )
                 if k in diff_add:
                     click.secho(
-                        repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl),
+                        text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl),
                         fg="green",
                         **pecho,
                     )
@@ -94,13 +94,13 @@ def diff_output_text(*, output_path, **kwargs):
         for k, v_old in diff["D"].items():
             click.secho(f"--- {prefix}{k}", bold=True, **pecho)
             click.secho(
-                repr_row(v_old, prefix="- ", exclude=repr_excl), fg="red", **pecho
+                text_row(v_old, prefix="- ", exclude=repr_excl), fg="red", **pecho
             )
 
         for o in diff["I"]:
             click.secho(f"+++ {prefix}{o[pk_field]}", bold=True, **pecho)
             click.secho(
-                repr_row(o, prefix="+ ", exclude=repr_excl), fg="green", **pecho
+                text_row(o, prefix="+ ", exclude=repr_excl), fg="green", **pecho
             )
 
         for _, (v_old, v_new) in diff["U"].items():
@@ -119,18 +119,18 @@ def diff_output_text(*, output_path, **kwargs):
 
             for k in all_keys:
                 if k in diff_del:
-                    rk = repr_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
+                    rk = text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
                     if rk:
                         click.secho(rk, fg="red", **pecho)
                 if k in diff_add:
-                    rk = repr_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
+                    rk = text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
                     if rk:
                         click.secho(rk, fg="green", **pecho)
 
     yield _out
 
 
-def repr_row(row, prefix="", exclude=None):
+def text_row(row, prefix="", exclude=None):
     m = []
     exclude = exclude or set()
     for k in sorted(row.keys()):
@@ -216,14 +216,14 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
             )
 
         for k, v_old in diff["D"].items():
-            fc["features"].append(_geojson_row(v_old, "D", pk_field))
+            fc["features"].append(geojson_row(v_old, pk_field, "D"))
 
         for o in diff["I"]:
-            fc["features"].append(_geojson_row(o, "I", pk_field))
+            fc["features"].append(geojson_row(o, pk_field, "I"))
 
         for _, (v_old, v_new) in diff["U"].items():
-            fc["features"].append(_geojson_row(v_old, "U-", pk_field))
-            fc["features"].append(_geojson_row(v_new, "U+", pk_field))
+            fc["features"].append(geojson_row(v_old, pk_field, "U-"))
+            fc["features"].append(geojson_row(v_new, pk_field, "U+"))
 
         dump_json_output(fc, fp, json_style=json_style)
 
@@ -257,16 +257,16 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
             d["metaChanges"][k] = [v_old, v_new]
 
         for k, v_old in diff["D"].items():
-            d["featureChanges"].append({'-': _json_row(v_old, "D", pk_field)})
+            d["featureChanges"].append({'-': json_row(v_old, pk_field, "D")})
 
         for o in diff["I"]:
-            d["featureChanges"].append({'+': _json_row(o, "I", pk_field)})
+            d["featureChanges"].append({'+': json_row(o, pk_field, "I")})
 
         for _, (v_old, v_new) in diff["U"].items():
             d["featureChanges"].append(
                 {
-                    '-': _json_row(v_old, "U-", pk_field),
-                    '+': _json_row(v_new, "U+", pk_field),
+                    '-': json_row(v_old, pk_field, "U-"),
+                    '+': json_row(v_new, pk_field, "U+"),
                 }
             )
 
@@ -286,15 +286,17 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     )
 
 
-def _json_row(row, change, pk_field):
+def json_row(row, pk_field, change=None):
     """
     Turns a row into a dict for serialization as JSON.
     The geometry is serialized as hexWKB.
     """
+    raw_id = row[pk_field]
+    change_id = f"{change}::{raw_id}" if change else raw_id
     f = {
         "geometry": None,
         "properties": {},
-        "id": f"{change}::{row[pk_field]}",
+        "id": change_id,
     }
 
     for k, v in row.items():
@@ -306,15 +308,17 @@ def _json_row(row, change, pk_field):
     return f
 
 
-def _geojson_row(row, change, pk_field):
+def geojson_row(row, pk_field, change=None):
     """
     Turns a row into a dict representing a GeoJSON feature.
     """
+    raw_id = row[pk_field]
+    change_id = f"{change}::{raw_id}" if change else raw_id
     f = {
         "type": "Feature",
         "geometry": None,
         "properties": {},
-        "id": f"{change}::{row[pk_field]}",
+        "id": change_id,
     }
 
     for k in row.keys():
