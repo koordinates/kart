@@ -12,6 +12,7 @@ from . import (
     branch,
     checkout,
     clone,
+    conflicts,
     commit,
     diff,
     init,
@@ -110,6 +111,7 @@ cli.add_command(checkout.restore)
 cli.add_command(checkout.switch)
 cli.add_command(checkout.workingcopy_set_path)
 cli.add_command(clone.clone)
+cli.add_command(conflicts.conflicts)
 cli.add_command(commit.commit)
 cli.add_command(diff.diff)
 cli.add_command(fsck.fsck)

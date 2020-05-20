@@ -27,6 +27,8 @@ class RepositoryStructure:
     @staticmethod
     def lookup(repo, key):
         L.debug(f"key={key}")
+        if isinstance(key, pygit2.Oid):
+            key = key.hex
         try:
             obj = repo.revparse_single(key)
         except KeyError:

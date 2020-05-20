@@ -2,25 +2,25 @@ from collections import namedtuple
 import json
 import logging
 import re
+import sys
 
 import click
 import pygit2
 
+from .cli_util import MutexOption
 from .diff_output import text_row, json_row, geojson_row
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, SUCCESS, SUCCESS_WITH_FLAG
+from .output_util import dump_json_output
 from .repo_files import (
-    ORIG_HEAD,
     MERGE_HEAD,
-    MERGE_MSG,
     MERGE_INDEX,
     MERGE_LABELS,
-    repo_file_path,
-    write_repo_file,
-    remove_repo_file,
     is_ongoing_merge,
-    repo_file_exists,
+    read_repo_file,
+    repo_file_path,
 )
 from .structs import AncestorOursTheirs
+from .structure import RepositoryStructure
 
 
 L = logging.getLogger("sno.conflicts")
@@ -172,33 +172,13 @@ class ConflictIndex:
             )
 
 
-class ConflictOutputFormat:
-    """Different ways of showing all the conflicts resulting from a merge."""
-
-    # Only SHORT_SUMMARY is used so far, by `sno merge`.
-
-    # Summaries:
-    SHORT_SUMMARY = 0  # Show counts of types of conflicts.
-    SUMMARY = 1  # List all the features that conflicted.
-
-    # Full diffs: Show all versions of all the features that conflicted, in...
-    FULL_TEXT_DIFF = 2  # ... text format.
-    FULL_JSON_DIFF = 3  # ... JSON format.
-    FULL_GEOJSON_DIFF = 4  # ... GEOJSON format.
-
-    _SUMMARY_FORMATS = (SHORT_SUMMARY, SUMMARY)
-
-
 # Stand in for a conflict if the conflict is going to be summarised anyway -
 # this helps code re-use between summary and full-diff output modes.
 _CONFLICT_PLACEHOLDER = object()
 
 
 def list_conflicts(
-    conflict_index,
-    repo_structure3,
-    output_format=ConflictOutputFormat.SHORT_SUMMARY,
-    flat=False,
+    conflict_index, repo_structure3, output_format="text", summarise=0, flat=False,
 ):
     """
         Lists all the conflicts in conflict_index, categorised into nested dicts.
@@ -225,14 +205,18 @@ def list_conflicts(
 
         conflict_index - the ConflictIndex containing the conflicts found.
         repo_structure3 - AncestorOursTheirs tuple containing RepositoryStructures.
-        output_format - one of the constants in ConflictOutputFormat.
+        output_format - one of 'text', 'json', 'geojson'
         flat - if True, don't categorise conflicts. Put them all at the top level.
     """
     conflicts = {}
+    conflict_output = _CONFLICT_PLACEHOLDER
 
     for key, conflict3 in conflict_index.conflicts.items():
         decoded_path3 = decode_conflict_paths(conflict3, repo_structure3)
-        conflict_output = conflict_repr(decoded_path3, repo_structure3, output_format)
+        if not summarise:
+            conflict_output = conflict_repr(
+                decoded_path3, repo_structure3, output_format
+            )
 
         if flat:
             label = get_conflict_label(decoded_path3)
@@ -241,10 +225,13 @@ def list_conflicts(
             label = get_categorised_conflict_label(decoded_path3)
             add_conflict_at_label(conflicts, label, conflict_output)
 
-    if output_format in ConflictOutputFormat._SUMMARY_FORMATS:
-        conflicts = summarise_conflicts(conflicts, output_format)
+    if summarise:
+        conflicts = summarise_conflicts(conflicts, summarise)
 
-    return conflicts
+    if output_format == "text":
+        return conflicts_json_as_text(conflicts)
+    else:
+        return conflicts
 
 
 def decode_conflict_paths(conflict3, repo_structure3):
@@ -344,14 +331,7 @@ def conflict_repr(decoded_path3, repo_structure3, output_format):
     """
     Returns a dict containing up to 3 versions of the conflict
     (at keys "ancestor", "theirs" and "ours") using conflict_version_repr.
-    If the output format is a summary format, just returns a placeholder.
     """
-
-    # For a summary, we don't actually need to fill in the conflict -
-    # this is removed later anyway in summarise_conflicts.
-    if output_format in ConflictOutputFormat._SUMMARY_FORMATS:
-        return _CONFLICT_PLACEHOLDER
-
     return AncestorOursTheirs(
         *(
             conflict_version_repr(dp, rs, output_format) if dp else None
@@ -372,20 +352,19 @@ def conflict_version_repr(decoded_path, repo_structure, output_format):
     - FULL_JSON_DIFF / FULL_GEOJSON_DIFF - as JSON object
     - FULL_TEXT_DIFF - as stringified JSON object
     """
-    assert output_format not in ConflictOutputFormat._SUMMARY_FORMATS
     if decoded_path[1] == "feature":
         table, tablepart, pk_field, pk = decoded_path
         _, feature = repo_structure[table].get_feature(pk, ogr_geoms=False)
-        if output_format == ConflictOutputFormat.FULL_TEXT_DIFF:
+        if output_format == "text":
             return text_row(feature)
-        elif output_format == ConflictOutputFormat.FULL_JSON_DIFF:
+        elif output_format == "json":
             return json_row(feature, pk_field)
-        elif output_format == ConflictOutputFormat.FULL_GEOJSON_DIFF:
+        elif output_format == "geojson":
             return geojson_row(feature, pk_field)
     else:
         table, tablepart, meta_path = decoded_path
         jdict = repo_structure[table].get_meta_item(meta_path)
-        if output_format == ConflictOutputFormat.FULL_TEXT_DIFF:
+        if output_format == "text":
             return json.dumps(jdict)
         else:
             return jdict
@@ -405,7 +384,7 @@ def add_conflict_at_label(root_dict, categorised_label, conflict):
     cur_dict[leaf] = conflict
 
 
-def summarise_conflicts(cur_dict, output_format):
+def summarise_conflicts(cur_dict, summarise):
     """
     Recursively traverses the tree of categorised conflicts,
     looking for a dict where the values are placeholders.
@@ -414,19 +393,20 @@ def summarise_conflicts(cur_dict, output_format):
         K1: _CONFLICT_PLACEHOLDER,
         K2: _CONFLICT_PLACEHOLDER,
     }
-    When found, it will be replaced with one of the following:
-    1) SHORT_SUMMARY: 2 (the size of the dict)
-    2) SUMMARY: [K1, K2]
+    When found, it will be replaced with one of the following,
+    depending on the summarise-level specified:
+    summarise=1: [K1, K2]
+    summarise=2: 2 (the size of the dict)
     """
     first_value = next(iter(cur_dict.values()))
     if first_value == _CONFLICT_PLACEHOLDER:
-        if output_format == ConflictOutputFormat.SHORT_SUMMARY:
-            return len(cur_dict)
-        else:
+        if summarise == 1:
             return sorted(cur_dict.keys(), key=_label_sort_key)
+        elif summarise == 2:
+            return len(cur_dict)
 
     for k, v in cur_dict.items():
-        cur_dict[k] = summarise_conflicts(v, output_format)
+        cur_dict[k] = summarise_conflicts(v, summarise)
     return cur_dict
 
 
@@ -445,78 +425,139 @@ def _label_sort_key(label):
         return "A meta", label
 
 
-def move_repo_to_merging_state(
-    repo, conflict_index, merge_message, *, ancestor, ours, theirs
-):
-    """
-    Move the sno repository into a "merging" state in which conflicts
-    can be resolved one by one.
-    repo - the pygit2.Repository.
-    conflict_index - the ConflictIndex containing the conflicts found.
-    merge_message - the commit message for when the merge is completed.
-    ancestor, ours, theirs - CommitWithReference objects.
-    """
-    if is_ongoing_merge(repo):
-        raise InvalidOperation("A merge is already ongoing")
-
-    # These are git standard files
-    write_repo_file(repo, ORIG_HEAD, ours.id.hex)
-    write_repo_file(repo, MERGE_HEAD, theirs.id.hex)
-    write_repo_file(repo, MERGE_MSG, merge_message)
-
-    # These are specific to sno repositories
-    conflict_index.write(repo_file_path(repo, MERGE_INDEX))
-    write_repo_file(
-        repo, MERGE_LABELS, "\n".join([str(ancestor), str(ours), str(theirs)])
-    )
-
-
-def abort_merging_state(repo):
-    """
-    Put things back how they were before the merge began.
-    Tries to be robust against failure, in case the user has messed up the repo's state.
-    """
-    is_ongoing_merge = repo_file_exists(repo, MERGE_HEAD)
-    # If we are in a merge, we now need to delete all the MERGE_* files.
-    # If we are not in a merge, we should clean them up anyway.
-    remove_repo_file(repo, MERGE_HEAD)
-    remove_repo_file(repo, MERGE_MSG)
-    remove_repo_file(repo, MERGE_INDEX)
-    remove_repo_file(repo, MERGE_LABELS)
-
-    if not is_ongoing_merge:
-        raise InvalidOperation("Repository is not in `merging` state.")
-
-    # TODO - maybe restore HEAD to ORIG_HEAD.
-    # Not sure if it matters - we don't modify HEAD when we move into merging state.
-
-
 _JSON_KEYS_TO_TEXT_HEADERS = {
     "featureConflicts": "Feature conflicts",
     "metaConflicts": "META conflicts",
 }
 
 
-def output_conflicts_as_text(jdict, level=0):
-    """Writes the JSON output of list_conflicts to stdout as text, using click.echo."""
-    top_level = level == 0
-    indent = "  " * level
+def conflicts_json_as_text(json_obj):
+    """
+    Converts the JSON output of list_conflicts to a string.
+    The conflicts themselves should already be in the appropriate format -
+    this function deals with the hierarchy that contains them.
+    """
 
-    for k, v in sorted(jdict.items()):
-        heading = _JSON_KEYS_TO_TEXT_HEADERS.get(k, k)
-        if isinstance(v, dict):
-            click.secho(f"{indent}{heading}:", bold=top_level)
-            output_conflicts_as_text(v, level + 1)
-            if top_level:
-                click.echo()
-        elif isinstance(v, list):
-            click.secho(f"{indent}{heading}:", bold=top_level)
-            for item in v:
-                click.echo(f"{indent}  {item}")
-            if top_level:
-                click.echo()
-        elif isinstance(v, str):
-            click.echo(f"{indent}{heading}:")
-            click.echo(v)
+    def key_to_text(key, level):
+        indent = "  " * level
+        heading = _JSON_KEYS_TO_TEXT_HEADERS.get(key, key)
+        styled_heading = f"{indent}{heading}:"
+        if level == 0:
+            styled_heading = click.style(styled_heading, bold=True)
+        return styled_heading
+
+    def value_to_text(value, level):
+        if isinstance(value, (str, int)):
+            return f"{value}\n"
+        elif isinstance(value, dict):
+            separator = "\n" if level == 0 else ""
+            return separator.join(
+                item_to_text(k, v, level) for k, v in sorted(value.items())
+            )
+        elif isinstance(value, list):
+            indent = "  " * level
+            return "".join(f"{indent}{item}\n" for item in value)
+
+    def item_to_text(key, value, level):
+        key_text = key_to_text(key, level)
+        if isinstance(value, int):
+            return f"{key_text} {value}\n"
         else:
-            click.echo(f"{indent}{heading}: {v}")
+            return f"{key_text}\n{value_to_text(value, level + 1)}"
+
+    return value_to_text(json_obj, 0)
+
+
+@click.command()
+@click.pass_context
+@click.option(
+    "--text",
+    "output_format",
+    flag_value="text",
+    default=True,
+    help="Get the diff in text format",
+    cls=MutexOption,
+    exclusive_with=["json", "geojson", "quiet"],
+)
+@click.option(
+    "--json",
+    "output_format",
+    flag_value="json",
+    help="Get the diff in JSON format",
+    hidden=True,
+    cls=MutexOption,
+    exclusive_with=["text", "geojson", "quiet"],
+)
+@click.option(
+    "--geojson",
+    "output_format",
+    flag_value="geojson",
+    help="Get the diff in GeoJSON format",
+    cls=MutexOption,
+    exclusive_with=["text", "json", "quiet"],
+)
+@click.option(
+    "--quiet",
+    "output_format",
+    flag_value="quiet",
+    help="Disable all output of the program. Implies --exit-code.",
+    cls=MutexOption,
+    exclusive_with=["json", "text", "geojson", "html"],
+)
+@click.option(
+    "--exit-code",
+    is_flag=True,
+    help="Make the program exit with 1 if there are conflicts and 0 means no conflicts.",
+)
+@click.option(
+    "--json-style",
+    type=click.Choice(["extracompact", "compact", "pretty"]),
+    default="pretty",
+    help="How to format the output. Only used with --json or --geojson",
+    cls=MutexOption,
+    exclusive_with=["text", "quiet"],
+)
+@click.option(
+    "--exit-code",
+    is_flag=True,
+    help="Make the program exit with 1 if there are conflicts and 0 means no conflicts.",
+)
+@click.option(
+    '-s',
+    '--summarise',
+    '--summarize',
+    count=True,
+    help="Summarise the conflicts rather than output each one in full. Use -ss for short summary.",
+)
+@click.option(
+    '--flat',
+    is_flag=True,
+    help="Output all conflicts in a flat list, instead of in a hierarchy.",
+)
+def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
+    """ Lists merge conflicts that need to be resolved before the ongoing merge can be completed. """
+
+    repo = ctx.obj.repo
+    if not is_ongoing_merge(repo):
+        raise InvalidOperation("Cannot list conflicts - there is no ongoing merge")
+
+    cindex = ConflictIndex.read(repo_file_path(repo, MERGE_INDEX))
+
+    if output_format == "quiet":
+        ctx.exit(SUCCESS_WITH_FLAG if cindex.conflicts else SUCCESS)
+
+    ours = RepositoryStructure.lookup(repo, "HEAD")
+    theirs = RepositoryStructure.lookup(repo, read_repo_file(repo, MERGE_HEAD).strip())
+    ancestor_id = repo.merge_base(theirs.id, ours.id)
+    ancestor = RepositoryStructure.lookup(repo, ancestor_id)
+
+    repo_structure3 = AncestorOursTheirs(ancestor, ours, theirs)
+    result = list_conflicts(cindex, repo_structure3, output_format, summarise, flat)
+
+    if output_format == "text":
+        click.echo(result)
+    else:
+        dump_json_output({"sno.conflicts/v1": result}, sys.stdout, json_style)
+
+    if exit_code:
+        ctx.exit(SUCCESS_WITH_FLAG if cindex.conflicts else SUCCESS)
