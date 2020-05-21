@@ -46,7 +46,7 @@ cleaner: clean
 	-$(MAKE) -C src/ clean
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest:
 	-$(RM) -r src/
 
 .PHONY: clean-configure

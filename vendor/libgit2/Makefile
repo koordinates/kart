@@ -45,7 +45,7 @@ cleaner: clean
 	-$(MAKE) -C build/ clean
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest:
 	-$(RM) -r build/ src/
 
 .PHONY: clean-configure
@@ -78,9 +78,7 @@ source: src
 
 $(configure-libgit2): export PKG_CONFIG_PATH=/dev/null
 $(configure-libgit2): | src
-	mkdir -p build
-	cd build \
-	&& $(CMAKE) -S $(realpath src) \
+	cmake -S src -B build \
 		-DCMAKE_INSTALL_PREFIX=$(PREFIX) \
 		-DBUILD_EXAMPLES=NO \
 		-DBUILD_CLAR=NO \
@@ -90,7 +88,9 @@ $(configure-libgit2): | src
 configure: clean-configure $(configure-libgit2)
 
 $(build-libgit2): $(configure-libgit2)
-	$(MAKE) -C build -j 2
+	cmake \
+		--build build \
+		--config RelWithDebInfo
 	$(MAKE) print-lib-deps-$(PLATFORM)
 
 #
@@ -99,7 +99,9 @@ $(build-libgit2): $(configure-libgit2)
 
 .PHONY: install
 install: $(build-libgit2)
-	$(MAKE) -C build install
+	cmake \
+		--install build \
+		--config RelWithDebInfo
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)

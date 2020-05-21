@@ -16,9 +16,11 @@ PROJ_DATUMGRID_ARCHIVES = proj-datumgrid-1.8.zip #\
 # 	proj-datumgrid-oceania-1.1.zip \
 # 	proj-datumgrid-world-1.0.zip
 
+export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
 ifeq ($(PLATFORM),Darwin)
 	CCACHE_PATH = /usr/local/opt/ccache/bin
 	LIBSUFFIX = dylib
+	export PKG_CONFIG_PATH += /usr/local/opt/sqlite/lib/pkgconfig
 else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
@@ -52,7 +54,7 @@ cleaner: clean
 	-$(MAKE) -C src/ clean
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest:
 	-$(RM) -r src/
 
 .PHONY: clean-configure
