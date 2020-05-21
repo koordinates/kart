@@ -53,7 +53,9 @@ def list_conflicts(
     conflicts = {}
     conflict_output = _CONFLICT_PLACEHOLDER
 
-    for conflict in rich_conflicts(merge_index.conflicts.values(), merge_context):
+    for conflict in rich_conflicts(
+        merge_index.unresolved_conflicts.values(), merge_context
+    ):
         if not summarise:
             conflict_output = conflict.output(output_format)
 
@@ -101,7 +103,7 @@ def summarise_conflicts(cur_dict, summarise):
     summarise=1: [K1, K2]
     summarise=2: 2 (the size of the dict)
     """
-    first_value = next(iter(cur_dict.values()))
+    first_value = next(iter(cur_dict.values())) if cur_dict else None
     if first_value == _CONFLICT_PLACEHOLDER:
         if summarise == 1:
             return sorted(cur_dict.keys(), key=_label_sort_key)

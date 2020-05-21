@@ -159,7 +159,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     index = repo.merge_trees(**tree3.as_dict())
 
     if index.conflicts:
-        merge_index = MergeIndex(index)
+        merge_index = MergeIndex.from_pygit2_index(index)
         merge_context = MergeContext.from_commit_with_refs(commit_with_ref3, repo)
         merge_jdict["conflicts"] = list_conflicts(
             merge_index, merge_context, "json", summarise=2

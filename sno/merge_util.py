@@ -67,54 +67,103 @@ class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_
 AncestorOursTheirs.EMPTY = AncestorOursTheirs(None, None, None)
 
 
+_MERGED_OURS_THEIRS_ORDER = ("merged", "ours", "theirs")
+
+
+class MergedOursTheirs(namedtuple("MergedOursTheirs", _MERGED_OURS_THEIRS_ORDER)):
+    """
+    When resolving a conflict, there can also be multiple versions. Possible versions are
+    the "merged" version - the version that contains both "our" changes and "their" changes -
+    but also a resolved "ours" and "theirs" version, in the case that both versions should
+    be preserved in some form to complete the merge.
+    Having all 3 versions is generally not required, but is allowed by this class.
+    """
+
+    NAMES = _MERGED_OURS_THEIRS_ORDER
+
+    @staticmethod
+    def partial(*, merged=None, ours=None, theirs=None):
+        """Supply some or all keyword arguments: merged, ours, theirs"""
+        return MergedOursTheirs(merged, ours, theirs)
+
+    def __or__(self, other):
+        # We don't allow any field to be set twice
+        assert not self.merged or not other.merged
+        assert not self.ours or not other.ours
+        assert not self.theirs or not other.theirs
+        result = MergedOursTheirs(
+            merged=self.merged or other.merged,
+            ours=self.ours or other.ours,
+            theirs=self.theirs or other.theirs,
+        )
+        return result
+
+    def map(self, fn, skip_nones=True):
+        actual_fn = fn
+        if skip_nones:
+            actual_fn = lambda x: fn(x) if x else None
+        return MergedOursTheirs(*map(actual_fn, self))
+
+    def as_dict(self):
+        return dict(zip(self.NAMES, self))
+
+
+MergedOursTheirs.EMPTY = MergedOursTheirs(None, None, None)
+
+
 class MergeIndex:
     """
     Like a pygit2.Index, but every conflict has a short key independent of its path,
-    and the entire index including conflicts can be serialised to a tree.
+    and the entire index including conflicts can be serialised to an index file.
+    Resolutions to conflicts can also be stored, independently of entries of conflicts.
     Conflicts are easier to modify than in a pygit2.Index (where they are backed by C iterators).
-    When serialised to a tree, conflicts will be added in a special .conflicts/ directory.
+    When serialised to an index file, conflicts will be added in a special .conflicts/ directory,
+    and resolutions will be added in a special .resolves/ directory (resolutions are called
+    "resolves" here for brevity and with consistency with the verb, ie "sno resolve").
     """
 
     # We could use pygit2.IndexEntry everywhere but it has unhelpful __eq__ and __repr__ behaviour.
     # So we have this equivalent struct.
+    # TODO - fix pygit2.IndexEntry.
     Entry = namedtuple("Entry", ("path", "id", "mode"))
 
     # Note that MergeIndex only contains Entries, which are simple structs -
     # not RichConflicts, which refer to the entire RepositoryStructure to give extra functionality.
 
-    def __init__(self, index, serialised=False):
-        self.entries = {}
-        self.conflicts = {}
+    def __init__(self, entries, conflicts, resolves):
+        self.entries = entries
+        self.conflicts = conflicts
+        self.resolves = resolves
 
-        if serialised and index.conflicts:
-            raise RuntimeError(
-                "pygit2.Index.conflicts should be empty if index has been serialised"
-            )
-
-        for entry in index:
-            if entry.path.startswith(".conflicts/"):
-                if not serialised:
-                    raise RuntimeError(
-                        ".conflicts/ directory shouldn't exist if index has not been serialised"
-                    )
-                key, conflict_part = self._deserialise_conflict_part(entry)
-                self.conflicts.setdefault(key, AncestorOursTheirs.EMPTY)
-                self.add_conflict(key, self.conflicts.get(key) | conflict_part)
-            else:
-                self.add(entry)
-
-        if index.conflicts:
-            for key, conflict3 in enumerate(index.conflicts):
-                self.add_conflict(str(key), conflict3)
+    @classmethod
+    def from_pygit2_index(cls, index):
+        """
+        Converts a pygit2.Index to a MergeIndex, preserving both entries and conflicts.
+        Conflicts are assigned arbitrary unique keys based on the iteration order.
+        """
+        entries = {e.path: cls._ensure_entry(e) for e in index}
+        conflicts = {
+            str(k): cls._ensure_conflict(c) for k, c in enumerate(index.conflicts)
+        }
+        resolves = {}
+        return MergeIndex(entries, conflicts, resolves)
 
     def __eq__(self, other):
         if not isinstance(other, MergeIndex):
             return False
-        return self.entries == other.entries and self.conflicts == other.conflicts
+        return (
+            self.entries == other.entries
+            and self.conflicts == other.conflicts
+            and self.resolves == other.resolves
+        )
 
     def __repr__(self):
         contents = json.dumps(
-            {"entries": self.entries, "conflicts": self.conflicts},
+            {
+                "entries": self.entries,
+                "conflicts": self.conflicts,
+                "resolves": self.resolves,
+            },
             default=lambda o: str(o),
             indent=2,
         )
@@ -145,28 +194,30 @@ class MergeIndex:
     def remove_conflict(self, key):
         del self.conflicts[key]
 
-    def _serialise_conflict(self, key, conflict):
+    @classmethod
+    def _serialise_conflict(cls, key, conflict):
         result = []
         for version, entry in zip(AncestorOursTheirs.NAMES, conflict):
             if not entry:
                 continue
             result_path = f".conflicts/{key}/{version}/{entry.path}"
-            result.append(self.Entry(result_path, entry.id, entry.mode))
+            result.append(cls.Entry(result_path, entry.id, entry.mode))
         return result
 
-    _PATTERN = re.compile(
+    _CONFLICT_PATTERN = re.compile(
         r"^.conflicts/(?P<key>.+?)/(?P<version>ancestor|ours|theirs)/(?P<path>.+)$"
     )
 
-    def _deserialise_conflict_part(self, index_entry):
-        match = self._PATTERN.match(index_entry.path)
+    @classmethod
+    def _deserialise_conflict_part(cls, index_entry):
+        match = cls._CONFLICT_PATTERN.match(index_entry.path)
         if not match:
             raise RuntimeError(f"Couldn't deserialise conflict: {index_entry.path}")
 
         key = match.group("key")
         version = match.group("version")
         result_path = match.group("path")
-        result_entry = self.Entry(result_path, index_entry.id, index_entry.mode)
+        result_entry = cls.Entry(result_path, index_entry.id, index_entry.mode)
         result = AncestorOursTheirs.partial(**{version: result_entry})
         return key, result
 
@@ -175,16 +226,95 @@ class MergeIndex:
             for index_entry in self._serialise_conflict(key, conflict3):
                 yield index_entry
 
+    def add_resolve(self, key, resolve):
+        if not isinstance(key, str):
+            raise TypeError("resolve key must be str", type(key))
+        self.resolves[key] = self._ensure_resolve(resolve)
+
+    def remove_resolve(self, key):
+        del self.resolves[key]
+
+    _EMPTY_OID = pygit2.Oid(hex="0" * 40)
+    _EMPTY_MODE = pygit2.GIT_FILEMODE_BLOB
+
+    @classmethod
+    def _serialise_resolve(cls, key, resolve):
+        if resolve == MergedOursTheirs.EMPTY:
+            return [
+                cls.Entry(f".resolves/{key}/deleted", cls._EMPTY_OID, cls._EMPTY_MODE)
+            ]
+
+        result = []
+        for version, entry in zip(MergedOursTheirs.NAMES, resolve):
+            if not entry:
+                continue
+            result_path = f".resolves/{key}/{version}/{entry.path}"
+            result.append(cls.Entry(result_path, entry.id, entry.mode))
+        return result
+
+    _RESOLVE_PATTERN = re.compile(
+        r"^.resolves/(?P<key>.+?)/(?P<version>merged|ours|theirs)/(?P<path>.+)$"
+    )
+
+    _RESOLVE_DELETE_PATTERN = re.compile(r"^.resolves/(?P<key>.+?)/delete")
+
+    @classmethod
+    def _deserialise_resolve_part(cls, index_entry):
+        match = cls._RESOLVE_DELETE_PATTERN.match(index_entry.path)
+        if match:
+            return match.group("key"), None
+
+        match = cls._RESOLVE_PATTERN.match(index_entry.path)
+        if not match:
+            raise RuntimeError(f"Couldn't deserialise resolve: {index_entry.path}")
+
+        key = match.group("key")
+        version = match.group("version")
+        result_path = match.group("path")
+        result_entry = cls.Entry(result_path, index_entry.id, index_entry.mode)
+        result = MergedOursTheirs.partial(**{version: result_entry})
+        return key, result
+
+    def resolves_as_entries(self):
+        for key, resolve3 in self.resolves.items():
+            for index_entry in self._serialise_resolve(key, resolve3):
+                yield index_entry
+
+    @property
+    def unresolved_conflicts(self):
+        return {k: v for k, v in self.conflicts.items() if k not in self.resolves}
+
     @classmethod
     def read(cls, path):
+        """Deserialise a MergeIndex from the given path."""
         index = pygit2.Index(str(path))
-        return MergeIndex(index, serialised=True)
+        if index.conflicts:
+            raise RuntimeError("pygit2.Index conflicts should be empty")
+        entries = {}
+        conflicts = {}
+        resolves = {}
+        for e in index:
+            if e.path.startswith(".conflicts/"):
+                key, conflict_part = cls._deserialise_conflict_part(e)
+                conflicts.setdefault(key, AncestorOursTheirs.EMPTY)
+                conflicts[key] |= conflict_part
+            elif e.path.startswith(".resolves/"):
+                key, resolve_part = cls._deserialise_resolve_part(e)
+                resolves.setdefault(key, MergedOursTheirs.EMPTY)
+                if resolve_part:
+                    resolves[key] |= resolve_part
+            else:
+                entries[e.path] = cls._ensure_entry(e)
+
+        return MergeIndex(entries, conflicts, resolves)
 
     @classmethod
     def read_from_repo(cls, repo):
+        """Deserialise a MergeIndex from the MERGE_INDEX file in the given repo."""
         return cls.read(repo_file_path(repo, MERGE_INDEX))
 
     def write(self, path):
+        """Serialise this MergeIndex to the given path."""
         index = pygit2.Index(str(path))
         index.clear()
 
@@ -192,34 +322,54 @@ class MergeIndex:
             index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
         for e in self.conflicts_as_entries():
             index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
+        for e in self.resolves_as_entries():
+            index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
         index.write()
 
     def write_to_repo(self, repo):
+        """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
         self.write(repo_file_path(repo, MERGE_INDEX))
 
-    def _ensure_entry(self, entry):
-        if entry is None or isinstance(entry, self.Entry):
+    @classmethod
+    def _ensure_entry(cls, entry):
+        if entry is None or isinstance(entry, cls.Entry):
             return entry
         elif isinstance(entry, pygit2.IndexEntry):
-            return self.Entry(entry.path, entry.id, entry.mode)
+            return cls.Entry(entry.path, entry.id, entry.mode)
         else:
             raise TypeError(
                 "Expected entry to be type Entry or IndexEntry", type(entry)
             )
 
-    def _ensure_conflict(self, conflict):
+    @classmethod
+    def _ensure_conflict(cls, conflict):
         if isinstance(conflict, AncestorOursTheirs):
             return conflict
         elif isinstance(conflict, tuple):
             return AncestorOursTheirs(
-                self._ensure_entry(conflict[0]),
-                self._ensure_entry(conflict[1]),
-                self._ensure_entry(conflict[2]),
+                cls._ensure_entry(conflict[0]),
+                cls._ensure_entry(conflict[1]),
+                cls._ensure_entry(conflict[2]),
             )
         else:
             raise TypeError(
                 "Expected conflict to be type AncestorOursTheirs or tuple",
                 type(conflict),
+            )
+
+    @classmethod
+    def _ensure_resolve(cls, resolve):
+        if isinstance(resolve, MergedOursTheirs):
+            return resolve
+        elif isinstance(resolve, tuple):
+            return AncestorOursTheirs(
+                cls._ensure_entry(resolve[0]),
+                cls._ensure_entry(resolve[1]),
+                cls._ensure_entry(resolve[2]),
+            )
+        else:
+            raise TypeError(
+                "Expected resolve to be type MergedOursTheirs or tuple", type(resolve),
             )
 
 

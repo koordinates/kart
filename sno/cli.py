@@ -19,6 +19,7 @@ from . import (
     fsck,
     merge,
     pull,
+    resolve,
     show,
     status,
     query,
@@ -119,6 +120,7 @@ cli.add_command(init.import_table)
 cli.add_command(init.init)
 cli.add_command(merge.merge)
 cli.add_command(pull.pull)
+cli.add_command(resolve.resolve)
 cli.add_command(show.show)
 cli.add_command(status.status)
 cli.add_command(query.query)
