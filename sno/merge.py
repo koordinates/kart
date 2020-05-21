@@ -6,14 +6,23 @@ import click
 from .cli_util import do_json_option
 from .conflicts import (
     ConflictIndex,
-    abort_merging_state,
-    move_repo_to_merging_state,
     list_conflicts,
-    output_conflicts_as_text,
+    conflicts_json_as_text,
 )
 from .exceptions import InvalidOperation
 from .output_util import dump_json_output
-from .repo_files import is_ongoing_merge
+from .repo_files import (
+    ORIG_HEAD,
+    MERGE_HEAD,
+    MERGE_MSG,
+    MERGE_INDEX,
+    MERGE_LABELS,
+    repo_file_path,
+    write_repo_file,
+    remove_repo_file,
+    is_ongoing_merge,
+    repo_file_exists,
+)
 from .structs import AncestorOursTheirs, CommitWithReference
 from .structure import RepositoryStructure
 
@@ -153,7 +162,9 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
         repo_structures3 = commit_with_ref3.map(
             lambda c: RepositoryStructure(repo, c.commit)
         )
-        merge_jdict["conflicts"] = list_conflicts(conflict_index, repo_structures3)
+        merge_jdict["conflicts"] = list_conflicts(
+            conflict_index, repo_structures3, "json", summarise=2
+        )
         if not dry_run:
             move_repo_to_merging_state(
                 repo,
@@ -181,6 +192,52 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     merge_jdict["mergeCommit"] = merge_commit_id.hex
 
     return merge_jdict
+
+
+def move_repo_to_merging_state(
+    repo, conflict_index, merge_message, *, ancestor, ours, theirs
+):
+    """
+    Move the sno repository into a "merging" state in which conflicts
+    can be resolved one by one.
+    repo - the pygit2.Repository.
+    conflict_index - the ConflictIndex containing the conflicts found.
+    merge_message - the commit message for when the merge is completed.
+    ancestor, ours, theirs - CommitWithReference objects.
+    """
+    if is_ongoing_merge(repo):
+        raise InvalidOperation("A merge is already ongoing")
+
+    # These are git standard files
+    write_repo_file(repo, ORIG_HEAD, ours.id.hex)
+    write_repo_file(repo, MERGE_HEAD, theirs.id.hex)
+    write_repo_file(repo, MERGE_MSG, merge_message)
+
+    # These are specific to sno repositories
+    conflict_index.write(repo_file_path(repo, MERGE_INDEX))
+    write_repo_file(
+        repo, MERGE_LABELS, "\n".join([str(ancestor), str(ours), str(theirs)])
+    )
+
+
+def abort_merging_state(repo):
+    """
+    Put things back how they were before the merge began.
+    Tries to be robust against failure, in case the user has messed up the repo's state.
+    """
+    is_ongoing_merge = repo_file_exists(repo, MERGE_HEAD)
+    # If we are in a merge, we now need to delete all the MERGE_* files.
+    # If we are not in a merge, we should clean them up anyway.
+    remove_repo_file(repo, MERGE_HEAD)
+    remove_repo_file(repo, MERGE_MSG)
+    remove_repo_file(repo, MERGE_INDEX)
+    remove_repo_file(repo, MERGE_LABELS)
+
+    if not is_ongoing_merge:
+        raise InvalidOperation("Repository is not in `merging` state.")
+
+    # TODO - maybe restore HEAD to ORIG_HEAD.
+    # Not sure if it matters - we don't modify HEAD when we move into merging state.
 
 
 def output_merge_json_as_text(jdict):
@@ -215,7 +272,7 @@ def output_merge_json_as_text(jdict):
         return
 
     click.echo("Conflicts found:\n")
-    output_conflicts_as_text(conflicts)
+    click.echo(conflicts_json_as_text(conflicts))
 
     if dry_run:
         click.echo("(Not actually merging due to --dry-run)")
