@@ -116,6 +116,15 @@ $(build-spatialite): $(configure-spatialite)
 	if [ "$(PLATFORM)" = "Darwin" ]; then \
 		ln -sf mod_spatialite.so $@; \
 	fi
+ifeq ($(PLATFORM),Darwin)
+	install_name_tool \
+		-change $(PREFIX)/lib/libproj.15.dylib @rpath/libproj.15.dylib \
+		-change libsqlite3.0.dylib @rpath/libsqlite3.0.dylib \
+		-change libgeos_c.1.dylib @rpath/libgeos_c.1.dylib \
+		-id mod_spatialite.7.so \
+		$(build-spatialite)
+endif
+
 	$(MAKE) print-lib-deps-$(PLATFORM)
 
 #
@@ -123,19 +132,8 @@ $(build-spatialite): $(configure-spatialite)
 #
 
 .PHONY: install
-install: INSTALL_PATH:=$(PREFIX)/lib/$(notdir $(build-spatialite))
 install: $(build-spatialite)
-	$(MAKE) -C src install
-	cp -f $< $(PREFIX)/lib/
-ifeq ($(PLATFORM),Darwin)
-	for BN in `otool -LX "$(INSTALL_PATH)" | awk '{print $$1}' | grep "$(PREFIX)/lib/"`; do \
-		install_name_tool \
-			 -change "$$BN" "@rpath/`basename "$$BN"`" \
-			 "$(INSTALL_PATH)"; \
-	done
-	otool -L $(INSTALL_PATH)
-	otool -l $(INSTALL_PATH) | grep -A2 RPATH || true
-endif
+	cp -fav src/src/.libs/mod_spatialite*.{dylib,so} $(PREFIX)/lib/
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)

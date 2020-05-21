@@ -191,11 +191,11 @@ $(build-gdal): $(configure-gdal) | $(ccache-deps)
 lib-fix-Darwin:
 	@echo fixing gdal libraries ...
 	install_name_tool \
-		-change $(SQLITE_PREFIX)/lib/libsqlite3.0.dylib libsqlite3.0.dylib \
-		-change /usr/local/opt/geos/lib/libgeos_c.1.dylib libgeos_c.1.dylib \
-		-change $(JSONC_PREFIX)/lib/libjson-c.4.dylib libjson-c.4.dylib \
-		-change $(PROJ_PREFIX)/lib/libproj.15.dylib libproj.15.dylib \
-		-change $(PG_PREFIX)/lib/libpq.5.dylib libpq.5.dylib \
+		-change $(SQLITE_PREFIX)/lib/libsqlite3.0.dylib @rpath/libsqlite3.0.dylib \
+		-change /usr/local/opt/geos/lib/libgeos_c.1.dylib @rpath/libgeos_c.1.dylib \
+		-change $(JSONC_PREFIX)/lib/libjson-c.4.dylib @rpath/libjson-c.4.dylib \
+		-change $(PROJ_PREFIX)/lib/libproj.15.dylib @rpath/libproj.15.dylib \
+		-change $(PG_PREFIX)/lib/libpq.5.dylib @rpath/libpq.5.dylib \
 		-id libgdal.26.dylib \
 		src/.libs/libgdal.26.dylib
 
