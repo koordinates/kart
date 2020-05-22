@@ -26,6 +26,182 @@ from .structure import RepositoryStructure
 L = logging.getLogger("sno.conflicts")
 
 
+def first_true(iterable):
+    """Returns the value from the iterable that is truthy."""
+    return next(filter(None, iterable))
+
+
+class RichConflictVersion:
+    """
+    An IndexEntry but with the relevant context attached - mainly the
+    repository structure - so that it can be labelled or output.
+    """
+
+    def __init__(self, entry, repo_structure, version_name):
+        self.path = entry.path
+        self.id = entry.id
+        self.mode = entry.mode
+        self.repo_structure = repo_structure
+        self.version_name = version_name
+
+    @property
+    def decoded_path(self):
+        if not hasattr(self, "_decoded_path"):
+            self._decoded_path = self.repo_structure.decode_path(self.path)
+        return self._decoded_path
+
+    @property
+    def table(self):
+        return self.decoded_path[0]
+
+    @property
+    def dataset(self):
+        return self.repo_structure[self.table]
+
+    @property
+    def table_part(self):
+        return self.decoded_path[1]
+
+    @property
+    def is_meta(self):
+        return self.table_part == "meta"
+
+    @property
+    def pk_field(self):
+        assert self.table_part == "feature"
+        return self.decoded_path[2]
+
+    @property
+    def pk(self):
+        assert self.table_part == "feature"
+        return self.decoded_path[3]
+
+    @property
+    def meta_path(self):
+        assert self.table_part == "meta"
+        return self.decoded_path[3]
+
+    @property
+    def feature(self):
+        assert self.table_part == "feature"
+        _, feature = self.dataset.get_feature(self.pk, ogr_geoms=False)
+        return feature
+
+    @property
+    def meta_item(self):
+        assert self.table_part == "meta"
+        return self.dataset.get_meta_item(self.meta_path)
+
+    @property
+    def path_label(self):
+        if self.is_meta:
+            return f"{self.table}:meta:{self.meta_path}"
+        else:
+            return f"{self.table}:{self.pk_field}={self.pk}"
+
+    def output(self, output_format):
+        """
+        Output this version of this feature or meta_item in the
+        given output_format - one of "text", "json" or "geojson".
+        """
+        if self.is_meta:
+            result = self.meta_item
+            if output_format == "text":
+                result = json.dumps(result)
+            return result
+
+        if output_format == "text":
+            return text_row(self.feature)
+        elif output_format == "json":
+            return json_row(self.feature, self.pk_field)
+        elif output_format == "geojson":
+            return geojson_row(self.feature, self.pk_field)
+
+
+class RichConflict:
+    """
+    Up to three RichConflictVersions that form a conflict.
+    All necessary context of the conflict is collected in this class
+    so that the conflict can be categorised, labelled, or output.
+    """
+
+    def __init__(self, entry3, repo_structure3):
+        self.versions = AncestorOursTheirs(
+            *(
+                RichConflictVersion(e, rs, n) if e else None
+                for e, rs, n in zip(entry3, repo_structure3, AncestorOursTheirs.NAMES)
+            )
+        )
+
+    @property
+    def true_versions(self):
+        """The versions that are truthy (not None)"""
+        return (v for v in self.versions if v)
+
+    @property
+    def has_multiple_paths(self):
+        """True if the conflict involves renames and has more than one path."""
+        if not hasattr(self, "_has_multiple_paths"):
+            paths = set(v.path for v in self.true_versions)
+            self._has_multiple_paths = len(paths) > 1
+        return self._has_multiple_paths
+
+    @property
+    def label(self):
+        """
+        A unique label for this conflict - eg: "tableA:fid=5" if
+        this conflict only involves the feature in tableA in row 5.
+        """
+        if not hasattr(self, "_label"):
+            if self.has_multiple_paths:
+                self._label = " ".join(
+                    f"{v.version_name}={v.path_label}" for v in self.versions if v
+                )
+            else:
+                self._label = first_true(self.versions).path_label
+        return self._label
+
+    @property
+    def categorised_label(self):
+        """
+        A unique label for this conflict, but as part of a hierarchy so it
+        can be grouped with similar conflicts. Eg:
+        ["tableA", "featureConflicts", "edit/edit" "tableA:fid=5"]
+        """
+        if (
+            self.has_multiple_paths
+            and len(set(v.table for v in self.true_versions)) > 1
+        ):
+            return ["<uncategorised>", self.label]
+        table = first_true(self.versions).table
+
+        if (
+            self.has_multiple_paths
+            and len(set(v.table_part for v in self.true_versions)) > 1
+        ):
+            # Meta/feature conflict. Shouldn't really happen.
+            return [table, "<uncategorised>", self.label]
+        table_part = first_true(self.versions).table_part + "Conflicts"
+
+        # <uncategorised> type currently includes everything involving renames.
+        conflict_type = "<uncategorised>"
+        if not self._has_multiple_paths:
+            if not self.versions.ancestor:
+                if self.versions.ours and self.versions.theirs:
+                    conflict_type = "add/add"
+            else:
+                if self.versions.ours and self.versions.theirs:
+                    conflict_type = "edit/edit"
+                elif self.versions.ours or self.versions.theirs:
+                    conflict_type = "edit/delete"
+
+        return [table, table_part, conflict_type, self.label]
+
+    def output(self, output_format):
+        """Output this conflict in the given output_format - text, json or geojson."""
+        return {v.version_name: v.output(output_format) for v in self.versions if v}
+
+
 class ConflictIndex:
     """
     Like a pygit2.Index, but every conflict has a short key independent of its path,
@@ -37,6 +213,9 @@ class ConflictIndex:
     # We could use pygit2.IndexEntry everywhere but it has unhelpful __eq__ and __repr__ behaviour.
     # So we have this equivalent struct.
     Entry = namedtuple("Entry", ("path", "id", "mode"))
+
+    # Note that ConflictIndex only contains Entries, which are simple structs -
+    # not RichConflicts, which refer to the entire RepositoryStructure to give extra functionality.
 
     def __init__(self, index, serialised=False):
         self.entries = {}
@@ -206,24 +385,22 @@ def list_conflicts(
         conflict_index - the ConflictIndex containing the conflicts found.
         repo_structure3 - AncestorOursTheirs tuple containing RepositoryStructures.
         output_format - one of 'text', 'json', 'geojson'
+        summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
         flat - if True, don't categorise conflicts. Put them all at the top level.
     """
     conflicts = {}
     conflict_output = _CONFLICT_PLACEHOLDER
 
-    for key, conflict3 in conflict_index.conflicts.items():
-        decoded_path3 = decode_conflict_paths(conflict3, repo_structure3)
+    for conflict in rich_conflicts(conflict_index.conflicts.values(), repo_structure3):
         if not summarise:
-            conflict_output = conflict_repr(
-                decoded_path3, repo_structure3, output_format
-            )
+            conflict_output = conflict.output(output_format)
 
         if flat:
-            label = get_conflict_label(decoded_path3)
-            conflicts[label] = conflict_output
+            conflicts[conflict.label] = conflict_output
         else:
-            label = get_categorised_conflict_label(decoded_path3)
-            add_conflict_at_label(conflicts, label, conflict_output)
+            add_conflict_at_label(
+                conflicts, conflict.categorised_label, conflict_output
+            )
 
     if summarise:
         conflicts = summarise_conflicts(conflicts, summarise)
@@ -234,140 +411,9 @@ def list_conflicts(
         return conflicts
 
 
-def decode_conflict_paths(conflict3, repo_structure3):
-    """
-    Given 3 versions of an IndexEntry, and 3 versions of a repository_structure,
-    return 3 versions of a decoded path - see RepositoryStructure.decode_path.
-    """
-    return AncestorOursTheirs(
-        *(
-            rs.decode_path(c.path) if c else None
-            for c, rs, in zip(conflict3, repo_structure3)
-        )
-    )
-
-
-def get_categorised_conflict_label(decoded_path3):
-    """
-    Given 3 versions of the decoded path, tries to categorise the conflict,
-    so that similar conflicts can be grouped together.
-    For example, a returned categorised label might be:
-    ["table_A", "featureConflicts", "edit/edit", "table_A:fid=3"]
-    Meaning conflicting edits were made to a feature fid=3 in table_A.
-    """
-    label = get_conflict_label(decoded_path3)
-
-    dpath3 = decoded_path3
-    actual_dpaths = [p for p in dpath3 if p]
-    actual_tables = [p[0] for p in actual_dpaths]
-    all_same_table = len(set(actual_tables)) == 1
-
-    if not all_same_table:
-        return ["<uncategorised>", label]
-    table = actual_tables[0]
-
-    actual_tableparts = [p[1] for p in actual_dpaths]
-    all_same_tablepart = len(set(actual_tableparts)) == 1
-    if all_same_tablepart:
-        tablepart = actual_tableparts[0] + "Conflicts"
-    else:
-        # Meta/feature conflict. Shouldn't really happen.
-        return [table, "<uncategorised>", label]
-
-    # <uncategorised> type currently includes everything involving renames.
-    conflict_type = "<uncategorised>"
-    all_same_path = len(set(actual_dpaths)) == 1
-    if all_same_path:
-        if not dpath3.ancestor:
-            if dpath3.ours and dpath3.theirs:
-                conflict_type = "add/add"
-        else:
-            if dpath3.ours and dpath3.theirs:
-                conflict_type = "edit/edit"
-            elif dpath3.ours or dpath3.theirs:
-                conflict_type = "edit/delete"
-
-    return [table, tablepart, conflict_type, label]
-
-
-def get_conflict_label(decoded_path3):
-    """
-    Given 3 versions of the decoded path, returns a unique name for a conflict.
-    In simply cases, this will be something like: "table_A:fid=5"
-    But if renames have occurred, it could have multiple names, eg:
-    "ancestor=table_A:fid=5 ours=table_A:fid=6 theirs=table_A:fid=12"
-    """
-    dpath3 = decoded_path3
-    actual_dpaths = [p for p in dpath3 if p]
-    all_same_path = len(set(actual_dpaths)) == 1
-
-    if all_same_path:
-        return decoded_path_to_label(actual_dpaths[0])
-
-    label3 = AncestorOursTheirs(
-        *(
-            f"{v}={decoded_path_to_label(p)}" if p else None
-            for v, p, in zip(AncestorOursTheirs.NAMES, decoded_path3)
-        )
-    )
-    return " ".join([l for l in label3 if l])
-
-
-def decoded_path_to_label(decoded_path):
-    """
-    Converts a decoded path to a unique name, eg:
-    ("table_A", "feature", "fid", 5) -> "table_A:fid=5"
-    """
-    if decoded_path is None:
-        return None
-    if decoded_path[1] == "feature":
-        table, tablepart, pk_field, pk = decoded_path
-        return f"{table}:{pk_field}={pk}"
-    else:
-        return ":".join(decoded_path)
-
-
-def conflict_repr(decoded_path3, repo_structure3, output_format):
-    """
-    Returns a dict containing up to 3 versions of the conflict
-    (at keys "ancestor", "theirs" and "ours") using conflict_version_repr.
-    """
-    return AncestorOursTheirs(
-        *(
-            conflict_version_repr(dp, rs, output_format) if dp else None
-            for dp, rs, in zip(decoded_path3, repo_structure3)
-        )
-    ).as_dict()
-
-
-def conflict_version_repr(decoded_path, repo_structure, output_format):
-    """
-    Returns the feature / metadata in repo_structure at decoded_path,
-    according to output_format.
-    If the decoded_path points to a feature, it will be output as follows:
-    - FULL_TEXT_DIFF - as a string using diff_output.text_row.
-    - FULL_JSON_DIFF - as JSON using diff_output.json_row
-    - FULL_GEOJSON_DIFF - as GEOJSON using diff_output.geojson_row
-    If the decoded path points to metadata, it will be output as follows:
-    - FULL_JSON_DIFF / FULL_GEOJSON_DIFF - as JSON object
-    - FULL_TEXT_DIFF - as stringified JSON object
-    """
-    if decoded_path[1] == "feature":
-        table, tablepart, pk_field, pk = decoded_path
-        _, feature = repo_structure[table].get_feature(pk, ogr_geoms=False)
-        if output_format == "text":
-            return text_row(feature)
-        elif output_format == "json":
-            return json_row(feature, pk_field)
-        elif output_format == "geojson":
-            return geojson_row(feature, pk_field)
-    else:
-        table, tablepart, meta_path = decoded_path
-        jdict = repo_structure[table].get_meta_item(meta_path)
-        if output_format == "text":
-            return json.dumps(jdict)
-        else:
-            return jdict
+def rich_conflicts(raw_conflicts, repo_structure3):
+    """Convert a list of AncestorOursTheirs tuples of Entrys to a list of RichConflicts."""
+    return (RichConflict(c, repo_structure3) for c in raw_conflicts)
 
 
 def add_conflict_at_label(root_dict, categorised_label, conflict):
