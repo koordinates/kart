@@ -64,22 +64,27 @@ class OgrImporter:
         # Optionally, accept driver-prefixed paths like 'GPKG:'
         allowed_formats = sorted(FORMAT_TO_OGR_MAP.keys())
         m = re.match(
-            rf'^({"|".join(FORMAT_TO_OGR_MAP.keys())}):(.+)$', ogr_source, re.I
+            rf'^(OGR|{"|".join(FORMAT_TO_OGR_MAP.keys())}):(.+)$', ogr_source, re.I
         )
         prefix = None
         if m:
             prefix, ogr_source = m.groups()
             prefix = prefix.upper()
-            allowed_formats = [prefix]
+            if prefix == 'OGR':
+                # Don't specify a driver; let OGR just do whatever it can do.
+                # We don't 'support' this, but it will probably work fine for some datasources.
+                allowed_formats = None
+            else:
+                allowed_formats = [prefix]
 
-            if prefix in LOCAL_PATH_FORMATS:
-                # resolve GPKG:~/foo.gpkg and GPKG:~me/foo.gpkg
-                # usually this is handled by the shell, but the GPKG: prefix prevents that
-                ogr_source = os.path.expanduser(ogr_source)
+                if prefix in LOCAL_PATH_FORMATS:
+                    # resolve GPKG:~/foo.gpkg and GPKG:~me/foo.gpkg
+                    # usually this is handled by the shell, but the GPKG: prefix prevents that
+                    ogr_source = os.path.expanduser(ogr_source)
 
-            if prefix in ('CSV', 'PG'):
-                # OGR actually handles these prefixes itself...
-                ogr_source = f'{prefix}:{ogr_source}'
+                if prefix in ('CSV', 'PG'):
+                    # OGR actually handles these prefixes itself...
+                    ogr_source = f'{prefix}:{ogr_source}'
 
         if prefix in LOCAL_PATH_FORMATS:
             if not os.path.exists(ogr_source):
@@ -91,17 +96,23 @@ class OgrImporter:
     @classmethod
     def open(cls, source, table=None):
         ogr_source, allowed_formats = cls.adapt_source_for_ogr(source)
-        allowed_ogr_drivers = [FORMAT_TO_OGR_MAP[x] for x in allowed_formats]
+        if allowed_formats is None:
+            # let OGR use any driver it's been compiled with.
+            open_kwargs = {}
+        else:
+            open_kwargs = {
+                'allowed_drivers': [FORMAT_TO_OGR_MAP[x] for x in allowed_formats]
+            }
         try:
             ds = gdal.OpenEx(
                 ogr_source,
                 gdal.OF_VECTOR | gdal.OF_VERBOSE_ERROR | gdal.OF_READONLY,
-                allowed_drivers=allowed_ogr_drivers,
+                **open_kwargs,
             )
         except RuntimeError as e:
             raise NotFound(
                 f"{ogr_source!r} doesn't appear to be valid "
-                f"(tried formats: {','.join(allowed_formats)})",
+                f"(tried formats: {','.join(allowed_formats) if allowed_formats else '(all)'})",
                 exit_code=NO_IMPORT_SOURCE,
             ) from e
 
