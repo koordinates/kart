@@ -246,30 +246,25 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     gpkg_meta_items["primary_key"] = meta_items["primary_key"]
 
     # SHP/TAB field names must be <10 chars
-    nuke_difficult_fields = set()
+    nuke_truncated_fields = set()
     for f in meta_items.keys():
         if f.startswith('fields/') and len(f) == 17:
             # It's likely OGR has truncated this field name.
             # Truncate the gpkg field to match.
-            match = re.match(r'^(?P<fieldname>fields/\w+?)(?:_?\d+)?$', f)
+            match = re.match(r'^fields/(?P<fieldname>\w+?)(?:_?\d+)?$', f)
             assert match
-            # truncate the gpkg field to match the truncated OGR field
-            keys = [
-                k
-                for k in gpkg_meta_items
-                if k.startswith(match.groupdict()["fieldname"])
-            ]
-            if len(keys) > 1:
-                nuke_difficult_fields.add(match.groupdict()["fieldname"])
-            else:
-                gpkg_meta_items[f] = gpkg_meta_items.pop(keys[0])
+            nuke_truncated_fields.add(match.groupdict()["fieldname"])
 
     # nuke difficult field names as mentioned above
-    nuke_difficult_fields = tuple(nuke_difficult_fields)
+    nuke_truncated_fields = tuple(nuke_truncated_fields)
     for d in (meta_items, gpkg_meta_items):
         for k in list(d):
-            if k.startswith(nuke_difficult_fields):
+            if k.startswith(tuple(f'fields/{f}' for f in nuke_truncated_fields)):
                 d.pop(k)
+        for f in d['sqlite_table_info']:
+            if f['name'].startswith(nuke_truncated_fields):
+                # truncated them here so we can test the rest of the stuff about the field
+                f['name'] = f"{f['name'][:7]}[trunc]"
 
     assert meta_items.keys() == gpkg_meta_items.keys()
     for d in (meta_items, gpkg_meta_items):
@@ -299,6 +294,31 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
         # but when converted to SHP it ends up with POLYGON
         # (because it contains only polygons)
         del d['gpkg_geometry_columns']['geometry_type_name']
+        for f in d['sqlite_table_info']:
+            if f['type'].startswith('MULTI'):
+                f['type'] = f['type'][5:]
+            if f['type'] in (
+                'POLYGON',
+                'POINT',
+                'LINESTRING',
+                'GEOMETRYCOLLECTION',
+                'GEOMETRY',
+            ):
+                # SHP/TAB formats don't preserve the ordering of the geometry column.
+                f['cid'] = -1
+            if f['type'] == 'DATETIME':
+                # wow, SHP doesn't support datetimes(!)
+                # OGR launders these to DATE
+                f['type'] = 'DATE'
+
+        # SHP/TAB formats don't preserve the ordering of the geometry column.
+        # Above, we set the geometry cid to -1
+        # Now we sort by cid, and then remove the cids.
+        # This ensures we're testing the ordering of the other columns, but
+        # means we don't care what their cids are with respect to the geometry column.
+        d['sqlite_table_info'].sort(key=lambda f: f['cid'])
+        for f in d['sqlite_table_info']:
+            f.pop('cid')
 
         # the GPKG spec allows for z/m values to be set to 2,
         # which means z/m values are optional.
@@ -315,10 +335,17 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    GPKG_IMPORTS[0],
+    "archive,source_gpkg,table",
     [
-        # Exclude the table one, because SHP can't handle tables very well
-        *GPKG_IMPORTS[1][:3],
+        pytest.param(
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="points"
+        ),
+        pytest.param(
+            "gpkg-polygons",
+            "nz-waca-adjustments.gpkg",
+            H.POLYGONS.LAYER,
+            id="polygons-pk",
+        ),
         pytest.param(
             "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
         ),
