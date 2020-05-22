@@ -324,8 +324,9 @@ class WorkingCopyGPKG(WorkingCopy):
                 dbcur.execute(sql, values)
 
     def read_meta(self, dataset):
+        yield ("version", {"version": dataset.version})
         with self.session() as db:
-            return gpkg.get_meta_info(db, dataset.name, dataset.version)
+            yield from gpkg.get_meta_info(db, dataset.name)
 
     def save_config(self, **kwargs):
         new_path = Path(self.path)

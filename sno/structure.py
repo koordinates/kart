@@ -49,7 +49,7 @@ class RepositoryStructure:
         )
 
     def __init__(self, repo, commit=None, tree=None):
-        self.L = logging.getLogger(__class__.__qualname__)
+        self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
         # If _commit is not None, self.tree -> self._commit.tree, so _tree is not set.
@@ -424,7 +424,8 @@ class DatasetStructure:
             yield tuple(f[c] for c in col_names)
 
     def import_meta_items(self, source):
-        for name, value in source.build_meta_info(repo_version=self.VERSION_IMPORT):
+        yield ("version", {"version": self.VERSION_IMPORT})
+        for name, value in source.build_meta_info():
             viter = value if isinstance(value, (list, tuple)) else [value]
 
             for v in viter:

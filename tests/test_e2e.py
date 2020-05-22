@@ -54,7 +54,7 @@ def test_e2e(
             assert r.exit_code == 0
 
             # import data
-            r = cli_runner.invoke(["import", f"GPKG:{data / gpkg}:{table}"])
+            r = cli_runner.invoke(["import", f"GPKG:{data / gpkg}", "--table", table])
             assert r.exit_code == 0
 
             # check there's a commit

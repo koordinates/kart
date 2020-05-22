@@ -1,13 +1,13 @@
 import itertools
-import json
 import re
 import subprocess
 
+from osgeo import gdal, ogr
 import pygit2
 import pytest
 
 from sno import gpkg
-from sno.init import ImportGPKG
+from sno.init import OgrImporter
 from sno.structure import DatasetStructure, Dataset1
 
 
@@ -89,6 +89,16 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     return dataset
 
 
+def normalise_feature(row):
+    row = dict(row)
+    if 'geom' in row:
+        # We import via OGR, which strips envelopes by default
+        row['geom'] = gpkg.ogr_to_gpkg_geom(
+            gpkg.gpkg_geom_to_ogr(row['geom'], parse_srs=True),
+        )
+    return row
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(
     GPKG_IMPORTS[0],
@@ -157,8 +167,9 @@ def test_import(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{data / source_gpkg}:{table}",
+                    str(data / source_gpkg),
                     f"--version={import_version}",
+                    f'--table={table}',
                     table,
                 ]
             )
@@ -187,24 +198,283 @@ def test_import(
             if num_rows > 0:
                 # compare the first feature in the repo against the source DB
                 key, feature = next(dataset.features())
-                row = dbcur.execute(
-                    f"SELECT * FROM {table} WHERE {pk_field}=?;", [feature[pk_field]]
-                ).fetchone()
-                print("First Feature:", key, feature, dict(row))
-                assert feature == dict(row)
+
+                row = normalise_feature(
+                    dbcur.execute(
+                        f"SELECT * FROM {table} WHERE {pk_field}=?;",
+                        [feature[pk_field]],
+                    ).fetchone()
+                )
+                feature = normalise_feature(feature)
+                print("First Feature:", key, feature, row)
+                assert feature == row
 
                 # compare a source DB feature against the repo feature
-                row = dbcur.execute(
-                    f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
-                ).fetchone()
+                row = normalise_feature(
+                    dbcur.execute(
+                        f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
+                    ).fetchone()
+                )
+
                 for key, feature in dataset.features():
                     if feature[pk_field] == row[pk_field]:
-                        assert feature == dict(row)
+                        feature = normalise_feature(feature)
+                        assert feature == row
                         break
                 else:
                     pytest.fail(
                         f"Couldn't find repo feature {pk_field}={row[pk_field]}"
                     )
+
+
+def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
+    """
+    Compares the meta items from an OGR import, with those from a GPKG import.
+    There are all sorts of caveats to the meta item emulation, and this attempts
+    to avoid them when comparing.
+    """
+    meta_items = dict(dataset.iter_meta_items())
+    gpkg_meta_items = dict(gpkg_dataset.iter_meta_items())
+
+    # we don't implement XML metadata for non-gpkg formats
+    del gpkg_meta_items['gpkg_metadata']
+    del gpkg_meta_items['gpkg_metadata_reference']
+    # SHP/TAB always call the primary key "FID"
+    gpkg_meta_items[f"fields/{dataset.primary_key}"] = gpkg_meta_items.pop(
+        f"fields/{gpkg_dataset.primary_key}"
+    )
+    gpkg_meta_items["primary_key"] = meta_items["primary_key"]
+
+    # SHP/TAB field names must be <10 chars
+    nuke_truncated_fields = set()
+    for f in meta_items.keys():
+        if f.startswith('fields/') and len(f) == 17:
+            # It's likely OGR has truncated this field name.
+            # Truncate the gpkg field to match.
+            match = re.match(r'^fields/(?P<fieldname>\w+?)(?:_?\d+)?$', f)
+            assert match
+            nuke_truncated_fields.add(match.groupdict()["fieldname"])
+
+    # nuke difficult field names as mentioned above
+    nuke_truncated_fields = tuple(nuke_truncated_fields)
+    for d in (meta_items, gpkg_meta_items):
+        for k in list(d):
+            if k.startswith(tuple(f'fields/{f}' for f in nuke_truncated_fields)):
+                d.pop(k)
+        for f in d['sqlite_table_info']:
+            if f['name'].startswith(nuke_truncated_fields):
+                # truncated them here so we can test the rest of the stuff about the field
+                f['name'] = f"{f['name'][:7]}[trunc]"
+
+    assert meta_items.keys() == gpkg_meta_items.keys()
+    for d in (meta_items, gpkg_meta_items):
+        # SHP/TAB can't possibly preserve identifier/description, those are GPKG specific :/
+        d['gpkg_contents'].pop('description')
+        d['gpkg_contents'].pop('identifier')
+
+        pk_field = [f for f in d['sqlite_table_info'] if f['pk']][0]
+        # SHP/TAB always call the primary key "FID"
+        pk_field['name'] = dataset.primary_key
+        # SHP/TAB don't preserve nullability
+        for f in d['sqlite_table_info']:
+            del f['notnull']
+
+        # OGR SRS names seem different from GPKG ones, and we don't seem to have descriptions at all.
+        # Luckily these don't really matter (do they?)
+        for srs in d['gpkg_spatial_ref_sys']:
+            del srs['description']
+            del srs['srs_name']
+
+            # this one matters, but slight variations may not.
+            # OGR adds AXIS definitions in that GPKG doesn't have. meh
+            assert srs.pop('definition')
+
+        # SHP/TAB don't preserve the MULTI-ness of their geometry type.
+        # also, at least one of our test datasets has gtype=GEOMETRY in GPKG,
+        # but when converted to SHP it ends up with POLYGON
+        # (because it contains only polygons)
+        del d['gpkg_geometry_columns']['geometry_type_name']
+        for f in d['sqlite_table_info']:
+            if f['type'].startswith('MULTI'):
+                f['type'] = f['type'][5:]
+            if f['type'] in (
+                'POLYGON',
+                'POINT',
+                'LINESTRING',
+                'GEOMETRYCOLLECTION',
+                'GEOMETRY',
+            ):
+                # SHP/TAB formats don't preserve the ordering of the geometry column.
+                f['cid'] = -1
+            if f['type'] == 'DATETIME':
+                # wow, SHP doesn't support datetimes(!)
+                # OGR launders these to DATE
+                f['type'] = 'DATE'
+
+        # SHP/TAB formats don't preserve the ordering of the geometry column.
+        # Above, we set the geometry cid to -1
+        # Now we sort by cid, and then remove the cids.
+        # This ensures we're testing the ordering of the other columns, but
+        # means we don't care what their cids are with respect to the geometry column.
+        d['sqlite_table_info'].sort(key=lambda f: f['cid'])
+        for f in d['sqlite_table_info']:
+            f.pop('cid')
+
+        # the GPKG spec allows for z/m values to be set to 2,
+        # which means z/m values are optional.
+        # OGR importer doesn't do that, it's 0 or 1
+        if d['gpkg_geometry_columns']['m'] == 2:
+            d['gpkg_geometry_columns']['m'] = 0
+        if d['gpkg_geometry_columns']['z'] == 2:
+            d['gpkg_geometry_columns']['z'] = 0
+
+    # That was dramatic. Whatever's left should be identical
+    for key in meta_items:
+        assert meta_items[key] == gpkg_meta_items[key], key
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "archive,source_gpkg,table",
+    [
+        pytest.param(
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="points"
+        ),
+        pytest.param(
+            "gpkg-polygons",
+            "nz-waca-adjustments.gpkg",
+            H.POLYGONS.LAYER,
+            id="polygons-pk",
+        ),
+        pytest.param(
+            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
+        ),
+    ],
+)
+@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(
+    'source_format,source_ogr_driver',
+    [
+        ('SHP', 'ESRI Shapefile'),
+        # https://github.com/koordinates/sno/issues/86
+        # This test starts by converting a GPKG into a TAB, and then imports then TAB.
+        # But the TAB ended up with very broken SRS info, and then during import GDAL
+        # failed to find an EPSG code for the projection.
+        # We can't currently work around this so we're disabling it.
+        # A future release might add handling via an option (--srs=epsg:4167 for example)
+        # ('TAB', 'MapInfo File')
+    ],
+    ids=['SHP'],
+)
+def test_import_from_non_gpkg(
+    import_version,
+    archive,
+    source_gpkg,
+    table,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
+    request,
+    source_format,
+    source_ogr_driver,
+):
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    param_ids = H.parameter_ids(request)
+
+    with data_archive(archive) as data:
+        db = geopackage(f"{data / source_gpkg}")
+        dbcur = db.cursor()
+        if param_ids[-1] == "empty":
+            with db:
+                print(f"emptying table {table}...")
+                dbcur.execute(f"DELETE FROM {table};")
+
+        num_rows = dbcur.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+
+        if param_ids[-1] == "empty":
+            assert num_rows == 0
+
+        # First, import the original GPKG to one repo
+        gpkg_repo_path = tmp_path / "gpkg"
+        gpkg_repo_path.mkdir()
+        r = cli_runner.invoke(
+            ["init", "--import", data / source_gpkg, f"--table={table}", gpkg_repo_path]
+        )
+        assert r.exit_code == 0, r
+
+        gpkg_repo = pygit2.Repository(str(gpkg_repo_path))
+        gpkg_tree = gpkg_repo.head.peel(pygit2.Tree) / table
+        gpkg_dataset = DatasetStructure.instantiate(gpkg_tree, table)
+
+        # convert to a new format using OGR
+        source_filename = tmp_path / f"data.{source_format.lower()}"
+        gdal.VectorTranslate(
+            str(source_filename),
+            gdal.OpenEx(str(data / source_gpkg)),
+            format=source_ogr_driver,
+            layers=[table],
+        )
+        repo_path = tmp_path / "non-gpkg"
+        repo_path.mkdir()
+        with chdir(repo_path):
+            r = cli_runner.invoke(["init"])
+            assert r.exit_code == 0, r
+
+            repo = pygit2.Repository(str(repo_path))
+            assert repo.is_bare
+            assert repo.is_empty
+
+            # Import from SHP/TAB/something into sno
+            r = cli_runner.invoke(
+                ["import", str(source_filename), f"--version={import_version}", table]
+            )
+            assert r.exit_code == 0, r
+
+            assert not repo.is_empty
+            assert repo.head.name == "refs/heads/master"
+            assert repo.head.shorthand == "master"
+
+            # has a single commit
+            assert len([c for c in repo.walk(repo.head.target)]) == 1
+
+            dataset = _import_check(
+                repo_path, table, f"{data / source_gpkg}", geopackage
+            )
+
+            assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
+            assert dataset.version == import_version
+
+            # Compare the meta items to the GPKG-imported ones
+            repo = pygit2.Repository(str(repo_path))
+            tree = repo.head.peel(pygit2.Tree) / table
+            dataset = DatasetStructure.instantiate(tree, table)
+
+            _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
+
+            if num_rows > 0:
+                # compare the first feature in the repo against the source DB
+                key, got_feature = next(dataset.features())
+                fid = dataset.decode_pk(key)
+
+                src_ds = ogr.Open(str(source_filename))
+                src_layer = src_ds.GetLayer(0)
+                assert src_layer.GetFeatureCount() == num_rows
+
+                f = src_layer.GetFeature(fid)
+                expected_feature = {
+                    f.GetFieldDefnRef(i).GetName(): f.GetField(i)
+                    for i in range(f.GetFieldCount())
+                }
+                expected_feature['FID'] = f.GetFID()
+                if src_layer.GetGeomType() != ogr.wkbNone:
+                    g = f.GetGeometryRef()
+                    if g:
+                        g.AssignSpatialReference(src_layer.GetSpatialRef())
+                    expected_feature['geom'] = gpkg.ogr_to_gpkg_geom(g)
+
+                assert normalise_feature(got_feature) == expected_feature
 
 
 def test_pk_encoding():
@@ -305,9 +575,9 @@ def test_import_multiple(
                 r = cli_runner.invoke(
                     [
                         "import",
-                        f"GPKG:{data / source_gpkg}:{table}",
+                        f"GPKG:{data / source_gpkg}",
                         f"--version={import_version}",
-                        table,
+                        f"--table={table}",
                     ]
                 )
                 assert r.exit_code == 0, r
@@ -324,9 +594,9 @@ def test_import_multiple(
                         r = cli_runner.invoke(
                             [
                                 "import",
-                                f"GPKG:{data / source_gpkg}:{table}",
+                                f"GPKG:{data / source_gpkg}",
                                 f"--version={import_version}",
-                                table,
+                                f"--table={table}",
                             ]
                         )
 
@@ -374,7 +644,7 @@ def test_write_feature_performance(
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = ImportGPKG(data / source_gpkg, table)
+            source = OgrImporter.open(data / source_gpkg, table=table)
             with source:
                 dataset = DatasetStructure.for_version(import_version)(None, table)
                 feature_iter = itertools.cycle(source.iter_features())
@@ -411,7 +681,7 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = ImportGPKG(data / "nz-pa-points-topo-150k.gpkg", table)
+            source = OgrImporter.open(data / "nz-pa-points-topo-150k.gpkg", table=table)
 
             dataset = DatasetStructure.for_version(import_version)(None, table)
             dataset.fast_import_table(repo, source)

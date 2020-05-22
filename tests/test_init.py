@@ -41,18 +41,179 @@ GPKG_IMPORTS = (
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(*GPKG_IMPORTS)
-def test_init_import_list(
-    archive, gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage
-):
-    with data_archive(archive) as data:
-        # list tables
-        r = cli_runner.invoke(["init", "--import", f"gPkG:{data / gpkg}"])
-        assert r.exit_code == 1, r
+def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_runner):
+    with data_archive_readonly("gpkg-points") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                data / "nz-pa-points-topo-150k.gpkg",
+                tmp_path / "emptydir",
+            ]
+        )
+        # You don't have to specify a table if there's only one.
+        assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
         assert len(lines) >= 2
-        assert lines[0] == f"GeoPackage tables in '{gpkg}':"
-        assert any(re.match(fr"^{table}\s+- ", l) for l in lines[1:])
+        assert "to nz_pa_points_topo_150k/ ..." in lines[0]
+        assert "Commit: " in lines[-1]
+
+
+def test_init_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner):
+    with data_archive_readonly("gpkg-au-census") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                data / "census2016_sdhca_ot_short.gpkg",
+                tmp_path / "emptydir",
+            ],
+            input="census2016_sdhca_ot_ced_short\n",
+        )
+        # Table was specified interactively via prompt
+        assert r.exit_code == 0, r
+        assert "Tables found:" in r.stdout
+        assert (
+            "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
+            in r.stdout
+        )
+        assert "to census2016_sdhca_ot_ced_short/ ..." in r.stdout
+        assert "Commit: " in r.stdout
+
+
+def test_init_import_table_with_prompt_with_no_input(
+    data_archive_readonly, tmp_path, cli_runner
+):
+    with data_archive_readonly("gpkg-au-census") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                data / "census2016_sdhca_ot_short.gpkg",
+                tmp_path / "emptydir",
+            ],
+        )
+        # Table was specified interactively via prompt
+        assert r.exit_code == NO_TABLE, r
+        assert "Tables found:" in r.stdout
+        assert (
+            "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
+            in r.stdout
+        )
+        assert "Invalid value for --table: No table specified" in r.stderr
+
+
+def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):
+    with data_archive_readonly("types") as data:
+        repo_path = tmp_path / "repo"
+        r = cli_runner.invoke(["init", "--import", data / "types.gpkg", repo_path],)
+        assert r.exit_code == 0, r
+
+        # There's a bunch of wacky types in here, let's check them
+        repo = pygit2.Repository(str(repo_path))
+        wc = WorkingCopy.open(repo)
+        with wc.session() as db:
+            table_info = [
+                dict(row) for row in db.cursor().execute("PRAGMA table_info('types');")
+            ]
+        assert table_info == [
+            {
+                'cid': 0,
+                'name': 'fid',
+                'type': 'INTEGER',
+                'notnull': 1,
+                'dflt_value': None,
+                'pk': 1,
+            },
+            {
+                'cid': 1,
+                'name': 'int16',
+                'type': 'SMALLINT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 2,
+                'name': 'int32',
+                'type': 'MEDIUMINT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 3,
+                'name': 'int64',
+                'type': 'INTEGER',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 4,
+                'name': 'boolean',
+                'type': 'BOOLEAN',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 5,
+                'name': 'double',
+                'type': 'REAL',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 6,
+                'name': 'float32',
+                'type': 'FLOAT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 7,
+                'name': 'string',
+                'type': 'TEXT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 8,
+                'name': 'blob',
+                'type': 'BLOB',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 9,
+                'name': 'date',
+                'type': 'DATE',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 10,
+                'name': 'datetime',
+                'type': 'DATETIME',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 11,
+                'name': 'time',
+                'type': 'TEXT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+        ]
 
 
 @pytest.mark.slow
@@ -67,7 +228,9 @@ def test_init_import(
         repo_path.mkdir()
 
         with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--import", f"gpkg:{data / gpkg}:{table}"])
+            r = cli_runner.invoke(
+                ["init", "--import", f"gpkg:{data / gpkg}", f"--table={table}"]
+            )
             assert r.exit_code == 0, r
             assert (repo_path / "HEAD").exists()
 
@@ -108,7 +271,7 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
     """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
     with data_archive("gpkg-editing") as data:
         r = cli_runner.invoke(
-            ["init", "--import", f"GPKG:editing.gpkg:editing", "editing"]
+            ["init", "--import", f"GPKG:editing.gpkg", "--table=editing", "editing"]
         )
         repo_path = data / "editing"
 
@@ -157,24 +320,23 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
         repo_path.mkdir()
 
         r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
-        assert r.exit_code == INVALID_ARGUMENT, r
-        assert 'invalid prefix: "FRED" (choose from GPKG)' in r.stderr
+        assert r.exit_code == NO_IMPORT_SOURCE, r
+        assert "fred:thingz' doesn't appear to be valid" in r.stderr
 
         r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
         assert r.exit_code == NO_IMPORT_SOURCE, r
-        assert "File 'thingz.gpkg' does not exist." in r.stderr
+        assert "Couldn't find 'thingz.gpkg'" in r.stderr
 
-        r = cli_runner.invoke(["init", "--import", f"gpkg:{data/gpkg}:no-existey"])
-        assert r.exit_code == NO_TABLE, r
-        assert (
-            "Feature/Attributes table 'no-existey' not found in gpkg_contents"
-            in r.stderr
+        r = cli_runner.invoke(
+            ["init", "--import", f"gpkg:{data/gpkg}", f"--table=no-existey"]
         )
+        assert r.exit_code == NO_TABLE, r
+        assert "Invalid value for --table: Table 'no-existey' not found" in r.stderr
 
         # not empty
         (repo_path / "a.file").touch()
         r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data/gpkg}:{table}", repo_path]
+            ["init", "--import", f"gpkg:{data/gpkg}", f"--table={table}", repo_path]
         )
         assert r.exit_code == INVALID_OPERATION, r
         assert "isn't empty" in r.stderr
@@ -187,7 +349,8 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
             [
                 "init",
                 "--import",
-                f"gpkg:{data / gpkg}:{table}",
+                f"gpkg:{data / gpkg}",
+                f"--table={table}",
                 repo_path,
                 "--no-checkout",
             ]
@@ -198,7 +361,7 @@ def test_init_import_errors(data_archive, tmp_path, cli_runner):
 
         # existing repo/dir
         r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data / gpkg}:{table}", repo_path]
+            ["init", "--import", f"gpkg:{data / gpkg}", f"--table={table}", repo_path]
         )
         assert r.exit_code == INVALID_OPERATION, r
         assert "isn't empty" in r.stderr
@@ -279,7 +442,8 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
                 r = cli_runner.invoke(
                     [
                         "import",
-                        f"GPKG:{source_path / source_gpkg}:{source_table}",
+                        f"GPKG:{source_path / source_gpkg}",
+                        f"--table={source_table}",
                         import_path,
                     ]
                 )
@@ -332,7 +496,11 @@ def test_init_import_home_resolve(
             monkeypatch.setenv("HOME", str(source_path))
 
             r = cli_runner.invoke(
-                ["import", f"GPKG:~/nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k"]
+                [
+                    "import",
+                    "GPKG:~/nz-pa-points-topo-150k.gpkg",
+                    "--table=nz_pa_points_topo_150k",
+                ]
             )
             assert r.exit_code == 0, r
 
@@ -354,7 +522,8 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS.LAYER}",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"--table={H.POLYGONS.LAYER}",
                 ]
             )
             assert r.exit_code == 0, r
@@ -391,7 +560,8 @@ def test_import_existing_wc(
             r = cli_runner.invoke(
                 [
                     "import",
-                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}:{H.POLYGONS.LAYER}",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    f"--table={H.POLYGONS.LAYER}",
                     "waca2",
                 ]
             )
