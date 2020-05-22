@@ -241,10 +241,14 @@ class OgrImporter:
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
-        # For some drivers, OGR returns '' here.
-        # https://trac.osgeo.org/gdal/ticket/2694
-        # In those cases, the name seems to always be 'FID'
-        return self.ogrlayer.GetFIDColumn() or 'FID'
+        # NOTE: for many OGR drivers, FID column is always 'FID'.
+        # For some drivers (databases), OGR will instead use the primary key
+        # of the given table, BUT only if it is an integer.
+        # For tables with non-integer PKS, ogrlayer.GetFIDColumn() returns ''.
+        # In that case, we would have no choice but to get the PK name outside of OGR.
+        # For that reason we don't use ogrlayer.GetFIDColumn() here,
+        # and instead we have to implement custom PK behaviour in driver-specific subclasses.
+        return 'FID'
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -464,6 +468,12 @@ class ImportGPKG(OgrImporter):
         SQLite-conformant identifier quoting
         """
         return gpkg.ident(part)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def primary_key(self):
+        db = gpkg.db(self.ogr_source)
+        return gpkg.pk(db, self.table)
 
     def iter_features(self):
         """
