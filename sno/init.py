@@ -400,6 +400,19 @@ class OgrImporter:
             "m": int(ogr.GT_HasM(ogr_geom_type)),
         }
 
+    def _ogr_type_to_sqlite_type(self, fd):
+        subtype = fd.GetSubType()
+        if subtype == ogr.OFSTNone:
+            type_name = self.OGR_TYPE_TO_SQLITE_TYPE[fd.GetTypeName()]
+        else:
+            type_name = self.OGR_SUBTYPE_TO_SQLITE_TYPE[subtype]
+
+        if type_name in ('TEXT', 'BLOB'):
+            width = fd.GetWidth()
+            if width is not None:
+                type_name += f'({width})'
+        return type_name
+
     @ungenerator(list)
     def get_meta_table_info(self):
         ld = self.ogrlayer.GetLayerDefn()
@@ -416,13 +429,9 @@ class OgrImporter:
                     type_name = self._get_meta_geometry_type()
             else:
                 fd = ld.GetFieldDefn(field_index)
+                type_name = self._ogr_type_to_sqlite_type(fd)
                 nullable = fd.IsNullable()
                 default = fd.GetDefault()
-                subtype = fd.GetSubType()
-                if subtype == ogr.OFSTNone:
-                    type_name = self.OGR_TYPE_TO_SQLITE_TYPE[fd.GetTypeName()]
-                else:
-                    type_name = self.OGR_SUBTYPE_TO_SQLITE_TYPE[subtype]
 
             yield {
                 "cid": cid,
