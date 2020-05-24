@@ -2,8 +2,6 @@ LIBGIT2_REF ?= v0.99.0
 LIBGIT2_REPO ?= libgit2/libgit2
 LIBGIT2_ARCHIVE := libgit2-0.99.0.tar.gz
 
-CMAKE ?= cmake
-
 CFLAGS += -g
 CXXFLAGS += -g
 

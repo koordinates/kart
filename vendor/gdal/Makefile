@@ -21,8 +21,8 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	LIBSUFFIX = so
-	PY_LDFLAGS := -Wl,-rpath='$$ORIGIN/lib',--enable-new-dtags
-	WHEELID = manylinux2010_x86_64
+	PY_LDFLAGS := -Wl,-rpath='$$ORIGIN/../../../',--enable-new-dtags
+	WHEELID = linux_x86_64
 endif
 PY3 := $(or $(PY3),python3.7)
 pywheel := wheel/GDAL-$(GDAL_VERSION)-cp37-cp37m-$(WHEELID).whl
@@ -35,7 +35,7 @@ export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 CCACHE_BIN := $(shell PATH=$(PATH) command -v ccache)
 
 PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
-PROJ_PREFIX := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config proj --variable=prefix)
+PROJ_PREFIX := $(PREFIX)
 
 ifeq ($(PLATFORM),Darwin)
 SQLITE_PREFIX = /usr/local/opt/sqlite
@@ -43,9 +43,9 @@ JSONC_PREFIX = /usr/local/opt/json-c
 PG_PREFIX = /usr/local/opt/libpq
 PKG_CONFIG_PATH := $(PKG_CONFIG_PATH):$(PG_PREFIX)/lib/pkgconfig
 else
-SQLITE_PREFIX := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config sqlite3 --variable=prefix)
-JSONC_PREFIX := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config json-c --variable=prefix)
-PG_PREFIX := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config libpq --variable=prefix)
+SQLITE_PREFIX := $(PREFIX)
+JSONC_PREFIX := $(PREFIX)
+PG_PREFIX := $(PREFIX)
 endif
 
 export PKG_CONFIG_PATH
@@ -214,6 +214,23 @@ $(pywheel): $(build-gdal)
 	&& LDFLAGS=$(PY_LDFLAGS) python3 setup.py --no-user-cfg build -v
 
 	@echo fixing python bindings ...
+	$(MAKE) py-fix-$(PLATFORM)
+
+	cd src/swig/python \
+	&& python3 setup.py --no-user-cfg bdist_wheel --skip-build -d $(abspath wheel)
+
+	$(MAKE) py-deps-$(PLATFORM)
+
+.PHONY: py-deps-Darwin
+py-deps-Darwin:
+	delocate-listdeps $(pywheel)
+
+.PHONY: py-deps-Linux
+py-deps-Linux:
+	auditwheel show $(pywheel)
+
+.PHONY: py-fix-Darwin
+py-fix-Darwin:
 	for SO in src/swig/python/build/lib.macosx*/osgeo/*.so; do \
 		echo $$SO; \
 		install_name_tool \
@@ -221,10 +238,13 @@ $(pywheel): $(build-gdal)
 			"$$SO"; \
 	done
 
-	cd src/swig/python \
-	&& python3 setup.py --no-user-cfg bdist_wheel --skip-build -d $(abspath wheel)
-
-	delocate-listdeps $@
+.PHONY: py-fix-Linux
+py-fix-Linux:
+	for SO in src/swig/python/build/lib.linux-x86_64-*/osgeo/*.so; do \
+		echo $$SO; \
+	    patchelf --remove-rpath "$$SO"; \
+		patchelf --force-rpath --set-rpath '$$ORIGIN/../../..' "$$SO"; \
+	done
 
 .PHONY: wheel
 wheel: $(pywheel)

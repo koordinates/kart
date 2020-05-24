@@ -23,11 +23,12 @@ ifeq ($(PLATFORM),Darwin)
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	WHEELTOOL = auditwheel
-	WHEELID = manylinux2010_x86_64
+	WHEELID = linux_x86_64
+	export LDFLAGS += -Wl,-rpath='$$ORIGIN',--enable-new-dtags
 endif
 PY3 := $(or $(PY3),python3.7)
 
-PYDEPS := pip wheel $(WHEELTOOL)
+PYDEPS := pip wheel $(WHEELTOOL) cmake==3.*
 
 packages = proj jsonc geos gdal spatialite libgit2 pygit2
 ifeq ($(PLATFORM),Linux)
@@ -67,11 +68,11 @@ env:
 	env/bin/pip install -U $(PYDEPS)
 
 # dependencies
-$(lib-proj): $(lib-sqlite) proj
-$(lib-git2): libgit2
-$(lib-spatialite): $(lib-geos) $(lib-proj) $(lib-sqlite) spatialite
+$(lib-proj): $(lib-sqlite) proj_build
+$(lib-git2): libgit2_build
+$(lib-spatialite): $(lib-sqlite) $(lib-geos) $(lib-proj) spatialite_build
 
-$(lib-gdal): $(lib-geos) $(lib-proj) $(lib-jsonc) $(lib-sqlite) $(lib-curl) $(lib-pq)
+$(lib-gdal): $(lib-sqlite) $(lib-geos) $(lib-proj) $(lib-jsonc) $(lib-pq)
 	$(MAKE) -C gdal install wheel
 	pip3 install --force-reinstall gdal/wheel/GDAL-*$(WHEELID).whl
 
@@ -172,20 +173,22 @@ else
 
 build-libs += $(lib-spatialindex) $(lib-curl)
 
-$(lib-spatialindex): spatialindex
-$(lib-sqlite): sqlite
-$(lib-git): $(lib-curl) git
-$(lib-curl): curl
-$(lib-geos): geos
-$(lib-jsonc): jsonc
+$(lib-spatialindex): spatialindex_build
+$(lib-sqlite): sqlite_build
+$(lib-git): $(lib-curl) git_build
+$(lib-curl): curl_build
+$(lib-geos): geos_build
+$(lib-jsonc): jsonc_build
+$(lib-pq): libpq_build
 endif
 
 
+# .PHONY: $(packages)
+packages_build := $(addsuffix _build,$(packages))
 
-.PHONY: $(packages)
-$(packages): | env
+%_build: % | env
 	@echo PATH=$$PATH PREFIX=$$PREFIX
-	$(MAKE) -C $@ install
+	$(MAKE) -C $* install
 
 packages_clean := $(addsuffix _clean,$(packages))
 

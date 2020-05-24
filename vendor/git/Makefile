@@ -27,7 +27,7 @@ export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
 
 ifeq ($(PLATFORM),Linux)
-	CURL_PREFIX = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config curl --variable=prefix)
+	CURL_PREFIX = $(PREFIX)
 	libcurl := $(PREFIX)/lib/libcurl.$(LIBSUFFIX)
 	libs += $(libcurl)
 	export LDFLAGS += -Wl,-rpath=$$ORIGIN/../../lib

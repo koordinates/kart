@@ -2,7 +2,7 @@ PG_VERSION = 10.12
 MACOS_SDK = MacOSX10.10.sdk
 
 SHELL = /bin/bash
-export PREFIX = $(abspath env)
+export PREFIX ?= $(abspath env)
 
 ifeq ($(OS),Windows_NT)
 	PLATFORM := Windows
@@ -24,7 +24,7 @@ endif
 # use ccache if available
 export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 
-build-pq := src/.libs/libcurl.4.$(LIBSUFFIX)
+build-pq := src/src/interfaces/libpq/libpq.$(LIBSUFFIX)
 configure-pq = src/config.status
 
 # default target
@@ -108,7 +108,8 @@ $(configure-pq): | src
 configure: clean-configure $(configure-pq)
 
 $(build-pq): $(configure-pq)
-	$(MAKE) -C src MAKELEVEL=0 all
+	$(MAKE) -C src/src/interfaces/libpq
+	$(MAKE) -C src/src/backend generated-headers
 	$(MAKE) print-lib-deps-$(PLATFORM)
 
 #
@@ -117,8 +118,9 @@ $(build-pq): $(configure-pq)
 
 .PHONY: install
 install: $(build-pq)
+	$(MAKE) -C src/src/interfaces/libpq install
+	$(MAKE) -C src/src/bin/pg_config install
 	$(MAKE) -C src/src/include install
-	$(MAKE) -C src/src/interfaces install
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)
