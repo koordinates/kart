@@ -26,7 +26,7 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
-	export LDFLAGS+=-Wl,-rpath='$$ORIGIN/lib',--enable-new-dtags
+	export LDFLAGS = -Wl,-rpath='$$ORIGIN/../../../',--enable-new-dtags
 endif
 PY3 := $(or $(PY3),python3.7)
 
@@ -86,10 +86,10 @@ source: src
 
 .PHONY: install
 install: | src $(libgit2)
-	@echo LDFLAGS=$(LDFLAGS) PY3=$(PY3)
+	@echo 'LDFLAGS=$(LDFLAGS) PY3=$(PY3)'
 	pip3 install -e src
 
 .PHONY: wheel
 wheel: | src $(libgit2)
-	@echo LDFLAGS=$(LDFLAGS) PY3=$(PY3)
+	@echo 'LDFLAGS=$(LDFLAGS) PY3=$(PY3)'
 	cd src && python3 setup.py  --no-user-cfg bdist_wheel -d $(abspath $@)

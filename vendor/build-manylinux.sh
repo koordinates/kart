@@ -50,7 +50,7 @@ else
     make lib-git
     cp -fav env/bin/git "$OUTPUT/env/bin/"
     cp -fav env/lib/libcurl.*so* "$OUTPUT/env/lib/"
-    cp -fav env/share/git-core/templates "$OUTPUT/env/share/"
+    cp -fav env/share/git-core/templates "$OUTPUT/env/share/git-core/"
     cp -fav env/libexec/git-core "$OUTPUT/env/libexec/"
 
     echo ">>> Building GDAL ..."

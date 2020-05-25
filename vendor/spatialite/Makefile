@@ -133,7 +133,7 @@ endif
 
 .PHONY: install
 install: $(build-spatialite)
-	cp -fav src/src/.libs/mod_spatialite*.so $(PREFIX)/lib/
+	cp -fav src/src/.libs/mod_spatialite*.so* $(PREFIX)/lib/
 ifeq ($(PLATFORM),Darwin)
 	cp -fav src/src/.libs/mod_spatialite*.dylib $(PREFIX)/lib/
 endif
