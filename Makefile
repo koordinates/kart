@@ -60,8 +60,10 @@ requirements/dev.txt: requirements/dev.in requirements.txt requirements/test.txt
 requirement%.txt requirements/%.txt:
 	$(MAKE) $(py-install-tools) $(vendor-install)
 	$(PIP_COMPILE_CMD) --output-file $@ $<
-#   Comment out pygit2, because we install manually afterwards
+#   Comment out things we build
 	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
+	sed -E -i.~bak -e 's/^(apsw=)/\#\1/' $@
+	sed -E -i.~bak -e 's/^(psycopg2=)/\#\1/' $@
 	$(RM) $@.~bak
 
 # Python dependency license checking
@@ -122,8 +124,7 @@ vendor-install := $(VIRTUAL_ENV)/.vendor-install
 $(vendor-install): $(vendor-archive) | $(VIRTUAL_ENV)
 	-$(RM) -r vendor/dist/wheelhouse
 	tar xvzf $(vendor-archive) -C vendor/dist wheelhouse/
-	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/GDAL-*.whl
-	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/pygit2-*.whl
+	pip install --force-reinstall --no-deps vendor/dist/wheelhouse/*.whl
 	tar xzf $(vendor-archive) -C $(VIRTUAL_ENV) --strip-components=1 env/
 	touch $@
 
@@ -189,7 +190,7 @@ ci-test:
 # Cleanup
 
 .PHONY: clean
-clean: test-clean
+clean:
 	$(RM) $(PREFIX)/bin/sno
 	$(RM) -r $(VIRTUAL_ENV)
 

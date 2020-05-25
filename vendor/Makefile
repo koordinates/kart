@@ -30,7 +30,7 @@ PY3 := $(or $(PY3),python3.7)
 
 PYDEPS := pip wheel $(WHEELTOOL) cmake==3.*
 
-packages = proj jsonc geos gdal spatialite libgit2 pygit2
+packages = proj jsonc geos gdal spatialite libgit2 pygit2 apsw psycopg2
 ifeq ($(PLATFORM),Linux)
 packages += sqlite spatialindex git curl libpq
 endif
@@ -49,9 +49,11 @@ lib-curl := env/lib/libcurl.$(LIBSUFFIX)
 
 lib-spatialite := env/lib/mod_spatialite.$(LIBSUFFIX)
 lib-gdal := env/lib/python3.7/site-packages/osgeo/__init__.py
-lib-git2 := env/lib/libgit2.$(LIBSUFFIX)
+lib-libgit2 := env/lib/libgit2.$(LIBSUFFIX)
 lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-git2)
+lib-apsw := env/lib/python3.7/site-packages/apsw.cpython-37m-$(shell echo $(PLATFORM) | tr A-Z a-z).so
+lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-apsw)
 
 
 # default target
@@ -69,16 +71,24 @@ env:
 
 # dependencies
 $(lib-proj): $(lib-sqlite) proj_build
-$(lib-git2): libgit2_build
+$(lib-libgit2): libgit2_build
 $(lib-spatialite): $(lib-sqlite) $(lib-geos) $(lib-proj) spatialite_build
 
 $(lib-gdal): $(lib-sqlite) $(lib-geos) $(lib-proj) $(lib-jsonc) $(lib-pq)
 	$(MAKE) -C gdal install wheel
 	pip3 install --force-reinstall gdal/wheel/GDAL-*$(WHEELID).whl
 
-$(lib-pygit2): $(lib-git2)
+$(lib-pygit2): $(lib-libgit2)
 	$(MAKE) -C pygit2 wheel
 	pip3 install --force-reinstall pygit2/wheel/pygit2-*$(WHEELID).whl
+
+$(lib-apsw): $(lib-sqlite)
+	$(MAKE) -C apsw wheel
+	pip3 install --force-reinstall apsw/wheel/apsw-*$(WHEELID).whl
+
+$(lib-psycopg2): $(lib-pq)
+	$(MAKE) -C psycopg2 wheel
+	pip3 install --force-reinstall psycopg2/wheel/psycopg2-*$(WHEELID).whl
 
 ifeq ($(PLATFORM),Darwin)
 #
@@ -265,6 +275,12 @@ lib-geos: $(lib-geos)
 .PHONY: lib-proj
 lib-proj: $(lib-proj)
 
+.PHONY: lib-apsw
+lib-apsw: $(lib-apsw)
+
+.PHONY: lib-psycopg2
+lib-psycopg2: $(lib-psycopg2)
+
 .PHONY: build-Darwin
 build-Darwin: VENDOR:=build/vendor-Darwin
 build-Darwin: VENDOR_ENV:=$(VENDOR)/env
@@ -280,6 +296,9 @@ build-Darwin: $(build-libs) $(brew-libs)
 
 	# PyGit2
 	cp -vf pygit2/wheel/pygit2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
+
+	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
+	cp -vf apsw/wheel/apsw-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
 

@@ -17,7 +17,7 @@ chmod -R a+r,u+rw "$1"/*
 ls -lr "$1"
 
 echo "updating library id values"
-find "$1" -type f -name "*.dylib" -print0 | while read -d $'\0' P
+find "$1" -type f \( -name "*.dylib" -o -name "*.so" \) -print0 | while read -d $'\0' P
 do
     F=$(basename "$P")
     echo "invoking 'install_name_tool -id \"$F\" \"$P\"'"

@@ -69,6 +69,14 @@ else
     echo ">>> Building spatialindex ..."
     make lib-spatialindex
 
+    echo ">>> Building APSW ..."
+    make lib-apsw
+    cp -fav apsw/wheel/apsw-*.whl "$OUTPUT/wheelhouse"
+
+    echo ">>> Building psycopg2 ..."
+    make lib-psycopg2
+    cp -fav psycopg2/wheel/psycopg2-*.whl "$OUTPUT/wheelhouse"
+
     env/bin/python3 ./linux-delocate-deps.py env/lib/
 
     cp -fav env/lib/*.so* "$OUTPUT/env/lib/"

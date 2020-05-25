@@ -4,6 +4,8 @@
 /venv
 /pip-wheel-metadata
 
+vendor/apsw/**
+!vendor/apsw/Makefile
 vendor/curl/**
 !vendor/curl/Makefile
 vendor/gdal/**
@@ -20,6 +22,8 @@ vendor/libpq/**
 !vendor/libpq/Makefile
 vendor/proj/**
 !vendor/proj/Makefile
+vendor/psycopg2/**
+!vendor/psycopg2/Makefile
 vendor/pygit2/**
 !vendor/pygit2/Makefile
 vendor/spatialindex/**
