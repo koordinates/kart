@@ -77,7 +77,6 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
           restore-keys: |
             pip-${{ runner.os }}-
-            pip-
 
       #
       # vendor build
@@ -339,7 +338,6 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('makefile.vc') }}
           restore-keys: |
             pip-${{ runner.os }}-
-            pip-
 
       #
       # vendor build
