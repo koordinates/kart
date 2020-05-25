@@ -4,19 +4,14 @@ import pytest
 
 import pygit2
 
-from sno.conflicts import (
-    ConflictIndex,
-    list_conflicts,
-)
-from sno.structs import AncestorOursTheirs, CommitWithReference
-from sno.structure import RepositoryStructure
+from sno.merge_util import MergeIndex
+from sno.structs import CommitWithReference
 from sno.repo_files import (
     MERGE_HEAD,
     MERGE_MSG,
     MERGE_LABELS,
     MERGE_INDEX,
     repo_file_exists,
-    repo_file_path,
     read_repo_file,
 )
 
@@ -69,7 +64,7 @@ def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
     "output_format", ["text", "json"],
 )
 @pytest.mark.parametrize(
-    "dry_run", [pytest.param(False, id="",), pytest.param(True, id="dryrun",),],
+    "dry_run", [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
 )
 def test_merge_conflicts(
     data, output_format, dry_run, create_conflicts, cli_runner,
@@ -134,8 +129,8 @@ def test_merge_conflicts(
                 read_repo_file(repo, MERGE_LABELS)
                 == f'({ancestor.id.hex})\n"ours_branch" ({ours.id.hex})\n"theirs_branch" ({theirs.id.hex})\n'
             )
-            conflict_index = ConflictIndex.read(repo_file_path(repo, MERGE_INDEX))
-            assert len(conflict_index.conflicts) == 4
+            merge_index = MergeIndex.read_from_repo(repo)
+            assert len(merge_index.conflicts) == 4
             cli_runner.invoke(["merge", "--abort"])
 
         assert not repo_file_exists(repo, MERGE_HEAD)
@@ -154,13 +149,13 @@ def test_conflict_index_roundtrip(create_conflicts, cli_runner):
         ancestor_id = repo.merge_base(ours.id, theirs.id)
         assert ancestor_id.hex == ancestor.id.hex
 
-        merge_index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
-        assert merge_index.conflicts
+        index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
+        assert index.conflicts
 
-        # Create a ConflictIndex object, and roundtrip it into a tree and back.
-        orig = ConflictIndex(merge_index)
+        # Create a MergeIndex object, and roundtrip it into a tree and back.
+        orig = MergeIndex(index)
         orig.write("test.conflict.index")
-        r1 = ConflictIndex.read("test.conflict.index")
+        r1 = MergeIndex.read("test.conflict.index")
         assert r1 is not orig
         assert r1 == orig
 
@@ -172,7 +167,7 @@ def test_conflict_index_roundtrip(create_conflicts, cli_runner):
 
         # Roundtrip again
         r1.write("test.conflict.index")
-        r2 = ConflictIndex.read("test.conflict.index")
+        r2 = MergeIndex.read("test.conflict.index")
         assert r2 == r1
 
 
@@ -268,9 +263,9 @@ def test_list_conflicts(create_conflicts, cli_runner):
     with create_conflicts(H.POINTS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
         # Resolve all but one conflict to make the output a bit shorter.
-        cindex = ConflictIndex.read(repo_file_path(repo, MERGE_INDEX))
-        cindex.conflicts = {"0": cindex.conflicts["0"]}
-        cindex.write(repo_file_path(repo, MERGE_INDEX))
+        merge_index = MergeIndex.read_from_repo(repo)
+        merge_index.conflicts = {"0": merge_index.conflicts["0"]}
+        merge_index.write_to_repo(repo)
 
         r = cli_runner.invoke(["conflicts"])
         assert r.exit_code == 0, r

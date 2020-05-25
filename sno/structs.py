@@ -1,5 +1,3 @@
-from collections import namedtuple
-
 import pygit2
 
 from .exceptions import NotFound, NO_COMMIT
@@ -94,49 +92,3 @@ class CommitWithReference:
             return CommitWithReference(commit, reference)
         except (KeyError, pygit2.InvalidSpecError):
             raise NotFound(f"No commit found at {refish}", exit_code=NO_COMMIT)
-
-
-# pygit2 always has this order - we use it too for consistency,
-# and so we can meaningfully zip() our tuples with theirs
-_ANCESTOR_OURS_THEIRS_ORDER = ("ancestor", "ours", "theirs")
-
-
-class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_ORDER)):
-    """
-    When merging two commits, we can end up with three versions of lots of things -
-    commits, repository-structures, datasets, features, primary keys.
-    The 3 versions  are the common ancestor, and 2 versions to be merged, "ours" and "theirs".
-    Like pygit2, we keep the 3 versions always in the same order - ancestor, ours, theirs.
-    """
-
-    NAMES = _ANCESTOR_OURS_THEIRS_ORDER
-    CHARS = tuple(n[0] for n in NAMES)
-
-    @staticmethod
-    def partial(*, ancestor=None, ours=None, theirs=None):
-        """Supply some or all keyword arguments: ancestor, ours, theirs"""
-        return AncestorOursTheirs(ancestor, ours, theirs)
-
-    def __or__(self, other):
-        # We don't allow any field to be set twice
-        assert not self.ancestor or not other.ancestor
-        assert not self.ours or not other.ours
-        assert not self.theirs or not other.theirs
-        result = AncestorOursTheirs(
-            ancestor=self.ancestor or other.ancestor,
-            ours=self.ours or other.ours,
-            theirs=self.theirs or other.theirs,
-        )
-        return result
-
-    def map(self, fn, skip_nones=True):
-        actual_fn = fn
-        if skip_nones:
-            actual_fn = lambda x: fn(x) if x else None
-        return AncestorOursTheirs(*map(actual_fn, self))
-
-    def as_dict(self):
-        return dict(zip(self.NAMES, self))
-
-
-AncestorOursTheirs.EMPTY = AncestorOursTheirs(None, None, None)

@@ -5,11 +5,11 @@ import click
 
 from .cli_util import do_json_option
 from .conflicts import (
-    ConflictIndex,
     list_conflicts,
     conflicts_json_as_text,
 )
 from .exceptions import InvalidOperation
+from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext
 from .output_util import dump_json_output
 from .repo_files import (
     ORIG_HEAD,
@@ -23,7 +23,8 @@ from .repo_files import (
     is_ongoing_merge,
     repo_file_exists,
 )
-from .structs import AncestorOursTheirs, CommitWithReference
+
+from .structs import CommitWithReference
 from .structure import RepositoryStructure
 
 
@@ -155,24 +156,17 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
 
     commit_with_ref3 = AncestorOursTheirs(ancestor, ours, theirs)
     tree3 = commit_with_ref3.map(lambda c: c.tree)
-    merge_index = repo.merge_trees(**tree3.as_dict())
+    index = repo.merge_trees(**tree3.as_dict())
 
-    if merge_index.conflicts:
-        conflict_index = ConflictIndex(merge_index)
-        repo_structures3 = commit_with_ref3.map(
-            lambda c: RepositoryStructure(repo, c.commit)
-        )
+    if index.conflicts:
+        merge_index = MergeIndex(index)
+        merge_context = MergeContext.from_commit_with_refs(commit_with_ref3, repo)
         merge_jdict["conflicts"] = list_conflicts(
-            conflict_index, repo_structures3, "json", summarise=2
+            merge_index, merge_context, "json", summarise=2
         )
         if not dry_run:
             move_repo_to_merging_state(
-                repo,
-                conflict_index,
-                merge_message,
-                ancestor=ancestor,
-                ours=ours,
-                theirs=theirs,
+                repo, merge_index, merge_context, merge_message,
             )
         return merge_jdict
 
@@ -180,7 +174,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
         merge_jdict["mergeCommit"] = "(dryRun)"
         return merge_jdict
 
-    merge_tree_id = merge_index.write_tree(repo)
+    merge_tree_id = index.write_tree(repo)
     L.debug(f"Merge tree: {merge_tree_id}")
 
     user = repo.default_signature
@@ -194,30 +188,23 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     return merge_jdict
 
 
-def move_repo_to_merging_state(
-    repo, conflict_index, merge_message, *, ancestor, ours, theirs
-):
+def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     """
     Move the sno repository into a "merging" state in which conflicts
     can be resolved one by one.
     repo - the pygit2.Repository.
-    conflict_index - the ConflictIndex containing the conflicts found.
+    merge_index - the MergeIndex containing the conflicts found.
+    merge_context - the MergeContext object for the merge.
     merge_message - the commit message for when the merge is completed.
     ancestor, ours, theirs - CommitWithReference objects.
     """
     if is_ongoing_merge(repo):
         raise InvalidOperation("A merge is already ongoing")
 
-    # These are git standard files
-    write_repo_file(repo, ORIG_HEAD, ours.id.hex)
-    write_repo_file(repo, MERGE_HEAD, theirs.id.hex)
-    write_repo_file(repo, MERGE_MSG, merge_message)
-
     # These are specific to sno repositories
-    conflict_index.write(repo_file_path(repo, MERGE_INDEX))
-    write_repo_file(
-        repo, MERGE_LABELS, "\n".join([str(ancestor), str(ours), str(theirs)])
-    )
+    merge_index.write_to_repo(repo)
+    merge_context.write_to_repo(repo)
+    write_repo_file(repo, MERGE_MSG, merge_message)
 
 
 def abort_merging_state(repo):
@@ -234,7 +221,7 @@ def abort_merging_state(repo):
     remove_repo_file(repo, MERGE_LABELS)
 
     if not is_ongoing_merge:
-        raise InvalidOperation("Repository is not in `merging` state.")
+        raise InvalidOperation('Repository is not in "merging" state.')
 
     # TODO - maybe restore HEAD to ORIG_HEAD.
     # Not sure if it matters - we don't modify HEAD when we move into merging state.
