@@ -380,7 +380,9 @@ def test_import_from_non_gpkg(
     source_format,
     source_ogr_driver,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    """
+    Import something else into a Sno repository.
+    """
     param_ids = H.parameter_ids(request)
 
     with data_archive(archive) as data:
@@ -475,6 +477,88 @@ def test_import_from_non_gpkg(
                     expected_feature['geom'] = gpkg.ogr_to_gpkg_geom(g)
 
                 assert normalise_feature(got_feature) == expected_feature
+
+
+def test_shp_import_meta(
+    data_archive, tmp_path, cli_runner, request,
+):
+    with data_archive('gpkg-polygons') as data:
+        # convert to SHP using OGR
+        source_filename = tmp_path / "nz_waca_adjustments.shp"
+        gdal.VectorTranslate(
+            str(source_filename),
+            gdal.OpenEx(str(data / 'nz-waca-adjustments.gpkg')),
+            format='ESRI Shapefile',
+            layers=['nz_waca_adjustments'],
+        )
+
+        # now import the SHP
+        repo_path = tmp_path / "repo"
+        r = cli_runner.invoke(["init", "--import", source_filename, repo_path])
+        assert r.exit_code == 0, r
+
+        # now check metadata
+        path = "nz_waca_adjustments"
+        repo = pygit2.Repository(str(repo_path))
+        tree = repo.head.peel(pygit2.Tree) / path
+        dataset = DatasetStructure.instantiate(tree, path)
+
+        meta_items = dict(dataset.iter_meta_items())
+        assert set(meta_items) == {
+            'gpkg_contents',
+            'gpkg_geometry_columns',
+            'gpkg_spatial_ref_sys',
+            'primary_key',
+            'sqlite_table_info',
+            'version',
+            'fields/FID',
+            'fields/adjusted_n',
+            'fields/date_adjus',
+            'fields/geom',
+            'fields/survey_ref',
+        }
+        assert meta_items['sqlite_table_info'] == [
+            {
+                'cid': 0,
+                'name': 'FID',
+                'type': 'INTEGER',
+                'notnull': 1,
+                'dflt_value': None,
+                'pk': 1,
+            },
+            {
+                'cid': 1,
+                'name': 'geom',
+                'type': 'POLYGON',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 2,
+                'name': 'date_adjus',
+                'type': 'DATE',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 3,
+                'name': 'survey_ref',
+                'type': 'TEXT(50)',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 4,
+                'name': 'adjusted_n',
+                'type': 'MEDIUMINT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+        ]
 
 
 def test_pk_encoding():

@@ -437,7 +437,7 @@ class OgrImporter:
                 "cid": cid,
                 "name": name,
                 "type": type_name,
-                "notnull": int(nullable),
+                "notnull": int(not nullable),
                 "dflt_value": default,
                 "pk": int(name == self.primary_key),
             }
