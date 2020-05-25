@@ -15,25 +15,25 @@ ifeq ($(PLATFORM),Darwin)
 	export PKG_CONFIG_PATH=/usr/local/opt/sqlite3/lib/pkgconfig/
 	CFLAGS+= $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config sqlite3 --cflags)
 	LDFLAGS+= $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config sqlite3 --libs)
-	export LDFLAGS+=-Wl,-rpath,'@loader_path/../../../'
-	SQLITE3_VERSION := $(shell /usr/local/opt/sqlite3/bin/sqlite3 --version 2>/dev/null | awk '{print $$1}')
+	export LDFLAGS+=-Wl,-rpath,'@loader_path/../..'
+	SQLITE_VERSION := $(shell /usr/local/opt/sqlite3/bin/sqlite3 --version 2>/dev/null | awk '{print $$1}')
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
 	export CFLAGS += -I$(PREFIX)/include
-	export LDFLAGS = -Wl,-rpath='$$ORIGIN/../../../',--enable-new-dtags -L$(PREFIX)/lib -lsqlite3
-	SQLITE3_VERSION := $(shell $(PREFIX)/bin/sqlite3 --version 2>/dev/null | awk '{print $$1}')
+	export LDFLAGS = -Wl,-rpath='$$ORIGIN/../..',--enable-new-dtags -L$(PREFIX)/lib -lsqlite3
+	include ../sqlite/version.mk  # SQLITE_VERSION
 endif
 PY3 := $(or $(PY3),python3.7)
 
 # use ccache if available
 export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 
-APSW_VERSION := "$(SQLITE3_VERSION)-r1"
-APSW_ARCHIVE := "apsw-$(APSW_VERSION).tar.gz"
-APSW_BUILD_OPTS := --enable-all-extensions
+APSW_VERSION := $(SQLITE_VERSION)-r1
+APSW_ARCHIVE := apsw-$(APSW_VERSION).tar.gz
+APSW_BUILD_OPTS := --enable-all-extensions --enable=load_extension
 
 # default target
 .PHONY: all
@@ -61,7 +61,7 @@ clean-configure:
 #
 
 $(APSW_ARCHIVE):
-	@echo "APSW_VERSION=$(APSW_VERSION) SQLITE3_VERSION=$(SQLITE3_VERSION) APSW_ARCHIVE=$(APSW_ARCHIVE)"
+	@echo "APSW_VERSION=$(APSW_VERSION) SQLITE_VERSION=$(SQLITE_VERSION) APSW_ARCHIVE=$(APSW_ARCHIVE)"
 	wget "https://github.com/rogerbinns/apsw/archive/$(APSW_VERSION).tar.gz" -O $@
 
 .PHONY: archive

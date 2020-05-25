@@ -32,13 +32,14 @@ echo ">>> Python: $(command -v python3.7)"
 
 echo ">>> Setting up /build ..."
 mkdir /build
-for M in Makefile */Makefile; do
+cp -v Makefile ./linux-delocate-deps.py /build/
+for M in */Makefile; do
     D=$(dirname "$M")
     mkdir -p "/build/$D"
     cp -v "$M" "/build/$M"
     find "$D" -maxdepth 1 \( -name "*.tar.*" -o -name "*.zip" \) -print -exec ln -s "$(pwd)"/{} "/build/$D/" \;
 done
-cp -v ./linux-delocate-deps.py /build/
+cp -v sqlite/version.mk /build/sqlite/
 
 cd /build
 if [ $# -gt 0 ]; then
