@@ -7,6 +7,7 @@ shift
 yum install -y ccache openssl-devel gettext
 
 export PATH=/opt/python/cp37-cp37m/bin:${PATH}
+export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}
 
 # setup ccache
 echo ">>> Setting up ccache ..."
@@ -31,7 +32,6 @@ popd
 echo ">>> Python: $(command -v python3.7)"
 
 echo ">>> Setting up /build ..."
-mkdir /build
 cp -v Makefile ./linux-delocate-deps.py /build/
 for M in */Makefile; do
     D=$(dirname "$M")
@@ -50,7 +50,6 @@ else
     echo ">>> Building Git ..."
     make lib-git
     cp -fav env/bin/git "$OUTPUT/env/bin/"
-    cp -fav env/lib/libcurl.*so* "$OUTPUT/env/lib/"
     cp -fav env/share/git-core/templates "$OUTPUT/env/share/git-core/"
     cp -fav env/libexec/git-core "$OUTPUT/env/libexec/"
 
@@ -78,7 +77,10 @@ else
     make lib-psycopg2
     cp -fav psycopg2/wheel/psycopg2-*.whl "$OUTPUT/wheelhouse"
 
+    echo ">>> Bundling libraries ..."
     env/bin/python3 ./linux-delocate-deps.py env/lib/
-
     cp -fav env/lib/*.so* "$OUTPUT/env/lib/"
+
+    echo ">>> CCache Stats:"
+    ccache --show-stats
 fi

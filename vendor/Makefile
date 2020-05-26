@@ -310,16 +310,19 @@ build-Darwin: $(build-libs) $(brew-libs)
 	tar czf $(vendor-Darwin-archive) -C $(VENDOR) env wheelhouse
 	-$(RM) -r $(VENDOR)
 
+	ccache --show-stats
+
 .PHONY: build-Linux
 build-Linux: VENDOR:=build/vendor-Linux
 build-Linux:
 	-$(RM) -r $(VENDOR) $(vendor-Linux-archive)
 	mkdir -p $(VENDOR) dist
-	docker run --rm \
+	time docker run --rm \
 		$(if $(MANYLINUX_DEBUG),-it) \
 		-v $(abspath .):/src \
 		-w /src \
-		-v $(CCACHE_DIR):/root/.cache/ccache:cached \
+		-v sno-vendor-linux-ccache:/root/.cache/ccache \
+		-v /build \
 		-e CCACHE_DIR=/root/.cache/ccache \
 		-e CCACHE_COMPRESS \
 		pyca/cryptography-manylinux2010:x86_64 \
