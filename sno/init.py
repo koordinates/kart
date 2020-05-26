@@ -4,10 +4,12 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import click
 import pygit2
 from osgeo import gdal, ogr
+import psycopg2
 
 from sno import is_windows
 from . import gpkg, checkout, structure
@@ -31,6 +33,7 @@ FORMAT_TO_OGR_MAP = {
     'SHP': 'ESRI Shapefile',
     # https://github.com/koordinates/sno/issues/86
     # 'TAB': 'MapInfo File',
+    'PG': 'PostgreSQL',
 }
 # The set of format prefixes where a local path is expected
 # (as opposed to a URL / something else)
@@ -56,6 +59,12 @@ class OgrImporter:
         'DateTime': 'DATETIME',
     }
     OGR_SUBTYPE_TO_SQLITE_TYPE = {ogr.OFSTBoolean: 'BOOLEAN', ogr.OFSTInt16: 'SMALLINT'}
+
+    @classmethod
+    def _all_subclasses(cls):
+        for sub in cls.__subclasses__():
+            yield sub
+            yield from sub._all_subclasses()
 
     @classmethod
     def adapt_source_for_ogr(cls, source):
@@ -85,12 +94,20 @@ class OgrImporter:
                 if prefix in ('CSV', 'PG'):
                     # OGR actually handles these prefixes itself...
                     ogr_source = f'{prefix}:{ogr_source}'
+            if prefix in LOCAL_PATH_FORMATS:
+                if not os.path.exists(ogr_source):
+                    raise NotFound(
+                        f"Couldn't find {ogr_source!r}", exit_code=NO_IMPORT_SOURCE
+                    )
+        else:
+            # see if any subclasses have a handler for this.
+            for subclass in cls._all_subclasses():
+                if 'handle_source_string' in subclass.__dict__:
+                    retval = subclass.handle_source_string(ogr_source)
+                    if retval is not None:
+                        ogr_source, allowed_formats = retval
+                        break
 
-        if prefix in LOCAL_PATH_FORMATS:
-            if not os.path.exists(ogr_source):
-                raise NotFound(
-                    f"Couldn't find {ogr_source!r}", exit_code=NO_IMPORT_SOURCE
-                )
         return ogr_source, allowed_formats
 
     @classmethod
@@ -378,10 +395,7 @@ class OgrImporter:
         return (
             # normalise the geometry type names the way the GPKG spec likes it:
             # http://www.geopackage.org/spec/#geometry_types
-            ogr.GeometryTypeToName(
-                # remove Z/M components
-                ogr.GT_Flatten(ogr_geom_type)
-            )
+            ogr.GeometryTypeToName(ogr_geom_type)
             # 'Line String' --> 'LineString'
             .replace(' ', '')
             # --> 'LINESTRING'
@@ -506,7 +520,83 @@ class ImportGPKG(OgrImporter):
         yield from gpkg.get_meta_info(db, layer=self.table)
 
 
-def list_import_formats(ctx):
+class ImportPostgreSQL(OgrImporter):
+    @classmethod
+    def postgres_url_to_ogr_conn_str(cls, url):
+        """
+        Takes a URL ('postgresql://..')
+        and turns it into a key/value connection string, prefixed by 'PG:' for OGR.
+
+        libpq actually handles URIs fine, but OGR doesn't :(
+        So to import via OGR we have to convert them.
+        https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+
+        We don't currently handle all of the things these URLs can contain.
+        In particular, we don't (currently) handle:
+         * domain sockets
+         * multiple hostnames or ports
+        """
+
+        url = urlsplit(url)
+        scheme = url.scheme.lower()
+        if scheme not in ('postgres', 'postgresql'):
+            raise ValueError("Bad scheme")
+
+        params = parse_qs(url.query)
+
+        if url.username:
+            params.setdefault('user', url.username)
+        if url.password:
+            params.setdefault('password', url.password)
+        if url.hostname:
+            params.setdefault('host', url.hostname)
+        if url.port:
+            params.setdefault('port', url.port)
+        dbname = (url.path or '/')[1:]
+        if dbname:
+            params.setdefault('dbname', dbname)
+
+        conn_str = ' '.join(sorted(f'{k}={v}' for (k, v) in params.items()))
+        return f'PG:{conn_str}'
+
+    @classmethod
+    def handle_source_string(cls, source):
+        if '://' not in source:
+            return None
+        try:
+            return cls.postgres_url_to_ogr_conn_str(source), ['PG']
+        except ValueError:
+            return None
+
+    def psycopg2_conn(self):
+        conn_str = self.source
+        if conn_str.startswith('OGR:'):
+            conn_str = conn_str[4:]
+        if conn_str.startswith('PG:'):
+            conn_str = conn_str[3:]
+        # this will either be a URL or a key=value conn str
+        return psycopg2.connect(conn_str)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def primary_key(self):
+        conn = self.psycopg2_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT a.attname
+                FROM   pg_index i
+                JOIN   pg_attribute a ON a.attrelid = i.indrelid
+                                     AND a.attnum = ANY(i.indkey)
+                WHERE  i.indrelid = %s::regclass
+                AND    i.indisprimary;
+                """,
+                [self.table],
+            )
+            return cur.fetchone()[0]
+
+
+def list_import_formats(ctx, param, value):
     """
     List the supported import formats
     """

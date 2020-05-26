@@ -1,7 +1,6 @@
-import re
-
 import pytest
 import pygit2
+
 
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
