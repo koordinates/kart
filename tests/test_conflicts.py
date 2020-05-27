@@ -4,7 +4,7 @@ import pytest
 
 import pygit2
 
-from sno.merge_util import MergeIndex
+from sno.merge_util import MergeIndex, MergedOursTheirs
 from sno.structs import CommitWithReference
 from sno.repo_files import (
     MERGE_HEAD,
@@ -16,40 +16,6 @@ from sno.repo_files import (
 )
 
 H = pytest.helpers.helpers()
-
-
-@pytest.fixture
-def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
-    @contextlib.contextmanager
-    def ctx(data):
-        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-            repo = pygit2.Repository(str(repo_path))
-            sample_pks = data.SAMPLE_PKS
-
-            cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
-            cli_runner.invoke(["checkout", "-b", "theirs_branch"])
-
-            db = geopackage(wc)
-            update(db, sample_pks[0], "theirs_version")
-            update(db, sample_pks[1], "ours_theirs_version")
-            update(db, sample_pks[2], "theirs_version")
-            update(db, sample_pks[3], "theirs_version")
-            update(db, sample_pks[4], "theirs_version")
-            insert(db, reset_index=1, insert_str="insert_theirs")
-
-            cli_runner.invoke(["checkout", "ancestor_branch"])
-            cli_runner.invoke(["checkout", "-b", "ours_branch"])
-
-            update(db, sample_pks[1], "ours_theirs_version")
-            update(db, sample_pks[2], "ours_version")
-            update(db, sample_pks[3], "ours_version")
-            update(db, sample_pks[4], "ours_version")
-            update(db, sample_pks[5], "ours_version")
-            insert(db, reset_index=1, insert_str="insert_ours")
-
-            yield repo
-
-    return ctx
 
 
 @pytest.mark.parametrize(
@@ -139,7 +105,7 @@ def test_merge_conflicts(
         assert not repo_file_exists(repo, MERGE_INDEX)
 
 
-def test_conflict_index_roundtrip(create_conflicts, cli_runner):
+def test_merge_index_roundtrip(create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
     with create_conflicts(H.POLYGONS) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
@@ -153,17 +119,30 @@ def test_conflict_index_roundtrip(create_conflicts, cli_runner):
         assert index.conflicts
 
         # Create a MergeIndex object, and roundtrip it into a tree and back.
-        orig = MergeIndex(index)
+        orig = MergeIndex.from_pygit2_index(index)
+        assert len(orig.entries) == 242
+        assert len(orig.conflicts) == 4
+        assert len(orig.resolves) == 0
+        assert len(orig.unresolved_conflicts) == 4
+
         orig.write("test.conflict.index")
         r1 = MergeIndex.read("test.conflict.index")
         assert r1 is not orig
         assert r1 == orig
 
-        # Simulate resolving a conflict:
-        key, conflict = next(iter(r1.conflicts.items()))
-        r1.remove_conflict(key)
-        r1.add(conflict.ours)  # Accept our change
+        # Simulate resolving some conflicts:
+        items = list(r1.conflicts.items())
+        key, conflict = items[0]
+        # Resolve conflict 0 by accepting our version.
+        r1.add_resolve(key, MergedOursTheirs.partial(merged=conflict.ours))
+        # Resolve conflict 1 by deleting it entirely.
+        key, conflict = items[1]
+        r1.add_resolve(key, MergedOursTheirs.EMPTY)
         assert r1 != orig
+        assert len(r1.entries) == 242
+        assert len(r1.conflicts) == 4
+        assert len(r1.resolves) == 2
+        assert len(r1.unresolved_conflicts) == 2
 
         # Roundtrip again
         r1.write("test.conflict.index")
