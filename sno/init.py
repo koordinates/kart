@@ -4,7 +4,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 import click
 import pygit2
@@ -529,12 +529,11 @@ class ImportPostgreSQL(OgrImporter):
 
         libpq actually handles URIs fine, but OGR doesn't :(
         So to import via OGR we have to convert them.
+
         https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
 
-        We don't currently handle all of the things these URLs can contain.
-        In particular, we don't (currently) handle:
-         * domain sockets
-         * multiple hostnames or ports
+        ^ These docs say these URLs can contain multiple hostnames or ports,
+        but we don't handle that.
         """
 
         url = urlsplit(url)
@@ -542,14 +541,14 @@ class ImportPostgreSQL(OgrImporter):
         if scheme not in ('postgres', 'postgresql'):
             raise ValueError("Bad scheme")
 
-        params = parse_qs(url.query)
+        params = dict(parse_qsl(url.query))
 
         if url.username:
             params.setdefault('user', url.username)
         if url.password:
             params.setdefault('password', url.password)
         if url.hostname:
-            params.setdefault('host', url.hostname)
+            params.setdefault('host', unquote(url.hostname))
         if url.port:
             params.setdefault('port', url.port)
         dbname = (url.path or '/')[1:]
