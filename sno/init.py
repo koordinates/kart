@@ -593,7 +593,10 @@ class ImportPostgreSQL(OgrImporter):
                 """,
                 [self.table],
             )
-            return cur.fetchone()[0]
+            rows = cur.fetchall()
+            # TODO: handle multi-column PKs. Ignoring for now.
+            assert len(rows) == 1
+            return rows[0][0]
 
 
 def list_import_formats(ctx, param, value):
