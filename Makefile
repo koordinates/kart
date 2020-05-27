@@ -177,6 +177,11 @@ install: | $(sno-app-any)
 test: $(py-install-test)
 	pytest -v --cov-report term --cov-report html:coverage
 
+ifeq ($(PLATFORM),Linux)
+# (github actions only supports docker containers on linux)
+ci-test: export SNO_POSTGRES_URL ?= postgresql://docker:docker@postgis:5432/gis
+endif
+
 .PHONY: ci-test
 ci-test:
 	pytest \
