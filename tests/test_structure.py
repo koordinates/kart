@@ -573,7 +573,7 @@ def quote_ident(part):
     (and most other dialects)
     """
     part = part.replace('"', '""')
-    return '"%s"' % part
+    return f'"{part}"'
 
 
 @pytest.fixture()

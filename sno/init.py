@@ -147,7 +147,7 @@ class OgrImporter:
         (and most other dialects)
         """
         part = part.replace('"', '""')
-        return '"%s"' % part
+        return f'"{part}"'
 
     @classmethod
     def quote_ident(cls, *parts):
@@ -541,8 +541,13 @@ class ImportPostgreSQL(OgrImporter):
         if scheme not in ('postgres', 'postgresql'):
             raise ValueError("Bad scheme")
 
+        # Start with everything from the querystring.
         params = dict(parse_qsl(url.query))
 
+        # Each of these fields can come from the main part of the URL,
+        # OR can come from the querystring.
+        # If both are specified, the querystring has precedence.
+        # So in 'postgresql://host1/?host=host2', the resultant host is 'host2'
         if url.username:
             params.setdefault('user', url.username)
         if url.password:
