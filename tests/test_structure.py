@@ -3,16 +3,15 @@ import itertools
 import os
 import re
 import subprocess
-from urllib.parse import urlsplit
 
-from osgeo import gdal, ogr, osr
+from osgeo import gdal, ogr
 
 import psycopg2
 import pygit2
 import pytest
 
 from sno import gpkg
-from sno.init import OgrImporter
+from sno.init import OgrImporter, ImportPostgreSQL
 from sno.structure import DatasetStructure
 from sno.dataset1 import Dataset1
 
@@ -592,13 +591,8 @@ def postgis_db():
 
 @pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
-    url = urlsplit(os.environ['SNO_POSTGRES_URL'])
-    postgres_conn_str = (
-        f"PG:dbname='{url.path.lstrip('/')}' "
-        f"host='{url.hostname}' "
-        f"port='{url.port or 5432}' "
-        f"user='{url.username or 'postgres'}' "
-        f"password='{url.password or ''}'"
+    postgres_conn_str = ImportPostgreSQL.postgres_url_to_ogr_conn_str(
+        os.environ['SNO_POSTGRES_URL']
     )
 
     @contextlib.contextmanager
