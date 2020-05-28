@@ -25,14 +25,12 @@ from . import (
     query,
     upgrade,
 )
+from .cli_util import call_and_exit_flag
 from .context import Context
 from .exec import execvp
 
 
-def print_version(ctx, param, value):
-    if not value or ctx.resilient_parsing:
-        return
-
+def print_version(ctx):
     import apsw
     import osgeo
     import rtree
@@ -84,13 +82,8 @@ def print_version(ctx, param, value):
     default=None,
     metavar="PATH",
 )
-@click.option(
-    "--version",
-    is_flag=True,
-    callback=print_version,
-    expose_value=False,
-    is_eager=True,
-    help="Show version information and exit.",
+@call_and_exit_flag(
+    "--version", callback=print_version, help="Show version information and exit.",
 )
 @click.option("-v", "--verbose", count=True, help="Repeat for more verbosity")
 @click.pass_context

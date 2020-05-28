@@ -3,7 +3,7 @@ import sys
 
 import click
 
-from .cli_util import do_json_option
+from .cli_util import do_json_option, call_and_exit_flag
 from .conflicts import (
     list_conflicts,
     conflicts_json_as_text,
@@ -12,14 +12,11 @@ from .exceptions import InvalidOperation
 from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext
 from .output_util import dump_json_output
 from .repo_files import (
-    ORIG_HEAD,
     MERGE_HEAD,
     MERGE_MSG,
-    MERGE_INDEX,
-    MERGE_LABELS,
-    repo_file_path,
     write_repo_file,
-    remove_repo_file,
+    read_repo_file,
+    remove_all_merge_repo_files,
     is_ongoing_merge,
     repo_file_exists,
 )
@@ -29,75 +26,6 @@ from .structure import RepositoryStructure
 
 
 L = logging.getLogger("sno.merge")
-
-
-def merge_abort(ctx, param, value):
-    if value:
-        repo = ctx.obj.repo
-        abort_merging_state(repo)
-        ctx.exit()
-
-
-@click.command()
-@click.option(
-    "--ff/--no-ff",
-    default=True,
-    help=(
-        "When the merge resolves as a fast-forward, only update the branch pointer, without creating a merge commit. "
-        "With --no-ff create a merge commit even when the merge resolves as a fast-forward."
-    ),
-)
-@click.option(
-    "--ff-only",
-    default=False,
-    is_flag=True,
-    help=(
-        "Refuse to merge and exit with a non-zero status unless the current HEAD is already up to date "
-        "or the merge can be resolved as a fast-forward."
-    ),
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Don't perform a merge - just show what would be done",
-)
-@click.option(
-    '--abort',
-    is_flag=True,
-    callback=merge_abort,
-    expose_value=False,
-    is_eager=True,
-    help="Abandon an ongoing merge, revert repository to the state before the merge began",
-)
-@click.argument("commit", required=True, metavar="COMMIT")
-@do_json_option
-@click.pass_context
-def merge(ctx, ff, ff_only, dry_run, do_json, commit):
-    """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
-
-    repo = ctx.obj.repo
-    if is_ongoing_merge(repo):
-        raise InvalidOperation("A merge is already ongoing")
-
-    merge_jdict = do_merge(repo, ff, ff_only, dry_run, commit)
-    no_op = merge_jdict.get("noOp", False) or merge_jdict.get("dryRun", False)
-    conflicts = merge_jdict.get("conflicts", None)
-
-    if not no_op and not conflicts:
-        # Update working copy.
-        # TODO - maybe lock the working copy during a merge?
-        repo_structure = RepositoryStructure(repo)
-        wc = repo_structure.working_copy
-        if wc:
-            L.debug(f"Updating {wc.path} ...")
-            merge_commit = repo[merge_jdict["mergeCommit"]]
-            wc.reset(merge_commit, repo_structure)
-
-    if do_json:
-        jdict = {"sno.merge/v1": merge_jdict}
-        dump_json_output(jdict, sys.stdout)
-    else:
-        output_merge_json_as_text(merge_jdict)
 
 
 def do_merge(repo, ff, ff_only, dry_run, commit):
@@ -207,24 +135,73 @@ def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     write_repo_file(repo, MERGE_MSG, merge_message)
 
 
-def abort_merging_state(repo):
+def abort_merging_state(ctx):
     """
     Put things back how they were before the merge began.
     Tries to be robust against failure, in case the user has messed up the repo's state.
     """
+    repo = ctx.obj.repo
     is_ongoing_merge = repo_file_exists(repo, MERGE_HEAD)
     # If we are in a merge, we now need to delete all the MERGE_* files.
     # If we are not in a merge, we should clean them up anyway.
-    remove_repo_file(repo, MERGE_HEAD)
-    remove_repo_file(repo, MERGE_MSG)
-    remove_repo_file(repo, MERGE_INDEX)
-    remove_repo_file(repo, MERGE_LABELS)
+    remove_all_merge_repo_files(repo)
 
     if not is_ongoing_merge:
         raise InvalidOperation('Repository is not in "merging" state.')
 
-    # TODO - maybe restore HEAD to ORIG_HEAD.
-    # Not sure if it matters - we don't modify HEAD when we move into merging state.
+
+def complete_merging_state(ctx):
+    """
+    Completes a merge that had conflicts - commits the result of the merge, and
+    moves the repo from merging state back into the normal state, with the branch
+    HEAD now at the merge commit. Only works if all conflicts have been resolved.
+    """
+    repo = ctx.obj.repo
+    if not is_ongoing_merge(repo):
+        raise InvalidOperation('Repository is not in "merging" state.')
+    merge_index = MergeIndex.read_from_repo(repo)
+    if merge_index.unresolved_conflicts:
+        raise InvalidOperation(
+            "Merge cannot be completed until conflicts are resolved."
+        )
+
+    merge_context = MergeContext.read_from_repo(repo)
+    commit_ids = merge_context.versions.map(lambda v: v.repo_structure.id)
+    merge_message = read_repo_file(repo, MERGE_MSG)
+
+    merge_jdict = {
+        "branch": CommitWithReference.resolve(repo, "HEAD").shorthand,
+        "ancestor": commit_ids.ancestor,
+        "ours": commit_ids.ours,
+        "theirs": commit_ids.theirs,
+        "message": merge_message,
+    }
+
+    merge_tree_id = merge_index.write_resolved_tree(repo)
+    L.debug(f"Merge tree: {merge_tree_id}")
+
+    user = repo.default_signature
+    merge_commit_id = repo.create_commit(
+        repo.head.name,
+        user,
+        user,
+        merge_message,
+        merge_tree_id,
+        [commit_ids.ours, commit_ids.theirs],
+    )
+
+    L.debug(f"Merge commit: {merge_commit_id}")
+    merge_jdict["mergeCommit"] = merge_commit_id.hex
+
+    repo_structure = RepositoryStructure(repo)
+    wc = repo_structure.working_copy
+    if wc:
+        L.debug(f"Updating {wc.path} ...")
+        merge_commit = repo[merge_commit_id]
+        wc.reset(merge_commit, repo_structure)
+
+    # TODO - support json output
+    output_merge_json_as_text(merge_jdict)
 
 
 def output_merge_json_as_text(jdict):
@@ -267,3 +244,69 @@ def output_merge_json_as_text(jdict):
         # TODO: explain how to resolve conflicts, when this is possible
         click.echo("Sorry, resolving merge conflicts is not yet supported", err=True)
         click.echo("Use `sno merge --abort` to abort this merge", err=True)
+
+
+@click.command()
+@click.option(
+    "--ff/--no-ff",
+    default=True,
+    help=(
+        "When the merge resolves as a fast-forward, only update the branch pointer, without creating a merge commit. "
+        "With --no-ff create a merge commit even when the merge resolves as a fast-forward."
+    ),
+)
+@click.option(
+    "--ff-only",
+    default=False,
+    is_flag=True,
+    help=(
+        "Refuse to merge and exit with a non-zero status unless the current HEAD is already up to date "
+        "or the merge can be resolved as a fast-forward."
+    ),
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Don't perform a merge - just show what would be done",
+)
+@call_and_exit_flag(
+    '--abort',
+    callback=abort_merging_state,
+    help="Abandon an ongoing merge, revert repository to the state before the merge began",
+)
+@call_and_exit_flag(
+    '--continue',
+    callback=complete_merging_state,
+    help="Completes and commits a merge once all conflicts are resolved and leaves the merging state",
+)
+@click.argument("commit", required=True, metavar="COMMIT")
+@do_json_option
+@click.pass_context
+def merge(ctx, ff, ff_only, dry_run, do_json, commit):
+    """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
+
+    repo = ctx.obj.repo
+    if is_ongoing_merge(repo):
+        raise InvalidOperation(
+            "A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`"
+        )
+
+    merge_jdict = do_merge(repo, ff, ff_only, dry_run, commit)
+    no_op = merge_jdict.get("noOp", False) or merge_jdict.get("dryRun", False)
+    conflicts = merge_jdict.get("conflicts", None)
+
+    if not no_op and not conflicts:
+        # Update working copy.
+        # TODO - maybe lock the working copy during a merge?
+        repo_structure = RepositoryStructure(repo)
+        wc = repo_structure.working_copy
+        if wc:
+            L.debug(f"Updating {wc.path} ...")
+            merge_commit = repo[merge_jdict["mergeCommit"]]
+            wc.reset(merge_commit, repo_structure)
+
+    if do_json:
+        jdict = {"sno.merge/v1": merge_jdict}
+        dump_json_output(jdict, sys.stdout)
+    else:
+        output_merge_json_as_text(merge_jdict)

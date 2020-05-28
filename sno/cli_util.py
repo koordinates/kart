@@ -53,3 +53,26 @@ def do_json_option(func):
         default=False,
         help="Whether to format the out output as JSON instead the default text output.",
     )(func)
+
+
+def call_and_exit_flag(*args, callback, **kwargs):
+    """
+    Add an is_flag option that, when set, eagerly calls the given callback with only the context as a parameter.
+    The callback may want to exit the program once it has completed, using ctx.exit(0)
+    Usage:
+    @call_and_exit_flag("--version", callback=print_version, help="Print the version number")
+    """
+
+    def actual_callback(ctx, param, value):
+        if value and not ctx.resilient_parsing:
+            callback(ctx)
+            ctx.exit()
+
+    return click.option(
+        *args,
+        is_flag=True,
+        callback=actual_callback,
+        expose_value=False,
+        is_eager=True,
+        **kwargs,
+    )
