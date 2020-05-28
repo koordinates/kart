@@ -12,7 +12,7 @@ from osgeo import gdal, ogr
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
-from .cli_util import do_json_option
+from .cli_util import call_and_exit_flag, do_json_option
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -503,12 +503,10 @@ class ImportGPKG(OgrImporter):
         yield from gpkg.get_meta_info(db, layer=self.table)
 
 
-def list_import_formats(ctx, param, value):
+def list_import_formats(ctx):
     """
     List the supported import formats
     """
-    if not value or ctx.resilient_parsing:
-        return
     names = set()
     for prefix, ogr_driver_name in FORMAT_TO_OGR_MAP.items():
         d = gdal.GetDriverByName(ogr_driver_name)
@@ -519,7 +517,6 @@ def list_import_formats(ctx, param, value):
                 names.add(prefix)
     for n in sorted(names):
         click.echo(n)
-    ctx.exit()
 
 
 @click.command("import")
@@ -539,19 +536,15 @@ def list_import_formats(ctx, param, value):
     "--list", "do_list", is_flag=True, help="List all tables present in the source path"
 )
 @click.option(
-    "--list-formats",
-    is_flag=True,
-    help="List available import formats, and then exit",
-    # https://click.palletsprojects.com/en/7.x/options/#callbacks-and-eager-options
-    is_eager=True,
-    expose_value=False,
-    callback=list_import_formats,
-)
-@click.option(
     "--version",
     type=click.Choice(structure.DatasetStructure.version_numbers()),
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
+)
+@call_and_exit_flag(
+    "--list-formats",
+    callback=list_import_formats,
+    help="List available import formats, and then exit",
 )
 @do_json_option
 def import_table(ctx, source, directory, table, do_list, do_json, version):

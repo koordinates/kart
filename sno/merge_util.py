@@ -17,6 +17,7 @@ from .repo_files import (
     repo_file_path,
 )
 from .structure import RepositoryStructure
+from .utils import ungenerator
 
 
 # Utility classes relevant to merges - used by merge command, conflicts command, resolve command.
@@ -196,13 +197,15 @@ class MergeIndex:
 
     @classmethod
     def _serialise_conflict(cls, key, conflict):
-        result = []
         for version, entry in zip(AncestorOursTheirs.NAMES, conflict):
             if not entry:
                 continue
             result_path = f".conflicts/{key}/{version}/{entry.path}"
-            result.append(cls.Entry(result_path, entry.id, entry.mode))
-        return result
+            yield cls.Entry(result_path, entry.id, entry.mode)
+
+    def _serialise_conflicts(self):
+        for key, conflict3 in self.conflicts.items():
+            yield from self._serialise_conflict(key, conflict3)
 
     _CONFLICT_PATTERN = re.compile(
         r"^.conflicts/(?P<key>.+?)/(?P<version>ancestor|ours|theirs)/(?P<path>.+)$"
@@ -221,10 +224,13 @@ class MergeIndex:
         result = AncestorOursTheirs.partial(**{version: result_entry})
         return key, result
 
-    def conflicts_as_entries(self):
-        for key, conflict3 in self.conflicts.items():
-            for index_entry in self._serialise_conflict(key, conflict3):
-                yield index_entry
+    @ungenerator(set)
+    def _conflicts_paths(self):
+        """All the paths in all the entries in all the conflicts, as a set."""
+        for conflict in self.conflicts.values():
+            for entry in conflict:
+                if entry:
+                    yield entry.path
 
     def add_resolve(self, key, resolve):
         if not isinstance(key, str):
@@ -240,17 +246,18 @@ class MergeIndex:
     @classmethod
     def _serialise_resolve(cls, key, resolve):
         if resolve == MergedOursTheirs.EMPTY:
-            return [
-                cls.Entry(f".resolves/{key}/deleted", cls._EMPTY_OID, cls._EMPTY_MODE)
-            ]
+            yield cls.Entry(f".resolves/{key}/deleted", cls._EMPTY_OID, cls._EMPTY_MODE)
+            return
 
-        result = []
         for version, entry in zip(MergedOursTheirs.NAMES, resolve):
             if not entry:
                 continue
             result_path = f".resolves/{key}/{version}/{entry.path}"
-            result.append(cls.Entry(result_path, entry.id, entry.mode))
-        return result
+            yield cls.Entry(result_path, entry.id, entry.mode)
+
+    def _serialise_resolves(self):
+        for key, resolve3 in self.resolves.items():
+            yield from self._serialise_resolve(key, resolve3)
 
     _RESOLVE_PATTERN = re.compile(
         r"^.resolves/(?P<key>.+?)/(?P<version>merged|ours|theirs)/(?P<path>.+)$"
@@ -275,10 +282,12 @@ class MergeIndex:
         result = MergedOursTheirs.partial(**{version: result_entry})
         return key, result
 
-    def resolves_as_entries(self):
-        for key, resolve3 in self.resolves.items():
-            for index_entry in self._serialise_resolve(key, resolve3):
-                yield index_entry
+    def _resolves_entries(self):
+        """All the entries in all the resolves."""
+        for resolve in self.resolves.values():
+            for entry in resolve:
+                if entry:
+                    yield entry
 
     @property
     def unresolved_conflicts(self):
@@ -314,21 +323,48 @@ class MergeIndex:
         return cls.read(repo_file_path(repo, MERGE_INDEX))
 
     def write(self, path):
-        """Serialise this MergeIndex to the given path."""
+        """
+        Serialise this MergeIndex to the given path.
+        Regular entries, conflicts, and resolves are each serialised separately,
+        so that they can be roundtripped accurately.
+        """
         index = pygit2.Index(str(path))
         index.clear()
 
         for e in self.entries.values():
             index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
-        for e in self.conflicts_as_entries():
+        for e in self._serialise_conflicts():
             index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
-        for e in self.resolves_as_entries():
+        for e in self._serialise_resolves():
             index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
         index.write()
 
     def write_to_repo(self, repo):
         """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
         self.write(repo_file_path(repo, MERGE_INDEX))
+
+    def write_resolved_tree(self, repo):
+        """
+        Write all the merged entries and the resolved conflicts to a tree in the given repo.
+        Resolved conflicts will be written the same as merged entries in the resulting tree.
+        Only works when all conflicts are resolved.
+        """
+        assert not self.unresolved_conflicts
+        index = pygit2.Index()
+
+        # Entries that were merged automatically by libgit2, often trivially:
+        for e in self.entries.values():
+            index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
+
+        # libgit2 leaves entries in the main part of the index, even if they are conflicts.
+        # We make sure this index only contains merged entries and resolved conflicts.
+        index.remove_all(list(self._conflicts_paths()))
+
+        # Entries that have been explicitly selected to resolve conflicts:
+        for e in self._resolves_entries():
+            index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
+
+        return index.write_tree(repo)
 
     @classmethod
     def _ensure_entry(cls, entry):
@@ -433,9 +469,16 @@ class MergeContext:
     def write_to_repo(self, repo):
         commits3 = self.versions.map(lambda v: v.repo_structure.head_commit)
         labels3 = self.versions.map(lambda v: v.version_label)
-        # We don't write the ancestor, but recalculate it fresh each time.
-        write_repo_file(repo, ORIG_HEAD, commits3.ours.id.hex)
+        # We don't write commits3.ancestor - we just recalculate it each time.
+        # And we don't write commits3.ours - thats already stored in HEAD.
+        # So we just write commits3.theirs:
         write_repo_file(repo, MERGE_HEAD, commits3.theirs.id.hex)
+        # We also don't write an ORIG_HEAD, since we don't change HEAD during a merge.
+
+        # We write labels for what we are merging to MERGE_LABELS - these include
+        # the names of the branches sno merge was given to merge, although these
+        # are merely informational since those branch heads could move ahead
+        # to new commits before this merge is completed.
         write_repo_file(repo, MERGE_LABELS, "".join(f"{l}\n" for l in labels3))
 
 

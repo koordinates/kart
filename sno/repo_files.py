@@ -89,3 +89,11 @@ def is_ongoing_merge(repo):
             )
         return True
     return False
+
+
+def remove_all_merge_repo_files(repo):
+    """Deletes the following files (if they exist) - MERGE_HEAD, MERGE_MSG, MERGE_INDEX, MERGE_LABELS."""
+    remove_repo_file(repo, MERGE_HEAD)
+    remove_repo_file(repo, MERGE_MSG)
+    remove_repo_file(repo, MERGE_INDEX)
+    remove_repo_file(repo, MERGE_LABELS)
