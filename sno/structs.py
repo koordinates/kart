@@ -6,8 +6,8 @@ from .exceptions import NotFound, NO_COMMIT
 class CommitWithReference:
     """
     Simple struct containing a commit, and optionally the reference used to find the commit.
-    When struct is passed around in place of sole commit, then any code that uses the commit is able to give a better
-    human-readable name to describe it.
+    When struct is passed around in place of sole commit, then any code that uses the commit
+    is able to give a better human-readable name to describe it.
     Example:
     >>> cwr = CommitWithReference.resolve(repo, "master")
     >>> cwr.commit.id
@@ -39,6 +39,10 @@ class CommitWithReference:
         return self.commit.id
 
     @property
+    def short_id(self):
+        return self.commit.short_id
+
+    @property
     def tree(self):
         return self.commit.tree
 
@@ -46,7 +50,7 @@ class CommitWithReference:
     def shorthand(self):
         if self.reference is not None:
             return self.reference.shorthand
-        return self.id.hex
+        return self.commit.short_id
 
     @property
     def reference_type(self):
@@ -59,14 +63,8 @@ class CommitWithReference:
         return None
 
     @property
-    def shorthand_with_type(self):
-        if self.reference is not None:
-            ref_type = self.reference_type
-            if ref_type:
-                return f'{ref_type} "{self.reference.shorthand}"'
-            else:
-                return f'"{self.reference.shorthand}"'
-        return self.id.hex
+    def branch_shorthand(self):
+        return self.reference.shorthand if self.reference_type == "branch" else None
 
     @staticmethod
     def resolve(repo, refish):

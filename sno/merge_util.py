@@ -7,15 +7,16 @@ import pygit2
 from .diff_output import text_row, json_row, geojson_row
 from .exceptions import InvalidOperation
 from .repo_files import (
-    ORIG_HEAD,
     MERGE_HEAD,
     MERGE_INDEX,
-    MERGE_LABELS,
+    MERGE_BRANCH,
     is_ongoing_merge,
     read_repo_file,
     write_repo_file,
+    remove_repo_file,
     repo_file_path,
 )
+from .structs import CommitWithReference
 from .structure import RepositoryStructure
 from .utils import ungenerator
 
@@ -412,15 +413,38 @@ class MergeIndex:
 class VersionContext:
     """
     The necessary context for categorising or outputting a single version of a conflict.
-    Holds the appropriate version of the repository structure,
-    the name of that version - one of "ancestor", "ours" or "theirs",
-    and a label for that version (the branch name or commit SHA).
+    Holds the name of that version - one of "ancestor", "ours" or "theirs", the commit ID
+    of that version, and optionally the name of the branch that was dereferenced to select
+    that commit ID (note that  the branch may or may not still point to that commit ID).
     """
 
-    def __init__(self, repo_structure, version_name, version_label):
-        self.repo_structure = repo_structure
+    def __init__(self, repo, version_name, commit_id, short_id, branch=None):
+        # The sno repository
+        self.repo = repo
+        # The name of the version - one of "ancestor", "ours" or "theirs".
         self.version_name = version_name
-        self.version_label = version_label
+        # The commit ID - a pygit2.Oid object.
+        self.commit_id = commit_id
+        # A shorter but still unique prefix of the commit ID - a string.
+        self.short_id = short_id
+        # The name of the branch used to find the commit, or None if none was used.
+        self.branch = branch
+
+    @property
+    def repo_structure(self):
+        if not hasattr(self, "_repo_structure"):
+            self._repo_structure = RepositoryStructure.lookup(self.repo, self.commit_id)
+        return self._repo_structure
+
+    @property
+    def shorthand(self):
+        return self.branch if self.branch else self.commit_id.hex
+
+    def as_json(self):
+        result = {"commit": self.commit_id.hex, "abbrevCommit": self.short_id}
+        if self.branch:
+            result["branch"] = self.branch
+        return result
 
 
 class MergeContext:
@@ -431,55 +455,73 @@ class MergeContext:
         self.versions = versions
 
     @classmethod
-    def _zip_together(cls, repo_structures3, labels3):
+    def _zip_together(cls, repo, commit_ids3, short_ids3, branches3):
         names3 = AncestorOursTheirs.NAMES
         versions = AncestorOursTheirs(
             *(
-                VersionContext(rs, n, l)
-                for rs, n, l in zip(repo_structures3, names3, labels3)
+                VersionContext(repo, n, c, s, b)
+                for n, c, s, b in zip(names3, commit_ids3, short_ids3, branches3)
             )
         )
         return MergeContext(versions)
 
     @classmethod
     def from_commit_with_refs(cls, commit_with_refs3, repo):
-        repo_structures3 = commit_with_refs3.map(
-            lambda c: RepositoryStructure(repo, commit=c.commit)
-        )
-        labels3 = commit_with_refs3.map(lambda c: str(c))
-        return cls._zip_together(repo_structures3, labels3)
+        commit_ids3 = commit_with_refs3.map(lambda c: c.id)
+        short_ids3 = commit_with_refs3.map(lambda c: c.short_id)
+        branches3 = commit_with_refs3.map(lambda c: c.branch_shorthand)
+        return cls._zip_together(repo, commit_ids3, short_ids3, branches3)
 
     @classmethod
     def read_from_repo(cls, repo):
         if not is_ongoing_merge(repo):
             raise InvalidOperation("Repository is not in 'merging' state")
-        ours = RepositoryStructure.lookup(repo, "HEAD")
-        theirs = RepositoryStructure.lookup(
-            repo, read_repo_file(repo, MERGE_HEAD).strip()
+
+        # HEAD is assumed to be our side of the merge. MERGE_HEAD (and MERGE_INDEX)
+        # are not version controlled, but are simply files in the repo. For these
+        # reasons, the user should not be able to change branch mid merge.
+
+        head = CommitWithReference.resolve(repo, "HEAD")
+        ours_commit_id = head.id
+        theirs_commit_id = pygit2.Oid(hex=read_repo_file(repo, MERGE_HEAD).strip())
+
+        commit_ids3 = AncestorOursTheirs(
+            # We find the ancestor by recalculating it fresh each time.
+            repo.merge_base(ours_commit_id, theirs_commit_id),
+            ours_commit_id,
+            theirs_commit_id,
         )
-        # We find the ancestor be recalculating it fresh each time. TODO: is that good?
-        ancestor_id = repo.merge_base(theirs.id, ours.id)
-        ancestor = RepositoryStructure.lookup(repo, ancestor_id)
-        repo_structures3 = AncestorOursTheirs(ancestor, ours, theirs)
-        labels3 = AncestorOursTheirs(
-            *read_repo_file(repo, MERGE_LABELS).strip().split("\n")
+        short_ids3 = commit_ids3.map(lambda c: repo[c].short_id)
+        branches3 = AncestorOursTheirs(
+            None,
+            head.branch_shorthand,
+            read_repo_file(repo, MERGE_BRANCH, missing_ok=True),
         )
-        return cls._zip_together(repo_structures3, labels3)
+
+        return cls._zip_together(repo, commit_ids3, short_ids3, branches3)
 
     def write_to_repo(self, repo):
-        commits3 = self.versions.map(lambda v: v.repo_structure.head_commit)
-        labels3 = self.versions.map(lambda v: v.version_label)
-        # We don't write commits3.ancestor - we just recalculate it each time.
-        # And we don't write commits3.ours - thats already stored in HEAD.
-        # So we just write commits3.theirs:
-        write_repo_file(repo, MERGE_HEAD, commits3.theirs.id.hex)
-        # We also don't write an ORIG_HEAD, since we don't change HEAD during a merge.
+        # We don't write ancestor.commit_id - we just recalculate it when needed.
+        # We don't write ours.commit_id - we can learn that from HEAD.
+        # So we just write theirs.commit_id in MERGE_HEAD.
+        write_repo_file(repo, MERGE_HEAD, self.versions.theirs.commit_id.hex)
 
-        # We write labels for what we are merging to MERGE_LABELS - these include
-        # the names of the branches sno merge was given to merge, although these
-        # are merely informational since those branch heads could move ahead
-        # to new commits before this merge is completed.
-        write_repo_file(repo, MERGE_LABELS, "".join(f"{l}\n" for l in labels3))
+        # We don't write ancestor.branch, since it's always None anyway.
+        # We don't write ours.branch. we can learn that from HEAD.
+        # So we just write theirs.branch in MERGE_BRANCH, unless its None.
+        if self.versions.theirs.branch:
+            write_repo_file(repo, MERGE_BRANCH, self.versions.theirs.branch)
+        else:
+            remove_repo_file(repo, MERGE_BRANCH)
+
+    def get_message(self):
+        theirs = self.versions.theirs
+        theirs_desc = f'branch "{theirs.branch}"' if theirs.branch else theirs.shorthand
+        return f'Merge {theirs_desc} into {self.versions.ours.shorthand}'
+
+    def as_json(self):
+        json3 = self.versions.map(lambda v: v.as_json())
+        return json3.as_dict()
 
 
 class RichConflictVersion:

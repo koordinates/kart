@@ -44,20 +44,20 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
         raise InvalidOperation(f"Commits {theirs.id} and {ours.id} aren't related.")
 
     ancestor = CommitWithReference.resolve(repo, ancestor_id)
+    commit_with_ref3 = AncestorOursTheirs(ancestor, ours, theirs)
+    merge_context = MergeContext.from_commit_with_refs(commit_with_ref3, repo)
+    merge_message = merge_context.get_message()
 
-    merge_message = f"Merge {theirs.shorthand_with_type} into {ours.shorthand}"
     merge_jdict = {
-        "branch": ours.shorthand,
-        "ancestor": ancestor.id.hex,
-        "ours": ours.id.hex,
-        "theirs": theirs.id.hex,
+        "commit": ours.id.hex,
+        "branch": ours.branch_shorthand,
+        "merging": merge_context.as_json(),
         "message": merge_message,
         "conflicts": None,
     }
 
     # We're up-to-date if we're trying to merge our own common ancestor.
     if ancestor_id == theirs.id:
-        merge_jdict["mergeCommit"] = ours.id.hex
         merge_jdict["noOp"] = True
         return merge_jdict
 
@@ -76,22 +76,22 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     if can_ff and ff:
         # do fast-forward merge
         L.debug(f"Fast forward: {theirs.id.hex}")
-        merge_jdict["mergeCommit"] = theirs.id.hex
+        merge_jdict["commit"] = theirs.id.hex
         merge_jdict["fastForward"] = True
         if not dry_run:
             repo.head.set_target(theirs.id, f"{merge_message}: Fast-forward")
         return merge_jdict
 
-    commit_with_ref3 = AncestorOursTheirs(ancestor, ours, theirs)
     tree3 = commit_with_ref3.map(lambda c: c.tree)
     index = repo.merge_trees(**tree3.as_dict())
 
     if index.conflicts:
         merge_index = MergeIndex.from_pygit2_index(index)
-        merge_context = MergeContext.from_commit_with_refs(commit_with_ref3, repo)
+
         merge_jdict["conflicts"] = list_conflicts(
             merge_index, merge_context, "json", summarise=2
         )
+        merge_jdict["state"] = "merging"
         if not dry_run:
             move_repo_to_merging_state(
                 repo, merge_index, merge_context, merge_message,
@@ -99,7 +99,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
         return merge_jdict
 
     if dry_run:
-        merge_jdict["mergeCommit"] = "(dryRun)"
+        merge_jdict["commit"] = "(dryRun)"
         return merge_jdict
 
     merge_tree_id = index.write_tree(repo)
@@ -111,7 +111,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     )
 
     L.debug(f"Merge commit: {merge_commit_id}")
-    merge_jdict["mergeCommit"] = merge_commit_id.hex
+    merge_jdict["commit"] = merge_commit_id.hex
 
     return merge_jdict
 
@@ -169,14 +169,6 @@ def complete_merging_state(ctx):
     commit_ids = merge_context.versions.map(lambda v: v.repo_structure.id)
     merge_message = read_repo_file(repo, MERGE_MSG)
 
-    merge_jdict = {
-        "branch": CommitWithReference.resolve(repo, "HEAD").shorthand,
-        "ancestor": commit_ids.ancestor,
-        "ours": commit_ids.ours,
-        "theirs": commit_ids.theirs,
-        "message": merge_message,
-    }
-
     merge_tree_id = merge_index.write_resolved_tree(repo)
     L.debug(f"Merge tree: {merge_tree_id}")
 
@@ -191,7 +183,14 @@ def complete_merging_state(ctx):
     )
 
     L.debug(f"Merge commit: {merge_commit_id}")
-    merge_jdict["mergeCommit"] = merge_commit_id.hex
+
+    head = CommitWithReference.resolve(repo, "HEAD")
+    merge_jdict = {
+        "branch": head.branch_shorthand,
+        "commit": merge_commit_id,
+        "merging": merge_context.as_json(),
+        "message": merge_message,
+    }
 
     repo_structure = RepositoryStructure(repo)
     wc = repo_structure.working_copy
@@ -205,23 +204,30 @@ def complete_merging_state(ctx):
 
 
 def output_merge_json_as_text(jdict):
-    click.echo(jdict["message"].replace("Merge", "Merging", 1))
+    theirs = jdict["merging"]["theirs"]
+    ours = jdict["merging"]["ours"]
+    theirs_branch = theirs.get("branch", None)
+    theirs_desc = (
+        f'branch "{theirs_branch}"' if theirs_branch else theirs["abbrevCommit"]
+    )
+    ours_desc = ours.get("branch", None) or ours["abbrevCommit"]
+    click.echo(f"Merging {theirs_desc} into {ours_desc}")
 
     if jdict.get("noOp", False):
         click.echo("Already up to date")
         return
 
     dry_run = jdict.get("dryRun", False)
-    merge_commit = jdict.get("mergeCommit", None)
+    commit = jdict.get("commit", None)
 
     if jdict.get("fastForward", False):
         if dry_run:
             click.echo(
-                f"Can fast-forward to {merge_commit}\n"
+                f"Can fast-forward to {commit}\n"
                 "(Not actually fast-forwarding due to --dry-run)",
             )
         else:
-            click.echo(f"Fast-forwarded to {merge_commit}")
+            click.echo(f"Fast-forwarded to {commit}")
         return
 
     conflicts = jdict.get("conflicts", None)
@@ -232,7 +238,7 @@ def output_merge_json_as_text(jdict):
                 "(Not actually merging due to --dry-run)"
             )
         else:
-            click.echo(f"No conflicts!\nMerge commited as {merge_commit}")
+            click.echo(f"No conflicts!\nMerge commited as {commit}")
         return
 
     click.echo("Conflicts found:\n")
@@ -242,8 +248,14 @@ def output_merge_json_as_text(jdict):
         click.echo("(Not actually merging due to --dry-run)")
     else:
         # TODO: explain how to resolve conflicts, when this is possible
-        click.echo("Sorry, resolving merge conflicts is not yet supported", err=True)
-        click.echo("Use `sno merge --abort` to abort this merge", err=True)
+        click.echo('Repository is now in "merging" state.')
+        click.echo(
+            "View conflicts with `sno conflicts` and resolve them with `sno resolve`."
+        )
+        click.echo(
+            "Once no conflicts remain, complete this merge with `sno merge --continue`."
+        )
+        click.echo("Or use `sno merge --abort` to return to the previous state.")
 
 
 @click.command()
@@ -302,7 +314,7 @@ def merge(ctx, ff, ff_only, dry_run, do_json, commit):
         wc = repo_structure.working_copy
         if wc:
             L.debug(f"Updating {wc.path} ...")
-            merge_commit = repo[merge_jdict["mergeCommit"]]
+            merge_commit = repo[merge_jdict["commit"]]
             wc.reset(merge_commit, repo_structure)
 
     if do_json:

@@ -9,14 +9,16 @@ import subprocess
 from . import is_windows
 from .exceptions import SubprocessError
 
-
+# Standard git files:
 HEAD = "HEAD"
 COMMIT_EDITMSG = "COMMIT_EDITMSG"
 ORIG_HEAD = "ORIG_HEAD"
 MERGE_HEAD = "MERGE_HEAD"
 MERGE_MSG = "MERGE_MSG"
+
+# Sno-specific files:
 MERGE_INDEX = "MERGE_INDEX"
-MERGE_LABELS = "MERGE_LABELS"
+MERGE_BRANCH = "MERGE_BRANCH"
 
 
 def repo_file_path(repo, filename):
@@ -69,14 +71,16 @@ def user_edit_repo_file(repo, filename):
         ) from e
 
 
-def read_repo_file(repo, filename):
+def read_repo_file(repo, filename, missing_ok=False):
     path = repo_file_path(repo, filename)
+    if missing_ok and not path.exists():
+        return None
     return path.read_text(encoding="utf-8")
 
 
 def remove_repo_file(repo, filename, missing_ok=True):
     path = repo_file_path(repo, filename)
-    if not path.exists() and missing_ok:
+    if missing_ok and not path.exists():
         return  # TODO: use path.unlink(missing_ok=True) (python3.8)
     path.unlink()
 
@@ -92,8 +96,8 @@ def is_ongoing_merge(repo):
 
 
 def remove_all_merge_repo_files(repo):
-    """Deletes the following files (if they exist) - MERGE_HEAD, MERGE_MSG, MERGE_INDEX, MERGE_LABELS."""
+    """Deletes the following files (if they exist) - MERGE_HEAD, MERGE_BRANCH, MERGE_MSG, MERGE_INDEX"""
     remove_repo_file(repo, MERGE_HEAD)
+    remove_repo_file(repo, MERGE_BRANCH)
     remove_repo_file(repo, MERGE_MSG)
     remove_repo_file(repo, MERGE_INDEX)
-    remove_repo_file(repo, MERGE_LABELS)
