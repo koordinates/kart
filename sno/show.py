@@ -92,24 +92,24 @@ def patch_output_text(*, target, output_path, **kwargs):
     by a unicode "␀" character.
     """
     commit = target.head_commit
-    fp = resolve_output_path(output_path)
-    pecho = {'file': fp, 'color': fp.isatty()}
-    with diff.diff_output_text(output_path=fp, **kwargs) as diff_writer:
-        author = commit.author
-        author_time_utc = datetime.fromtimestamp(author.time, timezone.utc)
-        author_timezone = timezone(timedelta(minutes=author.offset))
-        author_time_in_author_timezone = author_time_utc.astimezone(author_timezone)
+    with resolve_output_path(output_path) as fp:
+        pecho = {'file': fp}
+        with diff.diff_output_text(output_path=fp, **kwargs) as diff_writer:
+            author = commit.author
+            author_time_utc = datetime.fromtimestamp(author.time, timezone.utc)
+            author_timezone = timezone(timedelta(minutes=author.offset))
+            author_time_in_author_timezone = author_time_utc.astimezone(author_timezone)
 
-        click.secho(f'commit {commit.hex}', fg='yellow')
-        click.secho(f'Author: {author.name} <{author.email}>', **pecho)
-        click.secho(
-            f'Date:   {author_time_in_author_timezone.strftime("%c %z")}', **pecho
-        )
-        click.secho(**pecho)
-        for line in commit.message.splitlines():
-            click.secho(f'    {line}', **pecho)
-        click.secho(**pecho)
-        yield diff_writer
+            click.secho(f'commit {commit.hex}', fg='yellow', **pecho)
+            click.secho(f'Author: {author.name} <{author.email}>', **pecho)
+            click.secho(
+                f'Date:   {author_time_in_author_timezone.strftime("%c %z")}', **pecho
+            )
+            click.secho(**pecho)
+            for line in commit.message.splitlines():
+                click.secho(f'    {line}', **pecho)
+            click.secho(**pecho)
+            yield diff_writer
 
 
 @contextlib.contextmanager

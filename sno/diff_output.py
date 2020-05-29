@@ -11,7 +11,10 @@ from pathlib import Path
 import click
 
 from . import gpkg
-from .output_util import dump_json_output, resolve_output_path
+from .output_util import (
+    dump_json_output,
+    resolve_output_path,
+)
 
 
 @contextlib.contextmanager
@@ -50,82 +53,82 @@ def diff_output_text(*, output_path, **kwargs):
     In particular, geometry WKT is abbreviated and null values are represented
     by a unicode "␀" character.
     """
-    fp = resolve_output_path(output_path)
-    pecho = {'file': fp, 'color': fp.isatty()}
     if isinstance(output_path, Path) and output_path.is_dir():
         raise click.BadParameter(
             "Directory is not valid for --output with --text", param_hint="--output"
         )
 
     def _out(dataset, diff):
-        path = dataset.path
-        pk_field = dataset.primary_key
-        prefix = f"{path}:"
-        repr_excl = [pk_field]
+        with resolve_output_path(output_path) as fp:
+            pecho = {'file': fp}
+            path = dataset.path
+            pk_field = dataset.primary_key
+            prefix = f"{path}:"
+            repr_excl = [pk_field]
 
-        for k, (v_old, v_new) in diff["META"].items():
-            click.secho(
-                f"--- {prefix}meta/{k}\n+++ {prefix}meta/{k}", bold=True, **pecho
-            )
+            for k, (v_old, v_new) in diff["META"].items():
+                click.secho(
+                    f"--- {prefix}meta/{k}\n+++ {prefix}meta/{k}", bold=True, **pecho
+                )
 
-            s_old = set(v_old.items())
-            s_new = set(v_new.items())
+                s_old = set(v_old.items())
+                s_new = set(v_new.items())
 
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = set(diff_del.keys()) | set(diff_add.keys())
+                diff_add = dict(s_new - s_old)
+                diff_del = dict(s_old - s_new)
+                all_keys = set(diff_del.keys()) | set(diff_add.keys())
 
-            for k in all_keys:
-                if k in diff_del:
-                    click.secho(
-                        text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl),
-                        fg="red",
-                        **pecho,
-                    )
-                if k in diff_add:
-                    click.secho(
-                        text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl),
-                        fg="green",
-                        **pecho,
-                    )
+                for k in all_keys:
+                    if k in diff_del:
+                        click.secho(
+                            text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl),
+                            fg="red",
+                            **pecho,
+                        )
+                    if k in diff_add:
+                        click.secho(
+                            text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl),
+                            fg="green",
+                            **pecho,
+                        )
 
-        prefix = f"{path}:{pk_field}="
+            prefix = f"{path}:{pk_field}="
 
-        for k, v_old in diff["D"].items():
-            click.secho(f"--- {prefix}{k}", bold=True, **pecho)
-            click.secho(
-                text_row(v_old, prefix="- ", exclude=repr_excl), fg="red", **pecho
-            )
+            for k, v_old in diff["D"].items():
+                click.secho(f"--- {prefix}{k}", bold=True, **pecho)
+                click.secho(
+                    text_row(v_old, prefix="- ", exclude=repr_excl), fg="red", **pecho
+                )
 
-        for o in diff["I"]:
-            click.secho(f"+++ {prefix}{o[pk_field]}", bold=True, **pecho)
-            click.secho(
-                text_row(o, prefix="+ ", exclude=repr_excl), fg="green", **pecho
-            )
+            for o in diff["I"]:
+                click.secho(f"+++ {prefix}{o[pk_field]}", bold=True, **pecho)
+                click.secho(
+                    text_row(o, prefix="+ ", exclude=repr_excl), fg="green", **pecho
+                )
 
-        for _, (v_old, v_new) in diff["U"].items():
-            click.secho(
-                f"--- {prefix}{v_old[pk_field]}\n+++ {prefix}{v_new[pk_field]}",
-                bold=True,
-                **pecho,
-            )
+            for _, (v_old, v_new) in diff["U"].items():
+                click.secho(
+                    f"--- {prefix}{v_old[pk_field]}\n+++ {prefix}{v_new[pk_field]}",
+                    bold=True,
+                    **pecho,
+                )
 
-            s_old = set(v_old.items())
-            s_new = set(v_new.items())
+                s_old = set(v_old.items())
+                s_new = set(v_new.items())
 
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
+                diff_add = dict(s_new - s_old)
+                diff_del = dict(s_old - s_new)
+                all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
 
-            for k in all_keys:
-                if k in diff_del:
-                    rk = text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
-                    if rk:
-                        click.secho(rk, fg="red", **pecho)
-                if k in diff_add:
-                    rk = text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
-                    if rk:
-                        click.secho(rk, fg="green", **pecho)
+                for k in all_keys:
+                    if k in diff_del:
+                        rk = text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
+                        if rk:
+                            click.secho(rk, fg="red", **pecho)
+                    if k in diff_add:
+                        rk = text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
+                        if rk:
+                            click.secho(rk, fg="green", **pecho)
 
     yield _out
 
@@ -367,20 +370,19 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
 
         if not output_path:
             output_path = Path(repo.path) / "DIFF.html"
-        fo = resolve_output_path(output_path)
-
-        # Read all the geojson back in, and stick them in a dict
-        all_datasets_geojson = {}
-        for filename in os.listdir(tempdir):
-            with open(tempdir / filename) as json_file:
-                all_datasets_geojson[os.path.splitext(filename)[0]] = json.load(
-                    json_file
+        with resolve_output_path(output_path) as fo:
+            # Read all the geojson back in, and stick them in a dict
+            all_datasets_geojson = {}
+            for filename in os.listdir(tempdir):
+                with open(tempdir / filename) as json_file:
+                    all_datasets_geojson[os.path.splitext(filename)[0]] = json.load(
+                        json_file
+                    )
+            fo.write(
+                template.substitute(
+                    {"title": title, "geojson_data": json.dumps(all_datasets_geojson)}
                 )
-        fo.write(
-            template.substitute(
-                {"title": title, "geojson_data": json.dumps(all_datasets_geojson)}
             )
-        )
-    if fo != sys.stdout:
-        fo.close()
-        webbrowser.open_new(f"file://{output_path.resolve()}")
+        if fo != sys.stdout:
+            fo.close()
+            webbrowser.open_new(f"file://{output_path.resolve()}")
