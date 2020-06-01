@@ -1,15 +1,12 @@
-import contextlib
 import json
 import pytest
-
-import pygit2
 
 from sno.merge_util import MergeIndex, MergedOursTheirs
 from sno.structs import CommitWithReference
 from sno.repo_files import (
     MERGE_HEAD,
+    MERGE_BRANCH,
     MERGE_MSG,
-    MERGE_LABELS,
     MERGE_INDEX,
     repo_file_exists,
     read_repo_file,
@@ -48,8 +45,16 @@ def test_merge_conflicts(
         assert r.exit_code == 0, r
 
         if output_format == "text":
-            dry_run_message = (
-                ["(Not actually merging due to --dry-run)", ""] if dry_run else [""]
+            merging_state_message = (
+                ["(Not actually merging due to --dry-run)", ""]
+                if dry_run
+                else [
+                    'Repository is now in "merging" state.',
+                    "View conflicts with `sno conflicts` and resolve them with `sno resolve`.",
+                    "Once no conflicts remain, complete this merge with `sno merge --continue`.",
+                    "Or use `sno merge --abort` to return to the previous state.",
+                    "",
+                ]
             )
 
             assert (
@@ -64,7 +69,7 @@ def test_merge_conflicts(
                     "    edit/edit: 3",
                     "",
                 ]
-                + dry_run_message
+                + merging_state_message
             )
 
         else:
@@ -72,9 +77,23 @@ def test_merge_conflicts(
             assert jdict == {
                 "sno.merge/v1": {
                     "branch": "ours_branch",
-                    "ancestor": ancestor.id.hex,
-                    "ours": ours.id.hex,
-                    "theirs": theirs.id.hex,
+                    "commit": ours.id.hex,
+                    "merging": {
+                        "ancestor": {
+                            "commit": ancestor.id.hex,
+                            "abbrevCommit": ancestor.short_id,
+                        },
+                        "ours": {
+                            "branch": "ours_branch",
+                            "commit": ours.id.hex,
+                            "abbrevCommit": ours.short_id,
+                        },
+                        "theirs": {
+                            "branch": "theirs_branch",
+                            "commit": theirs.id.hex,
+                            "abbrevCommit": theirs.short_id,
+                        },
+                    },
                     "dryRun": dry_run,
                     "message": "Merge branch \"theirs_branch\" into ours_branch",
                     "conflicts": {
@@ -82,26 +101,25 @@ def test_merge_conflicts(
                             "featureConflicts": {"add/add": 1, "edit/edit": 3}
                         },
                     },
+                    "state": "merging",
                 },
             }
 
         if not dry_run:
             assert read_repo_file(repo, MERGE_HEAD) == theirs.id.hex + "\n"
+            assert read_repo_file(repo, MERGE_BRANCH) == "theirs_branch\n"
             assert (
                 read_repo_file(repo, MERGE_MSG)
                 == "Merge branch \"theirs_branch\" into ours_branch\n"
             )
-            assert (
-                read_repo_file(repo, MERGE_LABELS)
-                == f'({ancestor.id.hex})\n"ours_branch" ({ours.id.hex})\n"theirs_branch" ({theirs.id.hex})\n'
-            )
+
             merge_index = MergeIndex.read_from_repo(repo)
             assert len(merge_index.conflicts) == 4
             cli_runner.invoke(["merge", "--abort"])
 
         assert not repo_file_exists(repo, MERGE_HEAD)
+        assert not repo_file_exists(repo, MERGE_BRANCH)
         assert not repo_file_exists(repo, MERGE_MSG)
-        assert not repo_file_exists(repo, MERGE_LABELS)
         assert not repo_file_exists(repo, MERGE_INDEX)
 
 
