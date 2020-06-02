@@ -6,9 +6,8 @@ from osgeo import gdal, ogr
 import pygit2
 import pytest
 
-from sno import gpkg
+from sno import gpkg, structure
 from sno.init import OgrImporter
-from sno.structure import DatasetStructure
 from sno.dataset1 import Dataset1
 
 
@@ -42,30 +41,23 @@ GPKG_IMPORTS = (
 
 DATASET_VERSIONS = (
     "import_version",
-    DatasetStructure.version_numbers(),
+    structure.DatasetStructure.version_numbers(),
 )
 
 
 def test_dataset_versions():
-    assert DatasetStructure.version_numbers() == ("1.0",)
-    klasses = DatasetStructure.all_versions()
+    assert structure.DatasetStructure.version_numbers() == ("1.0",)
+    klasses = structure.DatasetStructure.all_versions()
     assert set(klass.VERSION_IMPORT for klass in klasses) == set(
-        DatasetStructure.version_numbers()
+        structure.DatasetStructure.version_numbers()
     )
-
-    di = DatasetStructure.importer("bob", version=None)
-    assert di.__class__.__name__ == "Dataset1"
-    assert di.VERSION_IMPORT == DatasetStructure.DEFAULT_IMPORT_VERSION
-
-    di = DatasetStructure.importer("bob", version="1.0")
-    assert di.__class__.__name__ == "Dataset1"
 
 
 def _import_check(repo_path, table, source_gpkg, geopackage):
     repo = pygit2.Repository(str(repo_path))
     tree = repo.head.peel(pygit2.Tree) / table
 
-    dataset = DatasetStructure.instantiate(tree, table)
+    dataset = structure.DatasetStructure.instantiate(tree, table)
 
     db = geopackage(source_gpkg)
     num_rows = db.cursor().execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
@@ -128,8 +120,8 @@ def test_import(
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
 
-    # wrap the DatasetStructure import with benchmarking
-    orig_import_func = DatasetStructure.fast_import_table
+    # wrap the structure.DatasetStructure import with benchmarking
+    orig_import_func = structure.fast_import_tables
 
     def _benchmark_import(*args, **kwargs):
         # one round/iteration isn't very statistical, but hopefully crude idea
@@ -137,7 +129,7 @@ def test_import(
             orig_import_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
-    monkeypatch.setattr(DatasetStructure, 'fast_import_table', _benchmark_import)
+    monkeypatch.setattr(structure, 'fast_import_tables', _benchmark_import)
 
     with data_archive(archive) as data:
         # list tables
@@ -171,7 +163,6 @@ def test_import(
                     str(data / source_gpkg),
                     f"--version={import_version}",
                     f'--table={table}',
-                    table,
                 ]
             )
             assert r.exit_code == 0, r
@@ -181,7 +172,7 @@ def test_import(
             assert repo.head.shorthand == "master"
 
             # has a single commit
-            assert len([c for c in repo.walk(repo.head.target)]) == 1
+            assert len(list(repo.walk(repo.head.target))) == 1
 
             dataset = _import_check(
                 repo_path, table, f"{data / source_gpkg}", geopackage
@@ -409,7 +400,7 @@ def test_import_from_non_gpkg(
 
         gpkg_repo = pygit2.Repository(str(gpkg_repo_path))
         gpkg_tree = gpkg_repo.head.peel(pygit2.Tree) / table
-        gpkg_dataset = DatasetStructure.instantiate(gpkg_tree, table)
+        gpkg_dataset = structure.DatasetStructure.instantiate(gpkg_tree, table)
 
         # convert to a new format using OGR
         source_filename = tmp_path / f"data.{source_format.lower()}"
@@ -431,7 +422,12 @@ def test_import_from_non_gpkg(
 
             # Import from SHP/TAB/something into sno
             r = cli_runner.invoke(
-                ["import", str(source_filename), f"--version={import_version}", table]
+                [
+                    "import",
+                    str(source_filename),
+                    f"--version={import_version}",
+                    f"--table=data:{table}",
+                ]
             )
             assert r.exit_code == 0, r
 
@@ -452,7 +448,7 @@ def test_import_from_non_gpkg(
             # Compare the meta items to the GPKG-imported ones
             repo = pygit2.Repository(str(repo_path))
             tree = repo.head.peel(pygit2.Tree) / table
-            dataset = DatasetStructure.instantiate(tree, table)
+            dataset = structure.DatasetStructure.instantiate(tree, table)
 
             _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
 
@@ -502,7 +498,7 @@ def test_shp_import_meta(
         path = "nz_waca_adjustments"
         repo = pygit2.Repository(str(repo_path))
         tree = repo.head.peel(pygit2.Tree) / path
-        dataset = DatasetStructure.instantiate(tree, path)
+        dataset = structure.DatasetStructure.instantiate(tree, path)
 
         meta_items = dict(dataset.iter_meta_items())
         assert set(meta_items) == {
@@ -606,7 +602,7 @@ def test_feature_find_decode_performance(
     path = "mytable"
     tree = repo.head.peel(pygit2.Tree) / path
 
-    dataset = DatasetStructure.instantiate(tree, path)
+    dataset = structure.DatasetStructure.instantiate(tree, path)
     assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
     assert dataset.version == import_version
 
@@ -731,7 +727,9 @@ def test_write_feature_performance(
 
             source = OgrImporter.open(data / source_gpkg, table=table)
             with source:
-                dataset = DatasetStructure.for_version(import_version)(None, table)
+                dataset = structure.DatasetStructure.for_version(import_version)(
+                    None, table
+                )
                 feature_iter = itertools.cycle(source.iter_features())
 
                 index = pygit2.Index()
@@ -768,14 +766,13 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
 
             source = OgrImporter.open(data / "nz-pa-points-topo-150k.gpkg", table=table)
 
-            dataset = DatasetStructure.for_version(import_version)(None, table)
-            dataset.fast_import_table(repo, source)
+            structure.fast_import_tables(repo, {table: source}, version=import_version)
 
             assert not repo.is_empty
             assert repo.head.name == "refs/heads/master"
             assert repo.head.shorthand == "master"
 
-            dataset.tree = repo.head.peel(pygit2.Tree) / table
+            dataset = structure.RepositoryStructure(repo)[table]
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1

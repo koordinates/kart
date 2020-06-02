@@ -12,7 +12,7 @@ from osgeo import gdal, ogr
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
-from .cli_util import call_and_exit_flag
+from .cli_util import call_and_exit_flag, MutexOption
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -151,6 +151,11 @@ class OgrImporter:
         self.source = source
         self.ogr_source = ogr_source
 
+    def clone_for_table(self, table):
+        return self.__class__(
+            self.ds, table=table, source=self.source, ogr_source=self.ogr_source
+        )
+
     @property
     @functools.lru_cache(maxsize=1)
     def ogrlayer(self):
@@ -205,25 +210,16 @@ class OgrImporter:
             s += f":{self.table}"
         return s
 
-    def check_table(self, prompt=False):
-        if not self.table:
-            if prompt:
-                # this re-inits and re-checks with the new table
-                self.table = self.prompt_for_table("Select a table to import")
-            else:
-                raise NotFound(
-                    "No table specified", exit_code=NO_TABLE, param_hint="--table"
-                )
-
-        if self.table not in self.get_tables():
+    def check_table(self, table_name):
+        if table_name not in self.get_tables():
             raise NotFound(
-                f"Table '{self.table}' not found",
+                f"Table '{table_name}' not found",
                 exit_code=NO_TABLE,
                 param_hint="--table",
             )
 
     def __enter__(self):
-        self.check_table()
+        self.check_table(self.table)
 
         if self.ds.TestCapability(ogr.ODsCTransactions):
             self.ds.StartTransaction()
@@ -522,24 +518,59 @@ def list_import_formats(ctx):
         click.echo(n)
 
 
+def get_table_names_map(tables):
+    names_map = {
+        # dst_table: src_table
+    }
+    for table in tables:
+        (src_table, *rest) = table.split(':', 1)
+        dst_table = rest[0] if rest else src_table
+        if not dst_table:
+            raise click.BadParameter("Invalid table name", param_hint="tables")
+        if is_windows:
+            dst_table = dst_table.replace("\\", "/")  # git paths use / as a delimiter
+
+        if dst_table in names_map:
+            raise InvalidOperation(
+                f'table "{dst_table}" was specified more than once', param_hint="tables"
+            )
+        names_map[dst_table] = src_table
+    return names_map
+
+
 @click.command("import")
 @click.pass_context
 @click.argument("source")
-@click.argument(
-    "directory",
-    type=click.Path(file_okay=False, exists=False, resolve_path=True),
-    required=False,
-)
 @click.option(
+    "tables",
     "--table",
     "-t",
-    help="Which table to import. If not specified, this will be selected interactively",
+    multiple=True,
+    help=(
+        "Which table to import (can specify more than one). "
+        "If not specified, this will be selected interactively"
+    ),
+    cls=MutexOption,
+    exclusive_with=["do_list", "all_tables"],
+)
+@click.option(
+    "--all-tables",
+    "-a",
+    help="Import all tables from the source.",
+    is_flag=True,
+    cls=MutexOption,
+    exclusive_with=["do_list", "tables"],
 )
 @click.option(
     "--message", "-m", help="Commit message. By default this is auto-generated.",
 )
 @click.option(
-    "--list", "do_list", is_flag=True, help="List all tables present in the source path"
+    "--list",
+    "do_list",
+    is_flag=True,
+    help="List all tables present in the source path",
+    cls=MutexOption,
+    exclusive_with=["all_tables", "tables"],
 )
 @click.option(
     "--version",
@@ -556,7 +587,7 @@ def list_import_formats(ctx):
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
 def import_table(
-    ctx, source, directory, table, message, do_list, output_format, version
+    ctx, source, tables, all_tables, message, do_list, output_format, version
 ):
     """
     Import data into a repository.
@@ -577,38 +608,33 @@ def import_table(
 
     use_repo_ctx = not do_list
     if use_repo_ctx:
-        repo_path = ctx.obj.repo_path
         repo = ctx.obj.repo
         check_git_user(repo)
 
-    source_loader = OgrImporter.open(source, table)
+    source_loader = OgrImporter.open(source, None)
 
     if do_list:
         source_loader.print_table_list(do_json=output_format == 'json')
         return
-
-    source_loader.check_table(prompt=True)
-
-    if directory:
-        directory = os.path.relpath(directory, os.path.abspath(repo_path))
-        if not directory:
-            raise click.BadParameter("Invalid import directory", param_hint="directory")
-        if is_windows:
-            directory = directory.replace("\\", "/")  # git paths use / as a delimiter
+    elif all_tables:
+        tables = source_loader.get_tables().keys()
     else:
-        directory = source_loader.table
+        if not tables:
+            tables = [source_loader.prompt_for_table("Select a table to import")]
 
-    importer = structure.DatasetStructure.importer(directory, version=version)
-    params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
-    if params:
-        click.echo(f"Import parameters: {params}")
-    importer.fast_import_table(repo, source_loader, message=message, **params)
+    names_map = get_table_names_map(tables)
+    loaders = {
+        dst_table: source_loader.clone_for_table(src_table)
+        for dst_table, src_table in names_map.items()
+    }
 
+    structure.fast_import_tables(repo, loaders, message=message, version=version)
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
-        # Update working copy with new dataset
-        dataset = rs[directory]
-        rs.working_copy.write_full(rs.head_commit, dataset)
+        # Update working copy with new datasets
+        for dst_table in names_map:
+            dataset = rs[dst_table]
+            rs.working_copy.write_full(rs.head_commit, dataset)
 
 
 @click.command()
@@ -619,9 +645,24 @@ def import_table(
     help='Import from data: "FORMAT:PATH" eg. "GPKG:my.gpkg"',
 )
 @click.option(
+    "tables",
     "--table",
     "-t",
-    help="Which table to import. If not specified, this will be selected interactively",
+    multiple=True,
+    help=(
+        "Which table to import (can specify more than one). "
+        "If not specified, this will be selected interactively"
+    ),
+    cls=MutexOption,
+    exclusive_with=["do_list", "all_tables"],
+)
+@click.option(
+    "--all-tables",
+    "-a",
+    help="Import all tables from the source.",
+    is_flag=True,
+    cls=MutexOption,
+    exclusive_with=["do_list", "tables"],
 )
 @click.option(
     "--checkout/--no-checkout",
@@ -644,7 +685,9 @@ def import_table(
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
 )
-def init(ctx, import_from, table, do_checkout, message, directory, version):
+def init(
+    ctx, import_from, tables, all_tables, do_checkout, message, directory, version
+):
     """
     Initialise a new repository and optionally import data
 
@@ -655,9 +698,13 @@ def init(ctx, import_from, table, do_checkout, message, directory, version):
     """
     if import_from:
         check_git_user(repo=None)
+        source_loader = OgrImporter.open(import_from, None)
 
-        source_loader = OgrImporter.open(import_from, table)
-        source_loader.check_table(prompt=True)
+        if all_tables:
+            tables = source_loader.get_tables().keys()
+        else:
+            if not tables:
+                tables = [source_loader.prompt_for_table("Select a table to import")]
 
     if directory is None:
         directory = os.curdir
@@ -672,19 +719,18 @@ def init(ctx, import_from, table, do_checkout, message, directory, version):
     repo = pygit2.init_repository(str(repo_path), bare=True)
 
     if import_from:
-        importer = structure.DatasetStructure.importer(
-            source_loader.table, version=version
-        )
-        params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
-        if params:
-            click.echo(f"Import parameters: {params}")
-        importer.fast_import_table(repo, source_loader, message=message, **params)
+        names_map = get_table_names_map(tables)
+        loaders = {
+            dst_table: source_loader.clone_for_table(src_table)
+            for dst_table, src_table in names_map.items()
+        }
+        structure.fast_import_tables(repo, loaders, message=message, version=version)
 
         if do_checkout:
             # Checkout a working copy
             wc_path = repo_path / f"{repo_path.stem}.gpkg"
 
-            click.echo(f"Checkout {source_loader.table} to {wc_path} as GPKG ...")
+            click.echo(f"Checkout to {wc_path} as GPKG ...")
 
             checkout.checkout_new(
                 repo_structure=structure.RepositoryStructure(repo),

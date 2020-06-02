@@ -55,7 +55,7 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
         assert r.exit_code == 0, r
         lines = r.stdout.splitlines()
         assert len(lines) >= 2
-        assert "to nz_pa_points_topo_150k/ ..." in lines[0]
+        assert "to nz_pa_points_topo_150k/ ..." in lines[1]
         assert "Commit: " in lines[-1]
 
 
@@ -330,61 +330,35 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
 
 
 @pytest.mark.slow
-def test_init_import_errors(data_archive, tmp_path, cli_runner):
+def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
     gpkg = "census2016_sdhca_ot_short.gpkg"
     table = "census2016_sdhca_ot_ra_short"
 
     with data_archive("gpkg-au-census") as data:
-        # list tables
         repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
+        with chdir(repo_path):
+            r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
+            assert r.exit_code == NO_IMPORT_SOURCE, r
+            assert "fred:thingz' doesn't appear to be valid" in r.stderr
 
-        r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
-        assert r.exit_code == NO_IMPORT_SOURCE, r
-        assert "fred:thingz' doesn't appear to be valid" in r.stderr
+            r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
+            assert r.exit_code == NO_IMPORT_SOURCE, r
+            assert "Couldn't find 'thingz.gpkg'" in r.stderr
 
-        r = cli_runner.invoke(["init", "--import", f"gpkg:thingz.gpkg"])
-        assert r.exit_code == NO_IMPORT_SOURCE, r
-        assert "Couldn't find 'thingz.gpkg'" in r.stderr
+            r = cli_runner.invoke(
+                ["init", "--import", f"gpkg:{data/gpkg}", f"--table=no-existey"]
+            )
+            assert r.exit_code == NO_TABLE, r
+            assert "Invalid value for --table: Table 'no-existey' not found" in r.stderr
 
-        r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data/gpkg}", f"--table=no-existey"]
-        )
-        assert r.exit_code == NO_TABLE, r
-        assert "Invalid value for --table: Table 'no-existey' not found" in r.stderr
-
-        # not empty
-        (repo_path / "a.file").touch()
-        r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data/gpkg}", f"--table={table}", repo_path]
-        )
-        assert r.exit_code == INVALID_OPERATION, r
-        assert "isn't empty" in r.stderr
-
-        # import
-        repo_path = tmp_path / "data2.sno"
-        repo_path.mkdir()
-
-        r = cli_runner.invoke(
-            [
-                "init",
-                "--import",
-                f"gpkg:{data / gpkg}",
-                f"--table={table}",
-                repo_path,
-                "--no-checkout",
-            ]
-        )
-        assert r.exit_code == 0, r
-        assert (repo_path / "HEAD").exists()
-        assert not (repo_path / f"{repo_path.stem}.gpkg").exists()
-
-        # existing repo/dir
-        r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data / gpkg}", f"--table={table}", repo_path]
-        )
-        assert r.exit_code == INVALID_OPERATION, r
-        assert "isn't empty" in r.stderr
+            # not empty
+            (repo_path / "a.file").touch()
+            r = cli_runner.invoke(
+                ["init", "--import", f"gpkg:{data/gpkg}", f"--table={table}", repo_path]
+            )
+            assert r.exit_code == INVALID_OPERATION, r
+            assert "isn't empty" in r.stderr
 
 
 def test_init_empty(tmp_path, cli_runner, chdir):
@@ -463,8 +437,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
                     [
                         "import",
                         f"GPKG:{source_path / source_gpkg}",
-                        f"--table={source_table}",
-                        import_path,
+                        f"--table={source_table}:{import_path}",
                     ]
                 )
                 assert r.exit_code == 0, r
@@ -581,8 +554,7 @@ def test_import_existing_wc(
                 [
                     "import",
                     f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
-                    f"--table={H.POLYGONS.LAYER}",
-                    "waca2",
+                    f"--table={H.POLYGONS.LAYER}:waca2",
                 ]
             )
             assert r.exit_code == 0, r
