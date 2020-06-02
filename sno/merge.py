@@ -17,8 +17,8 @@ from .repo_files import (
     write_repo_file,
     read_repo_file,
     remove_all_merge_repo_files,
-    is_ongoing_merge,
     repo_file_exists,
+    RepoState,
 )
 
 from .structs import CommitWithReference
@@ -106,6 +106,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     L.debug(f"Merge tree: {merge_tree_id}")
 
     user = repo.default_signature
+    # TODO - let user edit merge message.
     merge_commit_id = repo.create_commit(
         repo.head.name, user, user, merge_message, merge_tree_id, [ours.id, theirs.id],
     )
@@ -124,15 +125,12 @@ def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     merge_index - the MergeIndex containing the conflicts found.
     merge_context - the MergeContext object for the merge.
     merge_message - the commit message for when the merge is completed.
-    ancestor, ours, theirs - CommitWithReference objects.
     """
-    if is_ongoing_merge(repo):
-        raise InvalidOperation("A merge is already ongoing")
-
-    # These are specific to sno repositories
+    assert RepoState.get_state(repo) != RepoState.MERGING
     merge_index.write_to_repo(repo)
     merge_context.write_to_repo(repo)
     write_repo_file(repo, MERGE_MSG, merge_message)
+    assert RepoState.get_state(repo) == RepoState.MERGING
 
 
 def abort_merging_state(ctx):
@@ -140,14 +138,18 @@ def abort_merging_state(ctx):
     Put things back how they were before the merge began.
     Tries to be robust against failure, in case the user has messed up the repo's state.
     """
-    repo = ctx.obj.repo
+    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
     is_ongoing_merge = repo_file_exists(repo, MERGE_HEAD)
     # If we are in a merge, we now need to delete all the MERGE_* files.
     # If we are not in a merge, we should clean them up anyway.
     remove_all_merge_repo_files(repo)
+    assert RepoState.get_state(repo) != RepoState.MERGING
 
     if not is_ongoing_merge:
-        raise InvalidOperation('Repository is not in "merging" state.')
+        message = RepoState.bad_state_message(
+            RepoState.NORMAL, [RepoState.MERGING], command_extra="--abort"
+        )
+        raise InvalidOperation(message)
 
 
 def complete_merging_state(ctx):
@@ -156,18 +158,22 @@ def complete_merging_state(ctx):
     moves the repo from merging state back into the normal state, with the branch
     HEAD now at the merge commit. Only works if all conflicts have been resolved.
     """
-    repo = ctx.obj.repo
-    if not is_ongoing_merge(repo):
-        raise InvalidOperation('Repository is not in "merging" state.')
+    repo = ctx.obj.get_repo(
+        allowed_states=[RepoState.MERGING], command_extra="--continue",
+    )
     merge_index = MergeIndex.read_from_repo(repo)
     if merge_index.unresolved_conflicts:
         raise InvalidOperation(
-            "Merge cannot be completed until conflicts are resolved."
+            "Merge cannot be completed until all conflicts are resolved - see `sno conflicts`."
         )
 
     merge_context = MergeContext.read_from_repo(repo)
     commit_ids = merge_context.versions.map(lambda v: v.repo_structure.id)
-    merge_message = read_repo_file(repo, MERGE_MSG)
+
+    # TODO - let user edit merge message.
+    merge_message = read_repo_file(repo, MERGE_MSG, missing_ok=True)
+    if not merge_message:
+        merge_message = merge_context.get_message()
 
     merge_tree_id = merge_index.write_resolved_tree(repo)
     L.debug(f"Merge tree: {merge_tree_id}")
@@ -297,11 +303,10 @@ def output_merge_json_as_text(jdict):
 def merge(ctx, ff, ff_only, dry_run, do_json, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
 
-    repo = ctx.obj.repo
-    if is_ongoing_merge(repo):
-        raise InvalidOperation(
-            "A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`"
-        )
+    repo = ctx.obj.get_repo(
+        allowed_states=[RepoState.NORMAL],
+        bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
+    )
 
     merge_jdict = do_merge(repo, ff, ff_only, dry_run, commit)
     no_op = merge_jdict.get("noOp", False) or merge_jdict.get("dryRun", False)
