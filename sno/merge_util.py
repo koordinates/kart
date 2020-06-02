@@ -5,7 +5,6 @@ import re
 import pygit2
 
 from .diff_output import text_row, json_row, geojson_row
-from .exceptions import InvalidOperation
 from .repo_files import (
     MERGE_HEAD,
     MERGE_INDEX,
@@ -491,7 +490,7 @@ class MergeContext:
         branches3 = AncestorOursTheirs(
             None,
             head.branch_shorthand,
-            read_repo_file(repo, MERGE_BRANCH, missing_ok=True),
+            read_repo_file(repo, MERGE_BRANCH, missing_ok=True, strip=True),
         )
 
         return cls._zip_together(repo, commit_ids3, short_ids3, branches3)
