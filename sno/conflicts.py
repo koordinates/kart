@@ -4,10 +4,10 @@ import sys
 import click
 
 from .cli_util import MutexOption
-from .exceptions import InvalidOperation, SUCCESS, SUCCESS_WITH_FLAG
+from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
-from .repo_files import is_ongoing_merge
+from .repo_files import RepoState
 
 
 L = logging.getLogger("sno.conflicts")
@@ -242,10 +242,7 @@ def conflicts_json_as_text(json_obj):
 def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
     """ Lists merge conflicts that need to be resolved before the ongoing merge can be completed. """
 
-    repo = ctx.obj.repo
-    if not is_ongoing_merge(repo):
-        raise InvalidOperation("Cannot list conflicts - there is no ongoing merge")
-
+    repo = ctx.obj.get_repo(allowed_states=[RepoState.MERGING])
     merge_index = MergeIndex.read_from_repo(repo)
 
     if output_format == "quiet":

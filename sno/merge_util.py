@@ -10,7 +10,6 @@ from .repo_files import (
     MERGE_HEAD,
     MERGE_INDEX,
     MERGE_BRANCH,
-    is_ongoing_merge,
     read_repo_file,
     write_repo_file,
     remove_repo_file,
@@ -474,9 +473,6 @@ class MergeContext:
 
     @classmethod
     def read_from_repo(cls, repo):
-        if not is_ongoing_merge(repo):
-            raise InvalidOperation("Repository is not in 'merging' state")
-
         # HEAD is assumed to be our side of the merge. MERGE_HEAD (and MERGE_INDEX)
         # are not version controlled, but are simply files in the repo. For these
         # reasons, the user should not be able to change branch mid merge.

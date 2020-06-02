@@ -2,8 +2,8 @@ import click
 
 from .cli_util import MutexOption
 from .merge_util import MergedOursTheirs, MergeIndex, MergeContext, RichConflict
-from .repo_files import is_ongoing_merge
 from .exceptions import InvalidOperation, NotFound, NO_CONFLICT
+from .repo_files import RepoState
 
 
 @click.command()
@@ -45,19 +45,21 @@ from .exceptions import InvalidOperation, NotFound, NO_CONFLICT
 def resolve(ctx, resolve_to_version, conflict_label):
     """Resolve a merge conflict. So far only supports resolving to any of the three existing versions."""
 
-    repo = ctx.obj.repo
-    if not is_ongoing_merge(repo):
-        raise InvalidOperation("Cannot resolve conflicts - there is no ongoing merge")
-
+    repo = ctx.obj.get_repo(allowed_states=[RepoState.MERGING])
     if not resolve_to_version:
         raise click.UsageError("Resolve with either --ancestor, --ours or --theirs")
 
     merge_index = MergeIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
 
-    for key, conflict3 in merge_index.unresolved_conflicts.items():
+    for key, conflict3 in merge_index.conflicts.items():
         rich_conflict = RichConflict(conflict3, merge_context)
         if rich_conflict.label == conflict_label:
+            if key in merge_index.resolves:
+                raise InvalidOperation(
+                    f"Conflict at {conflict_label} is already resolved"
+                )
+
             if resolve_to_version == "delete":
                 res = MergedOursTheirs.EMPTY
             else:
@@ -70,8 +72,5 @@ def resolve(ctx, resolve_to_version, conflict_label):
                 f"Resolved 1 conflict. {len(merge_index.unresolved_conflicts)} conflicts to go."
             )
             ctx.exit(0)
-
-    if key in merge_index.conflicts:
-        raise InvalidOperation(f"Conflict at {conflict_label} is already resolved")
 
     raise NotFound(f"No conflict found at {conflict_label}", NO_CONFLICT)

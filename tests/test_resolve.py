@@ -41,7 +41,7 @@ def test_resolve_conflicts(create_conflicts, cli_runner):
             pk = conflict_id.split("=", 1)[1]
             pk_order += [pk]
 
-            cli_runner.invoke(["resolve", conflict_id, next(resolutions)])
+            r = cli_runner.invoke(["resolve", conflict_id, next(resolutions)])
             assert r.exit_code == 0, r
             conflict_ids = get_conflict_ids(cli_runner)
             assert len(conflict_ids) == num_conflicts - 1
