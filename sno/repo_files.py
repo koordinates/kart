@@ -71,11 +71,14 @@ def user_edit_repo_file(repo, filename):
         ) from e
 
 
-def read_repo_file(repo, filename, missing_ok=False):
+def read_repo_file(repo, filename, missing_ok=False, strip=False):
     path = repo_file_path(repo, filename)
     if missing_ok and not path.exists():
         return None
-    return path.read_text(encoding="utf-8")
+    result = path.read_text(encoding="utf-8")
+    if strip:
+        result = result.strip()
+    return result
 
 
 def remove_repo_file(repo, filename, missing_ok=True):

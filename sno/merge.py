@@ -206,62 +206,85 @@ def complete_merging_state(ctx):
         wc.reset(merge_commit, repo_structure)
 
     # TODO - support json output
-    output_merge_json_as_text(merge_jdict)
+    click.echo(merge_status_to_text(merge_jdict, fresh=True))
 
 
-def output_merge_json_as_text(jdict):
-    theirs = jdict["merging"]["theirs"]
-    ours = jdict["merging"]["ours"]
+def merge_context_to_text(jdict):
+    theirs = jdict["theirs"]
+    ours = jdict["ours"]
     theirs_branch = theirs.get("branch", None)
     theirs_desc = (
         f'branch "{theirs_branch}"' if theirs_branch else theirs["abbrevCommit"]
     )
     ours_desc = ours.get("branch", None) or ours["abbrevCommit"]
-    click.echo(f"Merging {theirs_desc} into {ours_desc}")
+    return f"Merging {theirs_desc} into {ours_desc}"
+
+
+def merge_status_to_text(jdict, fresh):
+    """
+    Converts the json output of sno merge (or of sno status, which uses
+    the same format during a merge) to text output.
+
+    jdict - the dictionary of json output.
+    fresh - True if we just arrived in this state due to a merge command,
+            False if the user is just checking the current state.
+    """
+    merging_text = merge_context_to_text(jdict["merging"])
 
     if jdict.get("noOp", False):
-        click.echo("Already up to date")
-        return
+        return merging_text + "\nAlready up to date"
 
     dry_run = jdict.get("dryRun", False)
     commit = jdict.get("commit", None)
 
     if jdict.get("fastForward", False):
         if dry_run:
-            click.echo(
+            ff_text = (
                 f"Can fast-forward to {commit}\n"
                 "(Not actually fast-forwarding due to --dry-run)",
             )
         else:
-            click.echo(f"Fast-forwarded to {commit}")
-        return
+            ff_text = f"Fast-forwarded to {commit}"
+        return "\n".join([merging_text, ff_text])
 
     conflicts = jdict.get("conflicts", None)
     if not conflicts:
         if dry_run:
-            click.echo(
+            no_conflicts_text = (
                 "No conflicts: merge will succeed!\n"
                 "(Not actually merging due to --dry-run)"
             )
         else:
-            click.echo(f"No conflicts!\nMerge commited as {commit}")
-        return
+            no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
+        return "\n".join([merging_text, no_conflicts_text])
 
-    click.echo("Conflicts found:\n")
-    click.echo(conflicts_json_as_text(conflicts))
+    conflicts_header = "Conflicts found:" if fresh else "Conflicts:"
+    conflicts_text = "\n\n".join([conflicts_header, conflicts_json_as_text(conflicts)])
 
     if dry_run:
-        click.echo("(Not actually merging due to --dry-run)")
+        dry_run_text = "(Not actually merging due to --dry-run)"
+        return "\n".join([merging_text, conflicts_text, dry_run_text])
+
+    conflicts_help_text = (
+        "View conflicts with `sno conflicts` and resolve them with `sno resolve`.\n"
+        "Once no conflicts remain, complete this merge with `sno merge --continue`.\n"
+        "Or use `sno merge --abort` to return to the previous state."
+    )
+    is_in = "is now in" if fresh else "is in"
+    repo_state_text = f'Repository {is_in} "merging" state.'
+
+    if fresh:
+        # When the user performs a merge, we format the output as follows:
+        # 1. Merging X and Y. 2. Conflicts found: XYZ. 3. Repo is now in merging state.
+        return "\n".join(
+            [merging_text, conflicts_text, repo_state_text, conflicts_help_text]
+        )
     else:
-        # TODO: explain how to resolve conflicts, when this is possible
-        click.echo('Repository is now in "merging" state.')
-        click.echo(
-            "View conflicts with `sno conflicts` and resolve them with `sno resolve`."
+        # When the user requests the current status, we format the output as follows:
+        # 1. Repo is in merging state. 2. Merging X and Y. 3. Conflicts: XYZ.
+        return "\n".join(
+            [repo_state_text, merging_text, conflicts_text, conflicts_help_text]
         )
-        click.echo(
-            "Once no conflicts remain, complete this merge with `sno merge --continue`."
-        )
-        click.echo("Or use `sno merge --abort` to return to the previous state.")
 
 
 @click.command()
@@ -308,9 +331,9 @@ def merge(ctx, ff, ff_only, dry_run, do_json, commit):
         bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
     )
 
-    merge_jdict = do_merge(repo, ff, ff_only, dry_run, commit)
-    no_op = merge_jdict.get("noOp", False) or merge_jdict.get("dryRun", False)
-    conflicts = merge_jdict.get("conflicts", None)
+    jdict = do_merge(repo, ff, ff_only, dry_run, commit)
+    no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)
+    conflicts = jdict.get("conflicts", None)
 
     if not no_op and not conflicts:
         # Update working copy.
@@ -319,11 +342,10 @@ def merge(ctx, ff, ff_only, dry_run, do_json, commit):
         wc = repo_structure.working_copy
         if wc:
             L.debug(f"Updating {wc.path} ...")
-            merge_commit = repo[merge_jdict["commit"]]
+            merge_commit = repo[jdict["commit"]]
             wc.reset(merge_commit, repo_structure)
 
     if do_json:
-        jdict = {"sno.merge/v1": merge_jdict}
-        dump_json_output(jdict, sys.stdout)
+        dump_json_output({"sno.merge/v1": jdict}, sys.stdout)
     else:
-        output_merge_json_as_text(merge_jdict)
+        click.echo(merge_status_to_text(jdict, fresh=True))

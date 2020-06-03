@@ -4,6 +4,8 @@ import subprocess
 import pytest
 
 from sno.exceptions import NO_REPOSITORY
+from sno.repo_files import RepoState
+from sno.structs import CommitWithReference
 
 
 H = pytest.helpers.helpers()
@@ -259,3 +261,62 @@ def test_status_none(tmp_path, cli_runner, chdir):
             r.stderr.splitlines()[-1]
             == "Error: Current directory is not an existing repository"
         )
+
+
+def test_status_merging(create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS) as repo:
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r
+
+        assert RepoState.get_state(repo) == RepoState.MERGING
+        assert text_status(cli_runner) == [
+            "On branch ours_branch",
+            "",
+            'Repository is in "merging" state.',
+            'Merging branch "theirs_branch" into ours_branch',
+            "Conflicts:",
+            "",
+            "nz_pa_points_topo_150k:",
+            "  Feature conflicts:",
+            "    add/add: 1",
+            "    edit/edit: 3",
+            "",
+            "",
+            "View conflicts with `sno conflicts` and resolve them with `sno resolve`.",
+            "Once no conflicts remain, complete this merge with `sno merge --continue`.",
+            "Or use `sno merge --abort` to return to the previous state.",
+        ]
+
+        ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
+        ours = CommitWithReference.resolve(repo, "ours_branch")
+        theirs = CommitWithReference.resolve(repo, "theirs_branch")
+        assert json_status(cli_runner) == {
+            'sno.status/v1': {
+                "abbrevCommit": ours.short_id,
+                "commit": ours.id.hex,
+                "branch": "ours_branch",
+                "upstream": None,
+                "state": "merging",
+                "merging": {
+                    "ancestor": {
+                        "abbrevCommit": ancestor.short_id,
+                        "commit": ancestor.id.hex,
+                    },
+                    "ours": {
+                        "abbrevCommit": ours.short_id,
+                        "commit": ours.id.hex,
+                        "branch": "ours_branch",
+                    },
+                    "theirs": {
+                        "abbrevCommit": theirs.short_id,
+                        "commit": theirs.id.hex,
+                        "branch": "theirs_branch",
+                    },
+                },
+                "conflicts": {
+                    "nz_pa_points_topo_150k": {
+                        "featureConflicts": {"add/add": 1, "edit/edit": 3}
+                    }
+                },
+            }
+        }
