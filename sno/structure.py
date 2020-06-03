@@ -483,7 +483,6 @@ class DatasetStructure:
                 ],
                 cwd=repo.path,
                 stdin=subprocess.PIPE,
-                bufsize=1,  # line
             )
 
             user = repo.default_signature
