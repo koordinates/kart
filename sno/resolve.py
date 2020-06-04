@@ -1,7 +1,7 @@
 import click
 
 from .cli_util import MutexOption
-from .merge_util import MergedOursTheirs, MergeIndex, MergeContext, RichConflict
+from .merge_util import MergeIndex, MergeContext, RichConflict
 from .exceptions import InvalidOperation, NotFound, NO_CONFLICT
 from .repo_files import RepoState
 
@@ -61,11 +61,15 @@ def resolve(ctx, resolve_to_version, conflict_label):
                 )
 
             if resolve_to_version == "delete":
-                res = MergedOursTheirs.EMPTY
+                res = []
             else:
-                res = MergedOursTheirs.partial(
-                    merged=getattr(conflict3, resolve_to_version)
-                )
+                res = [getattr(conflict3, resolve_to_version)]
+                if res == [None]:
+                    click.echo(
+                        f'Version "{resolve_to_version}" does not exist - resolving conflict by deleting.'
+                    )
+                    res = []
+
             merge_index.add_resolve(key, res)
             merge_index.write_to_repo(repo)
             click.echo(

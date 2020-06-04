@@ -67,50 +67,6 @@ class AncestorOursTheirs(namedtuple("AncestorOursTheirs", _ANCESTOR_OURS_THEIRS_
 AncestorOursTheirs.EMPTY = AncestorOursTheirs(None, None, None)
 
 
-_MERGED_OURS_THEIRS_ORDER = ("merged", "ours", "theirs")
-
-
-class MergedOursTheirs(namedtuple("MergedOursTheirs", _MERGED_OURS_THEIRS_ORDER)):
-    """
-    When resolving a conflict, there can also be multiple versions. Possible versions are
-    the "merged" version - the version that contains both "our" changes and "their" changes -
-    but also a resolved "ours" and "theirs" version, in the case that both versions should
-    be preserved in some form to complete the merge.
-    Having all 3 versions is generally not required, but is allowed by this class.
-    """
-
-    NAMES = _MERGED_OURS_THEIRS_ORDER
-
-    @staticmethod
-    def partial(*, merged=None, ours=None, theirs=None):
-        """Supply some or all keyword arguments: merged, ours, theirs"""
-        return MergedOursTheirs(merged, ours, theirs)
-
-    def __or__(self, other):
-        # We don't allow any field to be set twice
-        assert not self.merged or not other.merged
-        assert not self.ours or not other.ours
-        assert not self.theirs or not other.theirs
-        result = MergedOursTheirs(
-            merged=self.merged or other.merged,
-            ours=self.ours or other.ours,
-            theirs=self.theirs or other.theirs,
-        )
-        return result
-
-    def map(self, fn, skip_nones=True):
-        actual_fn = fn
-        if skip_nones:
-            actual_fn = lambda x: fn(x) if x else None
-        return MergedOursTheirs(*map(actual_fn, self))
-
-    def as_dict(self):
-        return dict(zip(self.NAMES, self))
-
-
-MergedOursTheirs.EMPTY = MergedOursTheirs(None, None, None)
-
-
 class MergeIndex:
     """
     Like a pygit2.Index, but every conflict has a short key independent of its path,
@@ -207,7 +163,7 @@ class MergeIndex:
             yield from self._serialise_conflict(key, conflict3)
 
     _CONFLICT_PATTERN = re.compile(
-        r"^.conflicts/(?P<key>.+?)/(?P<version>ancestor|ours|theirs)/(?P<path>.+)$"
+        r"^.conflicts/(?P<key>[^/]+)/(?P<version>ancestor|ours|theirs)/(?P<path>.+)$"
     )
 
     @classmethod
@@ -244,42 +200,37 @@ class MergeIndex:
 
     @classmethod
     def _serialise_resolve(cls, key, resolve):
-        if resolve == MergedOursTheirs.EMPTY:
-            yield cls.Entry(f".resolves/{key}/deleted", cls._EMPTY_OID, cls._EMPTY_MODE)
-            return
+        # We always yield at least one entry per resolve, even when the resolve
+        # has no features - otherwise it would appear to be unresolved.
+        yield cls.Entry(f".resolves/{key}/resolved", cls._EMPTY_OID, cls._EMPTY_MODE)
 
-        for version, entry in zip(MergedOursTheirs.NAMES, resolve):
-            if not entry:
-                continue
-            result_path = f".resolves/{key}/{version}/{entry.path}"
+        for i, entry in enumerate(resolve):
+            result_path = f".resolves/{key}/{i}/{entry.path}"
             yield cls.Entry(result_path, entry.id, entry.mode)
 
     def _serialise_resolves(self):
         for key, resolve3 in self.resolves.items():
             yield from self._serialise_resolve(key, resolve3)
 
-    _RESOLVE_PATTERN = re.compile(
-        r"^.resolves/(?P<key>.+?)/(?P<version>merged|ours|theirs)/(?P<path>.+)$"
+    _RESOLVED_PATTERN = re.compile(r"^.resolves/(?P<key>.+?)/resolved$")
+    _RESOLVE_PART_PATTERN = re.compile(
+        r"^.resolves/(?P<key>[^/]+)/(?P<i>[^/]+)/(?P<path>.+)$"
     )
-
-    _RESOLVE_DELETE_PATTERN = re.compile(r"^.resolves/(?P<key>.+?)/delete")
 
     @classmethod
     def _deserialise_resolve_part(cls, index_entry):
-        match = cls._RESOLVE_DELETE_PATTERN.match(index_entry.path)
+        match = cls._RESOLVED_PATTERN.match(index_entry.path)
         if match:
             return match.group("key"), None
 
-        match = cls._RESOLVE_PATTERN.match(index_entry.path)
+        match = cls._RESOLVE_PART_PATTERN.match(index_entry.path)
         if not match:
             raise RuntimeError(f"Couldn't deserialise resolve: {index_entry.path}")
 
         key = match.group("key")
-        version = match.group("version")
         result_path = match.group("path")
         result_entry = cls.Entry(result_path, index_entry.id, index_entry.mode)
-        result = MergedOursTheirs.partial(**{version: result_entry})
-        return key, result
+        return key, result_entry
 
     def _resolves_entries(self):
         """All the entries in all the resolves."""
@@ -308,9 +259,9 @@ class MergeIndex:
                 conflicts[key] |= conflict_part
             elif e.path.startswith(".resolves/"):
                 key, resolve_part = cls._deserialise_resolve_part(e)
-                resolves.setdefault(key, MergedOursTheirs.EMPTY)
+                resolves.setdefault(key, [])
                 if resolve_part:
-                    resolves[key] |= resolve_part
+                    resolves[key] += [resolve_part]
             else:
                 entries[e.path] = cls._ensure_entry(e)
 
@@ -394,18 +345,7 @@ class MergeIndex:
 
     @classmethod
     def _ensure_resolve(cls, resolve):
-        if isinstance(resolve, MergedOursTheirs):
-            return resolve
-        elif isinstance(resolve, tuple):
-            return AncestorOursTheirs(
-                cls._ensure_entry(resolve[0]),
-                cls._ensure_entry(resolve[1]),
-                cls._ensure_entry(resolve[2]),
-            )
-        else:
-            raise TypeError(
-                "Expected resolve to be type MergedOursTheirs or tuple", type(resolve),
-            )
+        return [cls._ensure_entry(e) for e in resolve]
 
 
 class VersionContext:
