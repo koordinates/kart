@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from sno.merge_util import MergeIndex, MergedOursTheirs
+from sno.merge_util import MergeIndex
 from sno.structs import CommitWithReference
 
 H = pytest.helpers.helpers()
@@ -36,10 +36,10 @@ def test_merge_index_roundtrip(create_conflicts, cli_runner):
         items = list(r1.conflicts.items())
         key, conflict = items[0]
         # Resolve conflict 0 by accepting our version.
-        r1.add_resolve(key, MergedOursTheirs.partial(merged=conflict.ours))
+        r1.add_resolve(key, [conflict.ours])
         # Resolve conflict 1 by deleting it entirely.
         key, conflict = items[1]
-        r1.add_resolve(key, MergedOursTheirs.EMPTY)
+        r1.add_resolve(key, [])
         assert r1 != orig
         assert len(r1.entries) == 242
         assert len(r1.conflicts) == 4

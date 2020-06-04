@@ -3,7 +3,7 @@ import pytest
 
 from sno.diff_output import json_row
 from sno.exceptions import INVALID_OPERATION
-from sno.merge_util import MergedOursTheirs, MergeIndex
+from sno.merge_util import MergeIndex
 from sno.structure import RepositoryStructure
 
 H = pytest.helpers.helpers()
@@ -57,12 +57,12 @@ def test_resolve_conflicts(create_conflicts, cli_runner):
         assert len(merge_index.resolves) == 4
 
         ck0, ck1, ck2, ck3 = ck_order
-        assert merge_index.resolves[ck0].merged == merge_index.conflicts[ck0].ancestor
-        # But the ancestor is actually None in conflict ck0:
+        # Conflict ck0 is resolved to ancestor, but the ancestor is None.
+        assert merge_index.resolves[ck0] == []
         assert merge_index.conflicts[ck0].ancestor is None
-        assert merge_index.resolves[ck1].merged == merge_index.conflicts[ck1].ours
-        assert merge_index.resolves[ck2].merged == merge_index.conflicts[ck2].theirs
-        assert merge_index.resolves[ck3] == MergedOursTheirs.EMPTY
+        assert merge_index.resolves[ck1] == [merge_index.conflicts[ck1].ours]
+        assert merge_index.resolves[ck2] == [merge_index.conflicts[ck2].theirs]
+        assert merge_index.resolves[ck3] == []
 
         r = cli_runner.invoke(["merge", "--continue"])
 
