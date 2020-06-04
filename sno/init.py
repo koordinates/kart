@@ -371,7 +371,10 @@ class OgrImporter:
         }
 
     def _get_meta_geometry_type(self):
-        ogr_geom_type = self.ogrlayer.GetGeomType()
+        # remove Z/M components
+        ogr_geom_type = ogr.GT_Flatten(self.ogrlayer.GetGeomType())
+        if ogr_geom_type == ogr.wkbUnknown:
+            return 'GEOMETRY'
         return (
             # normalise the geometry type names the way the GPKG spec likes it:
             # http://www.geopackage.org/spec/#geometry_types
