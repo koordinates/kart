@@ -450,11 +450,11 @@ class OgrImporter:
         srs = self.ogrlayer.GetSpatialRef()
         srid = self._get_meta_srid()
         yield {
-            'srs_name': srs.GetName(),
+            'srs_name': srs.GetName() if srs else 'Unknown CRS',
             'srs_id': srid,
             'organization': 'EPSG',
             'organization_coordsys_id': srid,
-            'definition': srs.ExportToWkt(),
+            'definition': srs.ExportToWkt() if srs else '',
             'description': None,
         }
 
