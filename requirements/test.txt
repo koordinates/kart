@@ -11,7 +11,7 @@ attrs==19.3.0             # via pytest
 cached-property==1.5.1    # via -r requirements/../requirements.txt
 certifi==2020.4.5.2       # via -r requirements/../requirements.txt
 cffi==1.14.0              # via -r requirements/../requirements.txt
-click==7.1.2              # via -r requirements/../requirements.txt
+https://github.com/craigds/click/archive/filelike-pager.zip  # via -r requirements/../requirements.txt
 coverage==5.1             # via pytest-cov
 fields==5.0.0             # via aspectlib
 gprof2dot==2019.11.30     # via pytest-profiling
@@ -37,7 +37,7 @@ pytest==4.6.11            # via -r requirements/test.in, lovely-pytest-docker, p
 rtree==0.9.4              # via -r requirements/../requirements.txt
 six==1.15.0               # via html5lib, packaging, pytest, pytest-profiling
 termcolor==1.1.0          # via pytest-sugar
-wcwidth==0.2.3            # via pytest
+wcwidth==0.2.4            # via pytest
 webencodings==0.5.1       # via html5lib
 zipp==3.1.0               # via importlib-metadata
 
