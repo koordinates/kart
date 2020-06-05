@@ -205,6 +205,9 @@ def complete_merging_state(ctx):
         merge_commit = repo[merge_commit_id]
         wc.reset(merge_commit, repo_structure)
 
+    remove_all_merge_repo_files(repo)
+    assert RepoState.get_state(repo) != RepoState.MERGING
+
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
 

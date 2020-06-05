@@ -4,19 +4,23 @@ import pytest
 from sno.diff_output import json_row
 from sno.exceptions import INVALID_OPERATION
 from sno.merge_util import MergeIndex
+from sno.repo_files import RepoState
 from sno.structure import RepositoryStructure
+
 
 H = pytest.helpers.helpers()
 
 
 def test_resolve_conflicts(create_conflicts, cli_runner):
     with create_conflicts(H.POLYGONS) as repo:
-        r = cli_runner.invoke(["merge", "--continue"])
-        assert r.exit_code == INVALID_OPERATION
-
         r = cli_runner.invoke(["merge", "theirs_branch", "--json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
+        assert RepoState.get_state(repo) == RepoState.MERGING
+
+        # Can't just complete the merge until we resolve the conflicts.
+        r = cli_runner.invoke(["merge", "--continue"])
+        assert r.exit_code == INVALID_OPERATION
 
         def get_conflict_ids(cli_runner):
             r = cli_runner.invoke(["conflicts", "-s", "--flat", "--json"])
@@ -65,6 +69,8 @@ def test_resolve_conflicts(create_conflicts, cli_runner):
         assert merge_index.resolves[ck3] == []
 
         r = cli_runner.invoke(["merge", "--continue"])
+        assert r.exit_code == 0, r
+        assert RepoState.get_state(repo) != RepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")
         ours = RepositoryStructure.lookup(repo, "ours_branch")
