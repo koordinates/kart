@@ -11,7 +11,7 @@ atomicwrites==1.4.0       # via -r requirements/test.txt, pytest
 attrs==19.3.0             # via -r requirements/test.txt, pytest
 backcall==0.1.0           # via ipython
 cached-property==1.5.1    # via -r requirements/../requirements.txt, -r requirements/test.txt
-certifi==2020.4.5.1       # via -r requirements/../requirements.txt, -r requirements/test.txt
+certifi==2020.4.5.2       # via -r requirements/../requirements.txt, -r requirements/test.txt
 cffi==1.14.0              # via -r requirements/../requirements.txt, -r requirements/test.txt
 click==7.1.2              # via -r requirements/../requirements.txt, -r requirements/test.txt
 coverage==5.1             # via -r requirements/test.txt, pytest-cov
@@ -19,15 +19,15 @@ decorator==4.4.2          # via ipython, traitlets
 fields==5.0.0             # via -r requirements/test.txt, aspectlib
 gprof2dot==2019.11.30     # via -r requirements/test.txt, pytest-profiling
 html5lib==1.0.1           # via -r requirements/test.txt
-importlib-metadata==1.6.0  # via -r requirements/test.txt, pluggy, pytest
+importlib-metadata==1.6.1  # via -r requirements/test.txt, pluggy, pytest
 ipdb==0.13.2              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
-ipython==7.13.0           # via -r requirements/dev.in, ipdb
+ipython==7.15.0           # via -r requirements/dev.in, ipdb
 jedi==0.17.0              # via ipython
 lovely-pytest-docker==0.1.0  # via -r requirements/test.txt
-more-itertools==8.2.0     # via -r requirements/test.txt, pytest
+more-itertools==8.3.0     # via -r requirements/test.txt, pytest
 msgpack==0.6.2            # via -r requirements/../requirements.txt, -r requirements/test.txt
-packaging==20.3           # via -r requirements/test.txt, pytest, pytest-sugar
+packaging==20.4           # via -r requirements/test.txt, pytest, pytest-sugar
 parso==0.7.0              # via jedi
 pexpect==4.8.0            # via ipython
 pickleshare==0.7.5        # via ipython
@@ -41,16 +41,16 @@ pycparser==2.20           # via -r requirements/../requirements.txt, -r requirem
 pygments==2.6.1           # via -r requirements/../requirements.txt, -r requirements/test.txt, ipython
 pyparsing==2.4.7          # via -r requirements/test.txt, packaging
 pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.txt
-pytest-cov==2.8.1         # via -r requirements/test.txt
+pytest-cov==2.9.0         # via -r requirements/test.txt
 pytest-helpers-namespace==2019.1.8  # via -r requirements/test.txt
 pytest-profiling==1.7.0   # via -r requirements/test.txt
 pytest-sugar==0.9.3       # via -r requirements/test.txt
-pytest==4.6.9             # via -r requirements/test.txt, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-helpers-namespace, pytest-profiling, pytest-sugar
+pytest==4.6.11            # via -r requirements/test.txt, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-helpers-namespace, pytest-profiling, pytest-sugar
 rtree==0.9.4              # via -r requirements/../requirements.txt, -r requirements/test.txt
-six==1.14.0               # via -r requirements/test.txt, html5lib, packaging, pytest, pytest-profiling, traitlets
+six==1.15.0               # via -r requirements/test.txt, html5lib, packaging, pytest, pytest-profiling, traitlets
 termcolor==1.1.0          # via -r requirements/test.txt, pytest-sugar
 traitlets==4.3.3          # via ipython
-wcwidth==0.1.9            # via -r requirements/test.txt, prompt-toolkit, pytest
+wcwidth==0.2.3            # via -r requirements/test.txt, prompt-toolkit, pytest
 webencodings==0.5.1       # via -r requirements/test.txt, html5lib
 zipp==3.1.0               # via -r requirements/test.txt, importlib-metadata
 
