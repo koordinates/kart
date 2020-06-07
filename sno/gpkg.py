@@ -1,5 +1,6 @@
 import binascii
 import collections
+import json
 import math
 import struct
 
@@ -358,6 +359,15 @@ def ogr_to_gpkg_geom(
         )
 
     return header + envelope + wkb
+
+
+def geojson_to_gpkg_geom(geojson, **kwargs):
+    """Given a GEOJSON geometry, construct a GPKG geometry value."""
+    if not isinstance(geojson, str):
+        json_ogr = json.dumps(geojson)
+
+    ogr_geom = ogr.CreateGeometryFromJson(json_ogr)
+    return ogr_to_gpkg_geom(ogr_geom, **kwargs)
 
 
 def geom_envelope(gpkg_geom):

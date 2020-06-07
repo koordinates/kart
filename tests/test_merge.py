@@ -296,7 +296,7 @@ def test_merge_state_lock(create_conflicts, cli_runner):
         assert r.exit_code == SUCCESS
         r = cli_runner.invoke(["conflicts"])
         assert r.exit_code == INVALID_OPERATION
-        r = cli_runner.invoke(["resolve", "dummy_conflict", "--delete"])
+        r = cli_runner.invoke(["resolve", "dummy_conflict", "--with=delete"])
         assert r.exit_code == INVALID_OPERATION
 
         r = cli_runner.invoke(["merge", "theirs_branch"])
@@ -310,5 +310,5 @@ def test_merge_state_lock(create_conflicts, cli_runner):
         assert r.exit_code == INVALID_OPERATION
         r = cli_runner.invoke(["conflicts"])
         assert r.exit_code == SUCCESS
-        r = cli_runner.invoke(["resolve", "dummy_conflict", "--delete"])
+        r = cli_runner.invoke(["resolve", "dummy_conflict", "--with=delete"])
         assert r.exit_code == NO_CONFLICT  # "dummy_conflict" is not a real conflict

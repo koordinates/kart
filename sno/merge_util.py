@@ -613,7 +613,7 @@ class RichConflict:
         if not hasattr(self, "_label"):
             if self.has_multiple_paths:
                 self._label = " ".join(
-                    f"{v.version_name}={v.path_label}" for v in self.versions if v
+                    f"{v.version_name}={v.path_label}" for v in self.true_versions
                 )
             else:
                 self._label = self.any_true_version.path_label
@@ -630,6 +630,7 @@ class RichConflict:
             self.has_multiple_paths
             and len(set(v.table for v in self.true_versions)) > 1
         ):
+            # Conflict involves files in multiple tables.
             return ["<uncategorised>", self.label]
         table = self.any_true_version.table
 
