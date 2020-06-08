@@ -107,6 +107,8 @@ brew-libs: $(brew-libs)
 
 env: brew-deps
 
+apsw_archive: brew-deps
+
 .PHONY: .delocate
 .delocate:
 	rm -rf $@
