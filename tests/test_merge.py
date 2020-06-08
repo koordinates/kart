@@ -72,7 +72,7 @@ def test_merge_fastforward(
     ],
 )
 def test_merge_fastforward_noff(
-    archive, data_working_copy, geopackage, cli_runner, insert, request
+    archive, data_working_copy, geopackage, cli_runner, insert, request, disable_editor
 ):
     with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
@@ -122,7 +122,15 @@ def test_merge_fastforward_noff(
     ],
 )
 def test_merge_true(
-    archive, layer, pk_field, data_working_copy, geopackage, cli_runner, insert, request
+    archive,
+    layer,
+    pk_field,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    insert,
+    request,
+    disable_editor,
 ):
     with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))

@@ -85,14 +85,9 @@ def commit(ctx, message, message_file, allow_empty, do_json):
     working_copy.assert_db_tree_match(tree)
 
     rs = RepositoryStructure(repo)
-    wcdiff = Diff(None)
-    wc_changes = {}
-    for i, dataset in enumerate(rs):
-        diff = working_copy.diff_db_to_tree(dataset)
-        wcdiff += diff
-        wc_changes[dataset.path] = diff.counts(dataset)
+    wc_diff = working_copy.diff_to_tree(rs)
 
-    if not wcdiff and not allow_empty:
+    if not wc_diff and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
     if message_file:
@@ -100,25 +95,25 @@ def commit(ctx, message, message_file, allow_empty, do_json):
     elif message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     else:
-        commit_msg = get_commit_message(repo, wc_changes, quiet=do_json)
+        commit_msg = get_commit_message(repo, wc_diff, quiet=do_json)
 
     if not commit_msg:
         raise click.UsageError("No commit message")
 
-    rs.commit(wcdiff, commit_msg, allow_empty=allow_empty)
+    rs.commit(wc_diff, commit_msg, allow_empty=allow_empty)
 
     new_commit = repo.head.peel(pygit2.Commit)
-    jdict = commit_obj_to_json(new_commit, repo, wc_changes)
+    jdict = commit_obj_to_json(new_commit, repo, wc_diff)
     if do_json:
         dump_json_output(jdict, sys.stdout)
     else:
         click.echo(commit_json_to_text(jdict))
 
 
-def get_commit_message(repo, wc_changes, quiet=False):
+def get_commit_message(repo, diff, draft_message="", quiet=False):
     """ Launches the system editor to get a commit message """
     initial_message = [
-        "",
+        draft_message,
         "# Please enter the commit message for your changes. Lines starting",
         "# with '#' will be ignored, and an empty message aborts the commit.",
         "#",
@@ -129,7 +124,7 @@ def get_commit_message(repo, wc_changes, quiet=False):
         re.sub(
             r"^",
             "# ",
-            (get_diff_status_message(wc_changes) or "  No changes (empty commit)"),
+            (get_diff_status_message(diff) or "  No changes (empty commit)"),
             flags=re.MULTILINE,
         ),
         "#",
@@ -149,7 +144,7 @@ def get_commit_message(repo, wc_changes, quiet=False):
     return message.strip()
 
 
-def commit_obj_to_json(commit, repo, wc_changes):
+def commit_obj_to_json(commit, repo, wc_diff):
     branch = None
     if not repo.head_is_detached:
         branch = repo.branches[repo.head.shorthand].shorthand
@@ -163,7 +158,7 @@ def commit_obj_to_json(commit, repo, wc_changes):
             "committer": commit.committer.email,
             "branch": branch,
             "message": commit.message,
-            "changes": get_diff_status_json(wc_changes),
+            "changes": get_diff_status_json(wc_diff),
             "commitTime": datetime_to_iso8601_utc(commit_time),
             "commitTimeOffset": timedelta_to_iso8601_tz(commit_time_offset),
         }

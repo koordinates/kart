@@ -76,28 +76,24 @@ def get_working_copy_status_json(repo):
 
     output = {"path": working_copy.path, "changes": None}
 
-    wc_changes = {}
-    for dataset in rs:
-        status = working_copy.status(dataset)
-        if any(status.values()):
-            wc_changes[dataset.path] = status
-
-    if wc_changes:
-        output["changes"] = get_diff_status_json(wc_changes)
+    wc_diff = working_copy.diff_to_tree(rs)
+    if wc_diff:
+        output["changes"] = get_diff_status_json(wc_diff)
 
     return output
 
 
-def get_diff_status_json(wc_changes):
+def get_diff_status_json(diff):
+    """Given a diff.Diff object, returns a JSON object describing the diff status."""
     output = {}
-    for dataset_path, status in wc_changes.items():
-        if sum(status.values()):
+    for dataset_path, counts in diff.counts().items():
+        if sum(counts.values()):
             output[dataset_path] = {
-                "metaChanges": {} if status["META"] else None,
+                "metaChanges": {} if counts["META"] else None,
                 "featureChanges": {
-                    "modified": status["U"],
-                    "new": status["I"],
-                    "deleted": status["D"],
+                    "modified": counts["U"],
+                    "new": counts["I"],
+                    "deleted": counts["D"],
                 },
             }
     return output
@@ -201,8 +197,9 @@ def get_branch_status_message(repo):
     return branch_status_to_text(get_branch_status_json(repo))
 
 
-def get_diff_status_message(wc_changes):
-    return diff_status_to_text(get_diff_status_json(wc_changes))
+def get_diff_status_message(diff):
+    """Given a diff.Diff, return a status message describing it."""
+    return diff_status_to_text(get_diff_status_json(diff))
 
 
 def _pf(count):

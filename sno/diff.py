@@ -335,8 +335,19 @@ class Diff:
 
         return True
 
-    def counts(self, dataset):
+    def dataset_counts(self, dataset=None):
+        """Returns a dict containing the count of each type of diff, for a particular dataset."""
         return {k: len(v) for k, v in self._data[dataset.path].items()}
+
+    def counts(self, dataset=None):
+        """
+        Returns multiple dataset_counts dicts, one for each dataset touched by this diff.
+        The dataset_counts dicts are returned in a top-level dict keyed by dataset path.
+        """
+
+        return {
+            dataset.path: self.dataset_counts(dataset) for dataset in self.datasets()
+        }
 
     def __repr__(self):
         return repr(self._data)
@@ -373,6 +384,15 @@ def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
         diff += diff_wc
 
     return diff
+
+
+def get_repo_diff(base_rs, target_rs):
+    """Generates a Diff for every dataset in both RepositoryStructures."""
+    all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
+    result = Diff(None)
+    for dataset in all_datasets:
+        result += get_dataset_diff(base_rs, target_rs, None, dataset, None)
+    return result
 
 
 def diff_with_writer(

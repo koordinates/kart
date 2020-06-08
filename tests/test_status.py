@@ -32,7 +32,14 @@ def get_commit_ids(jdict):
 
 
 def test_status(
-    data_archive, data_working_copy, geopackage, cli_runner, insert, tmp_path, request
+    data_archive,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    insert,
+    tmp_path,
+    request,
+    disable_editor,
 ):
     with data_working_copy("points") as (path1, wc):
         assert text_status(cli_runner) == [
