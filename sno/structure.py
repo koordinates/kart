@@ -441,7 +441,9 @@ class DatasetStructure:
                 json.dumps(value).encode("utf8"),
             )
 
-    def fast_import_table(self, repo, source, max_pack_size="2G", limit=None):
+    def fast_import_table(
+        self, repo, source, max_pack_size="2G", limit=None, message=None
+    ):
 
         table = source.table
         if not table:
@@ -487,10 +489,13 @@ class DatasetStructure:
 
             user = repo.default_signature
 
+            if message is None:
+                message = f'Import from {Path(source.source).name} to {path}/\n'
+
             header = (
                 "commit refs/heads/master\n"
                 f"committer {user.name} <{user.email}> now\n"
-                f"data <<EOM\nImport from {Path(source.source).name} to {path}/\nEOM\n"
+                f"data {len(message.encode('utf8'))}\n{message}\n"
             )
             p.stdin.write(header.encode("utf8"))
 

@@ -536,6 +536,9 @@ def list_import_formats(ctx):
     help="Which table to import. If not specified, this will be selected interactively",
 )
 @click.option(
+    "--message", "-m", help="Commit message. By default this is auto-generated.",
+)
+@click.option(
     "--list", "do_list", is_flag=True, help="List all tables present in the source path"
 )
 @click.option(
@@ -550,7 +553,7 @@ def list_import_formats(ctx):
     help="List available import formats, and then exit",
 )
 @do_json_option
-def import_table(ctx, source, directory, table, do_list, do_json, version):
+def import_table(ctx, source, directory, table, message, do_list, do_json, version):
     """
     Import data into a repository.
 
@@ -595,7 +598,7 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
     if params:
         click.echo(f"Import parameters: {params}")
-    importer.fast_import_table(repo, source_loader, **params)
+    importer.fast_import_table(repo, source_loader, message=message, **params)
 
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
@@ -623,6 +626,11 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     default=True,
     help="Whether to checkout a working copy in the repository",
 )
+@click.option(
+    "--message",
+    "-m",
+    help="Commit message (when used with --import). By default this is auto-generated.",
+)
 @click.argument(
     "directory", type=click.Path(writable=True, file_okay=False), required=False
 )
@@ -632,7 +640,7 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
 )
-def init(ctx, import_from, table, do_checkout, directory, version):
+def init(ctx, import_from, table, do_checkout, message, directory, version):
     """
     Initialise a new repository and optionally import data
 
@@ -666,7 +674,7 @@ def init(ctx, import_from, table, do_checkout, directory, version):
         params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
         if params:
             click.echo(f"Import parameters: {params}")
-        importer.fast_import_table(repo, source_loader, **params)
+        importer.fast_import_table(repo, source_loader, message=message, **params)
 
         if do_checkout:
             # Checkout a working copy
