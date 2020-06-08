@@ -5,7 +5,7 @@
 #    make py-requirements
 #
 cached-property==1.5.1    # via pygit2
-certifi==2020.4.5.1       # via -r requirements/requirements.in
+certifi==2020.4.5.2       # via -r requirements/requirements.in
 cffi==1.14.0              # via pygit2
 click==7.1.2              # via -r requirements/requirements.in
 msgpack==0.6.2            # via -r requirements/requirements.in
