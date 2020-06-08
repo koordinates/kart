@@ -24,7 +24,7 @@ else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	WHEELTOOL = auditwheel
 	WHEELID = linux_x86_64
-	export LDFLAGS = -Wl,-rpath='$$ORIGIN',--enable-new-dtags
+	export LDFLAGS = -Wl,-rpath='$$ORIGIN'
 endif
 PY3 := $(or $(PY3),python3.7)
 

@@ -26,7 +26,7 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
-	export LDFLAGS = -Wl,-rpath='$$ORIGIN/../../../',--enable-new-dtags
+	export LDFLAGS = -Wl,-rpath='$$ORIGIN/../../../'
 endif
 PY3 := $(or $(PY3),python3.7)
 

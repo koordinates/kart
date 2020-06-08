@@ -21,7 +21,7 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	LIBSUFFIX = so
-	PY_LDFLAGS := -Wl,-rpath='$$ORIGIN/../../../',--enable-new-dtags
+	PY_LDFLAGS := -Wl,-rpath='$$ORIGIN/../../../'
 	WHEELID = linux_x86_64
 endif
 PY3 := $(or $(PY3),python3.7)
