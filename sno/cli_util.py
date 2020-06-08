@@ -1,4 +1,89 @@
+from functools import wraps
+import uuid
+
 import click
+
+
+def one_of(*option_decorators, name):
+    """
+    Pass a list of options which are mutually exclusive.
+    Only one of them will be allowed.
+    Each option should be a `click.option` call.
+
+    Pass the name as a separate kwarg.
+    The value will be passed to the function as that kwarg.
+
+        @one_of(
+            click.option(
+                "--text", flag_value="text", default=True
+            ),
+            click.option(
+                "--json", flag_value="json"
+            ),
+            name="format"
+        )
+        def mycommand(ctx, format="text"):
+            ...
+    """
+
+    def dec(cmd_func):
+        @wraps(cmd_func)
+        def wrapper(*args, **kwargs):
+            return cmd_func(*args, **kwargs)
+
+        # apply all the arguments to a dummy function so we can figure out
+        # what options we have.
+        def dummy():
+            pass
+
+        for option_dec in reversed(option_decorators):
+            # apply all the options to a dummy function so we can figure out
+            # what options we have.
+            dummy = option_dec(dummy)
+            # But then also apply them to the main command
+            wrapper = option_dec(wrapper)
+
+        # now, this holds a list of Option instances:
+        option_names = set()
+        for opt in dummy.__click_params__:
+            if opt.name in option_names:
+                raise ValueError("options in `one_of` must have distinct names")
+            option_names.add(opt.name)
+
+        option_instances = {}
+        for opt in wrapper.__click_params__:
+            if opt.name in option_names:
+                option_instances[opt.name] = opt
+
+        def check_mutually_exclusive_options(ctx, param, value):
+            seen_name = None
+            value = None
+            for opt_name in option_names:
+                # prevent the option from being passed to the command function
+                option_instances[opt_name].expose_value = False
+                if opt_name in ctx.params:
+                    if seen_name is not None:
+                        raise click.UsageError(
+                            f"Illegal usage: {opt_name} can't be used together with {seen_name}."
+                        )
+                    value = ctx.params.pop(opt_name)
+                    seen_name = opt_name
+            return value
+
+        # Add a callback for a parameter that will never actually
+        # be present on the command line.
+        # This means the callback is called *after* all the options that
+        # *are* present have been added to the context.
+        # https://click.palletsprojects.com/en/7.x/advanced/#callback-evaluation-order
+        decorator = click.option(
+            f'--missing-{uuid.uuid4()}',
+            name,
+            hidden=True,
+            callback=check_mutually_exclusive_options,
+        )
+        return decorator(wrapper)
+
+    return dec
 
 
 class MutexOption(click.Option):

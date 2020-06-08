@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from .cli_util import MutexOption
+from .cli_util import MutexOption, one_of
 from .diff_output import *  # noqa - used from globals()
 from .exceptions import (
     InvalidOperation,
@@ -507,48 +507,25 @@ def diff_with_writer(
 
 @click.command()
 @click.pass_context
-@click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Get the diff in text format",
-    cls=MutexOption,
-    exclusive_with=["html", "json", "geojson", "quiet"],
-)
-@click.option(
-    "--json",
-    "output_format",
-    flag_value="json",
-    help="Get the diff in JSON format",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["html", "text", "geojson", "quiet"],
-)
-@click.option(
-    "--geojson",
-    "output_format",
-    flag_value="geojson",
-    help="Get the diff in GeoJSON format",
-    cls=MutexOption,
-    exclusive_with=["html", "text", "json", "quiet"],
-)
-@click.option(
-    "--html",
-    "output_format",
-    flag_value="html",
-    help="View the diff in a browser",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "quiet"],
-)
-@click.option(
-    "--quiet",
-    "output_format",
-    flag_value="quiet",
-    help="Disable all output of the program. Implies --exit-code.",
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "html"],
+@one_of(
+    click.option(
+        "--text", flag_value="text", default=True, help="Get the diff in text format",
+    ),
+    click.option(
+        "--json", flag_value="json", help="Get the diff in JSON format", hidden=True,
+    ),
+    click.option(
+        "--geojson", flag_value="geojson", help="Get the diff in GeoJSON format",
+    ),
+    click.option(
+        "--html", flag_value="html", help="View the diff in a browser", hidden=True,
+    ),
+    click.option(
+        "--quiet",
+        flag_value="quiet",
+        help="Disable all output of the program. Implies --exit-code.",
+    ),
+    name="output_format",
 )
 @click.option(
     "--exit-code",

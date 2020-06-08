@@ -3,7 +3,7 @@ import sys
 
 import click
 
-from .cli_util import MutexOption
+from .cli_util import MutexOption, one_of
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
@@ -175,39 +175,22 @@ def conflicts_json_as_text(json_obj):
 
 @click.command()
 @click.pass_context
-@click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Get the diff in text format",
-    cls=MutexOption,
-    exclusive_with=["json", "geojson", "quiet"],
-)
-@click.option(
-    "--json",
-    "output_format",
-    flag_value="json",
-    help="Get the diff in JSON format",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["text", "geojson", "quiet"],
-)
-@click.option(
-    "--geojson",
-    "output_format",
-    flag_value="geojson",
-    help="Get the diff in GeoJSON format",
-    cls=MutexOption,
-    exclusive_with=["text", "json", "quiet"],
-)
-@click.option(
-    "--quiet",
-    "output_format",
-    flag_value="quiet",
-    help="Disable all output of the program. Implies --exit-code.",
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "html"],
+@one_of(
+    click.option(
+        "--text", flag_value="text", default=True, help="Get the diff in text format",
+    ),
+    click.option(
+        "--json", flag_value="json", help="Get the diff in JSON format", hidden=True,
+    ),
+    click.option(
+        "--geojson", flag_value="geojson", help="Get the diff in GeoJSON format",
+    ),
+    click.option(
+        "--quiet",
+        flag_value="quiet",
+        help="Disable all output of the program. Implies --exit-code.",
+    ),
+    name="output_format",
 )
 @click.option(
     "--exit-code",

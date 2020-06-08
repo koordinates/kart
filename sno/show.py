@@ -5,7 +5,7 @@ from io import StringIO
 
 import click
 
-from .cli_util import MutexOption
+from .cli_util import MutexOption, one_of
 from .output_util import dump_json_output, resolve_output_path
 from .structs import CommitWithReference
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -17,24 +17,18 @@ EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 @click.command()
 @click.pass_context
-@click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Show commit in text format",
-    cls=MutexOption,
-    exclusive_with=["json"],
-)
-@click.option(
-    "--json",
-    "--patch",
-    "-p",
-    "output_format",
-    flag_value="json",
-    help="Show commit in JSON patch format",
-    cls=MutexOption,
-    exclusive_with=["text"],
+@one_of(
+    click.option(
+        "--text", flag_value="text", default=True, help="Show commit in text format",
+    ),
+    click.option(
+        "--json",
+        "--patch",
+        "-p",
+        flag_value="json",
+        help="Show commit in JSON patch format",
+    ),
+    name="output_format",
 )
 @click.option(
     "--json-style",
