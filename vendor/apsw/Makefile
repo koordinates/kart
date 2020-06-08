@@ -31,7 +31,11 @@ PY3 := $(or $(PY3),python3.7)
 # use ccache if available
 export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 
-APSW_VERSION := $(SQLITE_VERSION)-r1
+ifeq ($(SQLITE_VERSION),3.32.1)
+	# fix :-(
+	APSW_VERSION := 3.32.2-r1
+endif
+APSW_VERSION ?= $(SQLITE_VERSION)-r1
 APSW_ARCHIVE := apsw-$(APSW_VERSION).tar.gz
 APSW_BUILD_OPTS := --enable-all-extensions --enable=load_extension
 
