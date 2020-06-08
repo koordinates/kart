@@ -3,11 +3,13 @@ import sys
 
 import click
 
+from . import commit
 from .cli_util import do_json_option, call_and_exit_flag
 from .conflicts import (
     list_conflicts,
     conflicts_json_as_text,
 )
+from .diff import get_repo_diff
 from .exceptions import InvalidOperation
 from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext
 from .output_util import dump_json_output
@@ -20,7 +22,6 @@ from .repo_files import (
     repo_file_exists,
     RepoState,
 )
-
 from .structs import CommitWithReference
 from .structure import RepositoryStructure
 
@@ -28,7 +29,24 @@ from .structure import RepositoryStructure
 L = logging.getLogger("sno.merge")
 
 
-def do_merge(repo, ff, ff_only, dry_run, commit):
+def get_commit_message(
+    merge_context, merge_tree_id, repo, read_msg_file=False, quiet=False
+):
+    merge_message = None
+    if read_msg_file:
+        merge_message = read_repo_file(repo, MERGE_MSG, missing_ok=True)
+    if not merge_message:
+        merge_message = merge_context.get_message()
+    head = RepositoryStructure.lookup(repo, "HEAD")
+    merged = RepositoryStructure.lookup(repo, merge_tree_id)
+    diff = get_repo_diff(head, merged)
+    return commit.get_commit_message(
+        repo, diff, draft_message=merge_message, quiet=quiet
+    )
+    return merge_message
+
+
+def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
     """Does a merge, but doesn't update the working copy."""
     if ff_only and not ff:
         raise click.BadParameter(
@@ -46,7 +64,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     ancestor = CommitWithReference.resolve(repo, ancestor_id)
     commit_with_ref3 = AncestorOursTheirs(ancestor, ours, theirs)
     merge_context = MergeContext.from_commit_with_refs(commit_with_ref3, repo)
-    merge_message = merge_context.get_message()
+    merge_message = commit_message or merge_context.get_message()
 
     merge_jdict = {
         "commit": ours.id.hex,
@@ -106,9 +124,12 @@ def do_merge(repo, ff, ff_only, dry_run, commit):
     L.debug(f"Merge tree: {merge_tree_id}")
 
     user = repo.default_signature
-    # TODO - let user edit merge message.
+    if not commit_message:
+        commit_message = get_commit_message(
+            merge_context, merge_tree_id, repo, quiet=quiet
+        )
     merge_commit_id = repo.create_commit(
-        repo.head.name, user, user, merge_message, merge_tree_id, [ours.id, theirs.id],
+        repo.head.name, user, user, commit_message, merge_tree_id, [ours.id, theirs.id],
     )
 
     L.debug(f"Merge commit: {merge_commit_id}")
@@ -168,15 +189,15 @@ def complete_merging_state(ctx):
         )
 
     merge_context = MergeContext.read_from_repo(repo)
-    commit_ids = merge_context.versions.map(lambda v: v.repo_structure.id)
-
-    # TODO - let user edit merge message.
-    merge_message = read_repo_file(repo, MERGE_MSG, missing_ok=True)
-    if not merge_message:
-        merge_message = merge_context.get_message()
+    commit_ids = merge_context.versions.map(lambda v: v.commit_id)
 
     merge_tree_id = merge_index.write_resolved_tree(repo)
     L.debug(f"Merge tree: {merge_tree_id}")
+
+    # TODO - support -m commit-message
+    merge_message = get_commit_message(
+        merge_context, merge_tree_id, repo, read_msg_file=True
+    )
 
     user = repo.default_signature
     merge_commit_id = repo.create_commit(
@@ -313,6 +334,9 @@ def merge_status_to_text(jdict, fresh):
     is_flag=True,
     help="Don't perform a merge - just show what would be done",
 )
+@click.option(
+    "--message", "-m", help="Use the given message as the commit message.",
+)
 @call_and_exit_flag(
     '--abort',
     callback=abort_merging_state,
@@ -326,7 +350,7 @@ def merge_status_to_text(jdict, fresh):
 @click.argument("commit", required=True, metavar="COMMIT")
 @do_json_option
 @click.pass_context
-def merge(ctx, ff, ff_only, dry_run, do_json, commit):
+def merge(ctx, ff, ff_only, dry_run, message, do_json, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
 
     repo = ctx.obj.get_repo(
@@ -334,7 +358,7 @@ def merge(ctx, ff, ff_only, dry_run, do_json, commit):
         bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
     )
 
-    jdict = do_merge(repo, ff, ff_only, dry_run, commit)
+    jdict = do_merge(repo, ff, ff_only, dry_run, commit, message, quiet=do_json)
     no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)
     conflicts = jdict.get("conflicts", None)
 

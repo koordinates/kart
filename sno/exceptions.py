@@ -91,4 +91,4 @@ class SubprocessError(BaseException):
             message, exit_code=exit_code, param=param, param_hint=param_hint
         )
         if called_process_error and not exit_code:
-            self.exit_code = SUBPROCESS_ERROR_FLAG + called_process_error.return_code
+            self.exit_code = SUBPROCESS_ERROR_FLAG + called_process_error.returncode

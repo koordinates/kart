@@ -34,7 +34,7 @@ def get_json_feature(rs, layer, pk):
         return None
 
 
-def test_resolve_with_version(create_conflicts, cli_runner):
+def test_resolve_with_version(create_conflicts, cli_runner, disable_editor):
     with create_conflicts(H.POLYGONS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch", "--json"])
         assert r.exit_code == 0, r
@@ -105,7 +105,7 @@ def test_resolve_with_version(create_conflicts, cli_runner):
         assert get_json_feature(merged, l, pk3) is None
 
 
-def test_resolve_with_file(create_conflicts, cli_runner):
+def test_resolve_with_file(create_conflicts, cli_runner, disable_editor):
     with create_conflicts(H.POLYGONS) as repo:
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "--geojson"])
         assert r.exit_code == 0, r

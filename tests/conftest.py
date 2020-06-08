@@ -731,3 +731,12 @@ def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
             yield repo
 
     return ctx
+
+
+@pytest.fixture
+def disable_editor():
+    old_environ = dict(os.environ)
+    os.environ["GIT_EDITOR"] = "echo"
+    yield
+    os.environ.clear()
+    os.environ.update(old_environ)
