@@ -110,10 +110,8 @@ def main():
     if options.debug:
         db.setexectrace(db_debug)
     dbcur = db.cursor()
-    db.enableloadextension(True)
-    dbcur.execute(
-        "SELECT load_extension(?)", (str(Path(sys.prefix) / "lib" / "mod_spatialite"),)
-    )
+    db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
+    db.loadextension(str(Path(sys.prefix) / "lib" / "mod_spatialite"))
     dbcur.execute("SELECT EnableGpkgMode();")
     print(f"Connected to {db_path}")
 

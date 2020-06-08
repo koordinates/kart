@@ -64,8 +64,8 @@ def db(path, **kwargs):
     if current_journal.lower() == "delete":
         dbcur.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
 
-    db.enableloadextension(True)
-    dbcur.execute("SELECT load_extension(?)", (spatialite_path,))
+    db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
+    db.loadextension(spatialite_path)
     dbcur.execute("SELECT EnableGpkgMode();")
     return db
 
@@ -249,7 +249,7 @@ def gpkg_geom_to_hex_wkb(gpkg_geom):
     if wkb is None:
         return None
     else:
-        return binascii.hexlify(wkb).decode('ascii').upper()
+        return binascii.hexlify(wkb).decode("ascii").upper()
 
 
 def gpkg_geom_to_ogr(gpkg_geom, parse_srs=False):
@@ -311,7 +311,7 @@ def hex_wkb_to_gpkg_geom(hex_wkb, **kwargs):
 # The GPKG spec says we should use POINT(NaN, NaN) instead.
 # Here's the WKB of that.
 # We can't use WKT here: https://github.com/OSGeo/gdal/issues/2472
-WKB_POINT_EMPTY_LE = b'\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F'
+WKB_POINT_EMPTY_LE = b"\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F"
 
 
 def ogr_to_gpkg_geom(
@@ -349,9 +349,9 @@ def ogr_to_gpkg_geom(
     wkb = ogr_geom.ExportToIsoWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
 
     header = struct.pack(
-        f'{"<" if _little_endian else ">"}ccBBi', b'G', b'P', 0, flags, srid
+        f'{"<" if _little_endian else ">"}ccBBi', b"G", b"P", 0, flags, srid
     )
-    envelope = b''
+    envelope = b""
     if _add_envelope:
         envelope = struct.pack(
             f'{"<" if _little_endian else ">"}dddd', *ogr_geom.GetEnvelope()

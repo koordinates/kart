@@ -56,8 +56,8 @@ def print_version(ctx, param, value):
 
     db = apsw.Connection(":memory:")
     dbcur = db.cursor()
-    db.enableloadextension(True)
-    dbcur.execute("SELECT load_extension(?)", (sno.spatialite_path,))
+    db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
+    db.loadextension(sno.spatialite_path)
     spatialite_version = dbcur.execute("SELECT spatialite_version();").fetchone()[0]
 
     pq_version = psycopg2.__libpq_version__
