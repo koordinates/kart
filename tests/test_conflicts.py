@@ -83,7 +83,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
             '',
         ]
 
-        r = cli_runner.invoke(["conflicts", "-s", "--json"])
+        r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
@@ -100,7 +100,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
             }
         }
 
-        r = cli_runner.invoke(["conflicts", "-s", "--flat", "--json"])
+        r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": [
                 "nz_waca_adjustments:id=98001",
@@ -125,7 +125,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         assert r.exit_code == 0, r
         assert r.stdout.strip() == "4"
 
-        r = cli_runner.invoke(["conflicts", "-ss", "--json"])
+        r = cli_runner.invoke(["conflicts", "-ss", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
@@ -135,7 +135,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
             },
         }
 
-        r = cli_runner.invoke(["conflicts", "-ss", "--flat", "--json"])
+        r = cli_runner.invoke(["conflicts", "-ss", "--flat", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {"sno.conflicts/v1": 4}
 
@@ -180,7 +180,7 @@ def test_list_conflicts(create_conflicts, cli_runner):
             '',
         ]
 
-        r = cli_runner.invoke(["conflicts", "--json"])
+        r = cli_runner.invoke(["conflicts", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
@@ -228,7 +228,7 @@ def test_list_conflicts(create_conflicts, cli_runner):
             }
         }
 
-        r = cli_runner.invoke(["conflicts", "--geojson"])
+        r = cli_runner.invoke(["conflicts", "-o", "geojson"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {

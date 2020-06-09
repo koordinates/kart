@@ -97,7 +97,7 @@ def test_merge_fastforward_noff(
         assert repo.head.target.hex != commit_id
 
         # force creation of a merge commit
-        r = cli_runner.invoke(["merge", "changes", "--no-ff", "--json"])
+        r = cli_runner.invoke(["merge", "changes", "--no-ff", "-o", "json"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-merge")
@@ -162,7 +162,7 @@ def test_merge_true(
             "Can't resolve as a fast-forward merge and --ff-only specified" in r.stderr
         )
 
-        r = cli_runner.invoke(["merge", "changes", "--ff", "--json"])
+        r = cli_runner.invoke(["merge", "changes", "--ff", "-o", "json"])
         assert r.exit_code == 0, r
         H.git_graph(request, "post-merge")
 
@@ -208,7 +208,7 @@ def test_merge_conflicts(
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
 
-        cmd = ["merge", "theirs_branch", f"--{output_format}"]
+        cmd = ["merge", "theirs_branch", f"--output-format={output_format}"]
         if dry_run:
             cmd += ["--dry-run"]
 

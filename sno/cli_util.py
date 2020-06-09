@@ -44,17 +44,6 @@ class MutexOption(click.Option):
         return super().handle_parse_result(ctx, opts, args)
 
 
-def do_json_option(func):
-    """Apply --json/--text output format options to a Click command """
-    return click.option(
-        "--json/--text",
-        "do_json",
-        is_flag=True,
-        default=False,
-        help="Whether to format the out output as JSON instead the default text output.",
-    )(func)
-
-
 def call_and_exit_flag(*args, callback, **kwargs):
     """
     Add an is_flag option that, when set, eagerly calls the given callback with only the context as a parameter.

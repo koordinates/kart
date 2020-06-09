@@ -12,7 +12,7 @@ from osgeo import gdal, ogr
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
-from .cli_util import call_and_exit_flag, do_json_option
+from .cli_util import call_and_exit_flag
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -552,8 +552,12 @@ def list_import_formats(ctx):
     callback=list_import_formats,
     help="List available import formats, and then exit",
 )
-@do_json_option
-def import_table(ctx, source, directory, table, message, do_list, do_json, version):
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
+def import_table(
+    ctx, source, directory, table, message, do_list, output_format, version
+):
     """
     Import data into a repository.
 
@@ -566,9 +570,9 @@ def import_table(ctx, source, directory, table, message, do_list, do_json, versi
     $ sno import --list GPKG:my.gpkg
     """
 
-    if do_json and not do_list:
+    if output_format == 'json' and not do_list:
         raise click.UsageError(
-            "Illegal usage: 'sno import --json' only supports --list"
+            "Illegal usage: '--output-format=json' only supports --list"
         )
 
     use_repo_ctx = not do_list
@@ -580,7 +584,7 @@ def import_table(ctx, source, directory, table, message, do_list, do_json, versi
     source_loader = OgrImporter.open(source, table)
 
     if do_list:
-        source_loader.print_table_list(do_json=do_json)
+        source_loader.print_table_list(do_json=output_format == 'json')
         return
 
     source_loader.check_table(prompt=True)

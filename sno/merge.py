@@ -4,7 +4,7 @@ import sys
 import click
 
 from . import commit
-from .cli_util import do_json_option, call_and_exit_flag
+from .cli_util import call_and_exit_flag
 from .conflicts import (
     list_conflicts,
     conflicts_json_as_text,
@@ -337,6 +337,9 @@ def merge_status_to_text(jdict, fresh):
 @click.option(
     "--message", "-m", help="Use the given message as the commit message.",
 )
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
 @call_and_exit_flag(
     '--abort',
     callback=abort_merging_state,
@@ -348,15 +351,16 @@ def merge_status_to_text(jdict, fresh):
     help="Completes and commits a merge once all conflicts are resolved and leaves the merging state",
 )
 @click.argument("commit", required=True, metavar="COMMIT")
-@do_json_option
 @click.pass_context
-def merge(ctx, ff, ff_only, dry_run, message, do_json, commit):
+def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
 
     repo = ctx.obj.get_repo(
         allowed_states=[RepoState.NORMAL],
         bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
     )
+
+    do_json = output_format == 'json'
 
     jdict = do_merge(repo, ff, ff_only, dry_run, commit, message, quiet=do_json)
     no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)
