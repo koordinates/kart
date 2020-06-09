@@ -5,6 +5,7 @@ from io import StringIO
 
 import click
 
+from .repo_files import RepoState
 from .output_util import dump_json_output, resolve_output_path
 from .structs import CommitWithReference
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -37,7 +38,7 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
     if output_format == 'patch':
         output_format = 'json'
 
-    repo = ctx.obj.repo
+    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
     # Ensures we were given a reference to a commit, and not a tree or something
     commit = CommitWithReference.resolve(repo, refish).commit
 

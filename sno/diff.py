@@ -15,6 +15,7 @@ from .exceptions import (
     NO_WORKING_COPY,
     UNCATEGORIZED_ERROR,
 )
+from .repo_files import RepoState
 
 
 L = logging.getLogger("sno.diff")
@@ -417,7 +418,8 @@ def diff_with_writer(
         if isinstance(output_path, str) and output_path != "-":
             output_path = Path(output_path).expanduser()
 
-        repo = ctx.obj.repo
+        repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+
         args = list(args)
 
         # TODO: handle [--] and [<dataset>[:pk]...] without <commit>
