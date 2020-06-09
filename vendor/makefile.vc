@@ -4,6 +4,7 @@ GIT_VER=2.25.1
 LIBGIT_REF=v0.99.0
 PYGIT2_REF=ccf4df153c68d4af7d3d0f4f4f9104afc6f38d43
 PYGIT2_VER=1.1.0
+SQLITE_VER=3.31.1  # and APSW (-r1/.post1)
 
 # ==================================================================
 _PS=powershell.exe -NoLogo -Command
@@ -32,6 +33,7 @@ clean:
 	-rmdir /Q /S dist env
 	-rmdir /Q /S libgit2\build libgit2\env
 	-rmdir /Q /S pygit2\src\build pygit2\src\dist
+	-rmdir /Q /S apsw\src\build apsw\src\dist
 
 cleaner: clean
 	-rmdir /Q /S pygit2\src libgit2\src
@@ -39,6 +41,7 @@ cleaner: clean
 	-del spatialite\mod_spatialite.7z
 	-del libgit2\libgit2.zip
 	-del pygit2\pygit2.zip
+	-del apsw\apsw.zip
 	-rmdir /Q /S wheelhouse
 
 env:
@@ -120,6 +123,24 @@ Write-Output ">>> Expanding $$F ..."
 	dir wheelhouse\ | find "whl"
 	7z t wheelhouse\*.whl
 
+wheelhouse-archive:
+	-del wheelhouse\*.zip
+# we use `pwsh` because of https://github.com/actions/virtual-environments/issues/225
+	$(PWSH) ./<<tmpArchiveWheels.ps1
+$$ErrorActionPreference = 'stop'
+$$ProgressPreference='SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12
+
+$$H=(Get-FileHash -Algorithm SHA1 .\windows-reqs.txt).Hash
+Write-Output ">>> windows-reqs.txt hash is $$H ..."
+$$F="sno-windows-vendor-wheels-$${H}.zip"
+
+Write-Output ">>> Creating wheelhouse\$$F ..."
+Compress-Archive -Force -DestinationPath "wheelhouse\$$F" -Path "wheelhouse\*.whl"
+<<NOKEEP
+	7z l wheelhouse\*.zip
+
+
 wheels: wheelhouse
 	if not exist dist\wheelhouse mkdir dist\wheelhouse
 	copy /Y wheelhouse\*.whl dist\wheelhouse
@@ -167,8 +188,7 @@ $(pygit2_src): pygit2\pygit2.zip
 	if exist $@~ rmdir /S /Q $@~
 	7z x %s -o$@~
 	move /Y $@~\pygit2-* $@
-# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
-#	rmdir /Q /S $@~
+	rmdir /Q /S $@~
 
 $(pygit2): env $(pygit2_src) $(libgit2)
 	set LIBGIT2=$(MAKEDIR)\libgit2\env
@@ -177,8 +197,32 @@ $(pygit2): env $(pygit2_src) $(libgit2)
 
 pygit2: $(pygit2)
 
+
+# APSW
+APSW_URL="https://github.com/rogerbinns/apsw/archive/$(SQLITE_VER)-r1.zip"
+apsw_src=apsw\src
+apsw=dist\wheelhouse\apsw-$(SQLITE_VER).post1-cp37-cp37m-win_amd64.whl
+
+apsw\apsw.zip:
+	$(_PSDL) -Uri $(APSW_URL) -OutFile $@ $(_PSDLE)
+
+$(apsw_src): apsw\apsw.zip
+	if exist $@~ rmdir /S /Q $@~
+	7z x %s -o$@~
+	move /Y $@~\apsw-* $@
+	rmdir /Q /S $@~
+
+$(apsw): env $(apsw_src)
+	if not exist dist\wheelhouse mkdir dist\wheelhouse
+	(cd apsw\src && $(MAKEDIR)\env\Scripts\python setup.py \
+		fetch --version=$(SQLITE_VER) --missing-checksum-ok --all \
+		build --enable-all-extensions --enable=load_extension \
+		bdist_wheel -d $(MAKEDIR)\dist\wheelhouse)
+
+apsw: $(apsw)
+
 # Archive
-$(_ARCHIVE): $(pygit2) wheels $(git) $(spatialite) $(vcredist)
+$(_ARCHIVE): $(pygit2) $(apsw) wheels $(git) $(spatialite) $(vcredist)
 	if exist $@ del $@
 	7z a $@ .\dist\*
 
