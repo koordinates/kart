@@ -8,7 +8,8 @@ import pytest
 
 from sno import gpkg
 from sno.init import OgrImporter
-from sno.structure import DatasetStructure, Dataset1
+from sno.structure import DatasetStructure
+from sno.dataset1 import Dataset1
 
 
 H = pytest.helpers.helpers()
