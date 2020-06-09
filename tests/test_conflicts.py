@@ -61,24 +61,11 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         assert r.exit_code == 0, r
         assert r.stdout.split("\n") == [
             'nz_waca_adjustments:',
-            '  Feature conflicts:',
-            '    add/add:',
-            '      nz_waca_adjustments:id=98001',
-            '    edit/edit:',
-            '      nz_waca_adjustments:id=1452332',
-            '      nz_waca_adjustments:id=1456853',
-            '      nz_waca_adjustments:id=1456912',
-            '',
-            '',
-        ]
-
-        r = cli_runner.invoke(["conflicts", "-s", "--flat"])
-        assert r.exit_code == 0, r
-        assert r.stdout.split("\n") == [
-            'nz_waca_adjustments:id=98001',
-            'nz_waca_adjustments:id=1452332',
-            'nz_waca_adjustments:id=1456853',
-            'nz_waca_adjustments:id=1456912',
+            '    nz_waca_adjustments:feature:',
+            '        nz_waca_adjustments:feature:98001',
+            '        nz_waca_adjustments:feature:1452332',
+            '        nz_waca_adjustments:feature:1456853',
+            '        nz_waca_adjustments:feature:1456912',
             '',
             '',
         ]
@@ -87,57 +74,24 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
-                "nz_waca_adjustments": {
-                    "featureConflicts": {
-                        "add/add": ["nz_waca_adjustments:id=98001"],
-                        "edit/edit": [
-                            "nz_waca_adjustments:id=1452332",
-                            "nz_waca_adjustments:id=1456853",
-                            "nz_waca_adjustments:id=1456912",
-                        ],
-                    }
-                }
+                "nz_waca_adjustments": {"feature": [98001, 1452332, 1456853, 1456912]}
             }
-        }
-
-        r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
-        assert json.loads(r.stdout) == {
-            "sno.conflicts/v1": [
-                "nz_waca_adjustments:id=98001",
-                "nz_waca_adjustments:id=1452332",
-                "nz_waca_adjustments:id=1456853",
-                "nz_waca_adjustments:id=1456912",
-            ]
         }
 
         r = cli_runner.invoke(["conflicts", "-ss"])
         assert r.exit_code == 0, r
         assert r.stdout.split("\n") == [
             'nz_waca_adjustments:',
-            '  Feature conflicts:',
-            '    add/add: 1',
-            '    edit/edit: 3',
+            '    nz_waca_adjustments:feature: 4 conflicts',
             '',
             '',
         ]
 
-        r = cli_runner.invoke(["conflicts", "-ss", "--flat"])
-        assert r.exit_code == 0, r
-        assert r.stdout.strip() == "4"
-
         r = cli_runner.invoke(["conflicts", "-ss", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
-            "sno.conflicts/v1": {
-                "nz_waca_adjustments": {
-                    "featureConflicts": {"add/add": 1, "edit/edit": 3}
-                }
-            },
+            "sno.conflicts/v1": {"nz_waca_adjustments": {"feature": 4}},
         }
-
-        r = cli_runner.invoke(["conflicts", "-ss", "--flat", "-o", "json"])
-        assert r.exit_code == 0, r
-        assert json.loads(r.stdout) == {"sno.conflicts/v1": 4}
 
 
 def test_list_conflicts(create_conflicts, cli_runner):
@@ -152,24 +106,23 @@ def test_list_conflicts(create_conflicts, cli_runner):
         assert r.exit_code == 0, r
         assert r.stdout.split("\n") == [
             'nz_pa_points_topo_150k:',
-            '  Feature conflicts:',
-            '    edit/edit:',
-            '      nz_pa_points_topo_150k:fid=4:',
-            '        ancestor:',
+            '    nz_pa_points_topo_150k:feature:',
+            '        nz_pa_points_topo_150k:feature:4:',
+            '            nz_pa_points_topo_150k:feature:4:ancestor:',
             '                                     fid = 4',
             '                                    geom = POINT(...)',
             '                              macronated = N',
             '                                    name = ␀',
             '                              name_ascii = ␀',
             '                                 t50_fid = 2426274',
-            '        ours:',
+            '            nz_pa_points_topo_150k:feature:4:ours:',
             '                                     fid = 4',
             '                                    geom = POINT(...)',
             '                              macronated = N',
             '                                    name = ours_version',
             '                              name_ascii = ␀',
             '                                 t50_fid = 2426274',
-            '        theirs:',
+            '            nz_pa_points_topo_150k:feature:4:theirs:',
             '                                     fid = 4',
             '                                    geom = POINT(...)',
             '                              macronated = N',
@@ -185,43 +138,41 @@ def test_list_conflicts(create_conflicts, cli_runner):
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
                 "nz_pa_points_topo_150k": {
-                    "featureConflicts": {
-                        "edit/edit": {
-                            "nz_pa_points_topo_150k:fid=4": {
-                                "ancestor": {
-                                    "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
-                                    "properties": {
-                                        "fid": 4,
-                                        "macronated": "N",
-                                        "name": None,
-                                        "name_ascii": None,
-                                        "t50_fid": 2426274,
-                                    },
-                                    "id": 4,
+                    "feature": {
+                        "4": {
+                            "ancestor": {
+                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "properties": {
+                                    "fid": 4,
+                                    "macronated": "N",
+                                    "name": None,
+                                    "name_ascii": None,
+                                    "t50_fid": 2426274,
                                 },
-                                "ours": {
-                                    "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
-                                    "properties": {
-                                        "fid": 4,
-                                        "t50_fid": 2426274,
-                                        "name_ascii": None,
-                                        "macronated": "N",
-                                        "name": "ours_version",
-                                    },
-                                    "id": 4,
+                                "id": 4,
+                            },
+                            "ours": {
+                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "properties": {
+                                    "fid": 4,
+                                    "t50_fid": 2426274,
+                                    "name_ascii": None,
+                                    "macronated": "N",
+                                    "name": "ours_version",
                                 },
-                                "theirs": {
-                                    "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
-                                    "properties": {
-                                        "fid": 4,
-                                        "t50_fid": 2426274,
-                                        "name_ascii": None,
-                                        "macronated": "N",
-                                        "name": "theirs_version",
-                                    },
-                                    "id": 4,
+                                "id": 4,
+                            },
+                            "theirs": {
+                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "properties": {
+                                    "fid": 4,
+                                    "t50_fid": 2426274,
+                                    "name_ascii": None,
+                                    "macronated": "N",
+                                    "name": "theirs_version",
                                 },
-                            }
+                                "id": 4,
+                            },
                         }
                     }
                 }
@@ -231,68 +182,52 @@ def test_list_conflicts(create_conflicts, cli_runner):
         r = cli_runner.invoke(["conflicts", "-o", "geojson"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
-            "sno.conflicts/v1": {
-                "nz_pa_points_topo_150k": {
-                    "featureConflicts": {
-                        "edit/edit": {
-                            "nz_pa_points_topo_150k:fid=4": {
-                                "ancestor": {
-                                    "type": "Feature",
-                                    "geometry": {
-                                        "type": "Point",
-                                        "coordinates": [
-                                            177.28247012123683,
-                                            -38.09148422044983,
-                                        ],
-                                    },
-                                    "properties": {
-                                        "fid": 4,
-                                        "macronated": "N",
-                                        "name": None,
-                                        "name_ascii": None,
-                                        "t50_fid": 2426274,
-                                    },
-                                    "id": 4,
-                                },
-                                "ours": {
-                                    "type": "Feature",
-                                    "geometry": {
-                                        "type": "Point",
-                                        "coordinates": [
-                                            177.28247012123683,
-                                            -38.09148422044983,
-                                        ],
-                                    },
-                                    "properties": {
-                                        "fid": 4,
-                                        "t50_fid": 2426274,
-                                        "name_ascii": None,
-                                        "macronated": "N",
-                                        "name": "ours_version",
-                                    },
-                                    "id": 4,
-                                },
-                                "theirs": {
-                                    "type": "Feature",
-                                    "geometry": {
-                                        "type": "Point",
-                                        "coordinates": [
-                                            177.28247012123683,
-                                            -38.09148422044983,
-                                        ],
-                                    },
-                                    "properties": {
-                                        "fid": 4,
-                                        "t50_fid": 2426274,
-                                        "name_ascii": None,
-                                        "macronated": "N",
-                                        "name": "theirs_version",
-                                    },
-                                    "id": 4,
-                                },
-                            }
-                        }
-                    }
-                }
-            }
+            'features': [
+                {
+                    'geometry': {
+                        'coordinates': [177.28247012123683, -38.09148422044983],
+                        'type': 'Point',
+                    },
+                    'id': 'nz_pa_points_topo_150k:feature:4:ancestor',
+                    'properties': {
+                        'fid': 4,
+                        'macronated': 'N',
+                        'name': None,
+                        'name_ascii': None,
+                        't50_fid': 2426274,
+                    },
+                    'type': 'Feature',
+                },
+                {
+                    'geometry': {
+                        'coordinates': [177.28247012123683, -38.09148422044983],
+                        'type': 'Point',
+                    },
+                    'id': 'nz_pa_points_topo_150k:feature:4:ours',
+                    'properties': {
+                        'fid': 4,
+                        'macronated': 'N',
+                        'name': 'ours_version',
+                        'name_ascii': None,
+                        't50_fid': 2426274,
+                    },
+                    'type': 'Feature',
+                },
+                {
+                    'geometry': {
+                        'coordinates': [177.28247012123683, -38.09148422044983],
+                        'type': 'Point',
+                    },
+                    'id': 'nz_pa_points_topo_150k:feature:4:theirs',
+                    'properties': {
+                        'fid': 4,
+                        'macronated': 'N',
+                        'name': 'theirs_version',
+                        'name_ascii': None,
+                        't50_fid': 2426274,
+                    },
+                    'type': 'Feature',
+                },
+            ],
+            'type': 'FeatureCollection',
         }

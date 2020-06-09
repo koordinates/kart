@@ -83,7 +83,7 @@ class RepositoryStructure:
         """
         Given a path in the sno repository - eg "table_A/.sno-table/49/3e/Bg==" -
         returns a tuple in either of the following forms:
-        1. (table, "feature", primary_key_field, primary_key)
+        1. (table, "feature", primary_key)
         2. (table, "meta", metadata_file_path)
         """
         table, table_path = path.split("/.sno-table/", 1)
@@ -700,7 +700,7 @@ class Dataset1(DatasetStructure):
         """
         Given a path in this layer of the sno repository - eg ".sno-table/49/3e/Bg==" -
         returns a tuple in either of the following forms:
-        1. ("feature", primary_key_field, primary_key)
+        1. ("feature", primary_key)
         2. ("meta", metadata_file_path)
         """
         if path.startswith(".sno-table/"):
@@ -708,7 +708,7 @@ class Dataset1(DatasetStructure):
         if path.startswith("meta/"):
             return ("meta", path[len("meta/") :])
         pk = self.decode_pk(os.path.basename(path))
-        return ("feature", self.primary_key, pk)
+        return ("feature", pk)
 
     def import_meta_items(self, source):
         """

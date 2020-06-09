@@ -284,9 +284,7 @@ def test_status_merging(create_conflicts, cli_runner):
             "Conflicts:",
             "",
             "nz_pa_points_topo_150k:",
-            "  Feature conflicts:",
-            "    add/add: 1",
-            "    edit/edit: 3",
+            "    nz_pa_points_topo_150k:feature: 4 conflicts",
             "",
             "",
             "View conflicts with `sno conflicts` and resolve them with `sno resolve`.",
@@ -320,10 +318,6 @@ def test_status_merging(create_conflicts, cli_runner):
                         "branch": "theirs_branch",
                     },
                 },
-                "conflicts": {
-                    "nz_pa_points_topo_150k": {
-                        "featureConflicts": {"add/add": 1, "edit/edit": 3}
-                    }
-                },
+                "conflicts": {"nz_pa_points_topo_150k": {"feature": 4}},
             }
         }

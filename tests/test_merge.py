@@ -235,9 +235,7 @@ def test_merge_conflicts(
                     "Conflicts found:",
                     "",
                     f"{data.LAYER}:",
-                    "  Feature conflicts:",
-                    "    add/add: 1",
-                    "    edit/edit: 3",
+                    f"    {data.LAYER}:feature: 4 conflicts",
                     "",
                 ]
                 + merging_state_message
@@ -267,11 +265,7 @@ def test_merge_conflicts(
                     },
                     "dryRun": dry_run,
                     "message": "Merge branch \"theirs_branch\" into ours_branch",
-                    "conflicts": {
-                        data.LAYER: {
-                            "featureConflicts": {"add/add": 1, "edit/edit": 3}
-                        },
-                    },
+                    "conflicts": {data.LAYER: {"feature": 4}},
                     "state": "merging",
                 },
             }

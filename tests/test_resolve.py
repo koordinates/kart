@@ -60,7 +60,7 @@ def test_resolve_with_version(create_conflicts, cli_runner, disable_editor):
         while conflict_ids:
             num_conflicts = len(conflict_ids)
             conflict_id = conflict_ids[0]
-            pk = conflict_id.split("=", 1)[1]
+            pk = conflict_id.split(":", 2)[2]
             pk_order += [pk]
 
             r = cli_runner.invoke(
@@ -127,8 +127,8 @@ def test_resolve_with_file(create_conflicts, cli_runner, disable_editor):
         assert r.exit_code == 0, r
 
         conflicts = json.loads(r.stdout)["sno.conflicts/v1"]
-        add_add_conflict = conflicts[H.POLYGONS.LAYER]["featureConflicts"]["add/add"][0]
-        assert add_add_conflict == "nz_waca_adjustments:id=98001"
+        add_add_conflict_pk = conflicts[H.POLYGONS.LAYER]["feature"][0]
+        assert add_add_conflict_pk == 98001
 
         # These IDs are irrelevant, but we change them to at least be unique.
         ours_geojson["id"] = "ours-feature"
@@ -142,7 +142,11 @@ def test_resolve_with_file(create_conflicts, cli_runner, disable_editor):
         }
         write_repo_file(repo, "resolution.geojson", json.dumps(resolution))
         r = cli_runner.invoke(
-            ["resolve", add_add_conflict, "--with-file=resolution.geojson"]
+            [
+                "resolve",
+                f"{H.POLYGONS.LAYER}:feature:98001",
+                "--with-file=resolution.geojson",
+            ]
         )
         assert r.exit_code == 0, r
 
