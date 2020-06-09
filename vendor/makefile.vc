@@ -188,7 +188,8 @@ $(pygit2_src): pygit2\pygit2.zip
 	if exist $@~ rmdir /S /Q $@~
 	7z x %s -o$@~
 	move /Y $@~\pygit2-* $@
-	rmdir /Q /S $@~
+# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
+#	rmdir /Q /S $@~
 
 $(pygit2): env $(pygit2_src) $(libgit2)
 	set LIBGIT2=$(MAKEDIR)\libgit2\env
@@ -210,7 +211,8 @@ $(apsw_src): apsw\apsw.zip
 	if exist $@~ rmdir /S /Q $@~
 	7z x %s -o$@~
 	move /Y $@~\apsw-* $@
-	rmdir /Q /S $@~
+# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
+#	rmdir /Q /S $@~
 
 $(apsw): env $(apsw_src)
 	if not exist dist\wheelhouse mkdir dist\wheelhouse
