@@ -244,7 +244,8 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     if isinstance(output_path, Path):
         if output_path.is_dir():
             raise click.BadParameter(
-                "Directory is not valid for --output with --json", param_hint="--output"
+                "Directory is not valid for --output with --output-format=json",
+                param_hint="--output",
             )
 
     accumulated = {}

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import click
 
-from .cli_util import MutexOption
 from .diff_output import *  # noqa - used from globals()
 from .exceptions import (
     InvalidOperation,
@@ -335,8 +334,19 @@ class Diff:
 
         return True
 
-    def counts(self, dataset):
+    def dataset_counts(self, dataset=None):
+        """Returns a dict containing the count of each type of diff, for a particular dataset."""
         return {k: len(v) for k, v in self._data[dataset.path].items()}
+
+    def counts(self, dataset=None):
+        """
+        Returns multiple dataset_counts dicts, one for each dataset touched by this diff.
+        The dataset_counts dicts are returned in a top-level dict keyed by dataset path.
+        """
+
+        return {
+            dataset.path: self.dataset_counts(dataset) for dataset in self.datasets()
+        }
 
     def __repr__(self):
         return repr(self._data)
@@ -373,6 +383,15 @@ def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
         diff += diff_wc
 
     return diff
+
+
+def get_repo_diff(base_rs, target_rs):
+    """Generates a Diff for every dataset in both RepositoryStructures."""
+    all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
+    result = Diff(None)
+    for dataset in all_datasets:
+        result += get_dataset_diff(base_rs, target_rs, None, dataset, None)
+    return result
 
 
 def diff_with_writer(
@@ -508,47 +527,14 @@ def diff_with_writer(
 @click.command()
 @click.pass_context
 @click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Get the diff in text format",
-    cls=MutexOption,
-    exclusive_with=["html", "json", "geojson", "quiet"],
-)
-@click.option(
-    "--json",
-    "output_format",
-    flag_value="json",
-    help="Get the diff in JSON format",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["html", "text", "geojson", "quiet"],
-)
-@click.option(
-    "--geojson",
-    "output_format",
-    flag_value="geojson",
-    help="Get the diff in GeoJSON format",
-    cls=MutexOption,
-    exclusive_with=["html", "text", "json", "quiet"],
-)
-@click.option(
-    "--html",
-    "output_format",
-    flag_value="html",
-    help="View the diff in a browser",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "quiet"],
-)
-@click.option(
-    "--quiet",
-    "output_format",
-    flag_value="quiet",
-    help="Disable all output of the program. Implies --exit-code.",
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "html"],
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json", "geojson", "quiet", "html"]),
+    default="text",
+    help=(
+        "Output format. 'quiet' disables all output and implies --exit-code.\n"
+        "'html' attempts to open a browser unless writing to stdout ( --output=- )"
+    ),
 )
 @click.option(
     "--exit-code",
@@ -565,9 +551,7 @@ def diff_with_writer(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
     default="pretty",
-    help="How to format the output. Only used with --json or --geojson",
-    cls=MutexOption,
-    exclusive_with=["html", "text", "quiet"],
+    help="How to format the output. Only used with -o json or -o geojson",
 )
 @click.argument("args", nargs=-1)
 def diff(ctx, output_format, output_path, exit_code, json_style, args):

@@ -658,7 +658,9 @@ def insert(request, cli_runner):
         func.index += 1
 
         if commit:
-            r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}", "--json"])
+            r = cli_runner.invoke(
+                ["commit", "-m", f"commit-{func.index}", "-o", "json"]
+            )
             assert r.exit_code == 0, r
 
             commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
@@ -688,7 +690,7 @@ def update(request, cli_runner):
             assert db.changes() == 1
 
         if commit:
-            r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "--json"])
+            r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
             assert r.exit_code == 0, r
 
             commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
@@ -697,3 +699,46 @@ def update(request, cli_runner):
             return pk
 
     return func
+
+
+@pytest.fixture
+def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
+    @contextlib.contextmanager
+    def ctx(data):
+        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
+            repo = pygit2.Repository(str(repo_path))
+            sample_pks = data.SAMPLE_PKS
+
+            cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
+            cli_runner.invoke(["checkout", "-b", "theirs_branch"])
+
+            db = geopackage(wc)
+            update(db, sample_pks[0], "theirs_version")
+            update(db, sample_pks[1], "ours_theirs_version")
+            update(db, sample_pks[2], "theirs_version")
+            update(db, sample_pks[3], "theirs_version")
+            update(db, sample_pks[4], "theirs_version")
+            insert(db, reset_index=1, insert_str="insert_theirs")
+
+            cli_runner.invoke(["checkout", "ancestor_branch"])
+            cli_runner.invoke(["checkout", "-b", "ours_branch"])
+
+            update(db, sample_pks[1], "ours_theirs_version")
+            update(db, sample_pks[2], "ours_version")
+            update(db, sample_pks[3], "ours_version")
+            update(db, sample_pks[4], "ours_version")
+            update(db, sample_pks[5], "ours_version")
+            insert(db, reset_index=1, insert_str="insert_ours")
+
+            yield repo
+
+    return ctx
+
+
+@pytest.fixture
+def disable_editor():
+    old_environ = dict(os.environ)
+    os.environ["GIT_EDITOR"] = "echo"
+    yield
+    os.environ.clear()
+    os.environ.update(old_environ)

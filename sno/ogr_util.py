@@ -6,6 +6,8 @@ def adapt_value_noop(value):
 
 
 def adapt_ogr_datetime(value):
+    if value is None:
+        return value
     # OGR uses this strange format: '2012/07/09 09:01:52+00'
     # We convert back to a normal ISO8601 format.
     return value.replace('/', '-').replace(' ', 'T').replace('+00', 'Z')

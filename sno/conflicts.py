@@ -3,11 +3,10 @@ import sys
 
 import click
 
-from .cli_util import MutexOption
-from .exceptions import InvalidOperation, SUCCESS, SUCCESS_WITH_FLAG
+from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
-from .repo_files import is_ongoing_merge
+from .repo_files import RepoState
 
 
 L = logging.getLogger("sno.conflicts")
@@ -53,7 +52,9 @@ def list_conflicts(
     conflicts = {}
     conflict_output = _CONFLICT_PLACEHOLDER
 
-    for conflict in rich_conflicts(merge_index.conflicts.values(), merge_context):
+    for conflict in rich_conflicts(
+        merge_index.unresolved_conflicts.values(), merge_context
+    ):
         if not summarise:
             conflict_output = conflict.output(output_format)
 
@@ -101,7 +102,7 @@ def summarise_conflicts(cur_dict, summarise):
     summarise=1: [K1, K2]
     summarise=2: 2 (the size of the dict)
     """
-    first_value = next(iter(cur_dict.values()))
+    first_value = next(iter(cur_dict.values())) if cur_dict else None
     if first_value == _CONFLICT_PLACEHOLDER:
         if summarise == 1:
             return sorted(cur_dict.keys(), key=_label_sort_key)
@@ -174,38 +175,11 @@ def conflicts_json_as_text(json_obj):
 @click.command()
 @click.pass_context
 @click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Get the diff in text format",
-    cls=MutexOption,
-    exclusive_with=["json", "geojson", "quiet"],
-)
-@click.option(
-    "--json",
-    "output_format",
-    flag_value="json",
-    help="Get the diff in JSON format",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["text", "geojson", "quiet"],
-)
-@click.option(
-    "--geojson",
-    "output_format",
-    flag_value="geojson",
-    help="Get the diff in GeoJSON format",
-    cls=MutexOption,
-    exclusive_with=["text", "json", "quiet"],
-)
-@click.option(
-    "--quiet",
-    "output_format",
-    flag_value="quiet",
-    help="Disable all output of the program. Implies --exit-code.",
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "html"],
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json", "geojson", "quiet"]),
+    default="text",
+    help="Output format. 'quiet' disables all output and implies --exit-code.",
 )
 @click.option(
     "--exit-code",
@@ -216,9 +190,7 @@ def conflicts_json_as_text(json_obj):
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
     default="pretty",
-    help="How to format the output. Only used with --json or --geojson",
-    cls=MutexOption,
-    exclusive_with=["text", "quiet"],
+    help="How to format the output. Only used with `-o json` and `-o geojson`",
 )
 @click.option(
     "--exit-code",
@@ -240,10 +212,7 @@ def conflicts_json_as_text(json_obj):
 def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
     """ Lists merge conflicts that need to be resolved before the ongoing merge can be completed. """
 
-    repo = ctx.obj.repo
-    if not is_ongoing_merge(repo):
-        raise InvalidOperation("Cannot list conflicts - there is no ongoing merge")
-
+    repo = ctx.obj.get_repo(allowed_states=[RepoState.MERGING])
     merge_index = MergeIndex.read_from_repo(repo)
 
     if output_format == "quiet":

@@ -1,22 +1,24 @@
 import os
-
 from pathlib import Path
 import shlex
 import shutil
 import subprocess
 
+import click
 
 from . import is_windows
-from .exceptions import SubprocessError
+from .exceptions import SubprocessError, InvalidOperation, NotFound
 
-
+# Standard git files:
 HEAD = "HEAD"
 COMMIT_EDITMSG = "COMMIT_EDITMSG"
 ORIG_HEAD = "ORIG_HEAD"
 MERGE_HEAD = "MERGE_HEAD"
 MERGE_MSG = "MERGE_MSG"
+
+# Sno-specific files:
 MERGE_INDEX = "MERGE_INDEX"
-MERGE_LABELS = "MERGE_LABELS"
+MERGE_BRANCH = "MERGE_BRANCH"
 
 
 def repo_file_path(repo, filename):
@@ -69,23 +71,76 @@ def user_edit_repo_file(repo, filename):
         ) from e
 
 
-def read_repo_file(repo, filename):
+def read_repo_file(repo, filename, missing_ok=False, strip=False):
     path = repo_file_path(repo, filename)
-    return path.read_text(encoding="utf-8")
+    if missing_ok and not path.exists():
+        return None
+    result = path.read_text(encoding="utf-8")
+    if strip:
+        result = result.strip()
+    return result
 
 
 def remove_repo_file(repo, filename, missing_ok=True):
     path = repo_file_path(repo, filename)
-    if not path.exists() and missing_ok:
+    if missing_ok and not path.exists():
         return  # TODO: use path.unlink(missing_ok=True) (python3.8)
     path.unlink()
 
 
-def is_ongoing_merge(repo):
-    if repo_file_exists(repo, MERGE_HEAD):
-        if not repo_file_exists(repo, MERGE_INDEX):
-            raise RuntimeError(
-                "Repository is in merging state but MERGE_INDEX is missing. Try `sno merge --abort`"
+def remove_all_merge_repo_files(repo):
+    """Deletes the following files (if they exist) - MERGE_HEAD, MERGE_BRANCH, MERGE_MSG, MERGE_INDEX"""
+    remove_repo_file(repo, MERGE_HEAD)
+    remove_repo_file(repo, MERGE_BRANCH)
+    remove_repo_file(repo, MERGE_MSG)
+    remove_repo_file(repo, MERGE_INDEX)
+
+
+class RepoState:
+    """
+    A sno repository is defined as being in a certain state depending on the
+    presence or absence of certain repository files. Certain sno commands are
+    only valid in certain repository states.
+    """
+
+    NORMAL = "normal"
+    MERGING = "merging"
+
+    ALL_STATES = [NORMAL, MERGING]
+
+    @classmethod
+    def bad_state_message(cls, allowed_states, bad_state, command_extra):
+        """Generates a generic message about a disallowed_state if no specific message is provided."""
+        # Only two states exist right now so logic is pretty simple:
+        cmd = click.get_current_context().command_path
+        if command_extra:
+            cmd = f"{cmd} {command_extra}"
+        if bad_state == cls.MERGING:
+            return (
+                f'`{cmd}` does not work while the sno repo is in "merging" state.\n'
+                'Use `sno merge --abort` to abandon the merge and get back to the previous state.'
             )
-        return True
-    return False
+        return f'`{cmd}` only works when the sno repo is in "merging" state, but it is in "normal" state.'
+
+    @classmethod
+    def get_state(cls, repo):
+        if repo_file_exists(repo, MERGE_HEAD):
+            if not repo_file_exists(repo, MERGE_INDEX):
+                raise NotFound(
+                    'sno repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
+                    'Try `sno merge --abort` to return to a good state.'
+                )
+            return RepoState.MERGING
+        return RepoState.NORMAL
+
+    @classmethod
+    def ensure_state(
+        cls, repo, allowed_states, bad_state_message=None, command_extra=None
+    ):
+        repo_state = cls.get_state(repo)
+        if repo_state not in allowed_states:
+            if not bad_state_message:
+                bad_state_message = cls.bad_state_message(
+                    allowed_states, repo_state, command_extra
+                )
+            raise InvalidOperation(bad_state_message)

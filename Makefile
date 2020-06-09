@@ -180,7 +180,8 @@ test: $(py-install-test)
 .PHONY: ci-test
 ci-test:
 	pytest \
-		--verbose \
+		-vv \
+		--log-level=DEBUG \
 		-p no:sugar \
 		--cov-report term \
 		--cov-report html:test-results/coverage/ \
