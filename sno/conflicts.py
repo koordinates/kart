@@ -18,74 +18,80 @@ _CONFLICT_PLACEHOLDER = object()
 
 
 def list_conflicts(
-    merge_index, merge_context, output_format="text", summarise=0, flat=False,
+    merge_index, merge_context, output_format="text", summarise=0, flat=False
 ):
     """
         Lists all the conflicts in merge_index, categorised into nested dicts.
         Example:
         {
-            "table_A": {
-                "featureConflicts":
-                    "edit/edit": {
-                        "table_A:fid=5": {"ancestor": "...", "ours": ..., "theirs": ...},
-                        "table_A:fid=11": {"ancestor": "...", "ours": ..., "theirs": ...},
-                    },
-                    "add/add": {...}
+            "dataset_A": {
+                "feature":
+                    "5": {"ancestor": "...", "ours": ..., "theirs": ...},
+                    "11": {"ancestor": "...", "ours": ..., "theirs": ...},
                 },
-                "metaConflicts": {
-                    "edit/edit": {
-                        "table_A:meta:gpkg_spatial_ref_sys": {"ancestor": ..., "ours": ..., "theirs": ...}
-                    }
+                "meta": {
+                    "gpkg_spatial_ref_sys": {"ancestor": ..., "ours": ..., "theirs": ...}}
                 }
             },
-            "table_B": {...}
+            "dataset_B": {...}
         }
-        Depending on the output_format, the conflicts themselves could be summarised as counts
-        or as lists of names, eg ["table_1:fid=5", "table_1:fid=11"]
 
         merge_index - MergeIndex object containing the conflicts found.
         merge_context - MergeContext object containing RepositoryStructures.
         output_format - one of 'text', 'json', 'geojson'
         summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
-        flat - if True, don't categorise conflicts. Put them all at the top level.
+        categorise - if True, adds another layer between feature and ID which is the type of conflict, eg "edit/edit"
+        flat - if True, put all features at the top level, with the entire path as the key eg:
+            {"dataset_A:feature:5:ancestor": ..., "dataset_A:feature:5:ours": ...}
     """
     conflicts = {}
     conflict_output = _CONFLICT_PLACEHOLDER
+
+    if output_format == "geojson":
+        flat = True  # geojson must be flat or it is not valid geojson
+        summarise = 0
 
     for conflict in rich_conflicts(
         merge_index.unresolved_conflicts.values(), merge_context
     ):
         if not summarise:
-            conflict_output = conflict.output(output_format)
+            conflict_output = conflict.output(output_format, include_label=flat)
 
         if flat:
-            conflicts[conflict.label] = conflict_output
+            if isinstance(conflict_output, dict):
+                conflicts.update(conflict_output)
+            else:
+                conflicts[conflict.label] = conflict_output
         else:
-            add_conflict_at_label(
-                conflicts, conflict.categorised_label, conflict_output
-            )
+            set_value_at_dict_path(conflicts, conflict.decoded_path, conflict_output)
 
     if summarise:
         conflicts = summarise_conflicts(conflicts, summarise)
 
     if output_format == "text":
         return conflicts_json_as_text(conflicts)
+    elif output_format == "geojson":
+        return conflicts_json_as_geojson(conflicts)
     else:
         return conflicts
 
 
-def add_conflict_at_label(root_dict, categorised_label, conflict):
+def set_value_at_dict_path(root_dict, path, value):
     """
-    Ensures the given category of conflicts exists, and then adds
-    the given conflict dict to it.
+    Ensures the given path exists as a nested dict structure in root dict,
+    and then places the given value there. For example:
+    >>> d = {"x": 1}
+    >>> add_value_at_dict_path(d, ("a", "b", "c"), 100)
+    >>> d
+    {"a": {"b": {"c": 100}}, "x": 1}
     """
     cur_dict = root_dict
-    for c in categorised_label[:-1]:
+    for c in path[:-1]:
         cur_dict.setdefault(c, {})
         cur_dict = cur_dict[c]
 
-    leaf = categorised_label[-1]
-    cur_dict[leaf] = conflict
+    leaf = path[-1]
+    cur_dict[leaf] = value
 
 
 def summarise_conflicts(cur_dict, summarise):
@@ -105,7 +111,7 @@ def summarise_conflicts(cur_dict, summarise):
     first_value = next(iter(cur_dict.values())) if cur_dict else None
     if first_value == _CONFLICT_PLACEHOLDER:
         if summarise == 1:
-            return sorted(cur_dict.keys(), key=_label_sort_key)
+            return sorted(cur_dict.keys(), key=_path_sort_key)
         elif summarise == 2:
             return len(cur_dict)
 
@@ -114,25 +120,33 @@ def summarise_conflicts(cur_dict, summarise):
     return cur_dict
 
 
-def _label_sort_key(label):
-    """Sort labels of conflicts in a sensible way."""
-    if label.startswith(("ancestor=", "ours=", "theirs=")):
-        # Put the complicated conflicts last.
-        return "Z multiple-path", label
-
-    parts = label.split('=', 1)
-    if len(parts) == 2:
-        prefix, pk = parts
-        pk = int(pk) if pk.isdigit() else pk
-        return "B feature", prefix, pk
+def _path_sort_key(path):
+    """Sort conflicts in a sensible way."""
+    if isinstance(path, str) and ":" in path:
+        return tuple(_path_part_sort_key(p) for p in path.split(":"))
     else:
-        return "A meta", label
+        return _path_part_sort_key(path)
 
 
-_JSON_KEYS_TO_TEXT_HEADERS = {
-    "featureConflicts": "Feature conflicts",
-    "metaConflicts": "META conflicts",
-}
+def _path_part_sort_key(path_part):
+    # Treat stringified numbers as numbers
+    if isinstance(path_part, str) and path_part.isdigit():
+        path_part = int(path_part)
+
+    # Put meta before features:
+    if path_part == "meta":
+        return "A", path_part
+    elif path_part == "feature":
+        return "B", path_part
+
+    # Put complicated conflicts last:
+    if isinstance(path_part, str) and "," in path_part:
+        return "Z", path_part
+
+    if isinstance(path_part, int):
+        return "N", "", path_part
+    else:
+        return "N", path_part
 
 
 def conflicts_json_as_text(json_obj):
@@ -142,34 +156,52 @@ def conflicts_json_as_text(json_obj):
     this function deals with the hierarchy that contains them.
     """
 
-    def key_to_text(key, level):
-        indent = "  " * level
-        heading = _JSON_KEYS_TO_TEXT_HEADERS.get(key, key)
-        styled_heading = f"{indent}{heading}:"
-        if level == 0:
-            styled_heading = click.style(styled_heading, bold=True)
-        return styled_heading
+    def style_key_text(key_text, level):
+        indent = "    " * level
+        style = {}
+        if key_text.endswith(":ancestor:"):
+            style["fg"] = "red"
+        elif key_text.endswith(":ours:"):
+            style["fg"] = "green"
+        elif key_text.endswith(":theirs:"):
+            style["fg"] = "cyan"
+        return click.style(indent + key_text, **style)
 
-    def value_to_text(value, level):
-        if isinstance(value, (str, int)):
+    def value_to_text(value, path, level):
+        if isinstance(value, str):
             return f"{value}\n"
+        elif isinstance(value, int):
+            return f"{value} conflicts\n"
         elif isinstance(value, dict):
             separator = "\n" if level == 0 else ""
             return separator.join(
-                item_to_text(k, v, level) for k, v in sorted(value.items())
+                item_to_text(k, v, path, level) for k, v in sorted(value.items())
             )
         elif isinstance(value, list):
-            indent = "  " * level
-            return "".join(f"{indent}{item}\n" for item in value)
+            indent = "    " * level
+            return "".join(f"{indent}{path}{item}\n" for item in value)
 
-    def item_to_text(key, value, level):
-        key_text = key_to_text(key, level)
+    def item_to_text(key, value, path, level):
+        key_text = f"{path}{key}:"
+
+        styled_key_text = style_key_text(key_text, level)
+        value_text = value_to_text(value, key_text, level + 1)
+
         if isinstance(value, int):
-            return f"{key_text} {value}\n"
+            return f"{styled_key_text} {value_text}"
         else:
-            return f"{key_text}\n{value_to_text(value, level + 1)}"
+            return f"{styled_key_text}\n{value_text}"
 
-    return value_to_text(json_obj, 0)
+    return value_to_text(json_obj, "", 0)
+
+
+def conflicts_json_as_geojson(json_obj):
+    """Converts the JSON output of list_conflicts to geojson."""
+    features = []
+    for key, feature in json_obj.items():
+        feature["id"] = key
+        features.append(feature)
+    return {"type": "FeatureCollection", "features": features}
 
 
 @click.command()
@@ -207,6 +239,7 @@ def conflicts_json_as_text(json_obj):
 @click.option(
     '--flat',
     is_flag=True,
+    hidden=True,
     help="Output all conflicts in a flat list, instead of in a hierarchy.",
 )
 def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
@@ -223,8 +256,10 @@ def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
 
     if output_format == "text":
         click.echo(result)
-    else:
+    elif output_format == "json":
         dump_json_output({"sno.conflicts/v1": result}, sys.stdout, json_style)
+    elif output_format == "geojson":
+        dump_json_output(result, sys.stdout, json_style)
 
     if exit_code:
         ctx.exit(SUCCESS_WITH_FLAG if merge_context.conflicts else SUCCESS)

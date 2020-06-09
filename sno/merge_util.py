@@ -1,4 +1,5 @@
 from collections import namedtuple
+import functools
 import json
 import re
 
@@ -369,10 +370,9 @@ class VersionContext:
         self.branch = branch
 
     @property
+    @functools.lru_cache(maxsize=1)
     def repo_structure(self):
-        if not hasattr(self, "_repo_structure"):
-            self._repo_structure = RepositoryStructure.lookup(self.repo, self.commit_id)
-        return self._repo_structure
+        return RepositoryStructure.lookup(self.repo, self.commit_id)
 
     @property
     def shorthand(self):
@@ -498,59 +498,51 @@ class RichConflictVersion:
         return self.context.repo_structure
 
     @property
+    @functools.lru_cache(maxsize=1)
     def decoded_path(self):
-        if not hasattr(self, "_decoded_path"):
-            self._decoded_path = self.repo_structure.decode_path(self.path)
-        return self._decoded_path
+        return self.repo_structure.decode_path(self.path)
 
     @property
-    def table(self):
+    def dataset_path(self):
         return self.decoded_path[0]
 
     @property
     def dataset(self):
-        return self.repo_structure[self.table]
+        return self.repo_structure[self.dataset_path]
 
     @property
-    def table_part(self):
+    def dataset_part(self):
         return self.decoded_path[1]
 
     @property
     def is_meta(self):
-        return self.table_part == "meta"
-
-    @property
-    def pk_field(self):
-        assert self.table_part == "feature"
-        return self.decoded_path[2]
+        return self.dataset_part == "meta"
 
     @property
     def pk(self):
-        assert self.table_part == "feature"
-        return self.decoded_path[3]
+        assert self.dataset_part == "feature"
+        return self.decoded_path[2]
+
+    @property
+    def pk_field(self):
+        assert self.dataset_part == "feature"
+        return self.dataset.primary_key
 
     @property
     def meta_path(self):
-        assert self.table_part == "meta"
-        return self.decoded_path[3]
+        assert self.dataset_part == "meta"
+        return self.decoded_path[2]
 
     @property
     def feature(self):
-        assert self.table_part == "feature"
+        assert self.dataset_part == "feature"
         _, feature = self.dataset.get_feature(self.pk, ogr_geoms=False)
         return feature
 
     @property
     def meta_item(self):
-        assert self.table_part == "meta"
+        assert self.dataset_part == "meta"
         return self.dataset.get_meta_item(self.meta_path)
-
-    @property
-    def path_label(self):
-        if self.is_meta:
-            return f"{self.table}:meta:{self.meta_path}"
-        else:
-            return f"{self.table}:{self.pk_field}={self.pk}"
 
     def output(self, output_format):
         """
@@ -597,68 +589,52 @@ class RichConflict:
         return next(self.true_versions)
 
     @property
+    @functools.lru_cache(maxsize=1)
     def has_multiple_paths(self):
         """True if the conflict involves renames and has more than one path."""
-        if not hasattr(self, "_has_multiple_paths"):
-            paths = set(v.path for v in self.true_versions)
-            self._has_multiple_paths = len(paths) > 1
-        return self._has_multiple_paths
+        paths = set(v.path for v in self.true_versions)
+        return len(paths) > 1
+
+    def _multiversion_decoded_path(self):
+        def path_part(i):
+            parts = set(v.decoded_path[i] for v in self.true_versions)
+            if len(parts) == 1:
+                return next(iter(parts))
+            return ",".join(
+                f"{v.version_name}={v.decoded_path[i]}" for v in self.true_versions
+            )
+
+        return tuple(path_part(i) for i in range(2))
 
     @property
+    @functools.lru_cache(maxsize=1)
+    def decoded_path(self):
+        """
+        Generally returns the same as calling decoded_path on any of the versions,
+        ie a tuple that describes which feature or metadata this conflict involves:
+        ("datasetA", "feature", "5")
+        However any part of the tuple can be more complicated if the conflict spans
+        multiple paths (because it involves renames), eg:
+        ("datasetA", "feature", "ancestor=5,ours=6,theirs=7")
+        """
+        if self.has_multiple_paths:
+            return self._multiversion_decoded_path()
+        else:
+            return self.any_true_version.decoded_path
+
+    @property
+    @functools.lru_cache(maxsize=1)
     def label(self):
         """
-        A unique label for this conflict - eg: "tableA:fid=5" if
-        this conflict only involves the feature in tableA in row 5.
+        A unique label for this conflict - eg: "datsetA:feature:5".
+        See decoded_path.
         """
-        if not hasattr(self, "_label"):
-            if self.has_multiple_paths:
-                self._label = " ".join(
-                    f"{v.version_name}={v.path_label}" for v in self.true_versions
-                )
-            else:
-                self._label = self.any_true_version.path_label
-        return self._label
+        return ":".join(str(p) for p in self.decoded_path)
 
-    @property
-    def categorised_label(self):
-        """
-        A unique label for this conflict, but as part of a hierarchy so it
-        can be grouped with similar conflicts. Eg:
-        ["tableA", "featureConflicts", "edit/edit" "tableA:fid=5"]
-        """
-        if (
-            self.has_multiple_paths
-            and len(set(v.table for v in self.true_versions)) > 1
-        ):
-            # Conflict involves files in multiple tables.
-            return ["<uncategorised>", self.label]
-        table = self.any_true_version.table
-
-        if (
-            self.has_multiple_paths
-            and len(set(v.table_part for v in self.true_versions)) > 1
-        ):
-            # Meta/feature conflict. Shouldn't really happen.
-            return [table, "<uncategorised>", self.label]
-        table_part = self.any_true_version.table_part + "Conflicts"
-
-        # <uncategorised> type currently includes everything involving renames.
-        conflict_type = "<uncategorised>"
-        if not self._has_multiple_paths:
-            if not self.versions.ancestor:
-                if self.versions.ours and self.versions.theirs:
-                    conflict_type = "add/add"
-            else:
-                if self.versions.ours and self.versions.theirs:
-                    conflict_type = "edit/edit"
-                elif self.versions.ours or self.versions.theirs:
-                    conflict_type = "edit/delete"
-
-        return [table, table_part, conflict_type, self.label]
-
-    def output(self, output_format):
+    def output(self, output_format, include_label=False):
         """Output this conflict in the given output_format - text, json or geojson."""
-        return {v.version_name: v.output(output_format) for v in self.true_versions}
+        l = f"{self.label}:" if include_label else ""
+        return {l + v.version_name: v.output(output_format) for v in self.true_versions}
 
 
 def rich_conflicts(raw_conflicts, merge_context):

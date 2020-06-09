@@ -60,9 +60,8 @@ def ensure_geojson_resolve_supported(rich_conflict):
     - otherwise we won't know which table should contain the resolution -
     and the conflict only involves features, since we can't load metadata from geojson.
     """
-    categorised_label = rich_conflict.categorised_label
-    single_table = categorised_label[0] == rich_conflict.any_true_version.table
-    only_features = categorised_label[1] == "featureConflicts"
+    single_table = "," not in rich_conflict.decoded_path[0]
+    only_features = rich_conflict.decoded_path[1] == "feature"
     if not single_table or not only_features:
         raise NotYetImplemented(
             "Sorry, only feature conflicts can currently be resolved using --with-file"
@@ -100,6 +99,11 @@ def resolve(ctx, with_version, file_path, conflict_label):
 
     merge_index = MergeIndex.read_from_repo(repo)
     merge_context = MergeContext.read_from_repo(repo)
+
+    if conflict_label.endswith(":"):
+        # Due to the way conflict labels are often displayed with ":ancestor" etc on the end,
+        # a user could easily have an extra ":" on the end by accident.
+        conflict_label = conflict_label[:-1]
 
     for key, conflict3 in merge_index.conflicts.items():
         rich_conflict = RichConflict(conflict3, merge_context)
