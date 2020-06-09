@@ -18,7 +18,7 @@ def text_status(cli_runner):
 
 
 def json_status(cli_runner):
-    r = cli_runner.invoke(["status", "--json"])
+    r = cli_runner.invoke(["status", "-o", "json"])
     assert r.exit_code == 0, r
     return json.loads(r.stdout)
 
@@ -262,7 +262,7 @@ def test_status_none(tmp_path, cli_runner, chdir):
             == "Error: Current directory is not an existing repository"
         )
 
-        r = cli_runner.invoke(["status", "--json"])
+        r = cli_runner.invoke(["status", "-o", "json"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]

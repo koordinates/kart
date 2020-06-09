@@ -3,7 +3,6 @@ import sys
 import click
 import pygit2
 
-from .cli_util import do_json_option
 from .exceptions import InvalidOperation
 from .exec import execvp
 from .output_util import dump_json_output
@@ -11,19 +10,21 @@ from .output_util import dump_json_output
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
-@do_json_option
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def branch(ctx, do_json, args):
+def branch(ctx, output_format, args):
     """ List, create, or delete branches """
     repo = ctx.obj.repo
 
     sargs = set(args)
-    if do_json:
-        valid_args = {"--list"}  # "sno branch --json" or "sno branch --list --json"
+    if output_format == 'json':
+        valid_args = {"--list"}  # "sno branch -o json" or "sno branch --list -o json"
         invalid_args = sargs - valid_args
         if invalid_args:
             raise click.UsageError(
-                "Illegal usage: 'sno branch --json' only supports listing branches."
+                "Illegal usage: 'sno branch --output-format=json' only supports listing branches."
             )
         dump_json_output(list_branches_json(repo), sys.stdout)
         return

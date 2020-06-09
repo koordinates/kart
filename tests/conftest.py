@@ -658,7 +658,9 @@ def insert(request, cli_runner):
         func.index += 1
 
         if commit:
-            r = cli_runner.invoke(["commit", "-m", f"commit-{func.index}", "--json"])
+            r = cli_runner.invoke(
+                ["commit", "-m", f"commit-{func.index}", "-o", "json"]
+            )
             assert r.exit_code == 0, r
 
             commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
@@ -688,7 +690,7 @@ def update(request, cli_runner):
             assert db.changes() == 1
 
         if commit:
-            r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "--json"])
+            r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
             assert r.exit_code == 0, r
 
             commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]

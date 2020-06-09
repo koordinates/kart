@@ -27,7 +27,11 @@ def test_apply_empty_patch(data_archive_readonly, cli_runner):
 
 def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
     patch_data = json.dumps(
-        {'sno.diff/v1+hexwkb': {'wrong-name': {'featureChanges': [], 'metaChanges': [],}}}
+        {
+            'sno.diff/v1+hexwkb': {
+                'wrong-name': {'featureChanges': [], 'metaChanges': [],}
+            }
+        }
     )
     with data_archive("points"):
         r = cli_runner.invoke(["apply", '-'], input=patch_data)
@@ -85,8 +89,8 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         bits = r.stdout.split()
         assert bits[0] == 'Commit'
 
-        # Check that the `sno show --json` output is the same as our original patch file had.
-        r = cli_runner.invoke(['show', '--json'])
+        # Check that the `sno show -o json` output is the same as our original patch file had.
+        r = cli_runner.invoke(['show', '-o', 'json'])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
@@ -134,8 +138,8 @@ def test_apply_with_working_copy(
             names = dict(cur.fetchall())
             assert names == workingcopy_verify_names
 
-        # Check that the `sno show --json` output is the same as our original patch file had.
-        r = cli_runner.invoke(['show', '--json'])
+        # Check that the `sno show -o json` output is the same as our original patch file had.
+        r = cli_runner.invoke(['show', '-o', 'json'])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
@@ -173,7 +177,7 @@ def test_apply_with_working_copy_with_no_commit(
         assert bits[0] == 'Updating'
 
         # Check that the working copy diff is the same as the original patch file
-        r = cli_runner.invoke(['diff', '--json'])
+        r = cli_runner.invoke(['diff', '-o', 'json'])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
@@ -183,7 +187,7 @@ def test_apply_with_working_copy_with_no_commit(
 
 def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
     with data_archive("au-census"):
-        r = cli_runner.invoke(["show", "--json", "master"])
+        r = cli_runner.invoke(["show", "-o", "json", "master"])
         assert r.exit_code == 0, r
         patch_text = r.stdout
         patch_json = json.loads(patch_text)
@@ -197,7 +201,7 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
         r = cli_runner.invoke(["apply", "-"], input=patch_text)
         assert r.exit_code == 0, r
 
-        r = cli_runner.invoke(["show", "--json"])
+        r = cli_runner.invoke(["show", "-o", "json"])
         assert r.exit_code == 0, r
         new_patch_json = json.loads(r.stdout)
 
@@ -225,7 +229,7 @@ def test_apply_benchmark(
         assert r.exit_code == 0, r
 
         # Make it into a patch
-        r = cli_runner.invoke(["show", "--json"])
+        r = cli_runner.invoke(["show", "-o", "json"])
         assert r.exit_code == 0, r
         patch_text = r.stdout
         patch_json = json.loads(patch_text)

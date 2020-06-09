@@ -30,7 +30,7 @@ from .timestamps import (
 )
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
-from .cli_util import MutexOption, do_json_option
+from .cli_util import MutexOption
 
 
 @click.command()
@@ -62,8 +62,10 @@ from .cli_util import MutexOption, do_json_option
         "such a commit. This option bypasses the safety"
     ),
 )
-@do_json_option
-def commit(ctx, message, message_file, allow_empty, do_json):
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
+def commit(ctx, message, message_file, allow_empty, output_format):
     """ Record changes to the repository """
     repo = ctx.obj.repo
 
@@ -90,6 +92,7 @@ def commit(ctx, message, message_file, allow_empty, do_json):
     if not wc_diff and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
+    do_json = output_format == "json"
     if message_file:
         commit_msg = message_file.read().strip()
     elif message:

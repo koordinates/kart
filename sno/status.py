@@ -3,7 +3,6 @@ import sys
 import click
 import pygit2
 
-from .cli_util import do_json_option
 from .conflicts import list_conflicts
 from .output_util import dump_json_output
 from .structure import RepositoryStructure
@@ -14,8 +13,10 @@ from .merge_util import MergeContext, MergeIndex
 
 @click.command()
 @click.pass_context
-@do_json_option
-def status(ctx, do_json):
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
+def status(ctx, output_format):
     """ Show the working copy status """
     repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
@@ -24,7 +25,6 @@ def status(ctx, do_json):
         merge_index = MergeIndex.read_from_repo(repo)
         merge_context = MergeContext.read_from_repo(repo)
         jdict["merging"] = merge_context.as_json()
-        output_format = "json" if do_json else "text"
         jdict["conflicts"] = list_conflicts(
             merge_index, merge_context, output_format, summarise=2
         )
@@ -32,7 +32,7 @@ def status(ctx, do_json):
     else:
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
-    if do_json:
+    if output_format == 'json':
         dump_json_output({"sno.status/v1": jdict}, sys.stdout)
     else:
         click.echo(status_to_text(jdict))

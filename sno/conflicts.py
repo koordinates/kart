@@ -3,7 +3,6 @@ import sys
 
 import click
 
-from .cli_util import MutexOption
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
@@ -176,38 +175,11 @@ def conflicts_json_as_text(json_obj):
 @click.command()
 @click.pass_context
 @click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Get the diff in text format",
-    cls=MutexOption,
-    exclusive_with=["json", "geojson", "quiet"],
-)
-@click.option(
-    "--json",
-    "output_format",
-    flag_value="json",
-    help="Get the diff in JSON format",
-    hidden=True,
-    cls=MutexOption,
-    exclusive_with=["text", "geojson", "quiet"],
-)
-@click.option(
-    "--geojson",
-    "output_format",
-    flag_value="geojson",
-    help="Get the diff in GeoJSON format",
-    cls=MutexOption,
-    exclusive_with=["text", "json", "quiet"],
-)
-@click.option(
-    "--quiet",
-    "output_format",
-    flag_value="quiet",
-    help="Disable all output of the program. Implies --exit-code.",
-    cls=MutexOption,
-    exclusive_with=["json", "text", "geojson", "html"],
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json", "geojson", "quiet"]),
+    default="text",
+    help="Output format. 'quiet' disables all output and implies --exit-code.",
 )
 @click.option(
     "--exit-code",
@@ -218,9 +190,7 @@ def conflicts_json_as_text(json_obj):
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
     default="pretty",
-    help="How to format the output. Only used with --json or --geojson",
-    cls=MutexOption,
-    exclusive_with=["text", "quiet"],
+    help="How to format the output. Only used with `-o json` and `-o geojson`",
 )
 @click.option(
     "--exit-code",

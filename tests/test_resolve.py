@@ -12,7 +12,7 @@ H = pytest.helpers.helpers()
 
 
 def get_conflict_ids(cli_runner):
-    r = cli_runner.invoke(["conflicts", "-s", "--flat", "--json"])
+    r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
     assert r.exit_code == 0, r
     return json.loads(r.stdout)["sno.conflicts/v1"]
 
@@ -36,7 +36,7 @@ def get_json_feature(rs, layer, pk):
 
 def test_resolve_with_version(create_conflicts, cli_runner, disable_editor):
     with create_conflicts(H.POLYGONS) as repo:
-        r = cli_runner.invoke(["merge", "theirs_branch", "--json"])
+        r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
         assert RepoState.get_state(repo) == RepoState.MERGING
@@ -107,21 +107,23 @@ def test_resolve_with_version(create_conflicts, cli_runner, disable_editor):
 
 def test_resolve_with_file(create_conflicts, cli_runner, disable_editor):
     with create_conflicts(H.POLYGONS) as repo:
-        r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "--geojson"])
+        r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r
         ours_geojson = json.loads(r.stdout)["features"][0]
         assert ours_geojson["id"] == "I::98001"
 
-        r = cli_runner.invoke(["diff", "ancestor_branch..theirs_branch", "--geojson"])
+        r = cli_runner.invoke(
+            ["diff", "ancestor_branch..theirs_branch", "-o", "geojson"]
+        )
         assert r.exit_code == 0, r
         theirs_geojson = json.loads(r.stdout)["features"][0]
         assert theirs_geojson["id"] == "I::98001"
 
-        r = cli_runner.invoke(["merge", "theirs_branch", "--json"])
+        r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
 
-        r = cli_runner.invoke(["conflicts", "-s", "--json"])
+        r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
         assert r.exit_code == 0, r
 
         conflicts = json.loads(r.stdout)["sno.conflicts/v1"]
