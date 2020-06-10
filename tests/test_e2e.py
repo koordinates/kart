@@ -105,7 +105,7 @@ def test_e2e(
             assert r.stdout.splitlines()[0] == "On branch master"
 
             # merge it
-            r = cli_runner.invoke(["merge", "edit-1", "--no-ff"])
+            r = cli_runner.invoke(["merge", "edit-1", "--no-ff", "-m", "merge-1"])
             assert r.exit_code == 0
             assert "Fast-forward" not in r.stdout
             sha_merge1 = r.stdout.splitlines()[-1].split(" ")[-1]

@@ -75,7 +75,7 @@ try {
     Exec { sno commit -m 'my-commit' }
     Exec { sno switch 'master' }
     Exec { sno status }
-    Exec { sno merge 'edit-1' --no-ff }
+    Exec { sno merge 'edit-1' --no-ff -m 'my-merge'}
     Exec { sno log }
 }
 catch {

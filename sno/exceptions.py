@@ -27,6 +27,7 @@ NO_USER = 46
 NO_COMMIT = 47
 NO_IMPORT_SOURCE = 48
 NO_TABLE = 49
+NO_CONFLICT = 50
 
 SUBPROCESS_ERROR_FLAG = 128
 DEFAULT_SUBPROCESS_ERROR = 129
@@ -90,4 +91,4 @@ class SubprocessError(BaseException):
             message, exit_code=exit_code, param=param, param_hint=param_hint
         )
         if called_process_error and not exit_code:
-            self.exit_code = SUBPROCESS_ERROR_FLAG + called_process_error.return_code
+            self.exit_code = SUBPROCESS_ERROR_FLAG + called_process_error.returncode

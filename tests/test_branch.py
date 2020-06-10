@@ -16,7 +16,7 @@ def text_branches(cli_runner):
 
 
 def json_branches(cli_runner):
-    r = cli_runner.invoke(["branch", "--json"])
+    r = cli_runner.invoke(["branch", "-o", "json"])
     assert r.exit_code == 0, r
     return json.loads(r.stdout)
 
@@ -154,7 +154,7 @@ def test_branches_none(tmp_path, cli_runner, chdir):
             == "Error: Current directory is not an existing repository"
         )
 
-        r = cli_runner.invoke(["branch", "--json"])
+        r = cli_runner.invoke(["branch", "-o", "json"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]

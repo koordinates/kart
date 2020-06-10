@@ -12,7 +12,7 @@ from osgeo import gdal, ogr
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
-from .cli_util import do_json_option
+from .cli_util import call_and_exit_flag
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -371,7 +371,10 @@ class OgrImporter:
         }
 
     def _get_meta_geometry_type(self):
-        ogr_geom_type = self.ogrlayer.GetGeomType()
+        # remove Z/M components
+        ogr_geom_type = ogr.GT_Flatten(self.ogrlayer.GetGeomType())
+        if ogr_geom_type == ogr.wkbUnknown:
+            return 'GEOMETRY'
         return (
             # normalise the geometry type names the way the GPKG spec likes it:
             # http://www.geopackage.org/spec/#geometry_types
@@ -447,11 +450,11 @@ class OgrImporter:
         srs = self.ogrlayer.GetSpatialRef()
         srid = self._get_meta_srid()
         yield {
-            'srs_name': srs.GetName(),
+            'srs_name': srs.GetName() if srs else 'Unknown CRS',
             'srs_id': srid,
             'organization': 'EPSG',
             'organization_coordsys_id': srid,
-            'definition': srs.ExportToWkt(),
+            'definition': srs.ExportToWkt() if srs else '',
             'description': None,
         }
 
@@ -503,12 +506,10 @@ class ImportGPKG(OgrImporter):
         yield from gpkg.get_meta_info(db, layer=self.table)
 
 
-def list_import_formats(ctx, param, value):
+def list_import_formats(ctx):
     """
     List the supported import formats
     """
-    if not value or ctx.resilient_parsing:
-        return
     names = set()
     for prefix, ogr_driver_name in FORMAT_TO_OGR_MAP.items():
         d = gdal.GetDriverByName(ogr_driver_name)
@@ -519,7 +520,6 @@ def list_import_formats(ctx, param, value):
                 names.add(prefix)
     for n in sorted(names):
         click.echo(n)
-    ctx.exit()
 
 
 @click.command("import")
@@ -536,16 +536,10 @@ def list_import_formats(ctx, param, value):
     help="Which table to import. If not specified, this will be selected interactively",
 )
 @click.option(
-    "--list", "do_list", is_flag=True, help="List all tables present in the source path"
+    "--message", "-m", help="Commit message. By default this is auto-generated.",
 )
 @click.option(
-    "--list-formats",
-    is_flag=True,
-    help="List available import formats, and then exit",
-    # https://click.palletsprojects.com/en/7.x/options/#callbacks-and-eager-options
-    is_eager=True,
-    expose_value=False,
-    callback=list_import_formats,
+    "--list", "do_list", is_flag=True, help="List all tables present in the source path"
 )
 @click.option(
     "--version",
@@ -553,8 +547,17 @@ def list_import_formats(ctx, param, value):
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
 )
-@do_json_option
-def import_table(ctx, source, directory, table, do_list, do_json, version):
+@call_and_exit_flag(
+    "--list-formats",
+    callback=list_import_formats,
+    help="List available import formats, and then exit",
+)
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
+def import_table(
+    ctx, source, directory, table, message, do_list, output_format, version
+):
     """
     Import data into a repository.
 
@@ -567,9 +570,9 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     $ sno import --list GPKG:my.gpkg
     """
 
-    if do_json and not do_list:
+    if output_format == 'json' and not do_list:
         raise click.UsageError(
-            "Illegal usage: 'sno import --json' only supports --list"
+            "Illegal usage: '--output-format=json' only supports --list"
         )
 
     use_repo_ctx = not do_list
@@ -581,7 +584,7 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     source_loader = OgrImporter.open(source, table)
 
     if do_list:
-        source_loader.print_table_list(do_json=do_json)
+        source_loader.print_table_list(do_json=output_format == 'json')
         return
 
     source_loader.check_table(prompt=True)
@@ -599,7 +602,7 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
     if params:
         click.echo(f"Import parameters: {params}")
-    importer.fast_import_table(repo, source_loader, **params)
+    importer.fast_import_table(repo, source_loader, message=message, **params)
 
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
@@ -627,6 +630,11 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     default=True,
     help="Whether to checkout a working copy in the repository",
 )
+@click.option(
+    "--message",
+    "-m",
+    help="Commit message (when used with --import). By default this is auto-generated.",
+)
 @click.argument(
     "directory", type=click.Path(writable=True, file_okay=False), required=False
 )
@@ -636,7 +644,7 @@ def import_table(ctx, source, directory, table, do_list, do_json, version):
     default=structure.DatasetStructure.version_numbers()[0],
     hidden=True,
 )
-def init(ctx, import_from, table, do_checkout, directory, version):
+def init(ctx, import_from, table, do_checkout, message, directory, version):
     """
     Initialise a new repository and optionally import data
 
@@ -670,7 +678,7 @@ def init(ctx, import_from, table, do_checkout, directory, version):
         params = json.loads(os.environ.get("SNO_IMPORT_OPTIONS", None) or "{}")
         if params:
             click.echo(f"Import parameters: {params}")
-        importer.fast_import_table(repo, source_loader, **params)
+        importer.fast_import_table(repo, source_loader, message=message, **params)
 
         if do_checkout:
             # Checkout a working copy

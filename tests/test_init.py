@@ -59,6 +59,26 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
         assert "Commit: " in lines[-1]
 
 
+@pytest.mark.slow
+def test_init_import_custom_message(data_archive_readonly, tmp_path, cli_runner, chdir):
+    with data_archive_readonly("gpkg-points") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "-m",
+                "Custom message",
+                "--import",
+                data / "nz-pa-points-topo-150k.gpkg",
+                tmp_path / "emptydir",
+            ]
+        )
+        assert r.exit_code == 0, r
+        with chdir(tmp_path / "emptydir"):
+            r = cli_runner.invoke(["log", "-1"])
+        assert r.exit_code == 0, r
+        assert 'Custom message' in r.stdout
+
+
 def test_init_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner):
     with data_archive_readonly("gpkg-au-census") as data:
         r = cli_runner.invoke(

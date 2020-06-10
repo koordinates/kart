@@ -1,145 +1,13 @@
-import contextlib
 import json
 import pytest
 
-import pygit2
-
 from sno.merge_util import MergeIndex
 from sno.structs import CommitWithReference
-from sno.repo_files import (
-    MERGE_HEAD,
-    MERGE_MSG,
-    MERGE_LABELS,
-    MERGE_INDEX,
-    repo_file_exists,
-    read_repo_file,
-)
 
 H = pytest.helpers.helpers()
 
 
-@pytest.fixture
-def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
-    @contextlib.contextmanager
-    def ctx(data):
-        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-            repo = pygit2.Repository(str(repo_path))
-            sample_pks = data.SAMPLE_PKS
-
-            cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
-            cli_runner.invoke(["checkout", "-b", "theirs_branch"])
-
-            db = geopackage(wc)
-            update(db, sample_pks[0], "theirs_version")
-            update(db, sample_pks[1], "ours_theirs_version")
-            update(db, sample_pks[2], "theirs_version")
-            update(db, sample_pks[3], "theirs_version")
-            update(db, sample_pks[4], "theirs_version")
-            insert(db, reset_index=1, insert_str="insert_theirs")
-
-            cli_runner.invoke(["checkout", "ancestor_branch"])
-            cli_runner.invoke(["checkout", "-b", "ours_branch"])
-
-            update(db, sample_pks[1], "ours_theirs_version")
-            update(db, sample_pks[2], "ours_version")
-            update(db, sample_pks[3], "ours_version")
-            update(db, sample_pks[4], "ours_version")
-            update(db, sample_pks[5], "ours_version")
-            insert(db, reset_index=1, insert_str="insert_ours")
-
-            yield repo
-
-    return ctx
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        pytest.param(H.POINTS, id="points",),
-        pytest.param(H.POLYGONS, id="polygons",),
-        pytest.param(H.TABLE, id="table"),
-    ],
-)
-@pytest.mark.parametrize(
-    "output_format", ["text", "json"],
-)
-@pytest.mark.parametrize(
-    "dry_run", [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
-)
-def test_merge_conflicts(
-    data, output_format, dry_run, create_conflicts, cli_runner,
-):
-    with create_conflicts(data) as repo:
-        ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
-        ours = CommitWithReference.resolve(repo, "ours_branch")
-        theirs = CommitWithReference.resolve(repo, "theirs_branch")
-
-        cmd = ["merge", "theirs_branch", f"--{output_format}"]
-        if dry_run:
-            cmd += ["--dry-run"]
-
-        r = cli_runner.invoke(cmd)
-        assert r.exit_code == 0, r
-
-        if output_format == "text":
-            dry_run_message = (
-                ["(Not actually merging due to --dry-run)", ""] if dry_run else [""]
-            )
-
-            assert (
-                r.stdout.split("\n")
-                == [
-                    'Merging branch "theirs_branch" into ours_branch',
-                    "Conflicts found:",
-                    "",
-                    f"{data.LAYER}:",
-                    "  Feature conflicts:",
-                    "    add/add: 1",
-                    "    edit/edit: 3",
-                    "",
-                ]
-                + dry_run_message
-            )
-
-        else:
-            jdict = json.loads(r.stdout)
-            assert jdict == {
-                "sno.merge/v1": {
-                    "branch": "ours_branch",
-                    "ancestor": ancestor.id.hex,
-                    "ours": ours.id.hex,
-                    "theirs": theirs.id.hex,
-                    "dryRun": dry_run,
-                    "message": "Merge branch \"theirs_branch\" into ours_branch",
-                    "conflicts": {
-                        data.LAYER: {
-                            "featureConflicts": {"add/add": 1, "edit/edit": 3}
-                        },
-                    },
-                },
-            }
-
-        if not dry_run:
-            assert read_repo_file(repo, MERGE_HEAD) == theirs.id.hex + "\n"
-            assert (
-                read_repo_file(repo, MERGE_MSG)
-                == "Merge branch \"theirs_branch\" into ours_branch\n"
-            )
-            assert (
-                read_repo_file(repo, MERGE_LABELS)
-                == f'({ancestor.id.hex})\n"ours_branch" ({ours.id.hex})\n"theirs_branch" ({theirs.id.hex})\n'
-            )
-            merge_index = MergeIndex.read_from_repo(repo)
-            assert len(merge_index.conflicts) == 4
-            cli_runner.invoke(["merge", "--abort"])
-
-        assert not repo_file_exists(repo, MERGE_HEAD)
-        assert not repo_file_exists(repo, MERGE_MSG)
-        assert not repo_file_exists(repo, MERGE_LABELS)
-        assert not repo_file_exists(repo, MERGE_INDEX)
-
-
-def test_conflict_index_roundtrip(create_conflicts, cli_runner):
+def test_merge_index_roundtrip(create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
     with create_conflicts(H.POLYGONS) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
@@ -153,17 +21,30 @@ def test_conflict_index_roundtrip(create_conflicts, cli_runner):
         assert index.conflicts
 
         # Create a MergeIndex object, and roundtrip it into a tree and back.
-        orig = MergeIndex(index)
+        orig = MergeIndex.from_pygit2_index(index)
+        assert len(orig.entries) == 242
+        assert len(orig.conflicts) == 4
+        assert len(orig.resolves) == 0
+        assert len(orig.unresolved_conflicts) == 4
+
         orig.write("test.conflict.index")
         r1 = MergeIndex.read("test.conflict.index")
         assert r1 is not orig
         assert r1 == orig
 
-        # Simulate resolving a conflict:
-        key, conflict = next(iter(r1.conflicts.items()))
-        r1.remove_conflict(key)
-        r1.add(conflict.ours)  # Accept our change
+        # Simulate resolving some conflicts:
+        items = list(r1.conflicts.items())
+        key, conflict = items[0]
+        # Resolve conflict 0 by accepting our version.
+        r1.add_resolve(key, [conflict.ours])
+        # Resolve conflict 1 by deleting it entirely.
+        key, conflict = items[1]
+        r1.add_resolve(key, [])
         assert r1 != orig
+        assert len(r1.entries) == 242
+        assert len(r1.conflicts) == 4
+        assert len(r1.resolves) == 2
+        assert len(r1.unresolved_conflicts) == 2
 
         # Roundtrip again
         r1.write("test.conflict.index")
@@ -202,7 +83,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
             '',
         ]
 
-        r = cli_runner.invoke(["conflicts", "-s", "--json"])
+        r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
@@ -219,7 +100,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
             }
         }
 
-        r = cli_runner.invoke(["conflicts", "-s", "--flat", "--json"])
+        r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": [
                 "nz_waca_adjustments:id=98001",
@@ -244,7 +125,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         assert r.exit_code == 0, r
         assert r.stdout.strip() == "4"
 
-        r = cli_runner.invoke(["conflicts", "-ss", "--json"])
+        r = cli_runner.invoke(["conflicts", "-ss", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
@@ -254,7 +135,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
             },
         }
 
-        r = cli_runner.invoke(["conflicts", "-ss", "--flat", "--json"])
+        r = cli_runner.invoke(["conflicts", "-ss", "--flat", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {"sno.conflicts/v1": 4}
 
@@ -299,7 +180,7 @@ def test_list_conflicts(create_conflicts, cli_runner):
             '',
         ]
 
-        r = cli_runner.invoke(["conflicts", "--json"])
+        r = cli_runner.invoke(["conflicts", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {
@@ -347,7 +228,7 @@ def test_list_conflicts(create_conflicts, cli_runner):
             }
         }
 
-        r = cli_runner.invoke(["conflicts", "--geojson"])
+        r = cli_runner.invoke(["conflicts", "-o", "geojson"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "sno.conflicts/v1": {

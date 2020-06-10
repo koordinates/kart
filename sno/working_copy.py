@@ -647,7 +647,8 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
     def diff_db_to_tree(self, dataset, pk_filter=None):
         """
-        Generates a diff between a working copy DB and the underlying repository tree
+        Generates a diff between a working copy DB and the underlying repository tree,
+        for a single dataset only.
 
         Pass a list of PK values to filter results to them
         """
@@ -731,6 +732,16 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 deletes=dict(itertools.chain(*candidates_del.values())),
                 updates=candidates_upd,
             )
+
+    def diff_to_tree(self, repo_structure):
+        """
+        Generates a diff between a working copy DB and the underlying repository tree,
+        for every dataset in the given repository structure.
+        """
+        result = diff.Diff(None)
+        for dataset in repo_structure:
+            result += self.diff_db_to_tree(dataset)
+        return result
 
     def commit_callback(self, dataset, action, **kwargs):
         with self.session() as db:
@@ -1004,7 +1015,3 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                     (target_tree.hex,),
                 )
-
-    def status(self, dataset):
-        diff = self.diff_db_to_tree(dataset)
-        return diff.counts(dataset)

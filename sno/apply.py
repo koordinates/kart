@@ -145,6 +145,6 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
 @click.argument("patch_file", type=click.File('r', encoding="utf-8"))
 def apply(ctx, **kwargs):
     """
-    Applies and commits the given JSON patch (as created by `sno show --json`)
+    Applies and commits the given JSON patch (as created by `sno show -o json`)
     """
     apply_patch(repo=ctx.obj.repo, **kwargs)

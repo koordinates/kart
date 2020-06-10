@@ -96,7 +96,7 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
 
         print(f"deleted fid={pk_del}")
 
-        r = cli_runner.invoke(["commit", "-m", "test-commit-1", "--json"])
+        r = cli_runner.invoke(["commit", "-m", "test-commit-1", "-o", "json"])
         assert r.exit_code == 0, r
         commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
         print("commit:", commit_id)

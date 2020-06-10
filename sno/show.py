@@ -5,7 +5,6 @@ from io import StringIO
 
 import click
 
-from .cli_util import MutexOption
 from .output_util import dump_json_output, resolve_output_path
 from .structs import CommitWithReference
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -18,37 +17,26 @@ EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 @click.command()
 @click.pass_context
 @click.option(
-    "--text",
-    "output_format",
-    flag_value="text",
-    default=True,
-    help="Show commit in text format",
-    cls=MutexOption,
-    exclusive_with=["json"],
-)
-@click.option(
-    "--json",
-    "--patch",
-    "-p",
-    "output_format",
-    flag_value="json",
-    help="Show commit in JSON patch format",
-    cls=MutexOption,
-    exclusive_with=["text"],
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json", "patch"]),
+    default="text",
+    help="Output format. 'patch' is a synonym for 'json'",
 )
 @click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
     default="pretty",
-    help="How to format the output. Only used with --json",
-    cls=MutexOption,
-    exclusive_with=["text"],
+    help="How to format the output. Only used with --output-format=json",
 )
 @click.argument("refish", default='HEAD', required=False)
 def show(ctx, *, refish, output_format, json_style, **kwargs):
     """
     Show the given commit, or HEAD
     """
+    if output_format == 'patch':
+        output_format = 'json'
+
     repo = ctx.obj.repo
     # Ensures we were given a reference to a commit, and not a tree or something
     commit = CommitWithReference.resolve(repo, refish).commit

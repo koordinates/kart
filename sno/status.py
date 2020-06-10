@@ -3,28 +3,39 @@ import sys
 import click
 import pygit2
 
-from .cli_util import do_json_option
+from .conflicts import list_conflicts
 from .output_util import dump_json_output
 from .structure import RepositoryStructure
+from .repo_files import RepoState
+from .merge import merge_status_to_text
+from .merge_util import MergeContext, MergeIndex
 
 
 @click.command()
 @click.pass_context
-@do_json_option
-def status(ctx, do_json):
+@click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
+def status(ctx, output_format):
     """ Show the working copy status """
-    repo = ctx.obj.repo
-    jdict = get_status_json(repo)
-    if do_json:
-        dump_json_output(jdict, sys.stdout)
+    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    jdict = get_branch_status_json(repo)
+
+    if RepoState.get_state(repo) == RepoState.MERGING:
+        merge_index = MergeIndex.read_from_repo(repo)
+        merge_context = MergeContext.read_from_repo(repo)
+        jdict["merging"] = merge_context.as_json()
+        jdict["conflicts"] = list_conflicts(
+            merge_index, merge_context, output_format, summarise=2
+        )
+        jdict["state"] = "merging"
+    else:
+        jdict["workingCopy"] = get_working_copy_status_json(repo)
+
+    if output_format == 'json':
+        dump_json_output({"sno.status/v1": jdict}, sys.stdout)
     else:
         click.echo(status_to_text(jdict))
-
-
-def get_status_json(repo):
-    output = get_branch_status_json(repo)
-    output["workingCopy"] = get_working_copy_status_json(repo)
-    return {"sno.status/v1": output}
 
 
 def get_branch_status_json(repo):
@@ -65,42 +76,43 @@ def get_working_copy_status_json(repo):
 
     output = {"path": working_copy.path, "changes": None}
 
-    wc_changes = {}
-    for dataset in rs:
-        status = working_copy.status(dataset)
-        if any(status.values()):
-            wc_changes[dataset.path] = status
-
-    if wc_changes:
-        output["changes"] = get_diff_status_json(wc_changes)
+    wc_diff = working_copy.diff_to_tree(rs)
+    if wc_diff:
+        output["changes"] = get_diff_status_json(wc_diff)
 
     return output
 
 
-def get_diff_status_json(wc_changes):
+def get_diff_status_json(diff):
+    """Given a diff.Diff object, returns a JSON object describing the diff status."""
     output = {}
-    for dataset_path, status in wc_changes.items():
-        if sum(status.values()):
+    for dataset_path, counts in diff.counts().items():
+        if sum(counts.values()):
             output[dataset_path] = {
-                "metaChanges": {} if status["META"] else None,
+                "metaChanges": {} if counts["META"] else None,
                 "featureChanges": {
-                    "modified": status["U"],
-                    "new": status["I"],
-                    "deleted": status["D"],
+                    "modified": counts["U"],
+                    "new": counts["I"],
+                    "deleted": counts["D"],
                 },
             }
     return output
 
 
 def status_to_text(jdict):
-    branch_status = branch_status_to_text(jdict["sno.status/v1"])
-    wc_status = working_copy_status_to_text(jdict["sno.status/v1"]["workingCopy"])
+    branch_status = branch_status_to_text(jdict)
+    is_empty = not jdict["commit"]
+    is_merging = jdict.get("state", None) == RepoState.MERGING
 
-    is_empty = not jdict["sno.status/v1"]["commit"]
-    if is_empty:
-        return branch_status
+    if is_merging:
+        merge_status = merge_status_to_text(jdict, fresh=False)
+        return "\n\n".join([branch_status, merge_status])
 
-    return "\n\n".join([branch_status, wc_status])
+    if not is_empty:
+        wc_status = working_copy_status_to_text(jdict["workingCopy"])
+        return "\n\n".join([branch_status, wc_status])
+
+    return branch_status
 
 
 def branch_status_to_text(jdict):
@@ -185,8 +197,9 @@ def get_branch_status_message(repo):
     return branch_status_to_text(get_branch_status_json(repo))
 
 
-def get_diff_status_message(wc_changes):
-    return diff_status_to_text(get_diff_status_json(wc_changes))
+def get_diff_status_message(diff):
+    """Given a diff.Diff, return a status message describing it."""
+    return diff_status_to_text(get_diff_status_json(diff))
 
 
 def _pf(count):

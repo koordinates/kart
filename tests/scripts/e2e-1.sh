@@ -50,7 +50,7 @@ sno diff
 sno commit -m my-commit
 sno switch master
 sno status
-sno merge edit-1 --no-ff
+sno merge edit-1 --no-ff -m merge-1
 sno log
 
 { echo -e "\n✅ E2E: Success"; } 2>/dev/null

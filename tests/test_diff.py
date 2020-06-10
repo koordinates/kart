@@ -34,7 +34,7 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
     with data_working_copy("points") as (repo, wc):
         # empty
         r = cli_runner.invoke(
-            ["diff", f"--{output_format}", "--output=-", "--exit-code"]
+            ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
         )
         assert r.exit_code == 0, r
 
@@ -54,7 +54,9 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
             cur.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid=3;")
             assert db.changes() == 1
 
-        r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
+        r = cli_runner.invoke(
+            ["diff", f"--output-format={output_format}", "--output=-"]
+        )
         print("STDOUT", repr(r.stdout))
         if output_format == "quiet":
             assert r.exit_code == 1, r
@@ -298,7 +300,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
     with data_working_copy("polygons") as (repo, wc):
         # empty
         r = cli_runner.invoke(
-            ["diff", f"--{output_format}", "--output=-", "--exit-code"]
+            ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
         )
         assert r.exit_code == 0, r
 
@@ -318,7 +320,9 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
             cur.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id=1452332;")
             assert db.changes() == 1
 
-        r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
+        r = cli_runner.invoke(
+            ["diff", f"--output-format={output_format}", "--output=-"]
+        )
         if output_format == "quiet":
             assert r.exit_code == 1, r
             assert r.stdout == ""
@@ -648,7 +652,7 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
     with data_working_copy("table") as (repo, wc):
         # empty
         r = cli_runner.invoke(
-            ["diff", f"--{output_format}", "--output=-", "--exit-code"]
+            ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
         )
         assert r.exit_code == 0, r
 
@@ -668,7 +672,9 @@ def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
             cur.execute(f'DELETE FROM {H.TABLE.LAYER} WHERE "OBJECTID"=3;')
             assert db.changes() == 1
 
-        r = cli_runner.invoke(["diff", f"--{output_format}", "--output=-"])
+        r = cli_runner.invoke(
+            ["diff", f"--output-format={output_format}", "--output=-"]
+        )
         if output_format == "quiet":
             assert r.exit_code == 1, r
             assert r.stdout == ""
@@ -1025,7 +1031,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
         for spec in F_SPECS:
             print(f"fwd: {spec}")
-            r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
+            r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
@@ -1046,7 +1052,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
 
         for spec in R_SPECS:
             print(f"rev: {spec}")
-            r = cli_runner.invoke(["diff", "--exit-code", "--json", spec])
+            r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
@@ -1128,7 +1134,7 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
             return ds
 
         # changes from HEAD (R1 -> WC)
-        r = cli_runner.invoke(["diff", "--exit-code", "--json", R1])
+        r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", R1])
         assert r.exit_code == 1, r
         odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
         ddata = _extract(odata)
@@ -1145,7 +1151,7 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
         }
 
         # changes from HEAD^1 (R0 -> WC)
-        r = cli_runner.invoke(["diff", "--exit-code", "--json", R0])
+        r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", R0])
         assert r.exit_code == 1, r
         odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
         ddata = _extract(odata)
@@ -1372,17 +1378,17 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         H.git_graph(request, "pre-merge-master")
 
         # changes <> master (commit <> commit) diff should fail
-        r = cli_runner.invoke(["diff", "--quiet", f"{m_commit_id}..{b_commit_id}"])
+        r = cli_runner.invoke(["diff", "-o", "quiet", f"{m_commit_id}..{b_commit_id}"])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stderr
 
         # same the other way around
-        r = cli_runner.invoke(["diff", "--quiet", f"{b_commit_id}..{m_commit_id}"])
+        r = cli_runner.invoke(["diff", "-o", "quiet", f"{b_commit_id}..{m_commit_id}"])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stderr
 
         # diff against working copy should fail too
-        r = cli_runner.invoke(["diff", "--quiet", b_commit_id])
+        r = cli_runner.invoke(["diff", "-o", "quiet", b_commit_id])
         assert r.exit_code == NOT_YET_IMPLEMENTED, r
         assert "3-way diffs aren't supported" in r.stderr
 
@@ -1393,7 +1399,7 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
     Show a patch; ref defaults to HEAD
     """
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["show", f"--{output_format}", "HEAD"])
+        r = cli_runner.invoke(["show", f"--output-format={output_format}", "HEAD"])
         assert r.exit_code == 0, r
 
         if output_format == 'text':
@@ -1463,7 +1469,9 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
     initial_commit = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
 
     with data_archive_readonly("polygons"):
-        r = cli_runner.invoke(["show", f"--{output_format}", initial_commit])
+        r = cli_runner.invoke(
+            ["show", f"--output-format={output_format}", initial_commit]
+        )
         assert r.exit_code == 0, r
 
         if output_format == 'text':
@@ -1494,7 +1502,7 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
 
 def test_show_json_format(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["show", f"--json", "--json-style=compact", "HEAD"])
+        r = cli_runner.invoke(["show", f"-o", "json", "--json-style=compact", "HEAD"])
 
         assert r.exit_code == 0, r
         # output is compact, no indentation
