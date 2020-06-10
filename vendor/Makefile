@@ -1,3 +1,5 @@
+SHELL = /bin/bash
+
 export PREFIX := $(abspath env)
 export PATH := $(abspath env/bin):$(PATH)
 
@@ -319,8 +321,10 @@ build-Linux: VENDOR:=build/vendor-Linux
 build-Linux:
 	-$(RM) -r $(VENDOR) $(vendor-Linux-archive)
 	mkdir -p $(VENDOR) dist
-	time docker run --rm \
-		-it \
+	time docker run \
+		--name sno-vendor-build-linux \
+		--rm \
+		`[[ -t 0 ]] && echo '-it'` \
 		-v $(abspath .):/src \
 		-w /src \
 		-v sno-vendor-linux-ccache:/root/.cache/ccache \
