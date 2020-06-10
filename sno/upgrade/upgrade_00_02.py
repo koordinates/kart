@@ -10,7 +10,7 @@ import click
 import pygit2
 
 from sno.core import walk_tree
-from sno.structure import Dataset1
+from sno.dataset1 import Dataset1
 
 
 @click.command()
