@@ -9,6 +9,18 @@ from . import checkout
 from .structure import RepositoryStructure
 
 
+def get_directory_from_url(url):
+    if '/' in url:
+        # 'sno@example.com:path/to/repo'
+        return url.rsplit('/', 1)[1]
+    elif ':' in url:
+        # 'sno@example.com:repo'
+        return url.rsplit(':', 1)[1]
+    else:
+        # 'otherdir' or 'C:\otherdir'
+        return os.path.split(url)[1]
+
+
 @click.command()
 @click.pass_context
 @click.option(
@@ -26,7 +38,8 @@ from .structure import RepositoryStructure
 )
 def clone(ctx, do_checkout, url, directory):
     """ Clone a repository into a new directory """
-    repo_path = Path(directory or os.path.split(url)[1])
+
+    repo_path = Path(directory or get_directory_from_url(url))
 
     # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
     # pygit2.clone_repository() works fine except for that
