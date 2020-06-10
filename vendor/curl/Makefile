@@ -108,4 +108,4 @@ print-lib-deps-Darwin:
 .PHONY: print-lib-deps-Linux
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
-	cd src/  && find . -name "*.so" -print -exec ldd {} \;
+	cd src/  && find . -name "*.so" -print -exec sh -c "ldd {} && readelf -d {} | grep 'RPATH'" \;

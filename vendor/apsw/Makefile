@@ -23,7 +23,7 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
 	export CFLAGS += -I$(PREFIX)/include
-	export LDFLAGS = -Wl,-rpath='$$ORIGIN',-rpath='$$ORIGIN/../..' -L$(PREFIX)/lib -lsqlite3
+	export LDFLAGS := -Wl,-rpath='$$ORIGIN/../..' -L$(PREFIX)/lib -lsqlite3
 	include ../sqlite/version.mk  # SQLITE_VERSION
 endif
 PY3 := $(or $(PY3),python3.7)

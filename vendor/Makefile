@@ -320,7 +320,7 @@ build-Linux:
 	-$(RM) -r $(VENDOR) $(vendor-Linux-archive)
 	mkdir -p $(VENDOR) dist
 	time docker run --rm \
-		$(if $(MANYLINUX_DEBUG),-it) \
+		-it \
 		-v $(abspath .):/src \
 		-w /src \
 		-v sno-vendor-linux-ccache:/root/.cache/ccache \

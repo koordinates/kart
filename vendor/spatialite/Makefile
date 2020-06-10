@@ -13,6 +13,13 @@ SPATIALITE_ARCHIVE := libspatialite-$(SPATIALITE_VERSION).tar.gz
 
 CFLAGS += -DACCEPT_USE_OF_DEPRECATED_PROJ_API_H
 
+export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
+PROJ_CFLAGS := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config proj --cflags)
+PROJ_LDFLAGS := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config proj --libs)
+
+export CFLAGS += $(PROJ_CFLAGS)
+export LDFLAGS := $(value LDFLAGS) $(PROJ_LDFLAGS)
+
 ifeq ($(PLATFORM),Darwin)
 	CCACHE_PATH = /usr/local/opt/ccache/bin
 	LIBSUFFIX = dylib
@@ -21,13 +28,6 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 endif
-
-export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
-PROJ_CFLAGS := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config proj --cflags)
-PROJ_LDFLAGS := $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config proj --libs)
-
-export CFLAGS += $(PROJ_CFLAGS)
-export LDFLAGS += $(PROJ_LDFLAGS)
 
 # use ccache if available
 export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)

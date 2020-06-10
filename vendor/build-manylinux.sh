@@ -32,11 +32,11 @@ popd
 echo ">>> Python: $(command -v python3.7)"
 
 echo ">>> Setting up /build ..."
-cp -v Makefile ./linux-delocate-deps.py /build/
+ln -s "$(pwd)/Makefile" "$(pwd)/linux-delocate-deps.py" /build/
 for M in */Makefile; do
     D=$(dirname "$M")
     mkdir -p "/build/$D"
-    cp -v "$M" "/build/$M"
+    ln -s "$(pwd)/$M" "/build/$M"
     find "$D" -maxdepth 1 \( -name "*.tar.*" -o -name "*.zip" \) -print -exec ln -s "$(pwd)"/{} "/build/$D/" \;
 done
 cp -v sqlite/version.mk /build/sqlite/
@@ -83,4 +83,5 @@ else
 
     echo ">>> CCache Stats:"
     ccache --show-stats
+
 fi
