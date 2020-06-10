@@ -93,21 +93,29 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                 "Patch contains no author information, and --no-commit was not supplied"
             )
 
+        default_sig = repo.default_signature
+        if 'authorTime' in metadata:
+            timestamp = int(
+                datetime.timestamp(iso8601_utc_to_datetime(metadata['authorTime']))
+            )
+        else:
+            timestamp = default_sig.time
+        if 'authorTimeOffset' in metadata:
+            offset = int(
+                iso8601_tz_to_timedelta(metadata['authorTimeOffset']).total_seconds()
+                / 60  # minutes
+            )
+        else:
+            offset = default_sig.offset
+
         oid = rs.commit(
             diff,
             metadata['message'],
             author=pygit2.Signature(
-                name=metadata['authorName'],
-                email=metadata['authorEmail'],
-                time=int(
-                    datetime.timestamp(iso8601_utc_to_datetime(metadata['authorTime']))
-                ),
-                offset=int(
-                    iso8601_tz_to_timedelta(
-                        metadata['authorTimeOffset']
-                    ).total_seconds()
-                    / 60  # minutes
-                ),
+                name=metadata.get('authorName', default_sig.name),
+                email=metadata.get('authorEmail', default_sig.email),
+                time=timestamp,
+                offset=offset,
             ),
             allow_empty=allow_empty,
             # Don't call WorkingCopy.commit_callback(), because it *assumes* the working
