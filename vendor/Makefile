@@ -317,6 +317,11 @@ build-Darwin: $(build-libs) $(brew-libs)
 
 	ccache --show-stats
 
+# set LINUX_DEBUG=1,2,3 for different debugging options for build-Linux
+LINUX_DEBUG_CMD_1 = "|| bash; exit 1"  # drop to shell on errors
+LINUX_DEBUG_CMD_2 = "; bash"  # drop to shell after
+LINUX_DEBUG_CMD_3 = bash  # launch a shell instead of the build
+
 .PHONY: build-Linux
 build-Linux: VENDOR:=build/vendor-Linux
 build-Linux:
@@ -333,7 +338,7 @@ build-Linux:
 		-e CCACHE_DIR=/root/.cache/ccache \
 		-e CCACHE_COMPRESS \
 		pyca/cryptography-manylinux2010:x86_64 \
-		bash -c '/src/build-manylinux.sh /src/$(VENDOR) $(if $(MANYLINUX_DEBUG),; bash)'
+		bash -c '/src/build-manylinux.sh /src/$(VENDOR) ${LINUX_DEBUG_CMD_$(LINUX_DEBUG)}'
 
 	tar czf $(vendor-Linux-archive) -C $(VENDOR) env wheelhouse
 	-$(RM) -r $(VENDOR)
