@@ -76,6 +76,7 @@ src: $(APSW_ARCHIVE)
 	@echo "Extracting $(APSW_ARCHIVE) ..."
 	tar xzf $(APSW_ARCHIVE) --strip-components=1 -C $@
 
+$(sqlite_src): export SSL_CERT_FILE ?= $(CERTIFI_SSL_CERT_FILE)
 $(sqlite_src): | src
 	# fetch sqlite amalgamation
 	cd src && python setup.py fetch \
