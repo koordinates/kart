@@ -85,7 +85,7 @@ $(lib-pygit2): $(lib-libgit2)
 	$(MAKE) -C pygit2 wheel
 	pip3 install --force-reinstall pygit2/wheel/pygit2-*$(WHEELID).whl
 
-$(lib-apsw): $(lib-sqlite)
+$(lib-apsw):
 	$(MAKE) -C apsw wheel
 	pip3 install --force-reinstall apsw/wheel/apsw-*$(WHEELID).whl
 
