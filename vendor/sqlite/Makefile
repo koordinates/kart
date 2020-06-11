@@ -1,5 +1,4 @@
-SQLITE_VERSION = 3310100
-SQLITE_YEAR = 2020
+include version.mk
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
@@ -10,7 +9,7 @@ else
 	PLATFORM := $(shell uname -s)
 endif
 
-SQLITE_ARCHIVE := sqlite-autoconf-$(SQLITE_VERSION).tar.gz
+SQLITE_ARCHIVE := sqlite-autoconf-$(SQLITE_VERSIONID).tar.gz
 
 ifeq ($(PLATFORM),Darwin)
 	CCACHE_PATH = /usr/local/opt/ccache/bin
@@ -42,7 +41,7 @@ cleaner: clean
 	-$(MAKE) -C src/ clean
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest:
 	-$(RM) -r src/
 
 .PHONY: clean-configure

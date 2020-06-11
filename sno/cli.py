@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import logging
 import os
+import re
 import subprocess
 
 import click
@@ -33,6 +34,7 @@ from .exec import execvp
 def print_version(ctx):
     import apsw
     import osgeo
+    import psycopg2
     import rtree
 
     import sno
@@ -53,9 +55,14 @@ def print_version(ctx):
 
     db = apsw.Connection(":memory:")
     dbcur = db.cursor()
-    db.enableloadextension(True)
-    dbcur.execute("SELECT load_extension(?)", (sno.spatialite_path,))
+    db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
+    db.loadextension(sno.spatialite_path)
     spatialite_version = dbcur.execute("SELECT spatialite_version();").fetchone()[0]
+
+    pq_version = psycopg2.__libpq_version__
+    pq_version = "{}.{}.{}".format(
+        *[int(k) for k in re.findall(r"\d\d", str(psycopg2.__libpq_version__))]
+    )
 
     click.echo(
         (
@@ -65,7 +72,8 @@ def print_version(ctx):
             f"Git v{git_version}\n"
             f"» APSW v{apsw.apswversion()}; "
             f"SQLite v{apsw.sqlitelibversion()}; "
-            f"SpatiaLite v{spatialite_version}\n"
+            f"SpatiaLite v{spatialite_version}; "
+            f"Libpq v{pq_version}\n"
             f"» SpatialIndex v{sidx_version}"
         )
     )

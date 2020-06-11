@@ -45,7 +45,7 @@ def pytest_report_header(config):
         click.secho(
             "\nSkipping benchmarks in tests. Use --benchmark-enable to run them.",
             bold=True,
-            fg='yellow',
+            fg="yellow",
         )
 
 
@@ -191,10 +191,10 @@ def data_archive_readonly(request, pytestconfig):
             # Store extracted data in a content-addressed cache,
             # so if the archives change we don't have to manually `pytest --cache-clear`
             archive_path = get_archive_path(name)
-            with archive_path.open('rb') as f:
+            with archive_path.open("rb") as f:
                 _archive_hashes[name] = hashlib.md5(f.read()).hexdigest()
 
-        root = Path(request.config.cache.makedir('data_archive_readonly'))
+        root = Path(request.config.cache.makedir("data_archive_readonly"))
         path = root / _archive_hashes[name]
         if path.exists():
             L.info("Found cache at %s", path)
@@ -331,8 +331,8 @@ def geopackage():
         db.setrowtrace(Row)
         dbcur = db.cursor()
         dbcur.execute("PRAGMA foreign_keys = ON;")
-        db.enableloadextension(True)
-        dbcur.execute("SELECT load_extension(?)", (spatialite_path,))
+        db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
+        db.loadextension(spatialite_path)
         dbcur.execute("SELECT EnableGpkgMode();")
         return db
 

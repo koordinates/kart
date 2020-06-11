@@ -4,6 +4,8 @@
 /venv
 /pip-wheel-metadata
 
+vendor/apsw/**
+!vendor/apsw/Makefile
 vendor/curl/**
 !vendor/curl/Makefile
 vendor/gdal/**
@@ -16,8 +18,12 @@ vendor/jsonc/**
 !vendor/jsonc/Makefile
 vendor/libgit2/**
 !vendor/libgit2/Makefile
+vendor/libpq/**
+!vendor/libpq/Makefile
 vendor/proj/**
 !vendor/proj/Makefile
+vendor/psycopg2/**
+!vendor/psycopg2/Makefile
 vendor/pygit2/**
 !vendor/pygit2/Makefile
 vendor/spatialindex/**
@@ -26,11 +32,13 @@ vendor/spatialite/**
 !vendor/spatialite/Makefile
 vendor/sqlite/**
 !vendor/sqlite/Makefile
+!vendor/sqlite/version.mk
 vendor/.ccache/
 vendor/env/
 vendor/wheelhouse/
 vendor/dist/
 vendor/build/
+vendor/Brewfile.lock.json
 
 /platforms/*/build/
 /platforms/*/dist/

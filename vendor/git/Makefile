@@ -18,7 +18,6 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	LIBSUFFIX = so
-
 endif
 
 # use ccache if available
@@ -27,13 +26,14 @@ export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
 
 ifeq ($(PLATFORM),Linux)
-	CURL_PREFIX = $(shell PKG_CONFIG_PATH=$(PKG_CONFIG_PATH) pkg-config curl --variable=prefix)
+	CURL_PREFIX = $(PREFIX)
 	libcurl := $(PREFIX)/lib/libcurl.$(LIBSUFFIX)
 	libs += $(libcurl)
-	export LDFLAGS += -Wl,-rpath=$$ORIGIN/../../lib
+# something is broken in git's LDFLAGS handling
+	export LDFLAGS := $(subst $$,$$$$,$(value LDFLAGS) -Wl,-rpath='$$ORIGIN/../../lib')
 else
-	# on macOS, force to the OS builtin libcurl
-	CURL_PREFIX=/usr
+# on macOS, force to the Homebrew libcurl
+	CURL_PREFIX=/usr/local/opt/curl
 endif
 
 CONFIG_FLAGS += CURL_CONFIG=$(CURL_PREFIX)/bin/curl-config
@@ -129,4 +129,4 @@ print-lib-deps-Darwin:
 .PHONY: print-lib-deps-Linux
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
-	cd src/ && find . -perm -o=x -type f -name "git*" -print -exec ldd {} \;
+	cd src/ && find . -perm -o=x -type f -name "git*" -print -exec sh -c "ldd {} && readelf -d {} | grep 'RPATH'" \;

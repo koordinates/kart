@@ -1,8 +1,12 @@
-# We look to download a zip-file of the form:
+# Python windows wheels, sourced from https://www.lfd.uci.edu/~gohlke/pythonlibs/
+# Install via `nmake /F makefile.vc pipwin-refresh`.
+# Note that pipwin pretty aggressively removes old versions.
+
+# By default, we look to download a zip-file of the form:
 # https://s3-us-west-1.amazonaws.com/build-artifacts.sno.earth/vendor/windows-wheels/sno-windows-vendor-wheels-{SHA1}.zip
 # where {SHA1} is the SHA1 of this file.
+# Create it with `nmake /F makefile.vc wheelhouse-archive` once you've got all your versions/wheels in place.
 
 gdal==3.0.4
-apsw==3.31.1.post1
 rtree==0.9.4
-psycopg2==2.8.4
+psycopg2==2.8.5

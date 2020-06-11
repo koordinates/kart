@@ -16,8 +16,7 @@ export SPATIALINDEX_C_LIBRARY="$PYENV_PREFIX/lib/libspatialindex_c.so"
 
 pip install --no-deps --ignore-installed -r requirements.txt
 pip install --no-deps \
-    /tmp/wheelhouse/GDAL-*.whl \
-    /tmp/wheelhouse/pygit2-*.whl
+    /tmp/wheelhouse/*.whl
 
 { echo ">> Downgrading PyInstaller (https://github.com/pyinstaller/pyinstaller/issues/4674) ..."; } 2> /dev/null
 pip install "pyinstaller==3.5.*"

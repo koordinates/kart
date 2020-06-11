@@ -11,7 +11,6 @@ By default, vendored dependencies are downloaded from recent CI artifacts to sav
 Requirements (install via Homebrew/somehow):
 * Python 3.7
 * wget
-* cmake
 * jq
 
 ```console
@@ -33,7 +32,6 @@ Sno v0.3.1.dev0, Copyright (c) Sno Contributors
 Requirements:
 * Python 3.7
 * wget
-* cmake
 
 ```console
 $ git clone git@github.com:koordinates/sno.git
@@ -55,7 +53,7 @@ Requirements:
 * Windows 64-bit 8.1 / Windows Server 64-bit 2016; or newer
 * MS Visual Studio 2017 or newer, with C++ tools installed
 * Python 3.7 from [Python.org](https://python.org)
-* cmake
+* cmake 3.15+
 * 7-Zip
 * Git
 

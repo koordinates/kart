@@ -20,13 +20,13 @@ ifeq ($(PLATFORM),Darwin)
 	LIBSUFFIX = dylib
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
 	WHEELTOOL = delocate
-	export LDFLAGS+=-Wl,-rpath,'$(abspath $(LIBGIT2))/lib'
+	export LDFLAGS+=-Wl,-rpath,'@loader_path/../../../'
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
-	export LDFLAGS+=-Wl,-rpath='$(abspath $(LIBGIT2))/lib',--enable-new-dtags
+	export LDFLAGS := -Wl,-rpath='$$ORIGIN/../../..'
 endif
 PY3 := $(or $(PY3),python3.7)
 
@@ -37,12 +37,12 @@ export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 
 # default target
 .PHONY: all
-all: wheels
+all: wheel
 
 .PHONY: clean
 clean:
 	-$(RM) -r env
-	-$(RM) -r wheels wheelhouse
+	-$(RM) -r wheel wheelhouse
 	-$(RM) -r src/build src/dist src/.eggs
 
 .PHONY: cleaner
@@ -50,7 +50,7 @@ cleaner: clean
 	-(cd src && python3 setup.py clean)
 
 .PHONY: cleanest
-cleanest: cleaner
+cleanest: clean
 	-$(RM) -r src
 
 .PHONY: clean-configure
@@ -86,38 +86,10 @@ source: src
 
 .PHONY: install
 install: | src $(libgit2)
-	@echo LDFLAGS=$(LDFLAGS) PY3=$(PY3)
-	pip3.7 install -e src
-	$(MAKE) wheels
+	@echo 'LDFLAGS=$(LDFLAGS) PY3=$(PY3)'
+	pip3 install -e src
 
-.PHONY: wheels
-wheels: | src $(libgit2)
-	@echo LDFLAGS=$(LDFLAGS) PY3=$(PY3)
-	cd src \
-	&& python3 setup.py bdist_wheel -d $(abspath $@)
-	$(MAKE) wheelfix-$(PLATFORM)
-
-.PHONY: wheelfix-Darwin
-wheelfix-Darwin: export DYLD_LIBRARY_PATH:=$(PREFIX)/lib:$(DYLD_LIBRARY_PATH)
-wheelfix-Darwin:
-	@echo Examining Wheel dependencies...
-	delocate-listdeps wheels/*macosx*.whl
-
-	@echo Resolving wheel dependencies...
-	for WHL in wheels/*macosx*.whl; do delocate-wheel -v -w wheelhouse/ $$WHL; done
-
-	@echo Re-examining Wheel dependencies...
-	delocate-listdeps wheelhouse/*macosx*.whl
-
-.PHONY: wheelfix-Linux
-wheelfix-Linux: export LD_LIBRARY_PATH:=$(PREFIX)/lib:$(LD_LIBRARY_PATH)
-wheelfix-Linux:
-	@echo Examining Wheel dependencies...
-	auditwheel show wheels/*linux*.whl
-
-	@echo Resolving wheel dependencies...
-	for WHL in wheels/*linux*.whl; do auditwheel repair -w wheelhouse/ $$WHL; done
-	-$(RM) wheelhouse/*-linux_*.whl
-
-	@echo Re-examining Wheel dependencies...
-	auditwheel show wheelhouse/*manylinux*.whl
+.PHONY: wheel
+wheel: | src $(libgit2)
+	@echo 'LDFLAGS=$(LDFLAGS) PY3=$(PY3)'
+	cd src && python3 setup.py  --no-user-cfg bdist_wheel -d $(abspath $@)

@@ -5,11 +5,10 @@
 #    make py-requirements
 #
 appnope==0.1.0            # via ipython
-apsw-wheels==3.30.1.post3  # via -r requirements/../requirements.txt, -r requirements/test.txt
 aspectlib==1.5.0          # via -r requirements/test.txt, pytest-benchmark
 atomicwrites==1.4.0       # via -r requirements/test.txt, pytest
 attrs==19.3.0             # via -r requirements/test.txt, pytest
-backcall==0.1.0           # via ipython
+backcall==0.2.0           # via ipython
 cached-property==1.5.1    # via -r requirements/../requirements.txt, -r requirements/test.txt
 certifi==2020.4.5.2       # via -r requirements/../requirements.txt, -r requirements/test.txt
 cffi==1.14.0              # via -r requirements/../requirements.txt, -r requirements/test.txt
@@ -33,7 +32,6 @@ pexpect==4.8.0            # via ipython
 pickleshare==0.7.5        # via ipython
 pluggy==0.13.1            # via -r requirements/test.txt, pytest
 prompt-toolkit==3.0.5     # via ipython
-psycopg2-binary==2.8.5    # via -r requirements/../requirements.txt, -r requirements/test.txt
 ptyprocess==0.6.0         # via pexpect
 py-cpuinfo==5.0.0         # via -r requirements/test.txt, pytest-benchmark
 py==1.8.1                 # via -r requirements/test.txt, pytest
@@ -50,7 +48,7 @@ rtree==0.9.4              # via -r requirements/../requirements.txt, -r requirem
 six==1.15.0               # via -r requirements/test.txt, html5lib, packaging, pytest, pytest-profiling, traitlets
 termcolor==1.1.0          # via -r requirements/test.txt, pytest-sugar
 traitlets==4.3.3          # via ipython
-wcwidth==0.2.3            # via -r requirements/test.txt, prompt-toolkit, pytest
+wcwidth==0.2.4            # via -r requirements/test.txt, prompt-toolkit, pytest
 webencodings==0.5.1       # via -r requirements/test.txt, html5lib
 zipp==3.1.0               # via -r requirements/test.txt, importlib-metadata
 

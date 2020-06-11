@@ -4,10 +4,10 @@ set -eu
 OUTPUT=$1
 shift
 
-yum install -y cmake3 ccache openssl-devel gettext
-export CMAKE=cmake3
+yum install -y ccache openssl-devel gettext
 
 export PATH=/opt/python/cp37-cp37m/bin:${PATH}
+export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}
 
 # setup ccache
 echo ">>> Setting up ccache ..."
@@ -32,52 +32,56 @@ popd
 echo ">>> Python: $(command -v python3.7)"
 
 echo ">>> Setting up /build ..."
-mkdir /build
-for M in Makefile */Makefile; do
+ln -s "$(pwd)/Makefile" "$(pwd)/linux-delocate-deps.py" /build/
+for M in */Makefile; do
     D=$(dirname "$M")
     mkdir -p "/build/$D"
-    cp -v "$M" "/build/$M"
+    ln -s "$(pwd)/$M" "/build/$M"
     find "$D" -maxdepth 1 \( -name "*.tar.*" -o -name "*.zip" \) -print -exec ln -s "$(pwd)"/{} "/build/$D/" \;
 done
+cp -v sqlite/version.mk /build/sqlite/
 
 cd /build
 if [ $# -gt 0 ]; then
     exec "$@"
 else
-    mkdir -p "$OUTPUT/wheelhouse" "$OUTPUT"/env/{bin,share,lib,libexec}
+    mkdir -p "$OUTPUT/wheelhouse" "$OUTPUT"/env/{bin,share/git-core,lib,libexec}
 
     echo ">>> Building Git ..."
-    make git
+    make lib-git
     cp -fav env/bin/git "$OUTPUT/env/bin/"
-    cp -fav env/lib/libcurl.*so* "$OUTPUT/env/lib/"
-    cp -fav env/share/git-core "$OUTPUT/env/share/"
+    cp -fav env/share/git-core/templates "$OUTPUT/env/share/git-core/"
     cp -fav env/libexec/git-core "$OUTPUT/env/libexec/"
 
     echo ">>> Building GDAL ..."
-    make gdal-wheel
-    cp -fav gdal/wheelhouse/GDAL-*.whl "$OUTPUT/wheelhouse/"
+    make lib-gdal
+    cp -fav gdal/wheel/GDAL-*.whl "$OUTPUT/wheelhouse/"
     cp -fav env/share/gdal "$OUTPUT/env/share/"
     cp -fav env/share/proj "$OUTPUT/env/share/"
 
     echo ">>> Building PyGit2 ..."
-    make pygit2-wheel
-    cp -fav pygit2/wheelhouse/pygit2-*.whl "$OUTPUT/wheelhouse"
+    make lib-pygit2
+    cp -fav pygit2/wheel/pygit2-*.whl "$OUTPUT/wheelhouse"
 
     echo ">>> Building spatialite ..."
-    make spatialite
-    cp -fvL spatialite/src/src/.libs/mod_spatialite.so "$OUTPUT/env/lib/"
-    # FIXME: Use the GDAL auditwheel libraries
-    patchelf --remove-rpath "$OUTPUT/env/lib/mod_spatialite.so"
-    patchelf --force-rpath --set-rpath "\$ORIGIN" "$OUTPUT/env/lib/mod_spatialite.so"
-    cp -fav env/lib/libsqlite3.so* "$OUTPUT/env/lib/"
-    cp -fav env/lib/libproj.so* "$OUTPUT/env/lib/"
-    cp -fav env/lib/libgeos_c.so* "$OUTPUT/env/lib/"
-    cp -fav env/lib/libgeos-*.so "$OUTPUT/env/lib/"
+    make lib-spatialite
 
     echo ">>> Building spatialindex ..."
-    make spatialindex
-    cp -vfL env/lib/libspatialindex_c.so "$OUTPUT/env/lib/"
-    cp -vfL env/lib/libspatialindex.so.6 "$OUTPUT/env/lib/"
-    patchelf --remove-rpath "$OUTPUT/env/lib/libspatialindex_c.so"
-    patchelf --force-rpath --set-rpath "\$ORIGIN" "$OUTPUT/env/lib/libspatialindex_c.so"
+    make lib-spatialindex
+
+    echo ">>> Building APSW ..."
+    make lib-apsw
+    cp -fav apsw/wheel/apsw-*.whl "$OUTPUT/wheelhouse"
+
+    echo ">>> Building psycopg2 ..."
+    make lib-psycopg2
+    cp -fav psycopg2/wheel/psycopg2-*.whl "$OUTPUT/wheelhouse"
+
+    echo ">>> Bundling libraries ..."
+    env/bin/python3 ./linux-delocate-deps.py env/lib/
+    cp -fav env/lib/*.so* "$OUTPUT/env/lib/"
+
+    echo ">>> CCache Stats:"
+    ccache --show-stats
+
 fi
