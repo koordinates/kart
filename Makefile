@@ -179,12 +179,6 @@ test: $(py-install-test)
 
 .PHONY: ci-test
 ci-test:
-ifeq ($(PLATFORM),Linux)
-	ldd $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/apsw*.so
-	objdump -x $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/apsw*.so | grep PATH
-	(env | grep LD_) || true
-endif
-	LD_DEBUG=libs \
 	pytest \
 		-vv \
 		--log-level=DEBUG \
