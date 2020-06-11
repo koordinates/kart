@@ -179,7 +179,7 @@ test: $(py-install-test)
 
 ifeq ($(PLATFORM),Linux)
 # (github actions only supports docker containers on linux)
-ci-test: export SNO_POSTGRES_URL ?= postgresql://docker:docker@postgis:5432/gis
+ci-test: export SNO_POSTGRES_URL ?= postgresql://docker:docker@localhost:5432/gis
 endif
 
 .PHONY: ci-test

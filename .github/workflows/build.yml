@@ -26,6 +26,8 @@ jobs:
                   --health-interval 2s
                   --health-timeout 2s
                   --health-retries 5
+                ports:
+                  - 5432:5432
           - name: macOS
             id: Darwin
             os: macos-latest
