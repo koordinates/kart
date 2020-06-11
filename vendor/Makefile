@@ -30,7 +30,8 @@ else ifeq ($(PLATFORM),Linux)
 endif
 PY3 := $(or $(PY3),python3.7)
 
-PYDEPS := pip wheel $(WHEELTOOL) cmake==3.*
+PYDEPS := pip wheel $(WHEELTOOL) cmake==3.* certifi
+export SSL_CERT_FILE=$(abspath $(PREFIX)/lib/python3.7/site-packages/certifi/cacert.pem)
 
 packages = proj jsonc geos gdal spatialite libgit2 pygit2 apsw psycopg2
 ifeq ($(PLATFORM),Linux)
