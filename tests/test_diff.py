@@ -983,12 +983,12 @@ def test_diff_rev_noop(head_sha, head1_sha, data_archive_readonly, cli_runner):
     """diff between trees / commits - no-op"""
 
     NOOP_SPECS = (
-        f"{head_sha[:6]}..{head_sha[:6]}",
-        f"{head_sha}..{head_sha}",
-        f"{head1_sha}..{head1_sha}",
-        "HEAD^1..HEAD^1",
-        f"{head_sha}..",
-        f"..{head_sha}",
+        f"{head_sha[:6]}...{head_sha[:6]}",
+        f"{head_sha}...{head_sha}",
+        f"{head1_sha}...{head1_sha}",
+        "HEAD^1...HEAD^1",
+        f"{head_sha}...",
+        f"...{head_sha}",
     )
 
     with data_archive_readonly("points"):
@@ -1009,15 +1009,15 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
     """diff between trees / commits - no-op"""
 
     F_SPECS = (
-        f"{head1_sha}..{head_sha}",
-        f"{head1_sha}..",
-        "HEAD^1..HEAD",
+        f"{head1_sha}...{head_sha}",
+        f"{head1_sha}...",
+        "HEAD^1...HEAD",
     )
 
     R_SPECS = (
-        f"{head_sha}..{head1_sha}",
-        f"..{head1_sha}",
-        "HEAD..HEAD^1",
+        f"{head_sha}...{head1_sha}",
+        f"...{head1_sha}",
+        "HEAD...HEAD^1",
     )
 
     CHANGE_IDS = {
@@ -1354,9 +1354,6 @@ def test_diff_object_add_reverse():
 
 
 def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
-    # This isn't implemented, but we check it's detected correctly.
-    # commit<>commit diffs where A & B aren't linearly linked
-    # commit<>WC diffs where A & the WC base aren't linearly linked
     with data_working_copy("points") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -1377,20 +1374,35 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         m_commit_id = insert(db)
         H.git_graph(request, "pre-merge-master")
 
-        # changes <> master (commit <> commit) diff should fail
-        r = cli_runner.invoke(["diff", "-o", "quiet", f"{m_commit_id}..{b_commit_id}"])
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
-        assert "3-way diffs aren't supported" in r.stderr
+        # Three dots diff should show both sets of changes.
+        r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}...{b_commit_id}"])
+        assert r.exit_code == 0, r
+        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["featureChanges"]
+        assert len(featureChanges) == 4
 
-        # same the other way around
-        r = cli_runner.invoke(["diff", "-o", "quiet", f"{b_commit_id}..{m_commit_id}"])
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
-        assert "3-way diffs aren't supported" in r.stderr
+        r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}...{m_commit_id}"])
+        assert r.exit_code == 0, r
+        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["featureChanges"]
+        assert len(featureChanges) == 4
 
-        # diff against working copy should fail too
-        r = cli_runner.invoke(["diff", "-o", "quiet", b_commit_id])
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
-        assert "3-way diffs aren't supported" in r.stderr
+        # Two dots diff should show only one set of changes - the changes on the target branch.
+        r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}..{b_commit_id}"])
+        assert r.exit_code == 0, r
+        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["featureChanges"]
+        assert len(featureChanges) == 3
+
+        r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}..{m_commit_id}"])
+        assert r.exit_code == 0, r
+        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["featureChanges"]
+        assert len(featureChanges) == 1
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)

@@ -139,12 +139,12 @@ class RepositoryStructure:
     @property
     def id(self):
         obj = self._commit or self._tree
-        return obj.id if obj else None
+        return obj.id if obj is not None else None
 
     @property
     def short_id(self):
         obj = self._commit or self._tree
-        return obj.short_id if obj else None
+        return obj.short_id if obj is not None else None
 
     @property
     def head_commit(self):
