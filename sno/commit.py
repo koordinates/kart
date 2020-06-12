@@ -2,14 +2,19 @@ import re
 
 import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import click
 import pygit2
 
 from .core import check_git_user
-from .diff import Diff
-from .exceptions import NotFound, NO_CHANGES, NO_DATA, NO_WORKING_COPY
+from .exceptions import (
+    NotFound,
+    NotYetImplemented,
+    NO_CHANGES,
+    NO_DATA,
+    NO_WORKING_COPY,
+)
+from .filter_util import build_feature_filter, UNFILTERED
 from .output_util import dump_json_output
 from .repo_files import (
     COMMIT_EDITMSG,
@@ -65,7 +70,8 @@ from .cli_util import MutexOption
 @click.option(
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
-def commit(ctx, message, message_file, allow_empty, output_format):
+@click.argument("args", nargs=-1)
+def commit(ctx, message, message_file, allow_empty, output_format, args):
     """ Record changes to the repository """
     repo = ctx.obj.repo
 
@@ -86,8 +92,13 @@ def commit(ctx, message, message_file, allow_empty, output_format):
 
     working_copy.assert_db_tree_match(tree)
 
+    commit_filter = build_feature_filter(args)
+    if commit_filter is not UNFILTERED:
+        raise NotYetImplemented(
+            "Sorry, commits of part of the working copy are not supported"
+        )
     rs = RepositoryStructure(repo)
-    wc_diff = working_copy.diff_to_tree(rs)
+    wc_diff = working_copy.diff_to_tree(rs, commit_filter)
 
     if not wc_diff and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)

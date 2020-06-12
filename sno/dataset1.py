@@ -13,6 +13,7 @@ import pygit2
 
 from . import gpkg, diff
 from .exceptions import InvalidOperation, PATCH_DOES_NOT_APPLY
+from .filter_util import UNFILTERED
 from .structure import DatasetStructure, IntegrityError
 
 
@@ -471,7 +472,7 @@ class Dataset1(DatasetStructure):
 
             callback(self, "INDEX")
 
-    def diff(self, other, pk_filter=None, reverse=False):
+    def diff(self, other, pk_filter=UNFILTERED, reverse=False):
         candidates_ins = collections.defaultdict(list)
         candidates_upd = {}
         candidates_del = collections.defaultdict(list)
@@ -515,6 +516,8 @@ class Dataset1(DatasetStructure):
 
             if d.status == pygit2.GIT_DELTA_DELETED:
                 my_pk = this.decode_pk(os.path.basename(d.old_file.path))
+                if not str(my_pk) in pk_filter:
+                    continue
 
                 self.L.debug("diff(): D %s (%s)", d.old_file.path, my_pk)
 
@@ -524,6 +527,8 @@ class Dataset1(DatasetStructure):
             elif d.status == pygit2.GIT_DELTA_MODIFIED:
                 my_pk = this.decode_pk(os.path.basename(d.old_file.path))
                 other_pk = other.decode_pk(os.path.basename(d.new_file.path))
+                if not str(my_pk) in pk_filter and not str(other_pk) in pk_filter:
+                    continue
 
                 self.L.debug(
                     "diff(): M %s (%s) -> %s (%s)",
@@ -539,6 +544,8 @@ class Dataset1(DatasetStructure):
                 candidates_upd[str(my_pk)] = (my_obj, other_obj)
             elif d.status == pygit2.GIT_DELTA_ADDED:
                 other_pk = other.decode_pk(os.path.basename(d.new_file.path))
+                if not str(other_pk) in pk_filter:
+                    continue
 
                 self.L.debug("diff(): A %s (%s)", d.new_file.path, other_pk)
 

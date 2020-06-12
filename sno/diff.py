@@ -14,6 +14,7 @@ from .exceptions import (
     NO_WORKING_COPY,
     UNCATEGORIZED_ERROR,
 )
+from .filter_util import build_feature_filter, UNFILTERED
 from .repo_files import RepoState
 from .structure import RepositoryStructure
 
@@ -356,7 +357,9 @@ class Diff:
         return self._datasets.values()
 
 
-def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
+def get_dataset_diff(
+    base_rs, target_rs, working_copy, dataset_path, pk_filter=UNFILTERED
+):
     dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
     diff = Diff(dataset)
 
@@ -370,14 +373,14 @@ def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
             base_ds, target_ds = target_ds, base_ds
             params["reverse"] = True
 
-        diff_cc = base_ds.diff(target_ds, pk_filter=(pk_filter or None), **params)
+        diff_cc = base_ds.diff(target_ds, pk_filter=pk_filter, **params)
         L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
         diff += diff_cc
 
     if working_copy:
         # diff += target_rs<>working_copy
         target_ds = target_rs.get(dataset_path)
-        diff_wc = working_copy.diff_db_to_tree(target_ds, pk_filter=(pk_filter or None))
+        diff_wc = working_copy.diff_db_to_tree(target_ds, pk_filter=pk_filter)
         L.debug(
             "commit<>working_copy diff (%s): %s", dataset_path, repr(diff_wc),
         )
@@ -386,12 +389,18 @@ def get_dataset_diff(base_rs, target_rs, working_copy, dataset_path, pk_filter):
     return diff
 
 
-def get_repo_diff(base_rs, target_rs):
+def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
     """Generates a Diff for every dataset in both RepositoryStructures."""
     all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
+
+    if feature_filter is not UNFILTERED:
+        all_datasets = all_datasets.intersection(feature_filter.keys())
+
     result = Diff(None)
     for dataset in all_datasets:
-        result += get_dataset_diff(base_rs, target_rs, None, dataset, None)
+        result += get_dataset_diff(
+            base_rs, target_rs, None, dataset, feature_filter[dataset]
+        )
     return result
 
 
@@ -466,12 +475,7 @@ def diff_with_writer(
             working_copy.assert_db_tree_match(target_rs.tree)
 
         # Parse [<dataset>[:pk]...]
-        pk_filters = {}
-        for p in args:
-            pp = p.split(":", maxsplit=1)
-            pk_filters.setdefault(pp[0], [])
-            if len(pp) > 1:
-                pk_filters[pp[0]].append(pp[1])
+        feature_filter = build_feature_filter(args)
 
         base_str = base_rs.id
         target_str = "working-copy" if working_copy else target_rs.id
@@ -479,8 +483,8 @@ def diff_with_writer(
 
         all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
 
-        if pk_filters:
-            all_datasets = set(filter(lambda dsp: dsp in pk_filters, all_datasets))
+        if feature_filter is not UNFILTERED:
+            all_datasets = all_datasets.intersection(feature_filter.keys())
 
         writer_params = {
             "repo": repo,
@@ -506,7 +510,7 @@ def diff_with_writer(
                     target_rs,
                     working_copy,
                     dataset_path,
-                    pk_filters.get(dataset_path),
+                    feature_filter[dataset_path],
                 )
                 [dataset] = diff.datasets()
                 num_changes += len(diff)

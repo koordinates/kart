@@ -12,6 +12,7 @@ from osgeo import gdal
 
 from . import gpkg, diff
 from .exceptions import InvalidOperation
+from .filter_util import UNFILTERED
 
 L = logging.getLogger("sno.working_copy")
 
@@ -645,13 +646,14 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         return feat_count
 
-    def diff_db_to_tree(self, dataset, pk_filter=None):
+    def diff_db_to_tree(self, dataset, pk_filter=UNFILTERED):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
 
         Pass a list of PK values to filter results to them
         """
+        pk_filter = pk_filter or UNFILTERED
         with self.session() as db:
             dbcur = db.cursor()
 
@@ -677,7 +679,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 WHERE ({self.TRACKING_TABLE}.table_name = ?)
             """
             params = [table]
-            if pk_filter:
+            if pk_filter is not UNFILTERED:
                 diff_sql += f"\nAND {self.TRACKING_TABLE}.pk IN ({','.join(['?']*len(pk_filter))})"
                 params += [str(pk) for pk in pk_filter]
             dbcur.execute(diff_sql, params)
@@ -733,14 +735,16 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 updates=candidates_upd,
             )
 
-    def diff_to_tree(self, repo_structure):
+    def diff_to_tree(self, repo_structure, feature_filter=UNFILTERED):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for every dataset in the given repository structure.
         """
         result = diff.Diff(None)
         for dataset in repo_structure:
-            result += self.diff_db_to_tree(dataset)
+            result += self.diff_db_to_tree(
+                dataset, pk_filter=feature_filter[dataset.path]
+            )
         return result
 
     def commit_callback(self, dataset, action, **kwargs):
