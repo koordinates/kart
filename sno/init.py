@@ -339,17 +339,19 @@ class OgrImporter:
             name = field.GetName()
             yield name, get_type_value_adapter(field.GetType())
 
+    def _get_primary_key_value(self, ogr_feature, name):
+        return ogr_feature.GetFID()
+
     @ungenerator(dict)
     def _ogr_feature_to_dict(self, ogr_feature):
-        yield self.primary_key, ogr_feature.GetFID()
         for name, adapter in self.field_adapter_map.items():
-            if name == self.primary_key:
-                yield name, ogr_feature.GetFID()
-            elif name in self.geom_cols:
+            if name in self.geom_cols:
                 yield (
                     name,
                     gpkg.ogr_to_gpkg_geom(ogr_feature.GetGeometryRef()),
                 )
+            elif name == self.primary_key:
+                yield name, self._get_primary_key_value(ogr_feature, name)
             else:
                 value = ogr_feature.GetField(name)
                 yield name, adapter(value)
@@ -596,6 +598,9 @@ class ImportPostgreSQL(OgrImporter):
             conn_str = conn_str[3:]
         # this will either be a URL or a key=value conn str
         return psycopg2.connect(conn_str)
+
+    def _get_primary_key_value(self, ogr_feature, name):
+        return ogr_feature.GetField(name)
 
     @property
     @functools.lru_cache(maxsize=1)
