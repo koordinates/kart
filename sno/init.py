@@ -118,7 +118,7 @@ class OgrImporter:
         )
 
     @classmethod
-    def open(cls, source, table=None):
+    def open(cls, source, table=None, primary_key=None):
         ogr_source, allowed_formats = cls.adapt_source_for_ogr(source)
         if allowed_formats is None:
             # let OGR use any driver it's been compiled with.
@@ -144,7 +144,9 @@ class OgrImporter:
             # Reopen ds to give subclasses a chance to specify open options.
             ds = klass._ogr_open(ogr_source, **open_kwargs)
 
-        return klass(ds, table, source=source, ogr_source=ogr_source,)
+        return klass(
+            ds, table, source=source, ogr_source=ogr_source, primary_key=primary_key
+        )
 
     @classmethod
     def quote_ident_part(cls, part):
@@ -167,12 +169,13 @@ class OgrImporter:
             raise ValueError("at least one part required")
         return '.'.join([cls.quote_ident_part(p) for p in parts])
 
-    def __init__(self, ogr_ds, table=None, *, source, ogr_source):
+    def __init__(self, ogr_ds, table=None, *, source, ogr_source, primary_key=None):
         self.ds = ogr_ds
         self.driver = self.ds.GetDriver()
         self.table = table
         self.source = source
         self.ogr_source = ogr_source
+        self._primary_key = self._check_primary_key_option(primary_key)
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -271,7 +274,7 @@ class OgrImporter:
         # In that case, we would have no choice but to get the PK name outside of OGR.
         # For that reason we don't use ogrlayer.GetFIDColumn() here,
         # and instead we have to implement custom PK behaviour in driver-specific subclasses.
-        return 'FID'
+        return self._primary_key or 'FID'
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -297,10 +300,23 @@ class OgrImporter:
     def is_spatial(self):
         return bool(self.geom_cols)
 
-    @property
-    @functools.lru_cache(maxsize=1)
+    def _check_primary_key_option(self, primary_key_name):
+        if primary_key_name is None:
+            return
+        ld = self.ogrlayer.GetLayerDefn()
+
+        for i in range(ld.GetFieldCount()):
+            field = ld.GetFieldDefn(i)
+            if primary_key_name == field.GetName():
+                return primary_key_name
+        else:
+            raise InvalidOperation(
+                f"'{primary_key_name}' was not found in the dataset",
+                param_hint='--primary-key',
+            )
+
     @ungenerator(dict)
-    def field_cid_map(self):
+    def _field_cid_map(self):
         ld = self.ogrlayer.GetLayerDefn()
 
         yield self.primary_key, 0
@@ -318,6 +334,11 @@ class OgrImporter:
             field = ld.GetFieldDefn(i)
             name = field.GetName()
             yield name, i + start
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def field_cid_map(self):
+        return self._field_cid_map()
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -508,6 +529,9 @@ class ImportGPKG(OgrImporter):
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
+        if self._primary_key:
+            return self._primary_key
+
         db = gpkg.db(self.ogr_source)
         return gpkg.pk(db, self.table)
 
@@ -612,6 +636,8 @@ class ImportPostgreSQL(OgrImporter):
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
+        if self._primary_key:
+            return self._primary_key
         conn = self.psycopg2_conn()
         with conn.cursor() as cur:
             cur.execute(
@@ -680,8 +706,12 @@ def list_import_formats(ctx, param, value):
 @click.option(
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
+@click.option(
+    "--primary-key",
+    help="Which field to use as the primary key. Must be unique. Auto-detected when possible.",
+)
 def import_table(
-    ctx, source, directory, table, message, do_list, output_format, version
+    ctx, source, directory, table, message, do_list, output_format, version, primary_key
 ):
     """
     Import data into a repository.
@@ -706,7 +736,7 @@ def import_table(
         repo = ctx.obj.repo
         check_git_user(repo)
 
-    source_loader = OgrImporter.open(source, table)
+    source_loader = OgrImporter.open(source, table, primary_key=primary_key)
 
     if do_list:
         source_loader.print_table_list(do_json=output_format == 'json')
