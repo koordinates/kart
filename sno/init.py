@@ -111,6 +111,14 @@ class OgrImporter:
         return ogr_source, allowed_formats
 
     @classmethod
+    def _ogr_open(cls, ogr_source, **open_kwargs):
+        return gdal.OpenEx(
+            ogr_source,
+            gdal.OF_VECTOR | gdal.OF_VERBOSE_ERROR | gdal.OF_READONLY,
+            **open_kwargs,
+        )
+
+    @classmethod
     def open(cls, source, table=None):
         ogr_source, allowed_formats = cls.adapt_source_for_ogr(source)
         if allowed_formats is None:
@@ -121,11 +129,7 @@ class OgrImporter:
                 'allowed_drivers': [FORMAT_TO_OGR_MAP[x] for x in allowed_formats]
             }
         try:
-            ds = gdal.OpenEx(
-                ogr_source,
-                gdal.OF_VECTOR | gdal.OF_VERBOSE_ERROR | gdal.OF_READONLY,
-                **open_kwargs,
-            )
+            ds = cls._ogr_open(ogr_source, **open_kwargs)
         except RuntimeError as e:
             raise NotFound(
                 f"{ogr_source!r} doesn't appear to be valid "
@@ -136,7 +140,10 @@ class OgrImporter:
         try:
             klass = globals()[f'Import{ds.GetDriver().ShortName}']
         except KeyError:
-            klass = OgrImporter
+            klass = cls
+        else:
+            # Reopen ds to give subclasses a chance to specify open options.
+            ds = klass._ogr_open(ogr_source, **open_kwargs)
 
         return klass(ds, table, source=source, ogr_source=ogr_source,)
 
@@ -571,6 +578,13 @@ class ImportPostgreSQL(OgrImporter):
             return cls.postgres_url_to_ogr_conn_str(source), ['PG']
         except ValueError:
             return None
+
+    @classmethod
+    def _ogr_open(cls, ogr_source, **open_kwargs):
+        open_options = open_kwargs.setdefault('open_options', [])
+        # don't only list tables listed in geometry_columns
+        open_options.append('LIST_ALL_TABLES=YES')
+        return super()._ogr_open(ogr_source, **open_kwargs)
 
     def psycopg2_conn(self):
         conn_str = self.source
