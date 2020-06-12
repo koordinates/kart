@@ -697,10 +697,9 @@ def test_pg_import(
             },
         ]
         contents = meta_items['gpkg_contents']
-        description = contents.pop('description')
-        assert description.startswith('This layer provides')
         assert contents == {
             'table_name': 'nz_waca_adjustments',
+            'description': '',
             'data_type': 'features',
             'identifier': '',
             'srs_id': 4167,

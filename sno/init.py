@@ -9,7 +9,6 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 import click
 import pygit2
 from osgeo import gdal, ogr
-import psycopg2
 
 from sno import is_windows
 from . import gpkg, checkout, structure
@@ -520,7 +519,7 @@ class ImportGPKG(OgrImporter):
         db = gpkg.db(self.ogr_source)
         dbcur = db.cursor()
         dbcur.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
-        return dbcur
+        yield from dbcur
 
     def build_meta_info(self):
         """
@@ -591,6 +590,8 @@ class ImportPostgreSQL(OgrImporter):
         return super()._ogr_open(ogr_source, **open_kwargs)
 
     def psycopg2_conn(self):
+        import psycopg2
+
         conn_str = self.source
         if conn_str.startswith('OGR:'):
             conn_str = conn_str[4:]
@@ -600,7 +601,13 @@ class ImportPostgreSQL(OgrImporter):
         return psycopg2.connect(conn_str)
 
     def _get_primary_key_value(self, ogr_feature, name):
-        return ogr_feature.GetField(name)
+        try:
+            return ogr_feature.GetField(name)
+        except KeyError:
+            # OGR uses integer PKs as the 'FID', but then *doesn't*
+            # expose them as fields.
+            # In that case we have to call GetFID()
+            return ogr_feature.GetFID()
 
     @property
     @functools.lru_cache(maxsize=1)
