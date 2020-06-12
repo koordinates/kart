@@ -81,7 +81,24 @@ def print_version(ctx):
     ctx.exit()
 
 
-@click.group()
+class PdbGroup(click.Group):
+    def invoke(self, ctx):
+        try:
+            import ipdb as pdb
+        except ImportError:
+            # ipdb is only installed in dev venvs, not releases
+            import pdb
+        if ctx.params.get('post_mortem'):
+            try:
+                return super().invoke(ctx)
+            except Exception:
+                pdb.post_mortem()
+                raise
+        else:
+            return super().invoke(ctx)
+
+
+@click.group(cls=PdbGroup)
 @click.option(
     "-C",
     "--repo",
@@ -94,8 +111,15 @@ def print_version(ctx):
     "--version", callback=print_version, help="Show version information and exit.",
 )
 @click.option("-v", "--verbose", count=True, help="Repeat for more verbosity")
+# NOTE: this option isn't used in `cli`, but it is used in `PdbGroup` above.
+@click.option(
+    "--post-mortem",
+    is_flag=True,
+    hidden=True,
+    help="Interactively debug uncaught exceptions",
+)
 @click.pass_context
-def cli(ctx, repo_dir, verbose):
+def cli(ctx, repo_dir, verbose, post_mortem):
     ctx.ensure_object(Context)
     if repo_dir:
         ctx.obj.user_repo_path = repo_dir
