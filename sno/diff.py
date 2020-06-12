@@ -10,12 +10,12 @@ import click
 from .diff_output import *  # noqa - used from globals()
 from .exceptions import (
     InvalidOperation,
-    NotYetImplemented,
     NotFound,
     NO_WORKING_COPY,
     UNCATEGORIZED_ERROR,
 )
 from .repo_files import RepoState
+from .structure import RepositoryStructure
 
 
 L = logging.getLogger("sno.diff")
@@ -395,6 +395,20 @@ def get_repo_diff(base_rs, target_rs):
     return result
 
 
+def get_common_ancestor(repo, rs1, rs2):
+    for rs in rs1, rs2:
+        if not rs.head_commit:
+            raise click.UsageError(
+                f"The .. operator works on commits, not trees - {rs.id} is a tree. (Perhaps try the ... operator)"
+            )
+    ancestor_id = repo.merge_base(rs1.id, rs2.id)
+    if not ancestor_id:
+        raise InvalidOperation(
+            "The .. operator tries to find the common ancestor, but no common ancestor was found. Perhaps try the ... operator."
+        )
+    return RepositoryStructure.lookup(repo, ancestor_id)
+
+
 def diff_with_writer(
     ctx, diff_writer, *, output_path='-', exit_code, args, json_style="pretty"
 ):
@@ -412,7 +426,6 @@ def diff_with_writer(
       args:        The arguments given on the command line, including the refs to diff.
     """
     from .working_copy import WorkingCopy
-    from .structure import RepositoryStructure
 
     try:
         if isinstance(output_path, str) and output_path != "-":
@@ -432,6 +445,11 @@ def diff_with_writer(
             # Two commits specified - base and target. We diff base<>target.
             base_rs = RepositoryStructure.lookup(repo, commit_parts[0] or "HEAD")
             target_rs = RepositoryStructure.lookup(repo, commit_parts[2] or "HEAD")
+            if commit_parts[1] == "..":
+                # A   C    A...C is A<>C
+                #  \ /     A..C  is B<>C
+                #   B      (git log semantics)
+                base_rs = get_common_ancestor(repo, base_rs, target_rs)
             working_copy = None
         else:
             # When one commit is specified, it is base, and we diff base<>working_copy.
@@ -458,20 +476,6 @@ def diff_with_writer(
         base_str = base_rs.id
         target_str = "working-copy" if working_copy else target_rs.id
         L.debug('base=%s target=%s', base_str, target_str)
-
-        # check whether we need to do a 3-way merge
-        if base_rs.head_commit and target_rs.head_commit:
-            merge_base_id = repo.merge_base(base_rs.id, target_rs.id)
-            L.debug("Found merge base: %s", merge_base_id)
-
-            if not merge_base_id:
-                # there is no relation between the commits
-                raise InvalidOperation(
-                    f"Commits {base_rs.id} and {target_rs.id} aren't related."
-                )
-            elif merge_base_id not in (base_rs.id, target_rs.id):
-                # this needs a 3-way diff and we don't support them yet
-                raise NotYetImplemented(f"Sorry, 3-way diffs aren't supported yet.")
 
         all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
 
