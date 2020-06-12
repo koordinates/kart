@@ -1,6 +1,7 @@
-import os
+import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePath
+from urllib.parse import urlsplit
 
 import click
 import pygit2
@@ -10,15 +11,19 @@ from .structure import RepositoryStructure
 
 
 def get_directory_from_url(url):
-    if '/' in url:
+    if '://' in str(url):
+        return urlsplit(str(url)).path.split('/')[-1]
+    match = re.match(r'\w+@[^:]+?:(?:.*/)?(.+?)/?$', str(url))
+    if match:
         # 'sno@example.com:path/to/repo'
-        return url.rsplit('/', 1)[1]
-    elif ':' in url:
-        # 'sno@example.com:repo'
-        return url.rsplit(':', 1)[1]
-    else:
-        # 'otherdir' or 'C:\otherdir'
-        return os.path.split(url)[1]
+        return match.group(1)
+
+    # 'otherdir' or 'C:\otherdir'
+    if not isinstance(url, Path):
+        # Use PurePath so that the tests on mac/linux can test windows paths
+        path = PurePath(url)
+
+    return str(path.name or path.parent.name)
 
 
 @click.command()

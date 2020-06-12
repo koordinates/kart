@@ -1,8 +1,10 @@
 import subprocess
+from pathlib import PureWindowsPath
 
 import pytest
-
 import pygit2
+
+from sno.clone import get_directory_from_url
 
 
 H = pytest.helpers.helpers()
@@ -13,6 +15,23 @@ def test_clone_empty_repo(tmp_path, cli_runner, chdir):
     subprocess.check_call(["git", "init", "--bare", str(src)])
     r = cli_runner.invoke(["clone", str(src), tmp_path / "dest"])
     assert r.exit_code == 0
+
+
+def test_get_directory_from_url():
+    assert get_directory_from_url('sno@example.com:def/abc') == 'abc'
+    assert get_directory_from_url('sno@example.com:abc') == 'abc'
+    assert get_directory_from_url('https://example.com/def/abc') == 'abc'
+    assert get_directory_from_url('https://example.com/abc') == 'abc'
+    assert get_directory_from_url('abc') == 'abc'
+    assert get_directory_from_url('abc/') == 'abc'
+    assert get_directory_from_url('def/abc') == 'abc'
+    assert get_directory_from_url('def/abc/') == 'abc'
+    assert get_directory_from_url('/def/abc') == 'abc'
+    assert get_directory_from_url('/def/abc/') == 'abc'
+    assert get_directory_from_url(PureWindowsPath('C:/def/abc')) == 'abc'
+    assert get_directory_from_url(PureWindowsPath('C:\\def\\abc')) == 'abc'
+    assert get_directory_from_url(PureWindowsPath('C:\\def\\abc\\')) == 'abc'
+    assert get_directory_from_url(PureWindowsPath('C:\\def\\abc/')) == 'abc'
 
 
 @pytest.mark.parametrize(
