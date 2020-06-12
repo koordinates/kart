@@ -328,7 +328,9 @@ class OgrImporter:
 
         yield self.primary_key, adapt_value_noop
 
-        gc = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
+        gc = self.ogrlayer.GetGeometryColumn()
+        if self.geom_cols and not gc:
+            gc = self.geom_cols[0]
         if gc:
             yield gc, adapt_value_noop
 
