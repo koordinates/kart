@@ -12,6 +12,7 @@ import click
 
 from . import gpkg
 from .output_util import dump_json_output, resolve_output_path
+from .utils import ungenerator
 
 
 @contextlib.contextmanager
@@ -272,12 +273,15 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
             )
 
         # sort for reproducibility
-        d["featureChanges"].sort(
-            key=lambda fc: (
-                fc['-']["id"] if '-' in fc else "",
-                fc['+']["id"] if '+' in fc else "",
-            )
-        )
+        def sort_key(fc):
+            if '-' in fc and '+' in fc:
+                return (fc['-'][pk_field], fc['+'][pk_field])
+            elif '-' in fc:
+                return (fc['-'][pk_field],)
+            else:
+                return (fc['+'][pk_field],)
+
+        d["featureChanges"].sort(key=sort_key)
         accumulated[dataset.path] = d
 
     yield _out
@@ -287,26 +291,16 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     )
 
 
+@ungenerator(dict)
 def json_row(row, pk_field, change=None):
     """
     Turns a row into a dict for serialization as JSON.
     The geometry is serialized as hexWKB.
     """
-    raw_id = row[pk_field]
-    change_id = f"{change}::{raw_id}" if change else raw_id
-    f = {
-        "geometry": None,
-        "properties": {},
-        "id": change_id,
-    }
-
     for k, v in row.items():
         if isinstance(v, bytes):
-            f["geometry"] = gpkg.gpkg_geom_to_hex_wkb(v)
-        else:
-            f["properties"][k] = v
-
-    return f
+            v = gpkg.gpkg_geom_to_hex_wkb(v)
+        yield k, v
 
 
 def geojson_row(row, pk_field, change=None):

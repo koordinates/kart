@@ -4,52 +4,40 @@
       "featureChanges": [
         {
           "+": {
-            "geometry": "01010000005788C5255BEA6540CB85AC5AC54242C0",
-            "id": "U+::9999",
-            "properties": {
-              "fid": 9999,
-              "macronated": null,
-              "name": null,
-              "name_ascii": "new",
-              "t50_fid": null
-            }
+            "fid": 9999,
+            "geom": "01010000005788C5255BEA6540CB85AC5AC54242C0",
+            "macronated": null,
+            "name": null,
+            "name_ascii": "new",
+            "t50_fid": null
           }
         },
         {
           "-": {
-            "geometry": "0101000000492A45C30AEB6540551507C3663C42C0",
-            "id": "U-::1241",
-            "properties": {
-              "fid": 1241,
-              "macronated": "N",
-              "name": null,
-              "name_ascii": null,
-              "t50_fid": 2427486
-            }
+            "fid": 1241,
+            "geom": "0101000000492A45C30AEB6540551507C3663C42C0",
+            "macronated": "N",
+            "name": null,
+            "name_ascii": null,
+            "t50_fid": 2427486
           }
         },
         {
           "+": {
-            "geometry": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
-            "id": "U+::1795",
-            "properties": {
-              "fid": 1795,
-              "macronated": "N",
-              "name": null,
-              "name_ascii": "updated",
-              "t50_fid": 2428041
-            }
+            "fid": 1795,
+            "geom": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
+            "macronated": "N",
+            "name": null,
+            "name_ascii": "updated",
+            "t50_fid": 2428041
           },
           "-": {
-            "geometry": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
-            "id": "U-::1795",
-            "properties": {
-              "fid": 1795,
-              "macronated": "N",
-              "name": null,
-              "name_ascii": null,
-              "t50_fid": 2428041
-            }
+            "fid": 1795,
+            "geom": "010100000091C8DB9402C765403DDEF1BAB99F41C0",
+            "macronated": "N",
+            "name": null,
+            "name_ascii": null,
+            "t50_fid": 2428041
           }
         }
       ],

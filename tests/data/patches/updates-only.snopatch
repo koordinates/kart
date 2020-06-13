@@ -4,26 +4,20 @@
       "featureChanges": [
         {
           "-": {
-            "geometry": "0101000000DD1A926B95F16540D5B4783B715642C0",
-            "id": "U-::1095",
-            "properties": {
-              "fid": 1095,
-              "macronated": "Y",
-              "name": "Harataunga (Rākairoa)\n",
-              "name_ascii": "Harataunga (Rakairoa)\n",
-              "t50_fid": 2427339
-            }
+            "geom": "0101000000DD1A926B95F16540D5B4783B715642C0",
+            "fid": 1095,
+            "macronated": "Y",
+            "name": "Harataunga (Rākairoa)\n",
+            "name_ascii": "Harataunga (Rakairoa)\n",
+            "t50_fid": 2427339
           },
           "+": {
-            "geometry": "0101000000DD1A926B95F16540D5B4783B715642C0",
-            "id": "U+::1095",
-            "properties": {
-              "fid": 1095,
-              "macronated": "N",
-              "name": null,
-              "name_ascii": null,
-              "t50_fid": 2427339
-            }
+            "geom": "0101000000DD1A926B95F16540D5B4783B715642C0",
+            "fid": 1095,
+            "macronated": "N",
+            "name": null,
+            "name_ascii": null,
+            "t50_fid": 2427339
           }
         }
       ],

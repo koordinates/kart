@@ -23,10 +23,10 @@ from .working_copy import WorkingCopy
 def unjson_feature(dataset, d):
     if d is None:
         return d
-    r = copy.deepcopy(d['properties'])
+    r = copy.deepcopy(d)
     if dataset.geom_column_name:
         # add geometry in
-        r[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(d['geometry'])
+        r[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(r[dataset.geom_column_name])
     return r
 
 
