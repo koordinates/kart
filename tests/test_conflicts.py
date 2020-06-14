@@ -141,37 +141,28 @@ def test_list_conflicts(create_conflicts, cli_runner):
                     "feature": {
                         "4": {
                             "ancestor": {
-                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
-                                "properties": {
-                                    "fid": 4,
-                                    "macronated": "N",
-                                    "name": None,
-                                    "name_ascii": None,
-                                    "t50_fid": 2426274,
-                                },
-                                "id": 4,
+                                "geom": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "fid": 4,
+                                "macronated": "N",
+                                "name": None,
+                                "name_ascii": None,
+                                "t50_fid": 2426274,
                             },
                             "ours": {
-                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
-                                "properties": {
-                                    "fid": 4,
-                                    "t50_fid": 2426274,
-                                    "name_ascii": None,
-                                    "macronated": "N",
-                                    "name": "ours_version",
-                                },
-                                "id": 4,
+                                "geom": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "fid": 4,
+                                "t50_fid": 2426274,
+                                "name_ascii": None,
+                                "macronated": "N",
+                                "name": "ours_version",
                             },
                             "theirs": {
-                                "geometry": "0101000000E699C7FE092966404E7743C1B50B43C0",
-                                "properties": {
-                                    "fid": 4,
-                                    "t50_fid": 2426274,
-                                    "name_ascii": None,
-                                    "macronated": "N",
-                                    "name": "theirs_version",
-                                },
-                                "id": 4,
+                                "geom": "0101000000E699C7FE092966404E7743C1B50B43C0",
+                                "fid": 4,
+                                "t50_fid": 2426274,
+                                "name_ascii": None,
+                                "macronated": "N",
+                                "name": "theirs_version",
                             },
                         }
                     }

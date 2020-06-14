@@ -175,5 +175,4 @@ def test_resolve_with_file(create_conflicts, cli_runner, disable_editor):
 
         modified_theirs_json = get_json_feature(theirs, l, 98001)
         modified_theirs_json["id"] = 98002
-        modified_theirs_json["properties"]["id"] = 98002
         assert get_json_feature(merged, l, 98002) == modified_theirs_json
