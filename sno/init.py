@@ -412,7 +412,7 @@ class OgrImporter:
 
         if type_name in ('TEXT', 'BLOB'):
             width = fd.GetWidth()
-            if width is not None:
+            if width:
                 type_name += f'({width})'
         return type_name
 
