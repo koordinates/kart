@@ -162,7 +162,7 @@ def test_import(
                     "import",
                     str(data / source_gpkg),
                     f"--version={import_version}",
-                    f'--table={table}',
+                    table,
                 ]
             )
             assert r.exit_code == 0, r
@@ -394,13 +394,7 @@ def test_import_from_non_gpkg(
         gpkg_repo_path = tmp_path / "gpkg"
         gpkg_repo_path.mkdir()
         r = cli_runner.invoke(
-            [
-                "init",
-                "--import",
-                data / source_gpkg,
-                f"--table={table}",
-                f"--path={gpkg_repo_path}",
-            ]
+            ["init", "--import", data / source_gpkg, table, f"--path={gpkg_repo_path}",]
         )
         assert r.exit_code == 0, r
 
@@ -432,7 +426,7 @@ def test_import_from_non_gpkg(
                     "import",
                     str(source_filename),
                     f"--version={import_version}",
-                    f"--table=data:{table}",
+                    f"data:{table}",
                 ]
             )
             assert r.exit_code == 0, r
@@ -666,7 +660,7 @@ def test_import_multiple(
                         "import",
                         f"GPKG:{data / source_gpkg}",
                         f"--version={import_version}",
-                        f"--table={table}",
+                        table,
                     ]
                 )
                 assert r.exit_code == 0, r
@@ -685,7 +679,7 @@ def test_import_multiple(
                                 "import",
                                 f"GPKG:{data / source_gpkg}",
                                 f"--version={import_version}",
-                                f"--table={table}",
+                                table,
                             ]
                         )
 

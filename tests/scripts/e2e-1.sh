@@ -32,10 +32,10 @@ mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
 set -x
 
-sno init .
+sno init --path .
 sno config user.name "Sno E2E Test 1"
 sno config user.email "sno-e2e-test-1@email.invalid"
-sno import "GPKG:${TEST_GPKG}" --table=mylayer
+sno import "GPKG:${TEST_GPKG}" mylayer
 
 sno log
 sno checkout

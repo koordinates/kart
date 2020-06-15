@@ -195,9 +195,7 @@ class OgrImporter:
         else:
             self.print_table_list()
             if get_input_mode() == InputMode.NO_INPUT:
-                raise NotFound(
-                    "No table specified", exit_code=NO_TABLE, param_hint="--table"
-                )
+                raise NotFound("No table specified", exit_code=NO_TABLE)
             t_choices = click.Choice(choices=table_list)
             t_default = table_list[0] if len(table_list) == 1 else None
             return click.prompt(
@@ -213,9 +211,7 @@ class OgrImporter:
     def check_table(self, table_name):
         if table_name not in self.get_tables():
             raise NotFound(
-                f"Table '{table_name}' not found",
-                exit_code=NO_TABLE,
-                param_hint="--table",
+                f"Table '{table_name}' not found", exit_code=NO_TABLE,
             )
 
     def __enter__(self):
@@ -541,17 +537,8 @@ def get_table_names_map(tables):
 @click.command("import")
 @click.pass_context
 @click.argument("source")
-@click.option(
-    "tables",
-    "--table",
-    "-t",
-    multiple=True,
-    help=(
-        "Which table to import (can specify more than one). "
-        "If not specified, this will be selected interactively"
-    ),
-    cls=MutexOption,
-    exclusive_with=["do_list", "all_tables"],
+@click.argument(
+    "tables", nargs=-1,
 )
 @click.option(
     "--all-tables",
@@ -587,7 +574,7 @@ def get_table_names_map(tables):
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
 def import_table(
-    ctx, source, tables, all_tables, message, do_list, output_format, version
+    ctx, all_tables, message, do_list, output_format, version, source, tables,
 ):
     """
     Import data into a repository.
@@ -639,22 +626,13 @@ def import_table(
 
 @click.command()
 @click.pass_context
+@click.argument(
+    "tables", nargs=-1,
+)
 @click.option(
     "--import",
     "import_from",
     help='Import from data: "FORMAT:PATH" eg. "GPKG:my.gpkg"',
-)
-@click.option(
-    "tables",
-    "--table",
-    "-t",
-    multiple=True,
-    help=(
-        "Which table to import (can specify more than one). "
-        "If not specified, this will be selected interactively"
-    ),
-    cls=MutexOption,
-    exclusive_with=["do_list", "all_tables"],
 )
 @click.option(
     "--all-tables",
@@ -689,7 +667,7 @@ def import_table(
     hidden=True,
 )
 def init(
-    ctx, import_from, tables, all_tables, do_checkout, message, directory, version
+    ctx, all_tables, do_checkout, message, directory, version, import_from, tables
 ):
     """
     Initialise a new repository and optionally import data
@@ -699,6 +677,11 @@ def init(
     To show available tables in the import data, use
     $ sno init --import=GPKG:my.gpkg
     """
+    if tables and not import_from:
+        raise click.UsageError(
+            f"Table names cannot be specified without --import. Did you mean `--path PATH`?"
+        )
+
     if import_from:
         check_git_user(repo=None)
         source_loader = OgrImporter.open(import_from, None)
