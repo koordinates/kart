@@ -676,8 +676,11 @@ def import_table(
     "-m",
     help="Commit message (when used with --import). By default this is auto-generated.",
 )
-@click.argument(
-    "directory", type=click.Path(writable=True, file_okay=False), required=False
+@click.option(
+    "--path",
+    "directory",
+    type=click.Path(writable=True, file_okay=False),
+    required=False,
 )
 @click.option(
     "--version",

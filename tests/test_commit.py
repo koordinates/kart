@@ -280,7 +280,7 @@ def test_empty(tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "one.sno"
 
     # empty repo
-    r = cli_runner.invoke(["init", repo_path])
+    r = cli_runner.invoke(["init", f"--path={repo_path}"])
     assert r.exit_code == 0, r
     with chdir(repo_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])

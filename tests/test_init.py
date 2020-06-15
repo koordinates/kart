@@ -48,7 +48,7 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
                 "init",
                 "--import",
                 data / "nz-pa-points-topo-150k.gpkg",
-                tmp_path / "emptydir",
+                f"--path={tmp_path / 'emptydir'}",
             ]
         )
         # You don't have to specify a table if there's only one.
@@ -69,7 +69,7 @@ def test_init_import_custom_message(data_archive_readonly, tmp_path, cli_runner,
                 "Custom message",
                 "--import",
                 data / "nz-pa-points-topo-150k.gpkg",
-                tmp_path / "emptydir",
+                f"--path={tmp_path / 'emptydir'}",
             ]
         )
         assert r.exit_code == 0, r
@@ -86,7 +86,7 @@ def test_init_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runn
                 "init",
                 "--import",
                 data / "census2016_sdhca_ot_short.gpkg",
-                tmp_path / "emptydir",
+                f"--path={tmp_path / 'emptydir'}",
             ],
             input="census2016_sdhca_ot_ced_short\n",
         )
@@ -110,7 +110,7 @@ def test_init_import_table_with_prompt_with_no_input(
                 "init",
                 "--import",
                 data / "census2016_sdhca_ot_short.gpkg",
-                tmp_path / "emptydir",
+                f"--path={tmp_path / 'emptydir'}",
             ],
         )
         # Table was specified interactively via prompt
@@ -126,7 +126,9 @@ def test_init_import_table_with_prompt_with_no_input(
 def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):
     with data_archive_readonly("types") as data:
         repo_path = tmp_path / "repo"
-        r = cli_runner.invoke(["init", "--import", data / "types.gpkg", repo_path],)
+        r = cli_runner.invoke(
+            ["init", "--import", data / "types.gpkg", f"--path={repo_path}"],
+        )
         assert r.exit_code == 0, r
 
         # There's a bunch of wacky types in here, let's check them
@@ -291,7 +293,13 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
     """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
     with data_archive("gpkg-editing") as data:
         r = cli_runner.invoke(
-            ["init", "--import", f"GPKG:editing.gpkg", "--table=editing", "editing"]
+            [
+                "init",
+                "--import",
+                f"GPKG:editing.gpkg",
+                "--table=editing",
+                "--path=editing",
+            ]
         )
         repo_path = data / "editing"
 
@@ -355,7 +363,13 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
             # not empty
             (repo_path / "a.file").touch()
             r = cli_runner.invoke(
-                ["init", "--import", f"gpkg:{data/gpkg}", f"--table={table}", repo_path]
+                [
+                    "init",
+                    "--import",
+                    f"gpkg:{data/gpkg}",
+                    f"--table={table}",
+                    f'--path={repo_path}',
+                ]
             )
             assert r.exit_code == INVALID_OPERATION, r
             assert "isn't empty" in r.stderr
@@ -367,13 +381,13 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     repo_path.mkdir()
 
     # empty dir
-    r = cli_runner.invoke(["init", repo_path])
+    r = cli_runner.invoke(["init", f"--path={repo_path}"])
     assert r.exit_code == 0, r
     assert (repo_path / "HEAD").exists()
 
     # makes dir tree
     repo_path = tmp_path / "foo" / "bar" / "wiz.sno"
-    r = cli_runner.invoke(["init", repo_path])
+    r = cli_runner.invoke(["init", f"--path={repo_path}"])
     assert r.exit_code == 0, r
     assert (repo_path / "HEAD").exists()
 
@@ -389,7 +403,7 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "tree"
     repo_path.mkdir()
     (repo_path / "a.file").touch()
-    r = cli_runner.invoke(["init", repo_path])
+    r = cli_runner.invoke(["init", f"--path={repo_path}"])
     assert r.exit_code == INVALID_OPERATION, r
     assert not (repo_path / "HEAD").exists()
 
@@ -406,7 +420,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", repo_path])
+    r = cli_runner.invoke(["init", f"--path={repo_path}"])
     assert r.exit_code == 0, r
 
     ARCHIVE_PATHS = (
@@ -481,7 +495,7 @@ def test_init_import_home_resolve(
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", repo_path])
+    r = cli_runner.invoke(["init", f"--path={repo_path}"])
     assert r.exit_code == 0, r
 
     with data_archive("gpkg-points") as source_path:
