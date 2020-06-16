@@ -54,7 +54,7 @@ try {
     Exec { sno -v config --local 'user.name' 'Sno E2E Test 1' }
     Exec { sno -v config --local 'user.email' 'sno-e2e-test-1@email.invalid' }
     Exec { sno -v config --local 'core.pager' false }
-    Exec { sno import "GPKG:${TEST_GPKG}" "--table=mylayer" }
+    Exec { sno import "GPKG:${TEST_GPKG}" "mylayer" }
 
     Exec { sno log }
     Exec { sno checkout }

@@ -53,6 +53,7 @@ vendor/Brewfile.lock.json
 pytest.xml
 .coverage
 /.pytest*
+/test-results/
 /dist
 /build
 *.code-workspace
