@@ -1,6 +1,8 @@
 import base64
+from collections import namedtuple
 import functools
 import hashlib
+import json
 import os
 
 import msgpack
@@ -10,12 +12,24 @@ from .structure import IntegrityError
 
 def _pack(data):
     """data (any type) -> bytes"""
-    return msgpack.packb(data)
+    return msgpack.packb(data, use_bin_type=True)
 
 
 def _unpack(bytestring):
     """bytes -> data (any type)"""
     return msgpack.unpackb(bytestring, raw=False)
+
+
+# _json and _unjson are functionally identical to _pack and _unpack,
+# but their storage format is less compact and more human-readable.
+def _json(data):
+    """data (any type) -> bytes"""
+    return json.dumps(data).encode("utf8")
+
+
+def _unjson(bytestring):
+    """bytes -> data (any type)"""
+    return json.loads(bytestring, encoding="utf8")
 
 
 def _b64encode_str(bytestring):
@@ -34,19 +48,9 @@ def _hexhash(data):
     return hashlib.sha256(data).hexdigest()[:40]
 
 
-def _pk_index(c):
-    # TODO - maybe write a class to describe a schema column, so this could be
-    # `c.pk_index` instead of _pk_index(c)
-    return c["primaryKeyIndex"]
-
-
-def _is_pk_column(c):
-    return _pk_index(c) is not None
-
-
 class Legend:
     """
-    A legend is like a table-header that describes how a row is read.
+    A legend is like a table-header that describes how a row is read. Legends are immutable.
     A row is an array of values - eg ["Null Island", POINT(0, 0), "Imaginary points of interest"]
     To read this, we need to look at the legend, which is an array of UUIDs, like:
     ["1144c97-73a6-78d38ab68ed", "2f1551c-a094-c1a3678e317", "2feac23-08af-73e61dbced9"],
@@ -70,8 +74,16 @@ class Legend:
             pk_columns - a list of column IDs for primary key columns.
             non_pk_columns - a list of column IDs for non primary key columns.
         """
-        self.pk_columns = tuple(pk_columns)
-        self.non_pk_columns = tuple(non_pk_columns)
+        self._pk_columns = tuple(pk_columns)
+        self._non_pk_columns = tuple(non_pk_columns)
+
+    @property
+    def pk_columns(self):
+        return self._pk_columns
+
+    @property
+    def non_pk_columns(self):
+        return self._non_pk_columns
 
     @classmethod
     def loads(cls, data):
@@ -120,6 +132,150 @@ class Legend:
     def hexhash(self):
         """Like __hash__ but with platform-independent, 160-bit hex strings."""
         return _hexhash(self.dumps())
+
+
+def _pk_index_ordering(column):
+    """Returns primary key columns first, in pk_index order, then other columns."""
+    if column.pk_index is not None:
+        return column.pk_index
+    else:
+        # Non primary-key columns after primary key columns.
+        return float('inf')
+
+
+class ColumnSchema(
+    # namedtuple for Immutability
+    namedtuple(
+        "ColumnSchema", ("id", "name", "data_type", "pk_index", "extra_type_info")
+    )
+):
+    """
+    The schema for a single column. A column has a unique ID that is constant for the columns lifetime
+    - even if the column is moved or renamed - and it has a name, a datatype, info about if this
+    column is one of the primary keys, and potentially extra info about the specific datatype.
+    """
+
+    def __new__(cls, id, name, data_type, pk_index, **extra_type_info):
+        return super().__new__(cls, id, name, data_type, pk_index, extra_type_info)
+
+    @classmethod
+    def from_json_dict(cls, json_dict):
+        return cls(
+            json_dict.pop("id"),
+            json_dict.pop("name"),
+            json_dict.pop("dataType"),
+            json_dict.pop("primaryKeyIndex"),
+            **json_dict,
+        )
+
+    def to_json_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "dataType": self.data_type,
+            "primaryKeyIndex": self.pk_index,
+            **self.extra_type_info,
+        }
+
+    def __eq__(self, other):
+        if not isinstance(other, ColumnSchema):
+            return False
+        return (
+            self.id == other.id
+            and self.name == other.name
+            and self.data_type == other.data_type
+            and self.pk_index == other.pk_index
+            and self.extra_type_info == other.extra_type_info
+        )
+
+
+class Schema:
+    """A schema is just an immutable ordered list of ColumnSchemas."""
+
+    def __init__(self, columns):
+        """Create a new schema from a list of ColumnSchemas."""
+        self._columns = tuple(columns)
+        # Creating a legend validates the primaryKeyIndex field.
+        self._legend = self._to_legend()
+
+    @property
+    def columns(self):
+        return self._columns
+
+    @property
+    def legend(self):
+        return self._legend
+
+    def __getitem__(self, i):
+        """Return the _i_th ColumnSchema."""
+        return self._columns[i]
+
+    @classmethod
+    def loads(cls, data):
+        """Load a schema from a bytestring"""
+        json_array = _unjson(data)
+        columns = [ColumnSchema.from_json_dict(c) for c in json_array]
+        return cls(columns)
+
+    def dumps(self):
+        """Writes this schema to a bytestring."""
+        json_array = [c.to_json_dict() for c in self.columns]
+        return _json(json_array)
+
+    def feature_dict_from_raw(self, raw_dict):
+        """Values keyed by column ID -> values keyed by column name."""
+        feature_dict = {}
+        for column in self.columns:
+            feature_dict[column.name] = raw_dict.get(column.id, None)
+        return feature_dict
+
+    def feature_tuple_from_raw(self, raw_dict):
+        """Values keyed by column ID -> value tuple in schema order."""
+        feature_tuple = []
+        for column in self.columns:
+            feature_tuple.append(raw_dict.get(column.id, None))
+        return tuple(feature_tuple)
+
+    def feature_dict_to_raw(self, feature_dict):
+        """Values keyed by column name -> values keyed by column ID."""
+        raw_dict = {}
+        for column in self.columns:
+            raw_dict[column.id] = feature_dict[column.name]
+        return raw_dict
+
+    def feature_tuple_to_raw(self, feature_tuple):
+        """Value tuple in schema order -> values keyed by column ID."""
+        assert len(feature_tuple) == len(self.columns)
+        raw_dict = {}
+        for column, value in zip(self.columns, feature_tuple):
+            raw_dict[column.id] = value
+        return raw_dict
+
+    def _to_legend(self):
+        pk_column_ids = []
+        non_pk_column_ids = []
+        for i, column in enumerate(sorted(self.columns, key=_pk_index_ordering)):
+            if column.pk_index is not None:
+                if i != column.pk_index:
+                    raise ValueError(
+                        f"Expected contiguous primaryKeyIndex {i} but only found {column.pk_index}"
+                    )
+                pk_column_ids.append(column.id)
+            else:
+                non_pk_column_ids.append(column.id)
+        return Legend(pk_column_ids, non_pk_column_ids)
+
+    def __eq__(self, other):
+        if not isinstance(other, Schema):
+            return False
+        return self.columns == other.columns
+
+    def is_pk_compatible(self, other):
+        """
+        Does a schema change from self -> other mean that every feature needs a new path?
+        Only if the primary key columns have changed.
+        """
+        return self.legend.pk_columns == other.legend.pk_columns
 
 
 # TODO: this class is unfinished, and so doesn't extend DatasetStructure.
@@ -177,6 +333,21 @@ class Dataset2:
         """
         return f"meta/legend/{legend.hexhash()}", legend.dumps()
 
+    @functools.lru_cache(maxsize=1)
+    def get_current_schema(self):
+        """Load the current schema from this dataset."""
+        return Schema.loads(self.get_data_at(f"meta/schema"))
+
+    @classmethod
+    def encode_current_schema(cls, schema):
+        """
+        Given a schema, returns the path and the data which *should be written*
+        to write this schema. This is almost the inverse of get_current_schema,
+        except Dataset2 doesn't write the data. (Note that the schema's legend
+        should also be stored if any features are written with this schema.)
+        """
+        return "meta/schema", schema.dumps()
+
     def read_raw_feature_dict(self, path):
         """
         Given a dataset path, reads the feature stored there, and returns the feature row as a dict of
@@ -189,6 +360,14 @@ class Dataset2:
         legend = self.get_legend(legend_hash)
         pk_values = self.decode_path_to_pk_values(path)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
+
+    def read_feature_dict(self, path):
+        raw_dict = self.read_raw_feature_dict(path)
+        return self.get_current_schema().feature_dict_from_raw(raw_dict)
+
+    def read_feature_tuple(self, path):
+        raw_dict = self.read_raw_feature_dict(path)
+        return self.get_current_schema().feature_tuple_from_raw(raw_dict)
 
     @classmethod
     def decode_path_to_pk_values(cls, path):
@@ -207,6 +386,16 @@ class Dataset2:
         path = cls.encode_pk_values_to_path(pk_values)
         data = _pack([legend.hexhash(), non_pk_values])
         return path, data
+
+    @classmethod
+    def encode_feature_dict(cls, feature_dict, schema):
+        raw_dict = schema.feature_dict_to_raw(feature_dict)
+        return cls.encode_raw_feature_dict(raw_dict, schema.legend)
+
+    @classmethod
+    def encode_feature_tuple(cls, feature_tuple, schema):
+        raw_dict = schema.feature_tuple_to_raw(feature_tuple)
+        return cls.encode_raw_feature_dict(raw_dict, schema.legend)
 
     @classmethod
     def encode_pk_values_to_path(self, pk_values):
