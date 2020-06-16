@@ -599,7 +599,7 @@ def import_table(
             dst_table = dst_table.replace("\\", "/")  # git paths use / as a delimiter
 
         if dst_table in loaders:
-            raise InvalidOperation(
+            raise click.UsageError(
                 f'table "{dst_table}" was specified more than once', param_hint="tables"
             )
         loaders[dst_table] = source_loader.clone_for_table(src_table)

@@ -18,6 +18,16 @@ from .exceptions import NotFound, NO_COMMIT
 L = logging.getLogger("sno.structure")
 
 
+def write_blobs_to_stream(stream, blobs):
+    for i, (blob_path, blob_data) in enumerate(blobs):
+        stream.write(
+            f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode("utf8")
+        )
+        stream.write(blob_data)
+        stream.write(b"\n")
+        yield i, blob_path
+
+
 def fast_import_tables(
     repo, sources, max_pack_size="2G", limit=None, message=None, *, version
 ):
@@ -82,46 +92,28 @@ def fast_import_tables(
                         f"Importing {num_rows:,d} features from {source} to {path}/ ..."
                     )
 
-                t0 = time.monotonic()
-                src_iterator = source.iter_features()
-
-                t1 = time.monotonic()
-                click.echo(f"Source setup in {t1-t0:.1f}s")
-
-                for i, (blob_path, blob_data) in enumerate(
-                    dataset.import_iter_meta_blobs(repo, source)
+                for i, blob_path in write_blobs_to_stream(
+                    p.stdin, dataset.import_iter_meta_blobs(repo, source)
                 ):
-                    p.stdin.write(
-                        f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode(
-                            "utf8"
-                        )
-                    )
-                    p.stdin.write(blob_data)
-                    p.stdin.write(b"\n")
+                    pass
 
                 # features
-                t2 = time.monotonic()
-                for i, (blob_path, blob_data) in enumerate(
-                    dataset.import_iter_feature_blobs(src_iterator, source)
-                ):
-                    p.stdin.write(
-                        f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode(
-                            "utf8"
-                        )
-                    )
-                    p.stdin.write(blob_data)
-                    p.stdin.write(b"\n")
+                t1 = time.monotonic()
+                src_iterator = source.iter_features()
 
+                for i, blob_path in write_blobs_to_stream(
+                    p.stdin, dataset.import_iter_feature_blobs(src_iterator, source)
+                ):
                     if i and i % 100000 == 0:
-                        click.echo(f"  {i:,d} features... @{time.monotonic()-t2:.1f}s")
+                        click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
 
                     if limit is not None and i == (limit - 1):
                         click.secho(f"  Stopping at {limit:,d} features", fg="yellow")
                         break
-                t3 = time.monotonic()
-                click.echo(f"Added {num_rows:,d} Features to index in {t3-t2:.1f}s")
+                t2 = time.monotonic()
+                click.echo(f"Added {num_rows:,d} Features to index in {t2-t1:.1f}s")
                 click.echo(
-                    f"Overall rate: {(num_rows/(t3-t2 or 1E-3)):.0f} features/s)"
+                    f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)"
                 )
 
         p.stdin.write(b"\ndone\n")
@@ -134,8 +126,8 @@ def fast_import_tables(
     p.wait()
     if p.returncode != 0:
         raise subprocess.CalledProcessError(f"Error! {p.returncode}", "git-fast-import")
-    t4 = time.monotonic()
-    click.echo(f"Closed in {(t4-t3):.0f}s")
+    t3 = time.monotonic()
+    click.echo(f"Closed in {(t3-t2):.0f}s")
 
 
 class RepositoryStructure:
