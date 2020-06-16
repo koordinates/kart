@@ -305,8 +305,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                         "import",
                         f"GPKG:{data / source_gpkg}",
                         f"--version={version}",
-                        f"--table={table}",
-                        "mytable",
+                        f"{table}:mytable",
                     ]
                 )
                 assert r.exit_code == 0, r
