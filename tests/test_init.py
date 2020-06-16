@@ -48,7 +48,7 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
                 "init",
                 "--import",
                 data / "nz-pa-points-topo-150k.gpkg",
-                f"--path={tmp_path / 'emptydir'}",
+                str(tmp_path / 'emptydir'),
             ]
         )
         # You don't have to specify a table if there's only one.
@@ -69,7 +69,7 @@ def test_init_import_custom_message(data_archive_readonly, tmp_path, cli_runner,
                 "Custom message",
                 "--import",
                 data / "nz-pa-points-topo-150k.gpkg",
-                f"--path={tmp_path / 'emptydir'}",
+                str(tmp_path / 'emptydir'),
             ]
         )
         assert r.exit_code == 0, r
@@ -79,42 +79,37 @@ def test_init_import_custom_message(data_archive_readonly, tmp_path, cli_runner,
         assert 'Custom message' in r.stdout
 
 
-def test_init_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner):
+def test_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner, chdir):
     with data_archive_readonly("gpkg-au-census") as data:
-        r = cli_runner.invoke(
-            [
-                "init",
-                "--import",
-                data / "census2016_sdhca_ot_short.gpkg",
-                f"--path={tmp_path / 'emptydir'}",
-            ],
-            input="census2016_sdhca_ot_ced_short\n",
-        )
-        # Table was specified interactively via prompt
-        assert r.exit_code == 0, r
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                ["import", data / "census2016_sdhca_ot_short.gpkg",],
+                input="census2016_sdhca_ot_ced_short\n",
+            )
+            # Table was specified interactively via prompt
+            assert r.exit_code == 0, r
         assert "Tables found:" in r.stdout
         assert (
             "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
             in r.stdout
         )
         assert "to census2016_sdhca_ot_ced_short/ ..." in r.stdout
-        assert "Commit: " in r.stdout
 
 
-def test_init_import_table_with_prompt_with_no_input(
-    data_archive_readonly, tmp_path, cli_runner
+def test_import_table_with_prompt_with_no_input(
+    data_archive_readonly, tmp_path, cli_runner, chdir
 ):
     with data_archive_readonly("gpkg-au-census") as data:
-        r = cli_runner.invoke(
-            [
-                "init",
-                "--import",
-                data / "census2016_sdhca_ot_short.gpkg",
-                f"--path={tmp_path / 'emptydir'}",
-            ],
-        )
-        # Table was specified interactively via prompt
-        assert r.exit_code == NO_TABLE, r
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(["import", data / "census2016_sdhca_ot_short.gpkg"])
+            # Table was specified interactively via prompt
+            assert r.exit_code == NO_TABLE, r
         assert "Tables found:" in r.stdout
         assert (
             "  census2016_sdhca_ot_ced_short - census2016_sdhca_ot_ced_short"
@@ -127,7 +122,7 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
     with data_archive_readonly("types") as data:
         repo_path = tmp_path / "repo"
         r = cli_runner.invoke(
-            ["init", "--import", data / "types.gpkg", f"--path={repo_path}"],
+            ["init", "--import", data / "types.gpkg", str(repo_path)],
         )
         assert r.exit_code == 0, r
 
@@ -249,50 +244,49 @@ def test_init_import(
         repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
-        with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--import", f"gpkg:{data / gpkg}", table])
-            assert r.exit_code == 0, r
-            assert (repo_path / "HEAD").exists()
+        r = cli_runner.invoke(
+            ["init", "--import", f"gpkg:{data / gpkg}", str(repo_path)]
+        )
+        assert r.exit_code == 0, r
+        assert (repo_path / "HEAD").exists()
 
-            repo = pygit2.Repository(str(repo_path))
-            assert repo.is_bare
-            assert not repo.is_empty
+        repo = pygit2.Repository(str(repo_path))
+        assert repo.is_bare
+        assert not repo.is_empty
 
-            assert repo.head.name == "refs/heads/master"
-            assert repo.head.shorthand == "master"
+        assert repo.head.name == "refs/heads/master"
+        assert repo.head.shorthand == "master"
 
-            # has a single commit
-            assert len([c for c in repo.walk(repo.head.target)]) == 1
+        # has a single commit
+        assert len([c for c in repo.walk(repo.head.target)]) == 1
 
-            # working copy exists
-            wc = repo_path / f"{repo_path.stem}.gpkg"
-            assert wc.exists() and wc.is_file()
-            print("workingcopy at", wc)
+        # working copy exists
+        wc = repo_path / f"{repo_path.stem}.gpkg"
+        assert wc.exists() and wc.is_file()
+        print("workingcopy at", wc)
 
-            assert repo.config["sno.workingcopy.version"] == "1"
-            assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
+        assert repo.config["sno.workingcopy.version"] == "1"
+        assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
-            db = geopackage(wc)
-            assert H.row_count(db, table) > 0
+        db = geopackage(wc)
+        assert H.row_count(db, table) > 0
 
-            wc_tree_id = (
-                db.cursor()
-                .execute(
-                    """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
-                )
-                .fetchone()[0]
+        wc_tree_id = (
+            db.cursor()
+            .execute(
+                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
             )
-            assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+            .fetchone()[0]
+        )
+        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
-            H.verify_gpkg_extent(db, table)
+        H.verify_gpkg_extent(db, table)
 
 
 def test_init_import_name_clash(data_archive, cli_runner, geopackage):
     """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
     with data_archive("gpkg-editing") as data:
-        r = cli_runner.invoke(
-            ["init", "--import", f"GPKG:editing.gpkg", "editing", "--path=editing",]
-        )
+        r = cli_runner.invoke(["init", "--import", f"GPKG:editing.gpkg", "editing"])
         repo_path = data / "editing"
 
         assert r.exit_code == 0, r
@@ -346,16 +340,10 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
             assert r.exit_code == NO_IMPORT_SOURCE, r
             assert "Couldn't find 'thingz.gpkg'" in r.stderr
 
-            r = cli_runner.invoke(
-                ["init", "--import", f"gpkg:{data/gpkg}", "no-existey"]
-            )
-            assert r.exit_code == NO_TABLE, r
-            assert "Table 'no-existey' not found" in r.stderr
-
             # not empty
             (repo_path / "a.file").touch()
             r = cli_runner.invoke(
-                ["init", "--import", f"gpkg:{data/gpkg}", table, f'--path={repo_path}',]
+                ["init", "--import", f"gpkg:{data/gpkg}", str(repo_path)]
             )
             assert r.exit_code == INVALID_OPERATION, r
             assert "isn't empty" in r.stderr
@@ -367,13 +355,13 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     repo_path.mkdir()
 
     # empty dir
-    r = cli_runner.invoke(["init", f"--path={repo_path}"])
+    r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
     assert (repo_path / "HEAD").exists()
 
     # makes dir tree
     repo_path = tmp_path / "foo" / "bar" / "wiz.sno"
-    r = cli_runner.invoke(["init", f"--path={repo_path}"])
+    r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
     assert (repo_path / "HEAD").exists()
 
@@ -389,7 +377,7 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "tree"
     repo_path.mkdir()
     (repo_path / "a.file").touch()
-    r = cli_runner.invoke(["init", f"--path={repo_path}"])
+    r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == INVALID_OPERATION, r
     assert not (repo_path / "HEAD").exists()
 
@@ -406,7 +394,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", f"--path={repo_path}"])
+    r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
 
     ARCHIVE_PATHS = (
@@ -481,7 +469,7 @@ def test_init_import_home_resolve(
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", f"--path={repo_path}"])
+    r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
 
     with data_archive("gpkg-points") as source_path:

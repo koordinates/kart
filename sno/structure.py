@@ -1,5 +1,4 @@
 import contextlib
-import errno
 import functools
 
 import json
@@ -119,13 +118,13 @@ def fast_import_tables(
                     if limit is not None and i == (limit - 1):
                         click.secho(f"  Stopping at {limit:,d} features", fg="yellow")
                         break
-
-                p.stdin.write(b"\ndone\n")
                 t3 = time.monotonic()
                 click.echo(f"Added {num_rows:,d} Features to index in {t3-t2:.1f}s")
                 click.echo(
                     f"Overall rate: {(num_rows/(t3-t2 or 1E-3)):.0f} features/s)"
                 )
+
+        p.stdin.write(b"\ndone\n")
     except BrokenPipeError as e:
         # if git-fast-import dies early, we get an EPIPE here
         # we'll deal with it below

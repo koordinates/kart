@@ -50,7 +50,7 @@ $SQLITE=(Join-Path $SNO_PREFIX 'sqlite3.exe')
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
 try {
-    Exec { sno init --path . }
+    Exec { sno init . }
     Exec { sno -v config --local 'user.name' 'Sno E2E Test 1' }
     Exec { sno -v config --local 'user.email' 'sno-e2e-test-1@email.invalid' }
     Exec { sno -v config --local 'core.pager' false }

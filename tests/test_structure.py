@@ -393,10 +393,11 @@ def test_import_from_non_gpkg(
         # First, import the original GPKG to one repo
         gpkg_repo_path = tmp_path / "gpkg"
         gpkg_repo_path.mkdir()
-        r = cli_runner.invoke(
-            ["init", "--import", data / source_gpkg, table, f"--path={gpkg_repo_path}",]
-        )
-        assert r.exit_code == 0, r
+        with chdir(gpkg_repo_path):
+            r = cli_runner.invoke(["init"])
+            assert r.exit_code == 0, r
+            r = cli_runner.invoke(["import", data / source_gpkg, table])
+            assert r.exit_code == 0, r
 
         gpkg_repo = pygit2.Repository(str(gpkg_repo_path))
         gpkg_tree = gpkg_repo.head.peel(pygit2.Tree) / table
@@ -491,9 +492,7 @@ def test_shp_import_meta(
 
         # now import the SHP
         repo_path = tmp_path / "repo"
-        r = cli_runner.invoke(
-            ["init", "--import", source_filename, f"--path={repo_path}"]
-        )
+        r = cli_runner.invoke(["init", "--import", source_filename, str(repo_path)])
         assert r.exit_code == 0, r
 
         # now check metadata
