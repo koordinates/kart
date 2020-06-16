@@ -1,13 +1,17 @@
+import contextlib
 import itertools
+import os
 import re
 import subprocess
 
 from osgeo import gdal, ogr
+
+import psycopg2
 import pygit2
 import pytest
 
 from sno import gpkg, structure
-from sno.init import OgrImporter
+from sno.init import OgrImporter, ImportPostgreSQL
 from sno.dataset1 import Dataset1
 
 
@@ -557,6 +561,143 @@ def test_shp_import_meta(
                 'pk': 0,
             },
         ]
+
+
+def quote_ident(part):
+    """
+    SQL92 conformant identifier quoting, for use with OGR-dialect SQL
+    (and most other dialects)
+    """
+    part = part.replace('"', '""')
+    return f'"{part}"'
+
+
+@pytest.fixture()
+def postgis_db():
+    if 'SNO_POSTGRES_URL' not in os.environ:
+        raise pytest.skip('Requires postgres')
+    conn = psycopg2.connect(os.environ['SNO_POSTGRES_URL'])
+    with conn.cursor() as cur:
+        # test connection and postgis support
+        try:
+            cur.execute("""SELECT postgis_version()""")
+        except psycopg2.errors.UndefinedFunction:
+            raise pytest.skip('Requires PostGIS')
+    yield conn
+
+
+@pytest.fixture()
+def postgis_layer(postgis_db, data_archive):
+    postgres_conn_str = ImportPostgreSQL.postgres_url_to_ogr_conn_str(
+        os.environ['SNO_POSTGRES_URL']
+    )
+
+    @contextlib.contextmanager
+    def _postgis_layer(archive_name, gpkg_name, table):
+        with data_archive(archive_name) as data:
+            gdal.VectorTranslate(
+                postgres_conn_str,
+                gdal.OpenEx(str(data / gpkg_name)),
+                format='PostgreSQL',
+                accessMode='overwrite',
+                layerCreationOptions=['LAUNDER=NO'],
+                layers=[table],
+            )
+        yield
+        c = postgis_db.cursor()
+        c.execute(
+            f"""
+            DROP TABLE IF EXISTS {quote_ident(table)}
+            """
+        )
+
+    return _postgis_layer
+
+
+def test_pg_import(
+    postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
+):
+    with postgis_layer(
+        'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
+    ):
+        repo_path = tmp_path / "repo"
+        r = cli_runner.invoke(['init', repo_path])
+        assert r.exit_code == 0, r
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                ['import', os.environ['SNO_POSTGRES_URL'], 'nz_waca_adjustments']
+            )
+            assert r.exit_code == 0, r
+        # now check metadata
+        path = "nz_waca_adjustments"
+        repo = pygit2.Repository(str(repo_path))
+        tree = repo.head.peel(pygit2.Tree) / path
+        dataset = structure.DatasetStructure.instantiate(tree, path)
+
+        meta_items = dict(dataset.iter_meta_items())
+        assert set(meta_items.keys()) == {
+            'fields/geom',
+            'version',
+            'fields/id',
+            'gpkg_geometry_columns',
+            'gpkg_spatial_ref_sys',
+            'fields/adjusted_nodes',
+            'primary_key',
+            'gpkg_contents',
+            'fields/survey_reference',
+            'fields/date_adjusted',
+            'sqlite_table_info',
+        }
+        assert meta_items['sqlite_table_info'] == [
+            {
+                'cid': 0,
+                'name': 'id',
+                'type': 'INTEGER',
+                'notnull': 1,
+                'dflt_value': None,
+                'pk': 1,
+            },
+            {
+                'cid': 1,
+                'name': 'geom',
+                'type': 'MULTIPOLYGON',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 2,
+                'name': 'date_adjusted',
+                'type': 'DATETIME',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 3,
+                'name': 'survey_reference',
+                'type': 'TEXT(50)',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+            {
+                'cid': 4,
+                'name': 'adjusted_nodes',
+                'type': 'MEDIUMINT',
+                'notnull': 0,
+                'dflt_value': None,
+                'pk': 0,
+            },
+        ]
+        contents = meta_items['gpkg_contents']
+        assert contents == {
+            'table_name': 'nz_waca_adjustments',
+            'description': '',
+            'data_type': 'features',
+            'identifier': '',
+            'srs_id': 4167,
+        }
 
 
 def test_pk_encoding():

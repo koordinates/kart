@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 import click
 import pygit2
@@ -31,6 +32,7 @@ FORMAT_TO_OGR_MAP = {
     'SHP': 'ESRI Shapefile',
     # https://github.com/koordinates/sno/issues/86
     # 'TAB': 'MapInfo File',
+    'PG': 'PostgreSQL',
 }
 # The set of format prefixes where a local path is expected
 # (as opposed to a URL / something else)
@@ -56,6 +58,12 @@ class OgrImporter:
         'DateTime': 'DATETIME',
     }
     OGR_SUBTYPE_TO_SQLITE_TYPE = {ogr.OFSTBoolean: 'BOOLEAN', ogr.OFSTInt16: 'SMALLINT'}
+
+    @classmethod
+    def _all_subclasses(cls):
+        for sub in cls.__subclasses__():
+            yield sub
+            yield from sub._all_subclasses()
 
     @classmethod
     def adapt_source_for_ogr(cls, source):
@@ -85,16 +93,32 @@ class OgrImporter:
                 if prefix in ('CSV', 'PG'):
                     # OGR actually handles these prefixes itself...
                     ogr_source = f'{prefix}:{ogr_source}'
+            if prefix in LOCAL_PATH_FORMATS:
+                if not os.path.exists(ogr_source):
+                    raise NotFound(
+                        f"Couldn't find {ogr_source!r}", exit_code=NO_IMPORT_SOURCE
+                    )
+        else:
+            # see if any subclasses have a handler for this.
+            for subclass in cls._all_subclasses():
+                if 'handle_source_string' in subclass.__dict__:
+                    retval = subclass.handle_source_string(ogr_source)
+                    if retval is not None:
+                        ogr_source, allowed_formats = retval
+                        break
 
-        if prefix in LOCAL_PATH_FORMATS:
-            if not os.path.exists(ogr_source):
-                raise NotFound(
-                    f"Couldn't find {ogr_source!r}", exit_code=NO_IMPORT_SOURCE
-                )
         return ogr_source, allowed_formats
 
     @classmethod
-    def open(cls, source, table=None):
+    def _ogr_open(cls, ogr_source, **open_kwargs):
+        return gdal.OpenEx(
+            ogr_source,
+            gdal.OF_VECTOR | gdal.OF_VERBOSE_ERROR | gdal.OF_READONLY,
+            **open_kwargs,
+        )
+
+    @classmethod
+    def open(cls, source, table=None, primary_key=None):
         ogr_source, allowed_formats = cls.adapt_source_for_ogr(source)
         if allowed_formats is None:
             # let OGR use any driver it's been compiled with.
@@ -104,11 +128,7 @@ class OgrImporter:
                 'allowed_drivers': [FORMAT_TO_OGR_MAP[x] for x in allowed_formats]
             }
         try:
-            ds = gdal.OpenEx(
-                ogr_source,
-                gdal.OF_VECTOR | gdal.OF_VERBOSE_ERROR | gdal.OF_READONLY,
-                **open_kwargs,
-            )
+            ds = cls._ogr_open(ogr_source, **open_kwargs)
         except RuntimeError as e:
             raise NotFound(
                 f"{ogr_source!r} doesn't appear to be valid "
@@ -119,9 +139,14 @@ class OgrImporter:
         try:
             klass = globals()[f'Import{ds.GetDriver().ShortName}']
         except KeyError:
-            klass = OgrImporter
+            klass = cls
+        else:
+            # Reopen ds to give subclasses a chance to specify open options.
+            ds = klass._ogr_open(ogr_source, **open_kwargs)
 
-        return klass(ds, table, source=source, ogr_source=ogr_source,)
+        return klass(
+            ds, table, source=source, ogr_source=ogr_source, primary_key=primary_key
+        )
 
     @classmethod
     def quote_ident_part(cls, part):
@@ -130,7 +155,7 @@ class OgrImporter:
         (and most other dialects)
         """
         part = part.replace('"', '""')
-        return '"%s"' % part
+        return f'"{part}"'
 
     @classmethod
     def quote_ident(cls, *parts):
@@ -144,16 +169,21 @@ class OgrImporter:
             raise ValueError("at least one part required")
         return '.'.join([cls.quote_ident_part(p) for p in parts])
 
-    def __init__(self, ogr_ds, table=None, *, source, ogr_source):
+    def __init__(self, ogr_ds, table=None, *, source, ogr_source, primary_key=None):
         self.ds = ogr_ds
         self.driver = self.ds.GetDriver()
         self.table = table
         self.source = source
         self.ogr_source = ogr_source
+        self._primary_key = self._check_primary_key_option(primary_key)
 
-    def clone_for_table(self, table):
+    def clone_for_table(self, table, primary_key=None):
         return self.__class__(
-            self.ds, table=table, source=self.source, ogr_source=self.ogr_source
+            self.ds,
+            table=table,
+            source=self.source,
+            ogr_source=self.ogr_source,
+            primary_key=primary_key or self._primary_key,
         )
 
     @property
@@ -240,7 +270,7 @@ class OgrImporter:
         # In that case, we would have no choice but to get the PK name outside of OGR.
         # For that reason we don't use ogrlayer.GetFIDColumn() here,
         # and instead we have to implement custom PK behaviour in driver-specific subclasses.
-        return 'FID'
+        return self._primary_key or 'FID'
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -266,10 +296,23 @@ class OgrImporter:
     def is_spatial(self):
         return bool(self.geom_cols)
 
-    @property
-    @functools.lru_cache(maxsize=1)
+    def _check_primary_key_option(self, primary_key_name):
+        if primary_key_name is None:
+            return None
+        ld = self.ogrlayer.GetLayerDefn()
+
+        for i in range(ld.GetFieldCount()):
+            field = ld.GetFieldDefn(i)
+            if primary_key_name == field.GetName():
+                return primary_key_name
+        else:
+            raise InvalidOperation(
+                f"'{primary_key_name}' was not found in the dataset",
+                param_hint='--primary-key',
+            )
+
     @ungenerator(dict)
-    def field_cid_map(self):
+    def _field_cid_map(self):
         ld = self.ogrlayer.GetLayerDefn()
 
         yield self.primary_key, 0
@@ -290,13 +333,20 @@ class OgrImporter:
 
     @property
     @functools.lru_cache(maxsize=1)
+    def field_cid_map(self):
+        return self._field_cid_map()
+
+    @property
+    @functools.lru_cache(maxsize=1)
     @ungenerator(dict)
     def field_adapter_map(self):
         ld = self.ogrlayer.GetLayerDefn()
 
         yield self.primary_key, adapt_value_noop
 
-        gc = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
+        gc = self.ogrlayer.GetGeometryColumn()
+        if self.geom_cols and not gc:
+            gc = self.geom_cols[0]
         if gc:
             yield gc, adapt_value_noop
 
@@ -305,17 +355,19 @@ class OgrImporter:
             name = field.GetName()
             yield name, get_type_value_adapter(field.GetType())
 
+    def _get_primary_key_value(self, ogr_feature, name):
+        return ogr_feature.GetFID()
+
     @ungenerator(dict)
     def _ogr_feature_to_dict(self, ogr_feature):
-        yield self.primary_key, ogr_feature.GetFID()
         for name, adapter in self.field_adapter_map.items():
-            if name == self.primary_key:
-                yield name, ogr_feature.GetFID()
-            elif name in self.geom_cols:
+            if name in self.geom_cols:
                 yield (
                     name,
                     gpkg.ogr_to_gpkg_geom(ogr_feature.GetGeometryRef()),
                 )
+            elif name == self.primary_key:
+                yield name, self._get_primary_key_value(ogr_feature, name)
             else:
                 value = ogr_feature.GetField(name)
                 yield name, adapter(value)
@@ -370,10 +422,7 @@ class OgrImporter:
         return (
             # normalise the geometry type names the way the GPKG spec likes it:
             # http://www.geopackage.org/spec/#geometry_types
-            ogr.GeometryTypeToName(
-                # remove Z/M components
-                ogr.GT_Flatten(ogr_geom_type)
-            )
+            ogr.GeometryTypeToName(ogr_geom_type)
             # 'Line String' --> 'LineString'
             .replace(' ', '')
             # --> 'LINESTRING'
@@ -476,6 +525,9 @@ class ImportGPKG(OgrImporter):
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
+        if self._primary_key:
+            return self._primary_key
+
         db = gpkg.db(self.ogr_source)
         return gpkg.pk(db, self.table)
 
@@ -487,7 +539,7 @@ class ImportGPKG(OgrImporter):
         db = gpkg.db(self.ogr_source)
         dbcur = db.cursor()
         dbcur.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
-        return dbcur
+        yield from dbcur
 
     def build_meta_info(self):
         """
@@ -498,7 +550,110 @@ class ImportGPKG(OgrImporter):
         yield from gpkg.get_meta_info(db, layer=self.table)
 
 
-def list_import_formats(ctx):
+class ImportPostgreSQL(OgrImporter):
+    @classmethod
+    def postgres_url_to_ogr_conn_str(cls, url):
+        """
+        Takes a URL ('postgresql://..')
+        and turns it into a key/value connection string, prefixed by 'PG:' for OGR.
+
+        libpq actually handles URIs fine, but OGR doesn't :(
+        So to import via OGR we have to convert them.
+
+        https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+
+        ^ These docs say these URLs can contain multiple hostnames or ports,
+        but we don't handle that.
+        """
+
+        url = urlsplit(url)
+        scheme = url.scheme.lower()
+        if scheme not in ('postgres', 'postgresql'):
+            raise ValueError("Bad scheme")
+
+        # Start with everything from the querystring.
+        params = dict(parse_qsl(url.query))
+
+        # Each of these fields can come from the main part of the URL,
+        # OR can come from the querystring.
+        # If both are specified, the querystring has precedence.
+        # So in 'postgresql://host1/?host=host2', the resultant host is 'host2'
+        if url.username:
+            params.setdefault('user', url.username)
+        if url.password:
+            params.setdefault('password', url.password)
+        if url.hostname:
+            params.setdefault('host', unquote(url.hostname))
+        if url.port:
+            params.setdefault('port', url.port)
+        dbname = (url.path or '/')[1:]
+        if dbname:
+            params.setdefault('dbname', dbname)
+
+        conn_str = ' '.join(sorted(f'{k}={v}' for (k, v) in params.items()))
+        return f'PG:{conn_str}'
+
+    @classmethod
+    def handle_source_string(cls, source):
+        if '://' not in source:
+            return None
+        try:
+            return cls.postgres_url_to_ogr_conn_str(source), ['PG']
+        except ValueError:
+            return None
+
+    @classmethod
+    def _ogr_open(cls, ogr_source, **open_kwargs):
+        open_options = open_kwargs.setdefault('open_options', [])
+        # don't only list tables listed in geometry_columns
+        open_options.append('LIST_ALL_TABLES=YES')
+        return super()._ogr_open(ogr_source, **open_kwargs)
+
+    def psycopg2_conn(self):
+        import psycopg2
+
+        conn_str = self.source
+        if conn_str.startswith('OGR:'):
+            conn_str = conn_str[4:]
+        if conn_str.startswith('PG:'):
+            conn_str = conn_str[3:]
+        # this will either be a URL or a key=value conn str
+        return psycopg2.connect(conn_str)
+
+    def _get_primary_key_value(self, ogr_feature, name):
+        try:
+            return ogr_feature.GetField(name)
+        except KeyError:
+            # OGR uses integer PKs as the 'FID', but then *doesn't*
+            # expose them as fields.
+            # In that case we have to call GetFID()
+            return ogr_feature.GetFID()
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def primary_key(self):
+        if self._primary_key:
+            return self._primary_key
+        conn = self.psycopg2_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT a.attname
+                FROM   pg_index i
+                JOIN   pg_attribute a ON a.attrelid = i.indrelid
+                                     AND a.attnum = ANY(i.indkey)
+                WHERE  i.indrelid = %s::regclass
+                AND    i.indisprimary;
+                """,
+                [self.table],
+            )
+            rows = cur.fetchall()
+            # TODO: handle multi-column PKs. Ignoring for now.
+            assert len(rows) == 1
+            return rows[0][0]
+
+
+def list_import_formats(ctx, param, value):
     """
     List the supported import formats
     """
@@ -553,8 +708,20 @@ def list_import_formats(ctx):
 @click.option(
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
+@click.option(
+    "--primary-key",
+    help="Which field to use as the primary key. Must be unique. Auto-detected when possible.",
+)
 def import_table(
-    ctx, all_tables, message, do_list, output_format, version, source, tables,
+    ctx,
+    all_tables,
+    message,
+    do_list,
+    output_format,
+    version,
+    primary_key,
+    source,
+    tables,
 ):
     """
     Import data into a repository.
@@ -579,7 +746,6 @@ def import_table(
         check_git_user(repo)
 
     source_loader = OgrImporter.open(source, None)
-
     if do_list:
         source_loader.print_table_list(do_json=output_format == 'json')
         return
@@ -602,7 +768,9 @@ def import_table(
             raise click.UsageError(
                 f'table "{dst_table}" was specified more than once', param_hint="tables"
             )
-        loaders[dst_table] = source_loader.clone_for_table(src_table)
+        loaders[dst_table] = source_loader.clone_for_table(
+            src_table, primary_key=primary_key
+        )
 
     structure.fast_import_tables(repo, loaders, message=message, version=version)
     rs = structure.RepositoryStructure(repo)
