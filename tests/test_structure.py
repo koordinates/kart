@@ -615,22 +615,19 @@ def postgis_layer(postgis_db, data_archive):
 
 
 def test_pg_import(
-    postgis_db, postgis_layer, data_archive, tmp_path, cli_runner, request,
+    postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
 ):
     with postgis_layer(
         'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
     ):
         repo_path = tmp_path / "repo"
-        r = cli_runner.invoke(
-            [
-                'init',
-                '--import',
-                os.environ['SNO_POSTGRES_URL'],
-                '--table=nz_waca_adjustments',
-                repo_path,
-            ]
-        )
+        r = cli_runner.invoke(['init', repo_path])
         assert r.exit_code == 0, r
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                ['import', os.environ['SNO_POSTGRES_URL'], 'nz_waca_adjustments']
+            )
+            assert r.exit_code == 0, r
         # now check metadata
         path = "nz_waca_adjustments"
         repo = pygit2.Repository(str(repo_path))
