@@ -4,11 +4,13 @@ import io
 import json
 import logging
 import os
+import random
 import re
 import shutil
 import subprocess
 import tarfile
 import time
+import uuid
 from pathlib import Path
 
 import pytest
@@ -57,6 +59,18 @@ def monkeypatch_session(request):
     mpatch = MonkeyPatch()
     yield mpatch
     mpatch.undo()
+
+
+@pytest.fixture
+def gen_uuid(request):
+    """ Deterministic "random" UUID generator seeded from the test ID """
+    seed = int(hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest(), 16)
+    _uuid_gen = random.Random(seed)
+
+    def _uuid():
+        return str(uuid.UUID(int=_uuid_gen.getrandbits(128)))
+
+    return _uuid
 
 
 @pytest.fixture(scope="session", autouse=True)
