@@ -12,7 +12,7 @@ import click
 import pygit2
 
 from . import core, gpkg
-from .exceptions import NotFound, NO_COMMIT
+from .exceptions import NotFound, SubprocessError, NO_COMMIT
 
 L = logging.getLogger("sno.structure")
 
@@ -124,7 +124,7 @@ def fast_import_tables(
                 )
 
         p.stdin.write(b"\ndone\n")
-    except BrokenPipeError as e:
+    except BrokenPipeError:
         # if git-fast-import dies early, we get an EPIPE here
         # we'll deal with it below
         pass
@@ -132,7 +132,9 @@ def fast_import_tables(
         p.stdin.close()
     p.wait()
     if p.returncode != 0:
-        raise subprocess.CalledProcessError(f"Error! {p.returncode}", "git-fast-import")
+        raise SubprocessError(
+            f"git-fast-import error! {p.returncode}", exit_code=p.returncode
+        )
     t3 = time.monotonic()
     click.echo(f"Closed in {(t3-t2):.0f}s")
 
@@ -371,6 +373,7 @@ class DatasetStructure:
     def all_versions(cls):
         """ Get all supported Dataset Structure versions """
         from . import dataset1  # noqa
+        from . import dataset2  # noqa
 
         def _get_subclasses(klass):
             for c in klass.__subclasses__():
@@ -429,14 +432,17 @@ class DatasetStructure:
                     f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({blob.type_str})"
                 )
 
-            try:
-                d = json.loads(blob.data)
-            except Exception as e:
-                raise IntegrityError(
-                    f"{version_klass.__name__}: Couldn't load version file from: {path}/{version_klass.VERSION_PATH}"
-                ) from e
+            if len(blob.data) <= 3:
+                version = blob.data.decode("utf8")
+            else:
+                try:
+                    d = json.loads(blob.data)
+                    version = d.get("version", None)
+                except Exception as e:
+                    raise IntegrityError(
+                        f"{version_klass.__name__}: Couldn't load version file from: {path}/{version_klass.VERSION_PATH}"
+                    ) from e
 
-            version = d.get("version", None)
             if version and version.startswith(version_klass.VERSION_SPECIFIER):
                 L.debug("Found %s dataset at: %s", version, path)
                 return version_klass(tree, path)
