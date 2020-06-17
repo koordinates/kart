@@ -50,11 +50,11 @@ def test_raw_dict_to_value_tuples():
         "a": 123,
         "f": None,
         "d": 5.0,
-        "c": [0, 0],
-        "b": True,
+        "c": True,
+        "b": b"bytes",
     }
     pk_values, non_pk_values = legend.raw_dict_to_value_tuples(raw_feature_dict)
-    assert pk_values == (123, True, [0, 0])
+    assert pk_values == (123, b"bytes", True)
     assert non_pk_values == (5.0, "eggs", None)
     roundtripped = legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
     assert roundtripped is not raw_feature_dict
@@ -70,8 +70,8 @@ def test_raw_feature_roundtrip():
         "a": 123,
         "f": None,
         "d": 5.0,
-        "c": [0, 0],
-        "b": True,
+        "c": True,
+        "b": b"bytes",
     }
     feature_path, feature_data = Dataset2.encode_raw_feature_dict(
         raw_feature_dict, legend
@@ -79,9 +79,33 @@ def test_raw_feature_roundtrip():
     tree = DictTree({legend_path: legend_data, feature_path: feature_data})
 
     dataset2 = Dataset2(tree)
-    roundtripped = dataset2.read_raw_feature_dict(feature_path)
+    roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
     assert roundtripped is not raw_feature_dict
     assert roundtripped == raw_feature_dict
+
+    empty_feature_dict = {
+        "a": None,
+        "b": None,
+        "c": None,
+        "d": None,
+        "e": None,
+        "f": None,
+    }
+    _, empty_feature_data = Dataset2.encode_raw_feature_dict(empty_feature_dict, legend)
+    tree = DictTree({legend_path: legend_data, feature_path: empty_feature_data})
+
+    dataset2 = Dataset2(tree)
+    roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
+    # Overwriting the old feature with an empty feature at the same path only
+    # clears the non-pk values, since the pk values are part of the path.
+    assert roundtripped == {
+        "a": 123,
+        "b": b"bytes",
+        "c": True,
+        "d": None,
+        "e": None,
+        "f": None,
+    }
 
 
 @pytest.fixture
@@ -159,8 +183,8 @@ def test_feature_roundtrip(gen_uuid):
         "geom": "010100000087BF756489EF5C4C",
     }
 
-    feature_path, feature_data = Dataset2.encode_feature_tuple(feature_tuple, schema)
-    feature_path2, feature_data2 = Dataset2.encode_feature_dict(feature_dict, schema)
+    feature_path, feature_data = Dataset2.encode_feature(feature_tuple, schema)
+    feature_path2, feature_data2 = Dataset2.encode_feature(feature_dict, schema)
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
@@ -169,13 +193,13 @@ def test_feature_roundtrip(gen_uuid):
     )
 
     dataset2 = Dataset2(tree)
-    roundtripped = dataset2.read_feature_tuple(feature_path)
-    assert roundtripped is not feature_tuple
-    assert roundtripped == feature_tuple
+    roundtripped_tuple = dataset2.get_feature(path=feature_path, keys=False)
+    assert roundtripped_tuple is not feature_tuple
+    assert roundtripped_tuple == feature_tuple
 
-    roundtripped = dataset2.read_feature_dict(feature_path)
-    assert roundtripped is not feature_dict
-    assert roundtripped == feature_dict
+    roundtripped_dict = dataset2.get_feature(path=feature_path, keys=True)
+    assert roundtripped_dict is not feature_dict
+    assert roundtripped_dict == feature_dict
 
 
 def test_schema_change_roundtrip(gen_uuid):
@@ -208,12 +232,8 @@ def test_schema_change_roundtrip(gen_uuid):
         "ID": 7,
     }
 
-    feature_path, feature_data = Dataset2.encode_feature_tuple(
-        feature_tuple, old_schema
-    )
-    feature_path2, feature_data2 = Dataset2.encode_feature_dict(
-        feature_dict, old_schema
-    )
+    feature_path, feature_data = Dataset2.encode_feature(feature_tuple, old_schema)
+    feature_path2, feature_data2 = Dataset2.encode_feature(feature_dict, old_schema)
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
@@ -233,9 +253,9 @@ def test_schema_change_roundtrip(gen_uuid):
     dataset2 = Dataset2(tree)
     # Old columns that are not present in the new schema are gone.
     # New columns that are not present in the old schema have 'None's.
-    roundtripped = dataset2.read_feature_tuple(feature_path)
+    roundtripped = dataset2.get_feature(path=feature_path, keys=False)
     assert roundtripped == (7, None, "Bloggs", "Joe", None)
-    roundtripped = dataset2.read_feature_dict(feature_path)
+    roundtripped = dataset2.get_feature(path=feature_path, keys=True)
     assert roundtripped == {
         "personnel_id": 7,
         "tax_file_number": None,
