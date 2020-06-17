@@ -233,13 +233,6 @@ class Schema:
         else:
             return tuple([raw_dict.get(c.id, None) for c in self.columns])
 
-    def feature_tuple_from_raw(self, raw_dict):
-        """Values keyed by column ID -> value tuple in schema order."""
-        feature_tuple = []
-        for column in self.columns:
-            feature_tuple.append(raw_dict.get(column.id, None))
-        return tuple(feature_tuple)
-
     def feature_to_raw_dict(self, feature):
         """
         Takes a feature - either a dict of values keyed by column name,
@@ -256,13 +249,6 @@ class Schema:
             assert len(feature) == len(self.columns)
             for column, value in zip(self.columns, feature):
                 raw_dict[column.id] = value
-        return raw_dict
-
-    def feature_tuple_to_raw(self, feature_tuple):
-        """Value tuple in schema order -> values keyed by column ID."""
-
-        raw_dict = {}
-
         return raw_dict
 
     def _to_legend(self):
