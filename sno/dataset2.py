@@ -4,10 +4,11 @@ import functools
 import hashlib
 import json
 import os
+import uuid
 
 import msgpack
 
-from .structure import IntegrityError
+from .structure import DatasetStructure, IntegrityError
 
 
 def _pack(data):
@@ -46,6 +47,19 @@ def _hexhash(data):
     """data (any type) -> hex str. Irreversible."""
     # We only return 160 bits of the hash, same as git hashes - more is overkill.
     return hashlib.sha256(data).hexdigest()[:40]
+
+
+def walk_tree(tree, path="", max_depth=4):
+    """
+    Recursively yields all possible (file_path, file_data) tuples
+    in the given directory tree, up to a given max_depth.
+    """
+    for entry in tree:
+        entry_path = f"{path}/{entry.name}" if path else entry.name
+        if hasattr(entry, "data"):
+            yield entry_path, entry.data
+        elif max_depth > 0:
+            yield from walk_tree(entry, entry_path, max_depth - 1)
 
 
 class Legend:
@@ -143,6 +157,22 @@ def _pk_index_ordering(column):
         return float('inf')
 
 
+ALL_DATA_TYPES = {
+    "BOOLEAN",
+    "BLOB",
+    "DATE",
+    "DATETIME",
+    "FLOAT",
+    "GEOMETRY",
+    "INTEGER",
+    "INTERVAL",
+    "NUMERIC",
+    "TEXT",
+    "TIME",
+    "TIMESTAMP",
+}
+
+
 class ColumnSchema(
     # namedtuple for Immutability
     namedtuple(
@@ -155,7 +185,12 @@ class ColumnSchema(
     column is one of the primary keys, and potentially extra info about the specific datatype.
     """
 
+    @staticmethod
+    def new_id():
+        return str(uuid.uuid4())
+
     def __new__(cls, id, name, data_type, pk_index, **extra_type_info):
+        assert data_type in ALL_DATA_TYPES
         return super().__new__(cls, id, name, data_type, pk_index, extra_type_info)
 
     @classmethod
@@ -222,6 +257,14 @@ class Schema:
         json_array = [c.to_json_dict() for c in self.columns]
         return _json(json_array)
 
+    def __str__(self):
+        cols = ",\n".join(str(c) for c in self.columns)
+        return f"Schema([{cols}])"
+
+    def __repr__(self):
+        cols = ",\n".join(repr(c) for c in self.columns)
+        return f"Schema([{cols}])"
+
     def feature_from_raw_dict(self, raw_dict, keys=True):
         """
         Takes a "raw" feature dict - values keyed by column ID.
@@ -240,8 +283,9 @@ class Schema:
         Returns a "raw" feature dict - values keyed by column ID.
         """
         raw_dict = {}
-        if isinstance(feature, dict):
+        if isinstance(feature, dict) or hasattr(feature, "keys"):
             # Feature values are keyed by column name - find them by key.
+            # This also works for DB rows that are subscriptable.
             for column in self.columns:
                 raw_dict[column.id] = feature[column.name]
         else:
@@ -279,7 +323,7 @@ class Schema:
 
 
 # TODO: this class is unfinished, and so doesn't extend DatasetStructure.
-class Dataset2:
+class Dataset2(DatasetStructure):
     """
     - Uses messagePack to serialise features.
     - Stores each feature in a blob with path dependent on primary key values.
@@ -306,27 +350,39 @@ class Dataset2:
     which *should be written*. The caller must write these to a commit.
     """
 
-    LEGENDS_PATH = ".sno-table/meta/legend/"
+    VERSION_PATH = ".sno-table/meta/version"
+    VERSION_SPECIFIER = "2."
+    VERSION_IMPORT = "2.0"
+
+    ENCODE_VERSION = (VERSION_PATH, VERSION_IMPORT.encode('utf8'))
+
+    FEATURE_PATH = ".sno-table/feature/"
+    META_PATH = ".sno-table/meta/"
+    LEGEND_PATH = ".sno-table/meta/legend/"
     SCHEMA_PATH = ".sno-table/meta/schema"
 
-    def __init__(self, tree):
-        # Generally a pygit2.Tree, but conceptually just a directory tree
-        # with the appropriate structure.
-        self.tree = tree
-        # TODO - add support for reading from pygit2.Index or similar during merge.
+    @property
+    def version(self):
+        return self.get_data_at(self.VERSION_PATH, as_str=True)
 
-    def get_data_at(self, path):
+    def get_data_at(self, path, as_str=False):
         """Return the data at the given path from within this dataset."""
         leaf = self.tree / str(path)
         if not hasattr(leaf, "data"):
             raise IntegrityError(f"No data found at path {path}, type={type(leaf)}")
-        return leaf.data
+        return leaf.data.decode('utf8') if as_str else leaf.data
 
-    @functools.lru_cache(maxsize=16)
+    @functools.lru_cache()
+    def get_meta_item(self, path):
+        # TODO: this is hardly used - could maybe be removed.
+        content_is_str = not path.startswith(self.LEGEND_PATH)
+        return self.get_data_at(self.META_PATH + path, as_str=content_is_str)
+
+    @functools.lru_cache()
     def get_legend(self, legend_hash=None, *, path=None):
         """Load the legend with the given hash / at the given path from this dataset."""
         if path is None:
-            path = self.LEGENDS_PATH + legend_hash
+            path = self.LEGEND_PATH + legend_hash
         return Legend.loads(self.get_data_at(path))
 
     @classmethod
@@ -336,18 +392,19 @@ class Dataset2:
         to write this legend. This is almost the inverse of get_legend, except
         Dataset2 doesn't write the data.
         """
-        return cls.LEGENDS_PATH + legend.hexhash(), legend.dumps()
+        return cls.LEGEND_PATH + legend.hexhash(), legend.dumps()
 
+    @property
     @functools.lru_cache(maxsize=1)
-    def get_current_schema(self):
+    def schema(self):
         """Load the current schema from this dataset."""
         return Schema.loads(self.get_data_at(self.SCHEMA_PATH))
 
     @classmethod
-    def encode_current_schema(cls, schema):
+    def encode_schema(cls, schema):
         """
         Given a schema, returns the path and the data which *should be written*
-        to write this schema. This is almost the inverse of get_current_schema,
+        to write this schema. This is almost the inverse of calling .schema,
         except Dataset2 doesn't write the data. (Note that the schema's legend
         should also be stored if any features are written with this schema.)
         """
@@ -387,7 +444,23 @@ class Dataset2:
         or a tuple of values in schema order (if keys=False).
         """
         raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
-        return self.get_current_schema().feature_from_raw_dict(raw_dict, keys=keys)
+        return self.schema.feature_from_raw_dict(raw_dict, keys=keys)
+
+    def features(self, keys=True):
+        """
+        Returns a generator that calls get_feature once per feature.
+        Each entry in the generator is the path of the feature and then the feature itself.
+        """
+
+        # TODO: optimise.
+        # TODO: don't return the path of each feature by default - most callers don't care.
+        # (but this is the interface shared by dataset1 at the moment.)
+        if self.FEATURE_PATH not in self.tree:
+            return
+        for feature_path, feature_data in walk_tree(self.tree / self.FEATURE_PATH):
+            yield feature_path, self.get_feature(
+                path=feature_path, data=feature_data, keys=keys
+            ),
 
     @classmethod
     def decode_path_to_pk_values(cls, path):
@@ -427,7 +500,7 @@ class Dataset2:
         packed_pk = _pack(pk_values)
         pk_hash = _hexhash(packed_pk)
         filename = _b64encode_str(packed_pk)
-        return "/".join([".sno-table", pk_hash[:2], pk_hash[2:4], filename])
+        return f"{cls.FEATURE_PATH}{pk_hash[:2]}/{pk_hash[2:4]}/{filename}"
 
     @classmethod
     def sanitise_pk_values(cls, pk_values):
@@ -437,3 +510,23 @@ class Dataset2:
         if not isinstance(pk_values, (list, tuple)):
             return (pk_values,)
         return pk_values
+
+    def repo_path(self, rel_path):
+        return f"{self.path}/{rel_path}"
+
+    def import_iter_meta_blobs(self, repo, source):
+        schema = source.get_v2_schema()
+        meta_blobs = [
+            self.ENCODE_VERSION,
+            self.encode_schema(schema),
+            self.encode_legend(schema.legend),
+        ]
+
+        for meta_path, meta_content in meta_blobs:
+            yield self.repo_path(meta_path), meta_content
+
+    def import_iter_feature_blobs(self, resultset, source):
+        schema = source.get_v2_schema()
+        for feature in resultset:
+            feature_path, feature_content = self.encode_feature(feature, schema)
+            yield self.repo_path(feature_path), feature_content

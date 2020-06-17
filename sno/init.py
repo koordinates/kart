@@ -3,6 +3,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
@@ -58,6 +59,20 @@ class OgrImporter:
         'DateTime': 'DATETIME',
     }
     OGR_SUBTYPE_TO_SQLITE_TYPE = {ogr.OFSTBoolean: 'BOOLEAN', ogr.OFSTInt16: 'SMALLINT'}
+
+    OGR_TYPE_TO_V2_SCHEMA_TYPE = {
+        'Integer': ('INTEGER', {}),
+        'Integer64': ('INTEGER', {"size": 64}),
+        'Real': ('FLOAT', {}),
+        'String': ('TEXT', {}),
+        'Binary': ('BLOB', {}),
+        'Date': ('DATE', {}),
+        'DateTime': ('DATETIME', {}),
+    }
+    OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
+        ogr.OFSTBoolean: ('BOOLEAN', {}),
+        ogr.OFSTInt16: ('INTEGER', {"size": 16}),
+    }
 
     @classmethod
     def _all_subclasses(cls):
@@ -444,6 +459,26 @@ class OgrImporter:
             "m": int(ogr.GT_HasM(ogr_geom_type)),
         }
 
+    def get_geometry_v2_column_schema(self):
+        from .dataset2 import ColumnSchema
+
+        if not self.is_spatial:
+            return None
+
+        name = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
+        geometry_type = self._get_meta_geometry_type()
+        ogr_geom_type = self.ogrlayer.GetGeomType()
+        z = "Z" if ogr.GT_HasZ(ogr_geom_type) else ""
+        m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
+        extra_type_info = {
+            "geometryType": f"{geometry_type} {z}{m}".strip(),
+            "geometrySRS": f"EPSG:{self._get_meta_srid()}",
+        }
+
+        return ColumnSchema(
+            ColumnSchema.new_id(), name, "GEOMETRY", None, **extra_type_info
+        )
+
     def _ogr_type_to_sqlite_type(self, fd):
         subtype = fd.GetSubType()
         if subtype == ogr.OFSTNone:
@@ -456,6 +491,45 @@ class OgrImporter:
             if width:
                 type_name += f'({width})'
         return type_name
+
+    def _field_to_v2_column_schema(self, fd):
+        from .dataset2 import ColumnSchema
+
+        ogr_type = fd.GetTypeName()
+        ogr_subtype = fd.GetSubType()
+        if ogr_subtype == ogr.OFSTNone:
+            data_type, extra_type_info = self.OGR_TYPE_TO_V2_SCHEMA_TYPE[ogr_type]
+        else:
+            data_type, extra_type_info = self.OGR_SUBTYPE_TO_V2_SCHEMA_TYPE[ogr_subtype]
+
+        extra_type_info = extra_type_info.copy()
+
+        if data_type in ('TEXT', 'BLOB'):
+            width = fd.GetWidth()
+            if width:
+                extra_type_info["length"] = width
+
+        return ColumnSchema(
+            ColumnSchema.new_id(), fd.GetName(), data_type, None, **extra_type_info
+        )
+
+    @functools.lru_cache(maxsize=1)
+    def get_v2_schema(self):
+        from .dataset2 import Schema, ColumnSchema
+
+        ld = self.ogrlayer.GetLayerDefn()
+        pk_column = ColumnSchema(ColumnSchema.new_id(), self.primary_key, "INTEGER", 0)
+        geometry_column = self.get_geometry_v2_column_schema()
+        special_columns = (
+            [pk_column, geometry_column] if geometry_column else [pk_column]
+        )
+
+        other_columns = [
+            self._field_to_v2_column_schema(ld.GetFieldDefn(i))
+            for i in range(ld.GetFieldCount())
+        ]
+
+        return Schema(special_columns + other_columns)
 
     @ungenerator(list)
     def get_meta_table_info(self):
