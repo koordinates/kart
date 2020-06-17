@@ -222,12 +222,16 @@ class Schema:
         json_array = [c.to_json_dict() for c in self.columns]
         return _json(json_array)
 
-    def feature_dict_from_raw(self, raw_dict):
-        """Values keyed by column ID -> values keyed by column name."""
-        feature_dict = {}
-        for column in self.columns:
-            feature_dict[column.name] = raw_dict.get(column.id, None)
-        return feature_dict
+    def feature_from_raw_dict(self, raw_dict, keys=True):
+        """
+        Takes a "raw" feature dict - values keyed by column ID.
+        Returns a dict of values keyed by column name (if keys=True)
+        or a tuple of value in schema order (if keys=False).
+        """
+        if keys:
+            return {c.name: raw_dict.get(c.id, None) for c in self.columns}
+        else:
+            return tuple([raw_dict.get(c.id, None) for c in self.columns])
 
     def feature_tuple_from_raw(self, raw_dict):
         """Values keyed by column ID -> value tuple in schema order."""
@@ -236,19 +240,29 @@ class Schema:
             feature_tuple.append(raw_dict.get(column.id, None))
         return tuple(feature_tuple)
 
-    def feature_dict_to_raw(self, feature_dict):
-        """Values keyed by column name -> values keyed by column ID."""
+    def feature_to_raw_dict(self, feature):
+        """
+        Takes a feature - either a dict of values keyed by column name,
+        or a list / tuple of values in schema order.
+        Returns a "raw" feature dict - values keyed by column ID.
+        """
         raw_dict = {}
-        for column in self.columns:
-            raw_dict[column.id] = feature_dict[column.name]
+        if isinstance(feature, dict):
+            # Feature values are keyed by column name - find them by key.
+            for column in self.columns:
+                raw_dict[column.id] = feature[column.name]
+        else:
+            # Feature values are not keyed, but should be in order, one per column.
+            assert len(feature) == len(self.columns)
+            for column, value in zip(self.columns, feature):
+                raw_dict[column.id] = value
         return raw_dict
 
     def feature_tuple_to_raw(self, feature_tuple):
         """Value tuple in schema order -> values keyed by column ID."""
-        assert len(feature_tuple) == len(self.columns)
+
         raw_dict = {}
-        for column, value in zip(self.columns, feature_tuple):
-            raw_dict[column.id] = value
+
         return raw_dict
 
     def _to_legend(self):
@@ -306,6 +320,9 @@ class Dataset2:
     which *should be written*. The caller must write these to a commit.
     """
 
+    LEGENDS_PATH = ".sno-table/meta/legend/"
+    SCHEMA_PATH = ".sno-table/meta/schema"
+
     def __init__(self, tree):
         # Generally a pygit2.Tree, but conceptually just a directory tree
         # with the appropriate structure.
@@ -320,9 +337,11 @@ class Dataset2:
         return leaf.data
 
     @functools.lru_cache(maxsize=16)
-    def get_legend(self, legend_hash):
-        """Load the legend with the given hash from this dataset."""
-        return Legend.loads(self.get_data_at(f"meta/legend/{legend_hash}"))
+    def get_legend(self, legend_hash=None, *, path=None):
+        """Load the legend with the given hash / at the given path from this dataset."""
+        if path is None:
+            path = self.LEGENDS_PATH + legend_hash
+        return Legend.loads(self.get_data_at(path))
 
     @classmethod
     def encode_legend(cls, legend):
@@ -331,12 +350,12 @@ class Dataset2:
         to write this legend. This is almost the inverse of get_legend, except
         Dataset2 doesn't write the data.
         """
-        return f"meta/legend/{legend.hexhash()}", legend.dumps()
+        return cls.LEGENDS_PATH + legend.hexhash(), legend.dumps()
 
     @functools.lru_cache(maxsize=1)
     def get_current_schema(self):
         """Load the current schema from this dataset."""
-        return Schema.loads(self.get_data_at(f"meta/schema"))
+        return Schema.loads(self.get_data_at(self.SCHEMA_PATH))
 
     @classmethod
     def encode_current_schema(cls, schema):
@@ -346,28 +365,32 @@ class Dataset2:
         except Dataset2 doesn't write the data. (Note that the schema's legend
         should also be stored if any features are written with this schema.)
         """
-        return "meta/schema", schema.dumps()
+        return cls.SCHEMA_PATH, schema.dumps()
 
-    def read_raw_feature_dict(self, path):
+    def get_raw_feature_dict(self, pk=None, *, path=None):
         """
-        Given a dataset path, reads the feature stored there, and returns the feature row as a dict of
-        {column-id: value}. This is the raw feature dict - it returns only what is actually stored in the row,
-        and is keyed by internal column IDs. Getting a dict where the keys have their user-visible
-        names and are in the user-visible order requires looking up the current Schema.
+        Gets the feature with the given primary key(s) / at the given path.
+        The result is a "raw" feature dict, values are keyed by column ID,
+        and contains exactly those values that are actually stored in the tree,
+        which might not be the same values that are now in the schema.
+        To get a feature consistent with the current schema, call get_feature.
         """
+        if path is None:
+            path = self.encode_pk_values_to_path(pk)
         data = self.get_data_at(path)
         legend_hash, non_pk_values = _unpack(data)
         legend = self.get_legend(legend_hash)
         pk_values = self.decode_path_to_pk_values(path)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
-    def read_feature_dict(self, path):
-        raw_dict = self.read_raw_feature_dict(path)
-        return self.get_current_schema().feature_dict_from_raw(raw_dict)
-
-    def read_feature_tuple(self, path):
-        raw_dict = self.read_raw_feature_dict(path)
-        return self.get_current_schema().feature_tuple_from_raw(raw_dict)
+    def get_feature(self, pk=None, *, path=None, keys=True):
+        """
+        Gets the feature with the given primary key(s) / at the given path.
+        The result is either a dict of values keyed by column name (if keys=True)
+        or a tuple of values in schema order (if keys=False).
+        """
+        raw_dict = self.get_raw_feature_dict(pk=pk, path=path)
+        return self.get_current_schema().feature_from_raw_dict(raw_dict, keys=keys)
 
     @classmethod
     def decode_path_to_pk_values(cls, path):
@@ -378,9 +401,9 @@ class Dataset2:
     @classmethod
     def encode_raw_feature_dict(cls, raw_feature_dict, legend):
         """
-        Given a feature row and a legednd, returns the path and the data which
-        *should be written* to write this feature. This is almost the inverse
-        of read_raw_feature_dict, except Dataset2 doesn't write the data.
+        Given a "raw" feature dict (keyed by column IDs) and a schema, returns the path
+        and the data which *should be written* to write this feature. This is almost the
+        inverse of get_raw_feature_dict, except Dataset2 doesn't write the data.
         """
         pk_values, non_pk_values = legend.raw_dict_to_value_tuples(raw_feature_dict)
         path = cls.encode_pk_values_to_path(pk_values)
@@ -388,18 +411,23 @@ class Dataset2:
         return path, data
 
     @classmethod
-    def encode_feature_dict(cls, feature_dict, schema):
-        raw_dict = schema.feature_dict_to_raw(feature_dict)
-        return cls.encode_raw_feature_dict(raw_dict, schema.legend)
-
-    @classmethod
-    def encode_feature_tuple(cls, feature_tuple, schema):
-        raw_dict = schema.feature_tuple_to_raw(feature_tuple)
+    def encode_feature(cls, feature, schema):
+        """
+        Given a feature (either a dict keyed by column name, or a list / tuple in schema order),
+        returns the path and the data which *should be written* to write this feature. This is
+        almost the inverse of get_feature, except Dataset2 doesn't write the data.
+        """
+        raw_dict = schema.feature_to_raw_dict(feature)
         return cls.encode_raw_feature_dict(raw_dict, schema.legend)
 
     @classmethod
     def encode_pk_values_to_path(self, pk_values):
-        """Given some pk values, returns the path the feature should be written to."""
+        """
+        Given some pk values, returns the path the feature should be written to.
+        pk_values should be a single pk value, or a list of pk values.
+        """
+        if not isinstance(pk_values, (list, tuple)):
+            pk_values = [pk_values]
         packed_pk = _pack(pk_values)
         pk_hash = _hexhash(packed_pk)
         filename = _b64encode_str(packed_pk)
