@@ -3,6 +3,7 @@ import collections
 import functools
 import hashlib
 import itertools
+import logging
 import os
 import re
 
@@ -146,12 +147,12 @@ class Dataset1(DatasetStructure):
         object_path = self.get_feature_path(pk)
         index.remove("/".join([self.path, object_path]))
 
-    def repo_feature_to_dict(self, pk, blob, ogr_geoms=False):
+    def repo_feature_to_dict(self, blob_path, blob_data, ogr_geoms=False):
         feature = {
-            self.primary_key: self.decode_pk(pk),
+            self.primary_key: self.decode_pk(blob_path),
         }
         bin_feature = msgpack.unpackb(
-            blob.data,
+            blob_data,
             ext_hook=self._msgpack_unpack_ext_ogr
             if ogr_geoms
             else self._msgpack_unpack_ext,
@@ -180,8 +181,11 @@ class Dataset1(DatasetStructure):
         return pk_enc, te
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
-        pk_enc, blob = self._get_feature(pk_value)
-        return pk_enc, self.repo_feature_to_dict(pk_enc, blob, ogr_geoms=ogr_geoms)
+        blob_path, blob_data = self._get_feature(pk_value)
+        return (
+            blob_path,
+            self.repo_feature_to_dict(blob_path, blob_data, ogr_geoms=ogr_geoms),
+        )
 
     def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
         tupleizer = self.build_feature_tupleizer(col_names)
@@ -207,9 +211,9 @@ class Dataset1(DatasetStructure):
                 ftuple_order.append(field_cid_map[field_name])
         ftuple_order = tuple(ftuple_order)
 
-        def tupleizer(pk, blob):
+        def tupleizer(blob_path, blob_data):
             bin_feature = msgpack.unpackb(
-                blob.data,
+                blob_data,
                 ext_hook=self._msgpack_unpack_ext_ogr
                 if ogr_geoms
                 else self._msgpack_unpack_ext,
@@ -218,15 +222,20 @@ class Dataset1(DatasetStructure):
             )
             return tuple(
                 [
-                    self.decode_pk(pk) if c == -1 else bin_feature[c]
+                    self.decode_pk(blob_path) if c == -1 else bin_feature[c]
                     for c in ftuple_order
                 ]
             )
 
         return tupleizer
 
-    def _features(self, feature_builder, fast):
-        top_tree = self.tree / ".sno-table"
+    def _iter_feature_blobs(self, feature_builder, fast=False):
+        """
+        Iterates over all the features in self.tree that match the expected
+        pattern for a feature, and yields the following for each:
+        >>> feature_builder(path_name, path_data)
+        """
+        sno_table_tree = self.tree / ".sno-table"
 
         # .sno-table/
         #   [hex(pk-hash):2]/
@@ -234,38 +243,35 @@ class Dataset1(DatasetStructure):
         #       [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
         URLSAFE_B64 = r"A-Za-z0-9_\-"
 
-        RE_L = re.compile(r"([0-9a-f]{2})?$")
-        RE_F = re.compile(
+        RE_DIR = re.compile(r"([0-9a-f]{2})?$")
+        RE_LEAF = re.compile(
             fr"(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$"
         )
 
-        for l1e in top_tree:
-            if l1e.type != pygit2.GIT_OBJ_TREE or not RE_L.match(l1e.name):
+        for dir1 in sno_table_tree:
+            if hasattr(dir1, "data") or not RE_DIR.match(dir1.name):
                 continue
 
-            for l2e in l1e:
-                if l2e.type != pygit2.GIT_OBJ_TREE or not RE_L.match(l2e.name):
+            for dir2 in dir1:
+                if hasattr(dir2, "data") or not RE_DIR.match(dir2.name):
                     continue
 
-                for fbe in l2e:
+                for leaf in dir2:
                     if not fast:
-                        if not RE_F.match(fbe.name):
+                        if not RE_LEAF.match(leaf.name):
                             continue
-                        elif fbe.type != pygit2.GIT_OBJ_BLOB:
+                        elif not hasattr(leaf, "data"):
+                            path = f".sno-table/{dir1.name}/{dir2.name}/{leaf.name}"
                             self.L.warn(
-                                "features: Unexpected TreeEntry type=%s in feature tree '%s/%s/%s'",
-                                fbe.type_str,
-                                l1e.name,
-                                l2e.name,
-                                fbe.name,
+                                f"features: No data found at path {path}, type={type(leaf)}"
                             )
                             continue
 
-                    yield feature_builder(fbe.name, fbe)
+                    yield feature_builder(leaf.name, leaf.data)
 
     def features(self, *, ogr_geoms=False, **kwargs):
-        """ Feature iterator yielding (feature-key, feature-dict) pairs """
-        return self._features(
+        """ Feature iterator yielding (pk, feature-dict) pairs """
+        return self._iter_feature_blobs(
             lambda pk, blob: (
                 pk,
                 self.repo_feature_to_dict(pk, blob, ogr_geoms=ogr_geoms),
@@ -276,10 +282,10 @@ class Dataset1(DatasetStructure):
     def feature_tuples(self, col_names, **kwargs):
         """ Optimised feature iterator yielding tuples, ordered by the columns from col_names """
         tupleizer = self.build_feature_tupleizer(col_names)
-        return self._features(tupleizer, fast=True)
+        return self._iter_feature_blobs(tupleizer, fast=True)
 
     def feature_count(self, fast=True):
-        return sum(self._features(lambda pk, blob: 1, fast=fast))
+        return sum(self._iter_feature_blobs(lambda pk, blob: 1, fast=fast))
 
     def encode_feature(
         self,
