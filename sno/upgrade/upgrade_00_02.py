@@ -167,14 +167,22 @@ def upgrade(source, dest, layer):
                             source_blob.data.decode("utf8")
                         )
 
-                dataset.write_feature(
-                    source_feature_dict,
-                    dest_repo,
-                    index,
-                    field_cid_map=field_cid_map,
-                    geom_cols=[geom_field],
-                    primary_key=pk_field,
+                kwargs = {
+                    "field_cid_map": field_cid_map,
+                    "geom_cols": [geom_field],
+                    "primary_key": pk_field,
+                    "cast_primary_key": False,
+                }
+
+                dest_path, dest_data = dataset.encode_feature(
+                    source_feature_dict, **kwargs
                 )
+                blob_id = dest_repo.create_blob(dest_data)
+                entry = pygit2.IndexEntry(
+                    f"{dataset.path}/{dest_path}", blob_id, pygit2.GIT_FILEMODE_BLOB
+                )
+                index.add(entry)
+
                 feature_count += 1
 
             elif top_path == "" or re.match(r"^features(/[a-f0-9]{4})?$", top_path):

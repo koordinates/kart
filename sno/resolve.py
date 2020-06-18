@@ -35,11 +35,11 @@ def write_feature_to_dataset_entry(feature, dataset, repo):
     Returns the IndexEntry that refers to that blob - this IndexEntry still needs
     to be written to the repo to complete the write.
     """
-    pk = feature[dataset.primary_key]
-    object_path = "/".join([dataset.path, dataset.get_feature_path(pk)])
-    bin_feature = dataset.encode_feature(feature)
-    blob_id = repo.create_blob(bin_feature)
-    return pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
+    feature_path, feature_data = dataset.encode_feature(feature)
+    blob_id = repo.create_blob(feature_data)
+    return pygit2.IndexEntry(
+        f"{dataset.path}/{feature_path}", blob_id, pygit2.GIT_FILEMODE_BLOB
+    )
 
 
 def load_geojson_resolve(file_path, dataset, repo):

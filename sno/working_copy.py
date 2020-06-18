@@ -698,13 +698,15 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
                 if db_obj[pk_field] is None:
                     if repo_obj:  # ignore INSERT+DELETE
-                        blob_hash = pygit2.hash(dataset.encode_feature(repo_obj)).hex
+                        blob_hash = pygit2.hash(
+                            dataset.encode_feature_blob(repo_obj)
+                        ).hex
                         candidates_del[blob_hash].append((track_pk, repo_obj))
                     continue
 
                 elif not repo_obj:
                     # INSERT
-                    blob_hash = pygit2.hash(dataset.encode_feature(db_obj)).hex
+                    blob_hash = pygit2.hash(dataset.encode_feature_blob(db_obj)).hex
                     candidates_ins[blob_hash].append(db_obj)
 
                 else:
