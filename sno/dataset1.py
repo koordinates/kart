@@ -99,8 +99,9 @@ class Dataset1(DatasetStructure):
     def decode_pk(self, encoded):
         return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
 
-    def get_feature_path(self, pk):
-        pk = self.cast_primary_key(pk)
+    def get_feature_path(self, pk, cast_primary_key=True):
+        if cast_primary_key:
+            pk = self.cast_primary_key(pk)
         pk_enc = self.encode_pk(pk)
         pk_hash = hashlib.sha1(
             pk_enc.encode("utf8")
@@ -281,8 +282,31 @@ class Dataset1(DatasetStructure):
         return sum(self._features(lambda pk, blob: 1, fast=fast))
 
     def encode_feature(
+        self,
+        feature,
+        field_cid_map=None,
+        geom_cols=None,
+        primary_key=None,
+        cast_primary_key=True,
+    ):
+        """
+        Given a feature, returns the path and the data that *should be written*
+        to write this feature.
+        """
+        if primary_key is None:
+            primary_key = self.primary_key
+        return (
+            self.get_feature_path(feature[primary_key], cast_primary_key),
+            self.encode_feature_blob(feature, field_cid_map, geom_cols, primary_key),
+        )
+
+    def encode_feature_blob(
         self, feature, field_cid_map=None, geom_cols=None, primary_key=None
     ):
+        """
+        Given a feature, returns the data that *should be written* to write this feature
+        (but not the path it should be written to).
+        """
         if field_cid_map is None:
             field_cid_map = self.field_cid_map
         if geom_cols is None:
@@ -304,43 +328,6 @@ class Dataset1(DatasetStructure):
             bin_feature[field_id] = value
 
         return msgpack.packb(bin_feature, use_bin_type=True)
-
-    def write_feature(
-        self,
-        row,
-        repo,
-        index,
-        *,
-        field_cid_map=None,
-        geom_cols=None,
-        primary_key=None,
-        **kwargs,
-    ):
-        """
-        This function is only used by `sno upgrade` when upgrading pre-v0.2 repositories.
-        It should be removed eventually.
-        """
-        path = f"{self.path}/.sno-table"
-
-        if field_cid_map is None:
-            field_cid_map = self.field_cid_map
-        if geom_cols is None:
-            geom_cols = [self.geom_column_name]
-        if primary_key is None:
-            primary_key = self.primary_key
-
-        pk_enc = self.encode_pk(row[primary_key])
-        pk_hash = hashlib.sha1(
-            pk_enc.encode("utf8")
-        ).hexdigest()  # hash to randomly spread filenames
-
-        feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
-
-        bin_feature = self.encode_feature(row, field_cid_map, geom_cols, primary_key)
-        blob_id = repo.create_blob(bin_feature)
-        entry = pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-        index.add(entry)
-        return [entry]
 
     def import_iter_feature_blobs(self, resultset, source):
         path = f"{self.path}/.sno-table"
@@ -399,7 +386,7 @@ class Dataset1(DatasetStructure):
                     f"{self.path}: Trying to create feature that already exists: {pk}"
                 )
                 continue
-            bin_feature = self.encode_feature(obj_new)
+            bin_feature = self.encode_feature_blob(obj_new)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
             index.add(entry)
@@ -434,7 +421,7 @@ class Dataset1(DatasetStructure):
             index.remove(old_object_path)
             new_pk = obj_new[pk_field]
             new_object_path = "/".join([self.path, self.get_feature_path(new_pk)])
-            bin_feature = self.encode_feature(obj_new)
+            bin_feature = self.encode_feature_blob(obj_new)
             blob_id = repo.create_blob(bin_feature)
             entry = pygit2.IndexEntry(
                 new_object_path, blob_id, pygit2.GIT_FILEMODE_BLOB

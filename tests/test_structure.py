@@ -880,13 +880,17 @@ def test_write_feature_performance(
                     "geom_cols": source.geom_cols,
                     "field_cid_map": source.field_cid_map,
                     "primary_key": source.primary_key,
-                    "path": dataset.path,
+                    "cast_primary_key": False,
                 }
 
                 def _write_feature():
-                    return dataset.write_feature(
-                        next(feature_iter), repo, index, **kwargs
+                    feature = next(feature_iter)
+                    dest_path, dest_data = dataset.encode_feature(feature, **kwargs)
+                    blob_id = repo.create_blob(dest_data)
+                    entry = pygit2.IndexEntry(
+                        f"{dataset.path}/{dest_path}", blob_id, pygit2.GIT_FILEMODE_BLOB
                     )
+                    index.add(entry)
 
                 benchmark(_write_feature)
 
