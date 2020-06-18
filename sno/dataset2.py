@@ -366,6 +366,7 @@ class Dataset2:
         if pk_values is None and path is not None:
             pk_values = self.decode_path_to_pk_values(path)
         elif path is None and pk_values is not None:
+            pk_values = self.sanitise_pk_values(pk_values)
             path = self.encode_pk_values_to_path(pk_values)
         else:
             raise ValueError("Exactly one of (pk_values, path) must be supplied")
@@ -417,14 +418,22 @@ class Dataset2:
         return cls.encode_raw_feature_dict(raw_dict, schema.legend)
 
     @classmethod
-    def encode_pk_values_to_path(self, pk_values):
+    def encode_pk_values_to_path(cls, pk_values):
         """
         Given some pk values, returns the path the feature should be written to.
         pk_values should be a single pk value, or a list of pk values.
         """
-        if not isinstance(pk_values, (list, tuple)):
-            pk_values = [pk_values]
+        pk_values = cls.sanitise_pk_values(pk_values)
         packed_pk = _pack(pk_values)
         pk_hash = _hexhash(packed_pk)
         filename = _b64encode_str(packed_pk)
         return "/".join([".sno-table", pk_hash[:2], pk_hash[2:4], filename])
+
+    @classmethod
+    def sanitise_pk_values(cls, pk_values):
+        # This means get_feature(123) is treated same as get_feature([123]) -
+        # pk_values needs to be sanitized to a list or tuple of values, one for
+        # each pk column - even if there is only one pk column.
+        if not isinstance(pk_values, (list, tuple)):
+            return (pk_values,)
+        return pk_values
