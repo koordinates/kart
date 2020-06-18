@@ -353,7 +353,7 @@ class Dataset2:
         """
         return cls.SCHEMA_PATH, schema.dumps()
 
-    def get_raw_feature_dict(self, pk=None, *, path=None):
+    def get_raw_feature_dict(self, pk_values=None, *, path=None, data=None):
         """
         Gets the feature with the given primary key(s) / at the given path.
         The result is a "raw" feature dict, values are keyed by column ID,
@@ -361,21 +361,31 @@ class Dataset2:
         which might not be the same values that are now in the schema.
         To get a feature consistent with the current schema, call get_feature.
         """
-        if path is None:
-            path = self.encode_pk_values_to_path(pk)
-        data = self.get_data_at(path)
+
+        # Either pk_values or path should be supplied, but not both.
+        if pk_values is None and path is not None:
+            pk_values = self.decode_path_to_pk_values(path)
+        elif path is None and pk_values is not None:
+            path = self.encode_pk_values_to_path(pk_values)
+        else:
+            raise ValueError("Exactly one of (pk_values, path) must be supplied")
+
+        # Optionally, data can be supplied if the caller already knows it.
+        # This is just the data stored at path.
+        if data is None:
+            data = self.get_data_at(path)
+
         legend_hash, non_pk_values = _unpack(data)
         legend = self.get_legend(legend_hash)
-        pk_values = self.decode_path_to_pk_values(path)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
-    def get_feature(self, pk=None, *, path=None, keys=True):
+    def get_feature(self, pk_values=None, *, path=None, data=None, keys=True):
         """
         Gets the feature with the given primary key(s) / at the given path.
         The result is either a dict of values keyed by column name (if keys=True)
         or a tuple of values in schema order (if keys=False).
         """
-        raw_dict = self.get_raw_feature_dict(pk=pk, path=path)
+        raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
         return self.get_current_schema().feature_from_raw_dict(raw_dict, keys=keys)
 
     @classmethod
