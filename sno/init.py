@@ -726,12 +726,17 @@ def import_table(
     """
     Import data into a repository.
 
-    SOURCE: Import from dataset: "FORMAT:PATH[:TABLE]" eg. "GPKG:my.gpkg:my_table"
-    DIRECTORY: where to import the table to
+    $ sno import SOURCE [TABLE_SPEC] [TABLE_SPEC]
 
-    $ sno import GPKG:my.gpkg:my_table layers/the_table
+    SOURCE: Import from dataset: "FORMAT:PATH" eg. "GPKG:my.gpkg"
+
+    TABLE_SPEC: Import a particular table, optionally with a new name: "TABLE[:AS_NAME]"
+    eg. "2019_08_06_median_waterlevel:waterlevel"
+
+    $ sno import GPKG:my.gpkg [table1[:new_name1] [table2[:new_name2]]
 
     To show available tables in the import data, use
+
     $ sno import --list GPKG:my.gpkg
     """
 
