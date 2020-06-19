@@ -1,0 +1,60 @@
+# sno Changelog
+
+Please note that compatibility for 0.x releases (software or repositories) isn't guaranteed. Sno is evolving quickly and things will change. However, we aim to provide the means to upgrade existing repositories between 0.x versions and to 1.0.
+
+_When adding new entries to the changelog, please include issue/PR numbers._
+
+## Unreleased
+
+* nothing's been added here yet! 
+
+## 0.3.1
+
+* Sno is now available on Windows 🎉 (Windows 8.1+ / Server 2016+ (64-bit))
+* Updates to continuous integration — installers/archives are now built and tested with every commit for every platform.
+* For macOS users, a homebrew "tap" is now available: `brew cask install koordinates/sno/sno`
+* Several bug fixes
+
+## 0.3.0
+
+### Major changes in this release
+
+* License: sno is now publicly available under the GPL open source license.
+* Sno now has a website at [**sno.earth**](https://sno.earth)
+* Standalone builds and packaging for Linux and macOS. Windows won't be far behind
+* Refactoring to support alternative database working copies
+* Dependency upgrades (GDAL; Git; Pygit2; Proj; Libgit2; Sqlite; and others)
+* Several bug fixes
+
+### Upgrading
+
+If you were running a preview release, remove it before installing the new release:
+
+```console
+$ brew uninstall sno
+$ brew untap koordinates/sno
+```
+
+### Repository Hosting
+
+We have an initial preview available of our Sno repository hosting. This allows you & your team to push and pull Sno repositories. Please contact matt.mcgregor@koordinates.com with your Github username and we can get you set up. There is no cost for this service.
+
+### Compatibility
+
+
+Repositories created with Sno v0.2 are compatible with v0.3. For assistance upgrading any v0.1 repositories, please read our [upgrade guide](https://github.com/koordinates/sno/wiki/Upgrading).
+
+
+## 0.2.0
+
+### Major changes in this release
+* First and foremost, the name — we're now called Sno!
+* A new repository structure/layout, which has better performance and a smaller on-disk size
+* Data imports are now orders of magnitude faster
+* Support for multiple datasets in a single Sno repository
+* Support for non-spatial datasets
+* Increased test coverage including end-to-end tests
+* Improved macOS Homebrew packaging with CI testing.
+* Prototype support for spatial-indexing and a sno query command for spatial lookups.
+* Diffs across branches/commits, and a GeoJSON diff format.
+* Numerous bug fixes
