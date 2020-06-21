@@ -29,16 +29,16 @@ class MutexOption(click.Option):
 
     def handle_parse_result(self, ctx, opts, args):
         current_opt: bool = self.name in opts
-        for mutex_opt in self.exclusive_with:
-            if mutex_opt in opts:
+        for other_name in self.exclusive_with:
+
+            if other_name in opts:
                 if current_opt:
-                    raise click.UsageError(
-                        "Illegal usage: '"
-                        + str(self.name)
-                        + "' is mutually exclusive with "
-                        + str(mutex_opt)
-                        + "."
-                    )
+                    other = [x for x in ctx.command.params if x.name == other_name][0]
+                    if not other.value_is_missing(opts[other_name]):
+                        raise click.UsageError(
+                            f"Illegal usage: {self.get_error_hint(ctx)} "
+                            f"is mutually exclusive with {other.get_error_hint(ctx)}."
+                        )
                 else:
                     self.prompt = None
         return super().handle_parse_result(ctx, opts, args)
