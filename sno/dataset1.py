@@ -356,7 +356,7 @@ class Dataset1(DatasetStructure):
 
             yield (feature_path, msgpack.packb(bin_feature, use_bin_type=True))
 
-    def write_index(self, dataset_diff, index, repo, callback=None):
+    def write_index(self, dataset_diff, index, repo):
         pk_field = self.primary_key
 
         conflicts = False
@@ -432,32 +432,6 @@ class Dataset1(DatasetStructure):
             raise InvalidOperation(
                 "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
             )
-        if callback:
-            for _, obj_old in dataset_diff["D"].items():
-                object_path = "/".join(
-                    [self.path, self.get_feature_path(obj_old[pk_field])]
-                )
-                callback(self, "D", object_path=object_path, obj_old=obj_old)
-
-            for obj_new in dataset_diff["I"]:
-                object_path = "/".join(
-                    [self.path, self.get_feature_path(obj_new[pk_field])]
-                )
-                callback(self, "I", object_path=object_path, obj_new=obj_new)
-
-            for _, (obj_old, obj_new) in dataset_diff["U"].items():
-                new_object_path = "/".join(
-                    [self.path, self.get_feature_path(obj_new[pk_field])]
-                )
-                callback(
-                    self,
-                    "U",
-                    object_path=new_object_path,
-                    obj_old=obj_old,
-                    obj_new=obj_new,
-                )
-
-            callback(self, "INDEX")
 
     def diff(self, other, pk_filter=UNFILTERED, reverse=False):
         candidates_ins = collections.defaultdict(list)

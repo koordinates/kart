@@ -118,10 +118,6 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                 offset=offset,
             ),
             allow_empty=allow_empty,
-            # Don't call WorkingCopy.commit_callback(), because it *assumes* the working
-            # copy already has the changes being committed. In this case the working copy
-            # does *not* have the changes yet. We tackle updating the working copy below.
-            update_working_copy_head=False,
         )
         click.echo(f"Commit {oid.hex}")
 

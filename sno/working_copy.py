@@ -520,14 +520,15 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         )
 
     def _chunk(self, iterable, size):
+        """
+        Generator. Yield successive chunks from iterable of length <size>.
+        """
         it = iter(iterable)
         while True:
-            chunk_it = itertools.islice(it, size)
-            try:
-                first_el = next(chunk_it)
-            except StopIteration:
+            chunk = tuple(itertools.islice(it, size))
+            if not chunk:
                 return
-            yield itertools.chain((first_el,), chunk_it)
+            yield chunk
 
     def write_full(self, commit, *datasets, safe=True):
         """
@@ -742,40 +743,53 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         Generates a diff between a working copy DB and the underlying repository tree,
         for every dataset in the given repository structure.
         """
+        feature_filter = feature_filter or UNFILTERED
+
         result = diff.Diff(None)
         for dataset in repo_structure:
+            if dataset.path not in feature_filter:
+                continue
             result += self.diff_db_to_tree(
                 dataset, pk_filter=feature_filter[dataset.path]
             )
         return result
 
-    def commit_callback(self, dataset, action, **kwargs):
+    def reset_tracking_table(self, reset_filter=UNFILTERED):
+        reset_filter = reset_filter or UNFILTERED
+
         with self.session() as db:
             dbcur = db.cursor()
+            if reset_filter == UNFILTERED:
+                dbcur.execute(f"DELETE FROM {self.TRACKING_TABLE};")
+                return
 
-            if action in ("I", "U", "D", "META"):
-                pass
+            for dataset, pks in reset_filter.items():
+                if pks == UNFILTERED:
+                    dbcur.execute(
+                        f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
+                        (dataset,),
+                    )
+                    continue
 
-            elif action == "INDEX":
-                dbcur.execute(
-                    f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
-                    (dataset.name,),
-                )
+                CHUNK_SIZE = 100
+                for pk_chunk in self._chunk(pks, CHUNK_SIZE):
+                    dbcur.execute(
+                        f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=? AND pk IN ({','.join('?' * len(pk_chunk))});",
+                        (dataset, *pk_chunk),
+                    )
 
-            elif action == "TREE":
-                new_tree = kwargs["tree"]
-                L.info(f"Tree sha: {new_tree}")
+    def update_meta_table(self, new_tree):
+        with self.session() as db:
+            dbcur = db.cursor()
+            L.info(f"Tree sha: {new_tree}")
 
-                dbcur.execute(
-                    f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
-                    (str(new_tree),),
-                )
-                assert (
-                    db.changes() == 1
-                ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
-
-            else:
-                raise NotImplementedError(f"Unexpected action: {action}")
+            dbcur.execute(
+                f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
+                (str(new_tree),),
+            )
+            assert (
+                db.changes() == 1
+            ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
 
     def reset(
         self,

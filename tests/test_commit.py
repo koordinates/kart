@@ -62,6 +62,20 @@ def edit_table(dbcur):
     return pk_del
 
 
+def _count_tracking_table_changes(db, working_copy, layer):
+    with db:
+        cur = db.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=?;",
+            [layer],
+        )
+        change_count = cur.fetchone()[0]
+    return change_count
+
+
+@pytest.mark.parametrize(
+    "partial", [pytest.param(False, id=""), pytest.param(True, id="partial")],
+)
 @pytest.mark.parametrize(
     "archive,layer",
     [
@@ -70,7 +84,9 @@ def edit_table(dbcur):
         pytest.param("table", H.TABLE.LAYER, id="table"),
     ],
 )
-def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, request):
+def test_commit(
+    archive, layer, partial, data_working_copy, geopackage, cli_runner, request
+):
     """ commit outstanding changes from the working copy """
     param_ids = H.parameter_ids(request)
 
@@ -96,36 +112,52 @@ def test_commit(archive, layer, data_working_copy, geopackage, cli_runner, reque
 
         print(f"deleted fid={pk_del}")
 
-        r = cli_runner.invoke(["commit", "-m", "test-commit-1", "-o", "json"])
+        repo = pygit2.Repository(str(repo_dir))
+        rs = RepositoryStructure(repo)
+        wc = rs.working_copy
+        original_change_count = _count_tracking_table_changes(db, wc, layer)
+
+        if partial:
+            r = cli_runner.invoke(
+                ["commit", "-m", "test-commit-1", "-o", "json", f"{layer}:{pk_del}"]
+            )
+        else:
+            r = cli_runner.invoke(["commit", "-m", "test-commit-1", "-o", "json"])
+
         assert r.exit_code == 0, r
         commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
         print("commit:", commit_id)
 
-        repo = pygit2.Repository(str(repo_dir))
         assert str(repo.head.target) == commit_id
         commit = repo.head.peel(pygit2.Commit)
         assert commit.message == "test-commit-1"
         assert time.time() - commit.commit_time < 3
 
-        rs = RepositoryStructure(repo)
-        wc = rs.working_copy
         dataset = rs[layer]
-
         tree = repo.head.peel(pygit2.Tree)
         assert dataset.get_feature_path(pk_del) not in tree
 
-        cur.execute(
-            f"SELECT COUNT(*) FROM {wc.TRACKING_TABLE} WHERE table_name=?;", [layer]
-        )
-        change_count = cur.fetchone()[0]
-        assert change_count == 0, f"Changes still listed in {dataset.TRACKING_TABLE}"
-
         wc = WorkingCopy.open(repo)
         wc.assert_db_tree_match(tree)
+        change_count = _count_tracking_table_changes(db, wc, layer)
 
-        r = cli_runner.invoke(["diff"])
-        assert r.exit_code == 0, r
-        assert r.stdout == ""
+        if partial:
+            # All but one change should still be in the tracking table
+            assert change_count == original_change_count - 1
+
+            # Changes should still be visible in the working copy:
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 1, r
+            assert r.stdout != ""
+
+        else:
+            assert (
+                change_count == 0
+            ), f"Changes still listed in {wc.TRACKING_TABLE} after full commit"
+
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r
+            assert r.stdout == ""
 
 
 def test_tag(data_working_copy, cli_runner):

@@ -97,45 +97,42 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
 def test_list_conflicts(create_conflicts, cli_runner):
     with create_conflicts(H.POINTS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
-        # Resolve all but one conflict to make the output a bit shorter.
-        merge_index = MergeIndex.read_from_repo(repo)
-        merge_index.conflicts = {"0": merge_index.conflicts["0"]}
-        merge_index.write_to_repo(repo)
 
-        r = cli_runner.invoke(["conflicts"])
-        assert r.exit_code == 0, r
-        assert r.stdout.split("\n") == [
+        expected_text = [
             'nz_pa_points_topo_150k:',
             '    nz_pa_points_topo_150k:feature:',
-            '        nz_pa_points_topo_150k:feature:4:',
-            '            nz_pa_points_topo_150k:feature:4:ancestor:',
-            '                                     fid = 4',
+            '        nz_pa_points_topo_150k:feature:3:',
+            '            nz_pa_points_topo_150k:feature:3:ancestor:',
+            '                                     fid = 3',
             '                                    geom = POINT(...)',
             '                              macronated = N',
-            '                                    name = ␀',
-            '                              name_ascii = ␀',
-            '                                 t50_fid = 2426274',
-            '            nz_pa_points_topo_150k:feature:4:ours:',
-            '                                     fid = 4',
+            '                                    name = Tauwhare Pa',
+            '                              name_ascii = Tauwhare Pa',
+            '                                 t50_fid = 2426273',
+            '            nz_pa_points_topo_150k:feature:3:ours:',
+            '                                     fid = 3',
             '                                    geom = POINT(...)',
             '                              macronated = N',
             '                                    name = ours_version',
-            '                              name_ascii = ␀',
-            '                                 t50_fid = 2426274',
-            '            nz_pa_points_topo_150k:feature:4:theirs:',
-            '                                     fid = 4',
+            '                              name_ascii = Tauwhare Pa',
+            '                                 t50_fid = 2426273',
+            '            nz_pa_points_topo_150k:feature:3:theirs:',
+            '                                     fid = 3',
             '                                    geom = POINT(...)',
             '                              macronated = N',
             '                                    name = theirs_version',
-            '                              name_ascii = ␀',
-            '                                 t50_fid = 2426274',
-            '',
-            '',
+            '                              name_ascii = Tauwhare Pa',
+            '                                 t50_fid = 2426273',
         ]
-
-        r = cli_runner.invoke(["conflicts", "-o", "json"])
+        r = cli_runner.invoke(["conflicts", "nz_pa_points_topo_150k:feature:3"])
         assert r.exit_code == 0, r
-        assert json.loads(r.stdout) == {
+        assert r.stdout.split("\n") == expected_text + ['', '']
+
+        r = cli_runner.invoke(["conflicts"])
+        assert r.exit_code == 0, r
+        assert r.stdout.split("\n")[: len(expected_text)] == expected_text
+
+        expected_json = {
             "sno.conflicts/v1": {
                 "nz_pa_points_topo_150k": {
                     "feature": {
@@ -169,56 +166,80 @@ def test_list_conflicts(create_conflicts, cli_runner):
                 }
             }
         }
-
-        r = cli_runner.invoke(["conflicts", "-o", "geojson"])
+        r = cli_runner.invoke(
+            ["conflicts", "-o", "json", "nz_pa_points_topo_150k:feature:4"]
+        )
         assert r.exit_code == 0, r
-        assert json.loads(r.stdout) == {
+        assert json.loads(r.stdout) == expected_json
+        r = cli_runner.invoke(["conflicts", "-o", "json"])
+        assert r.exit_code == 0, r
+        full_json = json.loads(r.stdout)
+        features_json = full_json["sno.conflicts/v1"][H.POINTS.LAYER]["feature"]
+        assert len(features_json) == 4
+        assert (
+            features_json["4"]
+            == expected_json["sno.conflicts/v1"][H.POINTS.LAYER]["feature"]["4"]
+        )
+
+        expected_geojson = {
             'features': [
                 {
                     'geometry': {
-                        'coordinates': [177.28247012123683, -38.09148422044983],
+                        'coordinates': [177.2757807736718, -38.08491506728025],
                         'type': 'Point',
                     },
-                    'id': 'nz_pa_points_topo_150k:feature:4:ancestor',
+                    'id': 'nz_pa_points_topo_150k:feature:5:ancestor',
                     'properties': {
-                        'fid': 4,
+                        'fid': 5,
                         'macronated': 'N',
                         'name': None,
                         'name_ascii': None,
-                        't50_fid': 2426274,
+                        't50_fid': 2426275,
                     },
                     'type': 'Feature',
                 },
                 {
                     'geometry': {
-                        'coordinates': [177.28247012123683, -38.09148422044983],
+                        'coordinates': [177.2757807736718, -38.08491506728025],
                         'type': 'Point',
                     },
-                    'id': 'nz_pa_points_topo_150k:feature:4:ours',
+                    'id': 'nz_pa_points_topo_150k:feature:5:ours',
                     'properties': {
-                        'fid': 4,
+                        'fid': 5,
                         'macronated': 'N',
                         'name': 'ours_version',
                         'name_ascii': None,
-                        't50_fid': 2426274,
+                        't50_fid': 2426275,
                     },
                     'type': 'Feature',
                 },
                 {
                     'geometry': {
-                        'coordinates': [177.28247012123683, -38.09148422044983],
+                        'coordinates': [177.2757807736718, -38.08491506728025],
                         'type': 'Point',
                     },
-                    'id': 'nz_pa_points_topo_150k:feature:4:theirs',
+                    'id': 'nz_pa_points_topo_150k:feature:5:theirs',
                     'properties': {
-                        'fid': 4,
+                        'fid': 5,
                         'macronated': 'N',
                         'name': 'theirs_version',
                         'name_ascii': None,
-                        't50_fid': 2426274,
+                        't50_fid': 2426275,
                     },
                     'type': 'Feature',
                 },
             ],
             'type': 'FeatureCollection',
         }
+        r = cli_runner.invoke(
+            ["conflicts", "-o", "geojson", "nz_pa_points_topo_150k:feature:5"]
+        )
+        assert r.exit_code == 0, r
+        assert json.loads(r.stdout) == expected_geojson
+        r = cli_runner.invoke(["conflicts", "-o", "geojson"])
+        assert r.exit_code == 0, r
+        full_geojson = json.loads(r.stdout)
+        features_geojson = full_geojson["features"]
+        assert len(features_geojson) == 11  # 3 ancestors, 4 ours, 4 theirs.
+        for version in expected_geojson["features"]:
+            assert version in features_geojson
