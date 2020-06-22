@@ -5,12 +5,12 @@
 #    make py-requirements
 #
 appnope==0.1.0            # via ipython
-aspectlib==1.5.0          # via -r requirements/test.txt, pytest-benchmark
+aspectlib==1.5.1          # via -r requirements/test.txt, pytest-benchmark
 atomicwrites==1.4.0       # via -r requirements/test.txt, pytest
 attrs==19.3.0             # via -r requirements/test.txt, pytest
 backcall==0.2.0           # via ipython
 cached-property==1.5.1    # via -r requirements/../requirements.txt, -r requirements/test.txt
-certifi==2020.4.5.2       # via -r requirements/../requirements.txt, -r requirements/test.txt
+certifi==2020.6.20        # via -r requirements/../requirements.txt, -r requirements/test.txt
 cffi==1.14.0              # via -r requirements/../requirements.txt, -r requirements/test.txt
 click==7.1.2              # via -r requirements/../requirements.txt, -r requirements/test.txt
 coverage==5.1             # via -r requirements/test.txt, pytest-cov
@@ -22,9 +22,9 @@ importlib-metadata==1.6.1  # via -r requirements/test.txt, pluggy, pytest
 ipdb==0.13.2              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
 ipython==7.15.0           # via -r requirements/dev.in, ipdb
-jedi==0.17.0              # via ipython
+jedi==0.17.1              # via ipython
 lovely-pytest-docker==0.1.0  # via -r requirements/test.txt
-more-itertools==8.3.0     # via -r requirements/test.txt, pytest
+more-itertools==8.4.0     # via -r requirements/test.txt, pytest
 msgpack==0.6.2            # via -r requirements/../requirements.txt, -r requirements/test.txt
 packaging==20.4           # via -r requirements/test.txt, pytest, pytest-sugar
 parso==0.7.0              # via jedi
@@ -33,13 +33,13 @@ pickleshare==0.7.5        # via ipython
 pluggy==0.13.1            # via -r requirements/test.txt, pytest
 prompt-toolkit==3.0.5     # via ipython
 ptyprocess==0.6.0         # via pexpect
-py-cpuinfo==5.0.0         # via -r requirements/test.txt, pytest-benchmark
-py==1.8.1                 # via -r requirements/test.txt, pytest
+py-cpuinfo==6.0.0         # via -r requirements/test.txt, pytest-benchmark
+py==1.8.2                 # via -r requirements/test.txt, pytest
 pycparser==2.20           # via -r requirements/../requirements.txt, -r requirements/test.txt, cffi
 pygments==2.6.1           # via -r requirements/../requirements.txt, -r requirements/test.txt, ipython
 pyparsing==2.4.7          # via -r requirements/test.txt, packaging
 pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.txt
-pytest-cov==2.9.0         # via -r requirements/test.txt
+pytest-cov==2.10.0        # via -r requirements/test.txt
 pytest-helpers-namespace==2019.1.8  # via -r requirements/test.txt
 pytest-profiling==1.7.0   # via -r requirements/test.txt
 pytest-sugar==0.9.3       # via -r requirements/test.txt
