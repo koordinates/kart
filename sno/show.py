@@ -52,7 +52,8 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
         ctx,
         patch_writer,
         exit_code=False,
-        args=[f"{parent}...{refish}"],
+        commit_spec=f"{parent}...{refish}",
+        filters=[],
         json_style=json_style,
     )
 

@@ -310,6 +310,8 @@ class Diff:
         return count
 
     def __getitem__(self, dataset):
+        if isinstance(dataset, str):
+            return self._data[dataset]
         return self._data[dataset.path]
 
     def __iter__(self):
@@ -336,11 +338,11 @@ class Diff:
 
         return True
 
-    def dataset_counts(self, dataset=None):
+    def dataset_counts(self, dataset):
         """Returns a dict containing the count of each type of diff, for a particular dataset."""
         return {k: len(v) for k, v in self._data[dataset.path].items()}
 
-    def counts(self, dataset=None):
+    def counts(self):
         """
         Returns multiple dataset_counts dicts, one for each dataset touched by this diff.
         The dataset_counts dicts are returned in a top-level dict keyed by dataset path.
@@ -355,6 +357,22 @@ class Diff:
 
     def datasets(self):
         return self._datasets.values()
+
+    def to_filter(self):
+        """
+        Returns a filter object - see filter_util.py - that matches all features affected by this diff.
+        """
+        return {dataset.path: self._dataset_pks(dataset) for dataset in self.datasets()}
+
+    def _dataset_pks(self, dataset):
+        """Returns the set of all pks affected by this diff within a particular dataset."""
+        ds_data = self._data[dataset.path]
+        primary_key = dataset.primary_key
+        inserts = [str(o[primary_key]) for o in ds_data["I"]]
+        deletes = [str(o[primary_key]) for o in ds_data["D"].values()]
+        update_olds = [str(o[0][primary_key]) for o in ds_data["U"].values()]
+        update_news = [str(o[1][primary_key]) for o in ds_data["U"].values()]
+        return set(inserts + deletes + update_olds + update_news)
 
 
 def get_dataset_diff(
@@ -419,7 +437,14 @@ def get_common_ancestor(repo, rs1, rs2):
 
 
 def diff_with_writer(
-    ctx, diff_writer, *, output_path='-', exit_code, args, json_style="pretty"
+    ctx,
+    diff_writer,
+    *,
+    output_path='-',
+    exit_code,
+    json_style="pretty",
+    commit_spec,
+    filters,
 ):
     """
     Calculates the appropriate diff from the arguments,
@@ -432,7 +457,8 @@ def diff_with_writer(
                    and writes the output by the time it exits.
       output_path: The output path, or a file-like object, or the string '-' to use stdout.
       exit_code:   If True, the process will exit with code 1 if the diff is non-empty.
-      args:        The arguments given on the command line, including the refs to diff.
+      commit_spec: The commit-ref or -refs to diff.
+      filters:     Limit the diff to certain datasets or features.
     """
     from .working_copy import WorkingCopy
 
@@ -442,13 +468,9 @@ def diff_with_writer(
 
         repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
 
-        args = list(args)
-
-        # TODO: handle [--] and [<dataset>[:pk]...] without <commit>
-
         # Parse <commit> or <commit>...<commit>
-        commit_arg = args.pop(0) if args else "HEAD"
-        commit_parts = re.split(r"(\.{2,3})", commit_arg)
+        commit_spec = commit_spec or "HEAD"
+        commit_parts = re.split(r"(\.{2,3})", commit_spec)
 
         if len(commit_parts) == 3:
             # Two commits specified - base and target. We diff base<>target.
@@ -475,7 +497,7 @@ def diff_with_writer(
             working_copy.assert_db_tree_match(target_rs.tree)
 
         # Parse [<dataset>[:pk]...]
-        feature_filter = build_feature_filter(args)
+        feature_filter = build_feature_filter(filters)
 
         base_str = base_rs.id
         target_str = "working-copy" if working_copy else target_rs.id
@@ -563,14 +585,24 @@ def diff_with_writer(
     default="pretty",
     help="How to format the output. Only used with -o json or -o geojson",
 )
-@click.argument("args", nargs=-1)
-def diff(ctx, output_format, output_path, exit_code, json_style, args):
+@click.argument("commit_spec", required=False, nargs=1)
+@click.argument("filters", nargs=-1)
+def diff(ctx, output_format, output_path, exit_code, json_style, commit_spec, filters):
     """
-    Show changes between commits, commit and working tree, etc
+    Show changes between two commits, or between a commit and the working copy.
 
-    sno diff [options] [--] [<dataset>[:pk]...]
-    sno diff [options] <commit> [--] [<dataset>[:pk]...]
-    sno diff [options] <commit>..<commit> [--] [<dataset>[:pk]...]
+    COMMIT_SPEC -
+
+    - if not supplied, the default is HEAD, to diff between HEAD and the working copy.
+
+    - if a single ref is supplied: commit-A - diffs between commit-A and the working copy.
+
+    - if supplied with the form: commit-A...commit-B - diffs between commit-A and commit-B.
+
+    - if supplied with the form: commit-A..commit-B - diffs between (the common ancestor of
+    commit-A and commit-B) and (commit-B).
+
+    To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
 
     diff_writer = globals()[f"diff_output_{output_format}"]
@@ -582,6 +614,7 @@ def diff(ctx, output_format, output_path, exit_code, json_style, args):
         diff_writer,
         output_path=output_path,
         exit_code=exit_code,
-        args=args,
         json_style=json_style,
+        commit_spec=commit_spec,
+        filters=filters,
     )

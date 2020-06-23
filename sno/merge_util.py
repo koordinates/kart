@@ -6,6 +6,7 @@ import re
 import pygit2
 
 from .diff_output import text_row, json_row, geojson_row
+from .filter_util import UNFILTERED
 from .repo_files import (
     MERGE_HEAD,
     MERGE_INDEX,
@@ -515,33 +516,37 @@ class RichConflictVersion:
         return self.decoded_path[1]
 
     @property
+    def is_feature(self):
+        return self.dataset_part == "feature"
+
+    @property
     def is_meta(self):
         return self.dataset_part == "meta"
 
     @property
     def pk(self):
-        assert self.dataset_part == "feature"
+        assert self.is_feature
         return self.decoded_path[2]
 
     @property
     def pk_field(self):
-        assert self.dataset_part == "feature"
+        assert self.is_feature
         return self.dataset.primary_key
 
     @property
     def meta_path(self):
-        assert self.dataset_part == "meta"
+        assert self.is_meta
         return self.decoded_path[2]
 
     @property
     def feature(self):
-        assert self.dataset_part == "feature"
+        assert self.is_feature
         _, feature = self.dataset.get_feature(self.pk, ogr_geoms=False)
         return feature
 
     @property
     def meta_item(self):
-        assert self.dataset_part == "meta"
+        assert self.is_meta
         return self.dataset.get_meta_item(self.meta_path)
 
     def output(self, output_format):
@@ -561,6 +566,16 @@ class RichConflictVersion:
             return json_row(self.feature, self.pk_field)
         elif output_format == "geojson":
             return geojson_row(self.feature, self.pk_field)
+
+    def matches_filter(self, conflict_filter):
+        if conflict_filter == UNFILTERED:
+            return True
+        dataset_filter = conflict_filter.get(self.dataset_path, None)
+        if not dataset_filter:
+            return False
+        return dataset_filter == UNFILTERED or (
+            self.is_feature and str(self.pk) in dataset_filter
+        )
 
 
 class RichConflict:
@@ -635,6 +650,10 @@ class RichConflict:
         """Output this conflict in the given output_format - text, json or geojson."""
         l = f"{self.label}:" if include_label else ""
         return {l + v.version_name: v.output(output_format) for v in self.true_versions}
+
+    def matches_filter(self, conflict_filter):
+        """Returns True if this conflict matches (or part of this conflict matches) the given filter."""
+        return any(v.matches_filter(conflict_filter) for v in self.true_versions)
 
 
 def rich_conflicts(raw_conflicts, merge_context):

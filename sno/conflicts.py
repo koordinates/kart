@@ -4,6 +4,7 @@ import sys
 import click
 
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
+from .filter_util import build_feature_filter, UNFILTERED
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
 from .repo_files import RepoState
@@ -18,7 +19,12 @@ _CONFLICT_PLACEHOLDER = object()
 
 
 def list_conflicts(
-    merge_index, merge_context, output_format="text", summarise=0, flat=False
+    merge_index,
+    merge_context,
+    output_format="text",
+    conflict_filter=UNFILTERED,
+    summarise=0,
+    flat=False,
 ):
     """
         Lists all the conflicts in merge_index, categorised into nested dicts.
@@ -44,36 +50,39 @@ def list_conflicts(
         flat - if True, put all features at the top level, with the entire path as the key eg:
             {"dataset_A:feature:5:ancestor": ..., "dataset_A:feature:5:ours": ...}
     """
-    conflicts = {}
+    output_dict = {}
     conflict_output = _CONFLICT_PLACEHOLDER
+    conflict_filter = conflict_filter or UNFILTERED
 
     if output_format == "geojson":
         flat = True  # geojson must be flat or it is not valid geojson
         summarise = 0
 
-    for conflict in rich_conflicts(
-        merge_index.unresolved_conflicts.values(), merge_context
-    ):
+    conflicts = rich_conflicts(merge_index.unresolved_conflicts.values(), merge_context)
+    if conflict_filter != UNFILTERED:
+        conflicts = (c for c in conflicts if c.matches_filter(conflict_filter))
+
+    for conflict in conflicts:
         if not summarise:
             conflict_output = conflict.output(output_format, include_label=flat)
 
         if flat:
             if isinstance(conflict_output, dict):
-                conflicts.update(conflict_output)
+                output_dict.update(conflict_output)
             else:
-                conflicts[conflict.label] = conflict_output
+                output_dict[conflict.label] = conflict_output
         else:
-            set_value_at_dict_path(conflicts, conflict.decoded_path, conflict_output)
+            set_value_at_dict_path(output_dict, conflict.decoded_path, conflict_output)
 
     if summarise:
-        conflicts = summarise_conflicts(conflicts, summarise)
+        output_dict = summarise_conflicts(output_dict, summarise)
 
     if output_format == "text":
-        return conflicts_json_as_text(conflicts)
+        return conflicts_json_as_text(output_dict)
     elif output_format == "geojson":
-        return conflicts_json_as_geojson(conflicts)
+        return conflicts_json_as_geojson(output_dict)
     else:
-        return conflicts
+        return output_dict
 
 
 def set_value_at_dict_path(root_dict, path, value):
@@ -112,7 +121,7 @@ def summarise_conflicts(cur_dict, summarise):
     if first_value == _CONFLICT_PLACEHOLDER:
         if summarise == 1:
             return sorted(cur_dict.keys(), key=_path_sort_key)
-        elif summarise == 2:
+        elif summarise >= 2:
             return len(cur_dict)
 
     for k, v in cur_dict.items():
@@ -242,8 +251,13 @@ def conflicts_json_as_geojson(json_obj):
     hidden=True,
     help="Output all conflicts in a flat list, instead of in a hierarchy.",
 )
-def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
-    """ Lists merge conflicts that need to be resolved before the ongoing merge can be completed. """
+@click.argument("filters", nargs=-1)
+def conflicts(ctx, output_format, exit_code, json_style, summarise, flat, filters):
+    """
+    Lists merge conflicts that need to be resolved before the ongoing merge can be completed.
+
+    To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
+    """
 
     repo = ctx.obj.get_repo(allowed_states=[RepoState.MERGING])
     merge_index = MergeIndex.read_from_repo(repo)
@@ -252,7 +266,10 @@ def conflicts(ctx, output_format, exit_code, json_style, summarise, flat):
         ctx.exit(SUCCESS_WITH_FLAG if merge_index.conflicts else SUCCESS)
 
     merge_context = MergeContext.read_from_repo(repo)
-    result = list_conflicts(merge_index, merge_context, output_format, summarise, flat)
+    conflict_filter = build_feature_filter(filters)
+    result = list_conflicts(
+        merge_index, merge_context, output_format, conflict_filter, summarise, flat
+    )
 
     if output_format == "text":
         click.echo(result)

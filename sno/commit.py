@@ -70,9 +70,15 @@ from .cli_util import MutexOption
 @click.option(
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
-@click.argument("args", nargs=-1)
-def commit(ctx, message, message_file, allow_empty, output_format, args):
-    """ Record changes to the repository """
+@click.argument(
+    "filters", nargs=-1,
+)
+def commit(ctx, message, message_file, allow_empty, output_format, filters):
+    """
+    Record a snapshot of all of the changes to the repository.
+
+    To commit only particular changes, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
+    """
     repo = ctx.obj.repo
 
     if repo.is_empty:
@@ -92,11 +98,7 @@ def commit(ctx, message, message_file, allow_empty, output_format, args):
 
     working_copy.assert_db_tree_match(tree)
 
-    commit_filter = build_feature_filter(args)
-    if commit_filter is not UNFILTERED:
-        raise NotYetImplemented(
-            "Sorry, commits of part of the working copy are not supported"
-        )
+    commit_filter = build_feature_filter(filters)
     rs = RepositoryStructure(repo)
     wc_diff = working_copy.diff_to_tree(rs, commit_filter)
 
@@ -114,9 +116,12 @@ def commit(ctx, message, message_file, allow_empty, output_format, args):
     if not commit_msg:
         raise click.UsageError("No commit message")
 
-    rs.commit(wc_diff, commit_msg, allow_empty=allow_empty)
+    new_commit_id = rs.commit(wc_diff, commit_msg, allow_empty=allow_empty)
+    new_commit = repo[new_commit_id].peel(pygit2.Commit)
 
-    new_commit = repo.head.peel(pygit2.Commit)
+    working_copy.reset_tracking_table(wc_diff.to_filter())
+    working_copy.update_meta_table(new_commit.peel(pygit2.Tree).id.hex)
+
     jdict = commit_obj_to_json(new_commit, repo, wc_diff)
     if do_json:
         dump_json_output(jdict, sys.stdout)

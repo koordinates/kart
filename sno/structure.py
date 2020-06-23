@@ -1,4 +1,3 @@
-import contextlib
 import functools
 
 import json
@@ -293,7 +292,7 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
-    def create_tree_from_diff(self, diff, orig_tree=None, callback=None):
+    def create_tree_from_diff(self, diff, orig_tree=None):
         """
         Given a tree and a diff, returns a new tree created by applying the diff.
 
@@ -309,7 +308,7 @@ class RepositoryStructure:
         git_index.read_tree(orig_tree)
 
         for ds in self.iter_at(orig_tree):
-            ds.write_index(diff[ds], git_index, self.repo, callback=callback)
+            ds.write_index(diff[ds], git_index, self.repo)
 
         L.info("Writing tree...")
         new_tree_oid = git_index.write_tree(self.repo)
@@ -317,46 +316,32 @@ class RepositoryStructure:
         return new_tree_oid
 
     def commit(
-        self,
-        wcdiff,
-        message,
-        *,
-        author=None,
-        committer=None,
-        allow_empty=False,
-        update_working_copy_head=True,
+        self, wcdiff, message, *, author=None, committer=None, allow_empty=False,
     ):
+        """
+        Update the repository structure and write the updated data to the tree
+        as a new commit, setting HEAD to the new commit.
+        NOTE: Doesn't update working-copy meta or tracking tables, this is the
+        responsibility of the caller.
+        """
         tree = self.tree
 
         git_index = pygit2.Index()
         git_index.read_tree(tree)
 
-        wc = self.working_copy
-        commit_callback = None
-        if update_working_copy_head and wc:
-            context = wc.session()
-            commit_callback = wc.commit_callback
-        else:
-            # This happens when commit is called from `sno apply` in a bare repo
-            context = contextlib.nullcontext()
-        with context:
-            new_tree_oid = self.create_tree_from_diff(wcdiff, callback=commit_callback)
-
-            if commit_callback:
-                commit_callback(None, "TREE", tree=new_tree_oid)
-
-            L.info("Committing...")
-            user = self.repo.default_signature
-            # this will also update the ref (branch) to point to the current commit
-            new_commit = self.repo.create_commit(
-                "HEAD",  # reference_name
-                author or user,  # author
-                committer or user,  # committer
-                message,  # message
-                new_tree_oid,  # tree
-                [self.repo.head.target],  # parents
-            )
-            L.info(f"Commit: {new_commit}")
+        new_tree_oid = self.create_tree_from_diff(wcdiff)
+        L.info("Committing...")
+        user = self.repo.default_signature
+        # this will also update the ref (branch) to point to the current commit
+        new_commit = self.repo.create_commit(
+            "HEAD",  # reference_name
+            author or user,  # author
+            committer or user,  # committer
+            message,  # message
+            new_tree_oid,  # tree
+            [self.repo.head.target],  # parents
+        )
+        L.info(f"Commit: {new_commit}")
 
         # TODO: update reflog
         return new_commit
