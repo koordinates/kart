@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.4.0 (UNRELEASED)
+## 0.4.0
 
 ### Major changes in this release
 
@@ -40,6 +40,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * `sno diff`:
     - `a..b` now refers to the same changes as `sno log a..b` ([#116](https://github.com/koordinates/sno/issues/116))
     - can now diff against tree objects, particularly the empty tree ([#53](https://github.com/koordinates/sno/issues/53))
+    - can now view some subset of the changes by supplying filter args, ie `[dataset[:pk]]` 
+* `sno commit`:
+    - can now commit some subset of the changes by supplying filter args, ie `[dataset[:pk]]` ([#69](https://github.com/koordinates/sno/issues/69))
 * removed `import-gpkg` command; use `import` instead ([#85](https://github.com/koordinates/sno/issues/85))
 * Error messages now go to stderr instead of stdout ([#57](https://github.com/koordinates/sno/issues/57))
 * Error conditions now use exit codes to indicate different types of errors ([#46](https://github.com/koordinates/sno/issues/46))
