@@ -5,27 +5,27 @@ Sno: Distributed version-control for datasets
 
 ## Installing
 
-### Upgrading to v0.3.1
+### Upgrading to v0.4.0
 
-See the [v0.3.1 release notes](https://github.com/koordinates/sno/releases/tag/v0.3.1) for changes, upgrading, and compatibility notes.
+See the [v0.4.0 release notes](https://github.com/koordinates/sno/releases/tag/v0.4.0) for changes, upgrading, and compatibility notes.
 
 ### Windows
 
-Download the .msi installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1).
+Download the .msi installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.4.0).
 
 > 💡 If Windows Defender SmartScreen says "it prevented an unrecognized app from starting" after downloading, you'll need to click "Run anyway".
 
 ### macOS
 
-Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1);
+Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.4.0);
 
 Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/sno/sno`
 
 ### Linux
 
-For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1) and install via `dpkg -i sno_*.deb`.
+For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.4.0) and install via `dpkg -i sno_*.deb`.
 
-For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.3.1) and install via `rpm -i sno-*.rpm`.
+For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.4.0) and install via `rpm -i sno-*.rpm`.
 
 ### Source
 
