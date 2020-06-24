@@ -1,9 +1,7 @@
 import functools
-import json
 import os
 import re
 import sys
-import uuid
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
@@ -61,17 +59,17 @@ class OgrImporter:
     OGR_SUBTYPE_TO_SQLITE_TYPE = {ogr.OFSTBoolean: 'BOOLEAN', ogr.OFSTInt16: 'SMALLINT'}
 
     OGR_TYPE_TO_V2_SCHEMA_TYPE = {
-        'Integer': ('INTEGER', {}),
-        'Integer64': ('INTEGER', {"size": 64}),
-        'Real': ('FLOAT', {}),
-        'String': ('TEXT', {}),
-        'Binary': ('BLOB', {}),
-        'Date': ('DATE', {}),
-        'DateTime': ('DATETIME', {}),
+        'Integer': ('integer', {"size": 32}),
+        'Integer64': ('integer', {"size": 64}),
+        'Real': ('float', {}),
+        'String': ('text', {}),
+        'Binary': ('blob', {}),
+        'Date': ('date', {}),
+        'DateTime': ('datetime', {}),
     }
     OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
-        ogr.OFSTBoolean: ('BOOLEAN', {}),
-        ogr.OFSTInt16: ('INTEGER', {"size": 16}),
+        ogr.OFSTBoolean: ('boolean', {}),
+        ogr.OFSTInt16: ('integer', {"size": 16}),
     }
 
     @classmethod
@@ -476,7 +474,7 @@ class OgrImporter:
         }
 
         return ColumnSchema(
-            ColumnSchema.new_id(), name, "GEOMETRY", None, **extra_type_info
+            ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
         )
 
     def _ogr_type_to_sqlite_type(self, fd):
@@ -518,7 +516,7 @@ class OgrImporter:
         from .dataset2 import Schema, ColumnSchema
 
         ld = self.ogrlayer.GetLayerDefn()
-        pk_column = ColumnSchema(ColumnSchema.new_id(), self.primary_key, "INTEGER", 0)
+        pk_column = ColumnSchema(ColumnSchema.new_id(), self.primary_key, "integer", 0)
         geometry_column = self.get_geometry_v2_column_schema()
         special_columns = (
             [pk_column, geometry_column] if geometry_column else [pk_column]

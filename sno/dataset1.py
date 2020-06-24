@@ -3,7 +3,6 @@ import collections
 import functools
 import hashlib
 import itertools
-import logging
 import os
 import re
 
