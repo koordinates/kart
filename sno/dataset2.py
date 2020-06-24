@@ -49,7 +49,7 @@ def _hexhash(data):
     return hashlib.sha256(data).hexdigest()[:40]
 
 
-def walk_tree(tree, path="", max_depth=4):
+def walk_tree_blobs(tree, path="", max_depth=4):
     """
     Recursively yields all possible (file_path, file_data) tuples
     in the given directory tree, up to a given max_depth.
@@ -59,7 +59,7 @@ def walk_tree(tree, path="", max_depth=4):
         if hasattr(entry, "data"):
             yield entry_path, entry.data
         elif max_depth > 0:
-            yield from walk_tree(entry, entry_path, max_depth - 1)
+            yield from walk_tree_blobs(entry, entry_path, max_depth - 1)
 
 
 class Legend:
@@ -158,18 +158,18 @@ def _pk_index_ordering(column):
 
 
 ALL_DATA_TYPES = {
-    "BOOLEAN",
-    "BLOB",
-    "DATE",
-    "DATETIME",
-    "FLOAT",
-    "GEOMETRY",
-    "INTEGER",
-    "INTERVAL",
-    "NUMERIC",
-    "TEXT",
-    "TIME",
-    "TIMESTAMP",
+    "boolean",
+    "blob",
+    "date",
+    "datetime",
+    "float",
+    "geometry",
+    "integer",
+    "interval",
+    "numeric",
+    "text",
+    "time",
+    "timestamp",
 }
 
 
@@ -190,7 +190,7 @@ class ColumnSchema(
         return str(uuid.uuid4())
 
     def __new__(cls, id, name, data_type, pk_index, **extra_type_info):
-        assert data_type in ALL_DATA_TYPES
+        assert data_type in ALL_DATA_TYPES, data_type
         return super().__new__(cls, id, name, data_type, pk_index, extra_type_info)
 
     @classmethod
@@ -457,7 +457,9 @@ class Dataset2(DatasetStructure):
         # (but this is the interface shared by dataset1 at the moment.)
         if self.FEATURE_PATH not in self.tree:
             return
-        for feature_path, feature_data in walk_tree(self.tree / self.FEATURE_PATH):
+        for feature_path, feature_data in walk_tree_blobs(
+            self.tree / self.FEATURE_PATH
+        ):
             yield feature_path, self.get_feature(
                 path=feature_path, data=feature_data, keys=keys
             ),

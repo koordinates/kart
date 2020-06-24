@@ -19,7 +19,7 @@ from sno.dataset1 import Dataset1
 @click.argument("layer", required=True)
 def upgrade(source, dest, layer):
     """
-    Upgrade a v0.0/v0.1 Snowdrop repository to Sno v0.2
+    Upgrade a v0.0/v0.1 Sno repository to Sno v0.2
     """
     source = Path(source)
     dest = Path(dest)
