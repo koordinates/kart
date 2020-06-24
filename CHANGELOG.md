@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.5.0 (UNRELEASED)
+
+* Added a `sno meta get` command for viewing dataset metadata.
+
 ## 0.4.0
 
 ### Major changes in this release
