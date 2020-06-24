@@ -116,7 +116,7 @@ def pki(gen_uuid):
     def _pki(pk_index):
         # Returns an arbitrary ColumnSchema, but with the given pk_index property.
         id = gen_uuid()
-        return ColumnSchema(id, id[:8], "INTEGER", pk_index)
+        return ColumnSchema(id, id[:8], "integer", pk_index)
 
     return _pki
 
@@ -142,10 +142,10 @@ GEOM_TYPE_INFO = {"geometryType": "MULTIPOLYGON ZM", "geometrySRS": "EPSG:2193"}
 def test_schema_roundtrip(gen_uuid):
     orig = Schema(
         [
-            ColumnSchema(gen_uuid(), "geom", "GEOMETRY", None, **GEOM_TYPE_INFO),
-            ColumnSchema(gen_uuid(), "id", "INTEGER", 1, size=64),
-            ColumnSchema(gen_uuid(), "artist", "TEXT", 0, length=200),
-            ColumnSchema(gen_uuid(), "recording", "BLOB", None),
+            ColumnSchema(gen_uuid(), "geom", "geometry", None, **GEOM_TYPE_INFO),
+            ColumnSchema(gen_uuid(), "id", "integer", 1, size=64),
+            ColumnSchema(gen_uuid(), "artist", "text", 0, length=200),
+            ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
 
@@ -167,10 +167,10 @@ def test_schema_roundtrip(gen_uuid):
 def test_feature_roundtrip(gen_uuid):
     schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "geom", "GEOMETRY", None, **GEOM_TYPE_INFO),
-            ColumnSchema(gen_uuid(), "id", "INTEGER", 1, size=64),
-            ColumnSchema(gen_uuid(), "artist", "TEXT", 0, length=200),
-            ColumnSchema(gen_uuid(), "recording", "BLOB", None),
+            ColumnSchema(gen_uuid(), "geom", "geometry", None, **GEOM_TYPE_INFO),
+            ColumnSchema(gen_uuid(), "id", "integer", 1, size=64),
+            ColumnSchema(gen_uuid(), "artist", "text", 0, length=200),
+            ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
     schema_path, schema_data = Dataset2.encode_schema(schema)
@@ -208,19 +208,19 @@ def test_feature_roundtrip(gen_uuid):
 def test_schema_change_roundtrip(gen_uuid):
     old_schema = Schema(
         [
-            ColumnSchema(gen_uuid(), "ID", "INTEGER", 0),
-            ColumnSchema(gen_uuid(), "given_name", "TEXT", None),
-            ColumnSchema(gen_uuid(), "surname", "TEXT", None),
-            ColumnSchema(gen_uuid(), "date_of_birth", "DATE", None),
+            ColumnSchema(gen_uuid(), "ID", "integer", 0),
+            ColumnSchema(gen_uuid(), "given_name", "text", None),
+            ColumnSchema(gen_uuid(), "surname", "text", None),
+            ColumnSchema(gen_uuid(), "date_of_birth", "date", None),
         ]
     )
     new_schema = Schema(
         [
-            ColumnSchema(old_schema[0].id, "personnel_id", "INTEGER", 0),
-            ColumnSchema(gen_uuid(), "tax_file_number", "TEXT", None),
-            ColumnSchema(old_schema[2].id, "last_name", "TEXT", None),
-            ColumnSchema(old_schema[1].id, "first_name", "TEXT", None),
-            ColumnSchema(gen_uuid(), "middle_names", "TEXT", None),
+            ColumnSchema(old_schema[0].id, "personnel_id", "integer", 0),
+            ColumnSchema(gen_uuid(), "tax_file_number", "text", None),
+            ColumnSchema(old_schema[2].id, "last_name", "text", None),
+            ColumnSchema(old_schema[1].id, "first_name", "text", None),
+            ColumnSchema(gen_uuid(), "middle_names", "text", None),
         ]
     )
     # Updating the schema without updating features is only possible
