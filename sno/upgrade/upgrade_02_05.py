@@ -1,16 +1,14 @@
-import hashlib
-import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-import uuid
 
 import click
 import pygit2
 
 from sno.core import walk_tree
 from sno.dataset1 import Dataset1
-from sno.dataset2 import Dataset2, Schema, ColumnSchema
+from sno.dataset2 import Dataset2
+from sno.dataset2_gpkg import gpkg_to_v2_schema
 
 
 @click.command()
@@ -121,80 +119,26 @@ def _upgrade_tree(source_tree, dest_repo):
 def _update_dataset(source_dataset, dest_index, dest_repo):
     assert source_dataset.version == "1.0", source_dataset.version
     path = source_dataset.path
+
     sqlite_table_info = source_dataset.get_meta_item("sqlite_table_info")
-    geom_col_info = source_dataset.get_meta_item("gpkg_geometry_columns")
-    schema = Schema(
-        [
-            _upgrade_column_schema(c, geom_col_info, path)
-            for c in sorted(sqlite_table_info, key=_sort_by_cid)
-        ]
+    gpkg_geometry_columns = source_dataset.get_meta_item("gpkg_geometry_columns")
+    schema = gpkg_to_v2_schema(sqlite_table_info, gpkg_geometry_columns, id_salt=path)
+    _write_to_index(
+        dest_index, dest_repo, path, Dataset2.VERSION_PATH, Dataset2.VERSION_IMPORT,
     )
-    _write_to_index(dest_index, dest_repo, path, Dataset2.ENCODE_VERSION)
-    _write_to_index(dest_index, dest_repo, path, Dataset2.encode_schema(schema))
-    _write_to_index(dest_index, dest_repo, path, Dataset2.encode_legend(schema.legend))
+    _write_to_index(dest_index, dest_repo, path, *Dataset2.encode_schema(schema))
+    _write_to_index(dest_index, dest_repo, path, *Dataset2.encode_legend(schema.legend))
+
     feature_count = 0
     for _, feature in source_dataset.features():
         feature_count += 1
         _write_to_index(
-            dest_index, dest_repo, path, Dataset2.encode_feature(feature, schema)
+            dest_index, dest_repo, path, *Dataset2.encode_feature(feature, schema)
         )
     return feature_count
 
 
-def _write_to_index(dest_index, dest_repo, dataset_path, path_and_data):
-    path, data = path_and_data
-    blob_id = dest_repo.create_blob(data)
+def _write_to_index(dest_index, dest_repo, dataset_path, path, data):
     path = f"{dataset_path}/{path}"
+    blob_id = dest_repo.create_blob(data)
     dest_index.add(pygit2.IndexEntry(path, blob_id, pygit2.GIT_FILEMODE_BLOB))
-
-
-def _sort_by_cid(sqlite_col_info):
-    return sqlite_col_info["cid"]
-
-
-def _upgrade_column_schema(sqlite_col_info, geom_col_info, dataset_path):
-    id_hash = hashlib.sha256()
-    id_hash.update(dataset_path.encode('utf8'))
-    id_hash.update(sqlite_col_info["name"].encode('utf8'))
-    id_hash = id_hash.digest()[:16]
-    col_id = str(uuid.UUID(bytes=id_hash))
-    name = sqlite_col_info["name"]
-    pk_index = 0 if sqlite_col_info["pk"] == 1 else None
-    if geom_col_info and name == geom_col_info["column_name"]:
-        data_type, extra_type_info = _upgrade_geom_column_type(geom_col_info)
-    else:
-        data_type, extra_type_info = _upgrade_column_type(sqlite_col_info["type"])
-
-    return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
-
-
-_V1_TYPE_TO_V2_TYPE = {
-    "SMALLINT": ("integer", {"size": 16}),
-    "MEDIUMINT": ("integer", {"size": 32}),
-    "INTEGER": ("integer", {"size": 64}),
-    "REAL": ("float", {"size": 32}),
-    "FLOAT": ("float", {"size": 32}),
-    "DOUBLE": ("float", {"size": 64}),
-}
-
-
-def _upgrade_column_type(v1_type):
-    m = re.match(r"^(TEXT|BLOB)\(([0-9]+)\)$", v1_type)
-    if m:
-        return m.group(1).lower(), {"length": int(m.group(2))}
-    v2_type = _V1_TYPE_TO_V2_TYPE.get(v1_type)
-    if v2_type is None:
-        v2_type = (v1_type.lower(), {})
-    return v2_type
-
-
-def _upgrade_geom_column_type(geom_col_info):
-    geometry_type = geom_col_info["geometry_type_name"]
-    z = "Z" if geom_col_info["z"] else ""
-    m = "M" if geom_col_info["m"] else ""
-    srs_id = geom_col_info["srs_id"]
-    extra_type_info = {
-        "geometryType": f"{geometry_type} {z}{m}".strip(),
-        "geometrySRS": f"EPSG:{srs_id}",
-    }
-    return "geometry", extra_type_info
