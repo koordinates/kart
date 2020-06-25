@@ -14,13 +14,13 @@ JSON_PARAMS = {
 }
 
 
-def dump_json_output(output, output_path, json_style="pretty"):
+def format_json_for_output(output, fp, json_style="pretty"):
     """
-    Dumps the output to JSON in the output file.
+    Serializes JSON for writing to the given filelike object.
+    Doesn't actually write the JSON, just returns it.
+
+    Adds syntax highlighting if appropriate.
     """
-
-    fp = resolve_output_path(output_path)
-
     if json_style == 'pretty' and fp == sys.stdout and fp.isatty():
         # Add syntax highlighting
         from pygments import highlight
@@ -28,10 +28,19 @@ def dump_json_output(output, output_path, json_style="pretty"):
         from pygments.formatters import TerminalFormatter
 
         dumped = json.dumps(output, **JSON_PARAMS[json_style])
-        highlighted = highlight(dumped.encode(), JsonLexer(), TerminalFormatter())
-        fp.write(highlighted)
+        return highlight(dumped.encode(), JsonLexer(), TerminalFormatter())
     else:
-        json.dump(output, fp, **JSON_PARAMS[json_style])
+        # pygments adds a newline, best we do that here too for consistency
+        return json.dumps(output, **JSON_PARAMS[json_style]) + '\n'
+
+
+def dump_json_output(output, output_path, json_style="pretty"):
+    """
+    Dumps the output to JSON in the output file.
+    """
+
+    fp = resolve_output_path(output_path)
+    fp.write(format_json_for_output(output, fp, json_style=json_style))
 
 
 def resolve_output_path(output_path):

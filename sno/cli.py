@@ -19,6 +19,7 @@ from . import (
     init,
     fsck,
     merge,
+    meta,
     pull,
     resolve,
     show,
@@ -144,6 +145,7 @@ cli.add_command(fsck.fsck)
 cli.add_command(init.import_table)
 cli.add_command(init.init)
 cli.add_command(merge.merge)
+cli.add_command(meta.meta)
 cli.add_command(pull.pull)
 cli.add_command(resolve.resolve)
 cli.add_command(show.show)
