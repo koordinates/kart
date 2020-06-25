@@ -43,10 +43,25 @@ def _b64decode_str(b64_str):
     return base64.urlsafe_b64decode(b64_str)
 
 
-def _hexhash(data):
-    """data (any type) -> hex str. Irreversible."""
+def _hash(*data):
+    """*data (str or bytes) -> sha256. Irreversible."""
+    h = hashlib.sha256()
+    for d in data:
+        h.update(_bytes(d))
+    return h
+
+
+def _hexhash(*data):
+    """*data (str or bytes) -> hex str. Irreversible."""
     # We only return 160 bits of the hash, same as git hashes - more is overkill.
-    return hashlib.sha256(data).hexdigest()[:40]
+    return _hash(*data).hexdigest()[:40]
+
+
+def _bytes(data):
+    """data (str or bytes) -> bytes. Utf-8."""
+    if isinstance(data, str):
+        return data.encode('utf8')
+    return data
 
 
 def walk_tree_blobs(tree, path="", max_depth=4):
@@ -188,6 +203,12 @@ class ColumnSchema(
     @staticmethod
     def new_id():
         return str(uuid.uuid4())
+
+    @staticmethod
+    def deterministic_id(*data):
+        """*data (any types) -> str(UUID). Deterministic, irreversible."""
+        bytes16 = _hash(*data).digest()[:16]
+        return str(uuid.UUID(bytes=bytes16))
 
     def __new__(cls, id, name, data_type, pk_index, **extra_type_info):
         assert data_type in ALL_DATA_TYPES, data_type
@@ -351,15 +372,18 @@ class Dataset2(DatasetStructure):
     """
 
     VERSION_PATH = ".sno-table/meta/version"
-    VERSION_SPECIFIER = "2."
     VERSION_IMPORT = "2.0"
-
-    ENCODE_VERSION = (VERSION_PATH, VERSION_IMPORT.encode('utf8'))
+    VERSION_SPECIFIER = "2."
 
     FEATURE_PATH = ".sno-table/feature/"
     META_PATH = ".sno-table/meta/"
     LEGEND_PATH = ".sno-table/meta/legend/"
     SCHEMA_PATH = ".sno-table/meta/schema"
+
+    TITLE_PATH = ".sno-table/meta/title"
+    DESCRIPTION_PATH = ".sno-table/meta/description"
+
+    SRS_PATH = ".sno-table/meta/srs/"
 
     @property
     def version(self):
@@ -519,13 +543,13 @@ class Dataset2(DatasetStructure):
     def import_iter_meta_blobs(self, repo, source):
         schema = source.get_v2_schema()
         meta_blobs = [
-            self.ENCODE_VERSION,
+            (self.VERSION_PATH, self.VERSION_IMPORT),
             self.encode_schema(schema),
             self.encode_legend(schema.legend),
         ]
 
         for meta_path, meta_content in meta_blobs:
-            yield self.repo_path(meta_path), meta_content
+            yield self.repo_path(meta_path), _bytes(meta_content)
 
     def import_iter_feature_blobs(self, resultset, source):
         schema = source.get_v2_schema()
