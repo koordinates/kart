@@ -6,15 +6,15 @@ from datetime import datetime, timedelta, timezone
 import click
 import pygit2
 
+from .cli_util import StringFromFile
 from .core import check_git_user
 from .exceptions import (
     NotFound,
-    NotYetImplemented,
     NO_CHANGES,
     NO_DATA,
     NO_WORKING_COPY,
 )
-from .filter_util import build_feature_filter, UNFILTERED
+from .filter_util import build_feature_filter
 from .output_util import dump_json_output
 from .repo_files import (
     COMMIT_EDITMSG,
@@ -35,7 +35,6 @@ from .timestamps import (
 )
 from .working_copy import WorkingCopy
 from .structure import RepositoryStructure
-from .cli_util import MutexOption
 
 
 @click.command()
@@ -45,17 +44,7 @@ from .cli_util import MutexOption
     "-m",
     multiple=True,
     help="Use the given message as the commit message. If multiple `-m` options are given, their values are concatenated as separate paragraphs.",
-    cls=MutexOption,
-    exclusive_with=["message_file"],
-)
-@click.option(
-    "message_file",
-    "--file",
-    "-F",
-    type=click.File(encoding="utf-8"),
-    help="Take the commit message from the given file. Use `-` to read the message from the standard input.",
-    cls=MutexOption,
-    exclusive_with=["message"],
+    type=StringFromFile(encoding="utf-8"),
 )
 @click.option(
     "--allow-empty",
@@ -73,7 +62,7 @@ from .cli_util import MutexOption
 @click.argument(
     "filters", nargs=-1,
 )
-def commit(ctx, message, message_file, allow_empty, output_format, filters):
+def commit(ctx, message, allow_empty, output_format, filters):
     """
     Record a snapshot of all of the changes to the repository.
 
@@ -106,9 +95,7 @@ def commit(ctx, message, message_file, allow_empty, output_format, filters):
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
     do_json = output_format == "json"
-    if message_file:
-        commit_msg = message_file.read().strip()
-    elif message:
+    if message:
         commit_msg = "\n\n".join([m.strip() for m in message]).strip()
     else:
         commit_msg = get_commit_message(repo, wc_diff, quiet=do_json)

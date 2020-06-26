@@ -224,16 +224,18 @@ def test_commit_message(
             f.write("\ni am a message\n\n\n")
             f.flush()
 
-        r = cli_runner.invoke(["commit", "--allow-empty", "-F", f_commit_message])
+        r = cli_runner.invoke(
+            ["commit", "--allow-empty", f"--message=@{f_commit_message}"]
+        )
         assert r.exit_code == 0, r
         assert last_message() == "i am a message"
 
         # E: conflict
         r = cli_runner.invoke(
-            ["commit", "--allow-empty", "-F", f_commit_message, "-m", "foo"]
+            ["commit", "--allow-empty", f"--message=@{f_commit_message}", "-m", "foo"]
         )
-        assert r.exit_code == INVALID_ARGUMENT, r
-        assert "exclusive" in r.stderr
+        assert r.exit_code == 0, r
+        assert last_message() == "i am a message\n\nfoo"
 
         # multiple
         r = cli_runner.invoke(

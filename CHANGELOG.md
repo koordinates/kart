@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.5.0 (UNRELEASED)
 
 * Added a `sno meta get` command for viewing dataset metadata.
+* `merge`, `commit`, `init`, `import` commands can now take commit messages as files with `--message=@filename.txt`. This replaces the `sno commit -F` option.
 
 ## 0.4.0
 
