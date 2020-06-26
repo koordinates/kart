@@ -44,6 +44,36 @@ class MutexOption(click.Option):
         return super().handle_parse_result(ctx, opts, args)
 
 
+class StringFromFile(click.types.StringParamType):
+    """
+    Like a regular string option, but if the string starts with '@',
+    the string will actually be read from the filename that follows.
+
+    The special value "-" is a synonym for "@-", i.e. read from stdin.
+
+    Usage:
+        --param=value
+            --> "value"
+        --param=@filename.txt
+            --> "This is the contents of filename.txt"
+        --param=-
+            --> "This is the contents of stdin"
+    """
+
+    def __init__(self, **file_kwargs):
+        self.file_kwargs = file_kwargs
+
+    def convert(self, value, param, ctx):
+        value = super().convert(value, param, ctx)
+        if value == '-' or value.startswith('@'):
+            filetype = click.File(**self.file_kwargs)
+            filename = value[1:] if value.startswith('@') else value
+            fp = filetype.convert(filename, param, ctx)
+            return fp.read()
+
+        return value
+
+
 def call_and_exit_flag(*args, callback, **kwargs):
     """
     Add an is_flag option that, when set, eagerly calls the given callback with only the context as a parameter.

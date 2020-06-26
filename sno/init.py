@@ -1,5 +1,4 @@
 import functools
-import json
 import os
 import re
 import sys
@@ -13,7 +12,7 @@ from osgeo import gdal, ogr
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
-from .cli_util import call_and_exit_flag, MutexOption
+from .cli_util import call_and_exit_flag, MutexOption, StringFromFile
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -684,7 +683,10 @@ def list_import_formats(ctx, param, value):
     exclusive_with=["do_list", "tables"],
 )
 @click.option(
-    "--message", "-m", help="Commit message. By default this is auto-generated.",
+    "--message",
+    "-m",
+    type=StringFromFile(encoding='utf-8'),
+    help="Commit message. By default this is auto-generated.",
 )
 @click.option(
     "--list",
@@ -806,6 +808,7 @@ def import_table(
 @click.option(
     "--message",
     "-m",
+    type=StringFromFile(encoding='utf-8'),
     help="Commit message (when used with --import). By default this is auto-generated.",
 )
 @click.option(

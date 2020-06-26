@@ -4,7 +4,7 @@ import sys
 import click
 
 from . import commit
-from .cli_util import call_and_exit_flag
+from .cli_util import call_and_exit_flag, StringFromFile
 from .conflicts import (
     list_conflicts,
     conflicts_json_as_text,
@@ -335,7 +335,10 @@ def merge_status_to_text(jdict, fresh):
     help="Don't perform a merge - just show what would be done",
 )
 @click.option(
-    "--message", "-m", help="Use the given message as the commit message.",
+    "--message",
+    "-m",
+    type=StringFromFile(encoding='utf-8'),
+    help="Use the given message as the commit message.",
 )
 @click.option(
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
