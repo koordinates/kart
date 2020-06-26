@@ -1,4 +1,6 @@
+import json
 import click
+import jsonschema
 
 
 class MutexOption(click.Option):
@@ -71,6 +73,29 @@ class StringFromFile(click.types.StringParamType):
             fp = filetype.convert(filename, param, ctx)
             return fp.read()
 
+        return value
+
+
+class JsonFromFile(StringFromFile):
+    name = 'json'
+
+    def __init__(self, schema=None, **file_kwargs):
+        super().__init__(**file_kwargs)
+        self.schema = schema
+
+    def convert(self, value, param, ctx):
+        value = super().convert(value, param, ctx)
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as e:
+            self.fail(
+                f"Invalid JSON: {e}", param, ctx,
+            )
+        if self.schema:
+            try:
+                jsonschema.validate(instance=value, schema=self.schema)
+            except jsonschema.ValidationError as e:
+                self.fail(str(e), param, ctx)
         return value
 
 

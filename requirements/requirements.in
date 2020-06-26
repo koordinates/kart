@@ -3,6 +3,7 @@ msgpack~=0.6.1
 Rtree~=0.9.4
 certifi
 Pygments
+jsonschema
 
 # these are only here for dependencies
 psycopg2==2.8.5

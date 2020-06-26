@@ -1,3 +1,4 @@
+import json
 import pytest
 import pygit2
 
@@ -99,6 +100,62 @@ def test_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner, c
         assert "to census2016_sdhca_ot_ced_short/ ..." in r.stdout
 
 
+def test_import_table_meta_overrides(
+    data_archive_readonly, tmp_path, cli_runner, chdir, geopackage
+):
+    with data_archive_readonly("gpkg-au-census") as data:
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            original_xml_metadata = "<gmd:MD_Metadata xmlns:gco=\"http://www.isotc211.org/2005/gco\" xmlns:gmd=\"http://www.isotc211.org/2005/gmd\" xmlns:gml=\"http://www.opengis.net/gml\" xmlns:gts=\"http://www.isotc211.org/2005/gts\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xmlns=\"http://www.isotc211.org/2005/gmd\" />"
+            table_info_json = json.dumps(
+                {
+                    'census2016_sdhca_ot_ced_short': {
+                        'title': 'test title',
+                        'description': 'test description',
+                        'xmlMetadata': original_xml_metadata,
+                    }
+                }
+            )
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "census2016_sdhca_ot_short.gpkg",
+                    "census2016_sdhca_ot_ced_short",
+                    "--table-info",
+                    table_info_json,
+                ],
+            )
+            assert r.exit_code == 0, r
+
+            cli_runner.invoke(["checkout"])
+
+            repo = pygit2.Repository(str(repo_path))
+            wc = WorkingCopy.open(repo)
+            db = geopackage(wc.path)
+            cur = db.cursor()
+            title, description = cur.execute(
+                """
+                SELECT c.identifier, c.description
+                FROM gpkg_contents c
+                WHERE c.table_name = 'census2016_sdhca_ot_ced_short'
+                """
+            ).fetchone()
+            assert title == 'census2016_sdhca_ot_ced_short: test title'
+            assert description == 'test description'
+
+            xml_metadata = cur.execute(
+                """
+                SELECT m.metadata
+                FROM gpkg_metadata m JOIN gpkg_metadata_reference r
+                ON m.id = r.md_file_id
+                WHERE r.table_name = 'census2016_sdhca_ot_ced_short'
+                """
+            ).fetchone()[0]
+            assert xml_metadata == original_xml_metadata
+
+
 def test_import_table_with_prompt_with_no_input(
     data_archive_readonly, tmp_path, cli_runner, chdir
 ):
@@ -185,7 +242,7 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
             {
                 'cid': 6,
                 'name': 'float32',
-                'type': 'FLOAT',
+                'type': 'REAL',
                 'notnull': 0,
                 'dflt_value': None,
                 'pk': 0,
