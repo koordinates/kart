@@ -1,3 +1,4 @@
+import functools
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -7,8 +8,8 @@ import pygit2
 
 from sno.core import walk_tree
 from sno.dataset1 import Dataset1
-from sno.dataset2 import Dataset2
 from sno.dataset2_gpkg import gpkg_to_v2_schema
+from sno.fast_import import fast_import_tables
 
 
 @click.command()
@@ -78,18 +79,34 @@ def upgrade(source, dest):
     click.secho("\nUpgrade complete", fg="green", bold=True)
 
 
+def _raw_commit_time(commit):
+    offset = commit.commit_time_offset
+    hours, minutes = divmod(abs(offset), 60)
+    sign = "+" if offset >= 0 else "-"
+    return f"{commit.commit_time} {sign}{hours:02}{minutes:02}"
+
+
 def _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map):
     source_tree = source_commit.peel(pygit2.Tree)
-    dest_tree, dataset_count, feature_count = _upgrade_tree(source_tree, dest_repo)
-    dest_commit = dest_repo.create_commit(
-        "HEAD",
-        source_commit.author,
-        source_commit.committer,
-        source_commit.message,
-        dest_tree,
-        dest_parents,
-        # source_commit.message_encoding,
+    sources = {d.path: ImportV1Dataset(d) for d in _find_datasets(source_tree)}
+    dataset_count = len(sources)
+    feature_count = sum(s.row_count for s in sources.values())
+
+    s = source_commit
+    commit_time = _raw_commit_time(s)
+    header = (
+        "commit refs/heads/master\n"
+        f"author {s.author.name} <{s.author.email}> {commit_time}\n"
+        f"committer {s.committer.name} <{s.committer.email}> {commit_time}\n"
+        f"data {len(s.message.encode('utf8'))}\n{s.message}\n"
     )
+    header += "".join(f"merge {p}\n" for p in dest_parents)
+
+    fast_import_tables(
+        dest_repo, sources, incremental=False, quiet=True, header=header, version="2.0",
+    )
+
+    dest_commit = dest_repo.head.peel(pygit2.Commit)
     commit_map[source_commit.hex] = dest_commit.hex
 
     commit_time = datetime.fromtimestamp(source_commit.commit_time)
@@ -98,47 +115,45 @@ def _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map):
     )
 
 
-def _upgrade_tree(source_tree, dest_repo):
-    dest_index = pygit2.Index()
-    dataset_count = 0
-    feature_count = 0
+def _find_datasets(source_tree):
     for top_tree, top_path, subtree_names, blob_names in walk_tree(
         source_tree, topdown=True
     ):
         if subtree_names == [".sno-table"]:
-            dataset_count += 1
-            source_dataset = Dataset1(top_tree, top_path)
-            feature_count += _update_dataset(source_dataset, dest_index, dest_repo)
-            # No need to walk into subtrees.
+            yield Dataset1(top_tree, top_path)
+            # No need to walk into the subtree of this dataset.
             subtree_names.clear()
 
-    dest_tree = dest_index.write_tree(dest_repo)
-    return dest_tree, dataset_count, feature_count
 
+class ImportV1Dataset:
+    def __init__(self, dataset):
+        assert dataset.version == "1.0"
+        self.dataset = dataset
+        self.path = self.dataset.path
+        self.table = self.path
+        self.source = "v1-sno-repo"
 
-def _update_dataset(source_dataset, dest_index, dest_repo):
-    assert source_dataset.version == "1.0", source_dataset.version
-    path = source_dataset.path
-
-    sqlite_table_info = source_dataset.get_meta_item("sqlite_table_info")
-    gpkg_geometry_columns = source_dataset.get_meta_item("gpkg_geometry_columns")
-    schema = gpkg_to_v2_schema(sqlite_table_info, gpkg_geometry_columns, id_salt=path)
-    _write_to_index(
-        dest_index, dest_repo, path, Dataset2.VERSION_PATH, Dataset2.VERSION_IMPORT,
-    )
-    _write_to_index(dest_index, dest_repo, path, *Dataset2.encode_schema(schema))
-    _write_to_index(dest_index, dest_repo, path, *Dataset2.encode_legend(schema.legend))
-
-    feature_count = 0
-    for _, feature in source_dataset.features():
-        feature_count += 1
-        _write_to_index(
-            dest_index, dest_repo, path, *Dataset2.encode_feature(feature, schema)
+    @functools.lru_cache(maxsize=1)
+    def get_v2_schema(self):
+        sqlite_table_info = self.dataset.get_meta_item("sqlite_table_info")
+        gpkg_geometry_columns = self.dataset.get_meta_item("gpkg_geometry_columns")
+        return gpkg_to_v2_schema(
+            sqlite_table_info, gpkg_geometry_columns, id_salt=self.path
         )
-    return feature_count
 
+    def iter_features(self):
+        for _, feature in self.dataset.features():
+            yield feature
 
-def _write_to_index(dest_index, dest_repo, dataset_path, path, data):
-    path = f"{dataset_path}/{path}"
-    blob_id = dest_repo.create_blob(data)
-    dest_index.add(pygit2.IndexEntry(path, blob_id, pygit2.GIT_FILEMODE_BLOB))
+    @property
+    def row_count(self):
+        return self.dataset.feature_count()
+
+    def __str__(self):
+        return self.path
+
+    def __enter__(self):
+        pass
+
+    def __exit__(self, *args):
+        pass
