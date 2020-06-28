@@ -21,6 +21,7 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
+from .fast_import import fast_import_tables
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .timestamps import datetime_to_iso8601_utc
@@ -962,7 +963,7 @@ def import_table(
             xml_metadata=info.get('xmlMetadata'),
         )
 
-    structure.fast_import_tables(repo, loaders, message=message, version=version)
+    fast_import_tables(repo, loaders, message=message, version=version)
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
         # Update working copy with new datasets
@@ -1029,7 +1030,7 @@ def init(ctx, do_checkout, message, directory, version, import_from):
     repo = pygit2.init_repository(str(repo_path), bare=True)
 
     if import_from:
-        structure.fast_import_tables(repo, loaders, message=message, version=version)
+        fast_import_tables(repo, loaders, message=message, version=version)
 
         if do_checkout:
             # Checkout a working copy
