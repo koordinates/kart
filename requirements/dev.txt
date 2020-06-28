@@ -18,10 +18,10 @@ decorator==4.4.2          # via ipython, traitlets
 fields==5.0.0             # via -r requirements/test.txt, aspectlib
 gprof2dot==2019.11.30     # via -r requirements/test.txt, pytest-profiling
 html5lib==1.1             # via -r requirements/test.txt
-importlib-metadata==1.6.1  # via -r requirements/../requirements.txt, -r requirements/test.txt, jsonschema, pluggy, pytest
+importlib-metadata==1.7.0  # via -r requirements/../requirements.txt, -r requirements/test.txt, jsonschema, pluggy, pytest
 ipdb==0.13.3              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
-ipython==7.15.0           # via -r requirements/dev.in, ipdb
+ipython==7.16.1           # via -r requirements/dev.in, ipdb
 jedi==0.17.1              # via ipython
 jsonschema==3.2.0         # via -r requirements/../requirements.txt, -r requirements/test.txt
 lovely-pytest-docker==0.1.0  # via -r requirements/test.txt
