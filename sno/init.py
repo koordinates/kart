@@ -2,6 +2,7 @@ import functools
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
@@ -12,7 +13,7 @@ from osgeo import gdal, ogr
 from sno import is_windows
 from . import gpkg, checkout, structure
 from .core import check_git_user
-from .cli_util import call_and_exit_flag, MutexOption, StringFromFile
+from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromFile
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -21,6 +22,7 @@ from .exceptions import (
 )
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
+from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
 
 
@@ -50,13 +52,17 @@ class OgrImporter:
         # which we can't roundtrip. Tackle when we get someone actually using those types...
         'Integer': 'MEDIUMINT',
         'Integer64': 'INTEGER',
-        'Real': 'FLOAT',
+        'Real': 'REAL',
         'String': 'TEXT',
         'Binary': 'BLOB',
         'Date': 'DATE',
         'DateTime': 'DATETIME',
     }
-    OGR_SUBTYPE_TO_SQLITE_TYPE = {ogr.OFSTBoolean: 'BOOLEAN', ogr.OFSTInt16: 'SMALLINT'}
+    OGR_SUBTYPE_TO_SQLITE_TYPE = {
+        ogr.OFSTBoolean: 'BOOLEAN',
+        ogr.OFSTInt16: 'SMALLINT',
+        ogr.OFSTFloat32: 'REAL',
+    }
 
     @classmethod
     def _all_subclasses(cls):
@@ -168,21 +174,35 @@ class OgrImporter:
             raise ValueError("at least one part required")
         return '.'.join([cls.quote_ident_part(p) for p in parts])
 
-    def __init__(self, ogr_ds, table=None, *, source, ogr_source, primary_key=None):
+    def __init__(
+        self,
+        ogr_ds,
+        table=None,
+        *,
+        source,
+        ogr_source,
+        primary_key=None,
+        **meta_overrides,
+    ):
         self.ds = ogr_ds
         self.driver = self.ds.GetDriver()
         self.table = table
         self.source = source
         self.ogr_source = ogr_source
         self._primary_key = self._check_primary_key_option(primary_key)
+        self._meta_overrides = {
+            k: v for k, v in meta_overrides.items() if v is not None
+        }
 
-    def clone_for_table(self, table, primary_key=None):
+    def clone_for_table(self, table, primary_key=None, **meta_overrides):
+        meta_overrides = {**self._meta_overrides, **meta_overrides}
         return self.__class__(
             self.ds,
             table=table,
             source=self.source,
             ogr_source=self.ogr_source,
             primary_key=primary_key or self._primary_key,
+            **meta_overrides,
         )
 
     @property
@@ -405,11 +425,16 @@ class OgrImporter:
 
     def get_meta_contents(self):
         ogr_metadata = self.ogrlayer.GetMetadata()
+
         return {
             'table_name': self.table,
             'data_type': 'features' if self.is_spatial else 'attributes',
-            'identifier': ogr_metadata.get('IDENTIFIER') or '',
-            'description': ogr_metadata.get('DESCRIPTION') or '',
+            'identifier': self._meta_overrides.get(
+                'title', ogr_metadata.get('IDENTIFIER') or ''
+            ),
+            'description': self._meta_overrides.get(
+                'description', ogr_metadata.get('DESCRIPTION') or ''
+            ),
             'srs_id': self._get_meta_srid(),
         }
 
@@ -457,7 +482,7 @@ class OgrImporter:
         return type_name
 
     @ungenerator(list)
-    def get_meta_table_info(self):
+    def get_meta_column_info(self):
         ld = self.ogrlayer.GetLayerDefn()
         for name, cid in self.field_cid_map.items():
             default = None
@@ -498,6 +523,48 @@ class OgrImporter:
             'description': None,
         }
 
+    _KNOWN_METADATA_URIS = {
+        'GDALMultiDomainMetadata': 'http://gdal.org',
+    }
+
+    def _get_xml_metadata(self, xml_metadata):
+        from xml.dom.minidom import parseString
+
+        doc = parseString(xml_metadata)
+        element = doc.documentElement
+        if element.tagName in self._KNOWN_METADATA_URIS:
+            uri = self._KNOWN_METADATA_URIS[element.tagName]
+        else:
+            uri = element.namespaceURI or '(unknown)'
+
+        yield "gpkg_metadata_reference", [
+            {
+                'reference_scope': 'table',
+                'table_name': self.table,
+                'column_name': None,
+                'row_id_value': None,
+                'timestamp': datetime_to_iso8601_utc(datetime.now()),
+                'md_file_id': 1,
+                'md_parent_id': None,
+            }
+        ]
+
+        yield "gpkg_metadata", [
+            {
+                "id": 1,
+                "md_scope": "dataset",
+                "md_standard_uri": uri,
+                "mime_type": "text/xml",
+                "metadata": xml_metadata,
+            }
+        ]
+
+    def get_xml_metadata(self):
+        xml_metadata = self._meta_overrides.get('xml_metadata')
+
+        if xml_metadata:
+            yield from self._get_xml_metadata(xml_metadata)
+
     def build_meta_info(self):
         """
         Imitates the ImportGPKG implementation, and we just use the gpkg field/table names
@@ -506,11 +573,10 @@ class OgrImporter:
         """
         yield "gpkg_contents", self.get_meta_contents()
         yield "gpkg_geometry_columns", self.get_meta_geometry_columns()
-        yield "sqlite_table_info", self.get_meta_table_info()
+        yield "sqlite_table_info", self.get_meta_column_info()
         yield "gpkg_spatial_ref_sys", self.get_meta_spatial_ref_sys()
-        # TODO: The GPKG impl of this method reads internal XML metadata
-        # (gpkg_metadata_reference, gpkg_metadata)
-        # The OGR impl should probably read and store XML metadata from nearby files.
+
+        yield from self.get_xml_metadata()
 
 
 class ImportGPKG(OgrImporter):
@@ -543,10 +609,19 @@ class ImportGPKG(OgrImporter):
     def build_meta_info(self):
         """
         Returns metadata from the gpkg_* tables about this GPKG.
-        Keep this in sync with the OgrImporter implementation
         """
+        # We use the OGR implementation for everything it knows about.
+        # The `gpkg.get_meta_info()` can produce mostly the same stuff,
+        # but it doesn't know about overrides from the `--titles` and `--description` options.
+        done_keys = []
+        for k, v in super().build_meta_info():
+            done_keys.append(k)
+            yield k, v
+
+        # For everything not handled by the OGRImporter implementation, get it from gpkg.get_meta_info()
+        # (this is mostly just XML metadata)
         db = gpkg.db(self.ogr_source)
-        yield from gpkg.get_meta_info(db, layer=self.table)
+        yield from gpkg.get_meta_info(db, layer=self.table, exclude_keys=done_keys)
 
 
 class ImportPostgreSQL(OgrImporter):
@@ -689,6 +764,34 @@ def list_import_formats(ctx, param, value):
     help="Commit message. By default this is auto-generated.",
 )
 @click.option(
+    "--table-info",
+    type=JsonFromFile(
+        encoding='utf-8',
+        schema={
+            "type": "object",
+            "$schema": 'http://json-schema.org/draft-07/schema',
+            "patternProperties": {
+                ".*": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string"},
+                        "description": {"type": "string"},
+                        "xmlMetadata": {"type": "string"},
+                    },
+                }
+            },
+        },
+    ),
+    default='{}',
+    help=(
+        "Specifies overrides for imported tables, in a nested JSON object. \n"
+        "Each key is a dataset name, and each value is an object. \n"
+        "Valid overrides are 'title', 'description' and 'xmlMetadata'.\n"
+        '''e.g.:  --table-info='{"land_parcels": {"title": "Land Parcels 1:50k"}'\n'''
+        "To import from a file, prefix with `@`, e.g. `--table-info=@filename.json`"
+    ),
+)
+@click.option(
     "--list",
     "do_list",
     is_flag=True,
@@ -724,6 +827,7 @@ def import_table(
     primary_key,
     source,
     tables,
+    table_info,
 ):
     """
     Import data into a repository.
@@ -775,8 +879,13 @@ def import_table(
             raise click.UsageError(
                 f'table "{dst_table}" was specified more than once', param_hint="tables"
             )
+        info = table_info.get(table, {})
         loaders[dst_table] = source_loader.clone_for_table(
-            src_table, primary_key=primary_key
+            src_table,
+            primary_key=primary_key,
+            title=info.get('title'),
+            description=info.get('description'),
+            xml_metadata=info.get('xmlMetadata'),
         )
 
     structure.fast_import_tables(repo, loaders, message=message, version=version)

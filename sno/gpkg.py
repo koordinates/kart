@@ -71,7 +71,7 @@ def db(path, **kwargs):
     return db
 
 
-def get_meta_info(db, layer):
+def get_meta_info(db, layer, exclude_keys=()):
     """
     Returns metadata from the gpkg_* tables about this GPKG.
     Keep this in sync with OgrImporter.build_meta_info for other datasource types.
@@ -132,12 +132,14 @@ def get_meta_info(db, layer):
         ),
     }
     try:
-        for filename, (sql, params, rtype) in QUERIES.items():
+        for key, (sql, params, rtype) in QUERIES.items():
+            if key in exclude_keys:
+                continue
             # check table exists, the metadata ones may not
-            if not filename.startswith("sqlite_"):
+            if not key.startswith("sqlite_"):
                 dbcur.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name=?;",
-                    (filename,),
+                    (key,),
                 )
                 if not dbcur.fetchone():
                     continue
@@ -148,9 +150,9 @@ def get_meta_info(db, layer):
             ]
             if rtype is dict:
                 value = value[0] if len(value) else None
-            yield (filename, value)
+            yield (key, value)
     except Exception:
-        print(f"Error building meta/{filename}")
+        print(f"Error building meta/{key}")
         raise
 
 
