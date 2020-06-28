@@ -879,7 +879,7 @@ def import_table(
             raise click.UsageError(
                 f'table "{dst_table}" was specified more than once', param_hint="tables"
             )
-        info = table_info.get(table, {})
+        info = table_info.get(dst_table, {})
         loaders[dst_table] = source_loader.clone_for_table(
             src_table,
             primary_key=primary_key,
