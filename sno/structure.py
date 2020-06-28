@@ -3,139 +3,15 @@ import functools
 import json
 import logging
 import re
-import subprocess
 import time
 from collections import deque
-from pathlib import Path
 
-import click
 import pygit2
 
 from . import core, gpkg
-from .exceptions import NotFound, SubprocessError, NO_COMMIT
-from .output_util import logpipe
+from .exceptions import NotFound, NO_COMMIT
 
 L = logging.getLogger("sno.structure")
-
-
-def write_blobs_to_stream(stream, blobs):
-    for i, (blob_path, blob_data) in enumerate(blobs):
-        stream.write(
-            f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode("utf8")
-        )
-        stream.write(blob_data)
-        stream.write(b"\n")
-        yield i, blob_path
-
-
-def fast_import_tables(
-    repo, sources, max_pack_size="2G", limit=None, message=None, *, version
-):
-    for path, source in sources.items():
-        if not source.table:
-            raise ValueError("No table specified")
-
-        if not repo.is_empty:
-            if path in repo.head.peel(pygit2.Tree):
-                raise ValueError(f"{path}/ already exists")
-
-    with logpipe(L, logging.INFO) as log_stderr:
-        click.echo("Starting git-fast-import...")
-        p = subprocess.Popen(
-            [
-                "git",
-                "fast-import",
-                "--date-format=now",
-                "--done",
-                "--stats",
-                f"--max-pack-size={max_pack_size}",
-            ],
-            cwd=repo.path,
-            stdin=subprocess.PIPE,
-            stderr=log_stderr,
-        )
-        try:
-            user = repo.default_signature
-
-            if message is None:
-                if len(sources) == 1:
-                    for path, source in sources.items():
-                        message = f"Import from {Path(source.source).name} to {path}/"
-                else:
-                    message = f"Import {len(sources)} datasets from '{Path(source.source).name}':\n"
-                    for path, source in sources.items():
-                        if path == source.table:
-                            message += f"\n* {path}/"
-                        else:
-                            message += f"\n* {path} (from {source.table})"
-
-            header = (
-                "commit refs/heads/master\n"
-                f"committer {user.name} <{user.email}> now\n"
-                f"data {len(message.encode('utf8'))}\n{message}\n"
-            )
-            p.stdin.write(header.encode("utf8"))
-
-            if not repo.is_empty:
-                # start with the existing tree/contents
-                p.stdin.write(b"from refs/heads/master^0\n")
-            for path, source in sources.items():
-                dataset = DatasetStructure.for_version(version)(tree=None, path=path)
-
-                with source:
-                    if limit:
-                        num_rows = min(limit, source.row_count)
-                        click.echo(
-                            f"Importing {num_rows:,d} of {source.row_count:,d} features from {source} to {path}/ ..."
-                        )
-                    else:
-                        num_rows = source.row_count
-                        click.echo(
-                            f"Importing {num_rows:,d} features from {source} to {path}/ ..."
-                        )
-
-                    for i, blob_path in write_blobs_to_stream(
-                        p.stdin, dataset.import_iter_meta_blobs(repo, source)
-                    ):
-                        pass
-
-                    # features
-                    t1 = time.monotonic()
-                    src_iterator = source.iter_features()
-
-                    for i, blob_path in write_blobs_to_stream(
-                        p.stdin, dataset.import_iter_feature_blobs(src_iterator, source)
-                    ):
-                        if i and i % 100000 == 0:
-                            click.echo(
-                                f"  {i:,d} features... @{time.monotonic()-t1:.1f}s"
-                            )
-
-                        if limit is not None and i == (limit - 1):
-                            click.secho(
-                                f"  Stopping at {limit:,d} features", fg="yellow"
-                            )
-                            break
-                    t2 = time.monotonic()
-                    click.echo(f"Added {num_rows:,d} Features to index in {t2-t1:.1f}s")
-                    click.echo(
-                        f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)"
-                    )
-
-            p.stdin.write(b"\ndone\n")
-        except BrokenPipeError:
-            # if git-fast-import dies early, we get an EPIPE here
-            # we'll deal with it below
-            pass
-        else:
-            p.stdin.close()
-        p.wait()
-        if p.returncode != 0:
-            raise SubprocessError(
-                f"git-fast-import error! {p.returncode}", exit_code=p.returncode
-            )
-        t3 = time.monotonic()
-        click.echo(f"Closed in {(t3-t2):.0f}s")
 
 
 class RepositoryStructure:
