@@ -64,17 +64,16 @@ def _bytes(data):
     return data
 
 
-def walk_tree_blobs(tree, path="", max_depth=4):
+def find_blobs_in_tree(tree, max_depth=4):
     """
-    Recursively yields all possible (file_path, file_data) tuples
-    in the given directory tree, up to a given max_depth.
+    Recursively yields possible blobs in the given directory tree,
+    up to a given max_depth.
     """
     for entry in tree:
-        entry_path = f"{path}/{entry.name}" if path else entry.name
         if hasattr(entry, "data"):
-            yield entry_path, entry.data
+            yield entry
         elif max_depth > 0:
-            yield from walk_tree_blobs(entry, entry_path, max_depth - 1)
+            yield from find_blobs_in_tree(entry, max_depth - 1)
 
 
 class Legend:
@@ -481,11 +480,9 @@ class Dataset2(DatasetStructure):
         # (but this is the interface shared by dataset1 at the moment.)
         if self.FEATURE_PATH not in self.tree:
             return
-        for feature_path, feature_data in walk_tree_blobs(
-            self.tree / self.FEATURE_PATH
-        ):
-            yield feature_path, self.get_feature(
-                path=feature_path, data=feature_data, keys=keys
+        for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH):
+            yield blob.name, self.get_feature(
+                path=blob.name, data=blob.data, keys=keys
             ),
 
     @classmethod

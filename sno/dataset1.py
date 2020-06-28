@@ -171,33 +171,33 @@ class Dataset1(DatasetStructure):
             pk_enc.encode("utf8")
         ).hexdigest()  # hash to randomly spread filenames
 
-        te = self.tree / ".sno-table" / pk_hash[:2] / pk_hash[2:4] / pk_enc
-        if not isinstance(te, pygit2.Blob):
+        leaf = self.tree / ".sno-table" / pk_hash[:2] / pk_hash[2:4] / pk_enc
+        if not isinstance(leaf, pygit2.Blob):
             raise IntegrityError(
-                f"Unexpected TreeEntry type={te.type_str} in feature tree {pk_enc}"
+                f"Unexpected TreeEntry type={leaf.type_str} in feature tree {pk_enc}"
             )
 
-        return pk_enc, te
+        return leaf
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
-        blob_path, blob_data = self._get_feature(pk_value)
+        blob = self._get_feature(pk_value)
         return (
-            blob_path,
-            self.repo_feature_to_dict(blob_path, blob_data, ogr_geoms=ogr_geoms),
+            blob.name,
+            self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms),
         )
 
     def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
         tupleizer = self.build_feature_tupleizer(col_names)
         for pk in pk_values:
             try:
-                pk_enc, blob = self._get_feature(pk)
+                blob = self._get_feature(pk)
             except KeyError:
                 if ignore_missing:
                     continue
                 else:
                     raise
 
-            yield tupleizer(pk_enc, blob)
+            yield tupleizer(blob)
 
     def build_feature_tupleizer(self, tuple_cols, ogr_geoms=False):
         field_cid_map = self.field_cid_map
@@ -210,9 +210,9 @@ class Dataset1(DatasetStructure):
                 ftuple_order.append(field_cid_map[field_name])
         ftuple_order = tuple(ftuple_order)
 
-        def tupleizer(blob_path, blob_data):
+        def tupleizer(blob):
             bin_feature = msgpack.unpackb(
-                blob_data,
+                blob.data,
                 ext_hook=self._msgpack_unpack_ext_ogr
                 if ogr_geoms
                 else self._msgpack_unpack_ext,
@@ -221,7 +221,7 @@ class Dataset1(DatasetStructure):
             )
             return tuple(
                 [
-                    self.decode_pk(blob_path) if c == -1 else bin_feature[c]
+                    self.decode_pk(blob.name) if c == -1 else bin_feature[c]
                     for c in ftuple_order
                 ]
             )
@@ -266,14 +266,14 @@ class Dataset1(DatasetStructure):
                             )
                             continue
 
-                    yield feature_builder(leaf.name, leaf.data)
+                    yield feature_builder(leaf)
 
     def features(self, *, ogr_geoms=False, **kwargs):
         """ Feature iterator yielding (pk, feature-dict) pairs """
         return self._iter_feature_blobs(
-            lambda pk, blob: (
-                pk,
-                self.repo_feature_to_dict(pk, blob, ogr_geoms=ogr_geoms),
+            lambda blob: (
+                blob.name,
+                self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms),
             ),
             fast=False,
         )
@@ -284,7 +284,7 @@ class Dataset1(DatasetStructure):
         return self._iter_feature_blobs(tupleizer, fast=True)
 
     def feature_count(self, fast=True):
-        return sum(self._iter_feature_blobs(lambda pk, blob: 1, fast=fast))
+        return sum(self._iter_feature_blobs(lambda blob: 1, fast=fast))
 
     def encode_feature(
         self,

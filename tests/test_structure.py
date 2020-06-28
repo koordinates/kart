@@ -10,7 +10,7 @@ import psycopg2
 import pygit2
 import pytest
 
-from sno import gpkg, structure
+from sno import gpkg, structure, fast_import
 from sno.init import OgrImporter, ImportPostgreSQL
 from sno.dataset1 import Dataset1
 
@@ -126,8 +126,8 @@ def test_import(
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
 
-    # wrap the structure.DatasetStructure import with benchmarking
-    orig_import_func = structure.fast_import_tables
+    # wrap the fast_import_tables function with benchmarking
+    orig_import_func = fast_import.fast_import_tables
 
     def _benchmark_import(*args, **kwargs):
         # one round/iteration isn't very statistical, but hopefully crude idea
@@ -135,7 +135,7 @@ def test_import(
             orig_import_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
-    monkeypatch.setattr(structure, 'fast_import_tables', _benchmark_import)
+    monkeypatch.setattr(fast_import, 'fast_import_tables', _benchmark_import)
 
     with data_archive(archive) as data:
         # list tables
@@ -929,7 +929,9 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
 
             source = OgrImporter.open(data / "nz-pa-points-topo-150k.gpkg", table=table)
 
-            structure.fast_import_tables(repo, {table: source}, version=import_version)
+            fast_import.fast_import_tables(
+                repo, {table: source}, version=import_version
+            )
 
             assert not repo.is_empty
             assert repo.head.name == "refs/heads/master"
