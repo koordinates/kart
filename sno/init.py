@@ -440,19 +440,24 @@ class OgrImporter:
             )
 
     def get_meta_contents(self):
-        ogr_metadata = self.ogrlayer.GetMetadata()
-
         return {
             'table_name': self.table,
             'data_type': 'features' if self.is_spatial else 'attributes',
-            'identifier': self._meta_overrides.get(
-                'title', ogr_metadata.get('IDENTIFIER') or ''
-            ),
-            'description': self._meta_overrides.get(
-                'description', ogr_metadata.get('DESCRIPTION') or ''
-            ),
+            'identifier': self.get_meta_item('title'),
+            'description': self.get_meta_item('description'),
             'srs_id': self._get_meta_srid(),
         }
+
+    def get_meta_item(self, key):
+        if key in self._meta_overrides:
+            return self._meta_overrides[key]
+        ogr_metadata = self.ogrlayer.GetMetadata()
+        if key == "title":
+            return ogr_metadata.get('IDENTIFIER') or ''
+        elif key == "description":
+            return ogr_metadata.get('DESCRIPTION') or ''
+        elif key == "gpkg_spatial_ref_sys":
+            return self.get_meta_spatial_ref_sys()
 
     def _get_meta_geometry_type(self):
         # remove Z/M components

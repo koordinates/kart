@@ -141,6 +141,14 @@ class ImportV1Dataset:
             sqlite_table_info, gpkg_geometry_columns, id_salt=self.path
         )
 
+    def get_meta_item(self, key):
+        if key == "title":
+            return self.dataset.get_meta_item("gpkg_contents")["identifier"]
+        elif key == "description":
+            return self.dataset.get_meta_item("gpkg_contents")["description"]
+        else:
+            return self.dataset.get_meta_item(key)
+
     def iter_features(self):
         for _, feature in self.dataset.features():
             yield feature
