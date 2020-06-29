@@ -8,7 +8,7 @@ import uuid
 
 import msgpack
 
-from .structure import DatasetStructure, IntegrityError
+from .structure import DatasetStructure
 
 
 def _pack(data):
@@ -342,7 +342,6 @@ class Schema:
         return self.legend.pk_columns == other.legend.pk_columns
 
 
-# TODO: this class is unfinished, and so doesn't extend DatasetStructure.
 class Dataset2(DatasetStructure):
     """
     - Uses messagePack to serialise features.
@@ -388,18 +387,40 @@ class Dataset2(DatasetStructure):
     def version(self):
         return self.get_data_at(self.VERSION_PATH, as_str=True)
 
-    def get_data_at(self, path, as_str=False):
+    def get_data_at(self, path, as_str=False, missing_ok=False):
         """Return the data at the given path from within this dataset."""
-        leaf = self.tree / str(path)
-        if not hasattr(leaf, "data"):
-            raise IntegrityError(f"No data found at path {path}, type={type(leaf)}")
-        return leaf.data.decode('utf8') if as_str else leaf.data
+        try:
+            leaf = self.tree / str(path)
+        except KeyError:
+            leaf = None
+
+        if hasattr(leaf, "data"):
+            return leaf.data.decode('utf8') if as_str else leaf.data
+        elif missing_ok:
+            return None
+        raise KeyError(f"No data found at path {path}, type={type(leaf)}")
 
     @functools.lru_cache()
-    def get_meta_item(self, path):
-        # TODO: this is hardly used - could maybe be removed.
-        content_is_str = not path.startswith(self.LEGEND_PATH)
-        return self.get_data_at(self.META_PATH + path, as_str=content_is_str)
+    def get_meta_item(self, path, missing_ok=True):
+        from . import dataset2_gpkg
+
+        # These items are not stored, but generated from other items that are stored.
+        # TODO: Maybe move gpkg specific things out of the dataset2 interface.
+        if path == "gpkg_contents":
+            return dataset2_gpkg.v2_to_gpkg_contents(self)
+        elif path == "gpkg_geometry_columns":
+            return dataset2_gpkg.v2_to_gpkg_geometry_columns(self)
+        elif path == "gpkg_spatial_ref_sys":
+            return dataset2_gpkg.v2_to_gpkg_spatial_ref_sys(self)
+        elif path == "sqlite_table_info":
+            return dataset2_gpkg.v2_to_sqlite_table_info(self)
+        elif path == "gpkg_metadata" or path == "gpkg_metadata_reference":
+            return None
+
+        content_is_str = not path.startswith("legend/")
+        return self.get_data_at(
+            self.META_PATH + path, as_str=content_is_str, missing_ok=missing_ok
+        )
 
     @functools.lru_cache()
     def get_legend(self, legend_hash=None, *, path=None):
@@ -485,6 +506,11 @@ class Dataset2(DatasetStructure):
                 path=blob.name, data=blob.data, keys=keys
             ),
 
+    def feature_count(self):
+        if self.FEATURE_PATH not in self.tree:
+            return 0
+        return sum(1 for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH))
+
     @classmethod
     def decode_path_to_pk_values(cls, path):
         """Given a feature path, returns the pk values encoded in it."""
@@ -541,12 +567,21 @@ class Dataset2(DatasetStructure):
         schema = source.get_v2_schema()
         meta_blobs = [
             (self.VERSION_PATH, self.VERSION_IMPORT),
+            (self.TITLE_PATH, source.get_meta_item("title")),
+            (self.DESCRIPTION_PATH, source.get_meta_item("description")),
             self.encode_schema(schema),
             self.encode_legend(schema.legend),
         ]
 
+        # TODO - tidy up SRS ID code.
+        for srs in source.get_meta_item("gpkg_spatial_ref_sys"):
+            meta_blobs.append(
+                (f"{self.SRS_PATH}EPSG:{srs['srs_id']}.wkt", srs["definition"])
+            )
+
         for meta_path, meta_content in meta_blobs:
-            yield self.repo_path(meta_path), _bytes(meta_content)
+            if meta_content is not None:
+                yield self.repo_path(meta_path), _bytes(meta_content)
 
     def import_iter_feature_blobs(self, resultset, source):
         schema = source.get_v2_schema()

@@ -24,10 +24,14 @@ H = pytest.helpers.helpers()
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
+@pytest.mark.parametrize("version", ["1.0", "2.0"])
 def test_checkout_workingcopy(
-    archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
+    version, archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
 ):
     """ Checkout a working copy to edit """
+    if version == "2.0":
+        archive += "2"
+
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
 
