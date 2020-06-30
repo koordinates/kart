@@ -298,6 +298,7 @@ jobs:
         run: |
           sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
           readlink $(which sno)
+          tests/scripts/distcheck.sh
           PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
 
       - name: "🐧 package: tests"
