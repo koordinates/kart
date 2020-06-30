@@ -129,7 +129,13 @@ if platform.system() == "Darwin":
                     continue  # we already created it
                 if os.path.split(link_path)[1] == 'git':
                     # this symlinks to git: rewrite it
-                    os.symlink('git', os.path.join(dist_libexec_root, relpath))
+                    os.symlink(os.path.split(link_path)[1], os.path.join(dist_libexec_root, relpath))
+                    continue
+                if re.search(r'\.dylib$', f):
+                    os.symlink(
+                        os.path.join('../../../MacOS', os.path.split(link_path)[1]),
+                        os.path.join(dist_libexec_root, relpath)
+                    )
                     continue
                 if not os.path.exists(fpath) and not os.path.exists(os.path.join(dist_bin_root, link_path)):
                     print(f"ignoring broken link {relpath} -> {link_path}")
@@ -149,5 +155,29 @@ if platform.system() == "Darwin":
             shutil.copy(fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False)
 
 elif platform.system() == "Linux":
+    # fix symlinks/binaries in libexec/git-core/
     dist_libexec_root = os.path.join(DISTPATH, 'sno', 'libexec')
-    shutil.copytree(libexec_root, dist_libexec_root, symlinks=True)
+
+    dist_bin_root = os.path.join(DISTPATH, 'sno')
+    os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
+    for (dir_, dirs, files) in os.walk(libexec_root):
+        reldir = os.path.relpath(dir_, libexec_root)
+        for f in files:
+            fpath = os.path.join(dir_, f)
+            relpath = os.path.join(reldir, f)
+            if os.path.islink(fpath):
+                link_path = os.readlink(fpath)
+                if link_path == "../../bin/git":
+                    os.symlink(
+                        os.path.join('../../git'),
+                        os.path.join(dist_libexec_root, relpath)
+                    )
+                    continue
+                if not os.path.exists(fpath) and not os.path.exists(os.path.join(dist_bin_root, link_path)):
+                    print(f"ignoring broken link {relpath} -> {link_path}")
+                    # ignore broken symlinks (git-csvserver/git-shell)
+                    continue
+
+            os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
+            # copy anything else (keeps symlinks too)
+            shutil.copy(fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False)

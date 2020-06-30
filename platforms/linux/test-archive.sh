@@ -1,5 +1,5 @@
 #!/bin/bash
-set -eu
+set -euo pipefail
 
 HERE=$(dirname "$(readlink -f "$0")")
 USAGE="Usage: $0 deb|rpm ARCHIVE [target-distribution...]"
@@ -61,6 +61,7 @@ for DIST in ${TARGETS[*]}; do
 			command -v sno
 
 			sno --version
+			/src/tests/scripts/distcheck.sh
 			/src/tests/scripts/e2e-1.sh
 		EOF
 done

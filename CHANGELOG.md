@@ -9,6 +9,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * Added a `sno meta get` command for viewing dataset metadata.
 * `merge`, `commit`, `init`, `import` commands can now take commit messages as files with `--message=@filename.txt`. This replaces the `sno commit -F` option.
 * `import`: Added `--table-info` option to set dataset metadata, when it can't be autodetected from the source database
+* packaging: Fix issue with broken git component paths in packages on macOS and Linux (#143)
 
 ## 0.4.0
 
@@ -46,7 +47,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * `sno diff`:
     - `a..b` now refers to the same changes as `sno log a..b` ([#116](https://github.com/koordinates/sno/issues/116))
     - can now diff against tree objects, particularly the empty tree ([#53](https://github.com/koordinates/sno/issues/53))
-    - can now view some subset of the changes by supplying filter args, ie `[dataset[:pk]]` 
+    - can now view some subset of the changes by supplying filter args, ie `[dataset[:pk]]`
 * `sno commit`:
     - can now commit some subset of the changes by supplying filter args, ie `[dataset[:pk]]` ([#69](https://github.com/koordinates/sno/issues/69))
 * removed `import-gpkg` command; use `import` instead ([#85](https://github.com/koordinates/sno/issues/85))
