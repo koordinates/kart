@@ -10,6 +10,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * `merge`, `commit`, `init`, `import` commands can now take commit messages as files with `--message=@filename.txt`. This replaces the `sno commit -F` option.
 * `import`: Added `--table-info` option to set dataset metadata, when it can't be autodetected from the source database
 * packaging: Fix issue with broken git component paths in packages on macOS and Linux (#143)
+* `pull`, `push, `fetch`, `clone` commands now show progress - disabled with `--quiet` (#144)
 
 ## 0.4.0
 
