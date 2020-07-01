@@ -10,6 +10,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * `merge`, `commit`, `init`, `import` commands can now take commit messages as files with `--message=@filename.txt`. This replaces the `sno commit -F` option ([#138](https://github.com/koordinates/sno/issues/138))
 * `import`: Added `--table-info` option to set dataset metadata, when it can't be autodetected from the source database ([#139](https://github.com/koordinates/sno/issues/139))
 * packaging: Fix issue with broken git component paths in packages on macOS and Linux ([#143](https://github.com/koordinates/sno/issues/143))
+* packaging: Exclude dev dependency in macOS package
 
 ## 0.4.0
 
