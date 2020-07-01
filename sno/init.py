@@ -26,6 +26,12 @@ from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
+from .gpkg_adapter import (
+    osgeo_to_gpkg_spatial_ref_sys,
+    DEFAULT_GPKG_SPATIAL_REF_SYS,
+    osgeo_to_srs_str,
+    DEFAULT_SRS_STR,
+)
 
 
 # This defines what formats are allowed, as well as mapping
@@ -459,6 +465,23 @@ class OgrImporter:
         elif key == "gpkg_spatial_ref_sys":
             return self.get_meta_spatial_ref_sys()
 
+    def get_srs_definition(self, srs_name):
+        if self.is_spatial and srs_name == self._srs_name():
+            return self._srs_definition()
+        raise KeyError(srs_name)
+
+    def srs_definitions(self):
+        if self.is_spatial:
+            yield (self._srs_name(), self._srs_definition())
+
+    def _srs_name(self):
+        srs = self.ogrlayer.GetSpatialRef()
+        return osgeo_to_srs_str(srs) if srs else DEFAULT_SRS_STR
+
+    def _srs_definition(self):
+        srs = self.ogrlayer.GetSpatialRef()
+        return srs.ExportToWkt() if srs else ""
+
     def _get_meta_geometry_type(self):
         # remove Z/M components
         ogr_geom_type = ogr.GT_Flatten(self.ogrlayer.GetGeomType())
@@ -543,8 +566,9 @@ class OgrImporter:
             ColumnSchema.new_id(), fd.GetName(), data_type, None, **extra_type_info
         )
 
+    @property
     @functools.lru_cache(maxsize=1)
-    def get_v2_schema(self):
+    def schema(self):
         from .dataset2 import Schema, ColumnSchema
 
         ld = self.ogrlayer.GetLayerDefn()
@@ -590,18 +614,12 @@ class OgrImporter:
                 "pk": int(name == self.primary_key),
             }
 
-    @ungenerator(list)
     def get_meta_spatial_ref_sys(self):
         srs = self.ogrlayer.GetSpatialRef()
-        srid = self._get_meta_srid()
-        yield {
-            'srs_name': srs.GetName() if srs else 'Unknown CRS',
-            'srs_id': srid,
-            'organization': 'EPSG',
-            'organization_coordsys_id': srid,
-            'definition': srs.ExportToWkt() if srs else '',
-            'description': None,
-        }
+        if srs:
+            return osgeo_to_gpkg_spatial_ref_sys(srs)
+        else:
+            return DEFAULT_GPKG_SPATIAL_REF_SYS
 
     _KNOWN_METADATA_URIS = {
         'GDALMultiDomainMetadata': 'http://gdal.org',

@@ -898,7 +898,7 @@ def test_write_feature_performance(
                         "cast_primary_key": False,
                     }
                 else:
-                    kwargs = {"schema": source.get_v2_schema()}
+                    kwargs = {"schema": source.schema}
 
                 def _write_feature():
                     feature = next(feature_iter)
