@@ -64,6 +64,13 @@ def _bytes(data):
     return data
 
 
+def _text(data):
+    """data (str or bytes) -> str. Utf-8."""
+    if isinstance(data, bytes):
+        return data.decode('utf8')
+    return data
+
+
 def find_blobs_in_tree(tree, max_depth=4):
     """
     Recursively yields possible blobs in the given directory tree,
@@ -395,32 +402,33 @@ class Dataset2(DatasetStructure):
             leaf = None
 
         if hasattr(leaf, "data"):
-            return leaf.data.decode('utf8') if as_str else leaf.data
+            return _text(leaf.data) if as_str else leaf.data
         elif missing_ok:
             return None
         raise KeyError(f"No data found at path {path}, type={type(leaf)}")
 
     @functools.lru_cache()
     def get_meta_item(self, path, missing_ok=True):
-        from . import dataset2_gpkg
+        from . import gpkg_adapter
 
         # These items are not stored, but generated from other items that are stored.
-        # TODO: Maybe move gpkg specific things out of the dataset2 interface.
-        if path == "gpkg_contents":
-            return dataset2_gpkg.v2_to_gpkg_contents(self)
-        elif path == "gpkg_geometry_columns":
-            return dataset2_gpkg.v2_to_gpkg_geometry_columns(self)
-        elif path == "gpkg_spatial_ref_sys":
-            return dataset2_gpkg.v2_to_gpkg_spatial_ref_sys(self)
-        elif path == "sqlite_table_info":
-            return dataset2_gpkg.v2_to_sqlite_table_info(self)
-        elif path == "gpkg_metadata" or path == "gpkg_metadata_reference":
-            return None
+        if path in gpkg_adapter.GPKG_META_ITEMS:
+            return gpkg_adapter.get_meta_item(self, path)
 
         content_is_str = not path.startswith("legend/")
         return self.get_data_at(
             self.META_PATH + path, as_str=content_is_str, missing_ok=missing_ok
         )
+
+    def get_srs_definition(self, srs_name):
+        """Return the SRS definition stored with the given name."""
+        return self.get_meta_item(f"srs/{srs_name}.wkt")
+
+    def srs_definitions(self):
+        """Return all stored srs definitions in a dict."""
+        for blob in find_blobs_in_tree(self.tree / self.SRS_PATH):
+            # -4 -> Remove ".wkt"
+            yield blob.name[:-4], _text(blob.data)
 
     @functools.lru_cache()
     def get_legend(self, legend_hash=None, *, path=None):
@@ -564,7 +572,7 @@ class Dataset2(DatasetStructure):
         return f"{self.path}/{rel_path}"
 
     def import_iter_meta_blobs(self, repo, source):
-        schema = source.get_v2_schema()
+        schema = source.schema
         meta_blobs = [
             (self.VERSION_PATH, self.VERSION_IMPORT),
             (self.TITLE_PATH, source.get_meta_item("title")),
@@ -573,18 +581,15 @@ class Dataset2(DatasetStructure):
             self.encode_legend(schema.legend),
         ]
 
-        # TODO - tidy up SRS ID code.
-        for srs in source.get_meta_item("gpkg_spatial_ref_sys"):
-            meta_blobs.append(
-                (f"{self.SRS_PATH}EPSG:{srs['srs_id']}.wkt", srs["definition"])
-            )
+        for path, definition in source.srs_definitions():
+            meta_blobs.append((f"{self.SRS_PATH}{path}.wkt", definition))
 
         for meta_path, meta_content in meta_blobs:
             if meta_content is not None:
                 yield self.repo_path(meta_path), _bytes(meta_content)
 
     def import_iter_feature_blobs(self, resultset, source):
-        schema = source.get_v2_schema()
+        schema = source.schema
         for feature in resultset:
             feature_path, feature_content = self.encode_feature(feature, schema)
             yield self.repo_path(feature_path), feature_content
