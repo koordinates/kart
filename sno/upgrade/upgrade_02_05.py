@@ -8,7 +8,7 @@ import pygit2
 
 from sno.core import walk_tree
 from sno.dataset1 import Dataset1
-from sno.dataset2_gpkg import gpkg_to_v2_schema
+from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_srs_str
 from sno.fast_import import fast_import_tables
 
 
@@ -126,6 +126,8 @@ def _find_datasets(source_tree):
 
 
 class ImportV1Dataset:
+    # TODO: make ImportV1Dataset the same class as Dataset1 - they are almost the same already.
+
     def __init__(self, dataset):
         assert dataset.version == "1.0"
         self.dataset = dataset
@@ -133,12 +135,17 @@ class ImportV1Dataset:
         self.table = self.path
         self.source = "v1-sno-repo"
 
+    @property
     @functools.lru_cache(maxsize=1)
-    def get_v2_schema(self):
+    def schema(self):
         sqlite_table_info = self.dataset.get_meta_item("sqlite_table_info")
         gpkg_geometry_columns = self.dataset.get_meta_item("gpkg_geometry_columns")
+        gpkg_spatial_ref_sys = self.dataset.get_meta_item("gpkg_spatial_ref_sys")
         return gpkg_to_v2_schema(
-            sqlite_table_info, gpkg_geometry_columns, id_salt=self.path
+            sqlite_table_info,
+            gpkg_geometry_columns,
+            gpkg_spatial_ref_sys,
+            id_salt=self.path,
         )
 
     def get_meta_item(self, key):
@@ -148,6 +155,12 @@ class ImportV1Dataset:
             return self.dataset.get_meta_item("gpkg_contents")["description"]
         else:
             return self.dataset.get_meta_item(key)
+
+    def srs_definitions(self):
+        gsrs = self.dataset.get_meta_item("gpkg_spatial_ref_sys")
+        if gsrs and gsrs[0]["definition"]:
+            definition = gsrs[0]["definition"]
+            yield wkt_to_srs_str(definition), definition
 
     def iter_features(self):
         for _, feature in self.dataset.features():
