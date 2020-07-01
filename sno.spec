@@ -1,10 +1,15 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+# pyinstaller injects globals into here
+# https://pyinstaller.readthedocs.io/en/stable/spec-files.html#globals-available-to-the-spec-file
+# flake8: noqa E13
+
 import os
 import platform
 import re
 import shutil
 import subprocess
+
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
     sno_version = version_file.read().strip()
@@ -42,7 +47,9 @@ a = Analysis(
         'platforms/pyi-hooks',
     ],
     runtime_hooks=[],
-    excludes=[],
+    excludes=[
+        'ipdb',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=None,
