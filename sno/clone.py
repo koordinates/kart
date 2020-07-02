@@ -35,13 +35,20 @@ def get_directory_from_url(url):
     default=True,
     help="Whether to checkout a working copy in the repository",
 )
+@click.option(
+    "--progress/--quiet",
+    "do_progress",
+    is_flag=True,
+    default=True,
+    help="Whether to report progress to stderr",
+)
 @click.argument("url", nargs=1)
 @click.argument(
     "directory",
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, do_checkout, url, directory):
+def clone(ctx, do_checkout, do_progress, url, directory):
     """ Clone a repository into a new directory """
 
     repo_path = Path(directory or get_directory_from_url(url))
@@ -52,6 +59,7 @@ def clone(ctx, do_checkout, url, directory):
         [
             "git",
             "clone",
+            "--progress" if do_progress else "--quiet",
             "--bare",
             "--config",
             "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",

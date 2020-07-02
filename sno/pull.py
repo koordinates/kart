@@ -1,7 +1,13 @@
+import logging
+import subprocess
+
 import click
 
 from . import merge
 from .exceptions import NotFound, NO_BRANCH
+
+
+L = logging.getLogger("sno.pull")
 
 
 @click.command()
@@ -29,10 +35,17 @@ from .exceptions import NotFound, NO_BRANCH
         "Refuse to merge and exit with a non-zero status unless the current HEAD is already up to date or the merge can be resolved as a fast-forward."
     ),
 )
+@click.option(
+    "--progress/--quiet",
+    "do_progress",
+    is_flag=True,
+    default=True,
+    help="Whether to report progress to stderr",
+)
 @click.argument("repository", required=False, metavar="REMOTE")
 @click.argument("refspecs", nargs=-1, required=False, metavar="REFISH")
 @click.pass_context
-def pull(ctx, ff, ff_only, repository, refspecs):
+def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
     """ Fetch from and integrate with another repository or a local branch """
     repo = ctx.obj.repo
 
@@ -64,13 +77,22 @@ def pull(ctx, ff, ff_only, repository, refspecs):
                     param_hint="repository",
                 )
 
-    remote = repo.remotes[repository]
-
     # do the fetch
-    print("Running fetch:", repository, refspecs)
-    remote.fetch((refspecs or None))
-    # subprocess.check_call(["git", "-C", str(ctx.obj.repo_path), 'fetch', repository] + list(refspecs))
+    L.debug("Running fetch:", repository, refspecs)
+    # remote.fetch((refspecs or None))
+    # Call git fetch since it supports --progress.
+    subprocess.check_call(
+        [
+            "git",
+            "-C",
+            str(ctx.obj.repo_path),
+            'fetch',
+            "--progress" if do_progress else "--quiet",
+            repository,
+        ]
+        + list(refspecs)
+    )
 
     # now merge with FETCH_HEAD
-    print("Running merge:", {"ff": ff, "ff_only": ff_only, "commit": "FETCH_HEAD"})
+    L.debug("Running merge:", {"ff": ff, "ff_only": ff_only, "commit": "FETCH_HEAD"})
     ctx.invoke(merge.merge, ff=ff, ff_only=ff_only, commit="FETCH_HEAD")

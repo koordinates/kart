@@ -177,18 +177,52 @@ def log(ctx, args):
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
+@click.option(
+    "--progress/--quiet",
+    "do_progress",
+    is_flag=True,
+    default=True,
+    help="Whether to report progress to stderr",
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def push(ctx, args):
+def push(ctx, do_progress, args):
     """ Update remote refs along with associated objects """
-    execvp("git", ["git", "-C", ctx.obj.repo.path, "push"] + list(args))
+    execvp(
+        "git",
+        [
+            "git",
+            "-C",
+            ctx.obj.repo.path,
+            "push",
+            "--progress" if do_progress else "--quiet",
+        ]
+        + list(args),
+    )
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
+@click.option(
+    "--progress/--quiet",
+    "do_progress",
+    is_flag=True,
+    default=True,
+    help="Whether to report progress to stderr",
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def fetch(ctx, args):
+def fetch(ctx, do_progress, args):
     """ Download objects and refs from another repository """
-    execvp("git", ["git", "-C", ctx.obj.repo.path, "fetch"] + list(args))
+    execvp(
+        "git",
+        [
+            "git",
+            "-C",
+            ctx.obj.repo.path,
+            "fetch",
+            "--progress" if do_progress else "--quiet",
+        ]
+        + list(args),
+    )
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
