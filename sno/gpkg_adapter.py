@@ -26,28 +26,28 @@ def get_meta_item(dataset, path):
     elif path == "sqlite_table_info":
         return generate_sqlite_table_info(dataset)
     elif path == "gpkg_metadata" or path == "gpkg_metadata_reference":
+        # TODO - store and generate this metadata.
         return None
 
 
-def generate_gpkg_contents(dataset2):
+def generate_gpkg_contents(dataset):
     """Generate a gpkg_contents meta item from a dataset."""
-    gpkg_spatial_ref_sys = dataset2.get_meta_item("gpkg_spatial_ref_sys")
-    is_spatial = bool(gpkg_spatial_ref_sys)
+    is_spatial = bool(_get_geometry_columns(dataset.schema))
 
     result = {
-        "identifier": dataset2.get_meta_item("title"),
-        "description": dataset2.get_meta_item("description"),
-        "table_name": dataset2.tree.name,
+        "identifier": dataset.get_meta_item("title"),
+        "description": dataset.get_meta_item("description"),
+        "table_name": dataset.tree.name,
         "data_type": "features" if is_spatial else "attributes",
     }
     if is_spatial:
-        result["srs_id"] = gpkg_spatial_ref_sys[0]["srs_id"]
+        result["srs_id"] = _gpkg_srs_id(dataset)
     return result
 
 
-def generate_gpkg_geometry_columns(dataset2):
+def generate_gpkg_geometry_columns(dataset):
     """Generate a gpkg_geometry_columns meta item from a dataset."""
-    geom_columns = _get_geometry_columns(dataset2.schema)
+    geom_columns = _get_geometry_columns(dataset.schema)
     if not geom_columns:
         return None
 
@@ -56,12 +56,12 @@ def generate_gpkg_geometry_columns(dataset2):
     zm = zm[0] if zm else ""
     z = 1 if "Z" in zm else 0
     m = 1 if "M" in zm else 0
-    gpkg_spatial_ref_sys = dataset2.get_meta_item("gpkg_spatial_ref_sys")
+
     return {
-        "table_name": dataset2.tree.name,
+        "table_name": dataset.tree.name,
         "column_name": geom_columns[0].name,
         "geometry_type_name": type_name,
-        "srs_id": gpkg_spatial_ref_sys[0]["srs_id"],
+        "srs_id": _gpkg_srs_id(dataset),
         "z": z,
         "m": m,
     }
@@ -74,20 +74,15 @@ def generate_gpkg_spatial_ref_sys(dataset):
         return []
 
     srs_pathname = geom_columns[0].extra_type_info["geometrySRS"]
+    if not srs_pathname:
+        return []
     definition = dataset.get_srs_definition(srs_pathname)
     return wkt_to_gpkg_spatial_ref_sys(definition)
 
 
-DEFAULT_GPKG_SPATIAL_REF_SYS = [
-    {
-        "srs_name": "Unknown CRS",
-        "definition": "",
-        "organization": "EPSG",
-        "srs_id": 0,
-        "organization_coordsys_id": 0,
-        "description": None,
-    }
-]
+def _gpkg_srs_id(dataset):
+    gsrs = dataset.get_meta_item("gpkg_spatial_ref_sys")
+    return gsrs[0]["srs_id"] if gsrs else 0
 
 
 def wkt_to_gpkg_spatial_ref_sys(wkt):
@@ -97,25 +92,24 @@ def wkt_to_gpkg_spatial_ref_sys(wkt):
 
 def osgeo_to_gpkg_spatial_ref_sys(spatial_ref):
     """Given an osgeo SpatialReference, generate a gpkg_spatial_ref_sys meta item."""
-
     return _gpkg_spatial_ref_sys(spatial_ref, spatial_ref.ExportToWkt())
 
 
 def _gpkg_spatial_ref_sys(spatial_ref, wkt):
+    # TODO: Better support for custom WKT. https://github.com/koordinates/sno/issues/148
     spatial_ref.AutoIdentifyEPSG()
+    organization = spatial_ref.GetAuthorityName(None) or "NONE"
+    srs_id = spatial_ref.GetAuthorityCode(None) or 0
     return [
         {
             "srs_name": spatial_ref.GetName(),
             "definition": wkt,
-            "organization": spatial_ref.GetAuthorityName(None),
-            "srs_id": spatial_ref.GetAuthorityCode(None),
-            "organization_coordsys_id": spatial_ref.GetAuthorityCode(None),
+            "organization": organization,
+            "srs_id": srs_id,
+            "organization_coordsys_id": srs_id,
             "description": None,
         }
     ]
-
-
-DEFAULT_SRS_STR = "EPSG:0"
 
 
 def wkt_to_srs_str(wkt):
@@ -228,7 +222,7 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
     z = "Z" if ggc["z"] else ""
     m = "M" if ggc["m"] else ""
 
-    srs_str = DEFAULT_SRS_STR
+    srs_str = None
     if gsrs and gsrs[0]["definition"]:
         srs_str = wkt_to_srs_str(gsrs[0]["definition"])
 

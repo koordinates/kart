@@ -26,12 +26,7 @@ from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
-from .gpkg_adapter import (
-    osgeo_to_gpkg_spatial_ref_sys,
-    DEFAULT_GPKG_SPATIAL_REF_SYS,
-    osgeo_to_srs_str,
-    DEFAULT_SRS_STR,
-)
+from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 
 
 # This defines what formats are allowed, as well as mapping
@@ -431,19 +426,10 @@ class OgrImporter:
 
     def _get_meta_srid(self):
         srs = self.ogrlayer.GetSpatialRef()
-        if srs is None:
+        if not srs:
             return 0
         srs.AutoIdentifyEPSG()
-        if srs.IsProjected():
-            return int(srs.GetAuthorityCode("PROJCS"))
-        elif srs.IsGeographic():
-            return int(srs.GetAuthorityCode("GEOGCS"))
-        else:
-            # TODO: another type of SRS? Need examples.
-            raise ValueError(
-                "Unknown SRS type; please create an issue with details "
-                "( https://github.com/koordinates/sno/issues/new )"
-            )
+        return int(srs.GetAuthorityCode(None))
 
     def get_meta_contents(self):
         return {
@@ -466,21 +452,13 @@ class OgrImporter:
             return self.get_meta_spatial_ref_sys()
 
     def get_srs_definition(self, srs_name):
-        if self.is_spatial and srs_name == self._srs_name():
-            return self._srs_definition()
-        raise KeyError(srs_name)
+        return dict(self.srs_definitions)[srs_name]
 
     def srs_definitions(self):
         if self.is_spatial:
-            yield (self._srs_name(), self._srs_definition())
-
-    def _srs_name(self):
-        srs = self.ogrlayer.GetSpatialRef()
-        return osgeo_to_srs_str(srs) if srs else DEFAULT_SRS_STR
-
-    def _srs_definition(self):
-        srs = self.ogrlayer.GetSpatialRef()
-        return srs.ExportToWkt() if srs else ""
+            srs = self.ogrlayer.GetSpatialRef()
+            if srs:
+                yield (osgeo_to_srs_str(srs), srs.ExportToWkt())
 
     def _get_meta_geometry_type(self):
         # remove Z/M components
@@ -619,7 +597,7 @@ class OgrImporter:
         if srs:
             return osgeo_to_gpkg_spatial_ref_sys(srs)
         else:
-            return DEFAULT_GPKG_SPATIAL_REF_SYS
+            return []
 
     _KNOWN_METADATA_URIS = {
         'GDALMultiDomainMetadata': 'http://gdal.org',
