@@ -570,19 +570,17 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 CHUNK_SIZE = 10000
                 for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
                     dbcur.executemany(sql_insert_features, rows)
-                    feat_count += db.changes()
+                    feat_count += len(rows)
 
-                    nc = feat_count / CHUNK_SIZE
-                    if nc % 5 == 0 or not nc.is_integer():
-                        t0a = time.monotonic()
-                        L.info(
-                            "%s features... @%.1fs (+%.1fs, ~%d F/s)",
-                            feat_count,
-                            t0a - t0,
-                            t0a - t0p,
-                            (CHUNK_SIZE * 5) / (t0a - t0p or 0.001),
-                        )
-                        t0p = t0a
+                    t0a = time.monotonic()
+                    L.info(
+                        "%s features... @%.1fs (+%.1fs, ~%d F/s)",
+                        feat_count,
+                        t0a - t0,
+                        t0a - t0p,
+                        (CHUNK_SIZE * 5) / (t0a - t0p or 0.001),
+                    )
+                    t0p = t0a
 
                 t1 = time.monotonic()
                 L.info("Added %d features to GPKG in %.1fs", feat_count, t1 - t0)
