@@ -836,6 +836,31 @@ def test_import_multiple(
         assert tree / ds.path / f_path
 
 
+def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
+    repo_path = tmp_path / "data.sno"
+    repo_path.mkdir()
+
+    r = cli_runner.invoke(['init', '--no-checkout', repo_path])
+    assert r.exit_code == 0
+
+    with data_archive('gpkg-points') as data:
+        with chdir(repo_path):
+            r = cli_runner.invoke(['import', data / 'nz-pa-points-topo-150k.gpkg'])
+            assert r.exit_code == 0, r
+
+            # delete the master branch.
+            # HEAD still points to it, but that's okay - this just means
+            # the branch is empty.
+            # We still need to be able to import from this state.
+            subprocess.check_call(['git', 'branch', '-D', 'master'])
+
+            r = cli_runner.invoke(["import", data / 'nz-pa-points-topo-150k.gpkg'])
+            assert r.exit_code == 0, r
+
+            repo = pygit2.Repository(str(repo_path))
+            assert repo.head.peel(pygit2.Commit)
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
 @pytest.mark.parametrize(*DATASET_VERSIONS)

@@ -31,12 +31,20 @@ def write_blobs_to_stream(stream, blobs):
 def fast_import_tables(
     repo, sources, max_pack_size="2G", limit=None, message=None, *, version
 ):
+    head_tree = None
+    if not repo.is_empty:
+        try:
+            head_tree = repo.head.peel(pygit2.Tree)
+        except pygit2.GitError:
+            # happens if the current head is empty
+            # (but the repo isn't)
+            pass
     for path, source in sources.items():
         if not source.table:
             raise ValueError("No table specified")
 
-        if not repo.is_empty:
-            if path in repo.head.peel(pygit2.Tree):
+        if head_tree is not None:
+            if path in head_tree:
                 raise ValueError(f"{path}/ already exists")
 
     with logpipe(L, logging.INFO) as log_stderr:
@@ -69,6 +77,7 @@ def fast_import_tables(
                         else:
                             message += f"\n* {path} (from {source.table})"
 
+            # FIXME: this shouldn't be hardcoded to master.. right?
             header = (
                 "commit refs/heads/master\n"
                 f"committer {user.name} <{user.email}> now\n"
@@ -76,7 +85,7 @@ def fast_import_tables(
             )
             p.stdin.write(header.encode("utf8"))
 
-            if not repo.is_empty:
+            if head_tree is not None:
                 # start with the existing tree/contents
                 p.stdin.write(b"from refs/heads/master^0\n")
             for path, source in sources.items():

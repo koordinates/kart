@@ -12,6 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * `pull`, `push, `fetch`, `clone` commands now show progress - disabled with `--quiet` ([#144](https://github.com/koordinates/sno/issues/144))
 * packaging: Fix issue with broken git component paths in packages on macOS and Linux ([#143](https://github.com/koordinates/sno/issues/143))
 * packaging: Exclude dev dependency in macOS package
+* `import` now works while on an empty branch ([#149](https://github.com/koordinates/sno/issues/149))
 
 ## 0.4.0
 
