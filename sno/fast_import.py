@@ -23,6 +23,7 @@ def fast_import_tables(
     message=None,
     limit=None,
     max_pack_size="2G",
+    extra_blobs=(),
 ):
     for path, source in sources.items():
         if not source.table:
@@ -54,6 +55,10 @@ def fast_import_tables(
         if not repo.is_empty and incremental:
             # start with the existing tree/contents
             p.stdin.write(b"from refs/heads/master^0\n")
+
+        # Write an extra blobs supplied by the client.
+        for i, blob_path in write_blobs_to_stream(p.stdin, extra_blobs):
+            pass
 
         for path, source in sources.items():
             dataset = DatasetStructure.for_version(version)(tree=None, path=path)

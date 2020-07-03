@@ -1,5 +1,5 @@
 import re
-from .dataset2 import Schema, ColumnSchema
+from .dataset2 import Schema, ColumnSchema, pk_index_ordering
 from osgeo.osr import SpatialReference
 
 
@@ -8,6 +8,7 @@ GPKG_META_ITEMS = (
     "gpkg_geometry_columns",
     "gpkg_spatial_ref_sys",
     "sqlite_table_info",
+    "sqlite_table_pk_info",
     "gkpg_metadata",
     "gpkg_metadata_reference",
 )
@@ -25,6 +26,8 @@ def get_meta_item(dataset, path):
         return generate_gpkg_spatial_ref_sys(dataset)
     elif path == "sqlite_table_info":
         return generate_sqlite_table_info(dataset)
+    elif path == "sqlite_table_pk_info":
+        return generate_sqlite_table_pk_info(dataset)
     elif path == "gpkg_metadata" or path == "gpkg_metadata_reference":
         # TODO - store and generate this metadata.
         return None
@@ -126,7 +129,19 @@ def osgeo_to_srs_str(spatial_ref):
 
 def generate_sqlite_table_info(dataset):
     """Generate a sqlite_table_info meta item from a dataset."""
-    return [_column_schema_to_gpkg(i, col) for i, col in enumerate(dataset.schema)]
+    return [_column_schema_to_gpkg(col) for col in dataset.schema]
+
+
+def generate_sqlite_table_pk_info(dataset):
+    """
+    Generate a sqlite_table_pk_info meta item -
+    the same metadata as sqlite_table_info, but only primary keys, in primary key order.
+    """
+    return [
+        _column_schema_to_gpkg(col)
+        for col in sorted(dataset.schema, key=pk_index_ordering)
+        if col.pk_index is not None
+    ]
 
 
 def _get_geometry_columns(schema):
@@ -178,10 +193,9 @@ def _gpkg_to_column_schema(
     return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
 
-def _column_schema_to_gpkg(cid, column_schema):
+def _column_schema_to_gpkg(column_schema):
     is_pk = 1 if column_schema.pk_index is not None else 0
     return {
-        "cid": cid,
         "name": column_schema.name,
         "pk": is_pk,
         "type": v2_type_to_gpkg_type(column_schema),

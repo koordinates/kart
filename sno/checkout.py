@@ -11,6 +11,7 @@ from .exceptions import (
     NO_COMMIT,
     NO_WORKING_COPY,
 )
+from .repo_version import get_repo_version
 from .structure import RepositoryStructure
 from .structs import CommitWithReference
 from .working_copy import WorkingCopy
@@ -97,7 +98,10 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
 
 
 def checkout_empty_repo(repo, path):
-    wc = WorkingCopy.new(repo, path)
+    wc_version = 1
+    if get_repo_version(repo) >= "0.5":
+        wc_version = 2
+    wc = WorkingCopy.new(repo, path, version=wc_version)
     wc.create()
     wc.save_config()
     return wc

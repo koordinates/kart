@@ -54,11 +54,12 @@ def test_checkout_workingcopy(
         assert repo.head.shorthand == "master"
 
         head_tree = repo.head.peel(pygit2.Tree)
+        meta_table = "gpkg.sno.meta" if version == "2.0" else ".sno-meta"
 
         wc_tree_id = (
             db.cursor()
             .execute(
-                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "{meta_table}" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )

@@ -22,13 +22,19 @@ class WorkingCopy:
     def open(cls, repo):
         repo_cfg = repo.config
         if "sno.workingcopy.version" in repo_cfg:
-            version = repo_cfg["sno.workingcopy.version"]
-            if repo_cfg.get_int("sno.workingcopy.version") != 1:
-                raise NotImplementedError(f"Working copy version: {version}")
+
+            version = repo_cfg.get_int("sno.workingcopy.version")
+            if version not in (1, 2):
+                raise NotImplementedError(
+                    f"Working copy version: {repo_cfg['sno.workingcopy.version']}"
+                )
 
             path = repo_cfg["sno.workingcopy.path"]
             if not (Path(repo.path) / path).is_file():
                 raise FileNotFoundError(f"Working copy missing? {path}")
+
+            if version == 2:
+                return WorkingCopy_GPKG_2(repo, path)
 
             return WorkingCopy_GPKG_1(repo, path)
 
@@ -39,6 +45,9 @@ class WorkingCopy:
     def new(cls, repo, path, version=1, **kwargs):
         if (Path(repo.path) / path).exists():
             raise FileExistsError(path)
+
+        if version == 2:
+            return WorkingCopy_GPKG_2(repo, path, **kwargs)
 
         return WorkingCopy_GPKG_1(repo, path, **kwargs)
 
@@ -1035,3 +1044,68 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                     (target_tree.hex,),
                 )
+
+
+# TODO: refactor working copy v1 and v2 into a single class which only supports v2
+class WorkingCopy_GPKG_2(WorkingCopy_GPKG_1):
+    """GeoPackage Working Copy for v0.5 repositories."""
+
+    META_PREFIX = "gpkg.sno."
+
+    def _meta_name(self, name, suffix=""):
+        n = f"{self.META_PREFIX}{name}"
+        if suffix:
+            n += "." + suffix
+        return gpkg.ident(n)
+
+    def save_config(self, **kwargs):
+        new_path = Path(self.path)
+        if (not new_path.is_absolute()) and (str(new_path.parent) != "."):
+            new_path = (
+                Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve()))
+                / new_path.name
+            )
+
+        self.repo.config["sno.workingcopy.version"] = 2
+        self.repo.config["sno.workingcopy.path"] = str(new_path)
+
+    def create(self):
+        WorkingCopyGPKG.create(self)
+
+        # Don't create tracking table - this must be created per dataset
+
+    def write_full(self, commit, *datasets, safe=True):
+        """
+        Writes a full layer into a working-copy table
+
+        Use for new working-copy checkouts.
+        """
+        super().write_full(commit, *datasets, safe=safe)
+
+        # Create the tracking table(s)
+        with self.session(bulk=(0 if safe else 2)) as db:
+            dbcur = db.cursor()
+            for dataset in datasets:
+                table = dataset.name
+
+                cols = self._get_columns_v2(dataset, only_pks=True)
+                col_specs = cols.values()
+                dbcur.execute(
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {self._meta_name(table, "track")}
+                    ({', '.join(col_specs)});
+                    """
+                )
+
+    def _get_columns_v2(self, dataset, only_pks=False):
+        cols = {}
+        meta_item = "sqlite_table_pk_info" if only_pks else "sqlite_table_info"
+        for col in dataset.get_meta_item(meta_item):
+            col_spec = f"{gpkg.ident(col['name'])} {col['type']}"
+            if col["pk"]:
+                col_spec += " PRIMARY KEY"
+            if col["notnull"]:
+                col_spec += " NOT NULL"
+            cols[col["name"]] = col_spec
+
+        return cols
