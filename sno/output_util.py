@@ -2,10 +2,6 @@ import io
 import json
 import sys
 
-from contextlib import contextmanager
-import os
-from threading import Thread
-
 
 JSON_PARAMS = {
     "compact": {},
@@ -83,23 +79,3 @@ def is_empty_stream(stream):
             return True
         stream.seek(pos)
     return False
-
-
-@contextmanager
-def logpipe(logger, level):
-    """
-    Context manager.
-    Yields a writable file-like object that pipes text to a logger.
-
-    Uses threads to avoid deadlock when this is passed to a subprocess.
-    """
-    fd_read, fd_write = os.pipe()
-
-    def run():
-        with os.fdopen(fd_read) as fo_read:
-            for line in iter(fo_read.readline, ''):
-                logger.log(level, line.strip('\n'))
-
-    Thread(target=run).start()
-    with os.fdopen(fd_write, 'w') as f_write:
-        yield f_write
