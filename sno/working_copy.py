@@ -563,19 +563,22 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     VALUES
                         ({','.join(['?'] * len(col_names))});
                 """
-                feat_count = 0
+                feat_progress = 0
                 t0 = time.monotonic()
                 t0p = t0
 
                 CHUNK_SIZE = 10000
+                total_features = dataset.feature_count()
                 for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
                     dbcur.executemany(sql_insert_features, rows)
-                    feat_count += len(rows)
+                    feat_progress += len(rows)
 
                     t0a = time.monotonic()
                     L.info(
-                        "%s features... @%.1fs (+%.1fs, ~%d F/s)",
-                        feat_count,
+                        "%.1f%% %d/%d features... @%.1fs (+%.1fs, ~%d F/s)",
+                        feat_progress / total_features * 100,
+                        feat_progress,
+                        total_features,
                         t0a - t0,
                         t0a - t0p,
                         (CHUNK_SIZE * 5) / (t0a - t0p or 0.001),
@@ -583,8 +586,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     t0p = t0a
 
                 t1 = time.monotonic()
-                L.info("Added %d features to GPKG in %.1fs", feat_count, t1 - t0)
-                L.info("Overall rate: %d features/s", (feat_count / (t1 - t0 or 0.001)))
+                L.info("Added %d features to GPKG in %.1fs", feat_progress, t1 - t0)
+                L.info(
+                    "Overall rate: %d features/s", (feat_progress / (t1 - t0 or 0.001))
+                )
 
         for dataset in datasets:
             if dataset.has_geometry:
