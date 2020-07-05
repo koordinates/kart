@@ -169,7 +169,7 @@ class Legend:
         return _hexhash(self.dumps())
 
 
-def _pk_index_ordering(column):
+def pk_index_ordering(column):
     """Returns primary key columns first, in pk_index order, then other columns."""
     if column.pk_index is not None:
         return column.pk_index
@@ -325,7 +325,7 @@ class Schema:
     def _to_legend(self):
         pk_column_ids = []
         non_pk_column_ids = []
-        for i, column in enumerate(sorted(self.columns, key=_pk_index_ordering)):
+        for i, column in enumerate(sorted(self.columns, key=pk_index_ordering)):
             if column.pk_index is not None:
                 if i != column.pk_index:
                     raise ValueError(

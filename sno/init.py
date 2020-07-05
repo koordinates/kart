@@ -22,11 +22,12 @@ from .exceptions import (
     NO_TABLE,
 )
 from .fast_import import fast_import_tables
+from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
+from .repo_version import REPO_VERSION_PATH
 from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
-from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 
 
 # This defines what formats are allowed, as well as mapping
@@ -964,6 +965,9 @@ def import_table(
             xml_metadata=info.get('xmlMetadata'),
         )
 
+    extra_blobs = []
+    if version == 2:
+        extra_blobs = [(VERSION_BLOB_PATH, b"0.5\n")]
     fast_import_tables(repo, loaders, message=message, version=version)
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
