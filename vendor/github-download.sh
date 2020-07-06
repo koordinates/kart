@@ -56,16 +56,23 @@ fi
 
 cd "$(dirname "$0")"
 mkdir -p dist/
+DOWNLOADED=false
 if command -v hub >/dev/null; then
-    # if 'hub' is installed, use its authenticated access to the API
-    echo "Using 'hub' to download artifact via the Github API..."
-    for URL in $ARTIFACT_URLS; do
-        echo "Downloading... $URL"
-        hub api "$URL" > dist/tmp.zip
-        unzip -o -d dist/ dist/tmp.zip
-        rm dist/tmp.zip
-    done
-else
+    # if 'hub' is installed and configured, use its authenticated access to the API
+    if echo | hub api user > /dev/null ; then
+        echo "Using 'hub' to download artifact via the Github API..."
+        for URL in $ARTIFACT_URLS; do
+            echo "Downloading... $URL"
+            hub api "$URL" > dist/tmp.zip
+            unzip -o -d dist/ dist/tmp.zip
+            rm dist/tmp.zip
+        done
+        DOWNLOADED=true
+    else
+        echo -e "\n⚠️ "'`hub` failed. Run `hub api user` to setup authentication. https://hub.github.com/hub.1.html#github-oauth-authentication'
+    fi
+fi
+if [ "$DOWNLOADED" = false ] ; then
     # build a list of direct-download browser links
     CHECK_SUITE_ID=$(jq -r .check_suite_url <<<"$RUN" | awk -F / '{print $NF}')
     echo "CI Check Suite: ${CHECK_SUITE_ID}"
