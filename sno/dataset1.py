@@ -181,10 +181,7 @@ class Dataset1(DatasetStructure):
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
         blob = self._get_feature(pk_value)
-        return (
-            blob.name,
-            self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms),
-        )
+        return self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms)
 
     def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
         tupleizer = self.build_feature_tupleizer(col_names)
@@ -407,7 +404,7 @@ class Dataset1(DatasetStructure):
                 )
                 continue
 
-            _, existing_feature = self.get_feature(old_pk, ogr_geoms=False)
+            existing_feature = self.get_feature(old_pk, ogr_geoms=False)
             if geom_column_name:
                 # FIXME: actually compare the geometries here.
                 # Turns out this is quite hard - geometries are hard to compare sanely.
@@ -487,7 +484,7 @@ class Dataset1(DatasetStructure):
 
                 self.L.debug("diff(): D %s (%s)", d.old_file.path, my_pk)
 
-                _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
+                my_obj = this.get_feature(my_pk, ogr_geoms=False)
 
                 candidates_del[str(my_pk)].append((str(my_pk), my_obj))
             elif d.status == pygit2.GIT_DELTA_MODIFIED:
@@ -504,8 +501,8 @@ class Dataset1(DatasetStructure):
                     other_pk,
                 )
 
-                _, my_obj = this.get_feature(my_pk, ogr_geoms=False)
-                _, other_obj = other.get_feature(other_pk, ogr_geoms=False)
+                my_obj = this.get_feature(my_pk, ogr_geoms=False)
+                other_obj = other.get_feature(other_pk, ogr_geoms=False)
 
                 candidates_upd[str(my_pk)] = (my_obj, other_obj)
             elif d.status == pygit2.GIT_DELTA_ADDED:
@@ -515,7 +512,7 @@ class Dataset1(DatasetStructure):
 
                 self.L.debug("diff(): A %s (%s)", d.new_file.path, other_pk)
 
-                _, other_obj = other.get_feature(other_pk, ogr_geoms=False)
+                other_obj = other.get_feature(other_pk, ogr_geoms=False)
 
                 candidates_ins[str(other_pk)].append(other_obj)
             else:

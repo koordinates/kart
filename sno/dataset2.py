@@ -259,6 +259,9 @@ class Schema:
         self._columns = tuple(columns)
         # Creating a legend validates the primaryKeyIndex field.
         self._legend = self._to_legend()
+        self._pk_columns = tuple(
+            c for c in sorted(columns, key=pk_index_ordering) if c.pk_index is not None
+        )
 
     @property
     def columns(self):
@@ -267,6 +270,10 @@ class Schema:
     @property
     def legend(self):
         return self._legend
+
+    @property
+    def pk_columns(self):
+        return self._pk_columns
 
     def __getitem__(self, i):
         """Return the _i_th ColumnSchema."""
@@ -348,6 +355,23 @@ class Schema:
         """
         return self.legend.pk_columns == other.legend.pk_columns
 
+    def sanitise_pk_values(self, pk_values):
+        """
+        Fixes two common problems with pk_values, particularly if pk_values were provided by the user
+        as text and so had to be parsed from text:
+        1. pk_values should be a list / tuple, with one value per primary key column.
+           (There is hardly ever >1 primary key column, but as this is what our model supports, we need a list.)
+        2. integer columns need int values, so if the values were supplied as text, we need to cast to int here.
+        """
+        if isinstance(pk_values, tuple):
+            pk_values = list(pk_values)
+        elif not isinstance(pk_values, list):
+            pk_values = [pk_values]
+        for i, (value, column) in enumerate(zip(pk_values, self.pk_columns)):
+            if column.data_type == "integer" and isinstance(value, str):
+                pk_values[i] = int(pk_values[i])
+        return tuple(pk_values)
+
 
 class Dataset2(DatasetStructure):
     """
@@ -420,6 +444,15 @@ class Dataset2(DatasetStructure):
             self.META_PATH + path, as_str=content_is_str, missing_ok=missing_ok
         )
 
+    def iter_meta_items(self, exclude=None):
+        from . import gpkg_adapter
+
+        # TODO - change the interface to iterate through "diffable" meta items, and
+        # make datasets v2 implement this. (The dataset implementation itself is the
+        # best place to distinguish between user-visible and hidden meta items).
+        for path in gpkg_adapter.GPKG_META_ITEMS:
+            yield path, gpkg_adapter.get_meta_item(self, path)
+
     def get_srs_definition(self, srs_name):
         """Return the SRS definition stored with the given name."""
         return self.get_meta_item(f"srs/{srs_name}.wkt")
@@ -475,7 +508,7 @@ class Dataset2(DatasetStructure):
         if pk_values is None and path is not None:
             pk_values = self.decode_path_to_pk_values(path)
         elif path is None and pk_values is not None:
-            pk_values = self.sanitise_pk_values(pk_values)
+            pk_values = self.schema.sanitise_pk_values(pk_values)
             path = self.encode_pk_values_to_path(pk_values)
         else:
             raise ValueError("Exactly one of (pk_values, path) must be supplied")
@@ -489,7 +522,9 @@ class Dataset2(DatasetStructure):
         legend = self.get_legend(legend_hash)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
-    def get_feature(self, pk_values=None, *, path=None, data=None, keys=True):
+    def get_feature(
+        self, pk_values=None, *, path=None, data=None, keys=True, ogr_geoms=None
+    ):
         """
         Gets the feature with the given primary key(s) / at the given path.
         The result is either a dict of values keyed by column name (if keys=True)
@@ -553,20 +588,10 @@ class Dataset2(DatasetStructure):
         Given some pk values, returns the path the feature should be written to.
         pk_values should be a single pk value, or a list of pk values.
         """
-        pk_values = cls.sanitise_pk_values(pk_values)
         packed_pk = _pack(pk_values)
         pk_hash = _hexhash(packed_pk)
         filename = _b64encode_str(packed_pk)
         return f"{cls.FEATURE_PATH}{pk_hash[:2]}/{pk_hash[2:4]}/{filename}"
-
-    @classmethod
-    def sanitise_pk_values(cls, pk_values):
-        # This means get_feature(123) is treated same as get_feature([123]) -
-        # pk_values needs to be sanitized to a list or tuple of values, one for
-        # each pk column - even if there is only one pk column.
-        if not isinstance(pk_values, (list, tuple)):
-            return (pk_values,)
-        return pk_values
 
     def repo_path(self, rel_path):
         return f"{self.path}/{rel_path}"
@@ -593,3 +618,17 @@ class Dataset2(DatasetStructure):
         for feature in resultset:
             feature_path, feature_content = self.encode_feature(feature, schema)
             yield self.repo_path(feature_path), feature_content
+
+    @property
+    def primary_key(self):
+        # TODO - datasets v2 model supports more than one primary key.
+        # This function needs to be changed when we have a working copy v2 that does too.
+        if len(self.schema.pk_columns) == 1:
+            return self.schema.pk_columns[0].name
+        raise ValueError(f"No single primary key: {self.schema.pk_columns}")
+
+    def encode_feature_blob(self, feature):
+        # TODO - the dataset interface still needs some work:
+        # - maybe encode methods shouldn't be classmethods.
+        # - having a _blob version of encode_feature is too many similar methods.
+        return self.encode_feature(feature, self.schema)[1]

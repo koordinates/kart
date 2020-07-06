@@ -29,9 +29,11 @@ def _check_html_output(s):
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
+@pytest.mark.parametrize("version", ["1.0", "2.0"])
+def test_diff_points(version, output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
-    with data_working_copy("points") as (repo, wc):
+    data_archive = "points2" if version == "2.0" else "points"
+    with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -277,9 +279,13 @@ def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner):
+@pytest.mark.parametrize("version", ["1.0", "2.0"])
+def test_diff_polygons(
+    version, output_format, data_working_copy, geopackage, cli_runner
+):
     """ diff the working copy against HEAD """
-    with data_working_copy("polygons") as (repo, wc):
+    data_archive = "polygons2" if version == "2.0" else "polygons"
+    with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -611,9 +617,11 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
+@pytest.mark.parametrize("version", ["1.0", "2.0"])
+def test_diff_table(version, output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
-    with data_working_copy("table") as (repo, wc):
+    data_archive = "table2" if version == "2.0" else "table"
+    with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]

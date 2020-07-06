@@ -325,7 +325,10 @@ class WorkingCopyGPKG(WorkingCopy):
                 dbcur.execute(sql, values)
 
     def read_meta(self, dataset):
-        yield ("version", {"version": dataset.version})
+        if dataset.version == "1.0":
+            # TODO: we shouldn't be diffing dataset version to working copy version.
+            # Instead, we should just be helping the user upgrade to the latest version.
+            yield ("version", {"version": dataset.version})
         with self.session() as db:
             yield from gpkg.get_meta_info(db, dataset.name)
 
@@ -691,12 +694,13 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             candidates_ins = collections.defaultdict(list)
             candidates_upd = {}
             candidates_del = collections.defaultdict(list)
+
             for row in dbcur:
                 track_pk = row[0]
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
                 try:
-                    _, repo_obj = dataset.get_feature(track_pk, ogr_geoms=False)
+                    repo_obj = dataset.get_feature(track_pk, ogr_geoms=False)
                 except KeyError:
                     repo_obj = None
 

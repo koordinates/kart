@@ -777,7 +777,8 @@ def test_feature_find_decode_performance(
             feature_data = (tree / dataset.get_feature_path(pk)).data
             benchmark(dataset.repo_feature_to_dict, feature_path, feature_data)
         elif import_version == "2.0":
-            feature_path = dataset.encode_pk_values_to_path(pk)
+            pk_values = dataset.schema.sanitise_pk_values(pk)
+            feature_path = dataset.encode_pk_values_to_path(pk_values)
             feature_data = dataset.get_data_at(feature_path)
             benchmark(dataset.get_feature, path=feature_path, data=feature_data)
     else:
