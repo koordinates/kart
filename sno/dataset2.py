@@ -464,10 +464,9 @@ class Dataset2(DatasetStructure):
             yield blob.name[:-4], _text(blob.data)
 
     @functools.lru_cache()
-    def get_legend(self, legend_hash=None, *, path=None):
-        """Load the legend with the given hash / at the given path from this dataset."""
-        if path is None:
-            path = self.LEGEND_PATH + legend_hash
+    def get_legend(self, legend_hash):
+        """Load the legend with the given hash from this dataset."""
+        path = self.LEGEND_PATH + legend_hash
         return Legend.loads(self.get_data_at(path))
 
     @classmethod

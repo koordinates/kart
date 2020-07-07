@@ -225,7 +225,7 @@ class Dataset1(DatasetStructure):
 
         return tupleizer
 
-    def _iter_feature_blobs(self, feature_builder, fast=False):
+    def _iter_feature_blobs(self, fast=False):
         """
         Iterates over all the features in self.tree that match the expected
         pattern for a feature, and yields the following for each:
@@ -263,25 +263,25 @@ class Dataset1(DatasetStructure):
                             )
                             continue
 
-                    yield feature_builder(leaf)
+                    yield leaf
 
     def features(self, *, ogr_geoms=False, **kwargs):
         """ Feature iterator yielding (pk, feature-dict) pairs """
-        return self._iter_feature_blobs(
-            lambda blob: (
+        return (
+            (
                 blob.name,
                 self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms),
-            ),
-            fast=False,
+            )
+            for blob in self._iter_feature_blobs(fast=False)
         )
 
     def feature_tuples(self, col_names, **kwargs):
         """ Optimised feature iterator yielding tuples, ordered by the columns from col_names """
         tupleizer = self.build_feature_tupleizer(col_names)
-        return self._iter_feature_blobs(tupleizer, fast=True)
+        return (tupleizer(blob) for blob in self._iter_feature_blobs(fast=True))
 
     def feature_count(self, fast=True):
-        return sum(self._iter_feature_blobs(lambda blob: 1, fast=fast))
+        return sum(1 for blob in self._iter_feature_blobs(fast=True))
 
     def encode_feature(
         self,
