@@ -4,6 +4,25 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.5.0 (UNRELEASED)
+
+### Major changes in this release
+
+ * A new repository structure/layout, which will support schema changes. Internally known as Datasets V2.
+    - Unlike Datasets V1, the schema can be modified without rewriting every row in a dataset.
+    - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is nowhere near full featured.
+    - Tracking issue [#72](https://github.com/koordinates/sno/issues/72)
+
+### Progress on the new structure/layout (Datasets V2)
+
+ * Data can be imported into Datasets V2.
+ * Repositories can be upgraded from V1 to V2 with `sno upgrade 02-05`.
+ * A working copy can be checked out and features can be modified, such that `sno diff` shows the diff.
+
+#### Important missing functionality in Datasets V2
+
+ * Changes to V2 datasets cannot be committed, whether feature changes or schema changes.
+
 ## 0.4.1
 
 ### Packaging fix:
