@@ -16,7 +16,7 @@ def fast_import_tables(
     repo,
     sources,
     *,
-    version,
+    structure_version,
     incremental=True,
     quiet=False,
     header=None,
@@ -61,7 +61,9 @@ def fast_import_tables(
             pass
 
         for path, source in sources.items():
-            dataset = DatasetStructure.for_version(version)(tree=None, path=path)
+            dataset = DatasetStructure.for_version(structure_version)(
+                tree=None, path=path
+            )
 
             with source:
                 if limit:

@@ -43,10 +43,7 @@ GPKG_IMPORTS = (
     ],
 )
 
-DATASET_VERSIONS = (
-    "import_version",
-    structure.DatasetStructure.version_numbers(),
-)
+V1_OR_V2 = ("import_version", ["1", "2"])
 
 
 def test_dataset_versions():
@@ -108,7 +105,7 @@ def normalise_feature(row):
         ),
     ],
 )
-@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_import(
     import_version,
     archive,
@@ -184,8 +181,8 @@ def test_import(
                 repo_path, table, f"{data / source_gpkg}", geopackage
             )
 
-            assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
-            assert dataset.version == import_version
+            assert dataset.__class__.__name__ == f"Dataset{import_version}"
+            assert int(float(dataset.version)) == int(import_version)
 
             pk_field = gpkg.pk(db, table)
 
@@ -349,7 +346,7 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
         ),
     ],
 )
-@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(*V1_OR_V2)
 @pytest.mark.parametrize(
     'source_format,source_ogr_driver',
     [
@@ -449,26 +446,26 @@ def test_import_from_non_gpkg(
                 repo_path, table, f"{data / source_gpkg}", geopackage
             )
 
-            assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
-            assert dataset.version == import_version
+            assert dataset.__class__.__name__ == f"Dataset{import_version}"
+            assert int(float(dataset.version)) == int(import_version)
 
             # Compare the meta items to the GPKG-imported ones
             repo = pygit2.Repository(str(repo_path))
             tree = repo.head.peel(pygit2.Tree) / table
             dataset = structure.DatasetStructure.instantiate(tree, table)
 
-            if import_version == "1.0":
+            if import_version == "1":
                 _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
-            elif import_version == "2.0":
+            elif import_version == "2":
                 # TODO: Dataset2 needs to store more metadata.
                 pass
 
             if num_rows > 0:
                 # compare the first feature in the repo against the source DB
                 key, got_feature = next(dataset.features())
-                if import_version == "1.0":
+                if import_version == "1":
                     fid = dataset.decode_pk(key)
-                elif import_version == "2.0":
+                elif import_version == "2":
                     [fid] = dataset.decode_path_to_pk_values(key)
 
                 src_ds = ogr.Open(str(source_filename))
@@ -727,7 +724,7 @@ def test_pk_encoding():
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(*V1_OR_V2)
 @pytest.mark.parametrize("profile", ["get_feature", "feature_to_dict"])
 def test_feature_find_decode_performance(
     profile,
@@ -754,8 +751,8 @@ def test_feature_find_decode_performance(
     tree = repo.head.peel(pygit2.Tree) / path
 
     dataset = structure.DatasetStructure.instantiate(tree, path)
-    assert dataset.__class__.__name__ == f"Dataset{import_version[0]}"
-    assert dataset.version == import_version
+    assert dataset.__class__.__name__ == f"Dataset{import_version}"
+    assert int(float(dataset.version)) == int(import_version)
 
     with data_archive(archive) as data:
         db = geopackage(f"{data / source_gpkg}")
@@ -772,11 +769,11 @@ def test_feature_find_decode_performance(
     elif profile == "feature_to_dict":
         # TODO: try to avoid two sets of code for two dataset versions -
         # either by making their interfaces more similar, or by deleting v1
-        if import_version == "1.0":
+        if import_version == "1":
             feature_path = dataset.encode_pk(pk)
             feature_data = (tree / dataset.get_feature_path(pk)).data
             benchmark(dataset.repo_feature_to_dict, feature_path, feature_data)
-        elif import_version == "2.0":
+        elif import_version == "2":
             pk_values = dataset.schema.sanitise_pk_values(pk)
             feature_path = dataset.encode_pk_values_to_path(pk_values)
             feature_data = dataset.get_data_at(feature_path)
@@ -786,7 +783,7 @@ def test_feature_find_decode_performance(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("import_version", ["1.0"])
+@pytest.mark.parametrize("import_version", ["1"])
 def test_import_multiple(
     import_version, data_archive, chdir, cli_runner, tmp_path, geopackage
 ):
@@ -878,7 +875,7 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_write_feature_performance(
     import_version,
     archive,
@@ -916,14 +913,14 @@ def test_write_feature_performance(
 
                 index = pygit2.Index()
 
-                if import_version == "1.0":
+                if import_version == "1":
                     kwargs = {
                         "geom_cols": source.geom_cols,
                         "field_cid_map": source.field_cid_map,
                         "primary_key": source.primary_key,
                         "cast_primary_key": False,
                     }
-                else:
+                elif import_version == "2":
                     kwargs = {"schema": source.schema}
 
                 def _write_feature():
@@ -939,7 +936,7 @@ def test_write_feature_performance(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(*DATASET_VERSIONS)
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
     table = H.POINTS.LAYER
     with data_archive("gpkg-points") as data:
@@ -956,7 +953,7 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
             source = OgrImporter.open(data / "nz-pa-points-topo-150k.gpkg", table=table)
 
             fast_import.fast_import_tables(
-                repo, {table: source}, version=import_version
+                repo, {table: source}, structure_version=import_version
             )
 
             assert not repo.is_empty
@@ -969,7 +966,7 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
             assert len([c for c in repo.walk(repo.head.target)]) == 1
 
             # has meta information
-            assert import_version == dataset.version
+            assert int(float(dataset.version)) == int(import_version)
 
             # has the right number of features
             feature_count = sum(1 for f in dataset.features())

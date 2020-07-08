@@ -266,7 +266,7 @@ class Dataset1(DatasetStructure):
                     yield leaf
 
     def features(self, *, ogr_geoms=False, **kwargs):
-        """ Feature iterator yielding (pk, feature-dict) pairs """
+        """ Feature iterator yielding (encoded_pk, feature-dict) pairs """
         return (
             (
                 blob.name,

@@ -276,6 +276,9 @@ class DatasetStructure:
         if version is None:
             version = cls.DEFAULT_IMPORT_VERSION
 
+        if isinstance(version, int) or len(version) == 1:
+            version = f"{version}.0"
+
         for klass in cls.all_versions():
             if klass.VERSION_IMPORT == version:
                 return klass

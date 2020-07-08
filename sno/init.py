@@ -25,7 +25,10 @@ from .fast_import import fast_import_tables
 from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
-from .repo_version import REPO_VERSION_PATH
+from .structure_version import (
+    STRUCTURE_VERSIONS_CHOICE,
+    DEFAULT_STRUCTURE_VERSION,
+)
 from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
 
@@ -878,8 +881,8 @@ def list_import_formats(ctx, param, value):
 )
 @click.option(
     "--version",
-    type=click.Choice(structure.DatasetStructure.version_numbers()),
-    default=structure.DatasetStructure.version_numbers()[0],
+    type=STRUCTURE_VERSIONS_CHOICE,
+    default=str(DEFAULT_STRUCTURE_VERSION),
     hidden=True,
 )
 @call_and_exit_flag(
@@ -965,10 +968,7 @@ def import_table(
             xml_metadata=info.get('xmlMetadata'),
         )
 
-    extra_blobs = []
-    if version == 2:
-        extra_blobs = [(VERSION_BLOB_PATH, b"0.5\n")]
-    fast_import_tables(repo, loaders, message=message, version=version)
+    fast_import_tables(repo, loaders, message=message, structure_version=version)
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
         # Update working copy with new datasets
@@ -1002,8 +1002,8 @@ def import_table(
 )
 @click.option(
     "--version",
-    type=click.Choice(structure.DatasetStructure.version_numbers()),
-    default=structure.DatasetStructure.version_numbers()[0],
+    type=STRUCTURE_VERSIONS_CHOICE,
+    default=str(DEFAULT_STRUCTURE_VERSION),
     hidden=True,
 )
 def init(ctx, do_checkout, message, directory, version, import_from):
@@ -1035,7 +1035,7 @@ def init(ctx, do_checkout, message, directory, version, import_from):
     repo = pygit2.init_repository(str(repo_path), bare=True)
 
     if import_from:
-        fast_import_tables(repo, loaders, message=message, version=version)
+        fast_import_tables(repo, loaders, message=message, structure_version=version)
 
         if do_checkout:
             # Checkout a working copy

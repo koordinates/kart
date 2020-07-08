@@ -113,12 +113,12 @@ def _gpkg_spatial_ref_sys(spatial_ref, wkt):
 
 
 def wkt_to_srs_str(wkt):
-    """Given a WKT srs definition, generate a sensible name for it."""
+    """Given a WKT srs definition, generate a sensible identifier for it."""
     return osgeo_to_srs_str(SpatialReference(wkt))
 
 
 def osgeo_to_srs_str(spatial_ref):
-    """Given a osgeo SpatialReference, generate a sensible name for it."""
+    """Given a osgeo SpatialReference, generate a identifier name for it."""
     auth_name = spatial_ref.GetAuthorityName(None)
     auth_code = spatial_ref.GetAuthorityCode(None)
     return f"{auth_name}:{auth_code}"

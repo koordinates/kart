@@ -10,7 +10,7 @@ from sno.core import walk_tree
 from sno.dataset1 import Dataset1
 from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_srs_str
 from sno.fast_import import fast_import_tables
-from sno.repo_version import REPO_VERSION_PATH
+from sno.structure_version import encode_structure_version
 
 
 @click.command()
@@ -109,8 +109,8 @@ def _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map):
         incremental=False,
         quiet=True,
         header=header,
-        version="2.0",
-        extra_blobs=[(REPO_VERSION_PATH, b"0.5\n")],
+        structure_version=2,
+        extra_blobs=[encode_structure_version(2)],
     )
 
     dest_commit = dest_repo.head.peel(pygit2.Commit)
