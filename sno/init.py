@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
+
 import click
 import pygit2
 from osgeo import gdal, ogr
@@ -20,8 +21,14 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
+from .fast_import import fast_import_tables
+from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
+from .structure_version import (
+    STRUCTURE_VERSIONS_CHOICE,
+    DEFAULT_STRUCTURE_VERSION,
+)
 from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
 
@@ -62,6 +69,20 @@ class OgrImporter:
         ogr.OFSTBoolean: 'BOOLEAN',
         ogr.OFSTInt16: 'SMALLINT',
         ogr.OFSTFloat32: 'REAL',
+    }
+
+    OGR_TYPE_TO_V2_SCHEMA_TYPE = {
+        'Integer': ('integer', {"size": 32}),
+        'Integer64': ('integer', {"size": 64}),
+        'Real': ('float', {}),
+        'String': ('text', {}),
+        'Binary': ('blob', {}),
+        'Date': ('date', {}),
+        'DateTime': ('datetime', {}),
+    }
+    OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
+        ogr.OFSTBoolean: ('boolean', {}),
+        ogr.OFSTInt16: ('integer', {"size": 16}),
     }
 
     @classmethod
@@ -409,34 +430,39 @@ class OgrImporter:
 
     def _get_meta_srid(self):
         srs = self.ogrlayer.GetSpatialRef()
-        if srs is None:
+        if not srs:
             return 0
         srs.AutoIdentifyEPSG()
-        if srs.IsProjected():
-            return int(srs.GetAuthorityCode("PROJCS"))
-        elif srs.IsGeographic():
-            return int(srs.GetAuthorityCode("GEOGCS"))
-        else:
-            # TODO: another type of SRS? Need examples.
-            raise ValueError(
-                "Unknown SRS type; please create an issue with details "
-                "( https://github.com/koordinates/sno/issues/new )"
-            )
+        return int(srs.GetAuthorityCode(None))
 
     def get_meta_contents(self):
-        ogr_metadata = self.ogrlayer.GetMetadata()
-
         return {
             'table_name': self.table,
             'data_type': 'features' if self.is_spatial else 'attributes',
-            'identifier': self._meta_overrides.get(
-                'title', ogr_metadata.get('IDENTIFIER') or ''
-            ),
-            'description': self._meta_overrides.get(
-                'description', ogr_metadata.get('DESCRIPTION') or ''
-            ),
+            'identifier': self.get_meta_item('title'),
+            'description': self.get_meta_item('description'),
             'srs_id': self._get_meta_srid(),
         }
+
+    def get_meta_item(self, key):
+        if key in self._meta_overrides:
+            return self._meta_overrides[key]
+        ogr_metadata = self.ogrlayer.GetMetadata()
+        if key == "title":
+            return ogr_metadata.get('IDENTIFIER') or ''
+        elif key == "description":
+            return ogr_metadata.get('DESCRIPTION') or ''
+        elif key == "gpkg_spatial_ref_sys":
+            return self.get_meta_spatial_ref_sys()
+
+    def get_srs_definition(self, srs_name):
+        return dict(self.srs_definitions)[srs_name]
+
+    def srs_definitions(self):
+        if self.is_spatial:
+            srs = self.ogrlayer.GetSpatialRef()
+            if srs:
+                yield (osgeo_to_srs_str(srs), srs.ExportToWkt())
 
     def _get_meta_geometry_type(self):
         # remove Z/M components
@@ -468,6 +494,26 @@ class OgrImporter:
             "m": int(ogr.GT_HasM(ogr_geom_type)),
         }
 
+    def get_geometry_v2_column_schema(self):
+        from .dataset2 import ColumnSchema
+
+        if not self.is_spatial:
+            return None
+
+        name = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
+        geometry_type = self._get_meta_geometry_type()
+        ogr_geom_type = self.ogrlayer.GetGeomType()
+        z = "Z" if ogr.GT_HasZ(ogr_geom_type) else ""
+        m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
+        extra_type_info = {
+            "geometryType": f"{geometry_type} {z}{m}".strip(),
+            "geometrySRS": f"EPSG:{self._get_meta_srid()}",
+        }
+
+        return ColumnSchema(
+            ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
+        )
+
     def _ogr_type_to_sqlite_type(self, fd):
         subtype = fd.GetSubType()
         if subtype == ogr.OFSTNone:
@@ -480,6 +526,46 @@ class OgrImporter:
             if width:
                 type_name += f'({width})'
         return type_name
+
+    def _field_to_v2_column_schema(self, fd):
+        from .dataset2 import ColumnSchema
+
+        ogr_type = fd.GetTypeName()
+        ogr_subtype = fd.GetSubType()
+        if ogr_subtype == ogr.OFSTNone:
+            data_type, extra_type_info = self.OGR_TYPE_TO_V2_SCHEMA_TYPE[ogr_type]
+        else:
+            data_type, extra_type_info = self.OGR_SUBTYPE_TO_V2_SCHEMA_TYPE[ogr_subtype]
+
+        extra_type_info = extra_type_info.copy()
+
+        if data_type in ('TEXT', 'BLOB'):
+            width = fd.GetWidth()
+            if width:
+                extra_type_info["length"] = width
+
+        return ColumnSchema(
+            ColumnSchema.new_id(), fd.GetName(), data_type, None, **extra_type_info
+        )
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def schema(self):
+        from .dataset2 import Schema, ColumnSchema
+
+        ld = self.ogrlayer.GetLayerDefn()
+        pk_column = ColumnSchema(ColumnSchema.new_id(), self.primary_key, "integer", 0)
+        geometry_column = self.get_geometry_v2_column_schema()
+        special_columns = (
+            [pk_column, geometry_column] if geometry_column else [pk_column]
+        )
+
+        other_columns = [
+            self._field_to_v2_column_schema(ld.GetFieldDefn(i))
+            for i in range(ld.GetFieldCount())
+        ]
+
+        return Schema(special_columns + other_columns)
 
     @ungenerator(list)
     def get_meta_column_info(self):
@@ -510,18 +596,12 @@ class OgrImporter:
                 "pk": int(name == self.primary_key),
             }
 
-    @ungenerator(list)
     def get_meta_spatial_ref_sys(self):
         srs = self.ogrlayer.GetSpatialRef()
-        srid = self._get_meta_srid()
-        yield {
-            'srs_name': srs.GetName() if srs else 'Unknown CRS',
-            'srs_id': srid,
-            'organization': 'EPSG',
-            'organization_coordsys_id': srid,
-            'definition': srs.ExportToWkt() if srs else '',
-            'description': None,
-        }
+        if srs:
+            return osgeo_to_gpkg_spatial_ref_sys(srs)
+        else:
+            return []
 
     _KNOWN_METADATA_URIS = {
         'GDALMultiDomainMetadata': 'http://gdal.org',
@@ -801,8 +881,8 @@ def list_import_formats(ctx, param, value):
 )
 @click.option(
     "--version",
-    type=click.Choice(structure.DatasetStructure.version_numbers()),
-    default=structure.DatasetStructure.version_numbers()[0],
+    type=STRUCTURE_VERSIONS_CHOICE,
+    default=str(DEFAULT_STRUCTURE_VERSION),
     hidden=True,
 )
 @call_and_exit_flag(
@@ -888,7 +968,7 @@ def import_table(
             xml_metadata=info.get('xmlMetadata'),
         )
 
-    structure.fast_import_tables(repo, loaders, message=message, version=version)
+    fast_import_tables(repo, loaders, message=message, structure_version=version)
     rs = structure.RepositoryStructure(repo)
     if rs.working_copy:
         # Update working copy with new datasets
@@ -922,8 +1002,8 @@ def import_table(
 )
 @click.option(
     "--version",
-    type=click.Choice(structure.DatasetStructure.version_numbers()),
-    default=structure.DatasetStructure.version_numbers()[0],
+    type=STRUCTURE_VERSIONS_CHOICE,
+    default=str(DEFAULT_STRUCTURE_VERSION),
     hidden=True,
 )
 def init(ctx, do_checkout, message, directory, version, import_from):
@@ -955,7 +1035,7 @@ def init(ctx, do_checkout, message, directory, version, import_from):
     repo = pygit2.init_repository(str(repo_path), bare=True)
 
     if import_from:
-        structure.fast_import_tables(repo, loaders, message=message, version=version)
+        fast_import_tables(repo, loaders, message=message, structure_version=version)
 
         if do_checkout:
             # Checkout a working copy

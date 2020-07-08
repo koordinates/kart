@@ -88,7 +88,19 @@ class SubprocessError(BaseException):
         called_process_error=None,
     ):
         super(SubprocessError, self).__init__(
-            message, exit_code=exit_code, param=param, param_hint=param_hint
+            message, param=param, param_hint=param_hint
         )
-        if called_process_error and not exit_code:
-            self.exit_code = SUBPROCESS_ERROR_FLAG + called_process_error.returncode
+        if exit_code:
+            self.set_exit_code(exit_code)
+        elif called_process_error:
+            self.set_exit_code(called_process_error.returncode)
+        else:
+            self.exit_code = SUBPROCESS_ERROR_FLAG
+
+    def set_exit_code(self, code):
+        if code > 0 and code < SUBPROCESS_ERROR_FLAG:
+            self.exit_code = SUBPROCESS_ERROR_FLAG + code
+        elif code >= SUBPROCESS_ERROR_FLAG and code < 2 * SUBPROCESS_ERROR_FLAG:
+            self.exit_code = code
+        else:
+            self.exit_code = SUBPROCESS_ERROR_FLAG

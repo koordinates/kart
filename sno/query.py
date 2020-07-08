@@ -75,7 +75,7 @@ def query(ctx, path, command, params):
             lookup = params[0]
 
         t0 = time.monotonic()
-        results = dataset.get_feature(lookup)[1]
+        results = dataset.get_feature(lookup)
         t1 = time.monotonic()
 
     elif command == "geo-nearest":
@@ -93,9 +93,7 @@ def query(ctx, path, command, params):
 
         index = dataset.get_spatial_index(path)
         t0 = time.monotonic()
-        results = [
-            dataset.get_feature(pk)[1] for pk in index.nearest(coordinates, limit)
-        ]
+        results = [dataset.get_feature(pk) for pk in index.nearest(coordinates, limit)]
         t1 = time.monotonic()
 
     elif command == "geo-intersects":
@@ -109,7 +107,7 @@ def query(ctx, path, command, params):
 
         index = dataset.get_spatial_index(path)
         t0 = time.monotonic()
-        results = [dataset.get_feature(pk)[1] for pk in index.intersection(coordinates)]
+        results = [dataset.get_feature(pk) for pk in index.intersection(coordinates)]
         t1 = time.monotonic()
 
     elif command == "geo-count":
