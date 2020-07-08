@@ -32,7 +32,7 @@ def edit_points(dbcur):
     return pk_del
 
 
-def edit_polygons_pk(dbcur):
+def edit_polygons(dbcur):
     dbcur.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
     assert dbcur.getconnection().changes() == 1
     dbcur.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
@@ -73,6 +73,9 @@ def _count_tracking_table_changes(db, working_copy, layer):
     return change_count
 
 
+V1_OR_V2 = ("structure_version", ["1", "2"])
+
+
 @pytest.mark.parametrize(
     "partial", [pytest.param(False, id=""), pytest.param(True, id="partial")],
 )
@@ -80,17 +83,25 @@ def _count_tracking_table_changes(db, working_copy, layer):
     "archive,layer",
     [
         pytest.param("points", H.POINTS.LAYER, id="points"),
-        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons_pk"),
+        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons"),
         pytest.param("table", H.TABLE.LAYER, id="table"),
     ],
 )
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_commit(
-    archive, layer, partial, data_working_copy, geopackage, cli_runner, request
+    structure_version,
+    archive,
+    layer,
+    partial,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    request,
 ):
     """ commit outstanding changes from the working copy """
-    param_ids = H.parameter_ids(request)
+    versioned_archive = archive + "2" if structure_version == "2" else archive
 
-    with data_working_copy(archive) as (repo_dir, wc_path):
+    with data_working_copy(versioned_archive) as (repo_dir, wc_path):
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
         assert r.exit_code == NO_CHANGES, r
@@ -105,10 +116,10 @@ def test_commit(
         with db:
             cur = db.cursor()
             try:
-                edit_func = globals()[f"edit_{param_ids[0]}"]
+                edit_func = globals()[f"edit_{archive}"]
                 pk_del = edit_func(cur)
             except KeyError:
-                raise NotImplementedError(f"layer={layer}")
+                raise NotImplementedError(f"No edit_{archive}")
 
         print(f"deleted fid={pk_del}")
 
@@ -135,7 +146,13 @@ def test_commit(
 
         dataset = rs[layer]
         tree = repo.head.peel(pygit2.Tree)
-        assert dataset.get_feature_path(pk_del) not in tree
+        # TODO: fix the discrepancies between dataset v1 and v2
+        if structure_version == "1":
+            assert dataset.get_feature_path(pk_del) not in tree
+        elif structure_version == "2":
+            assert (
+                dataset.repo_path(dataset.encode_pk_values_to_path(pk_del)) not in tree
+            )
 
         wc = WorkingCopy.open(repo)
         wc.assert_db_tree_match(tree)

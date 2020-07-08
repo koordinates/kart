@@ -1,13 +1,18 @@
 import base64
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 import functools
 import hashlib
+import itertools
 import json
 import os
 import uuid
 
+import click
 import msgpack
+import pygit2
 
+from .filter_util import UNFILTERED
+from .exceptions import NotYetImplemented, InvalidOperation, PATCH_DOES_NOT_APPLY
 from .structure import DatasetStructure
 
 
@@ -631,3 +636,213 @@ class Dataset2(DatasetStructure):
         # - maybe encode methods shouldn't be classmethods.
         # - having a _blob version of encode_feature is too many similar methods.
         return self.encode_feature(feature, self.schema)[1]
+
+    def write_index(self, dataset_diff, index, repo):
+        """
+        Given a diff that only affects this dataset, write it to the given index + repo.
+        Blobs will be created in the repo, and referenced in the index, but the index is
+        not committed - this is the responsibility of the caller.
+        """
+        # TODO - support multiple primary keys.
+        pk_field = self.primary_key
+
+        conflicts = False
+        if dataset_diff["META"]:
+            raise NotYetImplemented(
+                "Sorry, committing meta changes is not yet supported"
+            )
+
+        for _, old_feature in dataset_diff["D"].items():
+            pk_values = (old_feature[pk_field],)
+            feature_path = self.repo_path(self.encode_pk_values_to_path(pk_values))
+            if feature_path not in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to delete nonexistent feature: {pk_values}"
+                )
+                continue
+            index.remove(feature_path)
+
+        for new_feature in dataset_diff["I"]:
+            pk_values = (new_feature[pk_field],)
+            feature_path, feature_data = self.encode_feature(new_feature, self.schema)
+            feature_path = self.repo_path(feature_path)
+            if feature_path in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to create feature that already exists: {pk_values}"
+                )
+                continue
+            blob_id = repo.create_blob(feature_data)
+            entry = pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
+            index.add(entry)
+
+        geom_column_name = self.geom_column_name
+        for _, (old_feature, new_feature) in dataset_diff["U"].items():
+            old_pk_values = (old_feature[pk_field],)
+            old_feature_path = self.repo_path(
+                self.encode_pk_values_to_path(old_pk_values)
+            )
+            if old_feature_path not in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update nonexistent feature: {old_pk_values}"
+                )
+                continue
+
+            actual_existing_feature = self.get_feature(old_pk_values)
+            if geom_column_name:
+                # FIXME: actually compare the geometries here.
+                # Turns out this is quite hard - geometries are hard to compare sanely.
+                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
+                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
+                actual_existing_feature.pop(geom_column_name)
+                old_feature = old_feature.copy()
+                old_feature.pop(geom_column_name)
+            if actual_existing_feature != old_feature:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update already-changed feature: {old_pk_values}"
+                )
+                continue
+
+            index.remove(old_feature_path)
+            new_feature_path, new_feature_data = self.encode_feature(
+                new_feature, self.schema
+            )
+            new_feature_path = self.repo_path(new_feature_path)
+            blob_id = repo.create_blob(new_feature_data)
+            entry = pygit2.IndexEntry(
+                new_feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+            )
+            index.add(entry)
+
+        if conflicts:
+            raise InvalidOperation(
+                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+            )
+
+    def diff(self, other, pk_filter=UNFILTERED, reverse=False):
+        """
+        Generates a Diff from self -> other.
+        If reverse is true, generates a diff from other -> self.
+        """
+        # TODO - support multiple primary keys.
+
+        candidates_ins = defaultdict(list)
+        candidates_upd = {}
+        candidates_del = defaultdict(list)
+
+        params = {}
+        if reverse:
+            params = {"swap": True}
+
+        if other is None:
+            diff_index = self.tree.diff_to_tree(**params)
+            self.L.debug(
+                "diff (%s -> None / %s): %s changes",
+                self.tree.id,
+                "R" if reverse else "F",
+                len(diff_index),
+            )
+        else:
+            diff_index = self.tree.diff_to_tree(other.tree, **params)
+            self.L.debug(
+                "diff (%s -> %s / %s): %s changes",
+                self.tree.id,
+                other.tree.id,
+                "R" if reverse else "F",
+                len(diff_index),
+            )
+
+        if reverse:
+            ours, theirs = other, self
+        else:
+            ours, theirs = self, other
+
+        for d in diff_index.deltas:
+            self.L.debug(
+                "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
+            )
+
+            if d.old_file and d.old_file.path.startswith(".sno-table/meta/"):
+                continue
+            elif d.new_file and d.new_file.path.startswith(".sno-table/meta/"):
+                continue
+
+            if d.status == pygit2.GIT_DELTA_DELETED:
+                ours_pk_values = ours.decode_path_to_pk_values(d.old_file.path)
+                ours_pk_str = str(ours_pk_values[0])
+                if ours_pk_str not in pk_filter:
+                    continue
+
+                self.L.debug("diff(): D %s (%s)", d.old_file.path, ours_pk_str)
+
+                ours_feature = ours.get_feature(ours_pk_values)
+                candidates_del[str(ours_pk_values[0])].append(
+                    (ours_pk_str, ours_feature)
+                )
+
+            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                ours_pk_values = ours.decode_path_to_pk_values(d.old_file.path)
+                ours_pk_str = str(ours_pk_values[0])
+                theirs_pk_values = theirs.decode_path_to_pk_values(d.new_file.path)
+                theirs_pk_str = str(theirs_pk_values[0])
+                if ours_pk_str not in pk_filter and theirs_pk_str not in pk_filter:
+                    continue
+
+                self.L.debug(
+                    "diff(): M %s (%s) -> %s (%s)",
+                    d.old_file.path,
+                    ours_pk_str,
+                    d.new_file.path,
+                    theirs_pk_str,
+                )
+
+                ours_feature = ours.get_feature(ours_pk_values)
+                theirs_feature = other.get_feature(theirs_pk_values)
+                candidates_upd[ours_pk_str] = (ours_feature, theirs_feature)
+
+            elif d.status == pygit2.GIT_DELTA_ADDED:
+                theirs_pk_values = theirs.decode_path_to_pk_values(d.new_file.path)
+                theirs_pk_str = str(theirs_pk_values[0])
+                if theirs_pk_str not in pk_filter:
+                    continue
+
+                self.L.debug("diff(): A %s (%s)", d.new_file.path, theirs_pk_str)
+
+                theirs_feature = theirs.get_feature(theirs_pk_str)
+                candidates_ins[theirs_pk_str].append(theirs_feature)
+
+            else:
+                # GIT_DELTA_RENAMED
+                # GIT_DELTA_COPIED
+                # GIT_DELTA_IGNORED
+                # GIT_DELTA_TYPECHANGE
+                # GIT_DELTA_UNMODIFIED
+                # GIT_DELTA_UNREADABLE
+                # GIT_DELTA_UNTRACKED
+                raise NotImplementedError(f"Delta status: {d.status_char()}")
+
+        # detect renames
+        for h in list(candidates_del.keys()):
+            if h in candidates_ins:
+                track_pk, my_obj = candidates_del[h].pop(0)
+                other_obj = candidates_ins[h].pop(0)
+
+                candidates_upd[track_pk] = (my_obj, other_obj)
+
+                if not candidates_del[h]:
+                    del candidates_del[h]
+                if not candidates_ins[h]:
+                    del candidates_ins[h]
+
+        from .diff import Diff
+
+        return Diff(
+            self,
+            meta={},
+            inserts=list(itertools.chain(*candidates_ins.values())),
+            deletes=dict(itertools.chain(*candidates_del.values())),
+            updates=candidates_upd,
+        )
