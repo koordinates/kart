@@ -17,11 +17,11 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * Data can be imported into Datasets V2.
  * Repositories can be upgraded from V1 to V2 with `sno upgrade 02-05`.
- * A working copy can be checked out and features can be modified, such that `sno diff` shows the diff.
+ * A working copy can be checked out and features can be modified, diffed and committed.
 
 #### Important missing functionality in Datasets V2
 
- * Changes to V2 datasets cannot be committed, whether feature changes or schema changes.
+ * `sno checkout` doesn't work, no way to change branch.
 
 ## 0.4.1
 

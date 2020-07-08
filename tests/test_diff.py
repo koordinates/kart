@@ -7,13 +7,13 @@ import pytest
 
 import pygit2
 from sno.diff import Diff
-from sno.exceptions import NOT_YET_IMPLEMENTED
 
 
 H = pytest.helpers.helpers()
 
 DIFF_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet", "html"]
 SHOW_OUTPUT_FORMATS = ["text", "json"]
+V1_OR_V2 = ("structure_version", ["1", "2"])
 
 
 def _check_html_output(s):
@@ -29,10 +29,12 @@ def _check_html_output(s):
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize("version", ["1.0", "2.0"])
-def test_diff_points(version, output_format, data_working_copy, geopackage, cli_runner):
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_diff_points(
+    structure_version, output_format, data_working_copy, geopackage, cli_runner
+):
     """ diff the working copy against HEAD """
-    data_archive = "points2" if version == "2.0" else "points"
+    data_archive = "points2" if structure_version == "2" else "points"
     with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -279,12 +281,12 @@ def test_diff_points(version, output_format, data_working_copy, geopackage, cli_
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize("version", ["1.0", "2.0"])
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_diff_polygons(
-    version, output_format, data_working_copy, geopackage, cli_runner
+    structure_version, output_format, data_working_copy, geopackage, cli_runner
 ):
     """ diff the working copy against HEAD """
-    data_archive = "polygons2" if version == "2.0" else "polygons"
+    data_archive = "polygons2" if structure_version == "2" else "polygons"
     with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -617,10 +619,12 @@ def test_diff_polygons(
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize("version", ["1.0", "2.0"])
-def test_diff_table(version, output_format, data_working_copy, geopackage, cli_runner):
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_diff_table(
+    structure_version, output_format, data_working_copy, geopackage, cli_runner
+):
     """ diff the working copy against HEAD """
-    data_archive = "table2" if version == "2.0" else "table"
+    data_archive = "table2" if structure_version == "2" else "table"
     with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -1360,60 +1364,80 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
-def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_show_points_HEAD(
+    structure_version, output_format, data_archive_readonly, cli_runner
+):
     """
     Show a patch; ref defaults to HEAD
     """
-    with data_archive_readonly("points"):
+    data_archive = "points2" if structure_version == "2" else "points"
+    with data_archive_readonly(data_archive):
         r = cli_runner.invoke(["show", f"--output-format={output_format}", "HEAD"])
         assert r.exit_code == 0, r
 
         if output_format == 'text':
-            assert r.stdout.splitlines() == [
-                'commit 2a1b7be8bdef32aea1510668e3edccbc6d454852',
+            commit_hash = r.stdout[7:47]
+            # TODO - maybe make the diff order consistent, so we don't need to sort here?
+            blocks = re.split("(?=---)", r.stdout)
+            assert blocks[0].splitlines() == [
+                f'commit {commit_hash}',
                 'Author: Robert Coup <robert@coup.net.nz>',
                 'Date:   Thu Jun 20 15:28:33 2019 +0100',
                 '',
                 '    Improve naming on Coromandel East coast',
                 '',
-                '--- nz_pa_points_topo_150k:fid=1168',
-                '+++ nz_pa_points_topo_150k:fid=1168',
-                '-                                     name = ␀',
-                '+                                     name = Tairua',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Tairua',
-                '--- nz_pa_points_topo_150k:fid=1166',
-                '+++ nz_pa_points_topo_150k:fid=1166',
-                '-                                     name = ␀',
-                '+                                     name = Oturu',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Oturu',
-                '--- nz_pa_points_topo_150k:fid=1095',
-                '+++ nz_pa_points_topo_150k:fid=1095',
-                '-                               macronated = N',
-                '+                               macronated = Y',
-                '-                                     name = ␀',
-                '+                                     name = Harataunga (Rākairoa)',
-                '',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Harataunga (Rakairoa)',
-                '',
-                '--- nz_pa_points_topo_150k:fid=1181',
-                '+++ nz_pa_points_topo_150k:fid=1181',
-                '-                               macronated = N',
-                '+                               macronated = Y',
-                '-                                     name = ␀',
-                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
-                '--- nz_pa_points_topo_150k:fid=1182',
-                '+++ nz_pa_points_topo_150k:fid=1182',
-                '-                               macronated = N',
-                '+                               macronated = Y',
-                '-                                     name = ␀',
-                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+            ]
+
+            assert [b.splitlines() for b in sorted(blocks[1:])] == [
+                [
+                    '--- nz_pa_points_topo_150k:fid=1095',
+                    '+++ nz_pa_points_topo_150k:fid=1095',
+                    '-                               macronated = N',
+                    '+                               macronated = Y',
+                    '-                                     name = ␀',
+                    '+                                     name = Harataunga (Rākairoa)',
+                    '',
+                    '-                               name_ascii = ␀',
+                    '+                               name_ascii = Harataunga (Rakairoa)',
+                    '',
+                ],
+                [
+                    '--- nz_pa_points_topo_150k:fid=1166',
+                    '+++ nz_pa_points_topo_150k:fid=1166',
+                    '-                                     name = ␀',
+                    '+                                     name = Oturu',
+                    '-                               name_ascii = ␀',
+                    '+                               name_ascii = Oturu',
+                ],
+                [
+                    '--- nz_pa_points_topo_150k:fid=1168',
+                    '+++ nz_pa_points_topo_150k:fid=1168',
+                    '-                                     name = ␀',
+                    '+                                     name = Tairua',
+                    '-                               name_ascii = ␀',
+                    '+                               name_ascii = Tairua',
+                ],
+                [
+                    '--- nz_pa_points_topo_150k:fid=1181',
+                    '+++ nz_pa_points_topo_150k:fid=1181',
+                    '-                               macronated = N',
+                    '+                               macronated = Y',
+                    '-                                     name = ␀',
+                    '+                                     name = Ko Te Rā Matiti (Wharekaho)',
+                    '-                               name_ascii = ␀',
+                    '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+                ],
+                [
+                    '--- nz_pa_points_topo_150k:fid=1182',
+                    '+++ nz_pa_points_topo_150k:fid=1182',
+                    '-                               macronated = N',
+                    '+                               macronated = Y',
+                    '-                                     name = ␀',
+                    '+                                     name = Ko Te Rā Matiti (Wharekaho)',
+                    '-                               name_ascii = ␀',
+                    '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+                ],
             ]
         elif output_format == 'json':
             j = json.loads(r.stdout)
@@ -1430,11 +1454,18 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
-def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner):
-    """Make sure we can show the initial commit"""
-    initial_commit = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_show_polygons_initial(
+    structure_version, output_format, data_archive_readonly, cli_runner
+):
+    data_archive = "polygons2" if structure_version == "2" else "polygons"
 
+    """Make sure we can show the initial commit"""
     with data_archive_readonly("polygons"):
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == 0, r
+        initial_commit = re.findall("commit ([0-9a-f]+)\n", r.stdout)[-1]
+
         r = cli_runner.invoke(
             ["show", f"--output-format={output_format}", initial_commit]
         )
