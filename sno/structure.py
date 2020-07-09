@@ -1,10 +1,10 @@
 import functools
-
+import itertools
 import json
 import logging
 import re
 import time
-from collections import deque
+from collections import defaultdict, deque
 
 import click
 import pygit2
@@ -17,6 +17,7 @@ from .exceptions import (
     NO_COMMIT,
     PATCH_DOES_NOT_APPLY,
 )
+from .filter_util import UNFILTERED
 
 
 L = logging.getLogger("sno.structure")
@@ -502,6 +503,125 @@ class DatasetStructure:
 
         idx = rtree.index.Index(path, properties=p)
         return idx
+
+    def diff(self, other, pk_filter=UNFILTERED, reverse=False):
+        """
+        Generates a Diff from self -> other.
+        If reverse is true, generates a diff from other -> self.
+        """
+        # TODO - support multiple primary keys.
+
+        candidates_ins = defaultdict(list)
+        candidates_upd = {}
+        candidates_del = defaultdict(list)
+
+        params = {}
+        if reverse:
+            params = {"swap": True}
+
+        if other is None:
+            diff_index = self.tree.diff_to_tree(**params)
+            self.L.debug(
+                "diff (%s -> None / %s): %s changes",
+                self.tree.id,
+                "R" if reverse else "F",
+                len(diff_index),
+            )
+        else:
+            diff_index = self.tree.diff_to_tree(other.tree, **params)
+            self.L.debug(
+                "diff (%s -> %s / %s): %s changes",
+                self.tree.id,
+                other.tree.id,
+                "R" if reverse else "F",
+                len(diff_index),
+            )
+
+        if reverse:
+            old, new = other, self
+        else:
+            old, new = self, other
+
+        for d in diff_index.deltas:
+            self.L.debug(
+                "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
+            )
+
+            if d.old_file and d.old_file.path.startswith(".sno-table/meta/"):
+                continue
+            elif d.new_file and d.new_file.path.startswith(".sno-table/meta/"):
+                continue
+
+            if d.status == pygit2.GIT_DELTA_DELETED:
+                old_pk = old.decode_path_to_1pk(d.old_file.path)
+                if str(old_pk) not in pk_filter:
+                    continue
+
+                self.L.debug("diff(): D %s (%s)", d.old_file.path, old_pk)
+
+                old_feature = old.get_feature(old_pk, ogr_geoms=False)
+                candidates_del[str(old_pk)].append((str(old_pk), old_feature))
+
+            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                old_pk = old.decode_path_to_1pk(d.old_file.path)
+                new_pk = new.decode_path_to_1pk(d.new_file.path)
+                if str(old_pk) not in pk_filter and str(new_pk) not in pk_filter:
+                    continue
+
+                self.L.debug(
+                    "diff(): M %s (%s) -> %s (%s)",
+                    d.old_file.path,
+                    old_pk,
+                    d.new_file.path,
+                    new_pk,
+                )
+
+                old_feature = old.get_feature(old_pk, ogr_geoms=False)
+                new_feature = other.get_feature(new_pk, ogr_geoms=False)
+                candidates_upd[str(old_pk)] = (old_feature, new_feature)
+
+            elif d.status == pygit2.GIT_DELTA_ADDED:
+                new_pk = new.decode_path_to_1pk(d.new_file.path)
+                if str(new_pk) not in pk_filter:
+                    continue
+
+                self.L.debug("diff(): A %s (%s)", d.new_file.path, new_pk)
+
+                new_feature = new.get_feature(new_pk, ogr_geoms=False)
+                candidates_ins[str(new_pk)].append(new_feature)
+
+            else:
+                # GIT_DELTA_RENAMED
+                # GIT_DELTA_COPIED
+                # GIT_DELTA_IGNORED
+                # GIT_DELTA_TYPECHANGE
+                # GIT_DELTA_UNMODIFIED
+                # GIT_DELTA_UNREADABLE
+                # GIT_DELTA_UNTRACKED
+                raise NotImplementedError(f"Delta status: {d.status_char()}")
+
+        # detect renames
+        for h in list(candidates_del.keys()):
+            if h in candidates_ins:
+                track_pk, my_obj = candidates_del[h].pop(0)
+                other_obj = candidates_ins[h].pop(0)
+
+                candidates_upd[track_pk] = (my_obj, other_obj)
+
+                if not candidates_del[h]:
+                    del candidates_del[h]
+                if not candidates_ins[h]:
+                    del candidates_ins[h]
+
+        from .diff import Diff
+
+        return Diff(
+            self,
+            meta={},
+            inserts=list(itertools.chain(*candidates_ins.values())),
+            deletes=dict(itertools.chain(*candidates_del.values())),
+            updates=candidates_upd,
+        )
 
     def write_index(self, dataset_diff, index, repo):
         """
