@@ -82,7 +82,7 @@ def find_blobs_in_tree(tree, max_depth=4):
     up to a given max_depth.
     """
     for entry in tree:
-        if hasattr(entry, "data"):
+        if isinstance(entry, pygit2.Blob):
             yield entry
         elif max_depth > 0:
             yield from find_blobs_in_tree(entry, max_depth - 1)
