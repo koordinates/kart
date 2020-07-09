@@ -540,7 +540,6 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         Use for new working-copy checkouts.
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
-
         with self.session(bulk=(0 if safe else 2)) as db:
             for dataset in datasets:
                 table = dataset.name
@@ -584,7 +583,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                         total_features,
                         t0a - t0,
                         t0a - t0p,
-                        (CHUNK_SIZE * 5) / (t0a - t0p or 0.001),
+                        CHUNK_SIZE / (t0a - t0p or 0.001),
                     )
                     t0p = t0a
 
