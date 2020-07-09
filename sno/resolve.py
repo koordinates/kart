@@ -37,9 +37,7 @@ def write_feature_to_dataset_entry(feature, dataset, repo):
     """
     feature_path, feature_data = dataset.encode_feature(feature)
     blob_id = repo.create_blob(feature_data)
-    return pygit2.IndexEntry(
-        f"{dataset.path}/{feature_path}", blob_id, pygit2.GIT_FILEMODE_BLOB
-    )
+    return pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
 
 
 def load_geojson_resolve(file_path, dataset, repo):

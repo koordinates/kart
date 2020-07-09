@@ -178,9 +178,7 @@ def upgrade(source, dest, layer):
                     source_feature_dict, **kwargs
                 )
                 blob_id = dest_repo.create_blob(dest_data)
-                entry = pygit2.IndexEntry(
-                    f"{dataset.path}/{dest_path}", blob_id, pygit2.GIT_FILEMODE_BLOB
-                )
+                entry = pygit2.IndexEntry(dest_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
                 index.add(entry)
 
                 feature_count += 1

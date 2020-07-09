@@ -6,10 +6,18 @@ import re
 import time
 from collections import deque
 
+import click
 import pygit2
 
 from . import core, gpkg
-from .exceptions import NotFound, NO_COMMIT
+from .exceptions import (
+    NotFound,
+    NotYetImplemented,
+    InvalidOperation,
+    NO_COMMIT,
+    PATCH_DOES_NOT_APPLY,
+)
+
 
 L = logging.getLogger("sno.structure")
 
@@ -333,6 +341,16 @@ class DatasetStructure:
 
     # useful methods
 
+    def full_path(self, rel_path):
+        """Given a path relative to this dataset, returns its full path from the repo root."""
+        return f"{self.path}/{rel_path}"
+
+    def rel_path(self, full_path):
+        """Given a full path to something in this dataset, returns its path relative to the dataset."""
+        if not full_path.startswith(f"{self.path}/"):
+            raise ValueError(f"{full_path} is not a descendant of {self.path}")
+        return full_path[len(self.path) + 1 :]
+
     @property
     @functools.lru_cache(maxsize=1)
     def version(self):
@@ -484,3 +502,80 @@ class DatasetStructure:
 
         idx = rtree.index.Index(path, properties=p)
         return idx
+
+    def write_index(self, dataset_diff, index, repo):
+        """
+        Given a diff that only affects this dataset, write it to the given index + repo.
+        Blobs will be created in the repo, and referenced in the index, but the index is
+        not committed - this is the responsibility of the caller.
+        """
+        # TODO - support multiple primary keys.
+        pk_field = self.primary_key
+
+        conflicts = False
+        if dataset_diff["META"]:
+            raise NotYetImplemented(
+                "Sorry, committing meta changes is not yet supported"
+            )
+
+        for _, old_feature in dataset_diff["D"].items():
+            pk = old_feature[pk_field]
+            feature_path = self.encode_1pk_to_path(pk)
+            if feature_path not in index:
+                conflicts = True
+                click.echo(f"{self.path}: Trying to delete nonexistent feature: {pk}")
+                continue
+            index.remove(feature_path)
+
+        for new_feature in dataset_diff["I"]:
+            pk = new_feature[pk_field]
+            feature_path, feature_data = self.encode_feature(new_feature)
+            if feature_path in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to create feature that already exists: {pk}"
+                )
+                continue
+            blob_id = repo.create_blob(feature_data)
+            entry = pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
+            index.add(entry)
+
+        geom_column_name = self.geom_column_name
+        for _, (old_feature, new_feature) in dataset_diff["U"].items():
+            old_pk = old_feature[pk_field]
+            old_feature_path = self.encode_1pk_to_path(old_pk)
+            if old_feature_path not in index:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update nonexistent feature: {old_pk}"
+                )
+                continue
+
+            actual_existing_feature = self.get_feature(old_pk)
+            if geom_column_name:
+                # FIXME: actually compare the geometries here.
+                # Turns out this is quite hard - geometries are hard to compare sanely.
+                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
+                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
+                actual_existing_feature.pop(geom_column_name)
+                old_feature = old_feature.copy()
+                old_feature.pop(geom_column_name)
+            if actual_existing_feature != old_feature:
+                conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update already-changed feature: {old_pk}"
+                )
+                continue
+
+            index.remove(old_feature_path)
+            new_feature_path, new_feature_data = self.encode_feature(new_feature)
+            blob_id = repo.create_blob(new_feature_data)
+            entry = pygit2.IndexEntry(
+                new_feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+            )
+            index.add(entry)
+
+        if conflicts:
+            raise InvalidOperation(
+                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+            )

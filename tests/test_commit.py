@@ -146,13 +146,7 @@ def test_commit(
 
         dataset = rs[layer]
         tree = repo.head.peel(pygit2.Tree)
-        # TODO: fix the discrepancies between dataset v1 and v2
-        if structure_version == "1":
-            assert dataset.get_feature_path(pk_del) not in tree
-        elif structure_version == "2":
-            assert (
-                dataset.repo_path(dataset.encode_pk_values_to_path(pk_del)) not in tree
-            )
+        assert dataset.encode_1pk_to_path(pk_del) not in tree
 
         wc = WorkingCopy.open(repo)
         wc.assert_db_tree_match(tree)

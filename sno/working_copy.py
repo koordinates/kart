@@ -941,16 +941,16 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                             # TODO: improve this by grouping by status then calling
                             # write_features/delete_features passing multiple PKs?
                             if d.status == pygit2.GIT_DELTA_DELETED:
-                                old_pk = src_ds.decode_pk(
+                                old_pk = src_ds.decode_path_to_1pk(
                                     os.path.basename(d.old_file.path)
                                 )
                                 L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
                                 self.delete_features(dbcur, src_ds, [old_pk])
                             elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                                old_pk = src_ds.decode_pk(
+                                old_pk = src_ds.decode_path_to_1pk(
                                     os.path.basename(d.old_file.path)
                                 )
-                                new_pk = dest_ds.decode_pk(
+                                new_pk = dest_ds.decode_path_to_1pk(
                                     os.path.basename(d.new_file.path)
                                 )
                                 L.debug(
@@ -962,7 +962,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                                 )
                                 self.write_features(dbcur, dest_ds, [new_pk])
                             elif d.status == pygit2.GIT_DELTA_ADDED:
-                                new_pk = dest_ds.decode_pk(
+                                new_pk = dest_ds.decode_path_to_1pk(
                                     os.path.basename(d.new_file.path)
                                 )
                                 L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)

@@ -463,10 +463,7 @@ def test_import_from_non_gpkg(
             if num_rows > 0:
                 # compare the first feature in the repo against the source DB
                 key, got_feature = next(dataset.features())
-                if import_version == "1":
-                    fid = dataset.decode_pk(key)
-                elif import_version == "2":
-                    [fid] = dataset.decode_path_to_pk_values(key)
+                fid = dataset.decode_path_to_1pk(key)
 
                 src_ds = ogr.Open(str(source_filename))
                 src_layer = src_ds.GetLayer(0)
@@ -709,17 +706,23 @@ def test_pg_import(
 def test_pk_encoding():
     ds = Dataset1(None, "mytable")
 
-    assert ds.encode_pk(492183) == "zgAHgpc="
-    assert ds.decode_pk("zgAHgpc=") == 492183
+    kwargs = {"cast_primary_key": False}
 
-    enc = [(i, ds.encode_pk(i)) for i in range(-50000, 50000, 23)]
+    assert (
+        ds.encode_1pk_to_path(492183, **kwargs) == "mytable/.sno-table/fd/ac/zgAHgpc="
+    )
+    assert ds.decode_path_to_1pk("mytable/.sno-table/fd/ac/zgAHgpc=") == 492183
+
+    enc = [(i, ds.encode_1pk_to_path(i, **kwargs)) for i in range(-50000, 50000, 23)]
     assert len(set([k for i, k in enc])) == len(enc)
 
     for i, k in enc:
-        assert ds.decode_pk(k) == i
+        assert ds.decode_path_to_1pk(k) == i
 
-    assert ds.encode_pk("Dave") == "pERhdmU="
-    assert ds.decode_pk("pERhdmU=") == "Dave"
+    assert (
+        ds.encode_1pk_to_path("Dave", **kwargs) == "mytable/.sno-table/b5/24/pERhdmU="
+    )
+    assert ds.decode_path_to_1pk("mytable/.sno-table/b5/24/pERhdmU=") == "Dave"
 
 
 @pytest.mark.slow
@@ -767,17 +770,15 @@ def test_feature_find_decode_performance(
         benchmark(dataset.get_feature, pk)
 
     elif profile == "feature_to_dict":
+        feature_path = dataset.encode_1pk_to_path(pk, relative=True)
+        feature_data = (tree / feature_path).data
+
         # TODO: try to avoid two sets of code for two dataset versions -
         # either by making their interfaces more similar, or by deleting v1
         if import_version == "1":
-            feature_path = dataset.encode_pk(pk)
-            feature_data = (tree / dataset.get_feature_path(pk)).data
             benchmark(dataset.repo_feature_to_dict, feature_path, feature_data)
         elif import_version == "2":
-            pk_values = dataset.schema.sanitise_pk_values(pk)
-            feature_path = dataset.encode_pk_values_to_path(pk_values)
-            feature_data = dataset.get_data_at(feature_path)
-            benchmark(dataset.get_feature, path=feature_path, data=feature_data)
+            benchmark(dataset.get_feature, full_path=feature_path, data=feature_data)
     else:
         raise NotImplementedError(f"Unknown profile: {profile}")
 
@@ -844,8 +845,8 @@ def test_import_multiple(
         assert ds.path == LAYERS[i][2]
 
         pk_enc, feature = next(ds.features())
-        f_path = ds.get_feature_path(feature[ds.primary_key])
-        assert tree / ds.path / f_path
+        f_path = ds.encode_1pk_to_path(feature[ds.primary_key])
+        assert tree / f_path
 
 
 def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):

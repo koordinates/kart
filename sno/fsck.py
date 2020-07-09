@@ -196,7 +196,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                 click.echo("Checking features...")
                 feature_err_count = 0
                 for pk_hash, feature in dataset.features(fast=False):
-                    h_verify = dataset.encode_pk(feature[pk])
+                    h_verify = dataset.encode_1pk_to_path(feature[pk])
 
                     if pk_hash != h_verify:
                         has_err = True

@@ -4,7 +4,8 @@ import pytest
 from sno.dataset2 import Dataset2, Legend, ColumnSchema, Schema
 
 
-DUMMY_PATH = "."
+DATASET_PATH = "path/to/dataset"
+EMPTY_DATASET = Dataset2(None, DATASET_PATH)
 
 
 class DictTree:
@@ -36,10 +37,10 @@ def test_legend_roundtrip():
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    path, data = Dataset2.encode_legend(orig)
+    path, data = EMPTY_DATASET.encode_legend(orig)
     tree = DictTree({path: data})
 
-    dataset2 = Dataset2(tree, DUMMY_PATH)
+    dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     roundtripped = dataset2.get_legend(orig.hexhash())
 
     assert roundtripped is not orig
@@ -66,7 +67,7 @@ def test_raw_dict_to_value_tuples():
 
 def test_raw_feature_roundtrip():
     legend = Legend(["a", "b", "c"], ["d", "e", "f"])
-    legend_path, legend_data = Dataset2.encode_legend(legend)
+    legend_path, legend_data = EMPTY_DATASET.encode_legend(legend)
 
     raw_feature_dict = {
         "e": "eggs",
@@ -76,13 +77,13 @@ def test_raw_feature_roundtrip():
         "c": True,
         "b": b"bytes",
     }
-    feature_path, feature_data = Dataset2.encode_raw_feature_dict(
+    feature_path, feature_data = EMPTY_DATASET.encode_raw_feature_dict(
         raw_feature_dict, legend
     )
     tree = DictTree({legend_path: legend_data, feature_path: feature_data})
 
-    dataset2 = Dataset2(tree, DUMMY_PATH)
-    roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
+    dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped = dataset2.get_raw_feature_dict(full_path=feature_path)
     assert roundtripped is not raw_feature_dict
     assert roundtripped == raw_feature_dict
 
@@ -94,11 +95,13 @@ def test_raw_feature_roundtrip():
         "e": None,
         "f": None,
     }
-    _, empty_feature_data = Dataset2.encode_raw_feature_dict(empty_feature_dict, legend)
+    _, empty_feature_data = EMPTY_DATASET.encode_raw_feature_dict(
+        empty_feature_dict, legend
+    )
     tree = DictTree({legend_path: legend_data, feature_path: empty_feature_data})
 
-    dataset2 = Dataset2(tree, DUMMY_PATH)
-    roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
+    dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped = dataset2.get_raw_feature_dict(full_path=feature_path)
     # Overwriting the old feature with an empty feature at the same path only
     # clears the non-pk values, since the pk values are part of the path.
     assert roundtripped == {
@@ -154,10 +157,10 @@ def test_schema_roundtrip(gen_uuid):
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    path, data = Dataset2.encode_schema(orig)
+    path, data = EMPTY_DATASET.encode_schema(orig)
     tree = DictTree({path: data})
 
-    dataset2 = Dataset2(tree, DUMMY_PATH)
+    dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     roundtripped = dataset2.schema
 
     assert roundtripped is not orig
@@ -173,8 +176,8 @@ def test_feature_roundtrip(gen_uuid):
             ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
-    schema_path, schema_data = Dataset2.encode_schema(schema)
-    legend_path, legend_data = Dataset2.encode_legend(schema.legend)
+    schema_path, schema_data = EMPTY_DATASET.encode_schema(schema)
+    legend_path, legend_data = EMPTY_DATASET.encode_legend(schema.legend)
 
     # Feature tuples must be in schema order:
     feature_tuple = ("010100000087BF756489EF5C4C", 7, "GIS Choir", b"MP3")
@@ -186,8 +189,8 @@ def test_feature_roundtrip(gen_uuid):
         "geom": "010100000087BF756489EF5C4C",
     }
 
-    feature_path, feature_data = Dataset2.encode_feature(feature_tuple, schema)
-    feature_path2, feature_data2 = Dataset2.encode_feature(feature_dict, schema)
+    feature_path, feature_data = EMPTY_DATASET.encode_feature(feature_tuple, schema)
+    feature_path2, feature_data2 = EMPTY_DATASET.encode_feature(feature_dict, schema)
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
@@ -195,12 +198,12 @@ def test_feature_roundtrip(gen_uuid):
         {schema_path: schema_data, legend_path: legend_data, feature_path: feature_data}
     )
 
-    dataset2 = Dataset2(tree, DUMMY_PATH)
-    roundtripped_tuple = dataset2.get_feature(path=feature_path, keys=False)
+    dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped_tuple = dataset2.get_feature(full_path=feature_path, keys=False)
     assert roundtripped_tuple is not feature_tuple
     assert roundtripped_tuple == feature_tuple
 
-    roundtripped_dict = dataset2.get_feature(path=feature_path, keys=True)
+    roundtripped_dict = dataset2.get_feature(full_path=feature_path, keys=True)
     assert roundtripped_dict is not feature_dict
     assert roundtripped_dict == feature_dict
 
@@ -235,15 +238,17 @@ def test_schema_change_roundtrip(gen_uuid):
         "ID": 7,
     }
 
-    feature_path, feature_data = Dataset2.encode_feature(feature_tuple, old_schema)
-    feature_path2, feature_data2 = Dataset2.encode_feature(feature_dict, old_schema)
+    feature_path, feature_data = EMPTY_DATASET.encode_feature(feature_tuple, old_schema)
+    feature_path2, feature_data2 = EMPTY_DATASET.encode_feature(
+        feature_dict, old_schema
+    )
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
     # The dataset should store only the current schema, but all legends.
-    schema_path, schema_data = Dataset2.encode_schema(new_schema)
-    new_legend_path, new_legend_data = Dataset2.encode_legend(new_schema.legend)
-    old_legend_path, old_legend_data = Dataset2.encode_legend(old_schema.legend)
+    schema_path, schema_data = EMPTY_DATASET.encode_schema(new_schema)
+    new_legend_path, new_legend_data = EMPTY_DATASET.encode_legend(new_schema.legend)
+    old_legend_path, old_legend_data = EMPTY_DATASET.encode_legend(old_schema.legend)
     tree = DictTree(
         {
             schema_path: schema_data,
@@ -253,12 +258,12 @@ def test_schema_change_roundtrip(gen_uuid):
         }
     )
 
-    dataset2 = Dataset2(tree, DUMMY_PATH)
+    dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     # Old columns that are not present in the new schema are gone.
     # New columns that are not present in the old schema have 'None's.
-    roundtripped = dataset2.get_feature(path=feature_path, keys=False)
+    roundtripped = dataset2.get_feature(full_path=feature_path, keys=False)
     assert roundtripped == (7, None, "Bloggs", "Joe", None)
-    roundtripped = dataset2.get_feature(path=feature_path, keys=True)
+    roundtripped = dataset2.get_feature(full_path=feature_path, keys=True)
     assert roundtripped == {
         "personnel_id": 7,
         "tax_file_number": None,

@@ -7,12 +7,10 @@ import json
 import os
 import uuid
 
-import click
 import msgpack
 import pygit2
 
 from .filter_util import UNFILTERED
-from .exceptions import NotYetImplemented, InvalidOperation, PATCH_DOES_NOT_APPLY
 from .structure import DatasetStructure
 
 
@@ -360,7 +358,7 @@ class Schema:
         """
         return self.legend.pk_columns == other.legend.pk_columns
 
-    def sanitise_pk_values(self, pk_values):
+    def sanitise_pks(self, pk_values):
         """
         Fixes two common problems with pk_values, particularly if pk_values were provided by the user
         as text and so had to be parsed from text:
@@ -423,18 +421,16 @@ class Dataset2(DatasetStructure):
     def version(self):
         return self.get_data_at(self.VERSION_PATH, as_str=True)
 
-    def get_data_at(self, path, as_str=False, missing_ok=False):
-        """Return the data at the given path from within this dataset."""
+    def get_data_at(self, rel_path, as_str=False, missing_ok=False):
+        """Return the data at the given relative path from within this dataset."""
+        leaf = None
         try:
-            leaf = self.tree / str(path)
-        except KeyError:
-            leaf = None
-
-        if hasattr(leaf, "data"):
+            leaf = self.tree / str(rel_path)
             return _text(leaf.data) if as_str else leaf.data
-        elif missing_ok:
-            return None
-        raise KeyError(f"No data found at path {path}, type={type(leaf)}")
+        except (KeyError, AttributeError):
+            if missing_ok:
+                return None
+            raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
 
     @functools.lru_cache()
     def get_meta_item(self, path, missing_ok=True):
@@ -474,14 +470,13 @@ class Dataset2(DatasetStructure):
         path = self.LEGEND_PATH + legend_hash
         return Legend.loads(self.get_data_at(path))
 
-    @classmethod
-    def encode_legend(cls, legend):
+    def encode_legend(self, legend):
         """
         Given a legend, returns the path and the data which *should be written*
         to write this legend. This is almost the inverse of get_legend, except
         Dataset2 doesn't write the data.
         """
-        return cls.LEGEND_PATH + legend.hexhash(), legend.dumps()
+        return self.full_path(self.LEGEND_PATH + legend.hexhash()), legend.dumps()
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -489,19 +484,18 @@ class Dataset2(DatasetStructure):
         """Load the current schema from this dataset."""
         return Schema.loads(self.get_data_at(self.SCHEMA_PATH))
 
-    @classmethod
-    def encode_schema(cls, schema):
+    def encode_schema(self, schema):
         """
         Given a schema, returns the path and the data which *should be written*
         to write this schema. This is almost the inverse of calling .schema,
         except Dataset2 doesn't write the data. (Note that the schema's legend
         should also be stored if any features are written with this schema.)
         """
-        return cls.SCHEMA_PATH, schema.dumps()
+        return self.full_path(self.SCHEMA_PATH), schema.dumps()
 
-    def get_raw_feature_dict(self, pk_values=None, *, path=None, data=None):
+    def get_raw_feature_dict(self, pk_values=None, *, full_path=None, data=None):
         """
-        Gets the feature with the given primary key(s) / at the given path.
+        Gets the feature with the given primary key(s) / at the given "full" path.
         The result is a "raw" feature dict, values are keyed by column ID,
         and contains exactly those values that are actually stored in the tree,
         which might not be the same values that are now in the schema.
@@ -509,32 +503,38 @@ class Dataset2(DatasetStructure):
         """
 
         # Either pk_values or path should be supplied, but not both.
-        if pk_values is None and path is not None:
-            pk_values = self.decode_path_to_pk_values(path)
-        elif path is None and pk_values is not None:
-            pk_values = self.schema.sanitise_pk_values(pk_values)
-            path = self.encode_pk_values_to_path(pk_values)
-        else:
-            raise ValueError("Exactly one of (pk_values, path) must be supplied")
+        if pk_values is not None and full_path is None and data is None:
+            # Normal case - caller supplied pk_values, look up path + data.
+            pk_values = self.schema.sanitise_pks(pk_values)
+            rel_path = self.encode_pks_to_path(pk_values, relative=True)
+            data = self.get_data_at(rel_path)
 
-        # Optionally, data can be supplied if the caller already knows it.
-        # This is just the data stored at path.
-        if data is None:
-            data = self.get_data_at(path)
+        elif full_path is not None and pk_values is None:
+            # Path case - caller can supply path and optionally data too,
+            # if they already know it. This is just the data at full_path.
+            pk_values = self.decode_path_to_pks(full_path)
+            if data is None:
+                data = self.get_data_at(self.rel_path(full_path))
+        else:
+            raise ValueError(
+                "Either <pk_values> or <full_path>, [<data>] must be supplied"
+            )
 
         legend_hash, non_pk_values = _unpack(data)
         legend = self.get_legend(legend_hash)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
     def get_feature(
-        self, pk_values=None, *, path=None, data=None, keys=True, ogr_geoms=None
+        self, pk_values=None, *, full_path=None, data=None, keys=True, ogr_geoms=None
     ):
         """
-        Gets the feature with the given primary key(s) / at the given path.
+        Gets the feature with the given primary key(s) / at the given "full" path.
         The result is either a dict of values keyed by column name (if keys=True)
         or a tuple of values in schema order (if keys=False).
         """
-        raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
+        raw_dict = self.get_raw_feature_dict(
+            pk_values=pk_values, full_path=full_path, data=data
+        )
         return self.schema.feature_from_raw_dict(raw_dict, keys=keys)
 
     def features(self, keys=True):
@@ -549,8 +549,9 @@ class Dataset2(DatasetStructure):
         if self.FEATURE_PATH not in self.tree:
             return
         for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH):
+            # blob.name is not actually the full_path, but since we provide data, the exact path is irrelevant.
             yield blob.name, self.get_feature(
-                path=blob.name, data=blob.data, keys=keys
+                full_path=blob.name, data=blob.data, keys=keys
             ),
 
     def feature_count(self):
@@ -559,69 +560,79 @@ class Dataset2(DatasetStructure):
         return sum(1 for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH))
 
     @classmethod
-    def decode_path_to_pk_values(cls, path):
+    def decode_path_to_pks(cls, path):
         """Given a feature path, returns the pk values encoded in it."""
         encoded = os.path.basename(path)
         return _unpack(_b64decode_str(encoded))
 
     @classmethod
-    def encode_raw_feature_dict(cls, raw_feature_dict, legend):
+    def decode_path_to_1pk(cls, path):
+        decoded = cls.decode_path_to_pks(path)
+        if len(decoded) != 1:
+            raise ValueError(f"Expected a single pk_value, got {decoded}")
+        return decoded[0]
+
+    def encode_raw_feature_dict(self, raw_feature_dict, legend):
         """
         Given a "raw" feature dict (keyed by column IDs) and a schema, returns the path
         and the data which *should be written* to write this feature. This is almost the
         inverse of get_raw_feature_dict, except Dataset2 doesn't write the data.
         """
         pk_values, non_pk_values = legend.raw_dict_to_value_tuples(raw_feature_dict)
-        path = cls.encode_pk_values_to_path(pk_values)
+        path = self.encode_pks_to_path(pk_values)
         data = _pack([legend.hexhash(), non_pk_values])
         return path, data
 
-    @classmethod
-    def encode_feature(cls, feature, schema):
+    def encode_feature(self, feature, schema=None):
         """
         Given a feature (either a dict keyed by column name, or a list / tuple in schema order),
         returns the path and the data which *should be written* to write this feature. This is
         almost the inverse of get_feature, except Dataset2 doesn't write the data.
         """
+        if schema is None:
+            schema = self.schema
         raw_dict = schema.feature_to_raw_dict(feature)
-        return cls.encode_raw_feature_dict(raw_dict, schema.legend)
+        return self.encode_raw_feature_dict(raw_dict, schema.legend)
 
-    @classmethod
-    def encode_pk_values_to_path(cls, pk_values):
+    def encode_pks_to_path(self, pk_values, relative=False):
         """
         Given some pk values, returns the path the feature should be written to.
-        pk_values should be a single pk value, or a list of pk values.
+        pk_values should be a list or tuple of pk values.
         """
         packed_pk = _pack(pk_values)
         pk_hash = _hexhash(packed_pk)
         filename = _b64encode_str(packed_pk)
-        return f"{cls.FEATURE_PATH}{pk_hash[:2]}/{pk_hash[2:4]}/{filename}"
+        rel_path = f"{self.FEATURE_PATH}{pk_hash[:2]}/{pk_hash[2:4]}/{filename}"
+        return rel_path if relative else self.full_path(rel_path)
 
-    def repo_path(self, rel_path):
-        return f"{self.path}/{rel_path}"
+    def encode_1pk_to_path(self, pk_value, relative=False):
+        """Given a feature's only pk value, returns the path the feature should be written to."""
+        if isinstance(pk_value, (list, tuple)):
+            raise ValueError(f"Expected a single pk value, got {pk_value}")
+        return self.encode_pks_to_path((pk_value,), relative=relative)
 
     def import_iter_meta_blobs(self, repo, source):
         schema = source.schema
-        meta_blobs = [
+        yield self.encode_schema(schema)
+        yield self.encode_legend(schema.legend)
+
+        rel_meta_blobs = [
             (self.VERSION_PATH, self.VERSION_IMPORT),
             (self.TITLE_PATH, source.get_meta_item("title")),
             (self.DESCRIPTION_PATH, source.get_meta_item("description")),
-            self.encode_schema(schema),
-            self.encode_legend(schema.legend),
         ]
 
         for path, definition in source.srs_definitions():
-            meta_blobs.append((f"{self.SRS_PATH}{path}.wkt", definition))
+            rel_meta_blobs.append((f"{self.SRS_PATH}{path}.wkt", definition))
 
-        for meta_path, meta_content in meta_blobs:
+        for meta_path, meta_content in rel_meta_blobs:
             if meta_content is not None:
-                yield self.repo_path(meta_path), _bytes(meta_content)
+                yield self.full_path(meta_path), _bytes(meta_content)
 
     def import_iter_feature_blobs(self, resultset, source):
         schema = source.schema
         for feature in resultset:
-            feature_path, feature_content = self.encode_feature(feature, schema)
-            yield self.repo_path(feature_path), feature_content
+            yield self.encode_feature(feature, schema)
 
     @property
     def primary_key(self):
@@ -633,94 +644,20 @@ class Dataset2(DatasetStructure):
 
     def encode_feature_blob(self, feature):
         # TODO - the dataset interface still needs some work:
-        # - maybe encode methods shouldn't be classmethods.
         # - having a _blob version of encode_feature is too many similar methods.
         return self.encode_feature(feature, self.schema)[1]
 
-    def write_index(self, dataset_diff, index, repo):
-        """
-        Given a diff that only affects this dataset, write it to the given index + repo.
-        Blobs will be created in the repo, and referenced in the index, but the index is
-        not committed - this is the responsibility of the caller.
-        """
-        # TODO - support multiple primary keys.
-        pk_field = self.primary_key
-
-        conflicts = False
-        if dataset_diff["META"]:
-            raise NotYetImplemented(
-                "Sorry, committing meta changes is not yet supported"
-            )
-
-        for _, old_feature in dataset_diff["D"].items():
-            pk_values = (old_feature[pk_field],)
-            feature_path = self.repo_path(self.encode_pk_values_to_path(pk_values))
-            if feature_path not in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to delete nonexistent feature: {pk_values}"
-                )
-                continue
-            index.remove(feature_path)
-
-        for new_feature in dataset_diff["I"]:
-            pk_values = (new_feature[pk_field],)
-            feature_path, feature_data = self.encode_feature(new_feature, self.schema)
-            feature_path = self.repo_path(feature_path)
-            if feature_path in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to create feature that already exists: {pk_values}"
-                )
-                continue
-            blob_id = repo.create_blob(feature_data)
-            entry = pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-            index.add(entry)
-
-        geom_column_name = self.geom_column_name
-        for _, (old_feature, new_feature) in dataset_diff["U"].items():
-            old_pk_values = (old_feature[pk_field],)
-            old_feature_path = self.repo_path(
-                self.encode_pk_values_to_path(old_pk_values)
-            )
-            if old_feature_path not in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update nonexistent feature: {old_pk_values}"
-                )
-                continue
-
-            actual_existing_feature = self.get_feature(old_pk_values)
-            if geom_column_name:
-                # FIXME: actually compare the geometries here.
-                # Turns out this is quite hard - geometries are hard to compare sanely.
-                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
-                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
-                actual_existing_feature.pop(geom_column_name)
-                old_feature = old_feature.copy()
-                old_feature.pop(geom_column_name)
-            if actual_existing_feature != old_feature:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update already-changed feature: {old_pk_values}"
-                )
-                continue
-
-            index.remove(old_feature_path)
-            new_feature_path, new_feature_data = self.encode_feature(
-                new_feature, self.schema
-            )
-            new_feature_path = self.repo_path(new_feature_path)
-            blob_id = repo.create_blob(new_feature_data)
-            entry = pygit2.IndexEntry(
-                new_feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
-            index.add(entry)
-
-        if conflicts:
-            raise InvalidOperation(
-                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
-            )
+    def get_feature_tuples(self, row_pks, col_names=None, *, ignore_missing=False):
+        # TODO - make the signature more like the features method, which supports results as tuples or dicts.
+        # TODO - support col_names (and maybe support it for features method too).
+        for pk in row_pks:
+            try:
+                yield self.get_feature(pk, keys=False)
+            except KeyError:
+                if ignore_missing:
+                    continue
+                else:
+                    raise
 
     def diff(self, other, pk_filter=UNFILTERED, reverse=False):
         """
@@ -771,7 +708,7 @@ class Dataset2(DatasetStructure):
                 continue
 
             if d.status == pygit2.GIT_DELTA_DELETED:
-                ours_pk_values = ours.decode_path_to_pk_values(d.old_file.path)
+                ours_pk_values = ours.decode_path_to_pks(d.old_file.path)
                 ours_pk_str = str(ours_pk_values[0])
                 if ours_pk_str not in pk_filter:
                     continue
@@ -784,9 +721,9 @@ class Dataset2(DatasetStructure):
                 )
 
             elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                ours_pk_values = ours.decode_path_to_pk_values(d.old_file.path)
+                ours_pk_values = ours.decode_path_to_pks(d.old_file.path)
                 ours_pk_str = str(ours_pk_values[0])
-                theirs_pk_values = theirs.decode_path_to_pk_values(d.new_file.path)
+                theirs_pk_values = theirs.decode_path_to_pks(d.new_file.path)
                 theirs_pk_str = str(theirs_pk_values[0])
                 if ours_pk_str not in pk_filter and theirs_pk_str not in pk_filter:
                     continue
@@ -804,7 +741,7 @@ class Dataset2(DatasetStructure):
                 candidates_upd[ours_pk_str] = (ours_feature, theirs_feature)
 
             elif d.status == pygit2.GIT_DELTA_ADDED:
-                theirs_pk_values = theirs.decode_path_to_pk_values(d.new_file.path)
+                theirs_pk_values = theirs.decode_path_to_pks(d.new_file.path)
                 theirs_pk_str = str(theirs_pk_values[0])
                 if theirs_pk_str not in pk_filter:
                     continue

@@ -6,13 +6,11 @@ import itertools
 import os
 import re
 
-import click
 import json
 import msgpack
 import pygit2
 
 from . import gpkg, diff
-from .exceptions import InvalidOperation, PATCH_DOES_NOT_APPLY
 from .filter_util import UNFILTERED
 from .structure import DatasetStructure, IntegrityError
 
@@ -91,22 +89,22 @@ class Dataset1(DatasetStructure):
         field = next(f for f in schema if f["name"] == self.primary_key)
         return field["type"]
 
-    def encode_pk(self, pk):
-        pk_enc = msgpack.packb(pk, use_bin_type=True)  # encode pk value via msgpack
-        pk_str = base64.urlsafe_b64encode(pk_enc).decode("utf8")  # filename safe
-        return pk_str
-
-    def decode_pk(self, encoded):
-        return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
-
-    def get_feature_path(self, pk, cast_primary_key=True):
+    def encode_1pk_to_path(self, pk, cast_primary_key=True, relative=False):
         if cast_primary_key:
             pk = self.cast_primary_key(pk)
-        pk_enc = self.encode_pk(pk)
+
+        pk_enc_bin = msgpack.packb(pk, use_bin_type=True)  # encode pk value via msgpack
+        pk_enc = base64.urlsafe_b64encode(pk_enc_bin).decode("utf8")  # filename safe
         pk_hash = hashlib.sha1(
             pk_enc.encode("utf8")
         ).hexdigest()  # hash to randomly spread filenames
-        return "/".join([".sno-table", pk_hash[:2], pk_hash[2:4], pk_enc])
+        rel_path = "/".join([".sno-table", pk_hash[:2], pk_hash[2:4], pk_enc])
+        return rel_path if relative else self.full_path(rel_path)
+
+    @classmethod
+    def decode_path_to_1pk(cls, path):
+        encoded = os.path.basename(path)
+        return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
 
     def decode_path(self, path):
         """
@@ -119,7 +117,7 @@ class Dataset1(DatasetStructure):
             path = path[len(".sno-table/") :]
         if path.startswith("meta/"):
             return ("meta", path[len("meta/") :])
-        pk = self.decode_pk(os.path.basename(path))
+        pk = self.decode_path_to_1pk(os.path.basename(path))
         return ("feature", pk)
 
     def import_meta_items(self, source):
@@ -143,12 +141,12 @@ class Dataset1(DatasetStructure):
         yield ("primary_key", pk_field)
 
     def remove_feature(self, pk, index):
-        object_path = self.get_feature_path(pk)
-        index.remove("/".join([self.path, object_path]))
+        feature_path = self.encode_1pk_to_path(pk)
+        index.remove(feature_path)
 
     def repo_feature_to_dict(self, blob_path, blob_data, ogr_geoms=False):
         feature = {
-            self.primary_key: self.decode_pk(blob_path),
+            self.primary_key: self.decode_path_to_1pk(blob_path),
         }
         bin_feature = msgpack.unpackb(
             blob_data,
@@ -165,18 +163,13 @@ class Dataset1(DatasetStructure):
 
     def _get_feature(self, pk_value):
         pk_value = self.cast_primary_key(pk_value)
+        rel_path = self.encode_1pk_to_path(pk_value, relative=True)
 
-        pk_enc = self.encode_pk(pk_value)
-        pk_hash = hashlib.sha1(
-            pk_enc.encode("utf8")
-        ).hexdigest()  # hash to randomly spread filenames
-
-        leaf = self.tree / ".sno-table" / pk_hash[:2] / pk_hash[2:4] / pk_enc
+        leaf = self.tree / rel_path
         if not isinstance(leaf, pygit2.Blob):
             raise IntegrityError(
-                f"Unexpected TreeEntry type={leaf.type_str} in feature tree {pk_enc}"
+                f"Unexpected TreeEntry type={leaf.type_str} at {rel_path}"
             )
-
         return leaf
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
@@ -218,7 +211,7 @@ class Dataset1(DatasetStructure):
             )
             return tuple(
                 [
-                    self.decode_pk(blob.name) if c == -1 else bin_feature[c]
+                    self.decode_path_to_1pk(blob.name) if c == -1 else bin_feature[c]
                     for c in ftuple_order
                 ]
             )
@@ -298,7 +291,7 @@ class Dataset1(DatasetStructure):
         if primary_key is None:
             primary_key = self.primary_key
         return (
-            self.get_feature_path(feature[primary_key], cast_primary_key),
+            self.encode_1pk_to_path(feature[primary_key], cast_primary_key),
             self.encode_feature_blob(feature, field_cid_map, geom_cols, primary_key),
         )
 
@@ -332,17 +325,13 @@ class Dataset1(DatasetStructure):
         return msgpack.packb(bin_feature, use_bin_type=True)
 
     def import_iter_feature_blobs(self, resultset, source):
-        path = f"{self.path}/.sno-table"
-
         pk_field = source.primary_key
 
         for row in resultset:
-            pk_enc = self.encode_pk(row[pk_field])
-            pk_hash = hashlib.sha1(
-                pk_enc.encode("utf8")
-            ).hexdigest()  # hash to randomly spread filenames
+            feature_path = self.encode_1pk_to_path(
+                row[pk_field], cast_primary_key=False
+            )
 
-            feature_path = f"{path}/{pk_hash[0:2]}/{pk_hash[2:4]}/{pk_enc}"
             bin_feature = {}
             for field in row.keys():
                 if field == pk_field:
@@ -357,83 +346,6 @@ class Dataset1(DatasetStructure):
                 bin_feature[field_id] = value
 
             yield (feature_path, msgpack.packb(bin_feature, use_bin_type=True))
-
-    def write_index(self, dataset_diff, index, repo):
-        pk_field = self.primary_key
-
-        conflicts = False
-        for k, (obj_old, obj_new) in dataset_diff["META"].items():
-            object_path = f"{self.meta_path}/{k}"
-            value = json.dumps(obj_new).encode("utf8")
-
-            blob = repo.create_blob(value)
-            idx_entry = pygit2.IndexEntry(object_path, blob, pygit2.GIT_FILEMODE_BLOB)
-            index.add(idx_entry)
-
-        for _, obj_old in dataset_diff["D"].items():
-            pk = obj_old[pk_field]
-            object_path = "/".join([self.path, self.get_feature_path(pk)])
-            if object_path not in index:
-                conflicts = True
-                click.echo(f"{self.path}: Trying to delete nonexistent feature: {pk}")
-                continue
-            index.remove(object_path)
-
-        for obj_new in dataset_diff["I"]:
-            pk = obj_new[pk_field]
-            object_path = "/".join([self.path, self.get_feature_path(pk)])
-            if object_path in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to create feature that already exists: {pk}"
-                )
-                continue
-            bin_feature = self.encode_feature_blob(obj_new)
-            blob_id = repo.create_blob(bin_feature)
-            entry = pygit2.IndexEntry(object_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-            index.add(entry)
-
-        geom_column_name = self.geom_column_name
-        for _, (obj_old, obj_new) in dataset_diff["U"].items():
-            old_pk = obj_old[pk_field]
-            old_object_path = "/".join([self.path, self.get_feature_path(old_pk)])
-            if old_object_path not in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update nonexistent feature: {old_pk}"
-                )
-                continue
-
-            existing_feature = self.get_feature(old_pk, ogr_geoms=False)
-            if geom_column_name:
-                # FIXME: actually compare the geometries here.
-                # Turns out this is quite hard - geometries are hard to compare sanely.
-                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
-                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
-                existing_feature.pop(geom_column_name)
-                obj_old = obj_old.copy()
-                obj_old.pop(geom_column_name)
-            if existing_feature != obj_old:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update already-changed feature: {old_pk}"
-                )
-                continue
-
-            index.remove(old_object_path)
-            new_pk = obj_new[pk_field]
-            new_object_path = "/".join([self.path, self.get_feature_path(new_pk)])
-            bin_feature = self.encode_feature_blob(obj_new)
-            blob_id = repo.create_blob(bin_feature)
-            entry = pygit2.IndexEntry(
-                new_object_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
-            index.add(entry)
-
-        if conflicts:
-            raise InvalidOperation(
-                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
-            )
 
     def diff(self, other, pk_filter=UNFILTERED, reverse=False):
         candidates_ins = collections.defaultdict(list)
@@ -478,7 +390,7 @@ class Dataset1(DatasetStructure):
                 continue
 
             if d.status == pygit2.GIT_DELTA_DELETED:
-                my_pk = this.decode_pk(os.path.basename(d.old_file.path))
+                my_pk = this.decode_path_to_1pk(os.path.basename(d.old_file.path))
                 if not str(my_pk) in pk_filter:
                     continue
 
@@ -488,8 +400,8 @@ class Dataset1(DatasetStructure):
 
                 candidates_del[str(my_pk)].append((str(my_pk), my_obj))
             elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                my_pk = this.decode_pk(os.path.basename(d.old_file.path))
-                other_pk = other.decode_pk(os.path.basename(d.new_file.path))
+                my_pk = this.decode_path_to_1pk(os.path.basename(d.old_file.path))
+                other_pk = other.decode_path_to_1pk(os.path.basename(d.new_file.path))
                 if not str(my_pk) in pk_filter and not str(other_pk) in pk_filter:
                     continue
 
@@ -506,7 +418,7 @@ class Dataset1(DatasetStructure):
 
                 candidates_upd[str(my_pk)] = (my_obj, other_obj)
             elif d.status == pygit2.GIT_DELTA_ADDED:
-                other_pk = other.decode_pk(os.path.basename(d.new_file.path))
+                other_pk = other.decode_path_to_1pk(os.path.basename(d.new_file.path))
                 if not str(other_pk) in pk_filter:
                     continue
 
