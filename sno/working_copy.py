@@ -13,6 +13,7 @@ from osgeo import gdal
 from . import gpkg, diff
 from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
+from .gpkg_adapter import GPKG_META_ITEMS
 
 L = logging.getLogger("sno.working_copy")
 
@@ -325,10 +326,6 @@ class WorkingCopyGPKG(WorkingCopy):
                 dbcur.execute(sql, values)
 
     def read_meta(self, dataset):
-        if dataset.version == "1.0":
-            # TODO: we shouldn't be diffing dataset version to working copy version.
-            # Instead, we should just be helping the user upgrade to the latest version.
-            yield ("version", {"version": dataset.version})
         with self.session() as db:
             yield from gpkg.get_meta_info(db, dataset.name)
 
@@ -666,13 +663,14 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             table = dataset.name
 
             meta_diff = {}
-            meta_old = dict(dataset.iter_meta_items(exclude={"fields", "primary_key"}))
+            meta_old = {key: dataset.get_meta_item(key) for key in GPKG_META_ITEMS}
             meta_new = dict(self.read_meta(dataset))
             for name in set(meta_new.keys()) ^ set(meta_old.keys()):
                 v_old = meta_old.get(name)
                 v_new = meta_new.get(name)
                 if v_old or v_new:
                     meta_diff[name] = (v_old, v_new)
+                    raise RuntimeError(f"{name}, {(v_old, v_new)}")
 
             pk_field = dataset.primary_key
 

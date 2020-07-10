@@ -30,21 +30,13 @@ def meta(ctx, **kwargs):
     default="pretty",
     help="How to format the JSON output. Only used with -o json",
 )
-@click.option(
-    "--include-readonly/--exclude-readonly",
-    is_flag=True,
-    default=True,
-    help="Include readonly meta items",
-)
 @click.argument('dataset')
 @click.argument('keys', required=False, nargs=-1)
 @click.pass_context
-def meta_get(ctx, output_format, json_style, include_readonly, dataset, keys):
+def meta_get(ctx, output_format, json_style, dataset, keys):
     """
     Prints the value of meta keys for the given dataset.
-    If no keys are given, all available values are printed.
     """
-
     rs = RepositoryStructure(ctx.obj.repo)
 
     try:
@@ -52,24 +44,30 @@ def meta_get(ctx, output_format, json_style, include_readonly, dataset, keys):
     except KeyError:
         raise click.UsageError(f"No such dataset: {dataset}")
 
-    exclude = () if include_readonly else READONLY_ITEMS
-    items = ds.iter_meta_items(exclude=exclude)
     if keys:
-        items = [(k, v) for (k, v) in items if k in keys]
-        if len(items) != len(keys):
-            missing_keys = set(keys) - set(dict(items).keys())
+        items = {}
+        missing_keys = []
+        for key in keys:
+            try:
+                items[key] = ds.get_meta_item(key)
+            except KeyError:
+                missing_keys.append(key)
+
+        if missing_keys:
             raise click.UsageError(
                 f"Couldn't find items: {', '.join(sorted(missing_keys))}"
             )
+    else:
+        items = dict(ds.iter_meta_items())
 
     fp = resolve_output_path('-')
     if output_format == 'text':
         indent = '    '
-        for k, value in items:
-            click.secho(k, bold=True)
+        for key, value in items.items():
+            click.secho(key, bold=True)
             serialized = format_json_for_output(value, fp, json_style=json_style)
             lines = serialized.splitlines()
             for i, line in enumerate(lines):
                 fp.write(f"{indent}{line}\n")
     else:
-        dump_json_output(dict(items), fp, json_style=json_style)
+        dump_json_output(items, fp, json_style=json_style)
