@@ -427,10 +427,12 @@ class Dataset2(DatasetStructure):
         try:
             leaf = self.tree / str(rel_path)
             return _text(leaf.data) if as_str else leaf.data
-        except (KeyError, AttributeError):
+        except (KeyError, AttributeError) as e:
             if missing_ok:
                 return None
-            raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
+            raise KeyError(
+                f"No data found at rel-path {rel_path}, type={type(leaf)}"
+            ) from e
 
     @functools.lru_cache()
     def get_meta_item(self, path, missing_ok=True):
