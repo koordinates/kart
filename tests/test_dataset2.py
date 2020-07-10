@@ -1,4 +1,3 @@
-import os
 import pytest
 
 from sno.dataset2 import Dataset2, Legend, ColumnSchema, Schema
@@ -26,7 +25,9 @@ class DictTree:
             self.data = all_data[cur_path]
 
     def __truediv__(self, path):
-        return DictTree(self.all_data, os.path.join(self.cur_path, path))
+        if self.cur_path:
+            path = f"{self.cur_path.rstrip('/')}/{path}"
+        return DictTree(self.all_data, path)
 
 
 def test_legend_roundtrip():
