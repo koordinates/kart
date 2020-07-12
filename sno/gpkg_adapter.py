@@ -8,7 +8,7 @@ GPKG_META_ITEMS = (
     "gpkg_geometry_columns",
     "gpkg_spatial_ref_sys",
     "sqlite_table_info",
-    "gkpg_metadata",
+    "gpkg_metadata",
     "gpkg_metadata_reference",
 )
 

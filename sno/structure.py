@@ -353,30 +353,19 @@ class DatasetStructure:
         return full_path[len(self.path) + 1 :]
 
     @property
-    @functools.lru_cache(maxsize=1)
     def version(self):
-        return self.get_meta_item("version")["version"]
+        """Returns a version string eg '1.0'."""
+        # TODO - get rid of per-dataset version - just use structure_version.
+        raise NotImplementedError()
 
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
         return self.tree / self.META_PATH
 
-    @functools.lru_cache()
-    def get_meta_item(self, name):
-        meta_tree = self.meta_tree
-        try:
-            o = meta_tree / name
-        except KeyError:
-            return None
-
-        if not isinstance(o, pygit2.Blob):
-            raise ValueError(f"meta/{name} is a {o.type_str}, expected blob")
-
-        return json.loads(o.data)
-
-    def iter_meta_items(self, exclude=None):
-        exclude = set(exclude or [])
+    def _iter_meta_items(self, exclude=()):
+        """Iterate over all meta items found in the meta tree."""
+        exclude = set(exclude)
         for top_tree, top_path, subtree_names, blob_names in core.walk_tree(
             self.meta_tree
         ):
@@ -388,6 +377,28 @@ class DatasetStructure:
                 yield (meta_path, self.get_meta_item(meta_path))
 
             subtree_names[:] = [n for n in subtree_names if n not in exclude]
+
+    def iter_meta_items(self):
+        """
+        Iterates through all meta items as (name, contents) tuples.
+        This implementation returns everything stored in the meta tree.
+        Subclasses can extend to also return generated meta-items,
+        or to hide meta-items that are implementation details.
+        """
+        yield from self._iter_meta_items()
+
+    def get_meta_item(self, name, missing_ok=False):
+        """
+        Returns the meta item with the given name.
+        Subclasses can extend to generate meta-items on the fly,
+        or to return the meta item in a format other than bytes.
+        """
+        leaf = None
+        try:
+            leaf = self.meta_tree / str(name)
+            return leaf.data
+        except (KeyError, AttributeError) as e:
+            raise KeyError(f"No meta-item found named {name}, type={type(leaf)}") from e
 
     @property
     @functools.lru_cache(maxsize=1)

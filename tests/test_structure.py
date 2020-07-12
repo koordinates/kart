@@ -228,8 +228,8 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     There are all sorts of caveats to the meta item emulation, and this attempts
     to avoid them when comparing.
     """
-    meta_items = dict(dataset.iter_meta_items())
-    gpkg_meta_items = dict(gpkg_dataset.iter_meta_items())
+    meta_items = dict(dataset.iter_meta_items(include_hidden=True))
+    gpkg_meta_items = dict(gpkg_dataset.iter_meta_items(include_hidden=True))
 
     # we don't implement XML metadata for non-gpkg formats
     del gpkg_meta_items['gpkg_metadata']
@@ -508,7 +508,7 @@ def test_shp_import_meta(
         tree = repo.head.peel(pygit2.Tree) / path
         dataset = structure.DatasetStructure.instantiate(tree, path)
 
-        meta_items = dict(dataset.iter_meta_items())
+        meta_items = dict(dataset.iter_meta_items(include_hidden=True))
         assert set(meta_items) == {
             'gpkg_contents',
             'gpkg_geometry_columns',
@@ -637,7 +637,7 @@ def test_pg_import(
         tree = repo.head.peel(pygit2.Tree) / path
         dataset = structure.DatasetStructure.instantiate(tree, path)
 
-        meta_items = dict(dataset.iter_meta_items())
+        meta_items = dict(dataset.iter_meta_items(include_hidden=True))
         assert set(meta_items.keys()) == {
             'fields/geom',
             'version',

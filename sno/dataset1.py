@@ -10,7 +10,7 @@ import json
 import msgpack
 import pygit2
 
-from . import gpkg, diff
+from . import diff, gpkg, gpkg_adapter
 from .filter_util import UNFILTERED
 from .structure import DatasetStructure, IntegrityError
 
@@ -41,6 +41,8 @@ class Dataset1(DatasetStructure):
     MSGPACK_EXT_GEOM = 71  # 'G'
     META_PATH = ".sno-table/meta"
 
+    ALL_META_ITEMS = gpkg_adapter.GPKG_META_ITEMS
+
     def _msgpack_unpack_ext(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
             return data  # bytes
@@ -54,6 +56,24 @@ class Dataset1(DatasetStructure):
         else:
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)
+
+    @property
+    def version(self):
+        return "1.0"
+
+    def iter_meta_items(self, include_hidden=False):
+        exclude = () if include_hidden else ("fields", "version")
+        return self._iter_meta_items(exclude=exclude)
+
+    @functools.lru_cache()
+    def get_meta_item(self, name):
+        # Dataset V1 items are always JSON.
+        try:
+            return json.loads(super().get_meta_item(name))
+        except KeyError:
+            if name in gpkg_adapter.GPKG_META_ITEMS:
+                return None  # We happen not to have this meta-item, but it is real.
+            raise  # This meta-item doesn't exist at all in dataset V1.
 
     @property
     @functools.lru_cache(maxsize=1)

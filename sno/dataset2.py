@@ -419,14 +419,14 @@ class Dataset2(DatasetStructure):
 
     @property
     def version(self):
-        return self.get_data_at(self.VERSION_PATH, as_str=True)
+        return "2.0"
 
-    def get_data_at(self, rel_path, as_str=False, missing_ok=False):
+    def get_data_at(self, rel_path, missing_ok=False):
         """Return the data at the given relative path from within this dataset."""
         leaf = None
         try:
             leaf = self.tree / str(rel_path)
-            return _text(leaf.data) if as_str else leaf.data
+            return leaf.data
         except (KeyError, AttributeError) as e:
             if missing_ok:
                 return None
@@ -434,27 +434,29 @@ class Dataset2(DatasetStructure):
                 f"No data found at rel-path {rel_path}, type={type(leaf)}"
             ) from e
 
+    def iter_meta_items(self, include_hidden=False):
+        exclude = () if include_hidden else ("legend", "version")
+        return self._iter_meta_items(exclude=exclude)
+
     @functools.lru_cache()
-    def get_meta_item(self, path, missing_ok=True):
+    def get_meta_item(self, name, missing_ok=True):
         from . import gpkg_adapter
 
         # These items are not stored, but generated from other items that are stored.
-        if path in gpkg_adapter.GPKG_META_ITEMS:
-            return gpkg_adapter.get_meta_item(self, path)
+        if name in gpkg_adapter.GPKG_META_ITEMS:
+            return gpkg_adapter.get_meta_item(self, name)
 
-        content_is_str = not path.startswith("legend/")
-        return self.get_data_at(
-            self.META_PATH + path, as_str=content_is_str, missing_ok=missing_ok
-        )
+        rel_path = self.META_PATH + name
+        data = self.get_data_at(rel_path, missing_ok=missing_ok)
+        if data is None:
+            return data
 
-    def iter_meta_items(self, exclude=None):
-        from . import gpkg_adapter
-
-        # TODO - change the interface to iterate through "diffable" meta items, and
-        # make datasets v2 implement this. (The dataset implementation itself is the
-        # best place to distinguish between user-visible and hidden meta items).
-        for path in gpkg_adapter.GPKG_META_ITEMS:
-            yield path, gpkg_adapter.get_meta_item(self, path)
+        if rel_path == self.SCHEMA_PATH:
+            return _unjson(data)
+        elif not rel_path.startswith(self.LEGEND_PATH):
+            return _text(data)
+        else:
+            return data
 
     def get_srs_definition(self, srs_name):
         """Return the SRS definition stored with the given name."""

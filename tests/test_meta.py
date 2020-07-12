@@ -1,6 +1,27 @@
 import json
 import pytest
 
+EXPECTED_GCG_JSON = {
+    "column_name": "geom",
+    "geometry_type_name": "POINT",
+    "m": 0,
+    "srs_id": 4326,
+    "table_name": "nz_pa_points_topo_150k",
+    "z": 0,
+}
+
+EXPECTED_GCG_TEXT = """
+gpkg_geometry_columns
+    {
+      "column_name": "geom",
+      "geometry_type_name": "POINT",
+      "m": 0,
+      "srs_id": 4326,
+      "table_name": "nz_pa_points_topo_150k",
+      "z": 0
+    }
+""".strip()
+
 
 class TestMetaGet:
     def test_errors(self, data_archive_readonly, cli_runner):
@@ -23,34 +44,14 @@ class TestMetaGet:
             )
             assert r.exit_code == 0, r
             if output_format == 'text':
-                assert 'fields/name_ascii\n    3\nfields/t50_fid\n    2' in r.stdout
+                assert EXPECTED_GCG_TEXT in r.stdout
+                assert "gpkg_contents" in r.stdout
+                assert "sqlite_table_info" in r.stdout
             else:
                 output = json.loads(r.stdout)
-                assert output['fields/name_ascii'] == 3
-
-    @pytest.mark.parametrize("output_format", ("text", "json"))
-    def test_all_exclude_readonly(
-        self, output_format, data_archive_readonly, cli_runner
-    ):
-        with data_archive_readonly("points"):
-            r = cli_runner.invoke(
-                [
-                    "meta",
-                    "get",
-                    "nz_pa_points_topo_150k",
-                    "-o",
-                    output_format,
-                    "--exclude-readonly",
-                ]
-            )
-            assert r.exit_code == 0, r
-            if output_format == 'text':
-                assert 'gpkg_contents\n' in r.stdout
-                assert 'fields/name_ascii' not in r.stdout
-            else:
-                output = json.loads(r.stdout)
-                assert 'gpkg_contents' in output
-                assert 'fields/name_ascii' not in output
+                assert output["gpkg_geometry_columns"] == EXPECTED_GCG_JSON
+                assert output["gpkg_contents"]
+                assert output["sqlite_table_info"]
 
     @pytest.mark.parametrize("output_format", ("text", "json"))
     def test_keys(self, output_format, data_archive_readonly, cli_runner):
@@ -62,15 +63,16 @@ class TestMetaGet:
                     "nz_pa_points_topo_150k",
                     "-o",
                     output_format,
-                    "gpkg_contents",
-                    "fields/name_ascii",
+                    "gpkg_geometry_columns",
                 ]
             )
             assert r.exit_code == 0, r
             if output_format == 'text':
-                assert 'fields/name_ascii\n    3' in r.stdout
-                assert 'fields/t50_fid' not in r.stdout
+                assert EXPECTED_GCG_TEXT in r.stdout
+                assert "gpkg_contents" not in r.stdout
+                assert "sqlite_table_info" not in r.stdout
             else:
                 output = json.loads(r.stdout)
-                assert output['fields/name_ascii'] == 3
-                assert 'fields/t50_fid' not in output
+                assert output["gpkg_geometry_columns"] == EXPECTED_GCG_JSON
+                assert "gpkg_contents" not in output
+                assert "sqlite_table_info" not in output
