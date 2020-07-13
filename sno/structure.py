@@ -18,6 +18,7 @@ from .exceptions import (
     PATCH_DOES_NOT_APPLY,
 )
 from .filter_util import UNFILTERED
+from .structure_version import get_structure_version
 
 
 L = logging.getLogger("sno.structure")
@@ -72,12 +73,19 @@ class RepositoryStructure:
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
 
     def __repr__(self):
+        name = f"RepoStructureV{self.version}"
         if self._commit is not None:
-            return f"RepoStructure<{self.repo.path}@{self._commit.id}>"
+            return f"{name}<{self.repo.path}@{self._commit.id}>"
         elif self._tree is not None:
-            return f"RepoStructure<{self.repo.path}@tree={self._tree.id}>"
+            return f"{name}<{self.repo.path}@tree={self._tree.id}>"
         else:
-            return f"RepoStructure<{self.repo.path} <empty>>"
+            return f"{name}<{self.repo.path} <empty>>"
+
+    @property
+    #    @functools.lru_cache(maxsize=1)
+    def version(self):
+        """Returns the dataset version to use for this entire repo."""
+        return get_structure_version(self.repo, self.tree)
 
     def decode_path(self, path):
         """
@@ -103,7 +111,7 @@ class RepositoryStructure:
             raise
 
         if isinstance(o, pygit2.Tree):
-            ds = DatasetStructure.instantiate(o, path)
+            ds = DatasetStructure.instantiate(o, path, self.version)
             return ds
 
         raise KeyError(f"No valid dataset found at '{path}'")
@@ -128,16 +136,10 @@ class RepositoryStructure:
                     else:
                         te_path = o.name
 
-                    try:
-                        ds = DatasetStructure.instantiate(o, te_path)
+                    if ".sno-table" in o:
+                        ds = DatasetStructure.instantiate(o, te_path, self.version)
                         yield ds
-                    except IntegrityError:
-                        self.L.warn(
-                            "Error loading dataset from %s, ignoring tree",
-                            te_path,
-                            exc_info=True,
-                        )
-                    except ValueError:
+                    else:
                         # examine inside this directory
                         to_examine.append((te_path, o))
 
@@ -253,92 +255,28 @@ class DatasetStructure:
         return f"<{self.__class__.__name__}: {self.path}>"
 
     @classmethod
-    @functools.lru_cache(maxsize=1)
-    def all_versions(cls):
-        """ Get all supported Dataset Structure versions """
-        from . import dataset1  # noqa
-        from . import dataset2  # noqa
+    def for_version(cls, version):
+        from .dataset1 import Dataset1
+        from .dataset2 import Dataset2
 
-        def _get_subclasses(klass):
-            for c in klass.__subclasses__():
-                yield c
-                yield from _get_subclasses(c)
+        version = int(version)
+        if version == 1:
+            return Dataset1
+        elif version == 2:
+            return Dataset2
 
-        return tuple(_get_subclasses(cls))
-
-    @classmethod
-    @functools.lru_cache(maxsize=1)
-    def version_numbers(cls):
-        versions = [klass.VERSION_IMPORT for klass in cls.all_versions()]
-        # default first, then newest to oldest
-        versions.sort(
-            key=lambda v: (
-                v == DatasetStructure.DEFAULT_IMPORT_VERSION,
-                [int(i) for i in v.split(".")],
-            ),
-            reverse=True,
-        )
-        return tuple(versions)
+        raise ValueError(f"No DatasetStructure found for version={version}")
 
     @classmethod
-    def for_version(cls, version=None):
-        if version is None:
-            version = cls.DEFAULT_IMPORT_VERSION
-
-        if isinstance(version, int) or len(version) == 1:
-            version = f"{version}.0"
-
-        for klass in cls.all_versions():
-            if klass.VERSION_IMPORT == version:
-                return klass
-
-        raise ValueError(f"No DatasetStructure for v{version}")
-
-    @classmethod
-    def instantiate(cls, tree, path):
+    def instantiate(cls, tree, path, version):
         """ Load a DatasetStructure from a Tree """
         L = logging.getLogger(cls.__qualname__)
 
         if not isinstance(tree, pygit2.Tree):
             raise TypeError(f"Expected Tree object, got {type(tree)}")
 
-        for version_klass in cls.all_versions():
-            try:
-                blob = tree[version_klass.VERSION_PATH]
-            except KeyError:
-                continue
-            else:
-                L.debug(
-                    "Found candidate %sx tree at: %s",
-                    version_klass.VERSION_SPECIFIER,
-                    path,
-                )
-
-            if not isinstance(blob, pygit2.Blob):
-                raise IntegrityError(
-                    f"{version_klass.__name__}: {path}/{version_klass.VERSION_PATH} isn't a blob ({blob.type_str})"
-                )
-
-            if len(blob.data) <= 3:
-                version = blob.data.decode("utf8")
-            else:
-                try:
-                    d = json.loads(blob.data)
-                    version = d.get("version", None)
-                except Exception as e:
-                    raise IntegrityError(
-                        f"{version_klass.__name__}: Couldn't load version file from: {path}/{version_klass.VERSION_PATH}"
-                    ) from e
-
-            if version and version.startswith(version_klass.VERSION_SPECIFIER):
-                L.debug("Found %s dataset at: %s", version, path)
-                return version_klass(tree, path)
-            else:
-                continue
-
-        raise ValueError(
-            f"{path}: Couldn't find any Dataset Structure version that matched"
-        )
+        version_klass = cls.for_version(version)
+        return version_klass(tree, path)
 
     # useful methods
 
@@ -433,24 +371,6 @@ class DatasetStructure:
         # not optimised in V0
         for k, f in self.features():
             yield tuple(f[c] for c in col_names)
-
-    def import_meta_items(self, source):
-        yield ("version", {"version": self.VERSION_IMPORT})
-        for name, value in source.build_meta_info():
-            viter = value if isinstance(value, (list, tuple)) else [value]
-
-            for v in viter:
-                if v and "table_name" in v:
-                    v["table_name"] = self.name
-
-            yield (name, value)
-
-    def import_iter_meta_blobs(self, repo, source):
-        for name, value in self.import_meta_items(source):
-            yield (
-                f"{self.path}/{self.META_PATH}/{name}",
-                json.dumps(value).encode("utf8"),
-            )
 
     RTREE_INDEX_EXTENSIONS = ("sno-idxd", "sno-idxi")
 

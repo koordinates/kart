@@ -645,7 +645,7 @@ class OgrImporter:
         if xml_metadata:
             yield from self._get_xml_metadata(xml_metadata)
 
-    def build_meta_info(self):
+    def iter_gpkg_meta_items(self):
         """
         Imitates the ImportGPKG implementation, and we just use the gpkg field/table names
         for compatibility, because there's no particular need to change it...
@@ -686,7 +686,7 @@ class ImportGPKG(OgrImporter):
         dbcur.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
         yield from dbcur
 
-    def build_meta_info(self):
+    def iter_gpkg_meta_items(self):
         """
         Returns metadata from the gpkg_* tables about this GPKG.
         """
@@ -694,7 +694,7 @@ class ImportGPKG(OgrImporter):
         # The `gpkg.get_meta_info()` can produce mostly the same stuff,
         # but it doesn't know about overrides from the `--titles` and `--description` options.
         done_keys = []
-        for k, v in super().build_meta_info():
+        for k, v in super().iter_gpkg_meta_items():
             done_keys.append(k)
             yield k, v
 

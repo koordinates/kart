@@ -25,6 +25,7 @@ class Dataset1(DatasetStructure):
     any/structure/mylayer/
       .sno-table/
         meta/
+          version      = {"version": "1.0"}
           primary_key
           fields/
             [field]  # map to attribute-id
@@ -35,8 +36,7 @@ class Dataset1(DatasetStructure):
     """
 
     VERSION_PATH = ".sno-table/meta/version"
-    VERSION_SPECIFIER = "1."
-    VERSION_IMPORT = "1.0"
+    VERSION_CONTENTS = {"version": "1.0"}
 
     MSGPACK_EXT_GEOM = 71  # 'G'
     META_PATH = ".sno-table/meta"
@@ -59,11 +59,15 @@ class Dataset1(DatasetStructure):
 
     @property
     def version(self):
-        return "1.0"
+        return 1
 
     def iter_meta_items(self, include_hidden=False):
         exclude = () if include_hidden else ("fields", "version")
-        return self._iter_meta_items(exclude=exclude)
+        yield from self._iter_meta_items(exclude=exclude)
+
+    def iter_gpkg_meta_items(self):
+        exclude = () if include_hidden else ("fields", "version")
+        yield from self._iter_meta_items(exclude=exclude)
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -139,26 +143,6 @@ class Dataset1(DatasetStructure):
             return ("meta", path[len("meta/") :])
         pk = self.decode_path_to_1pk(os.path.basename(path))
         return ("feature", pk)
-
-    def import_meta_items(self, source):
-        """
-            path/to/layer/.sno-table/
-              meta/
-                version
-                schema
-                geometry
-                primary_key
-                fields/
-                  myfield
-        """
-        for name, item in super().import_meta_items(source):
-            yield (name, item)
-
-        for colname, colid in source.field_cid_map.items():
-            yield (f"fields/{colname}", colid)
-
-        pk_field = source.primary_key
-        yield ("primary_key", pk_field)
 
     def remove_feature(self, pk, index):
         feature_path = self.encode_1pk_to_path(pk)
@@ -344,7 +328,44 @@ class Dataset1(DatasetStructure):
 
         return msgpack.packb(bin_feature, use_bin_type=True)
 
+    def _import_meta_items(self, source):
+        """
+        Iterates through V1 specific meta items to import:
+            path/to/layer/.sno-table/
+              meta/
+                version
+                primary_key
+                fields/
+                  myfield
+        and includes source.iter_gpkg_meta_items()
+        """
+        yield ("version", self.VERSION_CONTENTS)
+
+        for colname, colid in source.field_cid_map.items():
+            yield (f"fields/{colname}", colid)
+
+        pk_field = source.primary_key
+        yield ("primary_key", pk_field)
+
+        for name, value in source.iter_gpkg_meta_items():
+            viter = value if isinstance(value, (list, tuple)) else [value]
+
+            for v in viter:
+                if v and "table_name" in v:
+                    v["table_name"] = self.name
+
+            yield (name, value)
+
+    def import_iter_meta_blobs(self, repo, source):
+        """For the given import source, yield the meta blobs that should to be written."""
+        for name, value in self._import_meta_items(source):
+            yield (
+                f"{self.path}/{self.META_PATH}/{name}",
+                json.dumps(value).encode("utf8"),
+            )
+
     def import_iter_feature_blobs(self, resultset, source):
+        """For the given import source, yields the feature blobs that should be written."""
         pk_field = source.primary_key
 
         for row in resultset:

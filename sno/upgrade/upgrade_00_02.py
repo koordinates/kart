@@ -108,7 +108,7 @@ def upgrade(source, dest, layer):
             click.echo(f"  {layer}: Geometry={geom_field} PrimaryKey={pk_field}")
 
         dataset = Dataset1(None, layer)
-        version = json.dumps({"version": dataset.VERSION_IMPORT}).encode("utf8")
+        version = json.dumps(Dataset1.VERSION_CONTENTS).encode("utf8")
 
         feature_count = 0
 
