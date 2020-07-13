@@ -8,6 +8,8 @@ import pygit2
 
 from .exceptions import SubprocessError
 from .structure import DatasetStructure
+from .structure_version import get_structure_version, extra_blobs_for_version
+
 
 L = logging.getLogger("sno.fast_import")
 
@@ -25,13 +27,27 @@ def fast_import_tables(
     max_pack_size="2G",
     extra_blobs=(),
 ):
+    structure_version = int(structure_version)
+    head_tree = get_head_tree(repo) if incremental else None
+
+    if not head_tree:
+        # Starting from an effectively empty repo. Write the blobs needed for this repo version.
+        incremental = False
+        extra_blobs = list(extra_blobs) + extra_blobs_for_version(structure_version)
+    else:
+        # Starting from a repo with commits. Make sure we have a matching version.
+        repo_version = get_structure_version(repo, head_tree)
+        if repo_version != structure_version:
+            raise ValueError(
+                f"Version mismatch - repo is version {repo_version}, trying to import as {structure_version}"
+            )
+
     for path, source in sources.items():
         if not source.table:
             raise ValueError("No table specified")
 
-        if not repo.is_empty and incremental:
-            if path in repo.head.peel(pygit2.Tree):
-                raise ValueError(f"{path}/ already exists")
+        if incremental and path in head_tree:
+            raise ValueError(f"{path}/ already exists")
 
     cmd = [
         "git",
@@ -52,13 +68,15 @@ def fast_import_tables(
     try:
         p.stdin.write(header.encode("utf8"))
 
-        if not repo.is_empty and incremental:
-            # start with the existing tree/contents
+        if incremental:
+            # Start with the existing branch contents.
+            # FIXME - this should probably not always be master.
             p.stdin.write(b"from refs/heads/master^0\n")
 
-        # Write an extra blobs supplied by the client.
+        # Write an extra blobs supplied by the client or needed for this version.
         for i, blob_path in write_blobs_to_stream(p.stdin, extra_blobs):
-            pass
+            if incremental and blob_path in head_tree:
+                raise ValueError(f"{blob_path} already exists")
 
         for path, source in sources.items():
             dataset = DatasetStructure.for_version(structure_version)(
@@ -118,6 +136,17 @@ def fast_import_tables(
     t3 = time.monotonic()
     if not quiet:
         click.echo(f"Closed in {(t3-t2):.0f}s")
+
+
+def get_head_tree(repo):
+    """Returns the tree at the current repo HEAD."""
+    if repo.is_empty:
+        return None
+    try:
+        return repo.head.peel(pygit2.Tree)
+    except pygit2.GitError:
+        # This happens when the repo is not empty, but the current HEAD has no commits.
+        return None
 
 
 def write_blobs_to_stream(stream, blobs):

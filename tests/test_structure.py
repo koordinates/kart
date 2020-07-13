@@ -13,6 +13,8 @@ import pytest
 from sno import gpkg, structure, fast_import
 from sno.init import OgrImporter, ImportPostgreSQL
 from sno.dataset1 import Dataset1
+from sno.dataset2 import Dataset2
+from sno.structure_version import STRUCTURE_VERSIONS_CHOICE
 
 
 H = pytest.helpers.helpers()
@@ -47,18 +49,19 @@ V1_OR_V2 = ("import_version", ["1", "2"])
 
 
 def test_dataset_versions():
-    assert structure.DatasetStructure.version_numbers() == ("1.0", "2.0")
-    klasses = structure.DatasetStructure.all_versions()
-    assert set(klass.VERSION_IMPORT for klass in klasses) == set(
-        structure.DatasetStructure.version_numbers()
-    )
+    assert structure.DatasetStructure.for_version(1) == Dataset1
+    assert structure.DatasetStructure.for_version(2) == Dataset2
+
+    for choice in STRUCTURE_VERSIONS_CHOICE.choices:
+        assert structure.DatasetStructure.for_version(choice) is not None
 
 
-def _import_check(repo_path, table, source_gpkg, geopackage):
+def _import_check(repo_path, table, source_gpkg, geopackage, import_version=None):
     repo = pygit2.Repository(str(repo_path))
-    tree = repo.head.peel(pygit2.Tree) / table
+    dataset = structure.RepositoryStructure(repo)[table]
 
-    dataset = structure.DatasetStructure.instantiate(tree, table)
+    if import_version is not None:
+        assert dataset.version == int(import_version)
 
     db = geopackage(source_gpkg)
     num_rows = db.cursor().execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
@@ -66,12 +69,12 @@ def _import_check(repo_path, table, source_gpkg, geopackage):
     o = subprocess.check_output(["git", "ls-tree", "-r", "-t", "HEAD", table])
     print("\n".join(l.decode("utf8") for l in o.splitlines()[:20]))
 
-    if dataset.version.startswith("1."):
+    if dataset.version == 1:
         re_paths = (
             r"^\d{6} blob [0-9a-f]{40}\t%s/.sno-table/[0-9a-f]{2}/[0-9a-f]{2}/([^/]+)$"
             % table
         )
-    elif dataset.version.startswith("2."):
+    elif dataset.version == 2:
         re_paths = r"^\d{6} blob [0-9a-f]{40}\t%s/.sno-table/feature/.*$" % table
     else:
         raise NotImplementedError(dataset.version)
@@ -178,11 +181,11 @@ def test_import(
             assert len(list(repo.walk(repo.head.target))) == 1
 
             dataset = _import_check(
-                repo_path, table, f"{data / source_gpkg}", geopackage
+                repo_path, table, f"{data / source_gpkg}", geopackage, import_version
             )
 
             assert dataset.__class__.__name__ == f"Dataset{import_version}"
-            assert int(float(dataset.version)) == int(import_version)
+            assert dataset.version == int(import_version)
 
             pk_field = gpkg.pk(db, table)
 
@@ -403,8 +406,7 @@ def test_import_from_non_gpkg(
             assert r.exit_code == 0, r
 
         gpkg_repo = pygit2.Repository(str(gpkg_repo_path))
-        gpkg_tree = gpkg_repo.head.peel(pygit2.Tree) / table
-        gpkg_dataset = structure.DatasetStructure.instantiate(gpkg_tree, table)
+        gpkg_dataset = structure.RepositoryStructure(gpkg_repo)[table]
 
         # convert to a new format using OGR
         source_filename = tmp_path / f"data.{source_format.lower()}"
@@ -443,7 +445,7 @@ def test_import_from_non_gpkg(
             assert len([c for c in repo.walk(repo.head.target)]) == 1
 
             dataset = _import_check(
-                repo_path, table, f"{data / source_gpkg}", geopackage
+                repo_path, table, f"{data / source_gpkg}", geopackage, import_version
             )
 
             assert dataset.__class__.__name__ == f"Dataset{import_version}"
@@ -451,12 +453,11 @@ def test_import_from_non_gpkg(
 
             # Compare the meta items to the GPKG-imported ones
             repo = pygit2.Repository(str(repo_path))
-            tree = repo.head.peel(pygit2.Tree) / table
-            dataset = structure.DatasetStructure.instantiate(tree, table)
+            dataset = structure.RepositoryStructure(repo)[table]
 
-            if import_version == "1":
+            if dataset.version == 1:
                 _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
-            elif import_version == "2":
+            elif dataset.version == 2:
                 # TODO: Dataset2 needs to store more metadata.
                 pass
 
@@ -505,8 +506,7 @@ def test_shp_import_meta(
         # now check metadata
         path = "nz_waca_adjustments"
         repo = pygit2.Repository(str(repo_path))
-        tree = repo.head.peel(pygit2.Tree) / path
-        dataset = structure.DatasetStructure.instantiate(tree, path)
+        dataset = structure.RepositoryStructure(repo)[path]
 
         meta_items = dict(dataset.iter_meta_items(include_hidden=True))
         assert set(meta_items) == {
@@ -634,8 +634,7 @@ def test_pg_import(
         # now check metadata
         path = "nz_waca_adjustments"
         repo = pygit2.Repository(str(repo_path))
-        tree = repo.head.peel(pygit2.Tree) / path
-        dataset = structure.DatasetStructure.instantiate(tree, path)
+        dataset = structure.RepositoryStructure(repo)[path]
 
         meta_items = dict(dataset.iter_meta_items(include_hidden=True))
         assert set(meta_items.keys()) == {
@@ -749,13 +748,11 @@ def test_feature_find_decode_performance(
 
     repo_path = data_imported(archive, source_gpkg, table, import_version)
     repo = pygit2.Repository(str(repo_path))
+    tree = repo.head.peel(pygit2.Tree) / "mytable"
+    dataset = structure.RepositoryStructure(repo)["mytable"]
 
-    path = "mytable"
-    tree = repo.head.peel(pygit2.Tree) / path
-
-    dataset = structure.DatasetStructure.instantiate(tree, path)
     assert dataset.__class__.__name__ == f"Dataset{import_version}"
-    assert int(float(dataset.version)) == int(import_version)
+    assert dataset.version == int(import_version)
 
     with data_archive(archive) as data:
         db = geopackage(f"{data / source_gpkg}")
@@ -819,7 +816,13 @@ def test_import_multiple(
                 assert r.exit_code == 0, r
 
                 datasets.append(
-                    _import_check(repo_path, table, f"{data / source_gpkg}", geopackage)
+                    _import_check(
+                        repo_path,
+                        table,
+                        f"{data / source_gpkg}",
+                        geopackage,
+                        import_version,
+                    )
                 )
 
                 assert len([c for c in repo.walk(repo.head.target)]) == i + 1
@@ -965,9 +968,8 @@ def test_fast_import(import_version, data_archive, tmp_path, cli_runner, chdir):
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1
-
-            # has meta information
-            assert int(float(dataset.version)) == int(import_version)
+            assert dataset.version == int(import_version)
+            assert list(dataset.iter_meta_items())
 
             # has the right number of features
             feature_count = sum(1 for f in dataset.features())

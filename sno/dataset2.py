@@ -385,8 +385,7 @@ class Dataset2(DatasetStructure):
     any/structure/mylayer/
       .sno-table/
         meta/
-          version               = 2.0
-          schema                = [current schema JSON]
+          schema              = [current schema JSON]
           legend/
             [legend-a-hash]   = [column-id0, column-id1, ...]
             [legend-b-hash]   = [column-id0, column-id1, ...]
@@ -403,10 +402,6 @@ class Dataset2(DatasetStructure):
     which *should be written*. The caller must write these to a commit.
     """
 
-    VERSION_PATH = ".sno-table/meta/version"
-    VERSION_IMPORT = "2.0"
-    VERSION_SPECIFIER = "2."
-
     FEATURE_PATH = ".sno-table/feature/"
     META_PATH = ".sno-table/meta/"
     LEGEND_PATH = ".sno-table/meta/legend/"
@@ -419,7 +414,7 @@ class Dataset2(DatasetStructure):
 
     @property
     def version(self):
-        return "2.0"
+        return 2
 
     def get_data_at(self, rel_path, missing_ok=False):
         """Return the data at the given relative path from within this dataset."""
@@ -621,7 +616,6 @@ class Dataset2(DatasetStructure):
         yield self.encode_legend(schema.legend)
 
         rel_meta_blobs = [
-            (self.VERSION_PATH, self.VERSION_IMPORT),
             (self.TITLE_PATH, source.get_meta_item("title")),
             (self.DESCRIPTION_PATH, source.get_meta_item("description")),
         ]

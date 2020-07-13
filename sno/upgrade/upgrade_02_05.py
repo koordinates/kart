@@ -7,10 +7,9 @@ import click
 import pygit2
 
 from sno.core import walk_tree
-from sno.dataset1 import Dataset1
+from sno.structure import RepositoryStructure
 from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_srs_str
 from sno.fast_import import fast_import_tables
-from sno.structure_version import encode_structure_version
 
 
 @click.command()
@@ -57,7 +56,9 @@ def upgrade(source, dest):
                     f"Commit {i} ({source_commit.id}): Haven't seen parent ({parent_id})"
                 )
 
-        _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map)
+        _upgrade_commit(
+            i, source_repo, source_commit, dest_parents, dest_repo, commit_map
+        )
 
     click.echo(f"{i+1} commits processed.")
 
@@ -87,9 +88,11 @@ def _raw_commit_time(commit):
     return f"{commit.commit_time} {sign}{hours:02}{minutes:02}"
 
 
-def _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map):
-    source_tree = source_commit.peel(pygit2.Tree)
-    sources = {d.path: ImportV1Dataset(d) for d in _find_datasets(source_tree)}
+def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, commit_map):
+    source_repo_structure = RepositoryStructure(source_repo, commit=source_commit)
+    sources = {
+        dataset.path: ImportV1Dataset(dataset) for dataset in source_repo_structure
+    }
     dataset_count = len(sources)
     feature_count = sum(s.row_count for s in sources.values())
 
@@ -110,7 +113,6 @@ def _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map):
         quiet=True,
         header=header,
         structure_version=2,
-        extra_blobs=[encode_structure_version(2)],
     )
 
     dest_commit = dest_repo.head.peel(pygit2.Commit)
@@ -122,21 +124,11 @@ def _upgrade_commit(i, source_commit, dest_parents, dest_repo, commit_map):
     )
 
 
-def _find_datasets(source_tree):
-    for top_tree, top_path, subtree_names, blob_names in walk_tree(
-        source_tree, topdown=True
-    ):
-        if subtree_names == [".sno-table"]:
-            yield Dataset1(top_tree, top_path)
-            # No need to walk into the subtree of this dataset.
-            subtree_names.clear()
-
-
 class ImportV1Dataset:
     # TODO: make ImportV1Dataset the same class as Dataset1 - they are almost the same already.
 
     def __init__(self, dataset):
-        assert dataset.version == "1.0"
+        assert dataset.version == 1
         self.dataset = dataset
         self.path = self.dataset.path
         self.table = self.path
