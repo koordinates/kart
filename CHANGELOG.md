@@ -10,20 +10,24 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * A new repository structure/layout, which will support schema changes. Internally known as Datasets V2.
     - Unlike Datasets V1, the schema can be modified without rewriting every row in a dataset.
-    - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is nowhere near full featured.
-    - Repositories (not datasets) are now versioned. When the first dataset is imported, the repository is marked as either V1 or V2.
+    - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is not yet full featured.
     - Tracking issue [#72](https://github.com/koordinates/sno/issues/72)
 
-### Progress on the new structure/layout (Datasets V2)
+### Using Datasets V1
 
- * Data can be imported into Datasets V2.
- * Repositories can be upgraded from V1 to V2 with `sno upgrade 02-05`.
- * A working copy can be checked out and features can be modified, diffed and committed.
+ * Unless specific action is taken, existing repositories will remain V1, and new repositories still default to V1.
+
+### Using Datasets V2
+
+ * An entire repository must be either V1 or V2, so to use V2, all data must be imported as V2.
+ * Data can be imported as V2 using `sno init --import=<data> --version=2` or `sno import <data> --version=2`
+ * Entire repositories can be upgraded from V1 to V2 with `sno upgrade 02-05 <old_repo> <new_repo>`.
+ * Most functionality from V1 is available in V2, but there may be some bugs.
 
 #### Important missing functionality in Datasets V2
 
  * Geometry storage format is not yet finalised.
- * Merges and conflicts don't work properly.
+ * Schema / meta changes cannot be committed or diffed (note: also missing from V1).
 
 ## 0.4.1
 

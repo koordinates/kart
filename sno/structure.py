@@ -87,15 +87,16 @@ class RepositoryStructure:
         """Returns the dataset version to use for this entire repo."""
         return get_structure_version(self.repo, self.tree)
 
-    def decode_path(self, path):
+    def decode_path(self, full_path):
         """
-        Given a path in the sno repository - eg "table_A/.sno-table/49/3e/Bg==" -
+        Given a path in the sno repository - eg "path/to/dataset/.sno-table/49/3e/Bg==" -
         returns a tuple in either of the following forms:
-        1. (table, "feature", primary_key)
-        2. (table, "meta", metadata_file_path)
+        1. (dataset_path, "feature", primary_key)
+        2. (dataset_path, "meta", meta_item_path)
         """
-        table, table_path = path.split("/.sno-table/", 1)
-        return (table,) + self.get(table).decode_path(table_path)
+        dataset_path, rel_path = full_path.split("/.sno-table/", 1)
+        rel_path = f".sno-table/{rel_path}"
+        return (dataset_path,) + self.get(dataset_path).decode_path(rel_path)
 
     def get(self, path):
         try:
@@ -275,6 +276,9 @@ class DatasetStructure:
         if not isinstance(tree, pygit2.Tree):
             raise TypeError(f"Expected Tree object, got {type(tree)}")
 
+        if ".sno-table" not in tree:
+            raise KeyError(f"No dataset at {path} - missing .sno-table/ tree")
+
         version_klass = cls.for_version(version)
         return version_klass(tree, path)
 
@@ -289,6 +293,20 @@ class DatasetStructure:
         if not full_path.startswith(f"{self.path}/"):
             raise ValueError(f"{full_path} is not a descendant of {self.path}")
         return full_path[len(self.path) + 1 :]
+
+    def decode_path(self, rel_path):
+        """
+        Given a path in this layer of the sno repository - eg ".sno-table/49/3e/Bg==" -
+        returns a tuple in either of the following forms:
+        1. ("feature", primary_key)
+        2. ("meta", metadata_file_path)
+        """
+        if rel_path.startswith(".sno-table/"):
+            rel_path = rel_path[len(".sno-table/") :]
+        if rel_path.startswith("meta/"):
+            return ("meta", rel_path[len("meta/") :])
+        pk = self.decode_path_to_1pk(rel_path)
+        return ("feature", pk)
 
     @property
     def version(self):
@@ -336,6 +354,8 @@ class DatasetStructure:
             leaf = self.meta_tree / str(name)
             return leaf.data
         except (KeyError, AttributeError) as e:
+            if missing_ok:
+                return None
             raise KeyError(f"No meta-item found named {name}, type={type(leaf)}") from e
 
     @property
@@ -348,19 +368,6 @@ class DatasetStructure:
     def geom_column_name(self):
         meta_geom = self.get_meta_item("gpkg_geometry_columns")
         return meta_geom["column_name"] if meta_geom else None
-
-    def cast_primary_key(self, pk_value):
-        pk_type = self.primary_key_type
-
-        if pk_value is not None:
-            # https://www.sqlite.org/datatype3.html
-            # 3.1. Determination Of Column Affinity
-            if "INT" in pk_type:
-                pk_value = int(pk_value)
-            elif re.search("TEXT|CHAR|CLOB", pk_type):
-                pk_value = str(pk_value)
-
-        return pk_value
 
     def get_feature(self, pk_value):
         raise NotImplementedError()

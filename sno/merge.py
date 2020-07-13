@@ -279,7 +279,12 @@ def merge_status_to_text(jdict, fresh):
                 "(Not actually merging due to --dry-run)"
             )
         else:
-            no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
+            if fresh:
+                no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
+            else:
+                no_conflicts_text = (
+                    f"No conflicts!\nUse `sno merge --continue` to complete the merge"
+                )
         return "\n".join([merging_text, no_conflicts_text])
 
     conflicts_header = "Conflicts found:" if fresh else "Conflicts:"

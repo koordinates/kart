@@ -113,6 +113,19 @@ class Dataset1(DatasetStructure):
         field = next(f for f in schema if f["name"] == self.primary_key)
         return field["type"]
 
+    def cast_primary_key(self, pk_value):
+        pk_type = self.primary_key_type
+
+        if pk_value is not None:
+            # https://www.sqlite.org/datatype3.html
+            # 3.1. Determination Of Column Affinity
+            if "INT" in pk_type:
+                pk_value = int(pk_value)
+            elif re.search("TEXT|CHAR|CLOB", pk_type):
+                pk_value = str(pk_value)
+
+        return pk_value
+
     def encode_1pk_to_path(self, pk, cast_primary_key=True, relative=False):
         if cast_primary_key:
             pk = self.cast_primary_key(pk)
@@ -129,20 +142,6 @@ class Dataset1(DatasetStructure):
     def decode_path_to_1pk(cls, path):
         encoded = os.path.basename(path)
         return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
-
-    def decode_path(self, path):
-        """
-        Given a path in this layer of the sno repository - eg ".sno-table/49/3e/Bg==" -
-        returns a tuple in either of the following forms:
-        1. ("feature", primary_key)
-        2. ("meta", metadata_file_path)
-        """
-        if path.startswith(".sno-table/"):
-            path = path[len(".sno-table/") :]
-        if path.startswith("meta/"):
-            return ("meta", path[len("meta/") :])
-        pk = self.decode_path_to_1pk(os.path.basename(path))
-        return ("feature", pk)
 
     def remove_feature(self, pk, index):
         feature_path = self.encode_1pk_to_path(pk)
