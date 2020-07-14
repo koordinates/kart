@@ -4,6 +4,9 @@ Rtree~=0.9.4
 certifi
 Pygments
 jsonschema
+protobuf
+# https://github.com/mapbox/vector-tile-base/issues/18
+https://github.com/mapbox/vector-tile-base/archive/master.tar.gz
 
 # these are only here for dependencies
 psycopg2==2.8.5
