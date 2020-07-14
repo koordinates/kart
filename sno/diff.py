@@ -165,8 +165,8 @@ class Diff:
             "Diff doesn't support __setitem__: use Diff.add_child(diff_or_delta)"
         )
 
-    def get(self, child_key):
-        return self.children.get(child_key)
+    def get(self, child_key, default=None):
+        return self.children.get(child_key, default)
 
     def add_child(self, child):
         if self.child_type is None:
@@ -182,6 +182,7 @@ class Diff:
     def copy(self):
         result = Diff(self.self_key)
         result.children = self.children.copy()
+        result.child_type = self.child_type
         return result
 
     @property
@@ -236,7 +237,9 @@ class Diff:
         return Diff(self.self_key, result)
 
     def __iadd__(self, other):
-        self.children = (self + other).children
+        result = self + other
+        self.children = result.children
+        self.child_type = result.child_type
         return self
 
     def to_filter(self):
@@ -273,7 +276,7 @@ class Diff:
 
 
 def get_dataset_diff(
-    base_rs, target_rs, working_copy, dataset_path, pk_filter=UNFILTERED
+    base_rs, target_rs, working_copy, dataset_path, ds_filter=UNFILTERED
 ):
     diff = Diff(dataset_path)
 
@@ -287,14 +290,14 @@ def get_dataset_diff(
             base_ds, target_ds = target_ds, base_ds
             params["reverse"] = True
 
-        diff_cc = base_ds.diff(target_ds, pk_filter=pk_filter, **params)
+        diff_cc = base_ds.diff(target_ds, ds_filter=ds_filter, **params)
         L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
         diff += diff_cc
 
     if working_copy:
         # diff += target_rs<>working_copy
         target_ds = target_rs.get(dataset_path)
-        diff_wc = working_copy.diff_db_to_tree(target_ds, pk_filter=pk_filter)
+        diff_wc = working_copy.diff_db_to_tree(target_ds, ds_filter=ds_filter)
         L.debug(
             "commit<>working_copy diff (%s): %s", dataset_path, repr(diff_wc),
         )

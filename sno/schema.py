@@ -208,16 +208,21 @@ class Schema:
         return self._columns[i]
 
     @classmethod
-    def loads(cls, data):
-        """Load a schema from a bytestring"""
-        json_array = json_unpack(data)
+    def from_json_array(cls, json_array):
         columns = [ColumnSchema.from_json_dict(c) for c in json_array]
         return cls(columns)
 
+    @classmethod
+    def loads(cls, data):
+        """Load a schema from a bytestring"""
+        return cls.from_json_array(json_unpack(data))
+
+    def to_json_array(self):
+        return [c.to_json_dict() for c in self.columns]
+
     def dumps(self):
         """Writes this schema to a bytestring."""
-        json_array = [c.to_json_dict() for c in self.columns]
-        return json_pack(json_array)
+        return json_pack(self.to_json_array())
 
     def __str__(self):
         cols = ",\n".join(str(c) for c in self.columns)

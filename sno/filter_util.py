@@ -8,6 +8,10 @@ class _Unfiltered:
         # Every part of Unfiltered is also Unfiltered.
         return self
 
+    def get(self, *args):
+        # Every part of Unfiltered is also Unfiltered.
+        return self
+
     def __setitem__(self, *args):
         pass
 
@@ -56,5 +60,7 @@ def add_to_feature_filter(repo_filter, feature_pattern):
     if p is _SINGLE_FEATURE_PATTERN:
         dataset = match.group("dataset")
         pk = match.group("pk")
-        dataset_filter = repo_filter.setdefault(dataset, set())
-        dataset_filter.add(pk)
+        dataset_filter = repo_filter.setdefault(
+            dataset, {"feature": set(), "meta": UNFILTERED}
+        )
+        dataset_filter["feature"].add(pk)

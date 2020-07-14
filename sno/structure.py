@@ -193,7 +193,9 @@ class RepositoryStructure:
         git_index.read_tree(orig_tree)
 
         for ds in self.iter_at(orig_tree):
-            ds.write_index(diff[ds.path], git_index, self.repo)
+            ds_diff = diff.get(ds.path)
+            if ds_diff:
+                ds.write_index(ds_diff, git_index, self.repo)
 
         L.info("Writing tree...")
         new_tree_oid = git_index.write_tree(self.repo)
@@ -439,13 +441,16 @@ class DatasetStructure:
         idx = rtree.index.Index(path, properties=p)
         return idx
 
-    def diff(self, other, pk_filter=UNFILTERED, reverse=False):
+    def diff(self, other, ds_filter=UNFILTERED, reverse=False):
         """
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
         # TODO - support multiple primary keys.
         # TODO - rewrite this simpler, use Deltas for the whole method.
+
+        ds_filter = ds_filter or UNFILTERED
+        pk_filter = ds_filter.get("feature", ())
 
         candidates_ins = defaultdict(list)
         candidates_upd = {}
@@ -490,7 +495,7 @@ class DatasetStructure:
 
             if d.status == pygit2.GIT_DELTA_DELETED:
                 old_pk = old.decode_path_to_1pk(d.old_file.path)
-                if str(old_pk) not in pk_filter:
+                if str(old_pk) not in ds_filter:
                     continue
 
                 self.L.debug("diff(): D %s (%s)", d.old_file.path, old_pk)
@@ -501,7 +506,7 @@ class DatasetStructure:
             elif d.status == pygit2.GIT_DELTA_MODIFIED:
                 old_pk = old.decode_path_to_1pk(d.old_file.path)
                 new_pk = new.decode_path_to_1pk(d.new_file.path)
-                if str(old_pk) not in pk_filter and str(new_pk) not in pk_filter:
+                if str(old_pk) not in ds_filter and str(new_pk) not in ds_filter:
                     continue
 
                 self.L.debug(
@@ -561,7 +566,13 @@ class DatasetStructure:
             for old, new in candidates_upd.values()
         ]
 
-        return Diff(self.path, ins + dels + upd)
+        ds_diff = Diff(self.path)
+
+        feature_diff = Diff("feature", ins + dels + upd)
+        if feature_diff:
+            ds_diff.add_child(feature_diff)
+
+        return ds_diff
 
     def write_index(self, dataset_diff, index, repo):
         """
@@ -570,12 +581,13 @@ class DatasetStructure:
         not committed - this is the responsibility of the caller.
         """
         # TODO - support multiple primary keys.
+        # TODO - support writing new schemas
         pk_field = self.primary_key
 
         conflicts = False
 
         geom_column_name = self.geom_column_name
-        for delta in dataset_diff.values():
+        for delta in dataset_diff.get("feature", {}).values():
             if delta.type == "delete":
                 pk = delta.old.value[pk_field]
                 feature_path = self.encode_1pk_to_path(pk)

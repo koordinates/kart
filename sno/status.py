@@ -85,13 +85,7 @@ def get_working_copy_status_json(repo):
 
 def get_diff_status_json(diff):
     """Given a diff.Diff object, returns a JSON object describing the diff status."""
-    output = {}
-    for dataset_path, counts in diff.type_counts().items():
-        if sum(counts.values()):
-            output[dataset_path] = {
-                "feature": counts,
-            }
-    return output
+    return diff.type_counts()
 
 
 def status_to_text(jdict):
@@ -168,12 +162,19 @@ def working_copy_status_to_text(jdict):
 
 def diff_status_to_text(jdict):
     message = []
-    for dataset_path, all_changes in jdict.items():
-        message.append(f"  {dataset_path}/")
-        feature_changes = all_changes["feature"]
-        feature_change_message(message, feature_changes, "inserts")
-        feature_change_message(message, feature_changes, "updates")
-        feature_change_message(message, feature_changes, "deletes")
+    for dataset_path, dataset_changes in jdict.items():
+        message.append(f"  {dataset_path}:")
+        for dataset_part in ("meta", "feature"):
+            if dataset_part not in dataset_changes:
+                continue
+            message.append(f"    {dataset_part}:")
+            dataset_part_changes = dataset_changes[dataset_part]
+            for change_type in ("inserts", "updates", "deletes"):
+                if change_type not in dataset_part_changes:
+                    continue
+                change_type_count = dataset_part_changes[change_type]
+                message.append(f"      {change_type_count} {change_type}")
+
     return "\n".join(message)
 
 

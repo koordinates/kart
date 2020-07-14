@@ -567,14 +567,17 @@ class RichConflictVersion:
         elif output_format == "geojson":
             return geojson_row(self.feature, self.pk_field)
 
-    def matches_filter(self, conflict_filter):
-        if conflict_filter == UNFILTERED:
+    def matches_filter(self, repo_filter):
+        if repo_filter == UNFILTERED:
             return True
-        dataset_filter = conflict_filter.get(self.dataset_path, None)
-        if not dataset_filter:
+        ds_filter = repo_filter.get(self.dataset_path, None)
+        if not ds_filter:
             return False
-        return dataset_filter == UNFILTERED or (
-            self.is_feature and str(self.pk) in dataset_filter
+        pk_filter = ds_filter.get("feature", None)
+        if not pk_filter:
+            return False
+        return pk_filter == UNFILTERED or (
+            self.is_feature and str(self.pk) in pk_filter
         )
 
 

@@ -279,21 +279,23 @@ def test_commit_message(
         assert re.match(
             rf'{fallback_editor()} "?{re.escape(editmsg_path)}"?$', editor_cmd
         )
-        assert editor_in == (
-            "\n"
-            "# Please enter the commit message for your changes. Lines starting\n"
-            "# with '#' will be ignored, and an empty message aborts the commit.\n"
-            "#\n"
-            "# On branch master\n"
-            "#\n"
-            "# Changes to be committed:\n"
-            "#\n"
-            "#   nz_pa_points_topo_150k/\n"
-            "#     inserts:   1 feature\n"
-            "#     updates:   2 features\n"
-            "#     deletes:   5 features\n"
-            "#\n"
-        )
+        assert editor_in.splitlines() == [
+            '',
+            '# Please enter the commit message for your changes. Lines starting',
+            "# with '#' will be ignored, and an empty message aborts the commit.",
+            '#',
+            '# On branch master',
+            '#',
+            '# Changes to be committed:',
+            '#',
+            '#   nz_pa_points_topo_150k:',
+            '#     feature:',
+            '#       1 inserts',
+            '#       2 updates',
+            '#       5 deletes',
+            '#',
+        ]
+
         print(last_message())
         assert last_message() == "I am a message\nof warning"
 

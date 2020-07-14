@@ -640,9 +640,10 @@ def test_import_existing_wc(
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines()[-2:] == [
-            "  nz_waca_adjustments/",
-            "    deletes:   10 features",
+        assert r.stdout.splitlines()[-3:] == [
+            '  nz_waca_adjustments:',
+            '    feature:',
+            '      10 deletes',
         ]
 
 

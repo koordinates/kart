@@ -3,6 +3,7 @@ import io
 import itertools
 import json
 import os
+import re
 import string
 import sys
 import tempfile
@@ -34,6 +35,9 @@ def diff_output_quiet(**kwargs):
     yield _out
 
 
+_NULL = object()
+
+
 @contextlib.contextmanager
 def diff_output_text(*, output_path, **kwargs):
     """
@@ -61,11 +65,22 @@ def diff_output_text(*, output_path, **kwargs):
 
     def _out(dataset, diff):
         path = dataset.path
-        pk_field = dataset.primary_key
-        prefix = f"{path}:feature:"
-        repr_excl = [pk_field]
 
-        for key, delta in sorted(diff.items()):
+        prefix = f"{path}:meta:"
+        for key, delta in sorted(diff.get('meta', {}).items()):
+            if delta.old:
+                click.secho(f"--- {prefix}{delta.old.key}", bold=True, **pecho)
+            if delta.new:
+                click.secho(f"+++ {prefix}{delta.new.key}", bold=True, **pecho)
+            if delta.old:
+                click.secho(prefix_json(delta.old.value, "- "), fg="red", **pecho)
+            if delta.new:
+                click.secho(prefix_json(delta.new.value, "+ "), fg="green", **pecho)
+
+        pk_field = dataset.primary_key
+        repr_excl = [pk_field]
+        prefix = f"{path}:feature:"
+        for key, delta in sorted(diff.get('feature', {}).items()):
             if delta.type == "insert":
                 click.secho(f"+++ {prefix}{delta.new.key}", bold=True, **pecho)
                 click.secho(
@@ -98,7 +113,7 @@ def diff_output_text(*, output_path, **kwargs):
                 for k in all_keys:
                     if k.startswith("__") or k in repr_excl:
                         continue
-                    if delta.old.value.get(k) == delta.new.value.get(k):
+                    if delta.old.value.get(k, _NULL) == delta.new.value.get(k, _NULL):
                         continue
                     if k in delta.old.value:
                         click.secho(
@@ -106,7 +121,7 @@ def diff_output_text(*, output_path, **kwargs):
                             fg="red",
                             **pecho,
                         )
-                    if k in delta.old.value:
+                    if k in delta.new.value:
                         click.secho(
                             text_row_field(delta.new.value, k, prefix="+ "),
                             fg="green",
@@ -114,6 +129,11 @@ def diff_output_text(*, output_path, **kwargs):
                         )
 
     yield _out
+
+
+def prefix_json(jdict, prefix):
+    json_str = json.dumps(jdict, indent=2)
+    return re.sub("^", prefix, json_str, flags=re.MULTILINE)
 
 
 def text_row(row, prefix="", exclude=None):
@@ -194,9 +214,16 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
 
         pk_field = dataset.primary_key
 
+        for k in diff.get("meta", {}):
+            click.secho(
+                f"Warning: meta changes aren't included in GeoJSON output: {k}",
+                fg="yellow",
+                file=sys.stderr,
+            )
+
         fc = {"type": "FeatureCollection", "features": []}
 
-        for key, delta in sorted(diff.items()):
+        for key, delta in sorted(diff.get("feature", {}).items()):
             if delta.type == "insert":
                 fc["features"].append(geojson_row(delta.new.value, pk_field, "I"))
             elif delta.type == "update":
@@ -237,12 +264,20 @@ def diff_output_json(
 
     accumulated = {}
 
-    def _out(dataset, diff):
-        pk_field = dataset.primary_key
-
-        accumulated[dataset.path] = {
-            "feature": [delta_as_json(delta) for key, delta in sorted(diff.items())],
-        }
+    def _out(dataset, ds_diff):
+        ds_result = {}
+        meta_diff = ds_diff.get("meta")
+        if meta_diff:
+            ds_result["meta"] = [
+                meta_delta_as_json(delta) for key, delta in sorted(meta_diff.items())
+            ]
+        feature_diff = ds_diff.get("feature")
+        if feature_diff:
+            ds_result["feature"] = [
+                feature_delta_as_json(delta)
+                for key, delta in sorted(feature_diff.items())
+            ]
+        accumulated[dataset.path] = ds_result
 
     yield _out
 
@@ -251,7 +286,16 @@ def diff_output_json(
     )
 
 
-def delta_as_json(delta):
+def meta_delta_as_json(delta):
+    if delta.type == "insert":
+        return {"+": delta.new.value}
+    elif delta.type == "delete":
+        return {"-": delta.old.value}
+    elif delta.type == "update":
+        return {"-": delta.old.value, "+": delta.new.value}
+
+
+def feature_delta_as_json(delta):
     if delta.type == "insert":
         return {"+": json_row(delta.new.value)}
     elif delta.type == "delete":

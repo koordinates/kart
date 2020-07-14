@@ -10,7 +10,8 @@ from pathlib import Path
 import pygit2
 from osgeo import gdal
 
-from . import gpkg, diff
+from . import gpkg
+from .diff import Delta, Diff
 from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
 
@@ -247,6 +248,7 @@ class WorkingCopyGPKG(WorkingCopy):
     def write_meta(self, dataset):
         meta_info = dataset.get_meta_item("gpkg_contents")
         meta_info["table_name"] = dataset.name
+        # FIXME: a better way to roundtrip identifiers
         meta_info["identifier"] = f"{dataset.name}: {meta_info['identifier']}"
 
         meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
@@ -648,21 +650,28 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         return feat_count
 
-    def diff_db_to_tree(self, dataset, pk_filter=UNFILTERED):
+    def _columns_match(self, lhs, rhs):
+        if (
+            lhs["dataType"] == rhs["dataType"]
+            and lhs["primaryKeyIndex"] == rhs["primaryKeyIndex"]
+        ):
+            return 2 if lhs["name"] == rhs["name"] else 1
+        return 0
+
+    def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
 
         Pass a list of PK values to filter results to them
         """
-        pk_filter = pk_filter or UNFILTERED
+        ds_filter = ds_filter or UNFILTERED
+        pk_filter = ds_filter.get("feature", ())
         with self.session() as db:
             dbcur = db.cursor()
 
             table = dataset.name
-
-            # TODO - diff meta items.
-
+            ds_diff = Diff(dataset.name)
             pk_field = dataset.primary_key
 
             diff_sql = f"""
@@ -728,8 +737,6 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             def extract_key(obj):
                 return obj[pk_field], obj
 
-            from sno.diff import Delta, Diff
-
             ins = [Delta.insert(extract_key(v[0])) for v in candidates_ins.values()]
             dels = [Delta.delete(extract_key(v[0][1])) for v in candidates_del.values()]
             upd = [
@@ -737,24 +744,27 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 for old, new in candidates_upd.values()
             ]
 
-            return Diff(dataset.path, ins + dels + upd)
+            feature_diff = Diff("feature", ins + dels + upd)
+            if feature_diff:
+                ds_diff.add_child(feature_diff)
 
-    def diff_to_tree(self, repo_structure, feature_filter=UNFILTERED):
+            return ds_diff
+
+    def diff_to_tree(self, repo_structure, repo_filter=UNFILTERED):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for every dataset in the given repository structure.
         """
-        feature_filter = feature_filter or UNFILTERED
+        repo_filter = repo_filter or UNFILTERED
 
-        result = diff.Diff()
+        repo_diff = Diff()
         for dataset in repo_structure:
-            if dataset.path not in feature_filter:
+            if dataset.path not in repo_filter:
                 continue
-            ds_diff = self.diff_db_to_tree(
-                dataset, pk_filter=feature_filter[dataset.path]
-            )
-            result.add_child(ds_diff)
-        return result
+            ds_diff = self.diff_db_to_tree(dataset, ds_filter=repo_filter[dataset.path])
+            if ds_diff:
+                repo_diff.add_child(ds_diff)
+        return repo_diff
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):
         reset_filter = reset_filter or UNFILTERED
@@ -765,8 +775,11 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 dbcur.execute(f"DELETE FROM {self.TRACKING_TABLE};")
                 return
 
-            for dataset, pks in reset_filter.items():
-                if pks == UNFILTERED:
+            for dataset, dataset_filter in reset_filter.items():
+                if (
+                    dataset_filter == UNFILTERED
+                    or dataset_filter.get("feature") == UNFILTERED
+                ):
                     dbcur.execute(
                         f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
                         (dataset,),
@@ -774,6 +787,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     continue
 
                 CHUNK_SIZE = 100
+                pks = dataset_filter.get("feature", ())
                 for pk_chunk in self._chunk(pks, CHUNK_SIZE):
                     dbcur.execute(
                         f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=? AND pk IN ({','.join('?' * len(pk_chunk))});",

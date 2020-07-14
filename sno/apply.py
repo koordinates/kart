@@ -46,7 +46,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     if wc:
         wc.check_not_dirty()
 
-    diff = Diff()
+    repo_diff = Diff()
     for ds_name, ds_diff_dict in json_diff.items():
         dataset = rs.get(ds_name)
         if dataset is None:
@@ -76,12 +76,14 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             )
 
         if feature_changes:
-            diff.add_child(
-                Diff(dataset.path, (parse_delta(change) for change in feature_changes))
+            feature_diff = Diff(
+                "feature", (parse_delta(change) for change in feature_changes)
             )
+            ds_diff = Diff(dataset.path, [feature_diff])
+            repo_diff.add_child(ds_diff)
 
     if commit:
-        if not diff and not allow_empty:
+        if not repo_diff and not allow_empty:
             raise NotFound("No changes to commit", exit_code=NO_CHANGES)
         try:
             metadata = patch['sno.patch/v1']
@@ -107,7 +109,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             offset = default_sig.offset
 
         oid = rs.commit(
-            diff,
+            repo_diff,
             metadata['message'],
             author=pygit2.Signature(
                 name=metadata.get('authorName', default_sig.name),
@@ -120,7 +122,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         click.echo(f"Commit {oid.hex}")
 
     else:
-        oid = rs.create_tree_from_diff(diff)
+        oid = rs.create_tree_from_diff(repo_diff)
 
     if wc:
         # oid refers to either a commit or tree

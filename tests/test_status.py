@@ -204,10 +204,11 @@ def test_status(
             '  (use "sno commit" to commit)',
             '  (use "sno reset" to discard changes)',
             "",
-            f"  {H.POINTS.LAYER}/",
-            "    inserts:   1 feature",
-            "    updates:   3 features",
-            "    deletes:   2 features",
+            f"  {H.POINTS.LAYER}:",
+            "    feature:",
+            "      1 inserts",
+            "      3 updates",
+            "      2 deletes",
         ]
 
         jdict = json_status(cli_runner)
