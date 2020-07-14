@@ -16,7 +16,7 @@ SHELL = /bin/bash  # required for PATH to work
 export PREFIX ?= /usr/local
 
 # Python dependencies via pip-compile
-BASE_PIP_COMPILE_CMD = CUSTOM_COMPILE_COMMAND="make py-requirements" pip-compile -v --annotate --no-index --no-emit-trusted-host --upgrade
+BASE_PIP_COMPILE_CMD = CUSTOM_COMPILE_COMMAND="make py-requirements" pip-compile -v --annotate --no-index --no-emit-trusted-host --upgrade --allow-unsafe
 PIP_COMPILE_CMD ?= $(BASE_PIP_COMPILE_CMD)
 PY_REQS = requirements.txt requirements/test.txt requirements/dev.txt
 
