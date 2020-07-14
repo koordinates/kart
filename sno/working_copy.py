@@ -670,7 +670,6 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 v_new = meta_new.get(name)
                 if v_old or v_new:
                     meta_diff[name] = (v_old, v_new)
-                    raise RuntimeError(f"{name}, {(v_old, v_new)}")
 
             pk_field = dataset.primary_key
 
