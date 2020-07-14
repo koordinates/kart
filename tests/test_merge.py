@@ -17,18 +17,22 @@ from sno.repo_files import (
 
 H = pytest.helpers.helpers()
 
+V1_OR_V2 = ("structure_version", ["1", "2"])
+
 
 @pytest.mark.parametrize(
-    "archive",
+    "data",
     [
-        pytest.param("points", id="points"),
-        pytest.param("polygons", id="polygons"),
-        pytest.param("table", id="table"),
+        pytest.param(H.POINTS, id="points",),
+        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(H.TABLE, id="table"),
     ],
 )
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_fastforward(
-    archive, data_working_copy, geopackage, cli_runner, insert, request
+    structure_version, data, data_working_copy, geopackage, cli_runner, insert, request
 ):
+    archive = f"{data.ARCHIVE}2" if structure_version == 2 else data.ARCHIVE
     with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -64,16 +68,25 @@ def test_merge_fastforward(
 
 
 @pytest.mark.parametrize(
-    "archive",
+    "data",
     [
-        pytest.param("points", id="points"),
-        pytest.param("polygons", id="polygons"),
-        pytest.param("table", id="table"),
+        pytest.param(H.POINTS, id="points",),
+        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(H.TABLE, id="table"),
     ],
 )
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_fastforward_noff(
-    archive, data_working_copy, geopackage, cli_runner, insert, request, disable_editor
+    structure_version,
+    data,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    insert,
+    request,
+    disable_editor,
 ):
+    archive = f"{data.ARCHIVE}2" if structure_version == 2 else data.ARCHIVE
     with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -114,17 +127,17 @@ def test_merge_fastforward_noff(
 
 
 @pytest.mark.parametrize(
-    "archive,layer,pk_field",
+    "data",
     [
-        pytest.param("points", H.POINTS.LAYER, H.POINTS.LAYER_PK, id="points"),
-        pytest.param("polygons", H.POLYGONS.LAYER, H.POLYGONS.LAYER_PK, id="polygons"),
-        pytest.param("table", H.TABLE.LAYER, H.TABLE.LAYER_PK, id="table"),
+        pytest.param(H.POINTS, id="points",),
+        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(H.TABLE, id="table"),
     ],
 )
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_true(
-    archive,
-    layer,
-    pk_field,
+    structure_version,
+    data,
     data_working_copy,
     geopackage,
     cli_runner,
@@ -132,6 +145,7 @@ def test_merge_true(
     request,
     disable_editor,
 ):
+    archive = f"{data.ARCHIVE}2" if structure_version == 2 else data.ARCHIVE
     with data_working_copy(archive) as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
         # new branch
@@ -180,7 +194,7 @@ def test_merge_true(
         # check the database state
         num_inserts = len(insert.inserted_fids)
         dbcur.execute(
-            f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} IN ({','.join(['?']*num_inserts)});",
+            f"SELECT COUNT(*) FROM {data.LAYER} WHERE {data.LAYER_PK} IN ({','.join(['?']*num_inserts)});",
             insert.inserted_fids,
         )
         assert dbcur.fetchone()[0] == num_inserts
@@ -200,10 +214,11 @@ def test_merge_true(
 @pytest.mark.parametrize(
     "dry_run", [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
 )
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_conflicts(
-    data, output_format, dry_run, create_conflicts, cli_runner,
+    structure_version, data, output_format, dry_run, create_conflicts, cli_runner,
 ):
-    with create_conflicts(data) as repo:
+    with create_conflicts(data, structure_version) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
@@ -288,8 +303,9 @@ def test_merge_conflicts(
         assert not repo_file_exists(repo, MERGE_INDEX)
 
 
-def test_merge_state_lock(create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS) as repo:
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_merge_state_lock(structure_version, create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS, structure_version) as repo:
         # Repo state: normal
         # sno checkout works, but sno conflicts and sno resolve do not.
         assert RepoState.get_state(repo) == RepoState.NORMAL

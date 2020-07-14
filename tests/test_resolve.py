@@ -10,6 +10,8 @@ from sno.structure import RepositoryStructure
 
 H = pytest.helpers.helpers()
 
+V1_OR_V2 = ("structure_version", ["1", "2"])
+
 
 def get_conflict_ids(cli_runner):
     r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
@@ -34,8 +36,11 @@ def get_json_feature(rs, layer, pk):
         return None
 
 
-def test_resolve_with_version(create_conflicts, cli_runner, disable_editor):
-    with create_conflicts(H.POLYGONS) as repo:
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_resolve_with_version(
+    structure_version, create_conflicts, cli_runner, disable_editor
+):
+    with create_conflicts(H.POLYGONS, structure_version) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
@@ -105,8 +110,11 @@ def test_resolve_with_version(create_conflicts, cli_runner, disable_editor):
         assert get_json_feature(merged, l, pk3) is None
 
 
-def test_resolve_with_file(create_conflicts, cli_runner, disable_editor):
-    with create_conflicts(H.POLYGONS) as repo:
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_resolve_with_file(
+    structure_version, create_conflicts, cli_runner, disable_editor
+):
+    with create_conflicts(H.POLYGONS, structure_version) as repo:
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r
         ours_geojson = json.loads(r.stdout)["features"][0]

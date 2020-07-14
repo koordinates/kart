@@ -715,10 +715,13 @@ def update(request, cli_runner):
 
 
 @pytest.fixture
-def create_conflicts(data_working_copy, geopackage, cli_runner, update, insert):
+def create_conflicts(
+    data_working_copy, geopackage, cli_runner, update, insert,
+):
     @contextlib.contextmanager
-    def ctx(data):
-        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
+    def ctx(data, structure_version=1):
+        archive = f"{data.ARCHIVE}2" if structure_version == 2 else data.ARCHIVE
+        with data_working_copy(archive) as (repo_path, wc):
             repo = pygit2.Repository(str(repo_path))
             sample_pks = data.SAMPLE_PKS
 
