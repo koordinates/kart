@@ -3,7 +3,7 @@ import re
 import pytest
 from osgeo import ogr, osr
 
-from sno.gpkg import (
+from sno.geometry import (
     hex_wkb_to_gpkg_geom,
     gpkg_geom_to_hex_wkb,
     ogr_to_gpkg_geom,

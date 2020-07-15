@@ -14,6 +14,7 @@ from sno import gpkg, structure, fast_import
 from sno.init import OgrImporter, ImportPostgreSQL
 from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
+from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from sno.structure_version import STRUCTURE_VERSIONS_CHOICE
 
 
@@ -92,9 +93,7 @@ def normalise_feature(row):
     row = dict(row)
     if 'geom' in row:
         # We import via OGR, which strips envelopes by default
-        row['geom'] = gpkg.ogr_to_gpkg_geom(
-            gpkg.gpkg_geom_to_ogr(row['geom'], parse_srs=True),
-        )
+        row['geom'] = ogr_to_gpkg_geom(gpkg_geom_to_ogr(row['geom'], parse_srs=True),)
     return row
 
 
@@ -480,7 +479,7 @@ def test_import_from_non_gpkg(
                     g = f.GetGeometryRef()
                     if g:
                         g.AssignSpatialReference(src_layer.GetSpatialRef())
-                    expected_feature['geom'] = gpkg.ogr_to_gpkg_geom(g)
+                    expected_feature['geom'] = ogr_to_gpkg_geom(g)
 
                 assert normalise_feature(got_feature) == expected_feature
 

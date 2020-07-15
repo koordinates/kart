@@ -22,6 +22,7 @@ from .exceptions import (
     NO_TABLE,
 )
 from .fast_import import fast_import_tables
+from .geometry import ogr_to_gpkg_geom
 from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
@@ -404,7 +405,7 @@ class OgrImporter:
             if name in self.geom_cols:
                 yield (
                     name,
-                    gpkg.ogr_to_gpkg_geom(ogr_feature.GetGeometryRef()),
+                    ogr_to_gpkg_geom(ogr_feature.GetGeometryRef()),
                 )
             elif name == self.primary_key:
                 yield name, self._get_primary_key_value(ogr_feature, name)
