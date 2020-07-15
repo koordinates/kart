@@ -53,14 +53,13 @@ def query(ctx, path, command, params):
         USAGE = "index"
 
         t0 = time.monotonic()
-        dataset.build_spatial_index(dataset.name)
+        dataset.build_spatial_index(repo.path)
         t1 = time.monotonic()
         L.debug("Indexed {dataset} in %0.3fs", t1 - t0)
         return
 
-    try:
-        dataset.get_spatial_index(dataset.name)
-    except OSError:
+    index = dataset.get_spatial_index(repo.path)
+    if index is None:
         raise NotFound("No spatial index found. Run `sno query {path} index`")
 
     if command == "get":
@@ -91,7 +90,6 @@ def query(ctx, path, command, params):
         if len(coordinates) not in (2, 4):
             raise click.BadParameter(USAGE)
 
-        index = dataset.get_spatial_index(path)
         t0 = time.monotonic()
         results = [dataset.get_feature(pk) for pk in index.nearest(coordinates, limit)]
         t1 = time.monotonic()
@@ -105,7 +103,6 @@ def query(ctx, path, command, params):
         if len(coordinates) != 4:
             raise click.BadParameter(USAGE)
 
-        index = dataset.get_spatial_index(path)
         t0 = time.monotonic()
         results = [dataset.get_feature(pk) for pk in index.intersection(coordinates)]
         t1 = time.monotonic()
@@ -119,7 +116,6 @@ def query(ctx, path, command, params):
         if len(coordinates) != 4:
             raise click.BadParameter(USAGE)
 
-        index = dataset.get_spatial_index(path)
         t0 = time.monotonic()
         results = index.count(coordinates)
         t1 = time.monotonic()

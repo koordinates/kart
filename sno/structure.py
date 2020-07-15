@@ -1,7 +1,11 @@
 import functools
+import glob
 import logging
+import os
+import random
 import time
 from collections import defaultdict, deque
+from pathlib import Path
 
 import click
 import pygit2
@@ -380,7 +384,11 @@ class DatasetStructure:
 
     RTREE_INDEX_EXTENSIONS = ("sno-idxd", "sno-idxi")
 
-    def build_spatial_index(self, path):
+    @property
+    def _spatial_index_path(self):
+        return os.path.join('rtrees', f"{self.tree.id}.{self.name}")
+
+    def build_spatial_index(self, repo_path):
         """
         Internal proof-of-concept method for building a spatial index across the repository.
 
@@ -417,22 +425,46 @@ class DatasetStructure:
         p.dimensionality = 2
 
         t0 = time.monotonic()
-        idx = rtree.index.Index(path, _indexer(), properties=p, interleaved=False)
-        t1 = time.monotonic()
-        b = idx.bounds
-        c = idx.count(b)
-        del idx
+        path = os.path.join(repo_path, self._spatial_index_path)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp_path = path + f".{random.randint(0, 100000)}"
+        try:
+            idx = rtree.index.Index(
+                tmp_path, _indexer(), properties=p, interleaved=False,
+            )
+            t1 = time.monotonic()
+            b = idx.bounds
+            c = idx.count(b)
+            del idx
+        except Exception:
+            # cleanup temp files, don't want tons of these lying around if we ctrl+c etc
+            for filename in glob.glob(glob.escape(tmp_path) + '*'):
+                os.unlink(filename)
+            raise
+        # rename the tmp paths to the final path
+        for filename in glob.glob(glob.escape(tmp_path) + '*'):
+            os.rename(filename, path + os.path.splitext(filename)[1])
         t2 = time.monotonic()
         print(f"Indexed {c} features ({b}) in {t1-t0:.1f}s; flushed in {t2-t1:.1f}s")
 
-    def get_spatial_index(self, path):
+    def get_spatial_index(self, repo_path):
         """
         Retrieve a spatial index built with build_spatial_index().
 
         Query with .nearest(coords), .intersection(coords), .count(coords)
         http://toblerity.org/rtree/index.html
+
+        Returns None if the given spatial index has been created yet.
         """
         import rtree
+
+        path = os.path.join(repo_path, self._spatial_index_path)
+
+        exists = all(
+            Path(f"{path}.{xtn}").exists() for xtn in self.RTREE_INDEX_EXTENSIONS
+        )
+        if not exists:
+            return None
 
         p = rtree.index.Property()
         p.dat_extension = self.RTREE_INDEX_EXTENSIONS[0]

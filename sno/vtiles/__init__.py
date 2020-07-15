@@ -1,8 +1,7 @@
 from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
-import os
 import re
+import threading
 
-import sno
 
 import click
 
@@ -39,7 +38,10 @@ def make_handler(rs, datasets):
     map_srs = SRS(3857)
     d2m_transforms = {}
     m2d_transforms = {}
-    spatial_indexes = {}
+    # libspatialindex doesn't appear to be thread safe.
+    # sharing these across threads in a ThreadingHTTPServer causes segfaults.
+    spatial_indexes = threading.local()
+
     for dataset in datasets:
         dataset_srid = dataset.get_meta_item('gpkg_spatial_ref_sys')[0]['srs_id']
         dataset_srs = SRS(dataset_srid)
@@ -48,9 +50,6 @@ def make_handler(rs, datasets):
         )
         m2d_transforms[dataset.name] = osr.CoordinateTransformation(
             map_srs, dataset_srs
-        )
-        spatial_indexes[dataset.name] = dataset.get_spatial_index(
-            os.path.join(repo_path, dataset.name)
         )
 
     class VTilesRequestHandler(SimpleHTTPRequestHandler):
@@ -114,7 +113,7 @@ def make_handler(rs, datasets):
                 for i in range(ogr_geom.GetGeometryCount()):
                     # get linestring
                     g = ogr_geom.GetGeometryRef(i)
-                    feature.add_linestring(
+                    feature.add_line_string(
                         self.scale_points_list(tile_bbox, g.GetPoints())
                     )
 
@@ -158,10 +157,14 @@ def make_handler(rs, datasets):
                 w, e, s, n = tile_box_transformed.GetEnvelope()
 
                 vlayer = vtile.add_layer(dataset.name, version=3)
-                spatial_index = spatial_indexes[dataset.name]
-                pks = list(spatial_index.intersection((w, s, e, n)))
-                if pks:
-                    print(f"  {dataset.name} --> {len(pks)} features")
+                try:
+                    index = getattr(spatial_indexes, dataset.name)
+                except AttributeError:
+                    index = dataset.get_spatial_index(repo_path)
+                    setattr(
+                        spatial_indexes, dataset.name, index,
+                    )
+                pks = list(index.intersection((w, s, e, n)))
                 for pk in pks:
                     f = dataset.get_feature(pk)
                     geom = f.pop(dataset.geom_column_name)
@@ -229,8 +232,13 @@ def serve(ctx, host, port, revision, tables):
         datasets = list(ds for ds in rs if ds.has_geometry)
 
     for ds in datasets:
-        click.echo(f"Building spatial index for {ds.name}")
-        ds.build_spatial_index(ds.name)
+        index = ds.get_spatial_index(rs.repo.path)
+        if index is None:
+            click.echo(f"Building spatial index for {ds.name} @ {revision}")
+            ds.build_spatial_index(rs.repo.path)
+        else:
+            click.echo(f"Found existing spatial index for {ds.name} @ {revision}")
+            index = None
 
     server_address = (host, port)
 
