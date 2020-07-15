@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 
-from . import gpkg
+from .geometry import gpkg_geom_to_ogr, gpkg_geom_to_hex_wkb
 from .output_util import dump_json_output, resolve_output_path
 from .utils import ungenerator
 
@@ -141,7 +141,7 @@ def text_row(row, prefix="", exclude=None):
         v = row[k]
 
         if isinstance(v, bytes):
-            g = gpkg.gpkg_geom_to_ogr(v)
+            g = gpkg_geom_to_ogr(v)
             geom_typ = g.GetGeometryName()
             if g.IsEmpty():
                 v = f"{geom_typ} EMPTY"
@@ -299,7 +299,7 @@ def json_row(row, pk_field, change=None):
     """
     for k, v in row.items():
         if isinstance(v, bytes):
-            v = gpkg.gpkg_geom_to_hex_wkb(v)
+            v = gpkg_geom_to_hex_wkb(v)
         yield k, v
 
 
@@ -319,7 +319,7 @@ def geojson_row(row, pk_field, change=None):
     for k in row.keys():
         v = row[k]
         if isinstance(v, bytes):
-            g = gpkg.gpkg_geom_to_ogr(v)
+            g = gpkg_geom_to_ogr(v)
             f['geometry'] = json.loads(g.ExportToJson())
         else:
             f["properties"][k] = v

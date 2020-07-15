@@ -14,7 +14,7 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from .gpkg import hex_wkb_to_gpkg_geom
+from .geometry import hex_wkb_to_gpkg_geom
 from .structure import RepositoryStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 from .working_copy import WorkingCopy

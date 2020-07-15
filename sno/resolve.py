@@ -6,7 +6,7 @@ import click
 import pygit2
 
 from .cli_util import MutexOption
-from .gpkg import geojson_to_gpkg_geom
+from .geometry import geojson_to_gpkg_geom
 from .merge_util import MergeIndex, MergeContext, RichConflict
 from .exceptions import InvalidOperation, NotFound, NotYetImplemented, NO_CONFLICT
 from .repo_files import RepoState

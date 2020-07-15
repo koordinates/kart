@@ -1,15 +1,13 @@
 import functools
 import itertools
-import json
 import logging
-import re
 import time
 from collections import defaultdict, deque
 
 import click
 import pygit2
 
-from . import core, gpkg
+from . import core
 from .exceptions import (
     NotFound,
     NotYetImplemented,
@@ -18,6 +16,7 @@ from .exceptions import (
     PATCH_DOES_NOT_APPLY,
 )
 from .filter_util import UNFILTERED
+from .geometry import geom_envelope
 from .structure_version import get_structure_version
 
 
@@ -403,7 +402,7 @@ class DatasetStructure:
                 if geom is None:
                     continue
 
-                e = gpkg.geom_envelope(geom)
+                e = geom_envelope(geom)
                 yield (pk, e, None)
 
                 if c % 50000 == 0:

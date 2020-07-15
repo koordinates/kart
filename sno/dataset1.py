@@ -1,8 +1,6 @@
 import base64
-import collections
 import functools
 import hashlib
-import itertools
 import os
 import re
 
@@ -10,8 +8,8 @@ import json
 import msgpack
 import pygit2
 
-from . import diff, gpkg, gpkg_adapter
-from .filter_util import UNFILTERED
+from . import gpkg_adapter
+from .geometry import gpkg_geom_to_ogr
 from .structure import DatasetStructure, IntegrityError
 
 
@@ -52,7 +50,7 @@ class Dataset1(DatasetStructure):
 
     def _msgpack_unpack_ext_ogr(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
-            return gpkg.gpkg_geom_to_ogr(data)
+            return gpkg_geom_to_ogr(data)
         else:
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)
