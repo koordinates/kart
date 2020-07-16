@@ -1,6 +1,13 @@
-from http.server import HTTPServer, ThreadingHTTPServer, SimpleHTTPRequestHandler
+import cProfile  # noqa
+from http.server import (  # noqa
+    HTTPServer,
+    ThreadingHTTPServer,
+    SimpleHTTPRequestHandler,
+)
 import re
 import threading
+import time
+from urllib.parse import parse_qsl, urlparse
 
 
 import click
@@ -70,9 +77,21 @@ def make_handler(rs, datasets):
                 self.send_header(k.replace('_', '-'), v)
             self.end_headers()
             self.wfile.write(body)
-            # super().send_response doesn't log response sizes. So we don't call that,
-            # and do it ourselves
-            self.log_request(code, size=len(body))
+
+            profile_bits = ''
+            try:
+                profile_bits = f"{self.num_features} features"
+            except AttributeError:
+                pass
+            try:
+                request_time = time.monotonic() - self.request_start_time
+                profile_bits += f" / {request_time:.3f}s"
+            except AttributeError:
+                pass
+
+            self.log_request(
+                code, size=f'{len(body)}   [{profile_bits}]',
+            )
 
         def scale_points_list(self, tile_bbox, points_list, tile_grid_size=4096):
             tile_width = tile_bbox[2] - tile_bbox[0]
@@ -144,12 +163,20 @@ def make_handler(rs, datasets):
             return feature
 
         def make_vector_tile(self, z, x, y):
+            print(f"starting vector tile {self.path}")
             minx, miny, maxx, maxy = spherical_mercator_bbox(z, x, y)
             tile_box_geom = ogr.CreateGeometryFromWkt(
                 f'POLYGON(({minx} {miny},{minx} {maxy},{maxx} {maxy},{maxx} {miny},{minx} {miny}))'
             )
 
             vtile = VectorTile()
+            if 'debug_bboxes' in self.GET:
+                # add a box around the whole tile, so it's easy to see where the tile edges are
+                vlayer = vtile.add_layer('debug', version=3)
+                feature = vlayer.add_polygon_feature()
+                feature.add_ring([[0, 0], [4096, 0], [4096, 4096], [0, 4096], [0, 0]])
+
+            num_features = 0
             for dataset in datasets:
                 tile_box_transformed = tile_box_geom.Clone()
                 tile_box_transformed.Transform(m2d_transforms[dataset.name])
@@ -164,7 +191,9 @@ def make_handler(rs, datasets):
                     setattr(
                         spatial_indexes, dataset.name, index,
                     )
+
                 pks = list(index.intersection((w, s, e, n)))
+                num_features += len(pks)
                 for pk in pks:
                     f = dataset.get_feature(pk)
                     geom = f.pop(dataset.geom_column_name)
@@ -176,16 +205,34 @@ def make_handler(rs, datasets):
                     geom.Transform(d2m_transforms[dataset.name])
 
                     feature = self.add_feature(vlayer, geom, (minx, miny, maxx, maxy))
-                    feature.attributes = f
+                    if 'include_attributes' in self.GET:
+                        feature.attributes = f
                     feature.id = f"{dataset.name}::{pk}"
+            self.num_features = num_features
             return vtile.serialize()
 
         def serve_tile(self, z, x, y):
-            vtile_data = self.make_vector_tile(int(z), int(x), int(y))
+            if 'cprofile' in self.GET:
+                cProfile.runctx(
+                    "self.vtile_data = self.make_vector_tile(int(z), int(x), int(y))",
+                    globals(),
+                    locals(),
+                    sort='cumtime',
+                )
+                vtile_data = self.vtile_data
+            else:
+                vtile_data = self.make_vector_tile(int(z), int(x), int(y))
             return self.response(200, vtile_data, content_length=str(len(vtile_data)))
 
         def do_GET(self):
-            m = _PATH_SCHEME.match(self.path)
+            self.request_start_time = time.monotonic()
+
+            # oddly, `self.path` includes the querystring...
+            self.url_parsed = urlparse(self.path)
+            self.actual_path = self.url_parsed.path
+            self.GET = dict(parse_qsl(self.url_parsed.query, keep_blank_values=True))
+
+            m = _PATH_SCHEME.match(self.actual_path)
             if m:
                 z, x, y = m.groups()
                 return self.serve_tile(z, x, y)
