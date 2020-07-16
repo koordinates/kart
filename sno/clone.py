@@ -1,5 +1,7 @@
 import re
 import subprocess
+import sys
+
 from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 
@@ -7,6 +9,7 @@ import click
 import pygit2
 
 from . import checkout
+from .exceptions import translate_subprocess_exit_code
 from .structure import RepositoryStructure
 
 
@@ -53,20 +56,23 @@ def clone(ctx, do_checkout, do_progress, url, directory):
 
     repo_path = Path(directory or get_directory_from_url(url))
 
-    # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
-    # pygit2.clone_repository() works fine except for that
-    subprocess.check_call(
-        [
-            "git",
-            "clone",
-            "--progress" if do_progress else "--quiet",
-            "--bare",
-            "--config",
-            "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
-            url,
-            str(repo_path.resolve()),
-        ]
-    )
+    try:
+        # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
+        # pygit2.clone_repository() works fine except for that
+        subprocess.check_call(
+            [
+                "git",
+                "clone",
+                "--progress" if do_progress else "--quiet",
+                "--bare",
+                "--config",
+                "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
+                url,
+                str(repo_path.resolve()),
+            ]
+        )
+    except subprocess.CalledProcessError as e:
+        sys.exit(translate_subprocess_exit_code(e.returncode))
 
     repo = pygit2.Repository(str(repo_path.resolve()))
     if repo.head_is_unborn:

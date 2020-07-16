@@ -33,6 +33,15 @@ SUBPROCESS_ERROR_FLAG = 128
 DEFAULT_SUBPROCESS_ERROR = 129
 
 
+def translate_subprocess_exit_code(code):
+    if code > 0 and code < SUBPROCESS_ERROR_FLAG:
+        return SUBPROCESS_ERROR_FLAG + code
+    elif code >= SUBPROCESS_ERROR_FLAG and code < 2 * SUBPROCESS_ERROR_FLAG:
+        return code
+    else:
+        return SUBPROCESS_ERROR_FLAG
+
+
 class BaseException(click.ClickException):
     """
     A ClickException that can easily be constructed with any exit code,
@@ -98,9 +107,4 @@ class SubprocessError(BaseException):
             self.exit_code = SUBPROCESS_ERROR_FLAG
 
     def set_exit_code(self, code):
-        if code > 0 and code < SUBPROCESS_ERROR_FLAG:
-            self.exit_code = SUBPROCESS_ERROR_FLAG + code
-        elif code >= SUBPROCESS_ERROR_FLAG and code < 2 * SUBPROCESS_ERROR_FLAG:
-            self.exit_code = code
-        else:
-            self.exit_code = SUBPROCESS_ERROR_FLAG
+        self.exit_code = translate_subprocess_exit_code(code)
