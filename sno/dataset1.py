@@ -145,12 +145,12 @@ class Dataset1(DatasetStructure):
         feature_path = self.encode_1pk_to_path(pk)
         index.remove(feature_path)
 
-    def repo_feature_to_dict(self, blob_path, blob_data, ogr_geoms=False):
+    def repo_feature_to_dict(self, blob_path, blob_memoryview, ogr_geoms=False):
         feature = {
             self.primary_key: self.decode_path_to_1pk(blob_path),
         }
         bin_feature = msgpack.unpackb(
-            blob_data,
+            blob_memoryview,
             ext_hook=self._msgpack_unpack_ext_ogr
             if ogr_geoms
             else self._msgpack_unpack_ext,
@@ -175,7 +175,9 @@ class Dataset1(DatasetStructure):
 
     def get_feature(self, pk_value, *, ogr_geoms=True):
         blob = self._get_feature(pk_value)
-        return self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms)
+        return self.repo_feature_to_dict(
+            blob.name, memoryview(blob), ogr_geoms=ogr_geoms
+        )
 
     def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
         tupleizer = self.build_feature_tupleizer(col_names)
@@ -264,7 +266,9 @@ class Dataset1(DatasetStructure):
         return (
             (
                 blob.name,
-                self.repo_feature_to_dict(blob.name, blob.data, ogr_geoms=ogr_geoms),
+                self.repo_feature_to_dict(
+                    blob.name, memoryview(blob), ogr_geoms=ogr_geoms
+                ),
             )
             for blob in self._iter_feature_blobs(fast=False)
         )

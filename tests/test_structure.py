@@ -767,7 +767,7 @@ def test_feature_find_decode_performance(
 
     elif profile == "feature_to_dict":
         feature_path = dataset.encode_1pk_to_path(pk, relative=True)
-        feature_data = (tree / feature_path).data
+        feature_data = memoryview(tree / feature_path)
 
         # TODO: try to avoid two sets of code for two dataset versions -
         # either by making their interfaces more similar, or by deleting v1

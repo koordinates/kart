@@ -1,8 +1,7 @@
 import base64
-from collections import defaultdict, namedtuple
+from collections import namedtuple
 import functools
 import hashlib
-import itertools
 import json
 import os
 import uuid
@@ -10,7 +9,6 @@ import uuid
 import msgpack
 import pygit2
 
-from .filter_util import UNFILTERED
 from .structure import DatasetStructure
 
 
@@ -19,9 +17,9 @@ def _pack(data):
     return msgpack.packb(data, use_bin_type=True)
 
 
-def _unpack(bytestring):
-    """bytes -> data (any type)"""
-    return msgpack.unpackb(bytestring, raw=False)
+def _unpack(bytestring_or_memoryview):
+    """bytes/memoryview -> data (any type)"""
+    return msgpack.unpackb(bytestring_or_memoryview, raw=False)
 
 
 # _json and _unjson are functionally identical to _pack and _unpack,
@@ -376,6 +374,10 @@ class Schema:
         return tuple(pk_values)
 
 
+# So tests can patch this out. it's hard to mock memoryviews...
+_blob_to_memoryview = memoryview
+
+
 class Dataset2(DatasetStructure):
     """
     - Uses messagePack to serialise features.
@@ -416,18 +418,36 @@ class Dataset2(DatasetStructure):
     def version(self):
         return 2
 
-    def get_data_at(self, rel_path, missing_ok=False):
-        """Return the data at the given relative path from within this dataset."""
+    def get_data_at(self, rel_path, missing_ok=False, as_memoryview=False):
+        """
+        Return the data at the given relative path from within this dataset.
+
+        Data is usually returned as a bytestring.
+        If as_memoryview=True is given, data is returned as a memoryview instead
+        (this avoids a copy, so can make loops more efficient for many rows)
+        """
         leaf = None
         try:
             leaf = self.tree / str(rel_path)
-            return leaf.data
-        except (KeyError, AttributeError) as e:
-            if missing_ok:
-                return None
-            raise KeyError(
-                f"No data found at rel-path {rel_path}, type={type(leaf)}"
-            ) from e
+        except KeyError:
+            pass
+        else:
+            if leaf.type_str == 'blob':
+                if as_memoryview:
+                    try:
+                        return _blob_to_memoryview(leaf)
+                    except TypeError:
+                        pass
+                else:
+                    try:
+                        return leaf.data
+                    except AttributeError:
+                        pass
+        # if we got here, that means leaf wasn't a blob, or one of the above
+        # exceptions happened...
+        if missing_ok:
+            return None
+        raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
 
     def iter_meta_items(self, include_hidden=False):
         exclude = () if include_hidden else ("legend", "version")
@@ -506,14 +526,14 @@ class Dataset2(DatasetStructure):
             # Normal case - caller supplied pk_values, look up path + data.
             pk_values = self.schema.sanitise_pks(pk_values)
             rel_path = self.encode_pks_to_path(pk_values, relative=True)
-            data = self.get_data_at(rel_path)
+            data = self.get_data_at(rel_path, as_memoryview=True)
 
         elif full_path is not None and pk_values is None:
             # Path case - caller can supply path and optionally data too,
             # if they already know it. This is just the data at full_path.
             pk_values = self.decode_path_to_pks(full_path)
             if data is None:
-                data = self.get_data_at(self.rel_path(full_path))
+                data = self.get_data_at(self.rel_path(full_path), as_memoryview=True)
         else:
             raise ValueError(
                 "Either <pk_values> or <full_path>, [<data>] must be supplied"
