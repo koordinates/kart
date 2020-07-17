@@ -7,6 +7,17 @@ DATASET_PATH = "path/to/dataset"
 EMPTY_DATASET = Dataset2(None, DATASET_PATH)
 
 
+def _blob_to_memoryview(blob):
+    return memoryview(blob.data)
+
+
+@pytest.fixture(autouse=True)
+def blob_memoryview(monkeypatch):
+    from sno import dataset2
+
+    monkeypatch.setattr(dataset2, '_blob_to_memoryview', _blob_to_memoryview)
+
+
 class DictTree:
     """
     A fake directory tree structure.
@@ -23,6 +34,9 @@ class DictTree:
 
         if all_data.get(cur_path) is not None:
             self.data = all_data[cur_path]
+            self.type_str = 'blob'
+        else:
+            self.type_str = 'tree'
 
     def __truediv__(self, path):
         if self.cur_path:
