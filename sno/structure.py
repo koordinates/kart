@@ -1,5 +1,4 @@
 import functools
-import itertools
 import logging
 import time
 from collections import defaultdict, deque
@@ -10,7 +9,6 @@ import pygit2
 from . import core
 from .exceptions import (
     NotFound,
-    NotYetImplemented,
     InvalidOperation,
     NO_COMMIT,
     PATCH_DOES_NOT_APPLY,
@@ -195,7 +193,7 @@ class RepositoryStructure:
         git_index.read_tree(orig_tree)
 
         for ds in self.iter_at(orig_tree):
-            ds.write_index(diff[ds], git_index, self.repo)
+            ds.write_index(diff[ds.path], git_index, self.repo)
 
         L.info("Writing tree...")
         new_tree_oid = git_index.write_tree(self.repo)
@@ -447,6 +445,7 @@ class DatasetStructure:
         If reverse is true, generates a diff from other -> self.
         """
         # TODO - support multiple primary keys.
+        # TODO - rewrite this simpler, use Deltas for the whole method.
 
         candidates_ins = defaultdict(list)
         candidates_upd = {}
@@ -550,15 +549,19 @@ class DatasetStructure:
                 if not candidates_ins[h]:
                     del candidates_ins[h]
 
-        from .diff import Diff
+        from .diff import Diff, Delta
 
-        return Diff(
-            self,
-            meta={},
-            inserts=list(itertools.chain(*candidates_ins.values())),
-            deletes=dict(itertools.chain(*candidates_del.values())),
-            updates=candidates_upd,
-        )
+        def extract_key(obj):
+            return obj[self.primary_key], obj
+
+        ins = [Delta.insert(extract_key(v[0])) for v in candidates_ins.values()]
+        dels = [Delta.delete(extract_key(v[0][1])) for v in candidates_del.values()]
+        upd = [
+            Delta.update(extract_key(old), extract_key(new))
+            for old, new in candidates_upd.values()
+        ]
+
+        return Diff(self.path, ins + dels + upd)
 
     def write_index(self, dataset_diff, index, repo):
         """
@@ -570,67 +573,71 @@ class DatasetStructure:
         pk_field = self.primary_key
 
         conflicts = False
-        if dataset_diff["META"]:
-            raise NotYetImplemented(
-                "Sorry, committing meta changes is not yet supported"
-            )
-
-        for _, old_feature in dataset_diff["D"].items():
-            pk = old_feature[pk_field]
-            feature_path = self.encode_1pk_to_path(pk)
-            if feature_path not in index:
-                conflicts = True
-                click.echo(f"{self.path}: Trying to delete nonexistent feature: {pk}")
-                continue
-            index.remove(feature_path)
-
-        for new_feature in dataset_diff["I"]:
-            pk = new_feature[pk_field]
-            feature_path, feature_data = self.encode_feature(new_feature)
-            if feature_path in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to create feature that already exists: {pk}"
-                )
-                continue
-            blob_id = repo.create_blob(feature_data)
-            entry = pygit2.IndexEntry(feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-            index.add(entry)
 
         geom_column_name = self.geom_column_name
-        for _, (old_feature, new_feature) in dataset_diff["U"].items():
-            old_pk = old_feature[pk_field]
-            old_feature_path = self.encode_1pk_to_path(old_pk)
-            if old_feature_path not in index:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update nonexistent feature: {old_pk}"
-                )
-                continue
+        for delta in dataset_diff.values():
+            if delta.type == "delete":
+                pk = delta.old.value[pk_field]
+                feature_path = self.encode_1pk_to_path(pk)
+                if feature_path not in index:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to delete nonexistent feature: {pk}"
+                    )
+                    continue
+                index.remove(feature_path)
 
-            actual_existing_feature = self.get_feature(old_pk)
-            if geom_column_name:
-                # FIXME: actually compare the geometries here.
-                # Turns out this is quite hard - geometries are hard to compare sanely.
-                # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
-                # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
-                actual_existing_feature.pop(geom_column_name)
-                old_feature = old_feature.copy()
-                old_feature.pop(geom_column_name)
-            if actual_existing_feature != old_feature:
-                conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update already-changed feature: {old_pk}"
+            elif delta.type == "insert":
+                pk = delta.new.value[pk_field]
+                feature_path, feature_data = self.encode_feature(delta.new.value)
+                if feature_path in index:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to create feature that already exists: {pk}"
+                    )
+                    continue
+                blob_id = repo.create_blob(feature_data)
+                entry = pygit2.IndexEntry(
+                    feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
                 )
-                continue
+                index.add(entry)
 
-            index.remove(old_feature_path)
-            new_feature_path, new_feature_data = self.encode_feature(new_feature)
-            blob_id = repo.create_blob(new_feature_data)
-            entry = pygit2.IndexEntry(
-                new_feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-            )
-            index.add(entry)
+            elif delta.type == "update":
+                old_pk = delta.old.value[pk_field]
+                old_feature_path = self.encode_1pk_to_path(old_pk)
+                if old_feature_path not in index:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update nonexistent feature: {old_pk}"
+                    )
+                    continue
+
+                actual_existing_feature = self.get_feature(old_pk)
+                old_feature = delta.old.value
+                if geom_column_name:
+                    # FIXME: actually compare the geometries here.
+                    # Turns out this is quite hard - geometries are hard to compare sanely.
+                    # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
+                    # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
+                    actual_existing_feature.pop(geom_column_name)
+                    old_feature = old_feature.copy()
+                    old_feature.pop(geom_column_name)
+                if actual_existing_feature != old_feature:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update already-changed feature: {old_pk}"
+                    )
+                    continue
+
+                index.remove(old_feature_path)
+                new_feature_path, new_feature_data = self.encode_feature(
+                    delta.new.value
+                )
+                blob_id = repo.create_blob(new_feature_data)
+                entry = pygit2.IndexEntry(
+                    new_feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
+                )
+                index.add(entry)
 
         if conflicts:
             raise InvalidOperation(

@@ -6,7 +6,7 @@ import html5lib
 import pytest
 
 import pygit2
-from sno.diff import Diff
+from sno.diff import Delta, Diff
 
 
 H = pytest.helpers.helpers()
@@ -68,214 +68,196 @@ def test_diff_points(
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                "--- nz_pa_points_topo_150k:fid=3",
-                "-                                     geom = POINT(...)",
-                "-                               macronated = N",
-                "-                                     name = Tauwhare Pa",
-                "-                               name_ascii = Tauwhare Pa",
-                "-                                  t50_fid = 2426273",
-                "+++ nz_pa_points_topo_150k:fid=9999",
-                "+                                     geom = POINT(...)",
-                "+                               macronated = 0",
-                "+                                     name = Te Motu-a-kore",
-                "+                               name_ascii = Te Motu-a-kore",
-                "+                                  t50_fid = 9999999",
-                "--- nz_pa_points_topo_150k:fid=2",
-                "+++ nz_pa_points_topo_150k:fid=2",
-                "-                                     name = ␀",
-                "+                                     name = test",
-                "-                                  t50_fid = 2426272",
-                "+                                  t50_fid = ␀",
-                "--- nz_pa_points_topo_150k:fid=1",
-                "+++ nz_pa_points_topo_150k:fid=9998",
+                '--- nz_pa_points_topo_150k:feature:1',
+                '+++ nz_pa_points_topo_150k:feature:9998',
+                '--- nz_pa_points_topo_150k:feature:2',
+                '+++ nz_pa_points_topo_150k:feature:2',
+                '-                                  t50_fid = 2426272',
+                '+                                  t50_fid = ␀',
+                '-                                     name = ␀',
+                '+                                     name = test',
+                '--- nz_pa_points_topo_150k:feature:3',
+                '-                                     geom = POINT(...)',
+                '-                                  t50_fid = 2426273',
+                '-                               name_ascii = Tauwhare Pa',
+                '-                               macronated = N',
+                '-                                     name = Tauwhare Pa',
+                '+++ nz_pa_points_topo_150k:feature:9999',
+                '+                                     geom = POINT(...)',
+                '+                                  t50_fid = 9999999',
+                '+                               name_ascii = Te Motu-a-kore',
+                '+                               macronated = 0',
+                '+                                     name = Te Motu-a-kore',
             ]
         elif output_format == "geojson":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
-                "type": "FeatureCollection",
-                "features": [
+                'features': [
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [
-                                177.071_252_196_287_02,
-                                -37.979_475_484_627_57,
-                            ],
+                        'geometry': {
+                            'coordinates': [177.0959629713586, -38.00433803621768],
+                            'type': 'Point',
                         },
-                        "properties": {
-                            "fid": 3,
-                            "macronated": "N",
-                            "name": "Tauwhare Pa",
-                            "name_ascii": "Tauwhare Pa",
-                            "t50_fid": 2_426_273,
+                        'id': 'U-::1',
+                        'properties': {
+                            'fid': 1,
+                            'macronated': 'N',
+                            'name': None,
+                            'name_ascii': None,
+                            't50_fid': 2426271,
                         },
-                        "id": "D::3",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
-                        "properties": {
-                            "fid": 9999,
-                            "t50_fid": 9_999_999,
-                            "name_ascii": "Te Motu-a-kore",
-                            "macronated": "0",
-                            "name": "Te Motu-a-kore",
+                        'geometry': {
+                            'coordinates': [177.0959629713586, -38.00433803621768],
+                            'type': 'Point',
                         },
-                        "id": "I::9999",
+                        'id': 'U+::9998',
+                        'properties': {
+                            'fid': 9998,
+                            'macronated': 'N',
+                            'name': None,
+                            'name_ascii': None,
+                            't50_fid': 2426271,
+                        },
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [
-                                177.078_662_844_395_9,
-                                -37.988_184_857_601_8,
-                            ],
+                        'geometry': {
+                            'coordinates': [177.0786628443959, -37.9881848576018],
+                            'type': 'Point',
                         },
-                        "properties": {
-                            "fid": 2,
-                            "macronated": "N",
-                            "name": None,
-                            "name_ascii": None,
-                            "t50_fid": 2_426_272,
+                        'id': 'U-::2',
+                        'properties': {
+                            'fid': 2,
+                            'macronated': 'N',
+                            'name': None,
+                            'name_ascii': None,
+                            't50_fid': 2426272,
                         },
-                        "id": "U-::2",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [
-                                177.078_662_844_395_9,
-                                -37.988_184_857_601_8,
-                            ],
+                        'geometry': {
+                            'coordinates': [177.0786628443959, -37.9881848576018],
+                            'type': 'Point',
                         },
-                        "properties": {
-                            "fid": 2,
-                            "t50_fid": None,
-                            "name_ascii": None,
-                            "macronated": "N",
-                            "name": "test",
+                        'id': 'U+::2',
+                        'properties': {
+                            'fid': 2,
+                            'macronated': 'N',
+                            'name': 'test',
+                            'name_ascii': None,
+                            't50_fid': None,
                         },
-                        "id": "U+::2",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [
-                                177.095_962_971_358_6,
-                                -38.004_338_036_217_68,
-                            ],
+                        'geometry': {
+                            'coordinates': [177.07125219628702, -37.97947548462757],
+                            'type': 'Point',
                         },
-                        "properties": {
-                            "fid": 1,
-                            "macronated": "N",
-                            "name": None,
-                            "name_ascii": None,
-                            "t50_fid": 2_426_271,
+                        'id': 'D::3',
+                        'properties': {
+                            'fid': 3,
+                            'macronated': 'N',
+                            'name': 'Tauwhare Pa',
+                            'name_ascii': 'Tauwhare Pa',
+                            't50_fid': 2426273,
                         },
-                        "id": "U-::1",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Point",
-                            "coordinates": [
-                                177.095_962_971_358_6,
-                                -38.004_338_036_217_68,
-                            ],
+                        'geometry': {'coordinates': [0.0, 0.0], 'type': 'Point'},
+                        'id': 'I::9999',
+                        'properties': {
+                            'fid': 9999,
+                            'macronated': '0',
+                            'name': 'Te Motu-a-kore',
+                            'name_ascii': 'Te Motu-a-kore',
+                            't50_fid': 9999999,
                         },
-                        "properties": {
-                            "fid": 9998,
-                            "t50_fid": 2_426_271,
-                            "name_ascii": None,
-                            "macronated": "N",
-                            "name": None,
-                        },
-                        "id": "U+::9998",
+                        'type': 'Feature',
                     },
                 ],
+                'type': 'FeatureCollection',
             }
+
         elif output_format == "json":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
-                len(
-                    odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
-                        "featureChanges"
-                    ]
-                )
+                len(odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"])
                 == 4
             )
             assert odata == {
-                'sno.diff/v1+hexwkb': {
-                    'nz_pa_points_topo_150k': {
-                        'featureChanges': [
+                "sno.diff/v1+hexwkb": {
+                    "nz_pa_points_topo_150k": {
+                        "feature": [
                             {
-                                '+': {
-                                    'fid': 9998,
-                                    'geom': '010100000097F3EF201223664087D715268E0043C0',
-                                    'macronated': 'N',
-                                    'name': None,
-                                    'name_ascii': None,
-                                    't50_fid': 2426271,
+                                "+": {
+                                    "fid": 9998,
+                                    "geom": "010100000097F3EF201223664087D715268E0043C0",
+                                    "macronated": "N",
+                                    "name": None,
+                                    "name_ascii": None,
+                                    "t50_fid": 2426271,
                                 },
-                                '-': {
-                                    'fid': 1,
-                                    'geom': '010100000097F3EF201223664087D715268E0043C0',
-                                    'macronated': 'N',
-                                    'name': None,
-                                    'name_ascii': None,
-                                    't50_fid': 2426271,
+                                "-": {
+                                    "fid": 1,
+                                    "geom": "010100000097F3EF201223664087D715268E0043C0",
+                                    "macronated": "N",
+                                    "name": None,
+                                    "name_ascii": None,
+                                    "t50_fid": 2426271,
                                 },
                             },
                             {
-                                '+': {
-                                    'fid': 2,
-                                    'geom': '0101000000E702F16784226640ADE666D77CFE42C0',
-                                    'macronated': 'N',
-                                    'name': 'test',
-                                    'name_ascii': None,
-                                    't50_fid': None,
+                                "+": {
+                                    "fid": 2,
+                                    "geom": "0101000000E702F16784226640ADE666D77CFE42C0",
+                                    "macronated": "N",
+                                    "name": "test",
+                                    "name_ascii": None,
+                                    "t50_fid": None,
                                 },
-                                '-': {
-                                    'fid': 2,
-                                    'geom': '0101000000E702F16784226640ADE666D77CFE42C0',
-                                    'macronated': 'N',
-                                    'name': None,
-                                    'name_ascii': None,
-                                    't50_fid': 2426272,
+                                "-": {
+                                    "fid": 2,
+                                    "geom": "0101000000E702F16784226640ADE666D77CFE42C0",
+                                    "macronated": "N",
+                                    "name": None,
+                                    "name_ascii": None,
+                                    "t50_fid": 2426272,
                                 },
                             },
                             {
-                                '-': {
-                                    'fid': 3,
-                                    'geom': '0101000000459AAFB247226640C6DAE2735FFD42C0',
-                                    'macronated': 'N',
-                                    'name': 'Tauwhare Pa',
-                                    'name_ascii': 'Tauwhare Pa',
-                                    't50_fid': 2426273,
+                                "-": {
+                                    "fid": 3,
+                                    "geom": "0101000000459AAFB247226640C6DAE2735FFD42C0",
+                                    "macronated": "N",
+                                    "name": "Tauwhare Pa",
+                                    "name_ascii": "Tauwhare Pa",
+                                    "t50_fid": 2426273,
                                 }
                             },
                             {
-                                '+': {
-                                    'fid': 9999,
-                                    'geom': '010100000000000000000000000000000000000000',
-                                    'macronated': '0',
-                                    'name': 'Te Motu-a-kore',
-                                    'name_ascii': 'Te Motu-a-kore',
-                                    't50_fid': 9999999,
+                                "+": {
+                                    "fid": 9999,
+                                    "geom": "010100000000000000000000000000000000000000",
+                                    "macronated": "0",
+                                    "name": "Te Motu-a-kore",
+                                    "name_ascii": "Te Motu-a-kore",
+                                    "t50_fid": 9999999,
                                 }
                             },
                         ],
-                        'metaChanges': {},
                     }
                 }
             }
+
         elif output_format == "html":
             _check_html_output(r.stdout)
 
@@ -319,80 +301,212 @@ def test_diff_polygons(
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                "--- nz_waca_adjustments:id=1452332",
-                "-                           adjusted_nodes = 558",
-                "-                            date_adjusted = 2011-06-07T15:22:58Z",
-                "-                                     geom = MULTIPOLYGON(...)",
-                "-                         survey_reference = ␀",
-                "+++ nz_waca_adjustments:id=9999999",
-                "+                           adjusted_nodes = 123",
-                "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
-                "+                                     geom = POLYGON(...)",
-                "+                         survey_reference = Null Island™ 🗺",
-                "--- nz_waca_adjustments:id=1443053",
-                "+++ nz_waca_adjustments:id=1443053",
-                "-                            date_adjusted = 2011-05-10T12:09:10Z",
-                "+                            date_adjusted = 2019-01-01T00:00:00Z",
-                "-                         survey_reference = ␀",
-                "+                         survey_reference = test",
-                "--- nz_waca_adjustments:id=1424927",
-                "+++ nz_waca_adjustments:id=9998",
+                '--- nz_waca_adjustments:feature:1424927',
+                '+++ nz_waca_adjustments:feature:9998',
+                '--- nz_waca_adjustments:feature:1443053',
+                '+++ nz_waca_adjustments:feature:1443053',
+                '-                            date_adjusted = 2011-05-10T12:09:10Z',
+                '+                            date_adjusted = 2019-01-01T00:00:00Z',
+                '-                         survey_reference = ␀',
+                '+                         survey_reference = test',
+                '--- nz_waca_adjustments:feature:1452332',
+                '-                                     geom = MULTIPOLYGON(...)',
+                '-                            date_adjusted = 2011-06-07T15:22:58Z',
+                '-                         survey_reference = ␀',
+                '-                           adjusted_nodes = 558',
+                '+++ nz_waca_adjustments:feature:9999999',
+                '+                                     geom = POLYGON(...)',
+                '+                            date_adjusted = 2019-07-05T13:04:00+01:00',
+                '+                         survey_reference = Null Island™ 🗺',
+                '+                           adjusted_nodes = 123',
             ]
+
         elif output_format == "geojson":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
-                "type": "FeatureCollection",
-                "features": [
+                'features': [
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "MultiPolygon",
-                            "coordinates": [
+                        'geometry': {
+                            'coordinates': [
                                 [
                                     [
-                                        [174.731_157_683_3, -36.799_283_85],
-                                        [174.730_470_716_7, -36.796_400_95],
-                                        [174.730_472_2, -36.796_323_283_3],
-                                        [174.731_246_833_3, -36.795_535_566_7],
-                                        [174.731_796_216_7, -36.795_137_983_3],
-                                        [174.731_870_233_3, -36.795_087_966_7],
-                                        [174.731_899_816_7, -36.795_070_716_7],
-                                        [174.732_051_85, -36.794_982_083_3],
-                                        [174.732_203_9, -36.794_893_45],
-                                        [174.732_812_133_3, -36.794_538_9],
-                                        [174.733_139_883_3, -36.794_347_85],
-                                        [174.733_307_983_3, -36.794_249_866_7],
-                                        [174.733_341_716_7, -36.794_231_666_7],
-                                        [174.733_702_1, -36.794_166_5],
-                                        [174.733_990_683_3, -36.794_262_933_3],
-                                        [174.734_288_05, -36.794_433_116_7],
-                                        [174.736_541_133_3, -36.796_472_616_7],
-                                        [174.736_568_65, -36.796_552_566_7],
-                                        [174.736_553_833_3, -36.796_667],
-                                        [174.736_335_3, -36.796_878_85],
-                                        [174.736_180_016_7, -36.797_001_816_7],
-                                        [174.732_969_516_7, -36.799_071_45],
-                                        [174.732_654_483_3, -36.799_214_2],
-                                        [174.731_157_683_3, -36.799_283_85],
+                                        [175.36501955, -37.8677371333],
+                                        [175.3594248167, -37.8596774667],
+                                        [175.3587766, -37.8587394],
+                                        [175.3575281667, -37.8568299667],
+                                        [175.3573468, -37.8564048833],
+                                        [175.3503192167, -37.8384090167],
+                                        [175.3516358, -37.8348565833],
+                                        [175.3577393167, -37.8277652167],
+                                        [175.3581963667, -37.8273121833],
+                                        [175.3613082667, -37.8270649667],
+                                        [175.3843470333, -37.84913405],
+                                        [175.38430045, -37.8493045833],
+                                        [175.3774678333, -37.8602782667],
+                                        [175.3750135667, -37.8641522],
+                                        [175.3739396667, -37.8658466833],
+                                        [175.3726953667, -37.8674995333],
+                                        [175.3725163333, -37.86759125],
+                                        [175.36501955, -37.8677371333],
                                     ]
                                 ]
                             ],
+                            'type': 'MultiPolygon',
                         },
-                        "properties": {
-                            "id": 1_452_332,
-                            "adjusted_nodes": 558,
-                            "date_adjusted": "2011-06-07T15:22:58Z",
-                            "survey_reference": None,
+                        'id': 'U-::1424927',
+                        'properties': {
+                            'adjusted_nodes': 1122,
+                            'date_adjusted': '2011-03-25T07:30:45Z',
+                            'id': 1424927,
+                            'survey_reference': None,
                         },
-                        "id": "D::1452332",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "Polygon",
-                            "coordinates": [
+                        'geometry': {
+                            'coordinates': [
+                                [
+                                    [
+                                        [175.36501955, -37.8677371333],
+                                        [175.3594248167, -37.8596774667],
+                                        [175.3587766, -37.8587394],
+                                        [175.3575281667, -37.8568299667],
+                                        [175.3573468, -37.8564048833],
+                                        [175.3503192167, -37.8384090167],
+                                        [175.3516358, -37.8348565833],
+                                        [175.3577393167, -37.8277652167],
+                                        [175.3581963667, -37.8273121833],
+                                        [175.3613082667, -37.8270649667],
+                                        [175.3843470333, -37.84913405],
+                                        [175.38430045, -37.8493045833],
+                                        [175.3774678333, -37.8602782667],
+                                        [175.3750135667, -37.8641522],
+                                        [175.3739396667, -37.8658466833],
+                                        [175.3726953667, -37.8674995333],
+                                        [175.3725163333, -37.86759125],
+                                        [175.36501955, -37.8677371333],
+                                    ]
+                                ]
+                            ],
+                            'type': 'MultiPolygon',
+                        },
+                        'id': 'U+::9998',
+                        'properties': {
+                            'adjusted_nodes': 1122,
+                            'date_adjusted': '2011-03-25T07:30:45Z',
+                            'id': 9998,
+                            'survey_reference': None,
+                        },
+                        'type': 'Feature',
+                    },
+                    {
+                        'geometry': {
+                            'coordinates': [
+                                [
+                                    [
+                                        [174.2166180833, -39.1160069167],
+                                        [174.2105324333, -39.0628896333],
+                                        [174.2187671333, -39.0444813667],
+                                        [174.2336286, -39.0435761833],
+                                        [174.2489834333, -39.0673477167],
+                                        [174.2371150833, -39.1042998],
+                                        [174.2370479667, -39.1043865],
+                                        [174.2230324667, -39.11499395],
+                                        [174.2221168, -39.11534705],
+                                        [174.2199784667, -39.1158339833],
+                                        [174.2166180833, -39.1160069167],
+                                    ]
+                                ]
+                            ],
+                            'type': 'MultiPolygon',
+                        },
+                        'id': 'U-::1443053',
+                        'properties': {
+                            'adjusted_nodes': 1238,
+                            'date_adjusted': '2011-05-10T12:09:10Z',
+                            'id': 1443053,
+                            'survey_reference': None,
+                        },
+                        'type': 'Feature',
+                    },
+                    {
+                        'geometry': {
+                            'coordinates': [
+                                [
+                                    [
+                                        [174.2166180833, -39.1160069167],
+                                        [174.2105324333, -39.0628896333],
+                                        [174.2187671333, -39.0444813667],
+                                        [174.2336286, -39.0435761833],
+                                        [174.2489834333, -39.0673477167],
+                                        [174.2371150833, -39.1042998],
+                                        [174.2370479667, -39.1043865],
+                                        [174.2230324667, -39.11499395],
+                                        [174.2221168, -39.11534705],
+                                        [174.2199784667, -39.1158339833],
+                                        [174.2166180833, -39.1160069167],
+                                    ]
+                                ]
+                            ],
+                            'type': 'MultiPolygon',
+                        },
+                        'id': 'U+::1443053',
+                        'properties': {
+                            'adjusted_nodes': 1238,
+                            'date_adjusted': '2019-01-01T00:00:00Z',
+                            'id': 1443053,
+                            'survey_reference': 'test',
+                        },
+                        'type': 'Feature',
+                    },
+                    {
+                        'geometry': {
+                            'coordinates': [
+                                [
+                                    [
+                                        [174.7311576833, -36.79928385],
+                                        [174.7304707167, -36.79640095],
+                                        [174.7304722, -36.7963232833],
+                                        [174.7312468333, -36.7955355667],
+                                        [174.7317962167, -36.7951379833],
+                                        [174.7318702333, -36.7950879667],
+                                        [174.7318998167, -36.7950707167],
+                                        [174.73205185, -36.7949820833],
+                                        [174.7322039, -36.79489345],
+                                        [174.7328121333, -36.7945389],
+                                        [174.7331398833, -36.79434785],
+                                        [174.7333079833, -36.7942498667],
+                                        [174.7333417167, -36.7942316667],
+                                        [174.7337021, -36.7941665],
+                                        [174.7339906833, -36.7942629333],
+                                        [174.73428805, -36.7944331167],
+                                        [174.7365411333, -36.7964726167],
+                                        [174.73656865, -36.7965525667],
+                                        [174.7365538333, -36.796667],
+                                        [174.7363353, -36.79687885],
+                                        [174.7361800167, -36.7970018167],
+                                        [174.7329695167, -36.79907145],
+                                        [174.7326544833, -36.7992142],
+                                        [174.7311576833, -36.79928385],
+                                    ]
+                                ]
+                            ],
+                            'type': 'MultiPolygon',
+                        },
+                        'id': 'D::1452332',
+                        'properties': {
+                            'adjusted_nodes': 558,
+                            'date_adjusted': '2011-06-07T15:22:58Z',
+                            'id': 1452332,
+                            'survey_reference': None,
+                        },
+                        'type': 'Feature',
+                    },
+                    {
+                        'geometry': {
+                            'coordinates': [
                                 [
                                     [0.0, 0.0],
                                     [0.0, 0.001],
@@ -401,219 +515,86 @@ def test_diff_polygons(
                                     [0.0, 0.0],
                                 ]
                             ],
+                            'type': 'Polygon',
                         },
-                        "properties": {
-                            "id": 9_999_999,
-                            "date_adjusted": "2019-07-05T13:04:00+01:00",
-                            "survey_reference": "Null Island™ 🗺",
-                            "adjusted_nodes": 123,
+                        'id': 'I::9999999',
+                        'properties': {
+                            'adjusted_nodes': 123,
+                            'date_adjusted': '2019-07-05T13:04:00+01:00',
+                            'id': 9999999,
+                            'survey_reference': 'Null Island™ 🗺',
                         },
-                        "id": "I::9999999",
-                    },
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "MultiPolygon",
-                            "coordinates": [
-                                [
-                                    [
-                                        [174.216_618_083_3, -39.116_006_916_7],
-                                        [174.210_532_433_3, -39.062_889_633_3],
-                                        [174.218_767_133_3, -39.044_481_366_7],
-                                        [174.233_628_6, -39.043_576_183_3],
-                                        [174.248_983_433_3, -39.067_347_716_7],
-                                        [174.237_115_083_3, -39.104_299_8],
-                                        [174.237_047_966_7, -39.104_386_5],
-                                        [174.223_032_466_7, -39.114_993_95],
-                                        [174.222_116_8, -39.115_347_05],
-                                        [174.219_978_466_7, -39.115_833_983_3],
-                                        [174.216_618_083_3, -39.116_006_916_7],
-                                    ]
-                                ]
-                            ],
-                        },
-                        "properties": {
-                            "id": 1_443_053,
-                            "adjusted_nodes": 1238,
-                            "date_adjusted": "2011-05-10T12:09:10Z",
-                            "survey_reference": None,
-                        },
-                        "id": "U-::1443053",
-                    },
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "MultiPolygon",
-                            "coordinates": [
-                                [
-                                    [
-                                        [174.216_618_083_3, -39.116_006_916_7],
-                                        [174.210_532_433_3, -39.062_889_633_3],
-                                        [174.218_767_133_3, -39.044_481_366_7],
-                                        [174.233_628_6, -39.043_576_183_3],
-                                        [174.248_983_433_3, -39.067_347_716_7],
-                                        [174.237_115_083_3, -39.104_299_8],
-                                        [174.237_047_966_7, -39.104_386_5],
-                                        [174.223_032_466_7, -39.114_993_95],
-                                        [174.222_116_8, -39.115_347_05],
-                                        [174.219_978_466_7, -39.115_833_983_3],
-                                        [174.216_618_083_3, -39.116_006_916_7],
-                                    ]
-                                ]
-                            ],
-                        },
-                        "properties": {
-                            "id": 1_443_053,
-                            "date_adjusted": "2019-01-01T00:00:00Z",
-                            "survey_reference": "test",
-                            "adjusted_nodes": 1238,
-                        },
-                        "id": "U+::1443053",
-                    },
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "MultiPolygon",
-                            "coordinates": [
-                                [
-                                    [
-                                        [175.365_019_55, -37.867_737_133_3],
-                                        [175.359_424_816_7, -37.859_677_466_7],
-                                        [175.358_776_6, -37.858_739_4],
-                                        [175.357_528_166_7, -37.856_829_966_7],
-                                        [175.357_346_8, -37.856_404_883_3],
-                                        [175.350_319_216_7, -37.838_409_016_7],
-                                        [175.351_635_8, -37.834_856_583_3],
-                                        [175.357_739_316_7, -37.827_765_216_7],
-                                        [175.358_196_366_7, -37.827_312_183_3],
-                                        [175.361_308_266_7, -37.827_064_966_7],
-                                        [175.384_347_033_3, -37.849_134_05],
-                                        [175.384_300_45, -37.849_304_583_3],
-                                        [175.377_467_833_3, -37.860_278_266_7],
-                                        [175.375_013_566_7, -37.864_152_2],
-                                        [175.373_939_666_7, -37.865_846_683_3],
-                                        [175.372_695_366_7, -37.867_499_533_3],
-                                        [175.372_516_333_3, -37.867_591_25],
-                                        [175.365_019_55, -37.867_737_133_3],
-                                    ]
-                                ]
-                            ],
-                        },
-                        "properties": {
-                            "id": 1_424_927,
-                            "adjusted_nodes": 1122,
-                            "date_adjusted": "2011-03-25T07:30:45Z",
-                            "survey_reference": None,
-                        },
-                        "id": "U-::1424927",
-                    },
-                    {
-                        "type": "Feature",
-                        "geometry": {
-                            "type": "MultiPolygon",
-                            "coordinates": [
-                                [
-                                    [
-                                        [175.365_019_55, -37.867_737_133_3],
-                                        [175.359_424_816_7, -37.859_677_466_7],
-                                        [175.358_776_6, -37.858_739_4],
-                                        [175.357_528_166_7, -37.856_829_966_7],
-                                        [175.357_346_8, -37.856_404_883_3],
-                                        [175.350_319_216_7, -37.838_409_016_7],
-                                        [175.351_635_8, -37.834_856_583_3],
-                                        [175.357_739_316_7, -37.827_765_216_7],
-                                        [175.358_196_366_7, -37.827_312_183_3],
-                                        [175.361_308_266_7, -37.827_064_966_7],
-                                        [175.384_347_033_3, -37.849_134_05],
-                                        [175.384_300_45, -37.849_304_583_3],
-                                        [175.377_467_833_3, -37.860_278_266_7],
-                                        [175.375_013_566_7, -37.864_152_2],
-                                        [175.373_939_666_7, -37.865_846_683_3],
-                                        [175.372_695_366_7, -37.867_499_533_3],
-                                        [175.372_516_333_3, -37.867_591_25],
-                                        [175.365_019_55, -37.867_737_133_3],
-                                    ]
-                                ]
-                            ],
-                        },
-                        "properties": {
-                            "id": 9998,
-                            "date_adjusted": "2011-03-25T07:30:45Z",
-                            "survey_reference": None,
-                            "adjusted_nodes": 1122,
-                        },
-                        "id": "U+::9998",
+                        'type': 'Feature',
                     },
                 ],
+                'type': 'FeatureCollection',
             }
+
         elif output_format == "json":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
-                len(
-                    odata["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["featureChanges"]
-                )
-                == 4
+                len(odata["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["feature"]) == 4
             )
             assert odata == {
-                'sno.diff/v1+hexwkb': {
-                    'nz_waca_adjustments': {
-                        'featureChanges': [
+                "sno.diff/v1+hexwkb": {
+                    "nz_waca_adjustments": {
+                        "feature": [
                             {
-                                '+': {
-                                    'adjusted_nodes': 1122,
-                                    'date_adjusted': '2011-03-25T07:30:45Z',
-                                    'geom': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
-                                    'id': 9998,
-                                    'survey_reference': None,
+                                "+": {
+                                    "adjusted_nodes": 1122,
+                                    "date_adjusted": "2011-03-25T07:30:45Z",
+                                    "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
+                                    "id": 9998,
+                                    "survey_reference": None,
                                 },
-                                '-': {
-                                    'adjusted_nodes': 1122,
-                                    'date_adjusted': '2011-03-25T07:30:45Z',
-                                    'geom': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
-                                    'id': 1424927,
-                                    'survey_reference': None,
+                                "-": {
+                                    "adjusted_nodes": 1122,
+                                    "date_adjusted": "2011-03-25T07:30:45Z",
+                                    "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
+                                    "id": 1424927,
+                                    "survey_reference": None,
                                 },
                             },
                             {
-                                '+': {
-                                    'adjusted_nodes': 1238,
-                                    'date_adjusted': '2019-01-01T00:00:00Z',
-                                    'geom': '0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0',
-                                    'id': 1443053,
-                                    'survey_reference': 'test',
+                                "+": {
+                                    "adjusted_nodes": 1238,
+                                    "date_adjusted": "2019-01-01T00:00:00Z",
+                                    "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
+                                    "id": 1443053,
+                                    "survey_reference": "test",
                                 },
-                                '-': {
-                                    'adjusted_nodes': 1238,
-                                    'date_adjusted': '2011-05-10T12:09:10Z',
-                                    'geom': '0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0',
-                                    'id': 1443053,
-                                    'survey_reference': None,
+                                "-": {
+                                    "adjusted_nodes": 1238,
+                                    "date_adjusted": "2011-05-10T12:09:10Z",
+                                    "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
+                                    "id": 1443053,
+                                    "survey_reference": None,
                                 },
                             },
                             {
-                                '-': {
-                                    'adjusted_nodes': 558,
-                                    'date_adjusted': '2011-06-07T15:22:58Z',
-                                    'geom': '01060000000100000001030000000100000018000000C43FCCA465D7654049FCE5EE4E6642C031DD1F0460D765406D606177F06542C064343C0760D765408E68DDEBED6542C0774AC25F66D7654003E4041CD46542C00442E6DF6AD765405B0AD914C76542C00F9E1F7B6BD76540B7354771C56542C099152AB96BD76540ED1D93E0C46542C03E5700F86CD76540F85610F9C16542C01E90DF366ED76540FDC68D11BF6542C056546E3273D765402D735F73B36542C056C5C5E175D76540EFB2BA30AD6542C06AC54D4277D76540182AC9FAA96542C09C400C8977D7654048F61C62A96542C03590D37C7AD76540168A743FA76542C0F38A07DA7CD7654069796568AA6542C0FF12A7497FD76540FD8AFFFBAF6542C0D5F5B5BE91D765406A7190D0F26542C049E06AF891D76540BCC23B6FF56542C08B3858D991D76540B6662B2FF96542C07E0C0C0F90D76540E2CF4B20006642C03FF664C98ED7654020CAD027046642C020E67C7C74D765406A7528F9476642C052A1D0E771D76540D9BFA1A64C6642C0C43FCCA465D7654049FCE5EE4E6642C0',
-                                    'id': 1452332,
-                                    'survey_reference': None,
+                                "-": {
+                                    "adjusted_nodes": 558,
+                                    "date_adjusted": "2011-06-07T15:22:58Z",
+                                    "geom": "01060000000100000001030000000100000018000000C43FCCA465D7654049FCE5EE4E6642C031DD1F0460D765406D606177F06542C064343C0760D765408E68DDEBED6542C0774AC25F66D7654003E4041CD46542C00442E6DF6AD765405B0AD914C76542C00F9E1F7B6BD76540B7354771C56542C099152AB96BD76540ED1D93E0C46542C03E5700F86CD76540F85610F9C16542C01E90DF366ED76540FDC68D11BF6542C056546E3273D765402D735F73B36542C056C5C5E175D76540EFB2BA30AD6542C06AC54D4277D76540182AC9FAA96542C09C400C8977D7654048F61C62A96542C03590D37C7AD76540168A743FA76542C0F38A07DA7CD7654069796568AA6542C0FF12A7497FD76540FD8AFFFBAF6542C0D5F5B5BE91D765406A7190D0F26542C049E06AF891D76540BCC23B6FF56542C08B3858D991D76540B6662B2FF96542C07E0C0C0F90D76540E2CF4B20006642C03FF664C98ED7654020CAD027046642C020E67C7C74D765406A7528F9476642C052A1D0E771D76540D9BFA1A64C6642C0C43FCCA465D7654049FCE5EE4E6642C0",
+                                    "id": 1452332,
+                                    "survey_reference": None,
                                 }
                             },
                             {
-                                '+': {
-                                    'adjusted_nodes': 123,
-                                    'date_adjusted': '2019-07-05T13:04:00+01:00',
-                                    'geom': '01030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000',
-                                    'id': 9999999,
-                                    'survey_reference': 'Null Island™ 🗺',
+                                "+": {
+                                    "adjusted_nodes": 123,
+                                    "date_adjusted": "2019-07-05T13:04:00+01:00",
+                                    "geom": "01030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000",
+                                    "id": 9999999,
+                                    "survey_reference": "Null Island™ 🗺",
                                 }
                             },
                         ],
-                        'metaChanges': {},
                     }
                 }
             }
+
         elif output_format == "html":
             _check_html_output(r.stdout)
 
@@ -657,269 +638,269 @@ def test_diff_table(
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                "--- countiestbl:OBJECTID=3",
-                "-                                     AREA = 2529.9794",
-                "-                                CNTY_FIPS = 065",
-                "-                                     FIPS = 53065",
-                "-                                     NAME = Stevens",
-                "-                                  POP1990 = 30948.0",
-                "-                                  POP2000 = 40652.0",
-                "-                               POP90_SQMI = 12",
-                "-                               STATE_FIPS = 53",
-                "-                               STATE_NAME = Washington",
-                "-                               Shape_Area = 0.7954858988987561",
-                "-                               Shape_Leng = 4.876296245235406",
-                "+++ countiestbl:OBJECTID=9999",
-                "+                                     AREA = 1784.0634",
-                "+                                CNTY_FIPS = 077",
-                "+                                     FIPS = 27077",
-                "+                                     NAME = Lake of the Gruffalo",
-                "+                                  POP1990 = 4076.0",
-                "+                                  POP2000 = 4651.0",
-                "+                               POP90_SQMI = 2",
-                "+                               STATE_FIPS = 27",
-                "+                               STATE_NAME = Minnesota",
-                "+                               Shape_Area = 0.565449933741451",
-                "+                               Shape_Leng = 4.05545998243992",
-                "--- countiestbl:OBJECTID=2",
-                "+++ countiestbl:OBJECTID=2",
-                "-                                     NAME = Ferry",
-                "+                                     NAME = test",
-                "-                                  POP2000 = 7199.0",
-                "+                                  POP2000 = 9867.0",
-                "--- countiestbl:OBJECTID=1",
-                "+++ countiestbl:OBJECTID=9998",
+                '--- countiestbl:feature:1',
+                '+++ countiestbl:feature:9998',
+                '--- countiestbl:feature:2',
+                '+++ countiestbl:feature:2',
+                '-                                     NAME = Ferry',
+                '+                                     NAME = test',
+                '-                                  POP2000 = 7199.0',
+                '+                                  POP2000 = 9867.0',
+                '--- countiestbl:feature:3',
+                '-                                     NAME = Stevens',
+                '-                               STATE_NAME = Washington',
+                '-                               STATE_FIPS = 53',
+                '-                                CNTY_FIPS = 065',
+                '-                                     FIPS = 53065',
+                '-                                     AREA = 2529.9794',
+                '-                                  POP1990 = 30948.0',
+                '-                                  POP2000 = 40652.0',
+                '-                               POP90_SQMI = 12',
+                '-                               Shape_Leng = 4.876296245235406',
+                '-                               Shape_Area = 0.7954858988987561',
+                '+++ countiestbl:feature:9999',
+                '+                                     NAME = Lake of the Gruffalo',
+                '+                               STATE_NAME = Minnesota',
+                '+                               STATE_FIPS = 27',
+                '+                                CNTY_FIPS = 077',
+                '+                                     FIPS = 27077',
+                '+                                     AREA = 1784.0634',
+                '+                                  POP1990 = 4076.0',
+                '+                                  POP2000 = 4651.0',
+                '+                               POP90_SQMI = 2',
+                '+                               Shape_Leng = 4.05545998243992',
+                '+                               Shape_Area = 0.565449933741451',
             ]
+
         elif output_format == "geojson":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
-                "type": "FeatureCollection",
-                "features": [
+                'features': [
                     {
-                        "type": "Feature",
-                        "geometry": None,
-                        "properties": {
-                            "OBJECTID": 3,
-                            "AREA": 2529.9794,
-                            "CNTY_FIPS": "065",
-                            "FIPS": "53065",
-                            "NAME": "Stevens",
-                            "POP1990": 30948.0,
-                            "POP2000": 40652.0,
-                            "POP90_SQMI": 12,
-                            "STATE_FIPS": "53",
-                            "STATE_NAME": "Washington",
-                            "Shape_Area": 0.795_485_898_898_756_1,
-                            "Shape_Leng": 4.876_296_245_235_406,
+                        'geometry': None,
+                        'id': 'U-::1',
+                        'properties': {
+                            'AREA': 1784.0634,
+                            'CNTY_FIPS': '077',
+                            'FIPS': '27077',
+                            'NAME': 'Lake of the Woods',
+                            'OBJECTID': 1,
+                            'POP1990': 4076.0,
+                            'POP2000': 4651.0,
+                            'POP90_SQMI': 2,
+                            'STATE_FIPS': '27',
+                            'STATE_NAME': 'Minnesota',
+                            'Shape_Area': 0.5654499337414509,
+                            'Shape_Leng': 4.055459982439919,
                         },
-                        "id": "D::3",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": None,
-                        "properties": {
-                            "OBJECTID": 9999,
-                            "NAME": "Lake of the Gruffalo",
-                            "STATE_NAME": "Minnesota",
-                            "STATE_FIPS": "27",
-                            "CNTY_FIPS": "077",
-                            "FIPS": "27077",
-                            "AREA": 1784.0634,
-                            "POP1990": 4076.0,
-                            "POP2000": 4651.0,
-                            "POP90_SQMI": 2,
-                            "Shape_Leng": 4.055_459_982_439_92,
-                            "Shape_Area": 0.565_449_933_741_451,
+                        'geometry': None,
+                        'id': 'U+::9998',
+                        'properties': {
+                            'AREA': 1784.0634,
+                            'CNTY_FIPS': '077',
+                            'FIPS': '27077',
+                            'NAME': 'Lake of the Woods',
+                            'OBJECTID': 9998,
+                            'POP1990': 4076.0,
+                            'POP2000': 4651.0,
+                            'POP90_SQMI': 2,
+                            'STATE_FIPS': '27',
+                            'STATE_NAME': 'Minnesota',
+                            'Shape_Area': 0.5654499337414509,
+                            'Shape_Leng': 4.055459982439919,
                         },
-                        "id": "I::9999",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": None,
-                        "properties": {
-                            "OBJECTID": 2,
-                            "AREA": 2280.2319,
-                            "CNTY_FIPS": "019",
-                            "FIPS": "53019",
-                            "NAME": "Ferry",
-                            "POP1990": 6295.0,
-                            "POP2000": 7199.0,
-                            "POP90_SQMI": 3,
-                            "STATE_FIPS": "53",
-                            "STATE_NAME": "Washington",
-                            "Shape_Area": 0.718_059_302_645_116_1,
-                            "Shape_Leng": 3.786_160_993_863_997,
+                        'geometry': None,
+                        'id': 'U-::2',
+                        'properties': {
+                            'AREA': 2280.2319,
+                            'CNTY_FIPS': '019',
+                            'FIPS': '53019',
+                            'NAME': 'Ferry',
+                            'OBJECTID': 2,
+                            'POP1990': 6295.0,
+                            'POP2000': 7199.0,
+                            'POP90_SQMI': 3,
+                            'STATE_FIPS': '53',
+                            'STATE_NAME': 'Washington',
+                            'Shape_Area': 0.7180593026451161,
+                            'Shape_Leng': 3.786160993863997,
                         },
-                        "id": "U-::2",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": None,
-                        "properties": {
-                            "OBJECTID": 2,
-                            "NAME": "test",
-                            "STATE_NAME": "Washington",
-                            "STATE_FIPS": "53",
-                            "CNTY_FIPS": "019",
-                            "FIPS": "53019",
-                            "AREA": 2280.2319,
-                            "POP1990": 6295.0,
-                            "POP2000": 9867.0,
-                            "POP90_SQMI": 3,
-                            "Shape_Leng": 3.786_160_993_863_997,
-                            "Shape_Area": 0.718_059_302_645_116_1,
+                        'geometry': None,
+                        'id': 'U+::2',
+                        'properties': {
+                            'AREA': 2280.2319,
+                            'CNTY_FIPS': '019',
+                            'FIPS': '53019',
+                            'NAME': 'test',
+                            'OBJECTID': 2,
+                            'POP1990': 6295.0,
+                            'POP2000': 9867.0,
+                            'POP90_SQMI': 3,
+                            'STATE_FIPS': '53',
+                            'STATE_NAME': 'Washington',
+                            'Shape_Area': 0.7180593026451161,
+                            'Shape_Leng': 3.786160993863997,
                         },
-                        "id": "U+::2",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": None,
-                        "properties": {
-                            "OBJECTID": 1,
-                            "AREA": 1784.0634,
-                            "CNTY_FIPS": "077",
-                            "FIPS": "27077",
-                            "NAME": "Lake of the Woods",
-                            "POP1990": 4076.0,
-                            "POP2000": 4651.0,
-                            "POP90_SQMI": 2,
-                            "STATE_FIPS": "27",
-                            "STATE_NAME": "Minnesota",
-                            "Shape_Area": 0.565_449_933_741_450_9,
-                            "Shape_Leng": 4.055_459_982_439_919,
+                        'geometry': None,
+                        'id': 'D::3',
+                        'properties': {
+                            'AREA': 2529.9794,
+                            'CNTY_FIPS': '065',
+                            'FIPS': '53065',
+                            'NAME': 'Stevens',
+                            'OBJECTID': 3,
+                            'POP1990': 30948.0,
+                            'POP2000': 40652.0,
+                            'POP90_SQMI': 12,
+                            'STATE_FIPS': '53',
+                            'STATE_NAME': 'Washington',
+                            'Shape_Area': 0.7954858988987561,
+                            'Shape_Leng': 4.876296245235406,
                         },
-                        "id": "U-::1",
+                        'type': 'Feature',
                     },
                     {
-                        "type": "Feature",
-                        "geometry": None,
-                        "properties": {
-                            "OBJECTID": 9998,
-                            "NAME": "Lake of the Woods",
-                            "STATE_NAME": "Minnesota",
-                            "STATE_FIPS": "27",
-                            "CNTY_FIPS": "077",
-                            "FIPS": "27077",
-                            "AREA": 1784.0634,
-                            "POP1990": 4076.0,
-                            "POP2000": 4651.0,
-                            "POP90_SQMI": 2,
-                            "Shape_Leng": 4.055_459_982_439_919,
-                            "Shape_Area": 0.565_449_933_741_450_9,
+                        'geometry': None,
+                        'id': 'I::9999',
+                        'properties': {
+                            'AREA': 1784.0634,
+                            'CNTY_FIPS': '077',
+                            'FIPS': '27077',
+                            'NAME': 'Lake of the Gruffalo',
+                            'OBJECTID': 9999,
+                            'POP1990': 4076.0,
+                            'POP2000': 4651.0,
+                            'POP90_SQMI': 2,
+                            'STATE_FIPS': '27',
+                            'STATE_NAME': 'Minnesota',
+                            'Shape_Area': 0.565449933741451,
+                            'Shape_Leng': 4.05545998243992,
                         },
-                        "id": "U+::9998",
+                        'type': 'Feature',
                     },
                 ],
+                'type': 'FeatureCollection',
             }
+
         elif output_format == "json":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
-            assert (
-                len(odata["sno.diff/v1+hexwkb"]["countiestbl"]["featureChanges"]) == 4
-            )
+            assert len(odata["sno.diff/v1+hexwkb"]["countiestbl"]["feature"]) == 4
             assert odata == {
-                'sno.diff/v1+hexwkb': {
-                    'countiestbl': {
-                        'featureChanges': [
+                "sno.diff/v1+hexwkb": {
+                    "countiestbl": {
+                        "feature": [
                             {
-                                '+': {
-                                    'AREA': 1784.0634,
-                                    'CNTY_FIPS': '077',
-                                    'FIPS': '27077',
-                                    'NAME': 'Lake of the Woods',
-                                    'OBJECTID': 9998,
-                                    'POP1990': 4076.0,
-                                    'POP2000': 4651.0,
-                                    'POP90_SQMI': 2,
-                                    'STATE_FIPS': '27',
-                                    'STATE_NAME': 'Minnesota',
-                                    'Shape_Area': 0.5654499337414509,
-                                    'Shape_Leng': 4.055459982439919,
+                                "+": {
+                                    "AREA": 1784.0634,
+                                    "CNTY_FIPS": "077",
+                                    "FIPS": "27077",
+                                    "NAME": "Lake of the Woods",
+                                    "OBJECTID": 9998,
+                                    "POP1990": 4076.0,
+                                    "POP2000": 4651.0,
+                                    "POP90_SQMI": 2,
+                                    "STATE_FIPS": "27",
+                                    "STATE_NAME": "Minnesota",
+                                    "Shape_Area": 0.5654499337414509,
+                                    "Shape_Leng": 4.055459982439919,
                                 },
-                                '-': {
-                                    'AREA': 1784.0634,
-                                    'CNTY_FIPS': '077',
-                                    'FIPS': '27077',
-                                    'NAME': 'Lake of the Woods',
-                                    'OBJECTID': 1,
-                                    'POP1990': 4076.0,
-                                    'POP2000': 4651.0,
-                                    'POP90_SQMI': 2,
-                                    'STATE_FIPS': '27',
-                                    'STATE_NAME': 'Minnesota',
-                                    'Shape_Area': 0.5654499337414509,
-                                    'Shape_Leng': 4.055459982439919,
+                                "-": {
+                                    "AREA": 1784.0634,
+                                    "CNTY_FIPS": "077",
+                                    "FIPS": "27077",
+                                    "NAME": "Lake of the Woods",
+                                    "OBJECTID": 1,
+                                    "POP1990": 4076.0,
+                                    "POP2000": 4651.0,
+                                    "POP90_SQMI": 2,
+                                    "STATE_FIPS": "27",
+                                    "STATE_NAME": "Minnesota",
+                                    "Shape_Area": 0.5654499337414509,
+                                    "Shape_Leng": 4.055459982439919,
                                 },
                             },
                             {
-                                '+': {
-                                    'AREA': 2280.2319,
-                                    'CNTY_FIPS': '019',
-                                    'FIPS': '53019',
-                                    'NAME': 'test',
-                                    'OBJECTID': 2,
-                                    'POP1990': 6295.0,
-                                    'POP2000': 9867.0,
-                                    'POP90_SQMI': 3,
-                                    'STATE_FIPS': '53',
-                                    'STATE_NAME': 'Washington',
-                                    'Shape_Area': 0.7180593026451161,
-                                    'Shape_Leng': 3.786160993863997,
+                                "+": {
+                                    "AREA": 2280.2319,
+                                    "CNTY_FIPS": "019",
+                                    "FIPS": "53019",
+                                    "NAME": "test",
+                                    "OBJECTID": 2,
+                                    "POP1990": 6295.0,
+                                    "POP2000": 9867.0,
+                                    "POP90_SQMI": 3,
+                                    "STATE_FIPS": "53",
+                                    "STATE_NAME": "Washington",
+                                    "Shape_Area": 0.7180593026451161,
+                                    "Shape_Leng": 3.786160993863997,
                                 },
-                                '-': {
-                                    'AREA': 2280.2319,
-                                    'CNTY_FIPS': '019',
-                                    'FIPS': '53019',
-                                    'NAME': 'Ferry',
-                                    'OBJECTID': 2,
-                                    'POP1990': 6295.0,
-                                    'POP2000': 7199.0,
-                                    'POP90_SQMI': 3,
-                                    'STATE_FIPS': '53',
-                                    'STATE_NAME': 'Washington',
-                                    'Shape_Area': 0.7180593026451161,
-                                    'Shape_Leng': 3.786160993863997,
+                                "-": {
+                                    "AREA": 2280.2319,
+                                    "CNTY_FIPS": "019",
+                                    "FIPS": "53019",
+                                    "NAME": "Ferry",
+                                    "OBJECTID": 2,
+                                    "POP1990": 6295.0,
+                                    "POP2000": 7199.0,
+                                    "POP90_SQMI": 3,
+                                    "STATE_FIPS": "53",
+                                    "STATE_NAME": "Washington",
+                                    "Shape_Area": 0.7180593026451161,
+                                    "Shape_Leng": 3.786160993863997,
                                 },
                             },
                             {
-                                '-': {
-                                    'AREA': 2529.9794,
-                                    'CNTY_FIPS': '065',
-                                    'FIPS': '53065',
-                                    'NAME': 'Stevens',
-                                    'OBJECTID': 3,
-                                    'POP1990': 30948.0,
-                                    'POP2000': 40652.0,
-                                    'POP90_SQMI': 12,
-                                    'STATE_FIPS': '53',
-                                    'STATE_NAME': 'Washington',
-                                    'Shape_Area': 0.7954858988987561,
-                                    'Shape_Leng': 4.876296245235406,
+                                "-": {
+                                    "AREA": 2529.9794,
+                                    "CNTY_FIPS": "065",
+                                    "FIPS": "53065",
+                                    "NAME": "Stevens",
+                                    "OBJECTID": 3,
+                                    "POP1990": 30948.0,
+                                    "POP2000": 40652.0,
+                                    "POP90_SQMI": 12,
+                                    "STATE_FIPS": "53",
+                                    "STATE_NAME": "Washington",
+                                    "Shape_Area": 0.7954858988987561,
+                                    "Shape_Leng": 4.876296245235406,
                                 }
                             },
                             {
-                                '+': {
-                                    'AREA': 1784.0634,
-                                    'CNTY_FIPS': '077',
-                                    'FIPS': '27077',
-                                    'NAME': 'Lake of the Gruffalo',
-                                    'OBJECTID': 9999,
-                                    'POP1990': 4076.0,
-                                    'POP2000': 4651.0,
-                                    'POP90_SQMI': 2,
-                                    'STATE_FIPS': '27',
-                                    'STATE_NAME': 'Minnesota',
-                                    'Shape_Area': 0.565449933741451,
-                                    'Shape_Leng': 4.05545998243992,
+                                "+": {
+                                    "AREA": 1784.0634,
+                                    "CNTY_FIPS": "077",
+                                    "FIPS": "27077",
+                                    "NAME": "Lake of the Gruffalo",
+                                    "OBJECTID": 9999,
+                                    "POP1990": 4076.0,
+                                    "POP2000": 4651.0,
+                                    "POP90_SQMI": 2,
+                                    "STATE_FIPS": "27",
+                                    "STATE_NAME": "Minnesota",
+                                    "Shape_Area": 0.565449933741451,
+                                    "Shape_Leng": 4.05545998243992,
                                 }
                             },
                         ],
-                        'metaChanges': {},
                     }
                 }
             }
+
         elif output_format == "html":
             _check_html_output(r.stdout)
 
@@ -986,21 +967,20 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
-            assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
-            assert len(odata[H.POINTS.LAYER]["metaChanges"]) == 0
+            assert len(odata[H.POINTS.LAYER]["feature"]) == 5
 
             change_ids = {
                 (
                     f.get('-', {}).get(H.POINTS.LAYER_PK),
                     f.get('+', {}).get(H.POINTS.LAYER_PK),
                 )
-                for f in odata[H.POINTS.LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert change_ids == CHANGE_IDS
             # this commit _adds_ names
             change_names = {
                 (f['-']["name"], f['+']["name"])
-                for f in odata[H.POINTS.LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert not any(n[0] for n in change_names)
             assert all(n[1] for n in change_names)
@@ -1010,20 +990,19 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
             assert r.exit_code == 1, r
             odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
-            assert len(odata[H.POINTS.LAYER]["featureChanges"]) == 5
-            assert len(odata[H.POINTS.LAYER]["metaChanges"]) == 0
+            assert len(odata[H.POINTS.LAYER]["feature"]) == 5
             change_ids = {
                 (
                     f.get('-', {}).get(H.POINTS.LAYER_PK),
                     f.get('+', {}).get(H.POINTS.LAYER_PK),
                 )
-                for f in odata[H.POINTS.LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert change_ids == CHANGE_IDS
             # so names are _removed_
             change_names = {
                 (f['-']["name"], f['+']["name"])
-                for f in odata[H.POINTS.LAYER]["featureChanges"]
+                for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert all(n[0] for n in change_names)
             assert not any(n[1] for n in change_names)
@@ -1082,7 +1061,7 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
 
         def _extract(diff_json):
             ds = {}
-            for f in odata["editing"]["featureChanges"]:
+            for f in odata["editing"]["feature"]:
                 old = f.get('-')
                 new = f.get('+')
                 pk = old["id"] if old else new["id"]
@@ -1126,83 +1105,23 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
         }
 
 
-def test_diff_object_union():
-    FakeDataset = collections.namedtuple("Dataset", ["path"])
+def test_diff_object_add_empty():
+    null_diff = Diff("test")
+    assert len(null_diff) == 0
 
-    ds1 = FakeDataset("ds1")
-    ds2 = FakeDataset("ds2")
+    assert null_diff + null_diff is not null_diff
+    assert null_diff + null_diff == null_diff
 
-    # Diff(self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None)
-    diff1 = Diff(ds1)
-    diff2 = Diff(ds2)
-
-    assert len(diff1) == 0
-    assert len(diff2) == 0
-
-    diff3 = diff1 | diff2
-    assert diff3 is not diff1
-    assert diff3 is not diff2
-    assert set(diff3.datasets()) == {ds1, ds2}
-
-    diff1 |= diff2
-    assert set(diff1.datasets()) == {ds1, ds2}
-
-    diff4 = Diff(ds1)
-    with pytest.raises(ValueError):
-        diff4 | diff1
-
-    with pytest.raises(ValueError):
-        diff4 |= diff1
-
-
-FakeDataset = collections.namedtuple("Dataset", ["path", "primary_key"])
-
-
-def test_diff_object_add():
-
-    ds1 = FakeDataset("ds1", "pk")
-    ds2 = FakeDataset("ds2", "pk")
-
-    NULL_DIFF = {"D": {}, "I": [], "META": {}, "U": {}}
-
-    # Diff(self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None)
-    diff1 = Diff(ds1)
-    diff2 = Diff(ds2)
-
-    assert len(diff1) == 0
-    assert len(diff2) == 0
-
-    diff3 = diff1 + diff2
-    assert diff3 is not diff1
-    assert diff3 is not diff2
-    assert set(diff3.datasets()) == {ds1, ds2}
-
-    diff1 += diff2
-    assert set(diff1.datasets()) == {ds1, ds2}
-
-    diff4 = Diff(
-        ds1,
-        inserts=[{"pk": 20}],
-        updates={"10": ({"pk": 10}, {"pk": 11})},
-        deletes={"30": {"pk": 30}},
+    diff = Diff(
+        "test",
+        [
+            Delta.insert((20, {"pk": 20})),
+            Delta.update((10, {"pk": 10}), (11, {"pk": 11})),
+            Delta.delete((30, {"pk": 30})),
+        ],
     )
-    diff5 = diff4 + diff1
-    assert diff5[ds1] == {
-        "META": {},
-        "I": [{"pk": 20}],
-        "U": {"10": ({"pk": 10}, {"pk": 11})},
-        "D": {"30": {"pk": 30}},
-    }
-    assert diff5[ds2] == NULL_DIFF
-
-    diff4 += diff1
-    assert diff4[ds1] == {
-        "META": {},
-        "I": [{"pk": 20}],
-        "U": {"10": ({"pk": 10}, {"pk": 11})},
-        "D": {"30": {"pk": 30}},
-    }
-    assert diff4[ds2] == NULL_DIFF
+    assert diff + null_diff == diff
+    assert null_diff + diff == diff
 
 
 # ID  R0  ->  R1  ->  R2
@@ -1218,97 +1137,94 @@ def test_diff_object_add():
 # 10  -       j+      j
 # 11  -       -       k+
 # 12  l       l*      l1+
-DIFF_R1 = {
-    "I": [{"pk": 8, "v": "h"}, {"pk": 9, "v": "i"}, {"pk": 10, "v": "j"}],
-    "U": {
-        "1": ({"pk": 1, "v": "a"}, {"pk": 1, "v": "a1"}),
-        "2": ({"pk": 2, "v": "b"}, {"pk": 2, "v": "b1"}),
-        "4": ({"pk": 4, "v": "d"}, {"pk": 4, "v": "d1"}),
-        "5": ({"pk": 5, "v": "e"}, {"pk": 5, "v": "e1"}),
-    },
-    "D": {
-        "6": {"pk": 6, "v": "f"},
-        "7": {"pk": 7, "v": "g"},
-        "12": {"pk": 12, "v": "l"},
-    },
-}
-DIFF_R2 = {
-    "I": [{"pk": 6, "v": "f"}, {"pk": 11, "v": "k"}, {"pk": 12, "v": "l1"}],
-    "U": {
-        "1": ({"pk": 1, "v": "a1"}, {"pk": 1, "v": "a"}),
-        "3": ({"pk": 3, "v": "c"}, {"pk": 3, "v": "c1"}),
-        "4": ({"pk": 4, "v": "d1"}, {"pk": 4, "v": "d2"}),
-        "8": ({"pk": 8, "v": "h"}, {"pk": 8, "v": "h1"}),
-    },
-    "D": {"5": {"pk": 5, "v": "e1"}, "9": {"pk": 9, "v": "i"}},
-}
-DIFF_R0_R2 = {
-    "I": [{"pk": 8, "v": "h1"}, {"pk": 10, "v": "j"}, {"pk": 11, "v": "k"}],
-    "U": {
-        "2": ({"pk": 2, "v": "b"}, {"pk": 2, "v": "b1"}),
-        "3": ({"pk": 3, "v": "c"}, {"pk": 3, "v": "c1"}),
-        "4": ({"pk": 4, "v": "d"}, {"pk": 4, "v": "d2"}),
-        "12": ({"pk": 12, "v": "l"}, {"pk": 12, "v": "l1"}),
-    },
-    "D": {"5": {"pk": 5, "v": "e"}, "7": {"pk": 7, "v": "g"}},
-    "META": {},
-}
+DIFF_R1 = Diff(
+    "test",
+    [
+        Delta.update((1, {"pk": 1, "v": "a"}), (1, {"pk": 1, "v": "a1"})),
+        Delta.update((2, {"pk": 2, "v": "b"}), (2, {"pk": 2, "v": "b1"})),
+        # 3 no-op: c -> c
+        Delta.update((4, {"pk": 4, "v": "d"}), (4, {"pk": 4, "v": "d1"})),
+        Delta.update((5, {"pk": 5, "v": "e"}), (5, {"pk": 5, "v": "e1"})),
+        Delta.delete((6, {"pk": 6, "v": "f"})),
+        Delta.delete((7, {"pk": 7, "v": "g"})),
+        Delta.insert((8, {"pk": 8, "v": "h"})),
+        Delta.insert((9, {"pk": 9, "v": "i"})),
+        Delta.insert((10, {"pk": 10, "v": "j"})),
+        # 11 no-op: None -> None
+        Delta.delete((12, {"pk": 12, "v": "l"})),
+    ],
+)
+
+DIFF_R2 = Diff(
+    "test",
+    [
+        Delta.update((1, {"pk": 1, "v": "a1"}), (1, {"pk": 1, "v": "a"})),
+        # 2 no-op: b1 -> b1
+        Delta.update((3, {"pk": 3, "v": "c"}), (3, {"pk": 3, "v": "c1"})),
+        Delta.update((4, {"pk": 4, "v": "d1"}), (4, {"pk": 4, "v": "d2"})),
+        Delta.delete((5, {"pk": 5, "v": "e1"})),
+        Delta.insert((6, {"pk": 6, "v": "f"})),
+        # 7 no-op: None -> None
+        Delta.update((8, {"pk": 8, "v": "h"}), (8, {"pk": 8, "v": "h1"})),
+        Delta.delete((9, {"pk": 9, "v": "i"})),
+        # 10 no-op: j -> j
+        Delta.insert((11, {"pk": 11, "v": "k"})),
+        Delta.insert((12, {"pk": 12, "v": "l1"})),
+    ],
+)
+
+DIFF_R0_R2 = Diff(
+    "test",
+    [
+        # 1 no-op: a -> a
+        Delta.update((2, {"pk": 2, "v": "b"}), (2, {"pk": 2, "v": "b1"})),
+        Delta.update((3, {"pk": 3, "v": "c"}), (3, {"pk": 3, "v": "c1"})),
+        Delta.update((4, {"pk": 4, "v": "d"}), (4, {"pk": 4, "v": "d2"})),
+        Delta.delete((5, {"pk": 5, "v": "e"})),
+        # 6 no-op: f -> f
+        Delta.delete((7, {"pk": 7, "v": "g"})),
+        Delta.insert((8, {"pk": 8, "v": "h1"})),
+        # 9 no-op: None -> None
+        Delta.insert((10, {"pk": 10, "v": "j"})),
+        Delta.insert((11, {"pk": 11, "v": "k"})),
+        Delta.update((12, {"pk": 12, "v": "l"}), (12, {"pk": 12, "v": "l1"})),
+    ],
+)
 
 
-def test_diff_object_add_2():
-    ds = FakeDataset("ds", "pk")
+def test_diff_object_add():
+    assert DIFF_R1 != DIFF_R0_R2
+    assert DIFF_R2 != DIFF_R0_R2
+    assert DIFF_R1 + DIFF_R2 == DIFF_R0_R2
 
-    diff1 = Diff(ds, inserts=DIFF_R1["I"], updates=DIFF_R1["U"], deletes=DIFF_R1["D"])
-    diff2 = Diff(ds, inserts=DIFF_R2["I"], updates=DIFF_R2["U"], deletes=DIFF_R2["D"])
+    diff = DIFF_R1.copy()
+    assert diff != DIFF_R0_R2
+    diff += DIFF_R2
+    assert diff == DIFF_R0_R2
 
-    diff3 = diff1 + diff2
-    assert DIFF_R0_R2["I"] == diff3[ds]["I"]
-    assert DIFF_R0_R2["U"] == diff3[ds]["U"]
-    assert DIFF_R0_R2["D"] == diff3[ds]["D"]
-
-    diff1 += diff2
-    assert DIFF_R0_R2["I"] == diff1[ds]["I"]
-    assert DIFF_R0_R2["U"] == diff1[ds]["U"]
-    assert DIFF_R0_R2["D"] == diff1[ds]["D"]
-
-    assert diff3 == diff1
-
-
-def test_diff_object_eq_reverse():
-    ds = FakeDataset("ds", "pk")
-
-    diff1 = Diff(ds, inserts=DIFF_R1["I"], updates=DIFF_R1["U"], deletes=DIFF_R1["D"])
-    diff2 = Diff(ds, inserts=DIFF_R2["I"], updates=DIFF_R2["U"], deletes=DIFF_R2["D"])
-
-    diff3 = diff1 + diff2
-
-    diff4 = ~diff3
-    assert diff4 != diff3
-    assert diff4 == ~diff3
-    assert len(diff4[ds]["I"]) == len(diff3[ds]["D"])
-    assert len(diff4[ds]["D"]) == len(diff3[ds]["I"])
-    assert len(diff4[ds]["U"]) == len(diff3[ds]["U"])
-    assert list(diff4[ds]["U"].values()) == [
-        (v1, v0) for v0, v1 in diff3[ds]["U"].values()
-    ]
+    assert ~DIFF_R0_R2 == ~DIFF_R2 + ~DIFF_R1
 
 
 def test_diff_object_add_reverse():
     """
     Check that ~(A + B) == (~B + ~A)
     """
-    ds = FakeDataset("ds", "pk")
+    assert ~DIFF_R0_R2 == ~DIFF_R2 + ~DIFF_R1
 
-    diff1 = Diff(ds, inserts=DIFF_R1["I"], updates=DIFF_R1["U"], deletes=DIFF_R1["D"])
-    diff2 = Diff(ds, inserts=DIFF_R2["I"], updates=DIFF_R2["U"], deletes=DIFF_R2["D"])
 
-    diff3 = diff1 + diff2
+def _count(generator):
+    return len(list(generator))
 
-    r2 = ~diff2
-    r1 = ~diff1
-    r2r1 = r2 + r1
-    i3 = ~diff3
-    assert i3 == r2r1
+
+def test_diff_object_eq_reverse():
+    forward = DIFF_R0_R2
+    reverse = ~forward
+    forward_counts = forward.type_counts()
+    reverse_counts = reverse.type_counts()
+    assert forward_counts["inserts"] == reverse_counts["deletes"]
+    assert forward_counts["deletes"] == reverse_counts["inserts"]
+    assert forward_counts["updates"] == reverse_counts["updates"]
+    assert list(forward.values()) == [Delta(v1, v0) for v0, v1 in reverse.values()]
 
 
 def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
@@ -1335,32 +1251,32 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         # Three dots diff should show both sets of changes.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}...{b_commit_id}"])
         assert r.exit_code == 0, r
-        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
-            "nz_pa_points_topo_150k"
-        ]["featureChanges"]
-        assert len(featureChanges) == 4
+        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
+            "feature"
+        ]
+        assert len(features) == 4
 
         r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}...{m_commit_id}"])
         assert r.exit_code == 0, r
-        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
-            "nz_pa_points_topo_150k"
-        ]["featureChanges"]
-        assert len(featureChanges) == 4
+        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
+            "feature"
+        ]
+        assert len(features) == 4
 
         # Two dots diff should show only one set of changes - the changes on the target branch.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}..{b_commit_id}"])
         assert r.exit_code == 0, r
-        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
-            "nz_pa_points_topo_150k"
-        ]["featureChanges"]
-        assert len(featureChanges) == 3
+        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
+            "feature"
+        ]
+        assert len(features) == 3
 
         r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}..{m_commit_id}"])
         assert r.exit_code == 0, r
-        featureChanges = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
-            "nz_pa_points_topo_150k"
-        ]["featureChanges"]
-        assert len(featureChanges) == 1
+        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
+            "feature"
+        ]
+        assert len(features) == 1
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
@@ -1378,67 +1294,53 @@ def test_show_points_HEAD(
 
         if output_format == 'text':
             commit_hash = r.stdout[7:47]
-            # TODO - maybe make the diff order consistent, so we don't need to sort here?
-            blocks = re.split("(?=---)", r.stdout)
-            assert blocks[0].splitlines() == [
+            assert r.stdout.splitlines() == [
                 f'commit {commit_hash}',
                 'Author: Robert Coup <robert@coup.net.nz>',
                 'Date:   Thu Jun 20 15:28:33 2019 +0100',
                 '',
                 '    Improve naming on Coromandel East coast',
                 '',
+                '--- nz_pa_points_topo_150k:feature:1095',
+                '+++ nz_pa_points_topo_150k:feature:1095',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Harataunga (Rakairoa)',
+                '',
+                '-                               macronated = N',
+                '+                               macronated = Y',
+                '-                                     name = ␀',
+                '+                                     name = Harataunga (Rākairoa)',
+                '',
+                '--- nz_pa_points_topo_150k:feature:1166',
+                '+++ nz_pa_points_topo_150k:feature:1166',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Oturu',
+                '-                                     name = ␀',
+                '+                                     name = Oturu',
+                '--- nz_pa_points_topo_150k:feature:1168',
+                '+++ nz_pa_points_topo_150k:feature:1168',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Tairua',
+                '-                                     name = ␀',
+                '+                                     name = Tairua',
+                '--- nz_pa_points_topo_150k:feature:1181',
+                '+++ nz_pa_points_topo_150k:feature:1181',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+                '-                               macronated = N',
+                '+                               macronated = Y',
+                '-                                     name = ␀',
+                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
+                '--- nz_pa_points_topo_150k:feature:1182',
+                '+++ nz_pa_points_topo_150k:feature:1182',
+                '-                               name_ascii = ␀',
+                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
+                '-                               macronated = N',
+                '+                               macronated = Y',
+                '-                                     name = ␀',
+                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
             ]
 
-            assert [b.splitlines() for b in sorted(blocks[1:])] == [
-                [
-                    '--- nz_pa_points_topo_150k:fid=1095',
-                    '+++ nz_pa_points_topo_150k:fid=1095',
-                    '-                               macronated = N',
-                    '+                               macronated = Y',
-                    '-                                     name = ␀',
-                    '+                                     name = Harataunga (Rākairoa)',
-                    '',
-                    '-                               name_ascii = ␀',
-                    '+                               name_ascii = Harataunga (Rakairoa)',
-                    '',
-                ],
-                [
-                    '--- nz_pa_points_topo_150k:fid=1166',
-                    '+++ nz_pa_points_topo_150k:fid=1166',
-                    '-                                     name = ␀',
-                    '+                                     name = Oturu',
-                    '-                               name_ascii = ␀',
-                    '+                               name_ascii = Oturu',
-                ],
-                [
-                    '--- nz_pa_points_topo_150k:fid=1168',
-                    '+++ nz_pa_points_topo_150k:fid=1168',
-                    '-                                     name = ␀',
-                    '+                                     name = Tairua',
-                    '-                               name_ascii = ␀',
-                    '+                               name_ascii = Tairua',
-                ],
-                [
-                    '--- nz_pa_points_topo_150k:fid=1181',
-                    '+++ nz_pa_points_topo_150k:fid=1181',
-                    '-                               macronated = N',
-                    '+                               macronated = Y',
-                    '-                                     name = ␀',
-                    '+                                     name = Ko Te Rā Matiti (Wharekaho)',
-                    '-                               name_ascii = ␀',
-                    '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
-                ],
-                [
-                    '--- nz_pa_points_topo_150k:fid=1182',
-                    '+++ nz_pa_points_topo_150k:fid=1182',
-                    '-                               macronated = N',
-                    '+                               macronated = Y',
-                    '-                                     name = ␀',
-                    '+                                     name = Ko Te Rā Matiti (Wharekaho)',
-                    '-                               name_ascii = ␀',
-                    '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
-                ],
-            ]
         elif output_format == 'json':
             j = json.loads(r.stdout)
             # check the diff's present, but this test doesn't need to have hundreds of lines
@@ -1479,11 +1381,11 @@ def test_show_polygons_initial(
                 '',
                 '    Import from nz-waca-adjustments.gpkg',
                 '',
-                '+++ nz_waca_adjustments:id=1424927',
-                '+                           adjusted_nodes = 1122',
-                '+                            date_adjusted = 2011-03-25T07:30:45Z',
+                '+++ nz_waca_adjustments:feature:1424927',
                 '+                                     geom = MULTIPOLYGON(...)',
+                '+                            date_adjusted = 2011-03-25T07:30:45Z',
                 '+                         survey_reference = ␀',
+                '+                           adjusted_nodes = 1122',
             ]
         elif output_format == 'json':
             j = json.loads(r.stdout)

@@ -1,7 +1,7 @@
 {
   "sno.diff/v1+hexwkb": {
     "nz_pa_points_topo_150k": {
-      "featureChanges": [
+      "feature": [
         {
           "+": {
             "fid": 9999,
@@ -40,8 +40,7 @@
             "t50_fid": 2428041
           }
         }
-      ],
-      "metaChanges": {}
+      ]
     }
   },
   "sno.patch/v1": {

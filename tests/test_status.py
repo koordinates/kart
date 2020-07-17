@@ -205,9 +205,9 @@ def test_status(
             '  (use "sno reset" to discard changes)',
             "",
             f"  {H.POINTS.LAYER}/",
-            "    modified:  3 features",
-            "    new:       1 feature",
-            "    deleted:   2 features",
+            "    inserts:   1 feature",
+            "    updates:   3 features",
+            "    deletes:   2 features",
         ]
 
         jdict = json_status(cli_runner)
@@ -222,8 +222,7 @@ def test_status(
                     "path": str(wc),
                     "changes": {
                         "nz_pa_points_topo_150k": {
-                            "metaChanges": None,
-                            "featureChanges": {"modified": 3, "new": 1, "deleted": 2,},
+                            "feature": {"inserts": 1, "updates": 3, "deletes": 2,},
                         }
                     },
                 },

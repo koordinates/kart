@@ -289,9 +289,9 @@ def test_commit_message(
             "# Changes to be committed:\n"
             "#\n"
             "#   nz_pa_points_topo_150k/\n"
-            "#     modified:  2 features\n"
-            "#     new:       1 feature\n"
-            "#     deleted:   5 features\n"
+            "#     inserts:   1 feature\n"
+            "#     updates:   2 features\n"
+            "#     deletes:   5 features\n"
             "#\n"
         )
         print(last_message())
