@@ -563,7 +563,7 @@ class RichConflictVersion:
         if output_format == "text":
             return text_row(self.feature)
         elif output_format == "json":
-            return json_row(self.feature, self.pk_field)
+            return json_row(self.feature)
         elif output_format == "geojson":
             return geojson_row(self.feature, self.pk_field)
 

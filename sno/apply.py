@@ -6,7 +6,6 @@ import click
 
 import pygit2
 
-from .diff import Diff
 from .exceptions import (
     NO_CHANGES,
     NO_TABLE,
@@ -14,28 +13,29 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
+from .diff import Diff, Delta
 from .geometry import hex_wkb_to_gpkg_geom
 from .structure import RepositoryStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 from .working_copy import WorkingCopy
 
 
-def unjson_feature(dataset, d):
-    if d is None:
-        return d
-    r = copy.deepcopy(d)
+def unjson_feature(dataset, f):
+    if f is None:
+        return f
+    f = copy.deepcopy(f)
     if dataset.geom_column_name:
         # add geometry in
-        r[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(r[dataset.geom_column_name])
-    return r
+        f[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(f[dataset.geom_column_name])
+    return f
 
 
 def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     try:
         patch = json.load(patch_file)
         json_diff = patch['sno.diff/v1+hexwkb']
-    except (KeyError, json.JSONDecodeError):
-        raise click.FileError("Failed to parse JSON patch file")
+    except (KeyError, json.JSONDecodeError) as e:
+        raise click.FileError("Failed to parse JSON patch file") from e
 
     rs = RepositoryStructure(repo)
     wc = WorkingCopy.open(repo)
@@ -46,7 +46,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     if wc:
         wc.check_not_dirty()
 
-    diff = Diff(None)
+    diff = Diff()
     for ds_name, ds_diff_dict in json_diff.items():
         dataset = rs.get(ds_name)
         if dataset is None:
@@ -55,32 +55,30 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                 exit_code=NO_TABLE,
             )
 
-        meta_changes = ds_diff_dict.get('metaChanges', {})
+        meta_changes = ds_diff_dict.get('meta', [])
         if meta_changes:
             raise NotYetImplemented(
                 "Patches containing schema changes are not yet handled"
             )
 
-        feature_changes = ds_diff_dict['featureChanges']
-        if not feature_changes:
-            continue
-
-        inserts = []
-        updates = {}
-        deletes = {}
+        feature_changes = ds_diff_dict['feature']
         pk_name = dataset.primary_key
-        for change in feature_changes:
-            old = unjson_feature(dataset, change.get('-'))
-            new = unjson_feature(dataset, change.get('+'))
-            if old and new:
-                # update
-                assert old[pk_name] == new[pk_name]
-                updates[old[pk_name]] = (old, new)
-            elif old:
-                deletes[old[pk_name]] = old
-            else:
-                inserts.append(new)
-        diff += Diff(dataset, inserts=inserts, updates=updates, deletes=deletes)
+
+        def extract_key(feature):
+            if feature is None:
+                return None
+            return str(feature[pk_name]), feature
+
+        def parse_delta(change):
+            return Delta(
+                extract_key(unjson_feature(dataset, change.get('-'))),
+                extract_key(unjson_feature(dataset, change.get('+'))),
+            )
+
+        if feature_changes:
+            diff.add_child(
+                Diff(dataset.path, (parse_delta(change) for change in feature_changes))
+            )
 
     if commit:
         if not diff and not allow_empty:

@@ -1,5 +1,6 @@
 import contextlib
 import io
+import itertools
 import json
 import os
 import string
@@ -61,98 +62,84 @@ def diff_output_text(*, output_path, **kwargs):
     def _out(dataset, diff):
         path = dataset.path
         pk_field = dataset.primary_key
-        prefix = f"{path}:"
+        prefix = f"{path}:feature:"
         repr_excl = [pk_field]
 
-        for k, (v_old, v_new) in diff["META"].items():
-            click.secho(
-                f"--- {prefix}meta/{k}\n+++ {prefix}meta/{k}", bold=True, **pecho
-            )
+        for key, delta in sorted(diff.items()):
+            if delta.type == "insert":
+                click.secho(f"+++ {prefix}{delta.new.key}", bold=True, **pecho)
+                click.secho(
+                    text_row(delta.new.value, prefix="+ ", exclude=repr_excl),
+                    fg="green",
+                    **pecho,
+                )
 
-            s_old = set(v_old.items())
-            s_new = set(v_new.items())
+            elif delta.type == "delete":
+                click.secho(f"--- {prefix}{delta.old.key}", bold=True, **pecho)
+                click.secho(
+                    text_row(delta.old.value, prefix="- ", exclude=repr_excl),
+                    fg="red",
+                    **pecho,
+                )
 
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = set(diff_del.keys()) | set(diff_add.keys())
+            elif delta.type == "update":
+                click.secho(
+                    f"--- {prefix}{delta.old.key}\n+++ {prefix}{delta.new.key}",
+                    bold=True,
+                    **pecho,
+                )
 
-            for k in all_keys:
-                if k in diff_del:
-                    click.secho(
-                        text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl),
-                        fg="red",
-                        **pecho,
-                    )
-                if k in diff_add:
-                    click.secho(
-                        text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl),
-                        fg="green",
-                        **pecho,
-                    )
+                # This preserves row order:
+                all_keys = itertools.chain(
+                    delta.old.value.keys(),
+                    (k for k in delta.new.value.keys() if k not in delta.old.value),
+                )
 
-        prefix = f"{path}:{pk_field}="
-
-        for k, v_old in diff["D"].items():
-            click.secho(f"--- {prefix}{k}", bold=True, **pecho)
-            click.secho(
-                text_row(v_old, prefix="- ", exclude=repr_excl), fg="red", **pecho
-            )
-
-        for o in diff["I"]:
-            click.secho(f"+++ {prefix}{o[pk_field]}", bold=True, **pecho)
-            click.secho(
-                text_row(o, prefix="+ ", exclude=repr_excl), fg="green", **pecho
-            )
-
-        for _, (v_old, v_new) in diff["U"].items():
-            click.secho(
-                f"--- {prefix}{v_old[pk_field]}\n+++ {prefix}{v_new[pk_field]}",
-                bold=True,
-                **pecho,
-            )
-
-            s_old = set(v_old.items())
-            s_new = set(v_new.items())
-
-            diff_add = dict(s_new - s_old)
-            diff_del = dict(s_old - s_new)
-            all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
-
-            for k in all_keys:
-                if k in diff_del:
-                    rk = text_row({k: diff_del[k]}, prefix="- ", exclude=repr_excl)
-                    if rk:
-                        click.secho(rk, fg="red", **pecho)
-                if k in diff_add:
-                    rk = text_row({k: diff_add[k]}, prefix="+ ", exclude=repr_excl)
-                    if rk:
-                        click.secho(rk, fg="green", **pecho)
+                for k in all_keys:
+                    if k.startswith("__") or k in repr_excl:
+                        continue
+                    if delta.old.value.get(k) == delta.new.value.get(k):
+                        continue
+                    if k in delta.old.value:
+                        click.secho(
+                            text_row_field(delta.old.value, k, prefix="- "),
+                            fg="red",
+                            **pecho,
+                        )
+                    if k in delta.old.value:
+                        click.secho(
+                            text_row_field(delta.new.value, k, prefix="+ "),
+                            fg="green",
+                            **pecho,
+                        )
 
     yield _out
 
 
 def text_row(row, prefix="", exclude=None):
-    m = []
+    result = []
     exclude = exclude or set()
-    for k in sorted(row.keys()):
-        if k.startswith("__") or k in exclude:
+    for key in row.keys():
+        if key.startswith("__") or key in exclude:
             continue
+        result.append(text_row_field(row, key, prefix))
+    return "\n".join(result)
 
-        v = row[k]
 
-        if isinstance(v, bytes):
-            g = gpkg_geom_to_ogr(v)
-            geom_typ = g.GetGeometryName()
-            if g.IsEmpty():
-                v = f"{geom_typ} EMPTY"
-            else:
-                v = f"{geom_typ}(...)"
-            del g
+def text_row_field(row, key, prefix):
+    val = row[key]
 
-        v = "␀" if v is None else v
-        m.append("{prefix}{k:>40} = {v}".format(k=k, v=v, prefix=prefix))
+    if isinstance(val, bytes):
+        g = gpkg_geom_to_ogr(val)
+        geom_typ = g.GetGeometryName()
+        if g.IsEmpty():
+            val = f"{geom_typ} EMPTY"
+        else:
+            val = f"{geom_typ}(...)"
+        del g
 
-    return "\n".join(m)
+    val = "␀" if val is None else val
+    return f"{prefix}{key:>40} = {val}"
 
 
 @contextlib.contextmanager
@@ -209,22 +196,14 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
 
         fc = {"type": "FeatureCollection", "features": []}
 
-        for k, (v_old, v_new) in diff["META"].items():
-            click.secho(
-                f"Warning: meta changes aren't included in GeoJSON output: {k}",
-                fg="yellow",
-                file=sys.stderr,
-            )
-
-        for k, v_old in diff["D"].items():
-            fc["features"].append(geojson_row(v_old, pk_field, "D"))
-
-        for o in diff["I"]:
-            fc["features"].append(geojson_row(o, pk_field, "I"))
-
-        for _, (v_old, v_new) in diff["U"].items():
-            fc["features"].append(geojson_row(v_old, pk_field, "U-"))
-            fc["features"].append(geojson_row(v_new, pk_field, "U+"))
+        for key, delta in sorted(diff.items()):
+            if delta.type == "insert":
+                fc["features"].append(geojson_row(delta.new.value, pk_field, "I"))
+            elif delta.type == "update":
+                fc["features"].append(geojson_row(delta.old.value, pk_field, "U-"))
+                fc["features"].append(geojson_row(delta.new.value, pk_field, "U+"))
+            elif delta.type == "delete":
+                fc["features"].append(geojson_row(delta.old.value, pk_field, "D"))
 
         dump_json_output(fc, fp, json_style=json_style)
 
@@ -254,35 +233,9 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     def _out(dataset, diff):
         pk_field = dataset.primary_key
 
-        d = {"metaChanges": {}, "featureChanges": []}
-        for k, (v_old, v_new) in diff["META"].items():
-            d["metaChanges"][k] = [v_old, v_new]
-
-        for k, v_old in diff["D"].items():
-            d["featureChanges"].append({'-': json_row(v_old, pk_field, "D")})
-
-        for o in diff["I"]:
-            d["featureChanges"].append({'+': json_row(o, pk_field, "I")})
-
-        for _, (v_old, v_new) in diff["U"].items():
-            d["featureChanges"].append(
-                {
-                    '-': json_row(v_old, pk_field, "U-"),
-                    '+': json_row(v_new, pk_field, "U+"),
-                }
-            )
-
-        # sort for reproducibility
-        def sort_key(fc):
-            if '-' in fc and '+' in fc:
-                return (fc['-'][pk_field], fc['+'][pk_field])
-            elif '-' in fc:
-                return (fc['-'][pk_field],)
-            else:
-                return (fc['+'][pk_field],)
-
-        d["featureChanges"].sort(key=sort_key)
-        accumulated[dataset.path] = d
+        accumulated[dataset.path] = {
+            "feature": [delta_as_json(delta) for key, delta in sorted(diff.items())],
+        }
 
     yield _out
 
@@ -291,8 +244,17 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
     )
 
 
+def delta_as_json(delta):
+    if delta.type == "insert":
+        return {"+": json_row(delta.new.value)}
+    elif delta.type == "delete":
+        return {"-": json_row(delta.old.value)}
+    elif delta.type == "update":
+        return {"-": json_row(delta.old.value), "+": json_row(delta.new.value)}
+
+
 @ungenerator(dict)
-def json_row(row, pk_field, change=None):
+def json_row(row):
     """
     Turns a row into a dict for serialization as JSON.
     The geometry is serialized as hexWKB.

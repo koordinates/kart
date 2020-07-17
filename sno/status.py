@@ -86,15 +86,10 @@ def get_working_copy_status_json(repo):
 def get_diff_status_json(diff):
     """Given a diff.Diff object, returns a JSON object describing the diff status."""
     output = {}
-    for dataset_path, counts in diff.counts().items():
+    for dataset_path, counts in diff.type_counts().items():
         if sum(counts.values()):
             output[dataset_path] = {
-                "metaChanges": {} if counts["META"] else None,
-                "featureChanges": {
-                    "modified": counts["U"],
-                    "new": counts["I"],
-                    "deleted": counts["D"],
-                },
+                "feature": counts,
             }
     return output
 
@@ -175,18 +170,15 @@ def diff_status_to_text(jdict):
     message = []
     for dataset_path, all_changes in jdict.items():
         message.append(f"  {dataset_path}/")
-        if all_changes["metaChanges"] is not None:
-            message.append(f"    meta")
-
-        feature_changes = all_changes["featureChanges"]
-        feature_change_message(message, feature_changes, "modified")
-        feature_change_message(message, feature_changes, "new")
-        feature_change_message(message, feature_changes, "deleted")
+        feature_changes = all_changes["feature"]
+        feature_change_message(message, feature_changes, "inserts")
+        feature_change_message(message, feature_changes, "updates")
+        feature_change_message(message, feature_changes, "deletes")
     return "\n".join(message)
 
 
 def feature_change_message(message, feature_changes, key):
-    n = feature_changes[key]
+    n = feature_changes.get(key)
     label = f"    {key}:"
     col_width = 15
     if n:

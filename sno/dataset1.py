@@ -64,8 +64,7 @@ class Dataset1(DatasetStructure):
         yield from self._iter_meta_items(exclude=exclude)
 
     def iter_gpkg_meta_items(self):
-        exclude = () if include_hidden else ("fields", "version")
-        yield from self._iter_meta_items(exclude=exclude)
+        yield from self._iter_meta_items(exclude=("fields", "version"))
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -156,7 +155,7 @@ class Dataset1(DatasetStructure):
             else self._msgpack_unpack_ext,
             raw=False,
         )
-        for colid, value in bin_feature.items():
+        for colid, value in sorted(bin_feature.items()):
             field_name = self.cid_field_map[colid]
             feature[field_name] = value
 

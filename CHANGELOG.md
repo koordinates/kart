@@ -6,6 +6,12 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.5.0 (UNRELEASED)
 
+### Breaking changes in this release
+
+ * New structure to `sno diff` output:
+    - Text output: Features are now labelled as `<dataset>:feature:<primary_key>`, consistent with meta items that are labelled as `<dataset>:meta:<meta_item_name>`
+    - JSON output also uses "feature" and "meta" as keys for the different types of changes, instead of "featureChanges" and "metaChanges".
+
 ### Major changes in this release
 
  * A new repository structure/layout, which will support schema changes. Internally known as Datasets V2.

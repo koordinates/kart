@@ -662,14 +662,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
             table = dataset.name
 
-            meta_diff = {}
-            meta_old = {key: dataset.get_meta_item(key) for key in GPKG_META_ITEMS}
-            meta_new = dict(self.read_meta(dataset))
-            for name in set(meta_new.keys()) ^ set(meta_old.keys()):
-                v_old = meta_old.get(name)
-                v_new = meta_new.get(name)
-                if v_old or v_new:
-                    meta_diff[name] = (v_old, v_new)
+            # TODO - diff meta items.
 
             pk_field = dataset.primary_key
 
@@ -733,13 +726,19 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     if not candidates_ins[h]:
                         del candidates_ins[h]
 
-            return diff.Diff(
-                dataset,
-                meta=meta_diff,
-                inserts=list(itertools.chain(*candidates_ins.values())),
-                deletes=dict(itertools.chain(*candidates_del.values())),
-                updates=candidates_upd,
-            )
+            def extract_key(obj):
+                return obj[pk_field], obj
+
+            from sno.diff import Delta, Diff
+
+            ins = [Delta.insert(extract_key(v[0])) for v in candidates_ins.values()]
+            dels = [Delta.delete(extract_key(v[0][1])) for v in candidates_del.values()]
+            upd = [
+                Delta.update(extract_key(old), extract_key(new))
+                for old, new in candidates_upd.values()
+            ]
+
+            return Diff(dataset.path, ins + dels + upd)
 
     def diff_to_tree(self, repo_structure, feature_filter=UNFILTERED):
         """
@@ -748,13 +747,14 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         feature_filter = feature_filter or UNFILTERED
 
-        result = diff.Diff(None)
+        result = diff.Diff()
         for dataset in repo_structure:
             if dataset.path not in feature_filter:
                 continue
-            result += self.diff_db_to_tree(
+            ds_diff = self.diff_db_to_tree(
                 dataset, pk_filter=feature_filter[dataset.path]
             )
+            result.add_child(ds_diff)
         return result
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):

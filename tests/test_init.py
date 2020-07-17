@@ -620,7 +620,7 @@ def test_import_existing_wc(
         assert r.exit_code == 0, r
         assert r.stdout.splitlines()[-2:] == [
             "  nz_waca_adjustments/",
-            "    deleted:   10 features",
+            "    deletes:   10 features",
         ]
 
 

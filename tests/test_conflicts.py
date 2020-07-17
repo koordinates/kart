@@ -64,14 +64,13 @@ def test_summarise_conflicts(structure_version, create_conflicts, cli_runner):
 
         r = cli_runner.invoke(["conflicts", "-s"])
         assert r.exit_code == 0, r
-        assert r.stdout.split("\n") == [
+        assert r.stdout.splitlines() == [
             'nz_waca_adjustments:',
             '    nz_waca_adjustments:feature:',
             '        nz_waca_adjustments:feature:98001',
             '        nz_waca_adjustments:feature:1452332',
             '        nz_waca_adjustments:feature:1456853',
             '        nz_waca_adjustments:feature:1456912',
-            '',
             '',
         ]
 
@@ -85,10 +84,9 @@ def test_summarise_conflicts(structure_version, create_conflicts, cli_runner):
 
         r = cli_runner.invoke(["conflicts", "-ss"])
         assert r.exit_code == 0, r
-        assert r.stdout.split("\n") == [
+        assert r.stdout.splitlines() == [
             'nz_waca_adjustments:',
             '    nz_waca_adjustments:feature: 4 conflicts',
-            '',
             '',
         ]
 
@@ -111,32 +109,32 @@ def test_list_conflicts(structure_version, create_conflicts, cli_runner):
             '            nz_pa_points_topo_150k:feature:3:ancestor:',
             '                                     fid = 3',
             '                                    geom = POINT(...)',
+            '                                 t50_fid = 2426273',
+            '                              name_ascii = Tauwhare Pa',
             '                              macronated = N',
             '                                    name = Tauwhare Pa',
-            '                              name_ascii = Tauwhare Pa',
-            '                                 t50_fid = 2426273',
             '            nz_pa_points_topo_150k:feature:3:ours:',
             '                                     fid = 3',
             '                                    geom = POINT(...)',
+            '                                 t50_fid = 2426273',
+            '                              name_ascii = Tauwhare Pa',
             '                              macronated = N',
             '                                    name = ours_version',
-            '                              name_ascii = Tauwhare Pa',
-            '                                 t50_fid = 2426273',
             '            nz_pa_points_topo_150k:feature:3:theirs:',
             '                                     fid = 3',
             '                                    geom = POINT(...)',
+            '                                 t50_fid = 2426273',
+            '                              name_ascii = Tauwhare Pa',
             '                              macronated = N',
             '                                    name = theirs_version',
-            '                              name_ascii = Tauwhare Pa',
-            '                                 t50_fid = 2426273',
         ]
         r = cli_runner.invoke(["conflicts", "nz_pa_points_topo_150k:feature:3"])
         assert r.exit_code == 0, r
-        assert r.stdout.split("\n") == expected_text + ['', '']
+        assert r.stdout.splitlines() == expected_text + ['']
 
         r = cli_runner.invoke(["conflicts"])
         assert r.exit_code == 0, r
-        assert r.stdout.split("\n")[: len(expected_text)] == expected_text
+        assert r.stdout.splitlines()[: len(expected_text)] == expected_text
 
         expected_json = {
             "sno.conflicts/v1": {

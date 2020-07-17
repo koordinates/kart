@@ -1,5 +1,4 @@
-import collections
-import copy
+from collections import namedtuple
 import logging
 import re
 import sys
@@ -26,360 +25,257 @@ class Conflict(Exception):
     pass
 
 
-class Diff:
-    def __init__(
-        self, dataset_or_diff, meta=None, inserts=None, updates=None, deletes=None
-    ):
-        # @meta: {}
-        # @inserts: [{object}, ...]
-        # @deletes: {pk:(oldObject, newObject), ...}
-        # @updates: {pk:{object}, ...}
-        if dataset_or_diff is None:
-            # empty
-            self._data = {}
-            self._datasets = {}
-        elif isinstance(dataset_or_diff, Diff):
-            # clone
-            diff = dataset_or_diff
-            self._data = copy.deepcopy(diff._data)
-            self._datasets = copy.copy(diff._datasets)
+class KeyValue(namedtuple("KeyValue", ("key", "value"))):
+    """A key-value pair. A delta is made of two of these - one old, one new."""
+
+    @staticmethod
+    def of(obj):
+        """Ensures that the given object is a KeyValue, or None."""
+        if isinstance(obj, (KeyValue, type(None))):
+            return obj
+        elif isinstance(obj, tuple):
+            return KeyValue(*obj)
+        raise ValueError(f"Expected (key, value) tuple - got f{type(obj)}")
+
+
+class Delta(namedtuple("Delta", ("old", "new"))):
+    """
+    An object changes from old to new. Either old or new can be None, for insert or delete operations.
+    When present, old and new are both key-value pairs.
+    The key identifies which object changed (so, should be a filename / address / primary key),
+    and the value is the changed object's entire contents.
+    If the old_key is different to the new_key, this means the object moved in this delta, ie a rename operation.
+    Deltas can be concatenated together, if they refer to the same object - eg an delete + insert = update (usually).
+    Deltas can be inverted, which just means old and new are swapped.
+    """
+
+    def __new__(cls, old, new):
+        return super().__new__(cls, KeyValue.of(old), KeyValue.of(new))
+
+    def __init__(self, old, new):
+        super().__init__()
+        if self.old is None and self.new is None:
+            raise ValueError("Empty Delta")
+        elif self.old is None:
+            self.type = "insert"
+        elif self.new is None:
+            self.type = "delete"
         else:
-            dataset = dataset_or_diff
-            self._data = {
-                dataset.path: {
-                    "META": meta or {},
-                    "I": inserts or [],
-                    "U": updates or {},
-                    "D": deletes or {},
-                }
-            }
-            self._datasets = {dataset.path: dataset}
+            self.type = "update"
+
+    @staticmethod
+    def insert(new):
+        return Delta(None, new)
+
+    @staticmethod
+    def update(old, new):
+        return Delta(old, new)
+
+    @staticmethod
+    def maybe_update(old, new):
+        return Delta(old, new) if old != new else None
+
+    @staticmethod
+    def delete(old):
+        return Delta(old, None)
 
     def __invert__(self):
-        """ Return a new Diff that is the reverse of this Diff """
-        new_diff = Diff(self)
-        for ds_path, od in new_diff._data.items():
-            ds = new_diff._datasets[ds_path]
-            if od["META"]:
-                raise NotImplementedError(
-                    "Can't invert diffs containing meta changes yet"
-                )
+        return Delta(self.new, self.old)
 
-            new_diff._data[ds_path] = {
-                # deletes become inserts
-                "I": list(od["D"].values()),
-                # inserts become deletes
-                "D": {str(o[ds.primary_key]): o for o in od["I"]},
-                # updates are swapped old<>new
-                "U": {k: (v1, v0) for k, (v0, v1) in od["U"].items()},
-                "META": {},
-            }
-        return new_diff
+    @property
+    def old_key(self):
+        return self.old.key if self.old is not None else None
 
-    def __or__(self, other):
-        """
-        Return a new Diff with datasets from this Diff and other.
-        If a dataset exists in both this Diff and other, a ValueError will be raised
-        """
-        my_datasets = set(self._data.keys())
-        other_datasets = set(other._data.keys())
-        if my_datasets & other_datasets:
-            raise ValueError(
-                f"Same dataset appears in both Diffs, do you want + ? {', '.join(my_datasets & other_datasets)}"
-            )
+    @property
+    def new_key(self):
+        return self.new.key if self.new is not None else None
 
-        new_diff = Diff(self)
-        new_diff._data.update(copy.deepcopy(other._data))
-        new_diff._datasets.update(copy.deepcopy(other._datasets))
-        return new_diff
+    @property
+    def key(self):
+        # To be stored in a Diff, a Delta needs a single key.
+        # This mostly works, but isn't perfect when renames are involved.
+        return self.old_key or self.new_key
 
-    def __ior__(self, other):
-        """
-        Update this Diff with datasets from other.
-        If a dataset exists in both this Diff and other, a ValueError will be raised
-        """
-        my_datasets = set(self._datasets.keys())
-        other_datasets = set(other._datasets.keys())
-        if my_datasets & other_datasets:
-            raise ValueError(
-                f"Same dataset appears in both Diffs, do you want += ? {', '.join(my_datasets & other_datasets)}"
-            )
+    def __add__(self, other):
+        """Concatenate this delta with the subsequent delta, return the result as a single delta."""
+        # Note: this method assumes that the deltas being concatenated are related,
+        # ie that self.new == other.old. Don't try to concatenate arbitrary deltas together.
 
-        self._data.update(copy.deepcopy(other._data))
-        self._datasets.update(copy.copy(other._datasets))
-        return self
-
-    @classmethod
-    def _add(cls, a, b, a_pk, b_pk):
-
-        if any(a["META"].values()) or any(b["META"].values()):
-            raise NotImplementedError("Metadata changes")
-
-        conflict_keys = set()
-
-        # we edit both sides during iteration
-
-        a_inserts = {str(o[a_pk]): o for o in a["I"]}
-        a_updates = a["U"].copy()
-        a_deletes = a["D"].copy()
-        L.debug("initial a.inserts: %s", sorted(a_inserts.keys()))
-        L.debug("initial a.updates: %s", sorted(a_updates.keys()))
-        L.debug("initial a.deletes: %s", sorted(a_deletes.keys()))
-
-        b_inserts = {str(o[b_pk]): o for o in b["I"]}
-        b_updates = b["U"].copy()
-        b_deletes = b["D"].copy()
-        L.debug("initial b.inserts: %s", sorted(b_inserts.keys()))
-        L.debug("initial b.updates: %s", sorted(b_updates.keys()))
-        L.debug("initial b.deletes: %s", sorted(b_deletes.keys()))
-
-        out_ins = {}
-        out_upd = {}
-        out_del = {}
-
-        for pk, o in a_inserts.items():
+        if self.type == "insert":
             # ins + ins -> Conflict
             # ins + upd -> ins
             # ins + del -> noop
-            # ins +     -> ins
+            if other.type == "insert":
+                raise Conflict()
+            elif other.type == "update":
+                return Delta.insert(other.new)
+            elif other.type == "delete":
+                return None
 
-            b_ins = b_inserts.pop(pk, None)
-            if b_ins:
-                conflict_keys.add(pk)
-                continue
-
-            b_upd = b_updates.pop(pk, None)
-            if b_upd:
-                out_ins[pk] = b_upd[1]
-                continue
-
-            b_del = b_deletes.pop(pk, None)
-            if b_del:
-                continue  # never existed -> noop
-
-            out_ins[pk] = o
-
-        for pk, (a_old, a_new) in a_updates.items():
+        elif self.type == "update":
             # upd + ins -> Conflict
             # upd + upd -> upd?
             # upd + del -> del
-            # upd +     -> upd
+            if other.type == "insert":
+                raise Conflict()
+            elif other.type == "update":
+                return Delta.maybe_update(self.old, other.new)
+            elif other.type == "delete":
+                return Delta.delete(self.old)
 
-            b_ins = b_inserts.pop(pk, None)
-            if b_ins:
-                conflict_keys.add(pk)
-                continue
-
-            b_upd = b_updates.pop(pk, None)
-            if b_upd:
-                b_old, b_new = b_upd
-                if a_old != b_new:
-                    out_upd[pk] = (a_old, b_new)
-                else:
-                    pass  # changed back -> noop
-                continue
-
-            b_del = b_deletes.pop(pk, None)
-            if b_del:
-                out_del[pk] = a_old
-                continue
-
-            out_upd[pk] = (a_old, a_new)
-
-        for pk, o in a_deletes.items():
+        elif self.type == "delete":
+            # del + ins -> upd?
             # del + del -> Conflict
             # del + upd -> Conflict
-            # del + ins -> upd?
-            # del +     -> del
+            if other.type == "insert":
+                return Delta.maybe_update(self.old, other.new)
+            else:
+                raise Conflict()
 
-            b_del = b_deletes.pop(pk, None)
-            if b_del:
-                conflict_keys.add(pk)
-                continue
 
-            b_upd = b_updates.pop(pk, None)
-            if b_upd:
-                conflict_keys.add(pk)
-                continue
+class Diff:
+    """
+    A Diff is a set of Deltas, or a set of Diffs. A Diff's children are stored by key.
+    When two diffs are concatenated, all their children with matching keys are recursively concatenated.
+    The children of a Diff are responsible for knowing their own keys - this is a requirement
+    for Deltas in particular, since a Delta needs to be able to change key when inverted.
+    So, if a Diff will be added to a parent Diff, it needs to know its own key - the root Diff can be unnamed.
+    """
 
-            b_ins = b_inserts.pop(pk, None)
-            if b_ins:
-                if b_ins != o:
-                    out_upd[pk] = (o, b_ins)
-                else:
-                    pass  # inserted same as deleted -> noop
-                continue
+    def __init__(self, self_key=None, children=()):
+        try:
+            hash(self_key)
+        except Exception:
+            raise ValueError(f"Bad key for Diff object: {self_key}")
 
-            out_del[pk] = o
+        self.self_key = self_key
+        self.child_type = None
+        self.children = {}
+        for child in children:
+            self.add_child(child)
 
-        # we should only have keys left in b.* that weren't in a.*
-        L.debug("out_ins: %s", sorted(out_ins.keys()))
-        L.debug("out_upd: %s", sorted(out_upd.keys()))
-        L.debug("out_del: %s", sorted(out_del.keys()))
-        L.debug("remaining b.inserts: %s", sorted(b_inserts.keys()))
-        L.debug("remaining b.updates: %s", sorted(b_updates.keys()))
-        L.debug("remaining b.deletes: %s", sorted(b_deletes.keys()))
+    def __contains__(self, child_key):
+        return child_key in self.children
 
-        all_keys = sum(
-            [
-                list(l)
-                for l in [
-                    out_ins.keys(),
-                    out_upd.keys(),
-                    out_del.keys(),
-                    b_inserts.keys(),
-                    b_updates.keys(),
-                    b_deletes.keys(),
-                ]
-            ],
-            [],
+    def __getitem__(self, child_key):
+        return self.children[child_key]
+
+    def __setitem__(self, key, value):
+        raise RuntimeError(
+            "Diff doesn't support __setitem__: use Diff.add_child(diff_or_delta)"
         )
-        e = set(all_keys)
-        if len(e) != len(all_keys):
-            e_keys = [
-                k for k, count in collections.Counter(all_keys).items() if count > 1
-            ]
-            raise AssertionError(
-                f"Unexpected key conflict between operations: {e_keys}"
+
+    def get(self, child_key):
+        return self.children.get(child_key)
+
+    def add_child(self, child):
+        if self.child_type is None:
+            self.child_type = type(child)
+        elif type(child) != self.child_type:
+            raise ValueError(
+                f"A Diff's children should be all one type - all Diffs or all Deltas. {type(child)} added to {self}"
             )
+        if child.key is None:
+            raise ValueError(f"Can't add child with no key to parent: {child}")
+        self.children[child.key] = child
 
-        #     + ins -> ins
-        #     + upd -> upd
-        #     + del -> del
-        out_ins.update(b_inserts)
-        out_upd.update(b_updates)
-        out_del.update(b_deletes)
+    def copy(self):
+        result = Diff(self.self_key)
+        result.children = self.children.copy()
+        return result
 
-        return (
-            {
-                "META": {},
-                "I": sorted(out_ins.values(), key=lambda o: o[b_pk]),
-                "U": out_upd,
-                "D": out_del,
-            },
-            conflict_keys or None,
-        )
+    @property
+    def key(self):
+        return self.self_key
 
-    def __add__(self, other):
-        my_datasets = set(self._data.keys())
-        other_datasets = set(other._data.keys())
+    def keys(self):
+        return self.children.keys()
 
-        new_diff = Diff(self)
-        for ds in other_datasets:
-            if ds not in my_datasets:
-                new_diff._data[ds] = other._data[ds]
-                new_diff._datasets[ds] = other._datasets[ds]
-            else:
-                rdiff, conflicts = self._add(
-                    a=self._data[ds],
-                    b=other._data[ds],
-                    a_pk=self._datasets[ds].primary_key,
-                    b_pk=other._datasets[ds].primary_key,
-                )
-                if conflicts:
-                    raise Conflict(conflicts)
-                else:
-                    new_diff._data[ds] = rdiff
-        return new_diff
+    def values(self):
+        return self.children.values()
 
-    def __iadd__(self, other):
-        my_datasets = set(self._data.keys())
-        other_datasets = set(other._data.keys())
-
-        for ds in other_datasets:
-            if ds not in my_datasets:
-                self._data[ds] = other._data[ds]
-                self._datasets[ds] = other._datasets[ds]
-            else:
-                rdiff, conflicts = self._add(
-                    a=self._data[ds],
-                    b=other._data[ds],
-                    a_pk=self._datasets[ds].primary_key,
-                    b_pk=other._datasets[ds].primary_key,
-                )
-                if conflicts:
-                    raise Conflict(conflicts)
-                else:
-                    self._data[ds] = rdiff
-        return self
-
-    def __len__(self):
-        count = 0
-        for dataset_diff in self._data.values():
-            count += sum(len(o) for o in dataset_diff.values())
-        return count
-
-    def __getitem__(self, dataset):
-        if isinstance(dataset, str):
-            return self._data[dataset]
-        return self._data[dataset.path]
+    def items(self):
+        return self.children.items()
 
     def __iter__(self):
-        for ds_path, dsdiff in self._data.items():
-            ds = self._datasets[ds_path]
-            yield ds, dsdiff
+        yield from iter(self.children)
 
     def __eq__(self, other):
-        if set(self._datasets.keys()) != set(other._datasets.keys()):
+        if not isinstance(other, Diff):
             return False
+        return self.self_key == other.self_key and self.children == other.children
 
-        for ds, sdiff in self:
-            odiff = other[ds]
-            if sorted(sdiff["I"], key=lambda o: o[ds.primary_key]) != sorted(
-                odiff["I"], key=lambda o: o[ds.primary_key]
-            ):
-                return False
-            if sdiff["META"] != odiff["META"]:
-                return False
-            if sdiff["U"] != odiff["U"]:
-                return False
-            if sdiff["D"] != odiff["D"]:
-                return False
+    def __len__(self):
+        return len(self.children)
 
-        return True
+    def __bool__(self):
+        return any(bool(child) for child in self.children.values())
 
-    def dataset_counts(self, dataset):
-        """Returns a dict containing the count of each type of diff, for a particular dataset."""
-        return {k: len(v) for k, v in self._data[dataset.path].items()}
+    def __str__(self):
+        return f"Diff({self.self_key}, children={{{','.join(str(k) for k in self.children.keys())}}}))"
 
-    def counts(self):
-        """
-        Returns multiple dataset_counts dicts, one for each dataset touched by this diff.
-        The dataset_counts dicts are returned in a top-level dict keyed by dataset path.
-        """
+    __repr__ = __str__
 
-        return {
-            dataset.path: self.dataset_counts(dataset) for dataset in self.datasets()
-        }
+    def __invert__(self):
+        return Diff(self.self_key, (~c for c in self.children.values()))
 
-    def __repr__(self):
-        return repr(self._data)
+    def __add__(self, other):
+        """Concatenate this Diff to the subsequent Diff, by concatenating all children with matching keys."""
+        # FIXME: this algorithm isn't perfect when renames are involved.
 
-    def datasets(self):
-        return self._datasets.values()
+        result = []
+        for child_key in self.children.keys() | other.children.keys():
+            lhs = self.children.get(child_key)
+            rhs = other.children.get(child_key)
+            if lhs and rhs:
+                both = lhs + rhs
+                if both:
+                    result.append(both)
+            else:
+                result.append(lhs or rhs)
+        return Diff(self.self_key, result)
+
+    def __iadd__(self, other):
+        self.children = (self + other).children
+        return self
 
     def to_filter(self):
         """
-        Returns a filter object - see filter_util.py - that matches all features affected by this diff.
+        Returns the set of all keys of all the Deltas that are children of this Diff.
+        If the children are Diffs, not Deltas, returns instead dict of {child.key: child.to_filter()}
         """
-        return {dataset.path: self._dataset_pks(dataset) for dataset in self.datasets()}
+        if self.child_type is Diff:
+            # Any children are Diffs: recursively call to_filter() on them too.
+            return {child.key: child.to_filter() for child in self.children.values()}
+        else:
+            # Any children are Deltas. Create a filter of all their keys:
+            result = set()
+            for delta in self.children.values():
+                if delta.old is not None:
+                    result.add(str(delta.old.key))
+                if delta.new is not None:
+                    result.add(str(delta.new.key))
+            return result
 
-    def _dataset_pks(self, dataset):
-        """Returns the set of all pks affected by this diff within a particular dataset."""
-        ds_data = self._data[dataset.path]
-        primary_key = dataset.primary_key
-        inserts = [str(o[primary_key]) for o in ds_data["I"]]
-        deletes = [str(o[primary_key]) for o in ds_data["D"].values()]
-        update_olds = [str(o[0][primary_key]) for o in ds_data["U"].values()]
-        update_news = [str(o[1][primary_key]) for o in ds_data["U"].values()]
-        return set(inserts + deletes + update_olds + update_news)
+    def type_counts(self):
+        if self.child_type is Diff:
+            # Any children are Diffs: recursively call to_filter() on them too.
+            return {child.key: child.type_counts() for child in self.children.values()}
+        else:
+            # Any children are Deltas. Create a filter of all their keys:
+            result = {}
+            for delta in self.children.values():
+                delta_type = delta.type
+                result.setdefault(delta_type, 0)
+                result[delta_type] += 1
+            # Pluralise type names:
+            return {f"{delta_type}s": value for delta_type, value in result.items()}
 
 
 def get_dataset_diff(
     base_rs, target_rs, working_copy, dataset_path, pk_filter=UNFILTERED
 ):
-    dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
-    diff = Diff(dataset)
+    diff = Diff(dataset_path)
 
     if base_rs != target_rs:
         # diff += base_rs<>target_rs
@@ -414,11 +310,13 @@ def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
     if feature_filter is not UNFILTERED:
         all_datasets = all_datasets.intersection(feature_filter.keys())
 
-    result = Diff(None)
-    for dataset in all_datasets:
-        result += get_dataset_diff(
+    result = Diff()
+    for dataset in sorted(all_datasets):
+        ds_diff = get_dataset_diff(
             base_rs, target_rs, None, dataset, feature_filter[dataset]
         )
+        if ds_diff:
+            result.add_child(ds_diff)
     return result
 
 
@@ -534,10 +432,10 @@ def diff_with_writer(
                     dataset_path,
                     feature_filter[dataset_path],
                 )
-                [dataset] = diff.datasets()
+                dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
                 num_changes += len(diff)
                 L.debug("overall diff (%s): %s", dataset_path, repr(diff))
-                w(dataset, diff[dataset])
+                w(dataset, diff)
 
     except click.ClickException as e:
         L.debug("Caught ClickException: %s", e)

@@ -1,11 +1,5 @@
 {
-  "sno.diff/v1+hexwkb": {
-    "nz_pa_points_topo_150k": {
-      "featureChanges": [
-      ],
-      "metaChanges": {}
-    }
-  },
+  "sno.diff/v1+hexwkb": {},
   "sno.patch/v1": {
     "authorEmail": "robert@example.com",
     "authorName": "Robert Coup",
