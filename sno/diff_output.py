@@ -211,7 +211,14 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
 
 
 @contextlib.contextmanager
-def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwargs):
+def diff_output_json(
+    *,
+    output_path,
+    dataset_count,
+    json_style="pretty",
+    dump_function=dump_json_output,
+    **kwargs,
+):
     """
     Contextmanager.
     Yields a callable which can be called with dataset diffs
@@ -239,7 +246,7 @@ def diff_output_json(*, output_path, dataset_count, json_style="pretty", **kwarg
 
     yield _out
 
-    dump_json_output(
+    dump_function(
         {"sno.diff/v1+hexwkb": accumulated}, output_path, json_style=json_style
     )
 

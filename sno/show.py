@@ -126,29 +126,26 @@ def patch_output_json(*, target, output_path, json_style, **kwargs):
 
     authorTime is always returned in UTC, in Z-suffixed ISO8601 format.
     """
-    buf = StringIO()
 
-    output_path, original_output_path = buf, output_path
-    with diff.diff_output_json(
-        output_path=output_path, json_style=json_style, **kwargs
-    ) as diff_writer:
-        yield diff_writer
-
-    # At this point, the diff_writer has been used, meaning the StringIO has
-    # the diff output in it. Now we can add some patch info
-    buf.seek(0)
-    output = json.load(buf)
     commit = target.head_commit
     author = commit.author
     author_time = datetime.fromtimestamp(author.time, timezone.utc)
     author_time_offset = timedelta(minutes=author.offset)
 
-    output['sno.patch/v1'] = {
-        'authorName': author.name,
-        'authorEmail': author.email,
-        "authorTime": datetime_to_iso8601_utc(author_time),
-        "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
-        "message": commit.message,
-    }
+    def dump_function(data, *args, **kwargs):
+        data['sno.patch/v1'] = {
+            'authorName': author.name,
+            'authorEmail': author.email,
+            "authorTime": datetime_to_iso8601_utc(author_time),
+            "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
+            "message": commit.message,
+        }
+        dump_json_output(data, *args, **kwargs)
 
-    dump_json_output(output, original_output_path, json_style=json_style)
+    with diff.diff_output_json(
+        output_path=output_path,
+        json_style=json_style,
+        dump_function=dump_function,
+        **kwargs,
+    ) as diff_writer:
+        yield diff_writer
