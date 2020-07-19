@@ -25,6 +25,7 @@ def fast_import_tables(
     message=None,
     limit=None,
     max_pack_size="2G",
+    max_delta_depth=0,
     extra_blobs=(),
 ):
     structure_version = int(structure_version)
@@ -55,6 +56,7 @@ def fast_import_tables(
         "--quiet",
         "--done",
         f"--max-pack-size={max_pack_size}",
+        f"--depth={max_delta_depth}",
     ]
 
     if header is None:
