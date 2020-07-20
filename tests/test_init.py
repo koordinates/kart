@@ -37,6 +37,7 @@ GPKG_IMPORTS = (
         pytest.param(
             "gpkg-spec", "sample1_2.gpkg", "countiestbl", id="spec-counties-table"
         ),
+        pytest.param("gpkg-stringpk", "stringpk.gpkg", "stringpk", id="stringpk"),
     ],
 )
 
@@ -290,10 +291,22 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
         ]
 
 
+V1_OR_V2 = ("import_version", ["1", "2"])
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
+@pytest.mark.parametrize(*V1_OR_V2)
 def test_init_import(
-    archive, gpkg, table, data_archive, tmp_path, cli_runner, chdir, geopackage
+    archive,
+    gpkg,
+    table,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
+    import_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     with data_archive(archive) as data:
@@ -302,7 +315,13 @@ def test_init_import(
         repo_path.mkdir()
 
         r = cli_runner.invoke(
-            ["init", "--import", f"gpkg:{data / gpkg}", str(repo_path)]
+            [
+                "init",
+                "--import",
+                f"gpkg:{data / gpkg}",
+                str(repo_path),
+                f"--version={import_version}",
+            ]
         )
         assert r.exit_code == 0, r
         assert (repo_path / "HEAD").exists()
@@ -338,6 +357,9 @@ def test_init_import(
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
         H.verify_gpkg_extent(db, table)
+        with chdir(repo_path):
+            # check that we can view the commit we created
+            cli_runner.invoke(["show", "-o", "json"])
 
 
 def test_init_import_name_clash(data_archive, cli_runner, geopackage):

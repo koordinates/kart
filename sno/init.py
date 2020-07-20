@@ -545,25 +545,38 @@ class OgrImporter:
             if width:
                 extra_type_info["length"] = width
 
+        name = fd.GetName()
+        pk_index = 0 if name == self.primary_key else None
         return ColumnSchema(
-            ColumnSchema.new_id(), fd.GetName(), data_type, None, **extra_type_info
+            ColumnSchema.new_id(), name, data_type, pk_index, **extra_type_info
         )
 
     @property
     @functools.lru_cache(maxsize=1)
     def schema(self):
-        from .dataset2 import Schema, ColumnSchema
+        from .dataset2 import ColumnSchema, Schema
 
         ld = self.ogrlayer.GetLayerDefn()
-        pk_column = ColumnSchema(ColumnSchema.new_id(), self.primary_key, "integer", 0)
+
+        ogr_pk_index = ld.GetFieldIndex(self.primary_key)
+        if ogr_pk_index != -1:
+            pk_column = self._field_to_v2_column_schema(ld.GetFieldDefn(ogr_pk_index))
+        else:
+            # FID field, isn't an OGR field
+            pk_column = ColumnSchema(
+                ColumnSchema.new_id(), self.primary_key, "integer", 0
+            )
+
         geometry_column = self.get_geometry_v2_column_schema()
         special_columns = (
             [pk_column, geometry_column] if geometry_column else [pk_column]
         )
 
+        fds = [ld.GetFieldDefn(i) for i in range(ld.GetFieldCount())]
         other_columns = [
-            self._field_to_v2_column_schema(ld.GetFieldDefn(i))
-            for i in range(ld.GetFieldCount())
+            self._field_to_v2_column_schema(fd)
+            for fd in fds
+            if fd.GetName() != self.primary_key
         ]
 
         return Schema(special_columns + other_columns)
