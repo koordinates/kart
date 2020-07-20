@@ -13,7 +13,6 @@ from osgeo import gdal
 from . import gpkg, diff
 from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
-from .gpkg_adapter import GPKG_META_ITEMS
 
 L = logging.getLogger("sno.working_copy")
 

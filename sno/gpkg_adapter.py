@@ -1,5 +1,5 @@
 import re
-from .dataset2 import Schema, ColumnSchema
+from .schema import Schema, ColumnSchema
 from osgeo.osr import SpatialReference
 
 

@@ -1,6 +1,7 @@
 import pytest
 
-from sno.dataset2 import Dataset2, Legend, ColumnSchema, Schema
+from sno.dataset2 import Dataset2
+from sno.schema import Legend, ColumnSchema, Schema
 
 
 DATASET_PATH = "path/to/dataset"

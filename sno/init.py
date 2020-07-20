@@ -26,6 +26,7 @@ from .geometry import ogr_to_gpkg_geom
 from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
+from .schema import Schema, ColumnSchema
 from .structure_version import (
     STRUCTURE_VERSIONS_CHOICE,
     DEFAULT_STRUCTURE_VERSION,
@@ -496,8 +497,6 @@ class OgrImporter:
         }
 
     def get_geometry_v2_column_schema(self):
-        from .dataset2 import ColumnSchema
-
         if not self.is_spatial:
             return None
 
@@ -529,8 +528,6 @@ class OgrImporter:
         return type_name
 
     def _field_to_v2_column_schema(self, fd):
-        from .dataset2 import ColumnSchema
-
         ogr_type = fd.GetTypeName()
         ogr_subtype = fd.GetSubType()
         if ogr_subtype == ogr.OFSTNone:
@@ -554,8 +551,6 @@ class OgrImporter:
     @property
     @functools.lru_cache(maxsize=1)
     def schema(self):
-        from .dataset2 import ColumnSchema, Schema
-
         ld = self.ogrlayer.GetLayerDefn()
 
         ogr_pk_index = ld.GetFieldIndex(self.primary_key)
