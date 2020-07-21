@@ -11,7 +11,7 @@ import pygit2
 from osgeo import gdal
 
 from . import gpkg
-from .diff import Delta, Diff
+from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
 
@@ -671,7 +671,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             dbcur = db.cursor()
 
             table = dataset.name
-            ds_diff = Diff(dataset.name)
+            ds_diff = DatasetDiff()
             pk_field = dataset.primary_key
 
             diff_sql = f"""
@@ -744,9 +744,8 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 for old, new in candidates_upd.values()
             ]
 
-            feature_diff = Diff("feature", ins + dels + upd)
-            if feature_diff:
-                ds_diff.add_child(feature_diff)
+            feature_diff = DeltaDiff(ins + dels + upd)
+            ds_diff["feature"] = feature_diff
 
             return ds_diff
 
@@ -757,13 +756,13 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         """
         repo_filter = repo_filter or UNFILTERED
 
-        repo_diff = Diff()
+        repo_diff = RepoDiff()
         for dataset in repo_structure:
             if dataset.path not in repo_filter:
                 continue
             ds_diff = self.diff_db_to_tree(dataset, ds_filter=repo_filter[dataset.path])
-            if ds_diff:
-                repo_diff.add_child(ds_diff)
+            repo_diff[dataset.path] = ds_diff
+        repo_diff.prune()
         return repo_diff
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):

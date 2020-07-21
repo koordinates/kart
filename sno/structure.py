@@ -7,6 +7,7 @@ import click
 import pygit2
 
 from . import core
+from .diff_structs import DatasetDiff, DeltaDiff, Delta
 from .exceptions import (
     NotFound,
     InvalidOperation,
@@ -554,8 +555,6 @@ class DatasetStructure:
                 if not candidates_ins[h]:
                     del candidates_ins[h]
 
-        from .diff import Diff, Delta
-
         def extract_key(obj):
             return obj[self.primary_key], obj
 
@@ -566,11 +565,9 @@ class DatasetStructure:
             for old, new in candidates_upd.values()
         ]
 
-        ds_diff = Diff(self.path)
-
-        feature_diff = Diff("feature", ins + dels + upd)
-        if feature_diff:
-            ds_diff.add_child(feature_diff)
+        feature_diff = DeltaDiff(ins + dels + upd)
+        ds_diff = DatasetDiff()
+        ds_diff["feature"] = feature_diff
 
         return ds_diff
 

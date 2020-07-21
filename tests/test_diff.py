@@ -1,4 +1,3 @@
-import collections
 import json
 import re
 
@@ -6,7 +5,7 @@ import html5lib
 import pytest
 
 import pygit2
-from sno.diff import Delta, Diff
+from sno.diff_structs import Delta, DeltaDiff
 
 
 H = pytest.helpers.helpers()
@@ -1106,14 +1105,13 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
 
 
 def test_diff_object_add_empty():
-    null_diff = Diff("test")
+    null_diff = DeltaDiff()
     assert len(null_diff) == 0
 
     assert null_diff + null_diff is not null_diff
     assert null_diff + null_diff == null_diff
 
-    diff = Diff(
-        "test",
+    diff = DeltaDiff(
         [
             Delta.insert((20, {"pk": 20})),
             Delta.update((10, {"pk": 10}), (11, {"pk": 11})),
@@ -1137,8 +1135,7 @@ def test_diff_object_add_empty():
 # 10  -       j+      j
 # 11  -       -       k+
 # 12  l       l*      l1+
-DIFF_R1 = Diff(
-    "test",
+DIFF_R1 = DeltaDiff(
     [
         Delta.update((1, {"pk": 1, "v": "a"}), (1, {"pk": 1, "v": "a1"})),
         Delta.update((2, {"pk": 2, "v": "b"}), (2, {"pk": 2, "v": "b1"})),
@@ -1155,8 +1152,7 @@ DIFF_R1 = Diff(
     ],
 )
 
-DIFF_R2 = Diff(
-    "test",
+DIFF_R2 = DeltaDiff(
     [
         Delta.update((1, {"pk": 1, "v": "a1"}), (1, {"pk": 1, "v": "a"})),
         # 2 no-op: b1 -> b1
@@ -1173,8 +1169,7 @@ DIFF_R2 = Diff(
     ],
 )
 
-DIFF_R0_R2 = Diff(
-    "test",
+DIFF_R0_R2 = DeltaDiff(
     [
         # 1 no-op: a -> a
         Delta.update((2, {"pk": 2, "v": "b"}), (2, {"pk": 2, "v": "b1"})),

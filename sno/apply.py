@@ -13,7 +13,7 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
-from .diff import Diff, Delta
+from .diff_structs import RepoDiff, DeltaDiff, Delta
 from .geometry import hex_wkb_to_gpkg_geom
 from .structure import RepositoryStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
@@ -46,7 +46,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     if wc:
         wc.check_not_dirty()
 
-    repo_diff = Diff()
+    repo_diff = RepoDiff()
     for ds_name, ds_diff_dict in json_diff.items():
         dataset = rs.get(ds_name)
         if dataset is None:
@@ -76,11 +76,10 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             )
 
         if feature_changes:
-            feature_diff = Diff(
-                "feature", (parse_delta(change) for change in feature_changes)
+            feature_diff = DeltaDiff(
+                (parse_delta(change) for change in feature_changes)
             )
-            ds_diff = Diff(dataset.path, [feature_diff])
-            repo_diff.add_child(ds_diff)
+            repo_diff.recursive_set([dataset.path, "feature"], feature_diff)
 
     if commit:
         if not repo_diff and not allow_empty:

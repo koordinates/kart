@@ -1,4 +1,3 @@
-from collections import namedtuple
 import logging
 import re
 import sys
@@ -7,6 +6,7 @@ from pathlib import Path
 import click
 
 from .diff_output import *  # noqa - used from globals()
+from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -21,264 +21,10 @@ from .structure import RepositoryStructure
 L = logging.getLogger("sno.diff")
 
 
-class Conflict(Exception):
-    pass
-
-
-class KeyValue(namedtuple("KeyValue", ("key", "value"))):
-    """A key-value pair. A delta is made of two of these - one old, one new."""
-
-    @staticmethod
-    def of(obj):
-        """Ensures that the given object is a KeyValue, or None."""
-        if isinstance(obj, (KeyValue, type(None))):
-            return obj
-        elif isinstance(obj, tuple):
-            return KeyValue(*obj)
-        raise ValueError(f"Expected (key, value) tuple - got f{type(obj)}")
-
-
-class Delta(namedtuple("Delta", ("old", "new"))):
-    """
-    An object changes from old to new. Either old or new can be None, for insert or delete operations.
-    When present, old and new are both key-value pairs.
-    The key identifies which object changed (so, should be a filename / address / primary key),
-    and the value is the changed object's entire contents.
-    If the old_key is different to the new_key, this means the object moved in this delta, ie a rename operation.
-    Deltas can be concatenated together, if they refer to the same object - eg an delete + insert = update (usually).
-    Deltas can be inverted, which just means old and new are swapped.
-    """
-
-    def __new__(cls, old, new):
-        return super().__new__(cls, KeyValue.of(old), KeyValue.of(new))
-
-    def __init__(self, old, new):
-        super().__init__()
-        if self.old is None and self.new is None:
-            raise ValueError("Empty Delta")
-        elif self.old is None:
-            self.type = "insert"
-        elif self.new is None:
-            self.type = "delete"
-        else:
-            self.type = "update"
-
-    @staticmethod
-    def insert(new):
-        return Delta(None, new)
-
-    @staticmethod
-    def update(old, new):
-        return Delta(old, new)
-
-    @staticmethod
-    def maybe_update(old, new):
-        return Delta(old, new) if old != new else None
-
-    @staticmethod
-    def delete(old):
-        return Delta(old, None)
-
-    def __invert__(self):
-        return Delta(self.new, self.old)
-
-    @property
-    def old_key(self):
-        return self.old.key if self.old is not None else None
-
-    @property
-    def new_key(self):
-        return self.new.key if self.new is not None else None
-
-    @property
-    def key(self):
-        # To be stored in a Diff, a Delta needs a single key.
-        # This mostly works, but isn't perfect when renames are involved.
-        return self.old_key or self.new_key
-
-    def __add__(self, other):
-        """Concatenate this delta with the subsequent delta, return the result as a single delta."""
-        # Note: this method assumes that the deltas being concatenated are related,
-        # ie that self.new == other.old. Don't try to concatenate arbitrary deltas together.
-
-        if self.type == "insert":
-            # ins + ins -> Conflict
-            # ins + upd -> ins
-            # ins + del -> noop
-            if other.type == "insert":
-                raise Conflict()
-            elif other.type == "update":
-                return Delta.insert(other.new)
-            elif other.type == "delete":
-                return None
-
-        elif self.type == "update":
-            # upd + ins -> Conflict
-            # upd + upd -> upd?
-            # upd + del -> del
-            if other.type == "insert":
-                raise Conflict()
-            elif other.type == "update":
-                return Delta.maybe_update(self.old, other.new)
-            elif other.type == "delete":
-                return Delta.delete(self.old)
-
-        elif self.type == "delete":
-            # del + ins -> upd?
-            # del + del -> Conflict
-            # del + upd -> Conflict
-            if other.type == "insert":
-                return Delta.maybe_update(self.old, other.new)
-            else:
-                raise Conflict()
-
-
-class Diff:
-    """
-    A Diff is a set of Deltas, or a set of Diffs. A Diff's children are stored by key.
-    When two diffs are concatenated, all their children with matching keys are recursively concatenated.
-    The children of a Diff are responsible for knowing their own keys - this is a requirement
-    for Deltas in particular, since a Delta needs to be able to change key when inverted.
-    So, if a Diff will be added to a parent Diff, it needs to know its own key - the root Diff can be unnamed.
-    """
-
-    def __init__(self, self_key=None, children=()):
-        try:
-            hash(self_key)
-        except Exception:
-            raise ValueError(f"Bad key for Diff object: {self_key}")
-
-        self.self_key = self_key
-        self.child_type = None
-        self.children = {}
-        for child in children:
-            self.add_child(child)
-
-    def __contains__(self, child_key):
-        return child_key in self.children
-
-    def __getitem__(self, child_key):
-        return self.children[child_key]
-
-    def __setitem__(self, key, value):
-        raise RuntimeError(
-            "Diff doesn't support __setitem__: use Diff.add_child(diff_or_delta)"
-        )
-
-    def get(self, child_key, default=None):
-        return self.children.get(child_key, default)
-
-    def add_child(self, child):
-        if self.child_type is None:
-            self.child_type = type(child)
-        elif type(child) != self.child_type:
-            raise ValueError(
-                f"A Diff's children should be all one type - all Diffs or all Deltas. {type(child)} added to {self}"
-            )
-        if child.key is None:
-            raise ValueError(f"Can't add child with no key to parent: {child}")
-        self.children[child.key] = child
-
-    def copy(self):
-        result = Diff(self.self_key)
-        result.children = self.children.copy()
-        result.child_type = self.child_type
-        return result
-
-    @property
-    def key(self):
-        return self.self_key
-
-    def keys(self):
-        return self.children.keys()
-
-    def values(self):
-        return self.children.values()
-
-    def items(self):
-        return self.children.items()
-
-    def __iter__(self):
-        yield from iter(self.children)
-
-    def __eq__(self, other):
-        if not isinstance(other, Diff):
-            return False
-        return self.self_key == other.self_key and self.children == other.children
-
-    def __len__(self):
-        return len(self.children)
-
-    def __bool__(self):
-        return any(bool(child) for child in self.children.values())
-
-    def __str__(self):
-        return f"Diff({self.self_key}, children={{{','.join(str(k) for k in self.children.keys())}}}))"
-
-    __repr__ = __str__
-
-    def __invert__(self):
-        return Diff(self.self_key, (~c for c in self.children.values()))
-
-    def __add__(self, other):
-        """Concatenate this Diff to the subsequent Diff, by concatenating all children with matching keys."""
-        # FIXME: this algorithm isn't perfect when renames are involved.
-
-        result = []
-        for child_key in self.children.keys() | other.children.keys():
-            lhs = self.children.get(child_key)
-            rhs = other.children.get(child_key)
-            if lhs and rhs:
-                both = lhs + rhs
-                if both:
-                    result.append(both)
-            else:
-                result.append(lhs or rhs)
-        return Diff(self.self_key, result)
-
-    def __iadd__(self, other):
-        result = self + other
-        self.children = result.children
-        self.child_type = result.child_type
-        return self
-
-    def to_filter(self):
-        """
-        Returns the set of all keys of all the Deltas that are children of this Diff.
-        If the children are Diffs, not Deltas, returns instead dict of {child.key: child.to_filter()}
-        """
-        if self.child_type is Diff:
-            # Any children are Diffs: recursively call to_filter() on them too.
-            return {child.key: child.to_filter() for child in self.children.values()}
-        else:
-            # Any children are Deltas. Create a filter of all their keys:
-            result = set()
-            for delta in self.children.values():
-                if delta.old is not None:
-                    result.add(str(delta.old.key))
-                if delta.new is not None:
-                    result.add(str(delta.new.key))
-            return result
-
-    def type_counts(self):
-        if self.child_type is Diff:
-            # Any children are Diffs: recursively call to_filter() on them too.
-            return {child.key: child.type_counts() for child in self.children.values()}
-        else:
-            # Any children are Deltas. Create a filter of all their keys:
-            result = {}
-            for delta in self.children.values():
-                delta_type = delta.type
-                result.setdefault(delta_type, 0)
-                result[delta_type] += 1
-            # Pluralise type names:
-            return {f"{delta_type}s": value for delta_type, value in result.items()}
-
-
 def get_dataset_diff(
     base_rs, target_rs, working_copy, dataset_path, ds_filter=UNFILTERED
 ):
-    diff = Diff(dataset_path)
+    diff = DatasetDiff()
 
     if base_rs != target_rs:
         # diff += base_rs<>target_rs
@@ -303,6 +49,7 @@ def get_dataset_diff(
         )
         diff += diff_wc
 
+    diff.prune()
     return diff
 
 
@@ -313,13 +60,14 @@ def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
     if feature_filter is not UNFILTERED:
         all_datasets = all_datasets.intersection(feature_filter.keys())
 
-    result = Diff()
+    result = RepoDiff()
     for dataset in sorted(all_datasets):
         ds_diff = get_dataset_diff(
             base_rs, target_rs, None, dataset, feature_filter[dataset]
         )
-        if ds_diff:
-            result.add_child(ds_diff)
+        result[dataset] = ds_diff
+
+    result.prune()
     return result
 
 
