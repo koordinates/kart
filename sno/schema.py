@@ -190,6 +190,7 @@ class Schema:
         self._pk_columns = tuple(
             c for c in sorted(columns, key=pk_index_ordering) if c.pk_index is not None
         )
+        self.columns_by_name = {c.name: c for c in self._columns}
 
     @property
     def columns(self):

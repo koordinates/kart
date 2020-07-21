@@ -15,6 +15,7 @@ import click
 from osgeo import ogr, osr
 
 from sno.exceptions import NotFound
+from sno.geometry import gpkg_geom_to_ogr
 from sno.structure import RepositoryStructure
 from sno.pyvendor.vector_tile_base import VectorTile, PolygonFeature
 
@@ -195,13 +196,17 @@ def make_handler(rs, datasets):
                 pks = list(index.intersection((w, s, e, n)))
                 num_features += len(pks)
                 for pk in pks:
-                    f = dataset.get_feature(pk)
-                    geom = f.pop(dataset.geom_column_name)
+                    if 'include_attributes' in self.GET or 'get_feature' in self.GET:
+                        f = dataset.get_feature((pk,))
+                        geom = f.pop(dataset.geom_column_name)
+                    else:
+                        geom = dataset.get_geometry((pk,))
 
                     # reproject geom to spherical merc
                     if geom is None:
                         continue
 
+                    geom = gpkg_geom_to_ogr(geom)
                     geom.Transform(d2m_transforms[dataset.name])
 
                     feature = self.add_feature(vlayer, geom, (minx, miny, maxx, maxy))
@@ -265,6 +270,8 @@ def serve(ctx, host, port, revision, tables):
     Serves vector tiles from the given dataset(s)
     """
     rs = RepositoryStructure.lookup(ctx.obj.repo, revision)
+    if rs.version != 2:
+        raise NotImplementedError(f"Can only handle v2 repos, this one is {rs.version}")
     datasets = []
     if tables:
         for n in tables:

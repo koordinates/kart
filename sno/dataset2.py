@@ -211,6 +211,35 @@ class Dataset2(DatasetStructure):
         )
         return self.schema.feature_from_raw_dict(raw_dict, keys=keys)
 
+    def get_geometry(self, pk_values=None):
+        """
+        Optimised method to return *only* the geometry from a feature.
+
+        Use this if all you need is the geometry.
+        If you also need attributes, just call get_feature() instead.
+
+        Geometry is returned as a GPKG geometry in a bytestring
+        """
+        from msgpack import Unpacker
+
+        rel_path = self.encode_pks_to_path(pk_values, relative=True)
+        data = self.get_data_at(rel_path, as_memoryview=True)
+
+        unpacker = Unpacker(raw=True)
+        unpacker.feed(data)
+        unpacker.read_array_header()
+        legend_hash = unpacker.unpack().decode()
+
+        legend = self.get_legend(legend_hash)
+
+        geom_columnschema = self.schema.columns_by_name[self.geom_column_name]
+        colid = legend.non_pk_columns.index(geom_columnschema.id)
+
+        unpacker.read_array_header()
+        for i in range(colid):
+            unpacker.skip()
+        return unpacker.unpack()
+
     def features(self, keys=True):
         """
         Returns a generator that calls get_feature once per feature.
