@@ -6,8 +6,9 @@ from pathlib import Path
 import click
 import pygit2
 
-from sno.core import walk_tree
+from sno.exceptions import InvalidOperation
 from sno.structure import RepositoryStructure
+from sno.structure_version import get_structure_version
 from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_srs_str
 from sno.fast_import import fast_import_tables
 
@@ -30,6 +31,10 @@ def upgrade(source, dest):
         raise click.BadParameter(
             f"'{source}': not an existing repository", param_hint="SOURCE"
         )
+
+    version = get_structure_version(source_repo)
+    if version != 1:
+        raise InvalidOperation("source repo is already upgraded")
 
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
