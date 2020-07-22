@@ -14,9 +14,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Major changes in this release
 
- * A new repository structure/layout, which will support schema changes. Internally known as Datasets V2.
+ * A new repository structure/layout, which supports schema changes. Internally known as Datasets V2.
     - Unlike Datasets V1, the schema can be modified without rewriting every row in a dataset.
-    - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is not yet full featured.
+    - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is still in development.
     - Tracking issue [#72](https://github.com/koordinates/sno/issues/72)
 
 ### Using Datasets V1
@@ -32,8 +32,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 #### Important missing functionality in Datasets V2
 
+ * Schemas can be changed at HEAD and the new schemas committed, but checking out commits where the schema is different to the current working copy is not yet supported.
  * Geometry storage format is not yet finalised.
- * Schema / meta changes cannot be committed or diffed (note: also missing from V1).
 
 ## 0.4.1
 

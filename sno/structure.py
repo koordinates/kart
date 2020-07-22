@@ -16,6 +16,8 @@ from .exceptions import (
 )
 from .filter_util import UNFILTERED
 from .geometry import geom_envelope
+from .schema import Schema
+from .serialise_util import ensure_bytes
 from .structure_version import get_structure_version
 
 
@@ -484,6 +486,13 @@ class DatasetStructure:
         else:
             old, new = self, other
 
+        ds_diff = DatasetDiff()
+
+        if self.version == 2:
+            meta_old = dict(old.iter_meta_items()) if old else {}
+            meta_new = dict(new.iter_meta_items()) if new else {}
+            ds_diff["meta"] = DeltaDiff.diff_dicts(meta_old, meta_new)
+
         for d in diff_index.deltas:
             self.L.debug(
                 "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
@@ -565,9 +574,7 @@ class DatasetStructure:
             for old, new in candidates_upd.values()
         ]
 
-        feature_diff = DeltaDiff(ins + dels + upd)
-        ds_diff = DatasetDiff()
-        ds_diff["feature"] = feature_diff
+        ds_diff["feature"] = DeltaDiff(ins + dels + upd)
 
         return ds_diff
 
@@ -582,6 +589,63 @@ class DatasetStructure:
         pk_field = self.primary_key
 
         conflicts = False
+        encode_kwargs = {}
+
+        if "meta" in dataset_diff and self.version < 2:
+            raise NotImplementedError(
+                f"Meta changes are not supported for version {self.version}"
+            )
+
+        for delta in dataset_diff.get("meta", {}).values():
+            name = delta.key
+            rel_path = f"{self.META_PATH}{name}"
+            full_path = self.full_path(rel_path)
+            if delta.type == "delete":
+                if full_path not in index:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to delete nonexistent meta item: {name}"
+                    )
+                    continue
+                index.remove(full_path)
+            elif delta.type == "insert":
+                if full_path in index:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to create meta item that already exists: {name}"
+                    )
+                    continue
+                blob_id = repo.create_blob(ensure_bytes(delta.new.value))
+                entry = pygit2.IndexEntry(full_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
+                index.add(entry)
+            elif delta.type == "update":
+                if full_path not in index:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update nonexistent meta item: {name}"
+                    )
+                    continue
+
+                if self.get_meta_item(name) != delta.old.value:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update already-changed meta item: {name}"
+                    )
+                    continue
+                index.remove(full_path)
+                if name == "schema":
+                    schema = Schema.from_column_dicts(delta.new.value)
+                    encode_kwargs = {"schema": schema}
+                    to_write = [
+                        self.encode_schema(schema),
+                        self.encode_legend(schema.legend),
+                    ]
+                else:
+                    to_write = [(full_path, ensure_bytes(delta.new.value))]
+                for path, data in to_write:
+                    blob_id = repo.create_blob(data)
+                    entry = pygit2.IndexEntry(path, blob_id, pygit2.GIT_FILEMODE_BLOB)
+                    index.add(entry)
 
         geom_column_name = self.geom_column_name
         for delta in dataset_diff.get("feature", {}).values():
@@ -598,7 +662,9 @@ class DatasetStructure:
 
             elif delta.type == "insert":
                 pk = delta.new.value[pk_field]
-                feature_path, feature_data = self.encode_feature(delta.new.value)
+                feature_path, feature_data = self.encode_feature(
+                    delta.new.value, **encode_kwargs
+                )
                 if feature_path in index:
                     conflicts = True
                     click.echo(
@@ -640,7 +706,7 @@ class DatasetStructure:
 
                 index.remove(old_feature_path)
                 new_feature_path, new_feature_data = self.encode_feature(
-                    delta.new.value
+                    delta.new.value, **encode_kwargs
                 )
                 blob_id = repo.create_blob(new_feature_data)
                 entry = pygit2.IndexEntry(

@@ -14,6 +14,7 @@ from . import gpkg
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
+from .schema import Schema
 
 L = logging.getLogger("sno.working_copy")
 
@@ -329,6 +330,30 @@ class WorkingCopyGPKG(WorkingCopy):
     def read_meta(self, dataset):
         with self.session() as db:
             yield from gpkg.get_meta_info(db, dataset.name)
+
+    def iter_meta_items_v2(self, dataset):
+        from .gpkg_adapter import wkt_to_srs_str, gpkg_to_v2_schema
+
+        gpkg_meta_items = dict(self.read_meta(dataset))
+        identifier = gpkg_meta_items["gpkg_contents"]["identifier"]
+        # FIXME: a better way of roundtripping identifiers?
+        identifier_prefix = f"{dataset.name}: "
+        if identifier.startswith(identifier_prefix):
+            identifier = identifier[len(identifier_prefix) :]
+
+        yield "title", identifier
+        yield "description", gpkg_meta_items["gpkg_contents"]["description"]
+        for gsrs in gpkg_meta_items.get("gpkg_spatial_ref_sys", ()):
+            definition = gsrs["definition"]
+            yield f"srs/{wkt_to_srs_str(definition)}.wkt", definition
+
+        gpkg_name = os.path.basename(self.path)
+        yield "schema", gpkg_to_v2_schema(
+            gpkg_meta_items["sqlite_table_info"],
+            gpkg_meta_items["gpkg_geometry_columns"],
+            gpkg_meta_items["gpkg_spatial_ref_sys"],
+            f"{gpkg_name}/{dataset.name}",
+        ).to_column_dicts()
 
     def save_config(self, **kwargs):
         new_path = Path(self.path)
@@ -663,8 +688,18 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             dbcur = db.cursor()
 
             table = dataset.name
-            ds_diff = DatasetDiff()
             pk_field = dataset.primary_key
+
+            ds_diff = DatasetDiff()
+            new_schema = None
+
+            if dataset.version == 2:
+                meta_old = dict(dataset.iter_meta_items())
+                meta_new = dict(self.iter_meta_items_v2(dataset))
+                if "schema" in meta_old and "schema" in meta_new:
+                    Schema.align_schema_cols(meta_old["schema"], meta_new["schema"])
+                    new_schema = Schema.from_column_dicts(meta_new["schema"])
+                ds_diff["meta"] = DeltaDiff.diff_dicts(meta_old, meta_new)
 
             diff_sql = f"""
                 SELECT
@@ -679,6 +714,12 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 diff_sql += f"\nAND {self.TRACKING_TABLE}.pk IN ({','.join(['?']*len(pk_filter))})"
                 params += [str(pk) for pk in pk_filter]
             dbcur.execute(diff_sql, params)
+
+            old_hasher = dataset
+            new_hasher = new_schema if new_schema is not None else dataset
+
+            def hash_feature(hasher, f):
+                return pygit2.hash(hasher.encode_feature_blob(f)).hex
 
             candidates_ins = collections.defaultdict(list)
             candidates_upd = {}
@@ -695,15 +736,13 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
                 if db_obj[pk_field] is None:
                     if repo_obj:  # ignore INSERT+DELETE
-                        blob_hash = pygit2.hash(
-                            dataset.encode_feature_blob(repo_obj)
-                        ).hex
+                        blob_hash = hash_feature(old_hasher, repo_obj)
                         candidates_del[blob_hash].append((track_pk, repo_obj))
                     continue
 
                 elif not repo_obj:
                     # INSERT
-                    blob_hash = pygit2.hash(dataset.encode_feature_blob(db_obj)).hex
+                    blob_hash = hash_feature(new_hasher, db_obj)
                     candidates_ins[blob_hash].append(db_obj)
 
                 else:
@@ -893,7 +932,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     meta_tree = dest_ds.meta_tree
                     if base_meta_tree.diff_to_tree(meta_tree):
                         raise NotImplementedError(
-                            "Sorry, no way to do changeset/meta/schema updates yet"
+                            "Sorry, the working copy doesn't yet support metadata changes"
                         )
 
                     # todo: suspend/remove spatial index

@@ -130,31 +130,6 @@ def test_raw_feature_roundtrip():
     }
 
 
-@pytest.fixture
-def pki(gen_uuid):
-    def _pki(pk_index):
-        # Returns an arbitrary ColumnSchema, but with the given pk_index property.
-        id = gen_uuid()
-        return ColumnSchema(id, id[:8], "integer", pk_index)
-
-    return _pki
-
-
-def test_valid_schemas(pki):
-    Schema([pki(None), pki(None), pki(None)])
-    Schema([pki(2), pki(1), pki(0)])
-    Schema([pki(None), pki(1), pki(None), pki(0)])
-
-
-def test_invalid_schemas(pki):
-    with pytest.raises(ValueError):
-        Schema([pki(0), pki(None), pki(2)])
-    with pytest.raises(ValueError):
-        Schema([pki(0), pki(1), pki(1)])
-    with pytest.raises(ValueError):
-        Schema([pki(-1), pki(None), pki(None)])
-
-
 GEOM_TYPE_INFO = {"geometryType": "MULTIPOLYGON ZM", "geometrySRS": "EPSG:2193"}
 
 

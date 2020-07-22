@@ -268,9 +268,10 @@ def diff_output_json(
         ds_result = {}
         meta_diff = ds_diff.get("meta")
         if meta_diff:
-            ds_result["meta"] = [
-                meta_delta_as_json(delta) for key, delta in sorted(meta_diff.items())
-            ]
+            ds_result["meta"] = {
+                key: meta_delta_as_json(delta)
+                for key, delta in sorted(meta_diff.items())
+            }
         feature_diff = ds_diff.get("feature")
         if feature_diff:
             ds_result["feature"] = [

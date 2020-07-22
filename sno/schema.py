@@ -149,16 +149,17 @@ class ColumnSchema(
         return super().__new__(cls, id, name, data_type, pk_index, extra_type_info)
 
     @classmethod
-    def from_json_dict(cls, json_dict):
+    def from_dict(cls, d):
+        d = d.copy()
         return cls(
-            json_dict.pop("id"),
-            json_dict.pop("name"),
-            json_dict.pop("dataType"),
-            json_dict.pop("primaryKeyIndex"),
-            **json_dict,
+            d.pop("id"),
+            d.pop("name"),
+            d.pop("dataType"),
+            d.pop("primaryKeyIndex"),
+            **d,
         )
 
-    def to_json_dict(self):
+    def to_dict(self):
         return {
             "id": self.id,
             "name": self.name,
@@ -208,21 +209,21 @@ class Schema:
         return self._columns[i]
 
     @classmethod
-    def from_json_array(cls, json_array):
-        columns = [ColumnSchema.from_json_dict(c) for c in json_array]
+    def from_column_dicts(cls, column_dicts):
+        columns = [ColumnSchema.from_dict(d) for d in column_dicts]
         return cls(columns)
 
     @classmethod
     def loads(cls, data):
         """Load a schema from a bytestring"""
-        return cls.from_json_array(json_unpack(data))
+        return cls.from_column_dicts(json_unpack(data))
 
-    def to_json_array(self):
-        return [c.to_json_dict() for c in self.columns]
+    def to_column_dicts(self):
+        return [c.to_dict() for c in self.columns]
 
     def dumps(self):
         """Writes this schema to a bytestring."""
-        return json_pack(self.to_json_array())
+        return json_pack(self.to_column_dicts())
 
     def __str__(self):
         cols = ",\n".join(str(c) for c in self.columns)
@@ -261,6 +262,16 @@ class Schema:
             for column, value in zip(self.columns, feature):
                 raw_dict[column.id] = value
         return raw_dict
+
+    def encode_feature_blob(self, feature):
+        """
+        Given a feature, encodes it using this schema.
+        Doesn't encode a path, so primary key values are not encoded.
+        """
+        raw_dict = self.feature_to_raw_dict(feature)
+        pk_values, non_pk_values = self.legend.raw_dict_to_value_tuples(raw_dict)
+        data = msg_pack([self.legend.hexhash(), non_pk_values])
+        return data
 
     def _to_legend(self):
         pk_column_ids = []
@@ -304,3 +315,59 @@ class Schema:
             if column.data_type == "integer" and isinstance(value, str):
                 pk_values[i] = int(pk_values[i])
         return tuple(pk_values)
+
+    def align_to_previous_schema(self, previous):
+        """
+        Copies column IDs from the given existing schema onto this schema, if those columns are actually the same.
+        Uses a heuristic - columns are the same if they have the same name + type (handles reordering), or, if they
+        have the same position and type (handles renames).
+        """
+        # TODO - could prompt the user to help with more complex schema changes.
+        old_cols = previous.to_column_dicts()
+        new_cols = self.to_column_dicts()
+        Schema.align_schema_cols(old_cols, new_cols)
+        result = Schema.from_column_dicts(new_cols)
+        self._columns = result._columns
+        self._legend = result._legend
+        self._pk_columns = result._pk_columns
+
+    @classmethod
+    def align_schema_cols(cls, old_cols, new_cols):
+        """Same as align_to_previous_schema, but works on lists of column dicts, instead of Schema objects."""
+        for old_col in old_cols:
+            old_col["done"] = False
+        for new_col in new_cols:
+            new_col["done"] = False
+
+        # Align columns by name + type - handles reordering.
+        old_cols_by_name = {c["name"]: c for c in old_cols}
+        for new_col in new_cols:
+            cls._try_align(old_cols_by_name.get(new_col["name"]), new_col)
+
+        # Align columns by position + type - handles renames.
+        for old_col, new_col in zip(old_cols, new_cols):
+            cls._try_align(old_col, new_col)
+
+        for old_col in old_cols:
+            del old_col["done"]
+        for new_col in new_cols:
+            del new_col["done"]
+        return new_cols
+
+    @classmethod
+    def _try_align(cls, old_col, new_col):
+        if old_col is None or new_col is None:
+            return False
+        if old_col["done"] or new_col["done"]:
+            return False
+        if old_col["dataType"] != new_col["dataType"]:
+            return False
+        if old_col["primaryKeyIndex"] != new_col["primaryKeyIndex"]:
+            return False
+        new_col["id"] = old_col["id"]
+        # FIXME: Maybe columns should always have a size attribute? Try and get rid of this hack.
+        if "size" not in old_col and "size" in new_col:
+            del new_col["size"]
+        old_col["done"] = True
+        new_col["done"] = True
+        return True
