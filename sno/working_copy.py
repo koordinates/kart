@@ -650,14 +650,6 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         return feat_count
 
-    def _columns_match(self, lhs, rhs):
-        if (
-            lhs["dataType"] == rhs["dataType"]
-            and lhs["primaryKeyIndex"] == rhs["primaryKeyIndex"]
-        ):
-            return 2 if lhs["name"] == rhs["name"] else 1
-        return 0
-
     def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
