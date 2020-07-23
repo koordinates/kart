@@ -19,11 +19,11 @@ _When adding new entries to the changelog, please include issue/PR numbers where
     - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is not yet full featured.
     - Tracking issue [#72](https://github.com/koordinates/sno/issues/72)
 
-### Using Datasets V1
+#### Using Datasets V1
 
  * Unless specific action is taken, existing repositories will remain V1, and new repositories still default to V1.
 
-### Using Datasets V2
+#### Using Datasets V2
 
  * An entire repository must be either V1 or V2, so to use V2, all data must be imported as V2.
  * Data can be imported as V2 using `sno init --import=<data> --version=2` or `sno import <data> --version=2`
@@ -34,6 +34,10 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * Geometry storage format is not yet finalised.
  * Schema / meta changes cannot be committed or diffed (note: also missing from V1).
+
+### Other changes in this release
+
+ * `sno clone` now support shallow clones (`--depth N`) to avoid cloning a repo's entire history [#174](https://github.com/koordinates/sno/issues/174)
 
 ## 0.4.1
 
