@@ -437,6 +437,40 @@ def test_working_copy_reset(
         assert h_before == h_after
 
 
+def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
+    with data_working_copy("points2") as (repo, wc):
+        db = geopackage(wc)
+        cur = db.cursor()
+        cur.execute(
+            """
+            UPDATE gpkg_contents SET identifier = 'new identifier', description='new description'
+            """
+        )
+        r = cli_runner.invoke(['commit', '-m', 'change identifier and description'])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        assert r.exit_code == 0, r.stderr
+        cur.execute(
+            """
+            SELECT identifier, description FROM gpkg_contents
+            """
+        )
+        identifier, description = cur.fetchall()[0]
+        assert identifier == 'NZ Pa Points (Topo, 1:50k)'
+        assert description.startswith("Defensive earthworks")
+
+        r = cli_runner.invoke(['checkout', 'master'])
+        assert r.exit_code == 0, r.stderr
+        cur.execute(
+            """
+            SELECT identifier, description FROM gpkg_contents
+            """
+        )
+        identifier, description = cur.fetchall()[0]
+        assert identifier == 'new identifier'
+        assert description == "new description"
+
+
 def test_geopackage_locking_edit(
     data_working_copy, geopackage, cli_runner, monkeypatch
 ):

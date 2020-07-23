@@ -78,6 +78,11 @@ class Dataset1(DatasetStructure):
 
     @property
     @functools.lru_cache(maxsize=1)
+    def feature_tree(self):
+        return self.tree
+
+    @property
+    @functools.lru_cache(maxsize=1)
     def cid_field_map(self):
         cid_map = {}
         for te in self.meta_tree / "fields":
