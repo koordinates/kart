@@ -237,14 +237,14 @@ class Diff(RichDict):
         for key in self.keys() | other.keys():
             lhs = self.get(key)
             rhs = other.get(key)
-            if lhs and rhs:
+            if lhs is not None and rhs is not None:
                 both = lhs + rhs
                 if both:
                     result[key] = both
                 else:
                     result.pop(key, None)
             else:
-                result[key] = lhs or rhs
+                result[key] = lhs if lhs is not None else rhs
         return result
 
     def __iadd__(self, other):
@@ -304,6 +304,19 @@ class DeltaDiff(Diff):
             result[delta_type] += 1
         # Pluralise type names:
         return {f"{delta_type}s": value for delta_type, value in result.items()}
+
+    @classmethod
+    def diff_dicts(cls, old, new):
+        result = DeltaDiff()
+        for k in set(old) | set(new):
+            old_value = old.get(k)
+            new_value = new.get(k)
+            if old_value == new_value:
+                continue
+            old_key_value = (k, old_value) if old_value is not None else None
+            new_key_value = (k, new_value) if new_value is not None else None
+            result.add_delta(Delta(old_key_value, new_key_value))
+        return result
 
 
 class DatasetDiff(Diff):
