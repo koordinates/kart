@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pygit2
 import pytest
-from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
+from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, INVALID_OPERATION
 
 
 H = pytest.helpers.helpers()
@@ -97,6 +97,41 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
 
         assert patch['sno.patch/v1'] == original_patch['sno.patch/v1']
         assert patch['sno.diff/v1+hexwkb'] == original_patch['sno.diff/v1+hexwkb']
+
+
+def test_apply_meta_changes(data_archive, cli_runner):
+    patch_file = json.dumps(
+        {
+            "sno.diff/v1+hexwkb": {
+                "nz_pa_points_topo_150k": {
+                    "meta": {
+                        "title": {"-": "NZ Pa Points (Topo, 1:50k)", "+": "new title:",}
+                    }
+                },
+            },
+            "sno.patch/v1": {
+                "authorEmail": "robert@example.com",
+                "authorName": "Robert Coup",
+                "authorTime": "2019-06-20T14:28:33Z",
+                "authorTimeOffset": "+01:00",
+                "message": "Change the title",
+            },
+        }
+    )
+    with data_archive("points"):
+        # this won't work, v1 doesn't support this patch
+        r = cli_runner.invoke(["apply", '-'], input=patch_file,)
+        assert r.exit_code == INVALID_OPERATION, r
+    with data_archive("points2"):
+        r = cli_runner.invoke(["apply", '-'], input=patch_file,)
+        assert r.exit_code == 0, r
+
+        # Check that the `sno show -o json` output is the same as our original patch file had.
+        r = cli_runner.invoke(['show', '-o', 'json'])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+        meta = patch['sno.diff/v1+hexwkb']['nz_pa_points_topo_150k']['meta']
+        assert meta == {'title': {'+': 'new title:', '-': 'NZ Pa Points (Topo, 1:50k)'}}
 
 
 def test_apply_with_working_copy(

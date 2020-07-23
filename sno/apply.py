@@ -11,7 +11,7 @@ from .exceptions import (
     NO_TABLE,
     NO_WORKING_COPY,
     NotFound,
-    NotYetImplemented,
+    InvalidOperation,
 )
 from .diff_structs import RepoDiff, DeltaDiff, Delta
 from .geometry import hex_wkb_to_gpkg_geom
@@ -55,13 +55,20 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                 exit_code=NO_TABLE,
             )
 
-        meta_changes = ds_diff_dict.get('meta', [])
-        if meta_changes:
-            raise NotYetImplemented(
-                "Patches containing schema changes are not yet handled"
-            )
+        meta_changes = ds_diff_dict.get('meta', {})
 
-        feature_changes = ds_diff_dict['feature']
+        if meta_changes:
+            if dataset.version < 2:
+                raise InvalidOperation(
+                    "This repo doesn't support meta changes, use `sno upgrade`"
+                )
+            meta_diff = DeltaDiff(
+                Delta((k, v.get('-')), (k, v.get('+')))
+                for (k, v) in meta_changes.items()
+            )
+            repo_diff.recursive_set([dataset.path, "meta"], meta_diff)
+
+        feature_changes = ds_diff_dict.get('feature', [])
         pk_name = dataset.primary_key
 
         def extract_key(feature):
