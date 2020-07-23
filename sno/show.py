@@ -42,10 +42,18 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
     # Ensures we were given a reference to a commit, and not a tree or something
     commit = CommitWithReference.resolve(repo, refish).commit
 
-    if commit.parents:
-        parent = f"{refish}^"
-    else:
+    try:
+        parents = commit.parents
+    except KeyError:
+        # one or more parents doesn't exist.
+        # This is okay if this is the first commit of a shallow clone.
+        # (how to tell?)
         parent = EMPTY_TREE_SHA
+    else:
+        if parents:
+            parent = f"{refish}^"
+        else:
+            parent = EMPTY_TREE_SHA
     patch_writer = globals()[f"patch_output_{output_format}"]
 
     return diff.diff_with_writer(

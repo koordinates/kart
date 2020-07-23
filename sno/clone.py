@@ -45,32 +45,38 @@ def get_directory_from_url(url):
     default=True,
     help="Whether to report progress to stderr",
 )
+@click.option(
+    "--depth",
+    type=click.INT,
+    help="Create a shallow clone with a history truncated to the specified number of commits.",
+)
 @click.argument("url", nargs=1)
 @click.argument(
     "directory",
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, do_checkout, do_progress, url, directory):
+def clone(ctx, do_checkout, do_progress, depth, url, directory):
     """ Clone a repository into a new directory """
 
     repo_path = Path(directory or get_directory_from_url(url))
+    args = [
+        "git",
+        "clone",
+        "--progress" if do_progress else "--quiet",
+        "--bare",
+        "--config",
+        "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
+        url,
+        str(repo_path.resolve()),
+    ]
+    if depth is not None:
+        args.append(f'--depth={depth}')
 
     try:
         # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
         # pygit2.clone_repository() works fine except for that
-        subprocess.check_call(
-            [
-                "git",
-                "clone",
-                "--progress" if do_progress else "--quiet",
-                "--bare",
-                "--config",
-                "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
-                url,
-                str(repo_path.resolve()),
-            ]
-        )
+        subprocess.check_call(args)
     except subprocess.CalledProcessError as e:
         sys.exit(translate_subprocess_exit_code(e.returncode))
 
