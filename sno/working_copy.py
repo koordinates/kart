@@ -12,7 +12,7 @@ from osgeo import gdal
 
 from . import gpkg
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, NotYetImplemented
 from .filter_util import UNFILTERED
 from .schema import Schema
 
@@ -837,6 +837,103 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 db.changes() == 1
             ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
 
+    def _check_meta_diff_supported(self, dataset, wc_meta_diff):
+        if not wc_meta_diff:
+            return
+        nope = NotYetImplemented(
+            "Sorry, the working copy doesn't yet support schema changes"
+        )
+
+        if dataset.version < 2:
+            # dataset1 doesn't support meta changes at all
+            raise nope
+
+        for patch in wc_meta_diff:
+            delta = patch.delta
+            assert delta.old_file.path == delta.new_file.path
+            path = delta.old_file.path
+
+            if path.startswith(('legend', 'schema')):
+                raise nope
+
+    def _apply_meta_title(self, src_ds, dest_ds, dbcur, value):
+        dbcur.execute(
+            '''
+            UPDATE gpkg_contents SET identifier = ?
+            WHERE table_name = ?
+            ''',
+            [value, dest_ds.name],
+        )
+
+    def _apply_meta_description(self, src_ds, dest_ds, dbcur, value):
+        dbcur.execute(
+            '''
+            UPDATE gpkg_contents SET description = ?
+            WHERE table_name = ?
+            ''',
+            [value, dest_ds.name],
+        )
+
+    def _apply_meta_diff(self, src_ds, dest_ds, dbcur, meta_diff_index):
+        L.debug("Meta diff: %s changes", len(meta_diff_index))
+        for d in meta_diff_index.deltas:
+
+            path = d.old_file.path or d.new_file.path
+            try:
+                func = getattr(self, f'_apply_meta_{path.replace("/", "__")}')
+            except AttributeError:
+                continue
+            else:
+                # for deltas we care about, we dont' support a whole lot.
+                # in particular we don't currently support deletes
+                if d.status not in (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_ADDED,):
+                    # GIT_DELTA_DELETED
+                    # GIT_DELTA_RENAMED
+                    # GIT_DELTA_COPIED
+                    # GIT_DELTA_IGNORED
+                    # GIT_DELTA_TYPECHANGE
+                    # GIT_DELTA_UNMODIFIED
+                    # GIT_DELTA_UNREADABLE
+                    # GIT_DELTA_UNTRACKED
+                    raise NotImplementedError(f"Delta status: {d.status_char()}")
+
+                value = (dest_ds.meta_tree / d.new_file.path).data.decode('utf8')
+                func(src_ds, dest_ds, dbcur, value)
+
+    def _apply_feature_diff(self, src_ds, dest_ds, dbcur, feature_diff_index):
+        L.debug("Feature diff: %s changes", len(feature_diff_index))
+        for d in feature_diff_index.deltas:
+            # TODO: improve this by grouping by status then calling
+            # write_features/delete_features passing multiple PKs?
+            if d.status == pygit2.GIT_DELTA_DELETED:
+                old_pk = src_ds.decode_path_to_1pk(os.path.basename(d.old_file.path))
+                L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
+                self.delete_features(dbcur, src_ds, [old_pk])
+            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                old_pk = src_ds.decode_path_to_1pk(os.path.basename(d.old_file.path))
+                new_pk = dest_ds.decode_path_to_1pk(os.path.basename(d.new_file.path))
+                L.debug(
+                    "reset(): M %s (%s) -> %s (%s)",
+                    d.old_file.path,
+                    old_pk,
+                    d.new_file.path,
+                    new_pk,
+                )
+                self.write_features(dbcur, dest_ds, [new_pk])
+            elif d.status == pygit2.GIT_DELTA_ADDED:
+                new_pk = dest_ds.decode_path_to_1pk(os.path.basename(d.new_file.path))
+                L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)
+                self.write_features(dbcur, dest_ds, [new_pk])
+            else:
+                # GIT_DELTA_RENAMED
+                # GIT_DELTA_COPIED
+                # GIT_DELTA_IGNORED
+                # GIT_DELTA_TYPECHANGE
+                # GIT_DELTA_UNMODIFIED
+                # GIT_DELTA_UNREADABLE
+                # GIT_DELTA_UNTRACKED
+                raise NotImplementedError(f"Delta status: {d.status_char()}")
+
     def reset(
         self,
         target_tree_or_commit,
@@ -930,10 +1027,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     # check for schema differences
                     base_meta_tree = src_ds.meta_tree
                     meta_tree = dest_ds.meta_tree
-                    if base_meta_tree.diff_to_tree(meta_tree):
-                        raise NotImplementedError(
-                            "Sorry, the working copy doesn't yet support metadata changes"
-                        )
+                    self._check_meta_diff_supported(
+                        src_ds, base_meta_tree.diff_to_tree(meta_tree)
+                    )
 
                     # todo: suspend/remove spatial index
                     if is_dirty:
@@ -974,50 +1070,18 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                         ctx = contextlib.nullcontext()
 
                     with ctx:
-                        # feature diff
-                        diff_index = src_ds.tree.diff_to_tree(dest_ds.tree)
-                        L.debug("Index diff: %s changes", len(diff_index))
-                        for d in diff_index.deltas:
-                            # TODO: improve this by grouping by status then calling
-                            # write_features/delete_features passing multiple PKs?
-                            if d.status == pygit2.GIT_DELTA_DELETED:
-                                old_pk = src_ds.decode_path_to_1pk(
-                                    os.path.basename(d.old_file.path)
-                                )
-                                L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
-                                self.delete_features(dbcur, src_ds, [old_pk])
-                            elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                                old_pk = src_ds.decode_path_to_1pk(
-                                    os.path.basename(d.old_file.path)
-                                )
-                                new_pk = dest_ds.decode_path_to_1pk(
-                                    os.path.basename(d.new_file.path)
-                                )
-                                L.debug(
-                                    "reset(): M %s (%s) -> %s (%s)",
-                                    d.old_file.path,
-                                    old_pk,
-                                    d.new_file.path,
-                                    new_pk,
-                                )
-                                self.write_features(dbcur, dest_ds, [new_pk])
-                            elif d.status == pygit2.GIT_DELTA_ADDED:
-                                new_pk = dest_ds.decode_path_to_1pk(
-                                    os.path.basename(d.new_file.path)
-                                )
-                                L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)
-                                self.write_features(dbcur, dest_ds, [new_pk])
-                            else:
-                                # GIT_DELTA_RENAMED
-                                # GIT_DELTA_COPIED
-                                # GIT_DELTA_IGNORED
-                                # GIT_DELTA_TYPECHANGE
-                                # GIT_DELTA_UNMODIFIED
-                                # GIT_DELTA_UNREADABLE
-                                # GIT_DELTA_UNTRACKED
-                                raise NotImplementedError(
-                                    f"Delta status: {d.status_char()}"
-                                )
+                        self._apply_meta_diff(
+                            src_ds,
+                            dest_ds,
+                            dbcur,
+                            src_ds.meta_tree.diff_to_tree(dest_ds.meta_tree),
+                        )
+                        self._apply_feature_diff(
+                            src_ds,
+                            dest_ds,
+                            dbcur,
+                            src_ds.feature_tree.diff_to_tree(dest_ds.feature_tree),
+                        )
 
                     # Update gpkg_contents
                     if commit:

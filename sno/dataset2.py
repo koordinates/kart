@@ -73,6 +73,11 @@ class Dataset2(DatasetStructure):
     def version(self):
         return 2
 
+    @property
+    @functools.lru_cache(maxsize=1)
+    def feature_tree(self):
+        return self.tree / self.FEATURE_PATH
+
     def get_data_at(self, rel_path, missing_ok=False, as_memoryview=False):
         """
         Return the data at the given relative path from within this dataset.
