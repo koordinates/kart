@@ -88,11 +88,10 @@ def upgrade(source, dest):
     click.secho("\nUpgrade complete", fg="green", bold=True)
 
 
-def _raw_commit_time(commit):
-    offset = commit.commit_time_offset
-    hours, minutes = divmod(abs(offset), 60)
-    sign = "+" if offset >= 0 else "-"
-    return f"{commit.commit_time} {sign}{hours:02}{minutes:02}"
+def _raw_time(timestamp, tz_offset_minutes):
+    hours, minutes = divmod(abs(tz_offset_minutes), 60)
+    sign = "+" if tz_offset_minutes >= 0 else "-"
+    return f"{timestamp} {sign}{hours:02}{minutes:02}"
 
 
 def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, commit_map):
@@ -104,10 +103,11 @@ def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, comm
     feature_count = sum(s.row_count for s in sources.values())
 
     s = source_commit
-    commit_time = _raw_commit_time(s)
+    author_time = _raw_time(s.author.time, s.author.offset)
+    commit_time = _raw_time(s.commit_time, s.commit_time_offset)
     header = (
         "commit refs/heads/master\n"
-        f"author {s.author.name} <{s.author.email}> {commit_time}\n"
+        f"author {s.author.name} <{s.author.email}> {author_time}\n"
         f"committer {s.committer.name} <{s.committer.email}> {commit_time}\n"
         f"data {len(s.message.encode('utf8'))}\n{s.message}\n"
     )
