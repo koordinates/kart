@@ -16,8 +16,9 @@ from . import (
     conflicts,
     commit,
     diff,
-    init,
     fsck,
+    init,
+    log,
     merge,
     meta,
     pull,
@@ -144,6 +145,7 @@ cli.add_command(diff.diff)
 cli.add_command(fsck.fsck)
 cli.add_command(init.import_table)
 cli.add_command(init.init)
+cli.add_command(log.log)
 cli.add_command(merge.merge)
 cli.add_command(meta.meta)
 cli.add_command(pull.pull)
@@ -165,14 +167,6 @@ def reset(ctx):
 
 
 # straight process-replace commands
-
-
-@cli.command(context_settings=dict(ignore_unknown_options=True))
-@click.pass_context
-@click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def log(ctx, args):
-    """ Show commit logs """
-    execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
