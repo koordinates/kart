@@ -51,9 +51,9 @@ def test_align_schema(gen_uuid):
             ColumnSchema(gen_uuid(), "middle_names", "text", None),
         ]
     )
-    new_schema.align_to_previous_schema(old_schema)
+    aligned_schema = new_schema.align_to_previous_schema(old_schema)
 
-    assert [new_col.name for new_col in new_schema] == [
+    assert [c.name for c in aligned_schema] == [
         "personnel_id",
         "tax_file_number",
         "last_name",
@@ -63,9 +63,9 @@ def test_align_schema(gen_uuid):
 
     aligned = {}
     for old_col in old_schema:
-        for new_col in new_schema:
-            if new_col.id == old_col.id:
-                aligned[old_col.name] = new_col.name
+        for aligned_col in aligned_schema:
+            if aligned_col.id == old_col.id:
+                aligned[old_col.name] = aligned_col.name
 
     assert aligned == {
         "ID": "personnel_id",

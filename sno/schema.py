@@ -179,6 +179,17 @@ class ColumnSchema(
             and self.extra_type_info == other.extra_type_info
         )
 
+    def __hash__(self):
+        return hash(
+            (
+                self.id,
+                self.name,
+                self.data_type,
+                self.pk_index,
+                frozenset(self.extra_type_info.items()),
+            )
+        )
+
 
 class Schema:
     """A schema is just an immutable ordered list of ColumnSchemas."""
@@ -191,6 +202,7 @@ class Schema:
         self._pk_columns = tuple(
             c for c in sorted(columns, key=pk_index_ordering) if c.pk_index is not None
         )
+        self._hash = hash(self._columns)
 
     @property
     def columns(self):
@@ -292,6 +304,9 @@ class Schema:
             return False
         return self.columns == other.columns
 
+    def __hash__(self):
+        return self._hash
+
     def is_pk_compatible(self, other):
         """
         Does a schema change from self -> other mean that every feature needs a new path?
@@ -318,18 +333,16 @@ class Schema:
 
     def align_to_previous_schema(self, previous):
         """
-        Copies column IDs from the given existing schema onto this schema, if those columns are actually the same.
-        Uses a heuristic - columns are the same if they have the same name + type (handles reordering), or, if they
-        have the same position and type (handles renames).
+        Returns a new schema the same as self, except that some column IDs might be changed to match those in previous.
+        Column IDs are copied from the previous schema onto the resulting schema if the columns in the resulting schema
+        are the "same" as columns in the previous schema. Uses a heuristic - columns are the same if they have the
+        same name + type (handles reordering), or, if they have the same position and type (handles renames).
         """
         # TODO - could prompt the user to help with more complex schema changes.
         old_cols = previous.to_column_dicts()
         new_cols = self.to_column_dicts()
         Schema.align_schema_cols(old_cols, new_cols)
-        result = Schema.from_column_dicts(new_cols)
-        self._columns = result._columns
-        self._legend = result._legend
-        self._pk_columns = result._pk_columns
+        return Schema.from_column_dicts(new_cols)
 
     @classmethod
     def align_schema_cols(cls, old_cols, new_cols):
