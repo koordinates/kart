@@ -82,10 +82,9 @@ class RepositoryStructure:
             return f"{name}<{self.repo.path} <empty>>"
 
     @property
-    #    @functools.lru_cache(maxsize=1)
     def version(self):
         """Returns the dataset version to use for this entire repo."""
-        return get_structure_version(self.repo, self.tree)
+        return get_structure_version(self.repo, self.tree, maybe_v0=False)
 
     def decode_path(self, full_path):
         """

@@ -34,7 +34,9 @@ def upgrade(source, dest):
 
     version = get_structure_version(source_repo)
     if version != 1:
-        raise InvalidOperation("source repo is already upgraded")
+        raise InvalidOperation(
+            "source repo is not at sno version 0.2 - (dataset version 1)"
+        )
 
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)

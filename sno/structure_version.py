@@ -1,6 +1,10 @@
+import itertools
+
 import click
 import pygit2
 import json
+
+from sno.core import walk_tree
 
 STRUCTURE_VERSION_PATH = ".sno-format"
 
@@ -26,7 +30,7 @@ def extra_blobs_for_version(version):
     return [encode_structure_version(version)]
 
 
-def get_structure_version(repo, tree=None):
+def get_structure_version(repo, tree=None, maybe_v0=True):
     """
     Returns the repo version from the blob at <repo-root>/.sno-format -
     not a file in the BARE repository itself, but in the git tree.
@@ -41,7 +45,25 @@ def get_structure_version(repo, tree=None):
 
     if STRUCTURE_VERSION_PATH not in tree:
         # Versions less than 2 don't have ".sno-version" files.
-        # TODO: distinguish between 1 and 0
-        return 1
+        if maybe_v0:
+            return distinguish_v0_v1(tree)
+        else:
+            # We don't actually support v0 except for upgrade.
+            return 1
 
     return json.loads((tree / STRUCTURE_VERSION_PATH).data)
+
+
+def distinguish_v0_v1(tree):
+    WALK_LIMIT = 100
+    for top_tree, top_path, subtree_names, blob_names in itertools.islice(
+        walk_tree(tree), 0, WALK_LIMIT
+    ):
+        dir_name = top_tree.name
+        if dir_name == "meta" or dir_name == "features":
+            # "meta" exists in v1 too, but only inside ".sno-table" - so report the one we get to first.
+            return 0
+        elif dir_name == ".sno-table":
+            return 1
+    # Maybe this isn't even a sno repo?
+    return 1
