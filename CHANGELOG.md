@@ -39,6 +39,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ### Other changes in this release
 
  * `sno clone` now support shallow clones (`--depth N`) to avoid cloning a repo's entire history [#174](https://github.com/koordinates/sno/issues/174)
+ * `sno log` now supports JSON output with `--output-format json`
 
 ## 0.4.1
 
