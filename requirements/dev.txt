@@ -11,9 +11,9 @@ attrs==19.3.0             # via -r requirements/../requirements.txt, -r requirem
 backcall==0.2.0           # via ipython
 cached-property==1.5.1    # via -r requirements/../requirements.txt, -r requirements/test.txt
 certifi==2020.6.20        # via -r requirements/../requirements.txt, -r requirements/test.txt
-cffi==1.14.0              # via -r requirements/../requirements.txt, -r requirements/test.txt
+cffi==1.14.1              # via -r requirements/../requirements.txt, -r requirements/test.txt
 click==7.1.2              # via -r requirements/../requirements.txt, -r requirements/test.txt
-coverage==5.2             # via -r requirements/test.txt, pytest-cov
+coverage==5.2.1           # via -r requirements/test.txt, pytest-cov
 decorator==4.4.2          # via ipython, traitlets
 fields==5.0.0             # via -r requirements/test.txt, aspectlib
 gprof2dot==2019.11.30     # via -r requirements/test.txt, pytest-profiling
@@ -22,13 +22,13 @@ importlib-metadata==1.7.0  # via -r requirements/../requirements.txt, -r require
 ipdb==0.13.3              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
 ipython==7.16.1           # via -r requirements/dev.in, ipdb
-jedi==0.17.1              # via ipython
+jedi==0.17.2              # via ipython
 jsonschema==3.2.0         # via -r requirements/../requirements.txt, -r requirements/test.txt
 lovely-pytest-docker==0.1.0  # via -r requirements/test.txt
 more-itertools==8.4.0     # via -r requirements/test.txt, pytest
 msgpack==0.6.2            # via -r requirements/../requirements.txt, -r requirements/test.txt
 packaging==20.4           # via -r requirements/test.txt, pytest, pytest-sugar
-parso==0.7.0              # via jedi
+parso==0.7.1              # via jedi
 pexpect==4.8.0            # via ipython
 pickleshare==0.7.5        # via ipython
 pluggy==0.13.1            # via -r requirements/test.txt, pytest
