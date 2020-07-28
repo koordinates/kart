@@ -71,13 +71,13 @@ class OgrImporter:
     OGR_SUBTYPE_TO_SQLITE_TYPE = {
         ogr.OFSTBoolean: 'BOOLEAN',
         ogr.OFSTInt16: 'SMALLINT',
-        ogr.OFSTFloat32: 'REAL',
+        ogr.OFSTFloat32: 'FLOAT',
     }
 
     OGR_TYPE_TO_V2_SCHEMA_TYPE = {
         'Integer': ('integer', {"size": 32}),
         'Integer64': ('integer', {"size": 64}),
-        'Real': ('float', {}),
+        'Real': ('float', {"size": 64}),
         'String': ('text', {}),
         'Binary': ('blob', {}),
         'Date': ('date', {}),
@@ -86,6 +86,7 @@ class OgrImporter:
     OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
         ogr.OFSTBoolean: ('boolean', {}),
         ogr.OFSTInt16: ('integer', {"size": 16}),
+        ogr.OFSTFloat32: ('float', {"size": 32}),
     }
 
     @classmethod

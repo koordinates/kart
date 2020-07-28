@@ -243,7 +243,7 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
             {
                 'cid': 6,
                 'name': 'float32',
-                'type': 'REAL',
+                'type': 'FLOAT',
                 'notnull': 0,
                 'dflt_value': None,
                 'pk': 0,
