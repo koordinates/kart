@@ -40,6 +40,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * `sno clone` now support shallow clones (`--depth N`) to avoid cloning a repo's entire history [#174](https://github.com/koordinates/sno/issues/174)
  * `sno log` now supports JSON output with `--output-format json`
+ * Fixed some column datatype conversion issues during import and checkout.
 
 ## 0.4.1
 

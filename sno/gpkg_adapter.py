@@ -195,19 +195,45 @@ def _column_schema_to_gpkg(cid, column_schema, is_spatial):
     }
 
 
+# From http://www.geopackage.org/spec/
+# The columns of tables in a GeoPackage SHALL only be declared using one of the following data types:
+# BOOLEAN, TINYINT, SMALLINT, MEDIUMINT, INT / INTEGER, FLOAT, DOUBLE / REAL,
+# TEXT{(max_len)}, BLOB{(max_len)}, DATE, DATETIME, <geometry_type_name>
+
+
 _GPKG_TYPE_TO_V2_TYPE = {
+    "BOOLEAN": "boolean",
+    "TINYINT": ("integer", {"size": 8}),
     "SMALLINT": ("integer", {"size": 16}),
     "MEDIUMINT": ("integer", {"size": 32}),
+    "INT": ("integer", {"size": 64}),
     "INTEGER": ("integer", {"size": 64}),
-    "REAL": ("float", {"size": 32}),
     "FLOAT": ("float", {"size": 32}),
     "DOUBLE": ("float", {"size": 64}),
+    "REAL": ("float", {"size": 64}),
+    "TEXT": "text",
+    "BLOB": "blob",
+    "DATE": "date",
+    "DATETIME": "datetime",
+    # GEOMETRY types handled differently
 }
 
 
 _V2_TYPE_TO_GPKG_TYPE = {
-    "integer": {0: "INTEGER", 16: "SMALLINT", 32: "MEDIUMINT", 64: "INTEGER"},
-    "float": {0: "FLOAT", 32: "FLOAT", 64: "DOUBLE"},
+    "boolean": "BOOLEAN",
+    "integer": {
+        0: "INTEGER",
+        8: "TINYINT",
+        16: "SMALLINT",
+        32: "MEDIUMINT",
+        64: "INTEGER",
+    },
+    "float": {0: "REAL", 32: "FLOAT", 64: "REAL"},
+    "text": "TEXT",
+    "blob": "BLOB",
+    "date": "DATE",
+    "datetime": "DATETIME",
+    # geometry types handled differently
 }
 
 
@@ -216,10 +242,14 @@ def gpkg_type_to_v2_type(gkpg_type):
     m = re.match(r"^(TEXT|BLOB)\(([0-9]+)\)$", gkpg_type)
     if m:
         return m.group(1).lower(), {"length": int(m.group(2))}
-    v2_type = _GPKG_TYPE_TO_V2_TYPE.get(gkpg_type)
-    if v2_type is None:
-        v2_type = (gkpg_type.lower(), {})
-    return v2_type
+    v2_type_info = _GPKG_TYPE_TO_V2_TYPE.get(gkpg_type)
+    if v2_type_info is None:
+        raise ValueError(f"Unrecognised GPKG type: {gkpg_type}")
+    elif isinstance(v2_type_info, tuple):
+        v2_type, extra_type_info = v2_type_info
+    else:
+        v2_type, extra_type_info = v2_type_info, {}
+    return v2_type, extra_type_info
 
 
 def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
@@ -254,12 +284,13 @@ def v2_type_to_gpkg_type(column_schema, is_spatial):
     if column_schema.data_type == "geometry":
         return extra_type_info["geometryType"].split(" ", 1)[0]
 
-    gpkg_types = _V2_TYPE_TO_GPKG_TYPE.get(v2_type)
-    if gpkg_types:
-        return gpkg_types.get(extra_type_info.get("size", 0))
+    gpkg_type_info = _V2_TYPE_TO_GPKG_TYPE.get(v2_type)
+    if gpkg_type_info is None:
+        raise ValueError(f"Unrecognised data type: {v2_type}")
 
+    if isinstance(gpkg_type_info, dict):
+        return gpkg_type_info.get(extra_type_info.get("size", 0))
+
+    gpkg_type = gpkg_type_info
     length = extra_type_info.get("length", None)
-    if length:
-        return f"{v2_type.upper()}({length})"
-
-    return v2_type.upper()
+    return f"{gpkg_type}({length})" if length else gpkg_type

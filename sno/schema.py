@@ -378,13 +378,16 @@ class Schema:
         if old_col["primaryKeyIndex"] != new_col["primaryKeyIndex"]:
             return False
         new_col["id"] = old_col["id"]
-        # FIXME: Maybe columns should always have a size attribute? Try and get rid of this hack.
-        if "size" not in old_col and "size" in new_col:
-            del new_col["size"]
-        elif old_col["primaryKeyIndex"] is not None and "size" in old_col:
-            # Need more work on accurately roundtripping size, particularly for primary keys.
-            if old_col["size"] != new_col["size"]:
-                new_col["size"] = old_col["size"]
+
+        # We can't roundtrip size properly for GPKG primary keys since they have to be of type INTEGER.
+        if (
+            old_col["primaryKeyIndex"] is not None
+            and "size" in old_col
+            and "size" in new_col
+            and old_col["size"] != new_col["size"]
+        ):
+            new_col["size"] = old_col["size"]
+
         old_col["done"] = True
         new_col["done"] = True
         return True
