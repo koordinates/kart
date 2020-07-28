@@ -1,4 +1,5 @@
 import re
+from .exceptions import NotYetImplemented
 from .schema import Schema, ColumnSchema
 from osgeo.osr import SpatialReference
 
@@ -126,7 +127,11 @@ def osgeo_to_srs_str(spatial_ref):
 
 def generate_sqlite_table_info(dataset):
     """Generate a sqlite_table_info meta item from a dataset."""
-    return [_column_schema_to_gpkg(i, col) for i, col in enumerate(dataset.schema)]
+    is_spatial = bool(_get_geometry_columns(dataset.schema))
+    return [
+        _column_schema_to_gpkg(i, col, is_spatial)
+        for i, col in enumerate(dataset.schema)
+    ]
 
 
 def _get_geometry_columns(schema):
@@ -178,13 +183,13 @@ def _gpkg_to_column_schema(
     return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
 
-def _column_schema_to_gpkg(cid, column_schema):
+def _column_schema_to_gpkg(cid, column_schema, is_spatial):
     is_pk = 1 if column_schema.pk_index is not None else 0
     return {
         "cid": cid,
         "name": column_schema.name,
         "pk": is_pk,
-        "type": v2_type_to_gpkg_type(column_schema),
+        "type": v2_type_to_gpkg_type(column_schema, is_spatial),
         "notnull": 0,
         "dflt_value": None,
     }
@@ -233,8 +238,17 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
     return "geometry", extra_type_info
 
 
-def v2_type_to_gpkg_type(column_schema):
+def v2_type_to_gpkg_type(column_schema, is_spatial):
     """Convert a v2 schema type to a gpkg type."""
+    if is_spatial and column_schema.pk_index is not None:
+        if column_schema.data_type == "integer":
+            return "INTEGER"  # Must be INTEGER, not MEDIUMINT etc.
+        else:
+            raise NotYetImplemented(
+                "GPKG features only support integer primary keys"
+                f"- converting from {column_schema.data_type} not yet supported"
+            )
+
     v2_type = column_schema.data_type
     extra_type_info = column_schema.extra_type_info
     if column_schema.data_type == "geometry":

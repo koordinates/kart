@@ -381,6 +381,10 @@ class Schema:
         # FIXME: Maybe columns should always have a size attribute? Try and get rid of this hack.
         if "size" not in old_col and "size" in new_col:
             del new_col["size"]
+        elif old_col["primaryKeyIndex"] is not None and "size" in old_col:
+            # Need more work on accurately roundtripping size, particularly for primary keys.
+            if old_col["size"] != new_col["size"]:
+                new_col["size"] = old_col["size"]
         old_col["done"] = True
         new_col["done"] = True
         return True
