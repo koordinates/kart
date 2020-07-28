@@ -246,7 +246,7 @@ def v2_type_to_gpkg_type(column_schema, is_spatial):
         else:
             raise NotYetImplemented(
                 "GPKG features only support integer primary keys"
-                f"- converting from {column_schema.data_type} not yet supported"
+                f" - converting from {column_schema.data_type} not yet supported"
             )
 
     v2_type = column_schema.data_type

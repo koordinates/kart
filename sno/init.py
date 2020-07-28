@@ -18,6 +18,7 @@ from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromF
 from .exceptions import (
     InvalidOperation,
     NotFound,
+    NotYetImplemented,
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
@@ -595,6 +596,15 @@ class OgrImporter:
                 type_name = self._ogr_type_to_sqlite_type(fd)
                 nullable = fd.IsNullable()
                 default = fd.GetDefault()
+
+            if name == self.primary_key and self.is_spatial:
+                if type_name in ("SMALLINT", "MEDIUMINT", "INTEGER"):
+                    type_name = "INTEGER"
+                else:
+                    raise NotYetImplemented(
+                        "GPKG features only support integer primary keys"
+                        f" - converting from {type_name} not yet supported"
+                    )
 
             yield {
                 "cid": cid,
