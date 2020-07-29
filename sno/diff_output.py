@@ -215,8 +215,6 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
         else:
             fp = output_path.open("w")
 
-        pk_field = dataset.primary_key
-
         for k in diff.get("meta", {}):
             click.secho(
                 f"Warning: meta changes aren't included in GeoJSON output: {k}",
@@ -224,20 +222,57 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
                 file=sys.stderr,
             )
 
-        fc = {"type": "FeatureCollection", "features": []}
-
+        features = []
         for key, delta in sorted(diff.get("feature", {}).items()):
-            if delta.type == "insert":
-                fc["features"].append(geojson_row(delta.new_value, pk_field, "I"))
-            elif delta.type == "update":
-                fc["features"].append(geojson_row(delta.old_value, pk_field, "U-"))
-                fc["features"].append(geojson_row(delta.new_value, pk_field, "U+"))
-            elif delta.type == "delete":
-                fc["features"].append(geojson_row(delta.old_value, pk_field, "D"))
+            if delta.old:
+                change_type = "U-" if delta.new else "D"
+                features.append(LazyGeojsonFeatureOutput(change_type, delta.old))
+            if delta.new:
+                change_type = "U+" if delta.old else "I"
+                features.append(LazyGeojsonFeatureOutput(change_type, delta.new))
 
+        fc = {"type": "FeatureCollection", "features": features}
         dump_json_output(fc, fp, json_style=json_style)
 
     yield _out
+
+
+class LazyGeojsonFeatureOutput:
+    """Wrapper of KeyValue that lazily serialises it as GEOJSON when sent to json.dumps"""
+
+    __slots__ = ("change_type", "key_value")
+
+    def __init__(self, change_type, key_value):
+        self.change_type = change_type
+        self.key_value = key_value
+
+    def __json__(self):
+        return geojson_row(
+            self.key_value.get_lazy_value(), self.key_value.key, self.change_type
+        )
+
+
+def geojson_row(row, pk_value, change=None):
+    """
+    Turns a row into a dict representing a GeoJSON feature.
+    """
+    change_id = f"{change}::{pk_value}" if change else str(pk_value)
+    f = {
+        "type": "Feature",
+        "geometry": None,
+        "properties": {},
+        "id": change_id,
+    }
+
+    for k in row.keys():
+        v = row[k]
+        if isinstance(v, bytes):
+            g = gpkg_geom_to_ogr(v)
+            f['geometry'] = json.loads(g.ExportToJson())
+        else:
+            f["properties"][k] = v
+
+    return f
 
 
 @contextlib.contextmanager
@@ -265,50 +300,56 @@ def diff_output_json(
                 param_hint="--output",
             )
 
-    accumulated = {}
+    def prepare_meta_delta(delta):
+        # No lazy streaming of meta deltas.
+        result = {}
+        if delta.old:
+            result["-"] = delta.old.get_lazy_value()
+        if delta.new:
+            result["+"] = delta.new.get_lazy_value()
+        return result
+
+    def prepare_feature_delta(delta):
+        result = {}
+        if delta.old:
+            result["-"] = LazyJsonFeatureOutput(delta.old)
+        if delta.new:
+            result["+"] = LazyJsonFeatureOutput(delta.new)
+        return result
+
+    repo_result = {}
 
     def _out(dataset, ds_diff):
         ds_result = {}
-        meta_diff = ds_diff.get("meta")
-        if meta_diff:
+        if "meta" in ds_diff:
             ds_result["meta"] = {
-                key: meta_delta_as_json(delta)
-                for key, delta in sorted(meta_diff.items())
+                key: prepare_meta_delta(delta)
+                for key, delta in sorted(ds_diff["meta"].items())
             }
-        feature_diff = ds_diff.get("feature")
-        if feature_diff:
+        if "feature" in ds_diff:
             ds_result["feature"] = [
-                feature_delta_as_json(delta)
-                for key, delta in sorted(feature_diff.items())
+                prepare_feature_delta(delta)
+                for key, delta in sorted(ds_diff["feature"].items())
             ]
-        accumulated[dataset.path] = ds_result
+        repo_result[dataset.name] = ds_result
 
     yield _out
 
     dump_function(
-        {"sno.diff/v1+hexwkb": accumulated}, output_path, json_style=json_style
+        {"sno.diff/v1+hexwkb": repo_result}, output_path, json_style=json_style
     )
 
 
-def meta_delta_as_json(delta):
-    if delta.type == "insert":
-        return {"+": delta.new_value}
-    elif delta.type == "delete":
-        return {"-": delta.old_value}
-    elif delta.type == "update":
-        return {"-": delta.old_value, "+": delta.new_value}
+class LazyJsonFeatureOutput:
+    """Wrapper of KeyValue that lazily serialises it as JSON when sent to json.dumps"""
 
+    __slots__ = "key_value"
 
-def feature_delta_as_json(delta):
-    if delta.type == "insert":
-        return {"+": json_row(delta.new_value)}
-    elif delta.type == "delete":
-        return {"-": json_row(delta.old_value)}
-    elif delta.type == "update":
-        return {
-            "-": json_row(delta.old_value),
-            "+": json_row(delta.new_value),
-        }
+    def __init__(self, key_value):
+        self.key_value = key_value
+
+    def __json__(self):
+        return json_row(self.key_value.get_lazy_value())
 
 
 @ungenerator(dict)
@@ -321,30 +362,6 @@ def json_row(row):
         if isinstance(v, bytes):
             v = gpkg_geom_to_hex_wkb(v)
         yield k, v
-
-
-def geojson_row(row, pk_field, change=None):
-    """
-    Turns a row into a dict representing a GeoJSON feature.
-    """
-    raw_id = row[pk_field]
-    change_id = f"{change}::{raw_id}" if change else raw_id
-    f = {
-        "type": "Feature",
-        "geometry": None,
-        "properties": {},
-        "id": change_id,
-    }
-
-    for k in row.keys():
-        v = row[k]
-        if isinstance(v, bytes):
-            g = gpkg_geom_to_ogr(v)
-            f['geometry'] = json.loads(g.ExportToJson())
-        else:
-            f["properties"][k] = v
-
-    return f
 
 
 @contextlib.contextmanager

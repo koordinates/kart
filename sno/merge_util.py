@@ -565,7 +565,7 @@ class RichConflictVersion:
         elif output_format == "json":
             return json_row(self.feature)
         elif output_format == "geojson":
-            return geojson_row(self.feature, self.pk_field)
+            return geojson_row(self.feature, self.pk)
 
     def matches_filter(self, repo_filter):
         if repo_filter == UNFILTERED:

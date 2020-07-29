@@ -1,7 +1,7 @@
 import functools
 import logging
 import time
-from collections import defaultdict, deque
+from collections import deque
 
 import click
 import pygit2
