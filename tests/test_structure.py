@@ -774,7 +774,7 @@ def test_feature_find_decode_performance(
         if import_version == "1":
             benchmark(dataset.repo_feature_to_dict, feature_path, feature_data)
         elif import_version == "2":
-            benchmark(dataset.get_feature, full_path=feature_path, data=feature_data)
+            benchmark(dataset.get_feature, path=feature_path, data=feature_data)
     else:
         raise NotImplementedError(f"Unknown profile: {profile}")
 

@@ -6,7 +6,10 @@ class Conflict(Exception):
 
 
 class KeyValue(namedtuple("KeyValue", ("key", "value"))):
-    """A key-value pair. A delta is made of two of these - one old, one new."""
+    """
+    A key-value pair. A delta is made of two of these - one old, one new.
+
+    """
 
     @staticmethod
     def of(obj):
@@ -16,6 +19,21 @@ class KeyValue(namedtuple("KeyValue", ("key", "value"))):
         elif isinstance(obj, tuple):
             return KeyValue(*obj)
         raise ValueError(f"Expected (key, value) tuple - got f{type(obj)}")
+
+    def get_lazy_value(self):
+        """Deltas can be created so that the values are only generated when needed."""
+
+        if not callable(self.value):
+            # Not a lazily evaluated value. Just a value.
+            return self.value
+
+        try:
+            # Look for memoized value.
+            return self._value
+        except AttributeError:
+            # Time to evaluate and memoize.
+            self._value = self.value()
+            return self._value
 
 
 class Delta(namedtuple("Delta", ("old", "new"))):
@@ -27,6 +45,10 @@ class Delta(namedtuple("Delta", ("old", "new"))):
     If the old_key is different to the new_key, this means the object moved in this delta, ie a rename operation.
     Deltas can be concatenated together, if they refer to the same object - eg an delete + insert = update (usually).
     Deltas can be inverted, which just means old and new are swapped.
+
+    Prefer to access (old_key, new_key, old_value, new_value) over (old.key, new.key, old.value, new.value)
+    - these handle one possible AttributeError if old or new is None.
+    - these handle the case where old.value or new.value is a callable and can be lazily evaluated.
     """
 
     def __new__(cls, old, new):
@@ -53,7 +75,7 @@ class Delta(namedtuple("Delta", ("old", "new"))):
 
     @staticmethod
     def maybe_update(old, new):
-        return Delta(old, new) if old != new else None
+        return Delta(old, new) if old.get_lazy_value() != new.get_lazy_value() else None
 
     @staticmethod
     def delete(old):
@@ -69,6 +91,18 @@ class Delta(namedtuple("Delta", ("old", "new"))):
     @property
     def new_key(self):
         return self.new.key if self.new is not None else None
+
+    @property
+    def old_value(self):
+        if self.old is not None:
+            return self.old.get_lazy_value()
+        return None
+
+    @property
+    def new_value(self):
+        if self.new is not None:
+            return self.new.get_lazy_value()
+        return None
 
     @property
     def key(self):

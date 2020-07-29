@@ -1,3 +1,4 @@
+import functools
 import json
 import re
 
@@ -6,6 +7,7 @@ import pytest
 
 import pygit2
 from sno.diff_structs import Delta, DeltaDiff
+from sno.structure import RepositoryStructure
 
 
 H = pytest.helpers.helpers()
@@ -1413,3 +1415,37 @@ def test_show_shallow_clone(data_archive_readonly, cli_runner, tmp_path, chdir):
         with chdir(clone_path):
             r = cli_runner.invoke(["show"])
             assert r.exit_code == 0, r
+
+
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_diff_streaming(structure_version, data_archive_readonly):
+    # Test that a diff can be created without reading every feature,
+    # and that the features in that diff can be read one by one.
+    data_archive = "points2" if structure_version == "2" else "points"
+    with data_archive_readonly(data_archive) as repo_path:
+        repo = pygit2.Repository(str(repo_path))
+        old = RepositoryStructure.lookup(repo, "HEAD^")[H.POINTS.LAYER]
+        new = RepositoryStructure.lookup(repo, "HEAD")[H.POINTS.LAYER]
+
+        def override_get_feature(self, *args, **kwargs):
+            self.get_feature_calls += 1
+            return self.__class__.get_feature(self, *args, **kwargs)
+
+        old.get_feature_calls = 0
+        new.get_feature_calls = 0
+
+        old.get_feature = functools.partial(override_get_feature, old)
+        new.get_feature = functools.partial(override_get_feature, new)
+
+        feature_diff = old.diff(new)["feature"]
+
+        expected_calls = 0
+        assert old.get_feature_calls == expected_calls
+        assert new.get_feature_calls == expected_calls
+
+        for key, delta in sorted(feature_diff.items()):
+            print(delta.old_value)
+            print(delta.new_value)
+            expected_calls += 1
+            assert old.get_feature_calls == expected_calls
+            assert new.get_feature_calls == expected_calls

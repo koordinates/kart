@@ -295,6 +295,12 @@ class DatasetStructure:
             raise ValueError(f"{full_path} is not a descendant of {self.path}")
         return full_path[len(self.path) + 1 :]
 
+    def ensure_rel_path(self, path):
+        """Given either a relative path or a full path, return the equivalent relative path."""
+        if path.startswith(".sno-table/"):
+            return path
+        return self.rel_path(path)
+
     def decode_path(self, rel_path):
         """
         Given a path in this layer of the sno repository - eg ".sno-table/49/3e/Bg==" -
@@ -443,20 +449,22 @@ class DatasetStructure:
         idx = rtree.index.Index(path, properties=p)
         return idx
 
+    _INSERT_UPDATE_DELETE = (
+        pygit2.GIT_DELTA_ADDED,
+        pygit2.GIT_DELTA_MODIFIED,
+        pygit2.GIT_DELTA_DELETED,
+    )
+    _INSERT_UPDATE = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED)
+    _UPDATE_DELETE = (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_DELETED)
+
     def diff(self, other, ds_filter=UNFILTERED, reverse=False):
         """
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
-        # TODO - support multiple primary keys.
-        # TODO - rewrite this simpler, use Deltas for the whole method.
 
         ds_filter = ds_filter or UNFILTERED
         pk_filter = ds_filter.get("feature", ())
-
-        candidates_ins = defaultdict(list)
-        candidates_upd = {}
-        candidates_del = defaultdict(list)
 
         params = {}
         if reverse:
@@ -492,6 +500,8 @@ class DatasetStructure:
             meta_new = dict(new.iter_meta_items()) if new else {}
             ds_diff["meta"] = DeltaDiff.diff_dicts(meta_old, meta_new)
 
+        feature_diff = DeltaDiff()
+
         for d in diff_index.deltas:
             self.L.debug(
                 "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
@@ -502,43 +512,53 @@ class DatasetStructure:
             elif d.new_file and d.new_file.path.startswith(".sno-table/meta/"):
                 continue
 
-            if d.status == pygit2.GIT_DELTA_DELETED:
-                old_pk = old.decode_path_to_1pk(d.old_file.path)
-                if str(old_pk) not in ds_filter:
+            if d.status in self._INSERT_UPDATE_DELETE:
+
+                if d.status in self._UPDATE_DELETE:
+                    old_path = d.old_file.path
+                    old_pk = old.decode_path_to_1pk(old_path)
+                else:
+                    old_pk = None
+
+                if d.status in self._INSERT_UPDATE:
+                    new_path = d.new_file.path
+                    new_pk = new.decode_path_to_1pk(d.new_file.path)
+                else:
+                    new_pk = None
+
+                if old_pk not in pk_filter and new_pk not in pk_filter:
                     continue
 
-                self.L.debug("diff(): D %s (%s)", d.old_file.path, old_pk)
+                if d.status == pygit2.GIT_DELTA_ADDED:
+                    self.L.debug("diff(): insert %s (%s)", new_path, new_pk)
+                elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                    self.L.debug(
+                        "diff(): update %s %s -> %s %s",
+                        old_path,
+                        old_pk,
+                        new_path,
+                        new_pk,
+                    )
+                elif d.status == pygit2.GIT_DELTA_DELETED:
+                    self.L.debug("diff(): delete %s (%s) -> %s (%s)", old_path, old_pk)
 
-                old_feature = old.get_feature(old_pk, ogr_geoms=False)
-                candidates_del[str(old_pk)].append((str(old_pk), old_feature))
+                if d.status in self._UPDATE_DELETE:
+                    old_feature_promise = functools.partial(
+                        old.get_feature, old_pk, path=old_path, ogr_geoms=False,
+                    )
+                    old_half_delta = old_pk, old_feature_promise
+                else:
+                    old_half_delta = None
 
-            elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                old_pk = old.decode_path_to_1pk(d.old_file.path)
-                new_pk = new.decode_path_to_1pk(d.new_file.path)
-                if str(old_pk) not in ds_filter and str(new_pk) not in ds_filter:
-                    continue
+                if d.status in self._INSERT_UPDATE:
+                    new_feature_promise = functools.partial(
+                        new.get_feature, new_pk, path=new_path, ogr_geoms=False,
+                    )
+                    new_half_delta = new_pk, new_feature_promise
+                else:
+                    new_half_delta = None
 
-                self.L.debug(
-                    "diff(): M %s (%s) -> %s (%s)",
-                    d.old_file.path,
-                    old_pk,
-                    d.new_file.path,
-                    new_pk,
-                )
-
-                old_feature = old.get_feature(old_pk, ogr_geoms=False)
-                new_feature = other.get_feature(new_pk, ogr_geoms=False)
-                candidates_upd[str(old_pk)] = (old_feature, new_feature)
-
-            elif d.status == pygit2.GIT_DELTA_ADDED:
-                new_pk = new.decode_path_to_1pk(d.new_file.path)
-                if str(new_pk) not in pk_filter:
-                    continue
-
-                self.L.debug("diff(): A %s (%s)", d.new_file.path, new_pk)
-
-                new_feature = new.get_feature(new_pk, ogr_geoms=False)
-                candidates_ins[str(new_pk)].append(new_feature)
+                feature_diff.add_delta(Delta(old_half_delta, new_half_delta))
 
             else:
                 # GIT_DELTA_RENAMED
@@ -550,31 +570,9 @@ class DatasetStructure:
                 # GIT_DELTA_UNTRACKED
                 raise NotImplementedError(f"Delta status: {d.status_char()}")
 
-        # detect renames
-        for h in list(candidates_del.keys()):
-            if h in candidates_ins:
-                track_pk, my_obj = candidates_del[h].pop(0)
-                other_obj = candidates_ins[h].pop(0)
+        # TODO - detect renames by comparing blob ID
 
-                candidates_upd[track_pk] = (my_obj, other_obj)
-
-                if not candidates_del[h]:
-                    del candidates_del[h]
-                if not candidates_ins[h]:
-                    del candidates_ins[h]
-
-        def extract_key(obj):
-            return obj[self.primary_key], obj
-
-        ins = [Delta.insert(extract_key(v[0])) for v in candidates_ins.values()]
-        dels = [Delta.delete(extract_key(v[0][1])) for v in candidates_del.values()]
-        upd = [
-            Delta.update(extract_key(old), extract_key(new))
-            for old, new in candidates_upd.values()
-        ]
-
-        ds_diff["feature"] = DeltaDiff(ins + dels + upd)
-
+        ds_diff["feature"] = feature_diff
         return ds_diff
 
     def write_index(self, dataset_diff, index, repo):

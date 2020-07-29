@@ -172,7 +172,7 @@ class Dataset2(DatasetStructure):
         """
         return self.full_path(self.SCHEMA_PATH), schema.dumps()
 
-    def get_raw_feature_dict(self, pk_values=None, *, full_path=None, data=None):
+    def get_raw_feature_dict(self, pk_values=None, *, path=None, data=None):
         """
         Gets the feature with the given primary key(s) / at the given "full" path.
         The result is a "raw" feature dict, values are keyed by column ID,
@@ -181,39 +181,38 @@ class Dataset2(DatasetStructure):
         To get a feature consistent with the current schema, call get_feature.
         """
 
-        # Either pk_values or path should be supplied, but not both.
-        if pk_values is not None and full_path is None and data is None:
-            # Normal case - caller supplied pk_values, look up path + data.
-            pk_values = self.schema.sanitise_pks(pk_values)
-            rel_path = self.encode_pks_to_path(pk_values, relative=True)
-            data = self.get_data_at(rel_path, as_memoryview=True)
+        # The caller must supply at least one of (pk_values, path) so we know which
+        # feature is meant. We can infer whichever one is missing from the one supplied.
+        # If the caller knows both already, they can supply both, to avoid redundant work.
+        # Similarly, if the caller knows data, they can supply that too to avoid redundant work.
+        if pk_values is None and path is None:
+            raise ValueError("Either <pk_values> or <path> must be supplied")
 
-        elif full_path is not None and pk_values is None:
-            # Path case - caller can supply path and optionally data too,
-            # if they already know it. This is just the data at full_path.
-            pk_values = self.decode_path_to_pks(full_path)
-            if data is None:
-                data = self.get_data_at(self.rel_path(full_path), as_memoryview=True)
+        if pk_values is not None:
+            pk_values = self.schema.sanitise_pks(pk_values)
         else:
-            raise ValueError(
-                "Either <pk_values> or <full_path>, [<data>] must be supplied"
-            )
+            pk_values = self.decode_path_to_pks(path)
+
+        if data is None:
+            if path is not None:
+                rel_path = self.ensure_rel_path(path)
+            else:
+                rel_path = self.encode_pks_to_path(pk_values, relative=True)
+            data = self.get_data_at(rel_path, as_memoryview=True)
 
         legend_hash, non_pk_values = msg_unpack(data)
         legend = self.get_legend(legend_hash)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
     def get_feature(
-        self, pk_values=None, *, full_path=None, data=None, keys=True, ogr_geoms=None
+        self, pk_values=None, *, path=None, data=None, keys=True, ogr_geoms=None
     ):
         """
         Gets the feature with the given primary key(s) / at the given "full" path.
         The result is either a dict of values keyed by column name (if keys=True)
         or a tuple of values in schema order (if keys=False).
         """
-        raw_dict = self.get_raw_feature_dict(
-            pk_values=pk_values, full_path=full_path, data=data
-        )
+        raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
         return self.schema.feature_from_raw_dict(raw_dict, keys=keys)
 
     def features(self, keys=True):
@@ -228,9 +227,8 @@ class Dataset2(DatasetStructure):
         if self.FEATURE_PATH not in self.tree:
             return
         for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH):
-            # blob.name is not actually the full_path, but since we provide data, the exact path is irrelevant.
             yield blob.name, self.get_feature(
-                full_path=blob.name, data=blob.data, keys=keys
+                path=blob.name, data=blob.data, keys=keys
             ),
 
     def feature_count(self):
