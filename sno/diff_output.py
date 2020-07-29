@@ -69,61 +69,64 @@ def diff_output_text(*, output_path, **kwargs):
         prefix = f"{path}:meta:"
         for key, delta in sorted(diff.get('meta', {}).items()):
             if delta.old:
-                click.secho(f"--- {prefix}{delta.old.key}", bold=True, **pecho)
+                click.secho(f"--- {prefix}{delta.old_key}", bold=True, **pecho)
             if delta.new:
-                click.secho(f"+++ {prefix}{delta.new.key}", bold=True, **pecho)
+                click.secho(f"+++ {prefix}{delta.new_key}", bold=True, **pecho)
             if delta.old:
-                click.secho(prefix_json(delta.old.value, "- "), fg="red", **pecho)
+                click.secho(prefix_json(delta.old_value, "- "), fg="red", **pecho)
             if delta.new:
-                click.secho(prefix_json(delta.new.value, "+ "), fg="green", **pecho)
+                click.secho(prefix_json(delta.new_value, "+ "), fg="green", **pecho)
 
         pk_field = dataset.primary_key
         repr_excl = [pk_field]
         prefix = f"{path}:feature:"
         for key, delta in sorted(diff.get('feature', {}).items()):
+            old_pk = delta.old_key
+            new_pk = delta.new_key
+            old_feature = delta.old_value
+            new_feature = delta.new_value
+
             if delta.type == "insert":
-                click.secho(f"+++ {prefix}{delta.new.key}", bold=True, **pecho)
+                click.secho(f"+++ {prefix}{new_pk}", bold=True, **pecho)
                 click.secho(
-                    text_row(delta.new.value, prefix="+ ", exclude=repr_excl),
+                    text_row(new_feature, prefix="+ ", exclude=repr_excl),
                     fg="green",
                     **pecho,
                 )
 
             elif delta.type == "delete":
-                click.secho(f"--- {prefix}{delta.old.key}", bold=True, **pecho)
+                click.secho(f"--- {prefix}{old_pk}", bold=True, **pecho)
                 click.secho(
-                    text_row(delta.old.value, prefix="- ", exclude=repr_excl),
+                    text_row(old_feature, prefix="- ", exclude=repr_excl),
                     fg="red",
                     **pecho,
                 )
 
             elif delta.type == "update":
                 click.secho(
-                    f"--- {prefix}{delta.old.key}\n+++ {prefix}{delta.new.key}",
-                    bold=True,
-                    **pecho,
+                    f"--- {prefix}{old_pk}\n+++ {prefix}{new_pk}", bold=True, **pecho,
                 )
 
                 # This preserves row order:
                 all_keys = itertools.chain(
-                    delta.old.value.keys(),
-                    (k for k in delta.new.value.keys() if k not in delta.old.value),
+                    old_feature.keys(),
+                    (k for k in new_feature.keys() if k not in old_feature),
                 )
 
                 for k in all_keys:
                     if k.startswith("__") or k in repr_excl:
                         continue
-                    if delta.old.value.get(k, _NULL) == delta.new.value.get(k, _NULL):
+                    if old_feature.get(k, _NULL) == new_feature.get(k, _NULL):
                         continue
-                    if k in delta.old.value:
+                    if k in old_feature:
                         click.secho(
-                            text_row_field(delta.old.value, k, prefix="- "),
+                            text_row_field(old_feature, k, prefix="- "),
                             fg="red",
                             **pecho,
                         )
-                    if k in delta.new.value:
+                    if k in new_feature:
                         click.secho(
-                            text_row_field(delta.new.value, k, prefix="+ "),
+                            text_row_field(new_feature, k, prefix="+ "),
                             fg="green",
                             **pecho,
                         )
@@ -225,12 +228,12 @@ def diff_output_geojson(*, output_path, dataset_count, json_style='pretty', **kw
 
         for key, delta in sorted(diff.get("feature", {}).items()):
             if delta.type == "insert":
-                fc["features"].append(geojson_row(delta.new.value, pk_field, "I"))
+                fc["features"].append(geojson_row(delta.new_value, pk_field, "I"))
             elif delta.type == "update":
-                fc["features"].append(geojson_row(delta.old.value, pk_field, "U-"))
-                fc["features"].append(geojson_row(delta.new.value, pk_field, "U+"))
+                fc["features"].append(geojson_row(delta.old_value, pk_field, "U-"))
+                fc["features"].append(geojson_row(delta.new_value, pk_field, "U+"))
             elif delta.type == "delete":
-                fc["features"].append(geojson_row(delta.old.value, pk_field, "D"))
+                fc["features"].append(geojson_row(delta.old_value, pk_field, "D"))
 
         dump_json_output(fc, fp, json_style=json_style)
 
@@ -289,20 +292,23 @@ def diff_output_json(
 
 def meta_delta_as_json(delta):
     if delta.type == "insert":
-        return {"+": delta.new.value}
+        return {"+": delta.new_value}
     elif delta.type == "delete":
-        return {"-": delta.old.value}
+        return {"-": delta.old_value}
     elif delta.type == "update":
-        return {"-": delta.old.value, "+": delta.new.value}
+        return {"-": delta.old_value, "+": delta.new_value}
 
 
 def feature_delta_as_json(delta):
     if delta.type == "insert":
-        return {"+": json_row(delta.new.value)}
+        return {"+": json_row(delta.new_value)}
     elif delta.type == "delete":
-        return {"-": json_row(delta.old.value)}
+        return {"-": json_row(delta.old_value)}
     elif delta.type == "update":
-        return {"-": json_row(delta.old.value), "+": json_row(delta.new.value)}
+        return {
+            "-": json_row(delta.old_value),
+            "+": json_row(delta.new_value),
+        }
 
 
 @ungenerator(dict)

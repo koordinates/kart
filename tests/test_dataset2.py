@@ -99,7 +99,7 @@ def test_raw_feature_roundtrip():
     tree = DictTree({legend_path: legend_data, feature_path: feature_data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped = dataset2.get_raw_feature_dict(full_path=feature_path)
+    roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
     assert roundtripped is not raw_feature_dict
     assert roundtripped == raw_feature_dict
 
@@ -117,7 +117,7 @@ def test_raw_feature_roundtrip():
     tree = DictTree({legend_path: legend_data, feature_path: empty_feature_data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped = dataset2.get_raw_feature_dict(full_path=feature_path)
+    roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
     # Overwriting the old feature with an empty feature at the same path only
     # clears the non-pk values, since the pk values are part of the path.
     assert roundtripped == {
@@ -190,11 +190,11 @@ def test_feature_roundtrip(gen_uuid):
     )
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped_tuple = dataset2.get_feature(full_path=feature_path, keys=False)
+    roundtripped_tuple = dataset2.get_feature(path=feature_path, keys=False)
     assert roundtripped_tuple is not feature_tuple
     assert roundtripped_tuple == feature_tuple
 
-    roundtripped_dict = dataset2.get_feature(full_path=feature_path, keys=True)
+    roundtripped_dict = dataset2.get_feature(path=feature_path, keys=True)
     assert roundtripped_dict is not feature_dict
     assert roundtripped_dict == feature_dict
 
@@ -252,9 +252,9 @@ def test_schema_change_roundtrip(gen_uuid):
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     # Old columns that are not present in the new schema are gone.
     # New columns that are not present in the old schema have 'None's.
-    roundtripped = dataset2.get_feature(full_path=feature_path, keys=False)
+    roundtripped = dataset2.get_feature(path=feature_path, keys=False)
     assert roundtripped == (7, None, "Bloggs", "Joe", None)
-    roundtripped = dataset2.get_feature(full_path=feature_path, keys=True)
+    roundtripped = dataset2.get_feature(path=feature_path, keys=True)
     assert roundtripped == {
         "personnel_id": 7,
         "tax_file_number": None,

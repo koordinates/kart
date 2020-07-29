@@ -166,9 +166,17 @@ class Dataset1(DatasetStructure):
 
         return feature
 
-    def _get_feature(self, pk_value):
-        pk_value = self.cast_primary_key(pk_value)
-        rel_path = self.encode_1pk_to_path(pk_value, relative=True)
+    def _get_feature(self, pk_value, *, path=None):
+        # The caller must supply at least one of (pk_values, path) so we know which
+        # feature is meant. We can infer whichever one is missing from the one supplied.
+        if pk_value is None and path is None:
+            raise ValueError("Either <pk_values> or <path> must be supplied")
+
+        if path is not None:
+            rel_path = self.ensure_rel_path(path)
+        else:
+            pk_value = self.cast_primary_key(pk_value)
+            rel_path = self.encode_1pk_to_path(pk_value, relative=True)
 
         leaf = self.tree / rel_path
         if not isinstance(leaf, pygit2.Blob):
@@ -177,8 +185,8 @@ class Dataset1(DatasetStructure):
             )
         return leaf
 
-    def get_feature(self, pk_value, *, ogr_geoms=True):
-        blob = self._get_feature(pk_value)
+    def get_feature(self, pk_value, *, path=None, ogr_geoms=True):
+        blob = self._get_feature(pk_value=pk_value, path=path)
         return self.repo_feature_to_dict(
             blob.name, memoryview(blob), ogr_geoms=ogr_geoms
         )
