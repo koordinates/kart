@@ -8,7 +8,6 @@ class Conflict(Exception):
 class KeyValue(namedtuple("KeyValue", ("key", "value"))):
     """
     A key-value pair. A delta is made of two of these - one old, one new.
-
     """
 
     @staticmethod
@@ -29,11 +28,11 @@ class KeyValue(namedtuple("KeyValue", ("key", "value"))):
 
         try:
             # Look for memoized value.
-            return self._value
+            return self._cached_value
         except AttributeError:
             # Time to evaluate and memoize.
-            self._value = self.value()
-            return self._value
+            self._cached_value = self.value()
+            return self._cached_value
 
 
 class Delta(namedtuple("Delta", ("old", "new"))):

@@ -5,9 +5,19 @@ import sys
 
 JSON_PARAMS = {
     "compact": {},
-    "pretty": {"indent": 2, "sort_keys": True},
+    "pretty": {"indent": 2},
     "extracompact": {"separators": (',', ':')},
 }
+
+
+class ExtendedJsonEncoder(json.JSONEncoder):
+    """A JSONEncoder that tries calling __json__() if it can't serialise an object another way."""
+
+    def default(self, obj):
+        try:
+            return obj.__json__()
+        except AttributeError:
+            return json.JSONEncoder.default(self, obj)
 
 
 def format_json_for_output(output, fp, json_style="pretty"):
@@ -34,9 +44,15 @@ def dump_json_output(output, output_path, json_style="pretty"):
     """
     Dumps the output to JSON in the output file.
     """
-
     fp = resolve_output_path(output_path)
-    fp.write(format_json_for_output(output, fp, json_style=json_style))
+
+    # TODO: reintroduce JSON syntax highlighting
+    # highlit = json_style == 'pretty' and fp == sys.stdout and fp.isatty()
+
+    json_encoder = ExtendedJsonEncoder(**JSON_PARAMS[json_style])
+    for chunk in json_encoder.iterencode(output):
+        fp.write(chunk)
+    fp.write('\n')
 
 
 def resolve_output_path(output_path):
