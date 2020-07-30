@@ -14,14 +14,7 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 @click.command(context_settings=dict(ignore_unknown_options=True,))
 @click.pass_context
 @click.option(
-    "--output-format",
-    "-o",
-    type=click.Choice(["text", "json"]),
-    default="text",
-    help=(
-        "Output format. 'quiet' disables all output and implies --exit-code.\n"
-        "'html' attempts to open a browser unless writing to stdout ( --output=- )"
-    ),
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
 @click.option(
     "--json-style",
