@@ -840,23 +840,20 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
     def _check_meta_diff_supported(self, dataset, wc_meta_diff):
         if not wc_meta_diff:
             return
-        nope = NotYetImplemented(
-            "Sorry, the working copy doesn't yet support schema changes"
-        )
 
         if dataset.version < 2:
             # dataset1 doesn't support meta changes at all
-            raise nope
+            raise NotYetImplemented(
+                "Sorry, this sno repository version doesn't support schema changes"
+            )
 
         for patch in wc_meta_diff:
             delta = patch.delta
             assert delta.old_file.path == delta.new_file.path
-            path = delta.old_file.path
 
-            if path.startswith(('legend', 'schema')):
-                raise nope
-
-    def _apply_meta_title(self, src_ds, dest_ds, dbcur, value):
+    def _apply_meta_title(self, src_ds, dest_ds, src_value, dest_value, dbcur):
+        # TODO - find a better way to roundtrip titles while keeping them unique
+        value = f"{dest_ds.name}: {dest_value}"
         dbcur.execute(
             '''
             UPDATE gpkg_contents SET identifier = ?
@@ -865,14 +862,38 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             [value, dest_ds.name],
         )
 
-    def _apply_meta_description(self, src_ds, dest_ds, dbcur, value):
+    def _apply_meta_description(self, src_ds, dest_ds, src_value, dest_value, dbcur):
         dbcur.execute(
             '''
             UPDATE gpkg_contents SET description = ?
             WHERE table_name = ?
             ''',
-            [value, dest_ds.name],
+            [dest_value, dest_ds.name],
         )
+
+    def _apply_meta_schema(self, src_ds, dest_ds, src_value, dest_value, dbcur):
+        table_name = dest_ds.name
+        src_schema = Schema.from_column_dicts(src_value)
+        dest_schema = Schema.from_column_dicts(dest_value)
+
+        dt = src_schema.diff_types(dest_schema)
+        if (
+            dt["inserts"]
+            or dt["deletes"]
+            or dt["position_updates"]
+            or dt["type_updates"]
+            or dt["pk_updates"]
+        ):
+            raise NotYetImplemented(
+                "Sorry, this type of schema changes is not yet supported"
+            )
+
+        for col_id in dt["name_updates"]:
+            src_name = src_schema[col_id].name
+            dest_name = dest_schema[col_id].name
+            dbcur.execute(
+                f'''ALTER TABLE {gpkg.ident(table_name)} RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}'''
+            )
 
     def _apply_meta_diff(self, src_ds, dest_ds, dbcur, meta_diff_index):
         L.debug("Meta diff: %s changes", len(meta_diff_index))
@@ -897,8 +918,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     # GIT_DELTA_UNTRACKED
                     raise NotImplementedError(f"Delta status: {d.status_char()}")
 
-                value = (dest_ds.meta_tree / d.new_file.path).data.decode('utf8')
-                func(src_ds, dest_ds, dbcur, value)
+                src_value = src_ds.get_meta_item(path)
+                dest_value = dest_ds.get_meta_item(path)
+                func(src_ds, dest_ds, src_value, dest_value, dbcur)
 
     def _apply_feature_diff(self, src_ds, dest_ds, dbcur, feature_diff_index):
         L.debug("Feature diff: %s changes", len(feature_diff_index))

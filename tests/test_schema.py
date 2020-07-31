@@ -51,7 +51,7 @@ def test_align_schema(gen_uuid):
             ColumnSchema(gen_uuid(), "middle_names", "text", None),
         ]
     )
-    aligned_schema = new_schema.align_to_previous_schema(old_schema)
+    aligned_schema = old_schema.align_to_self(new_schema)
 
     assert [c.name for c in aligned_schema] == [
         "personnel_id",
@@ -71,6 +71,16 @@ def test_align_schema(gen_uuid):
         "ID": "personnel_id",
         "first_name": "first_name",
         "last_name": "last_name",
+    }
+
+    diff_counts = old_schema.diff_counts(aligned_schema)
+    assert diff_counts == {
+        "inserts": 2,
+        "deletes": 1,
+        "name_updates": 1,
+        "position_updates": 1,
+        "type_updates": 0,
+        "pk_updates": 0,
     }
 
 

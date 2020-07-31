@@ -217,8 +217,17 @@ class Schema:
         return self._pk_columns
 
     def __getitem__(self, i):
-        """Return the _i_th ColumnSchema."""
+        """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID."""
+        if isinstance(i, str):
+            try:
+                return next(c for c in self.columns if c.id == i)
+            except StopIteration:
+                raise KeyError(f"No such column: {i}")
+
         return self._columns[i]
+
+    def __contains__(self, id):
+        return any(c.id == id for c in self.columns)
 
     @classmethod
     def from_column_dicts(cls, column_dicts):
@@ -331,22 +340,22 @@ class Schema:
                 pk_values[i] = int(pk_values[i])
         return tuple(pk_values)
 
-    def align_to_previous_schema(self, previous):
+    def align_to_self(self, new_schema):
         """
-        Returns a new schema the same as self, except that some column IDs might be changed to match those in previous.
-        Column IDs are copied from the previous schema onto the resulting schema if the columns in the resulting schema
+        Returns a new schema the same as the one given, except that some column IDs might be changed to match those in
+        self. Column IDs are copied from self onto the resulting schema if the columns in the resulting schema
         are the "same" as columns in the previous schema. Uses a heuristic - columns are the same if they have the
         same name + type (handles reordering), or, if they have the same position and type (handles renames).
         """
         # TODO - could prompt the user to help with more complex schema changes.
-        old_cols = previous.to_column_dicts()
-        new_cols = self.to_column_dicts()
+        old_cols = self.to_column_dicts()
+        new_cols = new_schema.to_column_dicts()
         Schema.align_schema_cols(old_cols, new_cols)
         return Schema.from_column_dicts(new_cols)
 
     @classmethod
     def align_schema_cols(cls, old_cols, new_cols):
-        """Same as align_to_previous_schema, but works on lists of column dicts, instead of Schema objects."""
+        """Same as align_to_self, but works on lists of column dicts, instead of Schema objects."""
         for old_col in old_cols:
             old_col["done"] = False
         for new_col in new_cols:
@@ -391,3 +400,49 @@ class Schema:
         old_col["done"] = True
         new_col["done"] = True
         return True
+
+    def diff_types(self, new_schema):
+        """Returns a dict showing which columns have been affected by which types of changes."""
+        old_ids_list = [c.id for c in self]
+        old_ids = set(old_ids_list)
+        new_ids_list = [c.id for c in new_schema]
+        new_ids = set(new_ids_list)
+
+        inserts = new_ids - old_ids
+        deletes = old_ids - new_ids
+        position_updates = set()
+        name_updates = set()
+        type_updates = set()
+        pk_updates = set()
+
+        for new_index, new_col in enumerate(new_schema):
+            col_id = new_col.id
+            if col_id not in old_ids:
+                continue
+            old_col = self[col_id]
+
+            old_index = old_ids_list.index(col_id)
+            if old_index != new_index:
+                position_updates.add(col_id)
+
+            if old_col.name != new_col.name:
+                name_updates.add(col_id)
+            if (
+                old_col.data_type != new_col.data_type
+                or old_col.extra_type_info != new_col.extra_type_info
+            ):
+                type_updates.add(col_id)
+            if old_col.pk_index != new_col.pk_index:
+                pk_updates.add(col_id)
+
+        return {
+            "inserts": inserts,
+            "deletes": deletes,
+            "position_updates": position_updates,
+            "name_updates": name_updates,
+            "type_updates": type_updates,
+            "pk_updates": pk_updates,
+        }
+
+    def diff_counts(self, new_schema):
+        return {k: len(v) for k, v in self.diff_types(new_schema).items()}
