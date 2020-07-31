@@ -561,7 +561,7 @@ class OgrImporter:
         else:
             # FID field, isn't an OGR field
             pk_column = ColumnSchema(
-                ColumnSchema.new_id(), self.primary_key, "integer", 0
+                ColumnSchema.new_id(), self.primary_key, "integer", 0, size=64
             )
 
         geometry_column = self.get_geometry_v2_column_schema()

@@ -456,7 +456,7 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
             """
         )
         identifier, description = cur.fetchall()[0]
-        assert identifier == 'NZ Pa Points (Topo, 1:50k)'
+        assert identifier == 'nz_pa_points_topo_150k: NZ Pa Points (Topo, 1:50k)'
         assert description.startswith("Defensive earthworks")
 
         r = cli_runner.invoke(['checkout', 'master'])
@@ -467,8 +467,34 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
             """
         )
         identifier, description = cur.fetchall()[0]
-        assert identifier == 'new identifier'
+        assert identifier == 'nz_pa_points_topo_150k: new identifier'
         assert description == "new description"
+
+
+def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
+    with data_working_copy("points2") as (repo, wc):
+        db = geopackage(wc)
+        cur = db.cursor()
+        cur.execute(
+            f"""ALTER TABLE {H.POINTS.LAYER} RENAME name_ascii TO name_latin1"""
+        )
+        r = cli_runner.invoke(['commit', '-m', 'change schema'])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        assert r.exit_code == 0, r.stderr
+        cur.execute(
+            f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
+        )
+        name = cur.fetchall()[0][0]
+        assert name == "name_ascii"
+
+        r = cli_runner.invoke(['checkout', 'master'])
+        assert r.exit_code == 0, r.stderr
+        cur.execute(
+            f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
+        )
+        name = cur.fetchall()[0][0]
+        assert name == "name_latin1"
 
 
 def test_geopackage_locking_edit(
