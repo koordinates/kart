@@ -149,21 +149,20 @@ class WorkingCopyGPKG(WorkingCopy):
         Returns True if there are uncommitted changes in the working copy,
         or False otherwise.
         """
+        # FIXME - this only checks for feature changes. We should also be checking for meta changes
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
             return dbcur.fetchone()[0]
 
-    def check_not_dirty(
-        self,
-        message="You have uncommitted changes in your working copy. Commit or discard first",
-    ):
-        """
-        Checks the working copy has no changes in it.
-        Otherwise, raises InvalidOperation
-        """
+    def check_not_dirty(self, help_message=None):
+        """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
+        if not help_message:
+            help_message = "Commit these changes (`sno commit`) or discard these changes (`sno reset`) first."
         if self.is_dirty():
-            raise InvalidOperation(message)
+            raise InvalidOperation(
+                f"You have uncommitted changes in your working copy.\n{help_message}"
+            )
 
     def _get_columns(self, dataset):
         pk_field = None
@@ -1005,9 +1004,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             # check for dirty working copy
             is_dirty = self.is_dirty()
             if not force:
-                self.check_not_dirty(
-                    "You have uncommitted changes in your working copy. Commit or use --force to discard."
-                )
+                self.check_not_dirty()
 
             src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
             dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(target_tree)}

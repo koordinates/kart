@@ -367,6 +367,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
         allowed_states=[RepoState.NORMAL],
         bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
     )
+    ctx.obj.check_not_dirty()
 
     do_json = output_format == 'json'
 

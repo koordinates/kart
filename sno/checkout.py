@@ -48,6 +48,14 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
 
     commit = resolved.commit
     head_ref = resolved.reference.name if resolved.reference else commit.id
+    same_commit = repo.head.peel(pygit2.Commit) == commit
+
+    if not same_commit and not force:
+        ctx.obj.check_not_dirty(
+            help_message=(
+                "Commit these changes first (`sno commit`) or just discard them by adding the option `--force`."
+            )
+        )
 
     if branch:
         if branch in repo.branches:
@@ -81,7 +89,8 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
 
         click.echo(f"Updating {wc.path} ...")
         print(f"commit={commit.id} head_ref={head_ref}")
-        wc.reset(commit, repo_structure, force=force)
+        if not same_commit:
+            wc.reset(commit, repo_structure, force=force)
 
         if not repo.head_is_detached:
             repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
@@ -153,7 +162,12 @@ def switch(ctx, create, force_create, discard_changes, refish):
     if create and force_create:
         raise click.BadParameter("-c/--create and -C/--force-create are incompatible")
 
-    elif create or force_create:
+    dirty_help_message = (
+        "Commit these changes first (`sno commit`)"
+        " or just discard them by adding the option `--discard-changes`."
+    )
+
+    if create or force_create:
         # New Branch
         new_branch = force_create or create
         is_force = bool(force_create)
@@ -172,6 +186,10 @@ def switch(ctx, create, force_create, discard_changes, refish):
         else:
             resolved = CommitWithReference.resolve(repo, "HEAD")
         commit = resolved.commit
+
+        same_commit = repo.head.peel(pygit2.Commit) == commit
+        if not discard_changes and not same_commit:
+            ctx.obj.check_not_dirty(dirty_help_message)
 
         if new_branch in repo.branches and not force_create:
             raise click.BadParameter(
@@ -200,15 +218,19 @@ def switch(ctx, create, force_create, discard_changes, refish):
             branch = repo.branches[refish]
         except KeyError:
             raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
-
         commit = branch.peel(pygit2.Commit)
+
+        same_commit = repo.head.peel(pygit2.Commit) == commit
+        if not discard_changes and not same_commit:
+            ctx.obj.check_not_dirty(dirty_help_message)
+
         head_ref = branch.name
 
     repo.set_head(head_ref)
 
     repo_structure = RepositoryStructure(repo)
     working_copy = repo_structure.working_copy
-    if working_copy:
+    if working_copy and not same_commit:
         click.echo(f"Updating {working_copy.path} ...")
         working_copy.reset(commit, repo_structure, force=discard_changes)
 
