@@ -40,9 +40,11 @@ def get_commit_message(
     head = RepositoryStructure.lookup(repo, "HEAD")
     merged = RepositoryStructure.lookup(repo, merge_tree_id)
     diff = get_repo_diff(head, merged)
-    return commit.get_commit_message(
+    merge_message = commit.get_commit_message(
         repo, diff, draft_message=merge_message, quiet=quiet
     )
+    if not merge_message:
+        raise click.UsageError("Aborting commit due to empty commit message.")
     return merge_message
 
 
