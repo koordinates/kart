@@ -7,8 +7,9 @@ import apsw
 import pygit2
 
 import sno.checkout
-from sno.working_copy import WorkingCopy
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
+from sno.structure import RepositoryStructure
+from sno.working_copy import WorkingCopy
 
 
 H = pytest.helpers.helpers()
@@ -66,6 +67,11 @@ def test_checkout_workingcopy(
 
         wc = WorkingCopy.open(repo)
         assert wc.assert_db_tree_match(head_tree)
+
+        rs = RepositoryStructure(repo)
+        cols, pk_col = wc._get_columns(rs[table])
+        expected_col_spec = f'"{pk_col}" INTEGER PRIMARY KEY AUTOINCREMENT'
+        assert cols[pk_col] in (expected_col_spec, f"{expected_col_spec} NOT NULL")
 
 
 def test_checkout_detached(data_working_copy, cli_runner, geopackage):
