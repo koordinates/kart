@@ -444,5 +444,5 @@ class Schema:
             "pk_updates": pk_updates,
         }
 
-    def diff_counts(self, new_schema):
+    def diff_type_counts(self, new_schema):
         return {k: len(v) for k, v in self.diff_types(new_schema).items()}

@@ -477,7 +477,8 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
         assert description == "new description"
 
 
-def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
+def test_switch_with_trivial_schema_change(data_working_copy, geopackage, cli_runner):
+    # Column renames are one of the only schema changes we can do without having to recreate the whole table.
     with data_working_copy("points2") as (repo, wc):
         db = geopackage(wc)
         cur = db.cursor()
@@ -501,6 +502,81 @@ def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
         )
         name = cur.fetchall()[0][0]
         assert name == "name_latin1"
+
+
+def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
+    with data_working_copy("polygons2") as (repo, wc):
+        db = geopackage(wc)
+        cur = db.cursor()
+        cur.execute(f"""ALTER TABLE {H.POLYGONS.LAYER} ADD COLUMN colour TEXT""")
+        r = cli_runner.invoke(['commit', '-m', 'change schema'])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        assert r.exit_code == 0, r.stderr
+        cur.execute(
+            f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
+        )
+        result = cur.fetchall()
+        assert result == [
+            ('id', 'INTEGER'),
+            ('geom', 'MULTIPOLYGON'),
+            ('date_adjusted', 'DATETIME'),
+            ('survey_reference', 'TEXT(50)'),
+            ('adjusted_nodes', 'MEDIUMINT'),
+        ]
+
+        r = cli_runner.invoke(['checkout', 'master'])
+        assert r.exit_code == 0, r.stderr
+        cur.execute(
+            f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
+        )
+        result = cur.fetchall()
+        assert result == [
+            ('id', 'INTEGER'),
+            ('geom', 'MULTIPOLYGON'),
+            ('date_adjusted', 'DATETIME'),
+            ('survey_reference', 'TEXT(50)'),
+            ('adjusted_nodes', 'MEDIUMINT'),
+            ('colour', 'TEXT'),
+        ]
+
+
+@pytest.mark.parametrize("structure_version", [1, 2])
+def test_switch_pre_import_post_import(
+    structure_version, data_working_copy, data_archive_readonly, geopackage, cli_runner
+):
+    with data_archive_readonly("gpkg-au-census") as data:
+        data_wc_archive = "polygons2" if structure_version == 2 else "polygons"
+        with data_working_copy(data_wc_archive) as (repo, wc):
+            version_option = f"--version={structure_version}"
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "census2016_sdhca_ot_short.gpkg",
+                    "census2016_sdhca_ot_ced_short",
+                    version_option,
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            db = geopackage(wc)
+            cur = db.cursor()
+
+            r = cli_runner.invoke(['checkout', 'HEAD^'])
+            assert r.exit_code == 0, r.stderr
+            cur.execute(
+                f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
+            )
+            count = cur.fetchall()[0][0]
+            assert count == 0
+
+            r = cli_runner.invoke(['checkout', 'master'])
+            assert r.exit_code == 0, r.stderr
+            cur.execute(
+                f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
+            )
+            count = cur.fetchall()[0][0]
+            assert count == 1
 
 
 def test_geopackage_locking_edit(
