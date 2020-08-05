@@ -9,8 +9,9 @@ import pygit2
 from . import core
 from .diff_structs import DatasetDiff, DeltaDiff, Delta
 from .exceptions import (
-    NotFound,
     InvalidOperation,
+    NotFound,
+    NotYetImplemented,
     NO_COMMIT,
     PATCH_DOES_NOT_APPLY,
 )
@@ -589,7 +590,7 @@ class DatasetStructure:
         encode_kwargs = {}
 
         if "meta" in dataset_diff and self.version < 2:
-            raise NotImplementedError(
+            raise NotYetImplemented(
                 f"Meta changes are not supported for version {self.version}"
             )
 
@@ -631,11 +632,17 @@ class DatasetStructure:
                     continue
                 index.remove(full_path)
                 if name == "schema":
-                    schema = Schema.from_column_dicts(delta.new.value)
-                    encode_kwargs = {"schema": schema}
+                    old_schema = Schema.from_column_dicts(delta.old.value)
+                    new_schema = Schema.from_column_dicts(delta.new.value)
+                    if not old_schema.is_pk_compatible(new_schema):
+                        raise NotYetImplemented(
+                            "Schema changes that involve primary key changes are not yet supported"
+                        )
+
+                    encode_kwargs = {"schema": new_schema}
                     to_write = [
-                        self.encode_schema(schema),
-                        self.encode_legend(schema.legend),
+                        self.encode_schema(new_schema),
+                        self.encode_legend(new_schema.legend),
                     ]
                 else:
                     to_write = [(full_path, ensure_bytes(delta.new.value))]

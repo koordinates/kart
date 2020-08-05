@@ -334,6 +334,34 @@ class WorkingCopyGPKG(WorkingCopy):
         with self.session() as db:
             yield from gpkg.get_meta_info(db, dataset.name)
 
+    def delete_meta(self, dataset):
+        with self.session() as db:
+            dbcur = db.cursor()
+
+            # FOREIGN KEY constraints are still active, so we delete in a particular order:
+            for table in (
+                "gpkg_metadata_reference",
+                "gpkg_geometry_columns",
+                "gpkg_contents",
+            ):
+                dbcur.execute(
+                    f"""DELETE FROM {table} WHERE table_name = ?;""", (dataset.name,)
+                )
+
+            gpkg_metadata = dataset.get_meta_item("gpkg_metadata") or {}
+            for row in gpkg_metadata:
+                params = dict(row.items())
+                params.pop("id")
+
+                keys, values = zip(*params.items())
+                sql = f"""
+                    DELETE FROM gpkg_metadata WHERE
+                        ({','.join([gpkg.ident(k) for k in keys])})
+                    =
+                        ({','.join(['?']*len(keys))});
+                    """
+                dbcur.execute(sql, values)
+
     def iter_meta_items_v2(self, dataset):
         from .gpkg_adapter import wkt_to_srs_str, gpkg_to_v2_schema
 
@@ -369,7 +397,10 @@ class WorkingCopyGPKG(WorkingCopy):
         self.repo.config["sno.workingcopy.version"] = 1
         self.repo.config["sno.workingcopy.path"] = str(new_path)
 
-    def write_full(self, commit, dataset, safe=True):
+    def write_full(self, target_tree_or_commit, *datasets, safe=True):
+        raise NotImplementedError()
+
+    def drop_table(self, target_tree_or_commit, *dataset):
         raise NotImplementedError()
 
     def _create_spatial_index(self, dataset):
@@ -390,6 +421,24 @@ class WorkingCopyGPKG(WorkingCopy):
         del gdal_ds
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
+    def _drop_spatial_index(self, dataset):
+        L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
+
+        geom_col = dataset.geom_column_name
+
+        # Delete the GeoPackage Spatial Index
+        t0 = time.monotonic()
+        gdal_ds = gdal.OpenEx(
+            str(self.full_path),
+            gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
+            ["GPKG"],
+        )
+        sql = f"SELECT DisableSpatialIndex({gpkg.param_str(dataset.name)}, {gpkg.param_str(geom_col)});"
+        L.debug("Dropping spatial index for %s.%s: %s", dataset.name, geom_col, sql)
+        gdal_ds.ExecuteSQL(sql)
+        del gdal_ds
+        L.info("Dropped spatial index in %ss", time.monotonic() - t0)
+
     def _create_triggers(self, dbcur, table):
         raise NotImplementedError()
 
@@ -406,9 +455,8 @@ class WorkingCopyGPKG(WorkingCopy):
         finally:
             self._create_triggers(dbcur, table)
 
-    def update_gpkg_contents(self, commit, dataset):
+    def update_gpkg_contents(self, dataset, change_time):
         table = dataset.name
-        commit_time = datetime.utcfromtimestamp(commit.commit_time)
 
         with self.session() as db:
             dbcur = db.cursor()
@@ -442,7 +490,7 @@ class WorkingCopyGPKG(WorkingCopy):
             dbcur.execute(
                 sql,
                 (
-                    commit_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
+                    change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
                     table,
                 ),
             )
@@ -559,12 +607,22 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 return
             yield chunk
 
-    def write_full(self, commit, *datasets, safe=True):
+    def write_full(self, target_tree_or_commit, *datasets, safe=True):
         """
         Writes a full layer into a working-copy table
 
         Use for new working-copy checkouts.
         """
+        commit = (
+            target_tree_or_commit
+            if isinstance(target_tree_or_commit, pygit2.Commit)
+            else None
+        )
+        if commit:
+            change_time = datetime.utcfromtimestamp(commit.commit_time)
+        else:
+            change_time = datetime.utcnow()
+
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
         with self.session(bulk=(0 if safe else 2)) as db:
             for dataset in datasets:
@@ -628,14 +686,14 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             for dataset in datasets:
                 table = dataset.name
 
-                self.update_gpkg_contents(commit, dataset)
+                self.update_gpkg_contents(dataset, change_time)
 
                 # Create triggers
                 self._create_triggers(dbcur, table)
 
             dbcur.execute(
                 f"INSERT OR REPLACE INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
-                ("*", "tree", commit.peel(pygit2.Tree).hex),
+                ("*", "tree", target_tree_or_commit.peel(pygit2.Tree).hex),
             )
 
     def write_features(self, dbcur, dataset, pk_iter, *, ignore_missing=False):
@@ -677,6 +735,22 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             feat_count += dbcur.getconnection().changes()
 
         return feat_count
+
+    def drop_table(self, target_tree_or_commit, *datasets):
+        with self.session() as db:
+            dbcur = db.cursor()
+            for dataset in datasets:
+                table = dataset.name
+                if dataset.has_geometry:
+                    self._drop_spatial_index(dataset)
+
+                dbcur.execute(f"""DROP TABLE {gpkg.ident(table)};""")
+                self.delete_meta(dataset)
+
+                dbcur.execute(
+                    f"""DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;""",
+                    (table,),
+                )
 
     def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED):
         """
@@ -840,19 +914,34 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 db.changes() == 1
             ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
 
-    def _check_meta_diff_supported(self, dataset, wc_meta_diff):
-        if not wc_meta_diff:
-            return
+    def _is_meta_update_supported(self, src_ds, dest_ds):
+        """
+        Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
+        (Any meta change is supported - even in datasets v1 - if we drop and rewrite the table,
+        but of course it is less efficient).
+        """
+        meta_diff = src_ds.meta_tree.diff_to_tree(dest_ds.meta_tree)
+        if not meta_diff:
+            return True
 
-        if dataset.version < 2:
-            # dataset1 doesn't support meta changes at all
-            raise NotYetImplemented(
-                "Sorry, this sno repository version doesn't support schema changes"
-            )
-
-        for patch in wc_meta_diff:
+        # Sanity check:
+        for patch in meta_diff:
             delta = patch.delta
-            assert delta.old_file.path == delta.new_file.path
+            if delta.old_file and delta.new_file:
+                assert delta.old_file.path == delta.new_file.path
+
+        if src_ds.version < 2:
+            # Dataset1 doesn't support meta changes at all - except by rewriting the entire table.
+            return False
+
+        src_schema = src_ds.schema
+        dest_schema = dest_ds.schema
+        dt = src_schema.diff_type_counts(dest_schema)
+        dt.pop("name_updates")  # We do support name_updates.
+        if sum(dt.values()):
+            return False  # But we don't support any other type of schema update - except by rewriting the entire table.
+
+        return True
 
     def _apply_meta_title(self, src_ds, dest_ds, src_value, dest_value, dbcur):
         # TODO - find a better way to roundtrip titles while keeping them unique
@@ -879,19 +968,14 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 
-        dt = src_schema.diff_types(dest_schema)
-        if (
-            dt["inserts"]
-            or dt["deletes"]
-            or dt["position_updates"]
-            or dt["type_updates"]
-            or dt["pk_updates"]
-        ):
-            raise NotYetImplemented(
-                "Sorry, this type of schema changes is not yet supported"
+        diff_types = src_schema.diff_types(dest_schema)
+        name_updates = diff_types.pop("name_updates")
+        if any(dt for dt in diff_types.values()):
+            raise RuntimeError(
+                f"This schema change not supported by update - should be drop + rewrite_full: {diff_types}"
             )
 
-        for col_id in dt["name_updates"]:
+        for col_id in name_updates:
             src_name = src_schema[col_id].name
             dest_name = dest_schema[col_id].name
             dbcur.execute(
@@ -977,6 +1061,8 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         If update_meta=True (the default) the tree ID in the .sno-meta table gets set
         to the new tree ID. Otherwise it is unchanged.
         """
+        if not force:
+            self.check_not_dirty()
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
         commit = None
@@ -990,177 +1076,84 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             f"c={commit.id if commit else 'none'} t={target_tree.hex} update-meta={update_meta}",
         )
 
+        base_tree_id = self.get_db_tree()
+        base_tree = repo_structure.repo[base_tree_id]
+        L.debug("base_tree_id: %s", base_tree_id)
+        repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
+
+        L.debug(
+            "Working Copy DB is tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree:%s",
+            base_tree_id,
+            repo_tree_id,
+            target_tree,
+        )
+
+        src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
+        dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(target_tree)}
+
+        if paths:
+            for path in paths:
+                src_datasets = {
+                    ds.name: ds
+                    for ds in src_datasets.values()
+                    if os.path.commonpath([ds.path, path]) == path
+                }
+                dest_datasets = {
+                    ds.name: ds
+                    for ds in dest_datasets.values()
+                    if os.path.commonpath([ds.path, path]) == path
+                }
+
+        table_inserts = dest_datasets.keys() - src_datasets.keys()
+        table_deletes = src_datasets.keys() - dest_datasets.keys()
+        table_updates = src_datasets.keys() & dest_datasets.keys()
+        table_updates_unsupported = set()
+
+        for table in table_updates:
+            src_ds = src_datasets[table]
+            dest_ds = dest_datasets[table]
+            update_supported = self._is_meta_update_supported(src_ds, dest_ds)
+            if not update_supported:
+                table_updates_unsupported.add(table)
+
+        for table in table_updates_unsupported:
+            table_updates.remove(table)
+            table_inserts.add(table)
+            table_deletes.add(table)
+
+        L.debug(
+            "table_inserts: %s\ntable_deletes: %s\ntable_updates %s",
+            table_inserts,
+            table_deletes,
+            table_updates,
+        )
+
+        # Delete old tables
+        if table_deletes:
+            self.drop_table(
+                target_tree_or_commit, *[src_datasets[d] for d in table_deletes]
+            )
+        # Write new tables
+        if table_inserts:
+            # Note: write_full doesn't work if called from within an existing db session.
+            self.write_full(
+                target_tree_or_commit, *[dest_datasets[d] for d in table_inserts]
+            )
+
         with self.session(bulk=1) as db:
             dbcur = db.cursor()
 
-            base_tree_id = self.get_db_tree()
-            base_tree = repo_structure.repo[base_tree_id]
-            L.debug("base_tree_id: %s", base_tree_id)
-            repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
-
-            L.debug(
-                "Working Copy DB is tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree:%s",
-                base_tree_id,
-                repo_tree_id,
-                target_tree,
-            )
-
-            # check for dirty working copy
-            is_dirty = self.is_dirty()
-            if not force:
-                self.check_not_dirty()
-
-            src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
-            dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(target_tree)}
-
-            if paths:
-                for path in paths:
-                    src_datasets = {
-                        ds.name: ds
-                        for ds in src_datasets.values()
-                        if os.path.commonpath([ds.path, path]) == path
-                    }
-                    dest_datasets = {
-                        ds.name: ds
-                        for ds in dest_datasets.values()
-                        if os.path.commonpath([ds.path, path]) == path
-                    }
-
-            ds_names = set(src_datasets.keys()) | set(dest_datasets.keys())
-            L.debug("Datasets: %s", ds_names)
-
-            for table in ds_names:
-                src_ds = src_datasets.get(table, None)
-                dest_ds = dest_datasets.get(table, None)
-
-                geom_col = dest_ds.geom_column_name
-
-                if not dest_ds:
-                    # drop table
-                    raise NotImplementedError("Drop table via reset")
-                elif not src_ds:
-                    # new table
-                    raise NotImplementedError("Create table via reset")
-                elif src_ds.tree.id == dest_ds.tree.id and not is_dirty:
-                    # unchanged table
-                    pass
-                else:
-                    # existing table with update
-
-                    # check for schema differences
-                    base_meta_tree = src_ds.meta_tree
-                    meta_tree = dest_ds.meta_tree
-                    self._check_meta_diff_supported(
-                        src_ds, base_meta_tree.diff_to_tree(meta_tree)
-                    )
-
-                    # todo: suspend/remove spatial index
-                    if is_dirty:
-                        with self._suspend_triggers(dbcur, table):
-                            L.debug("Cleaning up dirty rows...")
-                            sql_changed = (
-                                f"SELECT pk FROM {self.TRACKING_TABLE} "
-                                "WHERE table_name=?;"
-                            )
-                            dbcur.execute(sql_changed, (table,))
-                            pk_list = [r[0] for r in dbcur]
-                            track_count = db.changes()
-                            count = self.delete_features(dbcur, src_ds, pk_list)
-                            L.debug(
-                                "reset(): dirty: removed %s features, tracking Δ count=%s",
-                                count,
-                                track_count,
-                            )
-                            count = self.write_features(
-                                dbcur, src_ds, pk_list, ignore_missing=True
-                            )
-                            L.debug(
-                                "reset(): dirty: wrote %s features, tracking Δ count=%s",
-                                count,
-                                track_count,
-                            )
-
-                            dbcur.execute(
-                                f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
-                                (table,),
-                            )
-
-                    if update_meta:
-                        ctx = self._suspend_triggers(dbcur, table)
-                    else:
-                        # if we're not updating meta information, we want to track these changes
-                        # as working copy edits so they can be committed.
-                        ctx = contextlib.nullcontext()
-
-                    with ctx:
-                        self._apply_meta_diff(
-                            src_ds,
-                            dest_ds,
-                            dbcur,
-                            src_ds.meta_tree.diff_to_tree(dest_ds.meta_tree),
-                        )
-                        self._apply_feature_diff(
-                            src_ds,
-                            dest_ds,
-                            dbcur,
-                            src_ds.feature_tree.diff_to_tree(dest_ds.feature_tree),
-                        )
-
-                    # Update gpkg_contents
-                    if commit:
-                        change_time = datetime.utcfromtimestamp(commit.commit_time)
-                    else:
-                        change_time = datetime.utcnow()
-                    if geom_col is not None:
-                        # FIXME: Why doesn't Extent(geom) work here as an aggregate?
-                        dbcur.execute(
-                            f"""
-                            WITH _BBOX AS (
-                                SELECT
-                                    Min(MbrMinX({gpkg.ident(geom_col)})) AS min_x,
-                                    Min(MbrMinY({gpkg.ident(geom_col)})) AS min_y,
-                                    Max(MbrMaxX({gpkg.ident(geom_col)})) AS max_x,
-                                    Max(MbrMaxY({gpkg.ident(geom_col)})) AS max_y
-                                FROM {gpkg.ident(table)}
-                            )
-                            UPDATE gpkg_contents
-                            SET
-                                last_change=?,
-                                min_x=(SELECT min_x FROM _BBOX),
-                                min_y=(SELECT min_y FROM _BBOX),
-                                max_x=(SELECT max_x FROM _BBOX),
-                                max_y=(SELECT max_y FROM _BBOX)
-                            WHERE
-                                table_name=?;
-                            """,
-                            (
-                                change_time.strftime(
-                                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                                ),  # GPKG Spec Req.15
-                                table,
-                            ),
-                        )
-                    else:
-                        dbcur.execute(
-                            f"""
-                            UPDATE gpkg_contents
-                            SET
-                                last_change=?
-                            WHERE
-                                table_name=?;
-                            """,
-                            (
-                                change_time.strftime(
-                                    "%Y-%m-%dT%H:%M:%S.%fZ"
-                                ),  # GPKG Spec Req.15
-                                table,
-                            ),
-                        )
-
-                    rowcount = db.changes()
-                    assert (
-                        rowcount == 1
-                    ), f"gpkg_contents update: expected 1Δ, got {rowcount}"
+            for table in table_updates:
+                src_ds = src_datasets[table]
+                dest_ds = dest_datasets[table]
+                self._update_table(
+                    commit,
+                    src_ds,
+                    dest_ds,
+                    db,
+                    dbcur,
+                    track_changes_as_dirty=not update_meta,
+                )
 
             if update_meta:
                 # update the tree id
@@ -1168,3 +1161,119 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                     (target_tree.hex,),
                 )
+
+    def _update_table(
+        self, commit, src_ds, dest_ds, db, dbcur, track_changes_as_dirty=False
+    ):
+        """
+        Update the given table in working copy from src_ds to dest_ds.
+        The table must exist in the working copy in the source and continue to exist in the destination,
+        and, the table must not have any unsupported meta changes.
+        """
+        # Existing table with update:
+        # check for schema differences
+
+        table = src_ds.name
+
+        sql_changed = f"SELECT pk FROM {self.TRACKING_TABLE} " "WHERE table_name=?;"
+        dbcur.execute(sql_changed, (table,))
+        dirty_pk_list = [r[0] for r in dbcur]
+        if dirty_pk_list:
+            with self._suspend_triggers(dbcur, table):
+                # todo: suspend/remove spatial index
+                L.debug("Cleaning up dirty rows...")
+
+                track_count = db.changes()
+                count = self.delete_features(dbcur, src_ds, dirty_pk_list)
+                L.debug(
+                    "reset(): dirty: removed %s features, tracking Δ count=%s",
+                    count,
+                    track_count,
+                )
+                count = self.write_features(
+                    dbcur, src_ds, dirty_pk_list, ignore_missing=True
+                )
+                L.debug(
+                    "reset(): dirty: wrote %s features, tracking Δ count=%s",
+                    count,
+                    track_count,
+                )
+
+                dbcur.execute(
+                    f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,),
+                )
+
+        if src_ds.tree == dest_ds.tree:
+            return
+
+        if not track_changes_as_dirty:
+            ctx = self._suspend_triggers(dbcur, table)
+        else:
+            # We want to track these changes as working copy edits so they can be committed.
+            ctx = contextlib.nullcontext()
+
+        with ctx:
+            self._apply_meta_diff(
+                src_ds,
+                dest_ds,
+                dbcur,
+                src_ds.meta_tree.diff_to_tree(dest_ds.meta_tree),
+            )
+            self._apply_feature_diff(
+                src_ds,
+                dest_ds,
+                dbcur,
+                src_ds.feature_tree.diff_to_tree(dest_ds.feature_tree),
+            )
+
+        # Update gpkg_contents
+        if commit:
+            change_time = datetime.utcfromtimestamp(commit.commit_time)
+        else:
+            change_time = datetime.utcnow()
+
+        geom_col = dest_ds.geom_column_name
+        if geom_col is not None:
+            # FIXME: Why doesn't Extent(geom) work here as an aggregate?
+            dbcur.execute(
+                f"""
+                WITH _BBOX AS (
+                    SELECT
+                        Min(MbrMinX({gpkg.ident(geom_col)})) AS min_x,
+                        Min(MbrMinY({gpkg.ident(geom_col)})) AS min_y,
+                        Max(MbrMaxX({gpkg.ident(geom_col)})) AS max_x,
+                        Max(MbrMaxY({gpkg.ident(geom_col)})) AS max_y
+                    FROM {gpkg.ident(table)}
+                )
+                UPDATE gpkg_contents
+                SET
+                    last_change=?,
+                    min_x=(SELECT min_x FROM _BBOX),
+                    min_y=(SELECT min_y FROM _BBOX),
+                    max_x=(SELECT max_x FROM _BBOX),
+                    max_y=(SELECT max_y FROM _BBOX)
+                WHERE
+                    table_name=?;
+                """,
+                (
+                    change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
+                    table,
+                ),
+            )
+        else:
+            dbcur.execute(
+                f"""
+                UPDATE gpkg_contents
+                SET
+                    last_change=?
+                WHERE
+                    table_name=?;
+                """,
+                (
+                    change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
+                    table,
+                ),
+            )
+
+        rowcount = db.changes()
+        assert rowcount == 1, f"gpkg_contents update: expected 1Δ, got {rowcount}"

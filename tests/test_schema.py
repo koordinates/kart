@@ -73,7 +73,7 @@ def test_align_schema(gen_uuid):
         "last_name": "last_name",
     }
 
-    diff_counts = old_schema.diff_counts(aligned_schema)
+    diff_counts = old_schema.diff_type_counts(aligned_schema)
     assert diff_counts == {
         "inserts": 2,
         "deletes": 1,

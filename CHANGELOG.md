@@ -33,10 +33,11 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 #### Important missing functionality in Datasets V2
 
- * Schemas can be changed at HEAD and the new schemas committed, but checking out commits where the schema is different to the current working copy is generally not yet supported. 
-     - It works when columns are renamed.
-     - It does not work when columns are inserted, deleted, reordered, or the types or primary keys are changed.
  * Geometry storage format is not yet finalised.
+ * String primary keys and tables without primary keys are not yet supported.
+ * Changing the primary key column is not yet fully supported.
+ * Schema changes might not be correctly interpreted if too many changes are made at once.
+    - It is safest to commit changes to any existing columns, then commit any new columns, then commit any feature changes.
 
 ### Other changes in this release
 
