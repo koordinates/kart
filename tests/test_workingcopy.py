@@ -1,3 +1,4 @@
+import json
 import subprocess
 from pathlib import Path
 
@@ -818,4 +819,32 @@ def test_delete_branch(data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
         r = cli_runner.invoke(["branch", "-d", "test"])
+        assert r.exit_code == 0, r
+
+
+def test_reset(data_working_copy, cli_runner, geopackage, edit_polygons):
+    with data_working_copy("polygons") as (repo_path, wc):
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+            edit_polygons(cur)
+
+        r = cli_runner.invoke(["status", "--output-format=json"])
+        assert r.exit_code == 0, r
+        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
+        assert changes == {
+            'nz_waca_adjustments': {
+                'feature': {'inserts': 1, 'updates': 2, 'deletes': 5}
+            }
+        }
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 1, r
+
+        r = cli_runner.invoke(["reset"])
+
+        r = cli_runner.invoke(["status", "--output-format=json"])
+        assert r.exit_code == 0, r
+        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
+        assert changes is None
+        r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r

@@ -163,7 +163,7 @@ cli.add_command(upgrade.upgrade)
 @click.pass_context
 def reset(ctx):
     """ Discard changes made in the working copy (ie. reset to HEAD """
-    ctx.invoke(checkout.checkout, force=True, refish="HEAD")
+    ctx.invoke(checkout.checkout, discard_changes=True, refish="HEAD")
 
 
 # straight process-replace commands

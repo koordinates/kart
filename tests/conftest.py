@@ -714,6 +714,67 @@ def update(request, cli_runner):
     return func
 
 
+def _edit_points(dbcur):
+    H = pytest.helpers.helpers()
+    dbcur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"UPDATE {H.POINTS.LAYER} SET name='test' WHERE fid=2;")
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid IN (3,30,31,32,33);")
+    assert dbcur.getconnection().changes() == 5
+    pk_del = 3
+    return pk_del
+
+
+@pytest.fixture
+def edit_points():
+    return _edit_points
+
+
+def _edit_polygons(dbcur):
+    H = pytest.helpers.helpers()
+    dbcur.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(
+        f"UPDATE {H.POLYGONS.LAYER} SET survey_reference='test' WHERE id=1443053;"
+    )
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(
+        f"DELETE FROM {H.POLYGONS.LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
+    )
+    assert dbcur.getconnection().changes() == 5
+    pk_del = 1452332
+    return pk_del
+
+
+@pytest.fixture
+def edit_polygons():
+    return _edit_polygons
+
+
+def _edit_table(dbcur):
+    H = pytest.helpers.helpers()
+    dbcur.execute(H.TABLE.INSERT, H.TABLE.RECORD)
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"UPDATE {H.TABLE.LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"UPDATE {H.TABLE.LAYER} SET name='test' WHERE OBJECTID=2;")
+    assert dbcur.getconnection().changes() == 1
+    dbcur.execute(f"DELETE FROM {H.TABLE.LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
+    assert dbcur.getconnection().changes() == 5
+    pk_del = 3
+    return pk_del
+
+
+@pytest.fixture
+def edit_table():
+    return _edit_table
+
+
 @pytest.fixture
 def create_conflicts(
     data_working_copy, geopackage, cli_runner, update, insert,

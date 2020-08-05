@@ -16,18 +16,29 @@ from .structure import RepositoryStructure
 from .structs import CommitWithReference
 from .working_copy import WorkingCopy
 
+_DISCARD_CHANGES_HELP_MESSAGE = (
+    "Commit these changes first (`sno commit`) or"
+    " just discard them by adding the option `--discard_changes`."
+)
+
 
 @click.command()
 @click.pass_context
 @click.option("branch", "-b", help="Name for new branch")
 @click.option("fmt", "--format", type=click.Choice(["GPKG"]), default="GPKG")
 @click.option(
-    "--force", "-f", is_flag=True, help="Discard current working copy if necessary"
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Discard local changes in working copy if necessary",
+)
+@click.option(
+    "--discard-changes", is_flag=True, help="Discard local changes in working copy"
 )
 @click.option("--path", type=click.Path(writable=True, dir_okay=False))
 @click.option("datasets", "--dataset", "-d", multiple=True)
 @click.argument("refish", default=None, required=False)
-def checkout(ctx, branch, fmt, force, path, datasets, refish):
+def checkout(ctx, branch, fmt, force, discard_changes, path, datasets, refish):
     """ Switch branches or restore working tree files """
     repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
@@ -50,12 +61,9 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
     head_ref = resolved.reference.name if resolved.reference else commit.id
     same_commit = repo.head.peel(pygit2.Commit) == commit
 
+    force = force or discard_changes
     if not same_commit and not force:
-        ctx.obj.check_not_dirty(
-            help_message=(
-                "Commit these changes first (`sno commit`) or just discard them by adding the option `--force`."
-            )
-        )
+        ctx.obj.check_not_dirty(help_message=_DISCARD_CHANGES_HELP_MESSAGE)
 
     if branch:
         if branch in repo.branches:
@@ -87,9 +95,9 @@ def checkout(ctx, branch, fmt, force, path, datasets, refish):
                 f"This repository already has a working copy at: {wc.path}",
             )
 
-        click.echo(f"Updating {wc.path} ...")
-        print(f"commit={commit.id} head_ref={head_ref}")
-        if not same_commit:
+        if discard_changes or not same_commit:
+            click.echo(f"Updating {wc.path} ...")
+            print(f"commit={commit.id} head_ref={head_ref}")
             wc.reset(commit, repo_structure, force=force)
 
         if not repo.head_is_detached:
@@ -162,11 +170,6 @@ def switch(ctx, create, force_create, discard_changes, refish):
     if create and force_create:
         raise click.BadParameter("-c/--create and -C/--force-create are incompatible")
 
-    dirty_help_message = (
-        "Commit these changes first (`sno commit`)"
-        " or just discard them by adding the option `--discard-changes`."
-    )
-
     if create or force_create:
         # New Branch
         new_branch = force_create or create
@@ -189,7 +192,7 @@ def switch(ctx, create, force_create, discard_changes, refish):
 
         same_commit = repo.head.peel(pygit2.Commit) == commit
         if not discard_changes and not same_commit:
-            ctx.obj.check_not_dirty(dirty_help_message)
+            ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
         if new_branch in repo.branches and not force_create:
             raise click.BadParameter(
@@ -222,7 +225,7 @@ def switch(ctx, create, force_create, discard_changes, refish):
 
         same_commit = repo.head.peel(pygit2.Commit) == commit
         if not discard_changes and not same_commit:
-            ctx.obj.check_not_dirty(dirty_help_message)
+            ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
         head_ref = branch.name
 
@@ -230,9 +233,10 @@ def switch(ctx, create, force_create, discard_changes, refish):
 
     repo_structure = RepositoryStructure(repo)
     working_copy = repo_structure.working_copy
-    if working_copy and not same_commit:
-        click.echo(f"Updating {working_copy.path} ...")
-        working_copy.reset(commit, repo_structure, force=discard_changes)
+    if working_copy:
+        if discard_changes or not same_commit:
+            click.echo(f"Updating {working_copy.path} ...")
+            working_copy.reset(commit, repo_structure, force=discard_changes)
 
     repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
