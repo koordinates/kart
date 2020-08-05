@@ -172,6 +172,10 @@ class WorkingCopyGPKG(WorkingCopy):
             if col["pk"]:
                 col_spec += " PRIMARY KEY"
                 pk_field = col["name"]
+                # TODO: Should INTEGER PRIMARY KEYs ever be non-AUTOINCREMENT?
+                # See https://github.com/koordinates/sno/issues/188
+                if col['type'] == "INTEGER":
+                    col_spec += " AUTOINCREMENT"
             if col["notnull"]:
                 col_spec += " NOT NULL"
             cols[col["name"]] = col_spec
