@@ -580,6 +580,52 @@ def test_switch_pre_import_post_import(
             assert count == 1
 
 
+def test_switch_xml_metadata_added(data_working_copy, geopackage, cli_runner):
+    with data_working_copy("table2") as (repo, wc):
+        db = geopackage(wc)
+        cur = db.cursor()
+        cur.execute(
+            """
+            INSERT INTO gpkg_metadata (id, md_scope, md_standard_uri, mime_type, metadata)
+            VALUES (1, "dataset", "http://www.isotc211.org/2005/gmd", "text/xml", "<test metadata>");
+            """
+        )
+        cur.execute(
+            """
+            INSERT INTO gpkg_metadata_reference (reference_scope, table_name, md_file_id)
+            VALUES ("table", "countiestbl", 1);
+            """
+        )
+
+        r = cli_runner.invoke(['commit', '-m', 'change xml metadata'])
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        assert r.exit_code == 0, r.stderr
+
+        xml_metadata = cur.execute(
+            """
+            SELECT m.metadata
+            FROM gpkg_metadata m JOIN gpkg_metadata_reference r
+            ON m.id = r.md_file_id
+            WHERE r.table_name = 'countiestbl'
+            """
+        ).fetchone()
+        assert not xml_metadata
+
+        r = cli_runner.invoke(['checkout', 'master'])
+        assert r.exit_code == 0, r.stderr
+
+        xml_metadata = cur.execute(
+            """
+            SELECT m.metadata
+            FROM gpkg_metadata m JOIN gpkg_metadata_reference r
+            ON m.id = r.md_file_id
+            WHERE r.table_name = 'countiestbl'
+            """
+        ).fetchone()[0]
+        assert xml_metadata == "<test metadata>"
+
+
 def test_geopackage_locking_edit(
     data_working_copy, geopackage, cli_runner, monkeypatch
 ):

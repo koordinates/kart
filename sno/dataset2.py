@@ -8,6 +8,7 @@ from .schema import Legend, Schema
 from .serialise_util import (
     msg_pack,
     msg_unpack,
+    json_pack,
     json_unpack,
     b64encode_str,
     b64decode_str,
@@ -69,6 +70,8 @@ class Dataset2(DatasetStructure):
 
     SRS_PATH = ".sno-table/meta/srs/"
 
+    DATASET_METADATA_PATH = ".sno-table/meta/metadata/dataset.json"
+
     @property
     def version(self):
         return 2
@@ -123,7 +126,8 @@ class Dataset2(DatasetStructure):
             if not data:
                 return None
 
-            if rel_path == self.SCHEMA_PATH:
+            # TODO - make schema path end with ".json"?
+            if rel_path == self.SCHEMA_PATH or rel_path.endswith(".json"):
                 return json_unpack(data)
             elif not rel_path.startswith(self.LEGEND_PATH):
                 return ensure_text(data)
@@ -303,14 +307,18 @@ class Dataset2(DatasetStructure):
         rel_meta_blobs = [
             (self.TITLE_PATH, source.get_meta_item("title")),
             (self.DESCRIPTION_PATH, source.get_meta_item("description")),
+            (self.DATASET_METADATA_PATH, source.get_meta_item("metadata/dataset.json")),
         ]
 
         for path, definition in source.srs_definitions():
             rel_meta_blobs.append((f"{self.SRS_PATH}{path}.wkt", definition))
 
-        for meta_path, meta_content in rel_meta_blobs:
-            if meta_content is not None:
-                yield self.full_path(meta_path), ensure_bytes(meta_content)
+        for rel_path, content in rel_meta_blobs:
+            if content is None:
+                continue
+            is_json = rel_path.endswith(".json")
+            content = json_pack(content) if is_json else ensure_bytes(content)
+            yield self.full_path(rel_path), content
 
     def import_iter_feature_blobs(self, resultset, source):
         schema = source.schema

@@ -356,6 +356,29 @@ def test_init_import(
         )
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
+        xml_metadata = (
+            db.cursor()
+            .execute(
+                f"""
+            SELECT m.metadata
+            FROM gpkg_metadata m JOIN gpkg_metadata_reference r
+            ON m.id = r.md_file_id
+            WHERE r.table_name = '{table}'
+            """
+            )
+            .fetchone()
+        )
+        if table == "nz_pa_points_topo_150k":
+            assert xml_metadata[0].startswith(
+                '<gmd:MD_Metadata xmlns:gco="http://www.isotc211.org/2005/gco"'
+            )
+        elif table == "nz_waca_adjustments":
+            assert xml_metadata[0].startswith(
+                '<GDALMultiDomainMetadata>\n  <Metadata>\n    <MDI key="GPKG_METADATA_ITEM_1">'
+            )
+        else:
+            assert not xml_metadata
+
         H.verify_gpkg_extent(db, table)
         with chdir(repo_path):
             # check that we can view the commit we created

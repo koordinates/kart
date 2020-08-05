@@ -18,7 +18,7 @@ from .exceptions import (
 from .filter_util import UNFILTERED
 from .geometry import geom_envelope
 from .schema import Schema
-from .serialise_util import ensure_bytes
+from .serialise_util import ensure_bytes, json_pack
 from .structure_version import get_structure_version
 
 
@@ -617,6 +617,7 @@ class DatasetStructure:
                     )
                     continue
                 index.remove(full_path)
+
             elif delta.type == "insert":
                 if full_path in index:
                     conflicts = True
@@ -624,9 +625,13 @@ class DatasetStructure:
                         f"{self.path}: Trying to create meta item that already exists: {name}"
                     )
                     continue
-                blob_id = repo.create_blob(ensure_bytes(delta.new.value))
+                if full_path.endswith(".json"):
+                    blob_id = repo.create_blob(json_pack(delta.new.value))
+                else:
+                    blob_id = repo.create_blob(ensure_bytes(delta.new.value))
                 entry = pygit2.IndexEntry(full_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
                 index.add(entry)
+
             elif delta.type == "update":
                 if full_path not in index:
                     conflicts = True
@@ -655,6 +660,8 @@ class DatasetStructure:
                         self.encode_schema(new_schema),
                         self.encode_legend(new_schema.legend),
                     ]
+                elif full_path.endswith(".json"):
+                    to_write = [(full_path, json_pack(delta.new.value))]
                 else:
                     to_write = [(full_path, ensure_bytes(delta.new.value))]
                 for path, data in to_write:
