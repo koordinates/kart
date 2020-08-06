@@ -108,7 +108,7 @@ def test_commit(
         tree = repo.head.peel(pygit2.Tree)
         assert dataset.encode_1pk_to_path(pk_del) not in tree
 
-        wc = WorkingCopy.open(repo)
+        wc = WorkingCopy.get(repo)
         wc.assert_db_tree_match(tree)
         change_count = _count_tracking_table_changes(db, wc, layer)
 

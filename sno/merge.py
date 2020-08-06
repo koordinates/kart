@@ -24,6 +24,7 @@ from .repo_files import (
 )
 from .structs import CommitWithReference
 from .structure import RepositoryStructure
+from .working_copy import WorkingCopy
 
 
 L = logging.getLogger("sno.merge")
@@ -221,12 +222,11 @@ def complete_merging_state(ctx):
         "message": merge_message,
     }
 
-    repo_structure = RepositoryStructure(repo)
-    wc = repo_structure.working_copy
+    wc = WorkingCopy.get(repo)
     if wc:
         L.debug(f"Updating {wc.path} ...")
         merge_commit = repo[merge_commit_id]
-        wc.reset(merge_commit, repo_structure)
+        wc.reset(merge_commit)
 
     remove_all_merge_repo_files(repo)
     assert RepoState.get_state(repo) != RepoState.MERGING
@@ -380,12 +380,11 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     if not no_op and not conflicts:
         # Update working copy.
         # TODO - maybe lock the working copy during a merge?
-        repo_structure = RepositoryStructure(repo)
-        wc = repo_structure.working_copy
+        wc = WorkingCopy.get(repo)
         if wc:
             L.debug(f"Updating {wc.path} ...")
             merge_commit = repo[jdict["commit"]]
-            wc.reset(merge_commit, repo_structure)
+            wc.reset(merge_commit)
 
     if do_json:
         dump_json_output({"sno.merge/v1": jdict}, sys.stdout)

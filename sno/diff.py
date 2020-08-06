@@ -138,11 +138,9 @@ def diff_with_writer(
             # and target is set to HEAD.
             base_rs = RepositoryStructure.lookup(repo, commit_parts[0])
             target_rs = RepositoryStructure.lookup(repo, "HEAD")
-            working_copy = WorkingCopy.open(repo)
+            working_copy = WorkingCopy.get(repo)
             if not working_copy:
-                raise NotFound(
-                    "No working copy, use 'checkout'", exit_code=NO_WORKING_COPY
-                )
+                raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
             working_copy.assert_db_tree_match(target_rs.tree)
 
         # Parse [<dataset>[:pk]...]

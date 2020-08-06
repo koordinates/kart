@@ -81,7 +81,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
     commit = repo.head.peel(pygit2.Commit)
     tree = commit.tree
 
-    working_copy = WorkingCopy.open(repo)
+    working_copy = WorkingCopy.get(repo)
     if not working_copy:
         raise NotFound("No working copy, use 'checkout'", exit_code=NO_WORKING_COPY)
 

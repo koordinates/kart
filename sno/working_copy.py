@@ -12,37 +12,76 @@ from osgeo import gdal
 
 from . import gpkg
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
-from .exceptions import InvalidOperation, NotYetImplemented
+from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
 from .schema import Schema
+from .structure import RepositoryStructure
 
 L = logging.getLogger("sno.working_copy")
 
 
+_DEFAULT_VERSION = 1
+
+
 class WorkingCopy:
     @classmethod
-    def open(cls, repo):
+    def get(cls, repo, create_if_missing=False):
+        if create_if_missing:
+            cls.ensure_config_exists(repo)
+
         repo_cfg = repo.config
-        if "sno.workingcopy.version" in repo_cfg:
-            version = repo_cfg["sno.workingcopy.version"]
-            if repo_cfg.get_int("sno.workingcopy.version") != 1:
-                raise NotImplementedError(f"Working copy version: {version}")
-
-            path = repo_cfg["sno.workingcopy.path"]
-            if not (Path(repo.path) / path).is_file():
-                raise FileNotFoundError(f"Working copy missing? {path}")
-
-            return WorkingCopy_GPKG_1(repo, path)
-
-        else:
+        if "sno.workingcopy.path" not in repo_cfg:
             return None
 
-    @classmethod
-    def new(cls, repo, path, version=1, **kwargs):
-        if (Path(repo.path) / path).exists():
-            raise FileExistsError(path)
+        path = repo_cfg["sno.workingcopy.path"]
+        if not (Path(repo.path) / path).is_file() and not create_if_missing:
+            return None
 
-        return WorkingCopy_GPKG_1(repo, path, **kwargs)
+        version = repo_cfg["sno.workingcopy.version"]
+        if repo_cfg.get_int("sno.workingcopy.version") != 1:
+            raise NotImplementedError(f"Working copy version: {version}")
+
+        return WorkingCopy_GPKG_1(repo, path)
+
+    @classmethod
+    def ensure_config_exists(cls, repo):
+        repo_cfg = repo.config
+        if "sno.workingcopy.bare" in repo_cfg and repo_cfg.get_bool(
+            "sno.workingcopy.bare"
+        ):
+            return
+        path = (
+            repo_cfg["sno.workingcopy.path"]
+            if "sno.workingcopy.path" in repo_cfg
+            else None
+        )
+        version = (
+            repo_cfg["sno.workingcopy.version"]
+            if "sno.workingcopy.version" in repo_cfg
+            else None
+        )
+        if path is None or version is None:
+            cls.write_config(repo, path, version)
+
+    @classmethod
+    def write_config(cls, repo, path=None, version=None, bare=False):
+        repo_cfg = repo.config
+
+        def del_repo_cfg(key):
+            if key in repo_cfg:
+                del repo_cfg[key]
+
+        if bare:
+            repo_cfg["sno.workingcopy.bare"] = True
+            del_repo_cfg("sno.workingcopy.path")
+            del_repo_cfg("sno.workingcopy.version")
+            return
+
+        path = path or f"{Path(repo.path).resolve().stem}.gpkg"
+        version = version or _DEFAULT_VERSION
+        repo_cfg["sno.workingcopy.path"] = str(path)
+        repo_cfg["sno.workingcopy.version"] = version
+        del_repo_cfg("sno.workingcopy.bare")
 
     class Mismatch(ValueError):
         def __init__(self, working_copy_tree_id, match_tree_id):
@@ -191,6 +230,9 @@ class WorkingCopyGPKG(WorkingCopy):
         # https://www.sqlite.org/shortnames.html
         for f in Path(self.full_path).parent.glob(Path(self.path).name + "-*"):
             f.unlink()
+
+    def is_created(self):
+        return self.full_path.is_file()
 
     def create(self):
         # GDAL: Create GeoPackage
@@ -386,17 +428,6 @@ class WorkingCopyGPKG(WorkingCopy):
             f"{gpkg_name}/{dataset.name}",
         ).to_column_dicts()
 
-    def save_config(self, **kwargs):
-        new_path = Path(self.path)
-        if (not new_path.is_absolute()) and (str(new_path.parent) != "."):
-            new_path = (
-                Path(os.path.relpath(new_path.parent, Path(self.repo.path).resolve()))
-                / new_path.name
-            )
-
-        self.repo.config["sno.workingcopy.version"] = 1
-        self.repo.config["sno.workingcopy.path"] = str(new_path)
-
     def write_full(self, target_tree_or_commit, *datasets, safe=True):
         raise NotImplementedError()
 
@@ -544,12 +575,6 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 );
             """
             )
-
-    def delete(self):
-        super().delete()
-
-        # clear the config in the repo
-        del self.repo.config["sno.workingcopy"]
 
     def _create_triggers(self, dbcur, table):
         pkf = gpkg.ident(gpkg.pk(dbcur.getconnection(), table))
@@ -1044,13 +1069,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
                 raise NotImplementedError(f"Delta status: {d.status_char()}")
 
     def reset(
-        self,
-        target_tree_or_commit,
-        repo_structure,
-        *,
-        force=False,
-        paths=None,
-        update_meta=True,
+        self, target_tree_or_commit, *, force=False, paths=None, update_meta=True,
     ):
         """
         Resets the working copy to the given tree (or the tree pointed to by the given commit)
@@ -1077,9 +1096,9 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         )
 
         base_tree_id = self.get_db_tree()
-        base_tree = repo_structure.repo[base_tree_id]
+        base_tree = self.repo[base_tree_id]
         L.debug("base_tree_id: %s", base_tree_id)
-        repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
+        repo_tree_id = self.repo.head.peel(pygit2.Tree).hex
 
         L.debug(
             "Working Copy DB is tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree:%s",
@@ -1088,6 +1107,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
             target_tree,
         )
 
+        repo_structure = RepositoryStructure(self.repo)
         src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
         dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(target_tree)}
 

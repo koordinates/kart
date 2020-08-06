@@ -38,7 +38,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         raise click.FileError("Failed to parse JSON patch file") from e
 
     rs = RepositoryStructure(repo)
-    wc = WorkingCopy.open(repo)
+    wc = WorkingCopy.get(repo)
     if not commit and not wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
         raise NotFound("--no-commit requires a working copy", exit_code=NO_WORKING_COPY)
@@ -134,7 +134,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         # oid refers to either a commit or tree
         wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")
-        wc.reset(wc_target, rs, update_meta=commit)
+        wc.reset(wc_target, update_meta=commit)
 
 
 @click.command()

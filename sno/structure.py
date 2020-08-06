@@ -169,7 +169,7 @@ class RepositoryStructure:
         from .working_copy import WorkingCopy
 
         if getattr(self, "_working_copy", None) is None:
-            self._working_copy = WorkingCopy.open(self.repo)
+            self._working_copy = WorkingCopy.get(self.repo)
 
         return self._working_copy
 

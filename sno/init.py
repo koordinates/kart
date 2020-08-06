@@ -12,7 +12,7 @@ import pygit2
 from osgeo import gdal, ogr
 
 from sno import is_windows
-from . import gpkg, checkout, structure
+from . import gpkg, checkout
 from .core import check_git_user
 from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromFile
 from .exceptions import (
@@ -28,12 +28,14 @@ from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
+from .structure import RepositoryStructure
 from .structure_version import (
     STRUCTURE_VERSIONS_CHOICE,
     DEFAULT_STRUCTURE_VERSION,
 )
 from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
+from .working_copy import WorkingCopy
 
 
 # This defines what formats are allowed, as well as mapping
@@ -843,6 +845,22 @@ def list_import_formats(ctx, param, value):
         click.echo(n)
 
 
+def _add_datasets_to_working_copy(repo, *datasets):
+    wc = WorkingCopy.get(repo, create_if_missing=True)
+    if not wc:
+        return
+
+    commit = repo.head.peel(pygit2.Commit)
+    if not wc.is_created():
+        click.echo(f'Creating working copy at {wc.path} ...')
+        wc.create()
+    else:
+        click.echo(f'Updating {wc.path} ...')
+
+    for dataset in datasets:
+        wc.write_full(commit, dataset)
+
+
 @click.command("import")
 @click.pass_context
 @click.argument("source")
@@ -1003,12 +1021,8 @@ def import_table(
         structure_version=version,
         max_delta_depth=max_delta_depth,
     )
-    rs = structure.RepositoryStructure(repo)
-    if rs.working_copy:
-        # Update working copy with new datasets
-        for dst_table in loaders:
-            dataset = rs[dst_table]
-            rs.working_copy.write_full(rs.head_commit, dataset)
+    rs = RepositoryStructure(repo)
+    _add_datasets_to_working_copy(repo, *[rs[dst_table] for dst_table in loaders])
 
 
 @click.command()
@@ -1020,13 +1034,6 @@ def import_table(
     "--import",
     "import_from",
     help='Import a database (all tables): "FORMAT:PATH" eg. "GPKG:my.gpkg"',
-)
-@click.option(
-    "--checkout/--no-checkout",
-    "do_checkout",
-    is_flag=True,
-    default=True,
-    help="Whether to checkout a working copy in the repository",
 )
 @click.option(
     "--message",
@@ -1041,13 +1048,37 @@ def import_table(
     hidden=True,
 )
 @click.option(
+    "--bare",
+    "--no-checkout/--checkout",
+    is_flag=True,
+    default=False,
+    help='Whether the new repository should be "bare" and have no working copy',
+)
+@click.option(
+    "--workingcopy-path",
+    "wc_path",
+    type=click.Path(dir_okay=False),
+    help="Path where the working copy should be created",
+)
+@click.option("--workingcopy-version", "wc_version", type=int)
+@click.option(
     "--max-delta-depth",
     hidden=True,
     default=0,
     type=click.INT,
     help="--depth option to git-fast-import (advanced users only)",
 )
-def init(ctx, do_checkout, message, directory, version, import_from, max_delta_depth):
+def init(
+    ctx,
+    message,
+    directory,
+    version,
+    import_from,
+    bare,
+    wc_path,
+    wc_version,
+    max_delta_depth,
+):
     """
     Initialise a new repository and optionally import data.
     DIRECTORY must be empty. Defaults to the current directory.
@@ -1075,6 +1106,8 @@ def init(ctx, do_checkout, message, directory, version, import_from, max_delta_d
     # Create the repository
     repo = pygit2.init_repository(str(repo_path), bare=True)
 
+    WorkingCopy.write_config(repo, wc_path, wc_version, bare)
+
     if import_from:
         fast_import_tables(
             repo,
@@ -1083,18 +1116,9 @@ def init(ctx, do_checkout, message, directory, version, import_from, max_delta_d
             structure_version=version,
             max_delta_depth=max_delta_depth,
         )
+        head_commit = repo.head.peel(pygit2.Commit)
+        checkout.reset_wc_if_needed(repo, head_commit)
 
-        if do_checkout:
-            # Checkout a working copy
-            wc_path = repo_path / f"{repo_path.stem}.gpkg"
-
-            click.echo(f"Checkout to {wc_path} as GPKG ...")
-
-            checkout.checkout_new(
-                repo_structure=structure.RepositoryStructure(repo),
-                path=wc_path.name,
-                commit=repo.head.peel(pygit2.Commit),
-            )
     else:
         click.echo(
             f"Created an empty repository at {repo_path} — import some data with `sno import`"

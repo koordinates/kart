@@ -10,7 +10,7 @@ import pygit2
 
 from . import checkout
 from .exceptions import translate_subprocess_exit_code
-from .structure import RepositoryStructure
+from .working_copy import WorkingCopy
 
 
 def get_directory_from_url(url):
@@ -32,12 +32,19 @@ def get_directory_from_url(url):
 @click.command()
 @click.pass_context
 @click.option(
-    "--checkout/--no-checkout",
-    "do_checkout",
+    "--bare",
+    "--no-checkout/--checkout",
     is_flag=True,
-    default=True,
-    help="Whether to checkout a working copy in the repository",
+    default=False,
+    help='Whether the new repository should be "bare" and have no working copy',
 )
+@click.option(
+    "--workingcopy-path",
+    "wc_path",
+    type=click.Path(dir_okay=False),
+    help="Path where the working copy should be created",
+)
+@click.option("--workingcopy-version", "wc_version", type=int)
 @click.option(
     "--progress/--quiet",
     "do_progress",
@@ -56,7 +63,7 @@ def get_directory_from_url(url):
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, do_checkout, do_progress, depth, url, directory):
+def clone(ctx, bare, wc_path, wc_version, do_progress, depth, url, directory):
     """ Clone a repository into a new directory """
 
     repo_path = Path(directory or get_directory_from_url(url))
@@ -92,15 +99,8 @@ def clone(ctx, do_checkout, do_progress, depth, url, directory):
     repo.config[f"branch.{head_ref}.remote"] = "origin"
     repo.config[f"branch.{head_ref}.merge"] = f"refs/heads/{head_ref}"
 
-    if do_checkout:
-        # Checkout a working copy
-        wc_path = f"{repo_path.stem}.gpkg"
+    WorkingCopy.write_config(repo, wc_path, wc_version, bare)
 
-        click.echo(f"Checkout to {wc_path} as GPKG ...")
-
-        if repo.is_empty:
-            checkout.checkout_empty_repo(repo, path=str(wc_path))
-        else:
-            checkout.checkout_new(
-                repo_structure=RepositoryStructure(repo), path=str(wc_path),
-            )
+    if not repo.is_empty:
+        head_commit = repo.head.peel(pygit2.Commit)
+        checkout.reset_wc_if_needed(repo, head_commit)

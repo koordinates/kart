@@ -5,7 +5,6 @@ import click
 import pygit2
 
 from .exceptions import (
-    InvalidOperation,
     NotFound,
     NO_BRANCH,
     NO_COMMIT,
@@ -22,10 +21,32 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
 )
 
 
+def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
+    """Resets the working copy to the target if it does not already match, or if discard_changes is True."""
+    wc = WorkingCopy.get(repo, create_if_missing=True)
+    if not wc:
+        click.echo(
+            "(Bare sno repository - to create a working copy, use `sno create-workingcopy`)"
+        )
+        return
+
+    if not wc.is_created():
+        click.echo(f'Creating working copy at {wc.path} ...')
+        wc.create()
+        for dataset in list(RepositoryStructure(repo)):
+            wc.write_full(target_tree_or_commit, dataset, safe=False)
+        return
+
+    db_tree_matches = wc.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
+
+    if discard_changes or not db_tree_matches:
+        click.echo(f'Updating {wc.path} ...')
+        wc.reset(target_tree_or_commit, force=discard_changes)
+
+
 @click.command()
 @click.pass_context
 @click.option("branch", "-b", help="Name for new branch")
-@click.option("fmt", "--format", type=click.Choice(["GPKG"]), default="GPKG")
 @click.option(
     "--force",
     "-f",
@@ -35,12 +56,9 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
 @click.option(
     "--discard-changes", is_flag=True, help="Discard local changes in working copy"
 )
-@click.option("--path", type=click.Path(writable=True, dir_okay=False))
-@click.option("datasets", "--dataset", "-d", multiple=True)
 @click.argument("refish", default=None, required=False)
-def checkout(ctx, branch, fmt, force, discard_changes, path, datasets, refish):
+def checkout(ctx, branch, force, discard_changes, refish):
     """ Switch branches or restore working tree files """
-    repo_path = ctx.obj.repo_path
     repo = ctx.obj.repo
 
     # refish could be:
@@ -72,72 +90,22 @@ def checkout(ctx, branch, fmt, force, discard_changes, path, datasets, refish):
             )
 
         if refish and refish in repo.branches.remote:
-            print(f"Creating new branch '{branch}' to track '{refish}'...")
+            click.echo(f"Creating new branch '{branch}' to track '{refish}'...")
             new_branch = repo.create_branch(branch, commit, force)
             new_branch.upstream = repo.branches.remote[refish]
-        elif refish and refish in repo.branches:
-            print(f"Creating new branch '{branch}' from '{refish}'...")
+        elif refish:
+            click.echo(f"Creating new branch '{branch}' from '{refish}'...")
             new_branch = repo.create_branch(branch, commit, force)
         else:
-            print(f"Creating new branch '{branch}'...")
+            click.echo(f"Creating new branch '{branch}'...")
             new_branch = repo.create_branch(branch, commit, force)
 
         head_ref = new_branch.name
 
-    repo_structure = RepositoryStructure(repo)
+    reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
-
-    wc = repo_structure.working_copy
-    if wc:
-        if path is not None:
-            raise InvalidOperation(
-                f"This repository already has a working copy at: {wc.path}",
-            )
-
-        if discard_changes or not same_commit:
-            click.echo(f"Updating {wc.path} ...")
-            print(f"commit={commit.id} head_ref={head_ref}")
-            wc.reset(commit, repo_structure, force=force)
-
-        if not repo.head_is_detached:
-            repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
-
-    else:
-        if path is None:
-            path = f"{repo_path.resolve().stem}.gpkg"
-
-        # new working-copy path
-        click.echo(f'Checkout {refish or "HEAD"} to {path} as {fmt} ...')
-        repo.reset(commit.id, pygit2.GIT_RESET_SOFT)
-
-        checkout_new(repo_structure, path, datasets=datasets, commit=commit)
-
-
-def checkout_empty_repo(repo, path):
-    wc_version = 1
-    # TODO - write Working Copy version 2.
-    # wc_version = get_structure_version(repo)
-    wc = WorkingCopy.new(repo, path, version=wc_version)
-    wc.create()
-    wc.save_config()
-    return wc
-
-
-def checkout_new(repo_structure, path, *, datasets=None, commit=None):
-    if not datasets:
-        datasets = list(repo_structure)
-    else:
-        datasets = [repo_structure[ds_path] for ds_path in datasets]
-
-    if not commit:
-        commit = repo_structure.repo.head.peel(pygit2.Commit)
-
-    click.echo(f"Commit: {commit.hex}")
-
-    wc = checkout_empty_repo(repo_structure.repo, path)
-    for dataset in datasets:
-        wc.write_full(commit, dataset, safe=False)
+    repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
 
 @click.command()
@@ -163,8 +131,6 @@ def switch(ctx, create, force_create, discard_changes, refish):
 
     REFISH is either the branch name to switch to, or start-point of new branch for -c/--create.
     """
-    from .structure import RepositoryStructure
-
     repo = ctx.obj.repo
 
     if create and force_create:
@@ -229,15 +195,9 @@ def switch(ctx, create, force_create, discard_changes, refish):
 
         head_ref = branch.name
 
+    reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
+
     repo.set_head(head_ref)
-
-    repo_structure = RepositoryStructure(repo)
-    working_copy = repo_structure.working_copy
-    if working_copy:
-        if discard_changes or not same_commit:
-            click.echo(f"Updating {working_copy.path} ...")
-            working_copy.reset(commit, repo_structure, force=discard_changes)
-
     repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
 
@@ -258,12 +218,9 @@ def restore(ctx, source, pathspec):
     """
     Restore specified paths in the working tree with some contents from a restore source.
     """
-    from .structure import RepositoryStructure
-
     repo = ctx.obj.repo
 
-    repo_structure = RepositoryStructure(repo)
-    working_copy = repo_structure.working_copy
+    working_copy = WorkingCopy.get(repo)
     if not working_copy:
         raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 
@@ -276,28 +233,40 @@ def restore(ctx, source, pathspec):
 
     working_copy.reset(
         commit_or_tree,
-        repo_structure,
         force=True,
         update_meta=(head_commit.id == commit_or_tree.id),
         paths=pathspec,
     )
 
 
-@click.command("workingcopy-set-path")
+@click.command("create-workingcopy")
 @click.pass_context
-@click.argument("new", nargs=1, type=click.Path(exists=True, dir_okay=False))
-def workingcopy_set_path(ctx, new):
-    """ Change the path to the working-copy """
-    repo_path = ctx.obj.repo_path
+@click.option(
+    "--discard-changes",
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Discard local changes in working copy if necessary",
+)
+@click.argument("path", nargs=1, type=click.Path(dir_okay=False), required=False)
+@click.argument("version", nargs=1, type=int, required=False)
+def create_workingcopy(ctx, discard_changes, path, version):
+    """ Create a new working copy - if one already exists it will be deleted """
+    if not discard_changes:
+        ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
+
+    if path is not None:
+        path = Path(path)
+        if not path.is_absolute():
+            # Note: This is basically path = normpath(path)
+            repo_path = ctx.obj.repo_path
+            path = os.path.relpath(os.path.join(repo_path, path), repo_path)
+
     repo = ctx.obj.repo
+    wc = WorkingCopy.get(repo)
+    if wc:
+        wc.delete()
 
-    repo_cfg = repo.config
-    if "sno.workingcopy.path" not in repo_cfg:
-        raise NotFound("No working copy? Try `sno checkout`", exit_code=NO_WORKING_COPY)
-
-    new = Path(new)
-    # TODO: This doesn't seem to do anything?
-    if not new.is_absolute():
-        new = os.path.relpath(os.path.join(repo_path, new), repo_path)
-
-    repo.config["sno.workingcopy.path"] = str(new)
+    WorkingCopy.write_config(repo, path, version)
+    head_commit = repo.head.peel(pygit2.Commit)
+    reset_wc_if_needed(repo, head_commit)

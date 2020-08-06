@@ -4,7 +4,7 @@ import pygit2
 
 from .exceptions import NotFound, NO_REPOSITORY
 from .repo_files import RepoState
-from .structure import RepositoryStructure
+from .working_copy import WorkingCopy
 
 
 class Context(object):
@@ -79,7 +79,6 @@ class Context(object):
 
     def check_not_dirty(self, help_message=None):
         repo = self.get_repo(allowed_states=RepoState.ALL_STATES)
-        repo_structure = RepositoryStructure(repo)
-        working_copy = repo_structure.working_copy
+        working_copy = WorkingCopy.get(repo)
         if working_copy:
             working_copy.check_not_dirty(help_message)

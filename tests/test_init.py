@@ -58,7 +58,7 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
         lines = r.stdout.splitlines()
         assert len(lines) >= 2
         assert "to nz_pa_points_topo_150k/ ..." in lines[1]
-        assert "Commit: " in lines[-1]
+        assert lines[-1] == "Creating working copy at emptydir.gpkg ..."
 
 
 @pytest.mark.slow
@@ -133,7 +133,7 @@ def test_import_table_meta_overrides(
             cli_runner.invoke(["checkout"])
 
             repo = pygit2.Repository(str(repo_path))
-            wc = WorkingCopy.open(repo)
+            wc = WorkingCopy.get(repo)
             db = geopackage(wc.path)
             cur = db.cursor()
             title, description = cur.execute(
@@ -186,7 +186,7 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
 
         # There's a bunch of wacky types in here, let's check them
         repo = pygit2.Repository(str(repo_path))
-        wc = WorkingCopy.open(repo)
+        wc = WorkingCopy.get(repo)
         with wc.session() as db:
             table_info = [
                 dict(row) for row in db.cursor().execute("PRAGMA table_info('types');")
@@ -473,7 +473,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", str(repo_path)])
+    r = cli_runner.invoke(["init", str(repo_path), "--workingcopy-path=wc.gpkg"])
     assert r.exit_code == 0, r
 
     ARCHIVE_PATHS = (
@@ -510,9 +510,6 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
                 assert r.exit_code == 0, r
 
     with chdir(repo_path):
-        r = cli_runner.invoke(["checkout", "--path=wc.gpkg", "HEAD"])
-        assert r.exit_code == 0, r
-
         # working copy exists
         db = geopackage("wc.gpkg")
         dbcur = db.cursor()
@@ -589,7 +586,7 @@ def test_import_existing_wc(
             assert r.exit_code == 0, r
 
         repo = pygit2.Repository(str(repo_path))
-        wc = WorkingCopy.open(repo)
+        wc = WorkingCopy.get(repo)
         db = geopackage(wcdb)
 
         assert H.row_count(db, "nz_waca_adjustments") > 0

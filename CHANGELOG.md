@@ -42,10 +42,11 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ### Other changes in this release
 
  * `sno clone` now support shallow clones (`--depth N`) to avoid cloning a repo's entire history [#174](https://github.com/koordinates/sno/issues/174)
- * `sno log` now supports JSON output with `--output-format json`
- * Fixed some column datatype conversion issues during import and checkout.
- * Bugfix: operations that should immediately fail due to dirty working copy no longer partially succeed.
- * Streaming diffs: less time until first change is shown when diffing large changes.
+ * `sno log` now supports JSON output with `--output-format json` [#170](https://github.com/koordinates/sno/issues/170)
+ * Streaming diffs: less time until first change is shown when diffing large changes. [#156](https://github.com/koordinates/sno/issues/156)
+ * Working copies are now created automatically. [#192](https://github.com/koordinates/sno/issues/192)
+ * Bugfix: operations that should immediately fail due to dirty working copy no longer partially succeed. [#181](https://github.com/koordinates/sno/issues/181)
+ * Bugfix: some column datatype conversion issues during import and checkout.
 
 ## 0.4.1
 

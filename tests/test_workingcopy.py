@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -37,21 +38,17 @@ def test_checkout_workingcopy(
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
 
-        wc = tmp_path / f"{table}.gpkg"
-        r = cli_runner.invoke(["checkout", f"--path={wc}"])
+        repo = pygit2.Repository(str(repo_path))
+        r = cli_runner.invoke(["checkout"])
+        wc = Path(repo.config["sno.workingcopy.path"])
         assert r.exit_code == 0, r
-        lines = r.stdout.splitlines()
-        # TODO: restore these
-        # assert re.match(fr"Checkout HEAD to .+ as GPKG \.\.\.$", lines[0])
-        # assert re.match(fr"Commit: {commit_sha}$", lines[1])
+        assert r.stdout.splitlines() == [f'Creating working copy at {wc} ...']
 
         assert wc.exists()
         db = geopackage(wc)
         assert H.row_count(db, table) > 0
 
-        repo = pygit2.Repository(str(repo_path))
         assert repo.is_bare
-
         assert repo.head.name == "refs/heads/master"
         assert repo.head.shorthand == "master"
 
@@ -66,7 +63,7 @@ def test_checkout_workingcopy(
         )
         assert wc_tree_id == head_tree.hex
 
-        wc = WorkingCopy.open(repo)
+        wc = WorkingCopy.get(repo)
         assert wc.assert_db_tree_match(head_tree)
 
         rs = RepositoryStructure(repo)
@@ -611,18 +608,18 @@ def test_geopackage_locking_edit(
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
 
-def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
+def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, wc):
         repo = pygit2.Repository(str(repo_path))
 
-        r = cli_runner.invoke(["workingcopy-set-path", "/thingz.gpkg"])
+        r = cli_runner.invoke(["create-workingcopy", "."])
         assert r.exit_code == INVALID_ARGUMENT, r
 
         # relative path 1
         new_path = Path("new-thingz.gpkg")
         wc.rename(new_path)
         assert new_path.exists()
-        r = cli_runner.invoke(["workingcopy-set-path", new_path])
+        r = cli_runner.invoke(["create-workingcopy", new_path])
         assert r.exit_code == 0, r
         wc = new_path
 
@@ -630,9 +627,8 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
 
         # relative path 2
         new_path = Path("other-thingz.gpkg")
-        wc.rename(new_path)
-        assert new_path.exists()
-        r = cli_runner.invoke(["workingcopy-set-path", Path("../points") / new_path])
+        assert not new_path.exists()
+        r = cli_runner.invoke(["create-workingcopy", Path("../points") / new_path])
         assert r.exit_code == 0, r
         wc = new_path
 
@@ -640,9 +636,8 @@ def test_workingcopy_set_path(data_working_copy, cli_runner, tmp_path):
 
         # abs path
         new_path = tmp_path / "thingz.gpkg"
-        wc.rename(new_path)
-        assert new_path.exists()
-        r = cli_runner.invoke(["workingcopy-set-path", new_path])
+        assert not new_path.exists()
+        r = cli_runner.invoke(["create-workingcopy", new_path])
         assert r.exit_code == 0, r
 
         assert repo.config["sno.workingcopy.path"] == str(new_path)
