@@ -309,6 +309,7 @@ def test_init_import(
     import_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    meta_prefix = 'gpkg_sno_' if import_version == '2' else '.sno-'
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.sno"
@@ -341,7 +342,7 @@ def test_init_import(
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.workingcopy.version"] == "1"
+        assert repo.config["sno.workingcopy.version"] == str(import_version)
         assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
         db = geopackage(wc)
@@ -350,7 +351,7 @@ def test_init_import(
         wc_tree_id = (
             db.cursor()
             .execute(
-                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "{meta_prefix}meta" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )
