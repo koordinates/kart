@@ -5,7 +5,6 @@ import pygit2
 
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
-    INVALID_ARGUMENT,
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
     NO_TABLE,
@@ -686,3 +685,24 @@ def test_postgres_url_parsing():
         func('postgres:///?host=%2Fvar%2Flib%2Fpostgresql')
         == 'PG:host=/var/lib/postgresql'
     )
+
+
+def test_init_import_detached_head(data_working_copy, data_archive, chdir, cli_runner):
+    with data_working_copy("points") as (repo_path, wcdb):
+        with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
+            r = cli_runner.invoke(["checkout", "HEAD^"])
+            repo = pygit2.Repository(str(repo_path))
+            assert repo.head_is_detached
+            initial_head = repo.head.target.hex
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    f"GPKG:{source_path / 'nz-waca-adjustments.gpkg'}",
+                    H.POLYGONS.LAYER,
+                ]
+            )
+            assert r.exit_code == 0, r
+            assert repo.head_is_detached
+            assert repo.head.target.hex != initial_head
+            assert repo.revparse_single("HEAD^").hex == initial_head

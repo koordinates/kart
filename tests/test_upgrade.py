@@ -1,3 +1,4 @@
+import json
 import pytest
 
 
@@ -52,6 +53,10 @@ def test_upgrade_00_02(archive, layer, data_archive, cli_runner, tmp_path, chdir
 )
 def test_upgrade_02_05(archive, layer, data_archive, cli_runner, tmp_path, chdir):
     with data_archive(archive) as source_path:
+        r = cli_runner.invoke(["status", "--output-format=json"])
+        assert r.exit_code == 0, r
+        src_branch = json.loads(r.stdout)["sno.status/v1"]["branch"]
+
         r = cli_runner.invoke(["upgrade", "02-05", source_path, tmp_path / "dest"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines()[-1] == "Upgrade complete"
@@ -74,6 +79,11 @@ def test_upgrade_02_05(archive, layer, data_archive, cli_runner, tmp_path, chdir
                 "",
                 "    Import from nz-pa-points-topo-150k.gpkg",
             ]
+
+        r = cli_runner.invoke(["status", "--output-format=json"])
+        assert r.exit_code == 0, r
+        dest_branch = json.loads(r.stdout)["sno.status/v1"]["branch"]
+        assert dest_branch == src_branch
 
 
 def test_upgrade_list(cli_runner):
