@@ -1,10 +1,11 @@
 -r ../requirements.txt
 
-pytest~=4.3
+pytest
 pytest-cov
 pytest-sugar
 pytest-helpers-namespace
 pytest-benchmark[aspect]
 pytest-profiling
+pytest-xdist
 lovely-pytest-docker
 html5lib

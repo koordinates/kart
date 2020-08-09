@@ -191,7 +191,8 @@ ci-test:
 		--cov-report term \
 		--cov-report html:test-results/coverage/ \
 		--junit-xml=test-results/junit.xml \
-		--benchmark-enable
+		--benchmark-enable \
+		--numprocesses=0
 
 # Cleanup
 
