@@ -78,7 +78,7 @@ def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
                 )
 
     # do the fetch
-    L.debug("Running fetch:", repository, refspecs)
+    L.debug("Running fetch: %s %s", repository, refspecs)
     # remote.fetch((refspecs or None))
     # Call git fetch since it supports --progress.
     subprocess.check_call(
