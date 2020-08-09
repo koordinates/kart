@@ -77,6 +77,13 @@ def commit_obj_to_json(commit, refs, dataset_changes=None):
     commit_time = datetime.fromtimestamp(commit.commit_time, timezone.utc)
     commit_time_offset = timedelta(minutes=commit.commit_time_offset)
 
+    try:
+        abbrev_parents = [p.short_id for p in commit.parents]
+    except KeyError:
+        # This happens for shallow clones where parent commits may not exist.
+        # There's no way to get valid short IDs in this situation, so we just
+        # fallback to full IDs
+        abbrev_parents = [oid.hex for oid in commit.parent_ids]
     result = {
         "commit": commit.id.hex,
         "abbrevCommit": commit.short_id,
@@ -90,8 +97,8 @@ def commit_obj_to_json(commit, refs, dataset_changes=None):
         "committerName": committer.name,
         "commitTime": datetime_to_iso8601_utc(commit_time),
         "commitTimeOffset": timedelta_to_iso8601_tz(commit_time_offset),
-        "parents": [p.id.hex for p in commit.parents],
-        "abbrevParents": [p.short_id for p in commit.parents],
+        "parents": [oid.hex for oid in commit.parent_ids],
+        "abbrevParents": abbrev_parents,
     }
     if dataset_changes is not None:
         result["datasetChanges"] = dataset_changes
