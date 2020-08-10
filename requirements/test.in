@@ -1,10 +1,15 @@
 -r ../requirements.txt
 
-pytest~=4.3
+pytest
+    # pytest 6+ depends on these on windows, but we generally run pip-compile on macOS...
+    # So we add them explicitly
+    atomicwrites>=1.0
+    colorama
 pytest-cov
 pytest-sugar
 pytest-helpers-namespace
 pytest-benchmark[aspect]
 pytest-profiling
+pytest-xdist
 lovely-pytest-docker
 html5lib

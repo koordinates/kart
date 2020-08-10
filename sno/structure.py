@@ -541,7 +541,7 @@ class DatasetStructure:
                         new_pk,
                     )
                 elif d.status == pygit2.GIT_DELTA_DELETED:
-                    self.L.debug("diff(): delete %s (%s) -> %s (%s)", old_path, old_pk)
+                    self.L.debug("diff(): delete %s %s", old_path, old_pk)
 
                 if d.status in self._UPDATE_DELETE:
                     old_feature_promise = functools.partial(
