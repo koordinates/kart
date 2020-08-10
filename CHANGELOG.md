@@ -19,6 +19,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
     - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is still in development.
     - Tracking issue [#72](https://github.com/koordinates/sno/issues/72)
     - Diffs, commits and patches all support meta changes
+    - Working copy tracking tables have been renamed [#63](https://github.com/koordinates/sno/issues/63)
 
 #### Using Datasets V1
 

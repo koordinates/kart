@@ -27,13 +27,15 @@ H = pytest.helpers.helpers()
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
-@pytest.mark.parametrize("version", ["1.0", "2.0"])
+@pytest.mark.parametrize("version", ["1", "2"])
 def test_checkout_workingcopy(
     version, archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
 ):
     """ Checkout a working copy to edit """
-    if version == "2.0":
+    meta_prefix = '.sno-'
+    if version == "2":
         archive += "2"
+        meta_prefix = 'gpkg_sno_'
 
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
@@ -57,7 +59,7 @@ def test_checkout_workingcopy(
         wc_tree_id = (
             db.cursor()
             .execute(
-                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "{meta_prefix}meta" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )

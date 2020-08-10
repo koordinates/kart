@@ -16,14 +16,14 @@ from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
 from .schema import Schema
 from .structure import RepositoryStructure
+from .structure_version import get_structure_version
 
 L = logging.getLogger("sno.working_copy")
 
 
-_DEFAULT_VERSION = 1
-
-
 class WorkingCopy:
+    VALID_VERSIONS = (1, 2)
+
     @classmethod
     def get(cls, repo, create_if_missing=False):
         if create_if_missing:
@@ -37,11 +37,13 @@ class WorkingCopy:
         if not (Path(repo.path) / path).is_file() and not create_if_missing:
             return None
 
-        version = repo_cfg["sno.workingcopy.version"]
-        if repo_cfg.get_int("sno.workingcopy.version") != 1:
+        version = repo_cfg.get_int("sno.workingcopy.version")
+        if version not in cls.VALID_VERSIONS:
             raise NotImplementedError(f"Working copy version: {version}")
-
-        return WorkingCopy_GPKG_1(repo, path)
+        if version < 2:
+            return WorkingCopy_GPKG_1(repo, path)
+        else:
+            return WorkingCopy_GPKG_2(repo, path)
 
     @classmethod
     def ensure_config_exists(cls, repo):
@@ -78,7 +80,7 @@ class WorkingCopy:
             return
 
         path = path or f"{Path(repo.path).resolve().stem}.gpkg"
-        version = version or _DEFAULT_VERSION
+        version = version or get_structure_version(repo)
         repo_cfg["sno.workingcopy.path"] = str(path)
         repo_cfg["sno.workingcopy.version"] = version
         del_repo_cfg("sno.workingcopy.bare")
@@ -93,8 +95,6 @@ class WorkingCopy:
 
 
 class WorkingCopyGPKG(WorkingCopy):
-    META_PREFIX = ".sno-"
-
     def __init__(self, repo, path):
         self.repo = repo
         self.path = path
@@ -291,6 +291,16 @@ class WorkingCopyGPKG(WorkingCopy):
             """
             )
 
+            dbcur.execute(
+                f"""
+                CREATE TABLE {self.TRACKING_TABLE} (
+                    table_name TEXT NOT NULL,
+                    pk TEXT NULL,
+                    CONSTRAINT {self._meta_name('track', 'pk')} PRIMARY KEY (table_name, pk)
+                );
+            """
+            )
+
     def write_meta(self, dataset):
         meta_info = dataset.get_meta_item("gpkg_contents")
         meta_info["table_name"] = dataset.name
@@ -428,12 +438,6 @@ class WorkingCopyGPKG(WorkingCopy):
             f"{gpkg_name}/{dataset.name}",
         ).to_column_dicts()
 
-    def write_full(self, target_tree_or_commit, *datasets, safe=True):
-        raise NotImplementedError()
-
-    def drop_table(self, target_tree_or_commit, *dataset):
-        raise NotImplementedError()
-
     def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
@@ -469,9 +473,6 @@ class WorkingCopyGPKG(WorkingCopy):
         gdal_ds.ExecuteSQL(sql)
         del gdal_ds
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
-
-    def _create_triggers(self, dbcur, table):
-        raise NotImplementedError()
 
     def _drop_triggers(self, dbcur, table):
         dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'ins')}")
@@ -554,27 +555,6 @@ class WorkingCopyGPKG(WorkingCopy):
         if wc_tree_id != tree_sha:
             raise self.Mismatch(wc_tree_id, tree_sha)
         return wc_tree_id
-
-
-class WorkingCopy_GPKG_1(WorkingCopyGPKG):
-    """
-    GeoPackage Working Copy for v0.1/v0.2 repositories
-    """
-
-    def create(self):
-        super().create()
-
-        with self.session() as db:
-            dbcur = db.cursor()
-            dbcur.execute(
-                f"""
-                CREATE TABLE {self.TRACKING_TABLE} (
-                    table_name TEXT NOT NULL,
-                    pk TEXT NULL,
-                    CONSTRAINT {self._meta_name('track', 'pk')} PRIMARY KEY (table_name, pk)
-                );
-            """
-            )
 
     def _create_triggers(self, dbcur, table):
         pkf = gpkg.ident(gpkg.pk(dbcur.getconnection(), table))
@@ -1297,3 +1277,20 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
 
         rowcount = db.changes()
         assert rowcount == 1, f"gpkg_contents update: expected 1Δ, got {rowcount}"
+
+
+class WorkingCopy_GPKG_1(WorkingCopyGPKG):
+    """
+    GeoPackage Working Copy for v0.1-v0.4 repositories
+    """
+
+    META_PREFIX = ".sno-"
+
+
+class WorkingCopy_GPKG_2(WorkingCopyGPKG):
+    """
+    GeoPackage Working Copy for v0.5+ repositories
+    """
+
+    # Using this prefix means OGR/QGIS doesn't list these tables as datasets
+    META_PREFIX = "gpkg_sno_"

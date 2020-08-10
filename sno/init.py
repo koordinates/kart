@@ -1120,6 +1120,9 @@ def init(
     if any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
+    if wc_version is None:
+        wc_version = version
+
     if import_from:
         check_git_user(repo=None)
         source_loader = OgrImporter.open(import_from, None)
