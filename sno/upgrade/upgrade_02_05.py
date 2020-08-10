@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 import pygit2
 
+from sno import checkout, context
 from sno.exceptions import InvalidOperation
 from sno.structure import RepositoryStructure
 from sno.structure_version import get_structure_version
@@ -14,9 +15,10 @@ from sno.fast_import import fast_import_tables
 
 
 @click.command()
+@click.pass_context
 @click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
 @click.argument("dest", type=click.Path(exists=False, writable=True), required=True)
-def upgrade(source, dest):
+def upgrade(ctx, source, dest):
     """
     Upgrade a v0.2/v0.3/v0.4 Sno repository to Sno v0.5
     """
@@ -82,8 +84,20 @@ def upgrade(source, dest):
             dest_repo.references.create(ref.name, ref.target)
             click.echo(f"  {ref.name} → {ref.target}")
 
+    if source_repo.head_is_detached:
+        dest_repo.set_head(pygit2.Oid(hex=commit_map[source_repo.head.target.hex]))
+    else:
+        dest_repo.set_head(source_repo.head.name)
+
     click.secho("\nCompacting repository ...", bold=True)
     subprocess.check_call(["git", "-C", str(dest), "gc"])
+
+    if "sno.workingcopy.path" in source_repo.config:
+        click.secho("\nCreating working copy ...", bold=True)
+        subctx = click.Context(ctx.command, parent=ctx)
+        subctx.ensure_object(context.Context)
+        subctx.obj.user_repo_path = str(dest)
+        subctx.invoke(checkout.create_workingcopy)
 
     click.secho("\nUpgrade complete", fg="green", bold=True)
 
@@ -106,6 +120,7 @@ def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, comm
     author_time = _raw_time(s.author.time, s.author.offset)
     commit_time = _raw_time(s.commit_time, s.commit_time_offset)
     header = (
+        # We import every commit onto refs/heads/master and fix the branch heads later.
         "commit refs/heads/master\n"
         f"author {s.author.name} <{s.author.email}> {author_time}\n"
         f"committer {s.committer.name} <{s.committer.email}> {commit_time}\n"
@@ -120,6 +135,9 @@ def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, comm
         quiet=True,
         header=header,
         structure_version=2,
+        # We import every commit onto refs/heads/master, even though not all commits are related - this means
+        # the master branch head will jump all over the place. git-fast-import only allows this with --force.
+        extra_cmd_args=["--force"],
     )
 
     dest_commit = dest_repo.head.peel(pygit2.Commit)
@@ -127,7 +145,8 @@ def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, comm
 
     commit_time = datetime.fromtimestamp(source_commit.commit_time)
     click.echo(
-        f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]} ({commit_time}; {source_commit.committer.name}; {dataset_count} datasets; {feature_count} rows)"
+        f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]}"
+        f" ({commit_time}; {source_commit.committer.name}; {dataset_count} datasets; {feature_count} rows)"
     )
 
 

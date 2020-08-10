@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 import pygit2
 
-from .exceptions import SubprocessError
+from .exceptions import SubprocessError, InvalidOperation
 from .structure import DatasetStructure
 from .structure_version import get_structure_version, extra_blobs_for_version
 
@@ -27,7 +27,26 @@ def fast_import_tables(
     max_pack_size="2G",
     max_delta_depth=0,
     extra_blobs=(),
+    extra_cmd_args=(),
 ):
+    """
+    Imports all of the given sources as new datasets, and commit the result.
+
+    repo - the sno repo to import into.
+    sources - a dict of {path:import-source} where path is the target dataset path to import to
+    structure-version - which dataset structure to use (ie 1 or 2 for datasets V1, datasets V2, ...)
+    incremental - True if the resulting commit should contain everything already at HEAD plus the new datasets,
+        False if the resulting commit should only contain the new datasets.
+    quiet - if True, no progress information is printed to stdout.
+    header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
+    message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
+    limit - maximum number of features to import per source.
+    max_pack_size - maximum size of pack files. Affects performance.
+    max_delta_depth - maximum depth of delta-compression chains. Affects performance.
+    extra_blobs - any extra blobs that also need to be written in the same commit.
+    extra_cmd_args - any extra args for the git-fast-import command.
+    """
+
     structure_version = int(structure_version)
     head_tree = get_head_tree(repo) if incremental else None
 
@@ -57,7 +76,7 @@ def fast_import_tables(
         "--done",
         f"--max-pack-size={max_pack_size}",
         f"--depth={max_delta_depth}",
-    ]
+    ] + list(extra_cmd_args)
 
     if header is None:
         header = generate_header(repo, sources, message)
@@ -68,12 +87,9 @@ def fast_import_tables(
 
     p = subprocess.Popen(cmd, cwd=repo.path, stdin=subprocess.PIPE,)
     try:
-        p.stdin.write(header.encode("utf8"))
-
         if incremental:
-            # Start with the existing branch contents.
-            # FIXME - this should probably not always be master.
-            p.stdin.write(b"from refs/heads/master^0\n")
+            header += f"from {get_head_branch(repo)}^0\n"
+        p.stdin.write(header.encode("utf8"))
 
         # Write an extra blobs supplied by the client or needed for this version.
         for i, blob_path in write_blobs_to_stream(p.stdin, extra_blobs):
@@ -151,6 +167,15 @@ def get_head_tree(repo):
         return None
 
 
+def get_head_branch(repo):
+    """Returns the branch that HEAD is currently on."""
+    if repo.head_is_detached:
+        raise InvalidOperation(
+            'Cannot fast-import when in "detached HEAD" state - ie, when not on a branch'
+        )
+    return repo.head.name if not repo.is_empty else "refs/heads/master"
+
+
 def write_blobs_to_stream(stream, blobs):
     for i, (blob_path, blob_data) in enumerate(blobs):
         stream.write(
@@ -167,7 +192,7 @@ def generate_header(repo, sources, message):
 
     user = repo.default_signature
     return (
-        "commit refs/heads/master\n"
+        f"commit {get_head_branch(repo)}\n"
         f"committer {user.name} <{user.email}> now\n"
         f"data {len(message.encode('utf8'))}\n{message}\n"
     )

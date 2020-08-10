@@ -1,3 +1,4 @@
+import contextlib
 import functools
 import os
 import re
@@ -861,6 +862,27 @@ def _add_datasets_to_working_copy(repo, *datasets):
         wc.write_full(commit, dataset)
 
 
+@contextlib.contextmanager
+def temporary_branch(repo):
+    """
+    Contextmanager.
+    Creates a branch for HEAD to point at, then deletes it again so HEAD is detached again.
+    """
+    TEMP_BRANCH_NAME = '__temp-fast-import-branch'
+    if TEMP_BRANCH_NAME in repo.branches:
+        del repo.branches[TEMP_BRANCH_NAME]
+
+    temp_branch = repo.branches.local.create(
+        TEMP_BRANCH_NAME, repo.head.peel(pygit2.Commit)
+    )
+    repo.set_head(temp_branch.name)
+    try:
+        yield temp_branch
+    finally:
+        repo.set_head(repo.head.target)
+        repo.branches.delete(temp_branch.branch_name)
+
+
 @click.command("import")
 @click.pass_context
 @click.argument("source")
@@ -1014,13 +1036,18 @@ def import_table(
             xml_metadata=info.get('xmlMetadata'),
         )
 
-    fast_import_tables(
-        repo,
-        loaders,
-        message=message,
-        structure_version=version,
-        max_delta_depth=max_delta_depth,
-    )
+    # Workaround the fact that fast import doesn't work when head is detached.
+    ctx = temporary_branch(repo) if repo.head_is_detached else contextlib.nullcontext()
+
+    with ctx:
+        fast_import_tables(
+            repo,
+            loaders,
+            message=message,
+            structure_version=version,
+            max_delta_depth=max_delta_depth,
+        )
+
     rs = RepositoryStructure(repo)
     _add_datasets_to_working_copy(repo, *[rs[dst_table] for dst_table in loaders])
 
