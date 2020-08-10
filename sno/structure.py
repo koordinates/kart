@@ -488,6 +488,7 @@ class DatasetStructure:
                 "R" if reverse else "F",
                 len(diff_index),
             )
+        # TODO - call diff_index.find_similar() to detect renames.
 
         if reverse:
             old, new = other, self

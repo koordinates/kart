@@ -88,8 +88,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
     working_copy.assert_db_tree_match(tree)
 
     commit_filter = build_feature_filter(filters)
-    rs = RepositoryStructure(repo)
-    wc_diff = working_copy.diff_to_tree(rs, commit_filter)
+    wc_diff = working_copy.diff_to_tree(commit_filter)
 
     if not wc_diff and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
@@ -103,6 +102,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
 
+    rs = RepositoryStructure(repo)
     new_commit_id = rs.commit(wc_diff, commit_msg, allow_empty=allow_empty)
     new_commit = repo[new_commit_id].peel(pygit2.Commit)
 

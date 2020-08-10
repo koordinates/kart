@@ -5,10 +5,10 @@ import pygit2
 
 from .conflicts import list_conflicts
 from .output_util import dump_json_output
-from .structure import RepositoryStructure
 from .repo_files import RepoState
 from .merge import merge_status_to_text
 from .merge_util import MergeContext, MergeIndex
+from .working_copy import WorkingCopy
 
 
 @click.command()
@@ -69,14 +69,13 @@ def get_working_copy_status_json(repo):
     if repo.is_empty:
         return None
 
-    rs = RepositoryStructure(repo)
-    working_copy = rs.working_copy
+    working_copy = WorkingCopy.get(repo)
     if not working_copy:
         return None
 
     output = {"path": working_copy.path, "changes": None}
 
-    wc_diff = working_copy.diff_to_tree(rs)
+    wc_diff = working_copy.diff_to_tree()
     if wc_diff:
         output["changes"] = get_diff_status_json(wc_diff)
 

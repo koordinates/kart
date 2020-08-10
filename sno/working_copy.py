@@ -21,6 +21,10 @@ from .structure_version import get_structure_version
 L = logging.getLogger("sno.working_copy")
 
 
+class WorkingCopyDirty(Exception):
+    pass
+
+
 class WorkingCopy:
     VALID_VERSIONS = (1, 2)
 
@@ -188,11 +192,11 @@ class WorkingCopyGPKG(WorkingCopy):
         Returns True if there are uncommitted changes in the working copy,
         or False otherwise.
         """
-        # FIXME - this only checks for feature changes. We should also be checking for meta changes
-        with self.session() as db:
-            dbcur = db.cursor()
-            dbcur.execute(f"SELECT COUNT(*) FROM {self.TRACKING_TABLE};")
-            return dbcur.fetchone()[0]
+        try:
+            self.diff_to_tree(raise_if_dirty=True)
+            return False
+        except WorkingCopyDirty:
+            return True
 
     def check_not_dirty(self, help_message=None):
         """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
@@ -757,7 +761,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     (table,),
                 )
 
-    def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED):
+    def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED, raise_if_dirty=False):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
@@ -773,15 +777,24 @@ class WorkingCopyGPKG(WorkingCopy):
             pk_field = dataset.primary_key
 
             ds_diff = DatasetDiff()
-            new_schema = None
+            do_find_renames = True
 
             if dataset.version == 2:
                 meta_old = dict(dataset.iter_meta_items())
                 meta_new = dict(self.iter_meta_items_v2(dataset))
                 if "schema" in meta_old and "schema" in meta_new:
                     Schema.align_schema_cols(meta_old["schema"], meta_new["schema"])
-                    new_schema = Schema.from_column_dicts(meta_new["schema"])
                 ds_diff["meta"] = DeltaDiff.diff_dicts(meta_old, meta_new)
+
+                if raise_if_dirty and ds_diff["meta"]:
+                    raise WorkingCopyDirty()
+
+                if "schema" in ds_diff["meta"]:
+                    old_col_ids = set(c["id"] for c in meta_old["schema"])
+                    new_col_ids = set(c["id"] for c in meta_new["schema"])
+                    if old_col_ids != new_col_ids:
+                        # No point looking for renames if the schema has changed - features will never match perfectly.
+                        do_find_renames = False
 
             diff_sql = f"""
                 SELECT
@@ -797,72 +810,76 @@ class WorkingCopyGPKG(WorkingCopy):
                 params += [str(pk) for pk in pk_filter]
             dbcur.execute(diff_sql, params)
 
-            old_hasher = dataset
-            new_hasher = new_schema if new_schema is not None else dataset
-
-            def hash_feature(hasher, f):
-                return pygit2.hash(hasher.encode_feature_blob(f)).hex
-
-            candidates_ins = collections.defaultdict(list)
-            candidates_upd = {}
-            candidates_del = collections.defaultdict(list)
+            feature_diff = DeltaDiff()
+            insert_count = delete_count = 0
 
             for row in dbcur:
-                track_pk = row[0]
+                track_pk = row[0]  # This is always a str
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
+
+                if db_obj[pk_field] is None:
+                    db_obj = None
 
                 try:
                     repo_obj = dataset.get_feature(track_pk, ogr_geoms=False)
                 except KeyError:
                     repo_obj = None
 
-                if db_obj[pk_field] is None:
-                    if repo_obj:  # ignore INSERT+DELETE
-                        blob_hash = hash_feature(old_hasher, repo_obj)
-                        candidates_del[blob_hash].append((track_pk, repo_obj))
+                if repo_obj == db_obj:
+                    # DB was changed and then changed back - eg INSERT then DELETE.
+                    # TODO - maybe delete track_pk from tracking table?
                     continue
 
-                elif not repo_obj:
-                    # INSERT
-                    blob_hash = hash_feature(new_hasher, db_obj)
-                    candidates_ins[blob_hash].append(db_obj)
+                if raise_if_dirty:
+                    raise WorkingCopyDirty()
 
-                else:
-                    # UPDATE
-                    s_old = set(repo_obj.items())
-                    s_new = set(db_obj.items())
-                    if s_old ^ s_new:
-                        candidates_upd[track_pk] = (repo_obj, db_obj)
+                if db_obj and not repo_obj:  # INSERT
+                    insert_count += 1
+                    feature_diff.add_delta(Delta.insert((db_obj[pk_field], db_obj)))
 
-            # detect renames
-            for h in list(candidates_del.keys()):
-                if h in candidates_ins:
-                    track_pk, repo_obj = candidates_del[h].pop(0)
-                    db_obj = candidates_ins[h].pop(0)
+                elif repo_obj and not db_obj:  # DELETE
+                    delete_count += 1
+                    feature_diff.add_delta(Delta.delete((repo_obj[pk_field], repo_obj)))
 
-                    candidates_upd[track_pk] = (repo_obj, db_obj)
+                else:  # UPDATE
+                    pk = db_obj[pk_field]
+                    feature_diff.add_delta(Delta.update((pk, repo_obj), (pk, db_obj)))
 
-                    if not candidates_del[h]:
-                        del candidates_del[h]
-                    if not candidates_ins[h]:
-                        del candidates_ins[h]
+        if do_find_renames and (insert_count + delete_count) <= 400:
+            self.find_renames(feature_diff, dataset)
 
-            def extract_key(obj):
-                return obj[pk_field], obj
+        ds_diff["feature"] = feature_diff
+        return ds_diff
 
-            ins = [Delta.insert(extract_key(v[0])) for v in candidates_ins.values()]
-            dels = [Delta.delete(extract_key(v[0][1])) for v in candidates_del.values()]
-            upd = [
-                Delta.update(extract_key(old), extract_key(new))
-                for old, new in candidates_upd.values()
-            ]
+    def find_renames(self, feature_diff, dataset):
+        """
+        Matches inserts + deletes into renames on a best effort basis.
+        changes at most one matching insert and delete into an update per blob-hash.
+        Modifies feature_diff in place.
+        """
+        hash_feature = lambda f: pygit2.hash(dataset.encode_feature_blob(f)).hex
 
-            feature_diff = DeltaDiff(ins + dels + upd)
-            ds_diff["feature"] = feature_diff
+        inserts = {}
+        deletes = {}
 
-            return ds_diff
+        search_size = 0
+        for delta in feature_diff.values():
+            if delta.type == "insert":
+                inserts[hash_feature(delta.new_value)] = delta
+            elif delta.type == "delete":
+                deletes[hash_feature(delta.old_value)] = delta
 
-    def diff_to_tree(self, repo_structure, repo_filter=UNFILTERED):
+        for h in deletes:
+            if h in inserts:
+                delete_delta = deletes[h]
+                insert_delta = inserts[h]
+
+                del feature_diff[delete_delta.key]
+                del feature_diff[insert_delta.key]
+                update_delta = delete_delta + insert_delta
+                feature_diff.add_delta(update_delta)
+
+    def diff_to_tree(self, repo_filter=UNFILTERED, raise_if_dirty=False):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for every dataset in the given repository structure.
@@ -870,10 +887,14 @@ class WorkingCopyGPKG(WorkingCopy):
         repo_filter = repo_filter or UNFILTERED
 
         repo_diff = RepoDiff()
-        for dataset in repo_structure:
+        for dataset in RepositoryStructure.lookup(self.repo, self.get_db_tree()):
             if dataset.path not in repo_filter:
                 continue
-            ds_diff = self.diff_db_to_tree(dataset, ds_filter=repo_filter[dataset.path])
+            ds_diff = self.diff_db_to_tree(
+                dataset,
+                ds_filter=repo_filter[dataset.path],
+                raise_if_dirty=raise_if_dirty,
+            )
             repo_diff[dataset.path] = ds_diff
         repo_diff.prune()
         return repo_diff
