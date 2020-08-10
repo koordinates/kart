@@ -7,12 +7,14 @@
 apipkg==1.5               # via -r requirements/test.txt, execnet
 appnope==0.1.0            # via ipython
 aspectlib==1.5.1          # via -r requirements/test.txt, pytest-benchmark
+atomicwrites==1.4.0       # via -r requirements/test.txt
 attrs==19.3.0             # via -r requirements/../requirements.txt, -r requirements/test.txt, jsonschema, pytest
 backcall==0.2.0           # via ipython
 cached-property==1.5.1    # via -r requirements/../requirements.txt, -r requirements/test.txt
 certifi==2020.6.20        # via -r requirements/../requirements.txt, -r requirements/test.txt
 cffi==1.14.1              # via -r requirements/../requirements.txt, -r requirements/test.txt
 click==7.1.2              # via -r requirements/../requirements.txt, -r requirements/test.txt
+colorama==0.4.3           # via -r requirements/test.txt
 coverage==5.2.1           # via -r requirements/test.txt, pytest-cov
 decorator==4.4.2          # via ipython, traitlets
 execnet==1.7.1            # via -r requirements/test.txt, pytest-xdist
