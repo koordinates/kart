@@ -198,7 +198,7 @@ class RichDict(dict):
             return self.get(keys[0], None)
         key, *keys = keys
         child = self.get(key)
-        return self.child.recursive_get(keys) if child is not None else default
+        return child.recursive_get(keys) if child is not None else default
 
     def recursive_set(self, keys, value):
         """
