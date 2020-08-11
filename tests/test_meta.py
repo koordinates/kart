@@ -22,6 +22,8 @@ gpkg_geometry_columns
     }
 """.strip()
 
+EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
+
 
 class TestMetaGet:
     def test_errors(self, data_archive_readonly, cli_runner):
@@ -38,20 +40,26 @@ class TestMetaGet:
 
     @pytest.mark.parametrize("output_format", ("text", "json"))
     def test_all(self, output_format, data_archive_readonly, cli_runner):
+        # All datasets now support getting metadata in either V1 or V2 format,
+        # but if you don't specify a particular item, they will show all V2 items -
+        # these are more self-explanatory to an end-user.
         with data_archive_readonly("points"):
             r = cli_runner.invoke(
                 ["meta", "get", "nz_pa_points_topo_150k", "-o", output_format]
             )
             assert r.exit_code == 0, r
             if output_format == 'text':
-                assert EXPECTED_GCG_TEXT in r.stdout
-                assert "gpkg_contents" in r.stdout
-                assert "sqlite_table_info" in r.stdout
+                assert "title" in r.stdout
+                assert EXPECTED_TITLE in r.stdout
+                assert "description" in r.stdout
+                assert "schema" in r.stdout
+                assert "srs/EPSG:4326.wkt" in r.stdout
             else:
                 output = json.loads(r.stdout)
-                assert output["gpkg_geometry_columns"] == EXPECTED_GCG_JSON
-                assert output["gpkg_contents"]
-                assert output["sqlite_table_info"]
+                assert output["title"] == EXPECTED_TITLE
+                assert output["description"]
+                assert output["schema"]
+                assert output["srs/EPSG:4326.wkt"]
 
     @pytest.mark.parametrize("output_format", ("text", "json"))
     def test_keys(self, output_format, data_archive_readonly, cli_runner):

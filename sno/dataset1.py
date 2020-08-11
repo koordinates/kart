@@ -60,11 +60,10 @@ class Dataset1(DatasetStructure):
         return 1
 
     def iter_meta_items(self, include_hidden=False):
-        exclude = () if include_hidden else ("fields", "version")
-        yield from self._iter_meta_items(exclude=exclude)
+        return gpkg_adapter.iter_v2_meta_items(self)
 
-    def iter_gpkg_meta_items(self):
-        yield from self._iter_meta_items(exclude=("fields", "version"))
+    def iter_v1_meta_items(self):
+        yield from self._iter_meta_items()
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -72,9 +71,11 @@ class Dataset1(DatasetStructure):
         try:
             return json.loads(super().get_meta_item(name))
         except KeyError:
-            if name in gpkg_adapter.GPKG_META_ITEMS:
+            if gpkg_adapter.is_gpkg_meta_item(name):
                 return None  # We happen not to have this meta-item, but it is real.
-            raise  # This meta-item doesn't exist at all in dataset V1.
+            elif gpkg_adapter.is_v2_meta_item(name):
+                return gpkg_adapter.generate_v2_meta_item(self, name)
+            raise  # This meta-item doesn't exist at all.
 
     @property
     @functools.lru_cache(maxsize=1)

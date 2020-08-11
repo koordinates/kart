@@ -14,41 +14,123 @@ GPKG_META_ITEMS = (
 )
 
 
-def get_meta_item(dataset, path):
-    if path not in GPKG_META_ITEMS:
+V2_META_ITEMS = (
+    "title",
+    "description",
+    "schema",
+    "metadata/dataset.json",
+)
+
+
+def is_gpkg_meta_item(path):
+    return path in GPKG_META_ITEMS
+
+
+def generate_gpkg_meta_item(v2_dataset, path):
+    if not is_gpkg_meta_item(path):
         raise KeyError(f"Not a gpkg meta_item: {path}")
 
     if path == "gpkg_contents":
-        return generate_gpkg_contents(dataset)
+        return generate_gpkg_contents(v2_dataset)
     elif path == "gpkg_geometry_columns":
-        return generate_gpkg_geometry_columns(dataset)
+        return generate_gpkg_geometry_columns(v2_dataset)
     elif path == "gpkg_spatial_ref_sys":
-        return generate_gpkg_spatial_ref_sys(dataset)
+        return generate_gpkg_spatial_ref_sys(v2_dataset)
     elif path == "sqlite_table_info":
-        return generate_sqlite_table_info(dataset)
+        return generate_sqlite_table_info(v2_dataset)
     elif path == "gpkg_metadata" or path == "gpkg_metadata_reference":
         # TODO - store and generate this metadata.
         return None
 
 
-def generate_gpkg_contents(dataset):
-    """Generate a gpkg_contents meta item from a dataset."""
-    is_spatial = bool(_get_geometry_columns(dataset.schema))
+def is_v2_meta_item(path):
+    return path in V2_META_ITEMS or path.startswith("srs/")
+
+
+def generate_v2_meta_item(v1_dataset, path, id_salt=None):
+    if not is_v2_meta_item(path):
+        raise KeyError(f"Not a v2 meta_item: {path}")
+
+    if path == "title":
+        return extract_title(v1_dataset)
+
+    elif path == "description":
+        description = v1_dataset.get_meta_item("gpkg_contents").get("description")
+        return description if description else None
+
+    elif path == "schema":
+        return gpkg_to_v2_schema(
+            v1_dataset.get_meta_item("sqlite_table_info"),
+            v1_dataset.get_meta_item("gpkg_geometry_columns"),
+            v1_dataset.get_meta_item("gpkg_spatial_ref_sys"),
+            id_salt or v1_dataset.name,
+        ).to_column_dicts()
+    elif path == "metadata/dataset.json":
+        # TODO - store and generate this metadata.
+        return None
+
+    elif path.startswith("srs/"):
+        gpkg_spatial_ref_sys = v1_dataset.get_meta_item("gpkg_spatial_ref_sys") or ()
+        for gsrs in gpkg_spatial_ref_sys:
+            definition = gsrs["definition"]
+            if not definition or definition == "undefined":
+                continue
+            if wkt_to_v2_name(definition) == path:
+                return definition
+        raise KeyError(f"No SRS found for {path}")
+
+
+def iter_v2_meta_items(v1_dataset, id_salt=None):
+    for path in V2_META_ITEMS:
+        result = generate_v2_meta_item(v1_dataset, path, id_salt=id_salt)
+        if result:
+            yield path, result
+
+    gpkg_spatial_ref_sys = v1_dataset.get_meta_item("gpkg_spatial_ref_sys") or ()
+    for gsrs in gpkg_spatial_ref_sys:
+        definition = gsrs["definition"]
+        if not definition or definition == "undefined":
+            continue
+        yield wkt_to_v2_name(definition), definition
+
+
+def extract_title(v1_dataset):
+    """Extract the dataset title from a v1 dataset."""
+    identifier = v1_dataset.get_meta_item("gpkg_contents").get("identifier")
+    # FIXME: find a better way of roundtripping identifiers?
+    identifier_prefix = f"{v1_dataset.name}: "
+    if identifier.startswith(identifier_prefix):
+        identifier = identifier[len(identifier_prefix) :]
+    return identifier if identifier else None
+
+
+def generate_gpkg_contents(v2_dataset):
+    """Generate a gpkg_contents meta item from a v2 dataset."""
+    is_spatial = bool(_get_geometry_columns(v2_dataset.schema))
 
     result = {
-        "identifier": dataset.get_meta_item("title"),
-        "description": dataset.get_meta_item("description"),
-        "table_name": dataset.tree.name,
+        "identifier": generate_unique_identifier(v2_dataset),
+        "description": v2_dataset.get_meta_item("description") or "",
+        "table_name": v2_dataset.name,
         "data_type": "features" if is_spatial else "attributes",
     }
     if is_spatial:
-        result["srs_id"] = _gpkg_srs_id(dataset)
+        result["srs_id"] = _gpkg_srs_id(v2_dataset)
     return result
 
 
-def generate_gpkg_geometry_columns(dataset):
+def generate_unique_identifier(v2_dataset):
+    # FIXME: find a better way of roundtripping identifiers?
+    identifier = v2_dataset.get_meta_item("title") or ""
+    identifier_prefix = f"{v2_dataset.name}: "
+    if not identifier.startswith(identifier_prefix):
+        identifier = identifier_prefix + identifier
+    return identifier
+
+
+def generate_gpkg_geometry_columns(v2_dataset):
     """Generate a gpkg_geometry_columns meta item from a dataset."""
-    geom_columns = _get_geometry_columns(dataset.schema)
+    geom_columns = _get_geometry_columns(v2_dataset.schema)
     if not geom_columns:
         return None
 
@@ -59,25 +141,25 @@ def generate_gpkg_geometry_columns(dataset):
     m = 1 if "M" in zm else 0
 
     return {
-        "table_name": dataset.tree.name,
+        "table_name": v2_dataset.name,
         "column_name": geom_columns[0].name,
         "geometry_type_name": type_name,
-        "srs_id": _gpkg_srs_id(dataset),
+        "srs_id": _gpkg_srs_id(v2_dataset),
         "z": z,
         "m": m,
     }
 
 
-def generate_gpkg_spatial_ref_sys(dataset):
+def generate_gpkg_spatial_ref_sys(v2_dataset):
     """Generate a gpkg_spatial_ref_sys meta item from a dataset."""
-    geom_columns = _get_geometry_columns(dataset.schema)
+    geom_columns = _get_geometry_columns(v2_dataset.schema)
     if not geom_columns:
         return []
 
     srs_pathname = geom_columns[0].extra_type_info["geometrySRS"]
     if not srs_pathname:
         return []
-    definition = dataset.get_srs_definition(srs_pathname)
+    definition = v2_dataset.get_srs_definition(srs_pathname)
     return wkt_to_gpkg_spatial_ref_sys(definition)
 
 
@@ -113,6 +195,10 @@ def _gpkg_spatial_ref_sys(spatial_ref, wkt):
     ]
 
 
+def wkt_to_v2_name(wkt):
+    return f"srs/{wkt_to_srs_str(wkt)}.wkt"
+
+
 def wkt_to_srs_str(wkt):
     """Given a WKT srs definition, generate a sensible identifier for it."""
     return osgeo_to_srs_str(SpatialReference(wkt))
@@ -125,12 +211,12 @@ def osgeo_to_srs_str(spatial_ref):
     return f"{auth_name}:{auth_code}"
 
 
-def generate_sqlite_table_info(dataset):
+def generate_sqlite_table_info(v2_dataset):
     """Generate a sqlite_table_info meta item from a dataset."""
-    is_spatial = bool(_get_geometry_columns(dataset.schema))
+    is_spatial = bool(_get_geometry_columns(v2_dataset.schema))
     return [
         _column_schema_to_gpkg(i, col, is_spatial)
-        for i, col in enumerate(dataset.schema)
+        for i, col in enumerate(v2_dataset.schema)
     ]
 
 

@@ -308,8 +308,11 @@ class WorkingCopyGPKG(WorkingCopy):
     def write_meta(self, dataset):
         meta_info = dataset.get_meta_item("gpkg_contents")
         meta_info["table_name"] = dataset.name
-        # FIXME: a better way to roundtrip identifiers
-        meta_info["identifier"] = f"{dataset.name}: {meta_info['identifier']}"
+
+        # FIXME: find a better way to roundtrip identifiers
+        identifier_prefix = f"{dataset.name}: "
+        if not meta_info["identifier"].startswith(identifier_prefix):
+            meta_info["identifier"] = identifier_prefix + meta_info['identifier']
 
         meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
         meta_srs = dataset.get_meta_item("gpkg_spatial_ref_sys")
@@ -386,9 +389,31 @@ class WorkingCopyGPKG(WorkingCopy):
                 """
                 dbcur.execute(sql, values)
 
-    def read_meta(self, dataset):
+    def iter_meta_items(self, dataset):
+        """
+        Extract all the metadata of this GPKG and convert to dataset V2 format.
+        Note that the extracted schema will not be aligned to any existing schema
+        - the generated column IDs are stable, but do not necessarily match the ones in the dataset.
+        Calling Schema.align_* is required to find how the columns matches the existing schema.
+        """
         with self.session() as db:
-            yield from gpkg.get_meta_info(db, dataset.name)
+            gpkg_meta_items = dict(gpkg.get_meta_info(db, dataset.name))
+
+        class GpkgTableAsV1Dataset:
+            def __init__(self, name, gpkg_meta_items):
+                self.name = name
+                self.gpkg_meta_items = gpkg_meta_items
+
+            def get_meta_item(self, path):
+                return gpkg_meta_items[path]
+
+        from . import gpkg_adapter
+
+        gpkg_name = os.path.basename(self.path)
+        yield from gpkg_adapter.iter_v2_meta_items(
+            GpkgTableAsV1Dataset(dataset.name, gpkg_meta_items),
+            id_salt=f"{gpkg_name}/{dataset.name}",
+        )
 
     def delete_meta(self, dataset):
         with self.session() as db:
@@ -417,30 +442,6 @@ class WorkingCopyGPKG(WorkingCopy):
                         ({','.join(['?']*len(keys))});
                     """
                 dbcur.execute(sql, values)
-
-    def iter_meta_items_v2(self, dataset):
-        from .gpkg_adapter import wkt_to_srs_str, gpkg_to_v2_schema
-
-        gpkg_meta_items = dict(self.read_meta(dataset))
-        identifier = gpkg_meta_items["gpkg_contents"]["identifier"]
-        # FIXME: a better way of roundtripping identifiers?
-        identifier_prefix = f"{dataset.name}: "
-        if identifier.startswith(identifier_prefix):
-            identifier = identifier[len(identifier_prefix) :]
-
-        yield "title", identifier
-        yield "description", gpkg_meta_items["gpkg_contents"]["description"]
-        for gsrs in gpkg_meta_items.get("gpkg_spatial_ref_sys", ()):
-            definition = gsrs["definition"]
-            yield f"srs/{wkt_to_srs_str(definition)}.wkt", definition
-
-        gpkg_name = os.path.basename(self.path)
-        yield "schema", gpkg_to_v2_schema(
-            gpkg_meta_items["sqlite_table_info"],
-            gpkg_meta_items["gpkg_geometry_columns"],
-            gpkg_meta_items["gpkg_spatial_ref_sys"],
-            f"{gpkg_name}/{dataset.name}",
-        ).to_column_dicts()
 
     def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
@@ -761,6 +762,17 @@ class WorkingCopyGPKG(WorkingCopy):
                     (table,),
                 )
 
+    def diff_db_to_tree_meta(self, dataset):
+        """
+        Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
+        How the metadata is formatted depends on the version of the dataset.
+        """
+        meta_old = dict(dataset.iter_meta_items())
+        meta_new = dict(self.iter_meta_items(dataset))
+        if "schema" in meta_old and "schema" in meta_new:
+            Schema.align_schema_cols(meta_old["schema"], meta_new["schema"])
+        return DeltaDiff.diff_dicts(meta_old, meta_new)
+
     def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED, raise_if_dirty=False):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
@@ -779,22 +791,10 @@ class WorkingCopyGPKG(WorkingCopy):
             ds_diff = DatasetDiff()
             do_find_renames = True
 
-            if dataset.version == 2:
-                meta_old = dict(dataset.iter_meta_items())
-                meta_new = dict(self.iter_meta_items_v2(dataset))
-                if "schema" in meta_old and "schema" in meta_new:
-                    Schema.align_schema_cols(meta_old["schema"], meta_new["schema"])
-                ds_diff["meta"] = DeltaDiff.diff_dicts(meta_old, meta_new)
+            ds_diff["meta"] = self.diff_db_to_tree_meta(dataset)
 
-                if raise_if_dirty and ds_diff["meta"]:
-                    raise WorkingCopyDirty()
-
-                if "schema" in ds_diff["meta"]:
-                    old_col_ids = set(c["id"] for c in meta_old["schema"])
-                    new_col_ids = set(c["id"] for c in meta_new["schema"])
-                    if old_col_ids != new_col_ids:
-                        # No point looking for renames if the schema has changed - features will never match perfectly.
-                        do_find_renames = False
+            if raise_if_dirty and ds_diff["meta"]:
+                raise WorkingCopyDirty()
 
             diff_sql = f"""
                 SELECT
@@ -845,11 +845,27 @@ class WorkingCopyGPKG(WorkingCopy):
                     pk = db_obj[pk_field]
                     feature_diff.add_delta(Delta.update((pk, repo_obj), (pk, db_obj)))
 
-        if do_find_renames and (insert_count + delete_count) <= 400:
+        if (
+            self.can_find_renames(ds_diff["meta"])
+            and (insert_count + delete_count) <= 400
+        ):
             self.find_renames(feature_diff, dataset)
 
         ds_diff["feature"] = feature_diff
         return ds_diff
+
+    def can_find_renames(self, meta_diff):
+        """There's no point looking for renames if the schema has changed."""
+        if "schema" not in meta_diff:
+            return True
+
+        schema_delta = meta_diff["schema"]
+        if not schema_delta.old_value or not schema_delta.new_value:
+            return False
+
+        old_col_ids = [c["id"] for c in schema_delta.old_value]
+        new_col_ids = [c["id"] for c in schema_delta.new_value]
+        return old_col_ids == new_col_ids
 
     def find_renames(self, feature_diff, dataset):
         """

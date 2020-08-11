@@ -114,24 +114,31 @@ class Dataset2(DatasetStructure):
         return self._iter_meta_items(exclude=exclude)
 
     @functools.lru_cache()
-    def get_meta_item(self, name, missing_ok=True):
-        from . import gpkg_adapter
+    def get_meta_item(self, name):
+        if name == "version":
+            return 2
+        try:
+            rel_path = self.META_PATH + name
+            data = self.get_data_at(rel_path)
+            if not data:
+                return None
 
-        # These items are not stored, but generated from other items that are stored.
-        if name in gpkg_adapter.GPKG_META_ITEMS:
-            return gpkg_adapter.get_meta_item(self, name)
+            if rel_path == self.SCHEMA_PATH:
+                return json_unpack(data)
+            elif not rel_path.startswith(self.LEGEND_PATH):
+                return ensure_text(data)
+            else:
+                return data
 
-        rel_path = self.META_PATH + name
-        data = self.get_data_at(rel_path, missing_ok=missing_ok)
-        if data is None:
-            return data
+        except KeyError:
+            from . import gpkg_adapter
 
-        if rel_path == self.SCHEMA_PATH:
-            return json_unpack(data)
-        elif not rel_path.startswith(self.LEGEND_PATH):
-            return ensure_text(data)
-        else:
-            return data
+            if name in gpkg_adapter.V2_META_ITEMS:
+                return None  # We happen not to have this meta-item, but it is real.
+            elif gpkg_adapter.is_gpkg_meta_item(name):
+                # These items are not stored, but generated from other items that are stored.
+                return gpkg_adapter.generate_gpkg_meta_item(self, name)
+            raise  # This meta-item doesn't exist at all.
 
     def get_srs_definition(self, srs_name):
         """Return the SRS definition stored with the given name."""
