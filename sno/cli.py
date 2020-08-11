@@ -83,13 +83,36 @@ def print_version(ctx):
     ctx.exit()
 
 
-class PdbGroup(click.Group):
+class SnoGroup(click.Group):
+    def get_command(self, ctx, cmd_name):
+        rv = super().get_command(ctx, cmd_name)
+        if rv is not None:
+            return rv
+
+        # typo? Suggest similar commands.
+        import difflib
+
+        matches = difflib.get_close_matches(
+            cmd_name, list(self.list_commands(ctx)), n=3
+        )
+
+        fail_message = f"sno: '{cmd_name}' is not a sno command. See 'sno --help'.\n"
+        if matches:
+            if len(matches) == 1:
+                fail_message += '\nThe most similar command is\n'
+            else:
+                fail_message += '\nThe most similar commands are\n'
+            for m in matches:
+                fail_message += f'\t{m}\n'
+        ctx.fail(fail_message)
+
     def invoke(self, ctx):
         try:
             import ipdb as pdb
         except ImportError:
             # ipdb is only installed in dev venvs, not releases
             import pdb
+
         if ctx.params.get('post_mortem'):
             try:
                 return super().invoke(ctx)
@@ -100,7 +123,7 @@ class PdbGroup(click.Group):
             return super().invoke(ctx)
 
 
-@click.group(cls=PdbGroup)
+@click.group(cls=SnoGroup)
 @click.option(
     "-C",
     "--repo",

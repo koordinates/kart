@@ -46,6 +46,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `sno log` now supports JSON output with `--output-format json` [#170](https://github.com/koordinates/sno/issues/170)
  * Streaming diffs: less time until first change is shown when diffing large changes. [#156](https://github.com/koordinates/sno/issues/156)
  * Working copies are now created automatically. [#192](https://github.com/koordinates/sno/issues/192)
+ * Commands which are misspelled now suggest the correct spelling [#199](https://github.com/koordinates/sno/issues/199)
  * Bugfix: operations that should immediately fail due to dirty working copy no longer partially succeed. [#181](https://github.com/koordinates/sno/issues/181)
  * Bugfix: some column datatype conversion issues during import and checkout.
 
