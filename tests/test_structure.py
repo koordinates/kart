@@ -576,8 +576,15 @@ def quote_ident(part):
 
 @pytest.fixture()
 def postgis_db():
+    """
+    Using docker, you can run a PostGres test - such as test_pg_import - as follows:
+        docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
+        SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k test_pg_import --pdb -vvs
+    """
     if 'SNO_POSTGRES_URL' not in os.environ:
-        raise pytest.skip('Requires postgres')
+        raise pytest.skip(
+            'Requires postgres - read docstring at sno.test_structure.postgis_db'
+        )
     conn = psycopg2.connect(os.environ['SNO_POSTGRES_URL'])
     with conn.cursor() as cur:
         # test connection and postgis support
