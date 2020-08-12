@@ -464,6 +464,9 @@ class DatasetStructure:
         If reverse is true, generates a diff from other -> self.
         """
 
+        ds_diff = DatasetDiff()
+        ds_diff["meta"] = self.diff_meta(other, reverse=reverse)
+
         ds_filter = ds_filter or UNFILTERED
         pk_filter = ds_filter.get("feature", ())
 
@@ -494,13 +497,6 @@ class DatasetStructure:
             old, new = other, self
         else:
             old, new = self, other
-
-        ds_diff = DatasetDiff()
-
-        if self.version == 2:
-            meta_old = dict(old.iter_meta_items()) if old else {}
-            meta_new = dict(new.iter_meta_items()) if new else {}
-            ds_diff["meta"] = DeltaDiff.diff_dicts(meta_old, meta_new)
 
         feature_diff = DeltaDiff()
 
@@ -576,6 +572,20 @@ class DatasetStructure:
 
         ds_diff["feature"] = feature_diff
         return ds_diff
+
+    def diff_meta(self, other, reverse=False):
+        """
+        Generates a diff from self -> other, but only for meta items.
+        If reverse is true, generates a diff from other -> self.
+        """
+        if reverse:
+            old, new = other, self
+        else:
+            old, new = self, other
+
+        meta_old = dict(old.iter_meta_items()) if old else {}
+        meta_new = dict(new.iter_meta_items()) if new else {}
+        return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def write_index(self, dataset_diff, index, repo):
         """

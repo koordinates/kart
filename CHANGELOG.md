@@ -11,6 +11,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * New structure to `sno diff` output:
     - Text output: Features are now labelled as `<dataset>:feature:<primary_key>`, consistent with meta items that are labelled as `<dataset>:meta:<meta_item_name>`
     - JSON output also uses "feature" and "meta" as keys for the different types of changes, instead of "featureChanges" and "metaChanges".
+  * Meta changes are now included in `sno diff` output:
+    - Eg title, description and schema changes.
+    - This is true for Datasets V1 and for Datasets V2 (see below), but meta changes can only be committed in datasets V2.
 
 ### Major changes in this release
 

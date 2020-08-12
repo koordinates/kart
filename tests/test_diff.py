@@ -1371,19 +1371,34 @@ def test_show_polygons_initial(
         assert r.exit_code == 0, r
 
         if output_format == 'text':
-            assert r.stdout.splitlines()[0:11] == [
+            lines = r.stdout.splitlines()
+
+            assert lines[0:6] == [
                 'commit 1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec',
                 'Author: Robert Coup <robert@coup.net.nz>',
                 'Date:   Mon Jul 22 12:05:39 2019 +0100',
                 '',
                 '    Import from nz-waca-adjustments.gpkg',
                 '',
+            ]
+
+            assert '+++ nz_waca_adjustments:meta:title' in lines
+            index = lines.index('+++ nz_waca_adjustments:meta:title')
+            assert lines[index : index + 2] == [
+                '+++ nz_waca_adjustments:meta:title',
+                '+ "NZ WACA Adjustments"',
+            ]
+
+            assert '+++ nz_waca_adjustments:feature:1424927' in lines
+            index = lines.index('+++ nz_waca_adjustments:feature:1424927')
+            assert lines[index : index + 5] == [
                 '+++ nz_waca_adjustments:feature:1424927',
                 '+                                     geom = MULTIPOLYGON(...)',
                 '+                            date_adjusted = 2011-03-25T07:30:45Z',
                 '+                         survey_reference = ␀',
                 '+                           adjusted_nodes = 1122',
             ]
+
         elif output_format == 'json':
             j = json.loads(r.stdout)
             assert 'sno.diff/v1+hexwkb' in j
