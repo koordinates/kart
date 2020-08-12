@@ -635,7 +635,7 @@ def test_pg_import(
         repo = pygit2.Repository(str(repo_path))
         dataset = structure.RepositoryStructure(repo)[path]
 
-        meta_items = dict(dataset.iter_meta_items(include_hidden=True))
+        meta_items = dict(dataset.iter_v1_meta_items())
         assert set(meta_items.keys()) == {
             'fields/geom',
             'version',
