@@ -108,16 +108,19 @@ class WorkingCopyGPKG(WorkingCopy):
         """ Return a full absolute path to the working copy """
         return (Path(self.repo.path) / self.path).resolve()
 
+    TRACKING_NAME = "track"
+    STATE_NAME = "state"
+
     @property
     def TRACKING_TABLE(self):
-        return self._meta_name("track")
+        return self._sno_table(self.TRACKING_NAME)
 
     @property
-    def META_TABLE(self):
-        return self._meta_name("meta")
+    def STATE_TABLE(self):
+        return self._sno_table(self.STATE_NAME)
 
-    def _meta_name(self, name, suffix=""):
-        n = f"{self.META_PREFIX}{name}"
+    def _sno_table(self, name, suffix=""):
+        n = f"{self.SNO_TABLE_PREFIX}{name}"
         if suffix:
             n += "_" + suffix
         return gpkg.ident(n)
@@ -286,11 +289,11 @@ class WorkingCopyGPKG(WorkingCopy):
 
             dbcur.execute(
                 f"""
-                CREATE TABLE {self.META_TABLE} (
+                CREATE TABLE {self.STATE_TABLE} (
                     table_name TEXT NOT NULL,
                     key TEXT NOT NULL,
                     value TEXT NULL,
-                    CONSTRAINT {self._meta_name('meta', 'pk')} PRIMARY KEY (table_name, key)
+                    CONSTRAINT {self._sno_table(self.STATE_NAME, 'pk')} PRIMARY KEY (table_name, key)
                 );
             """
             )
@@ -300,7 +303,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 CREATE TABLE {self.TRACKING_TABLE} (
                     table_name TEXT NOT NULL,
                     pk TEXT NULL,
-                    CONSTRAINT {self._meta_name('track', 'pk')} PRIMARY KEY (table_name, pk)
+                    CONSTRAINT {self._sno_table(self.TRACKING_NAME, 'pk')} PRIMARY KEY (table_name, pk)
                 );
             """
             )
@@ -480,9 +483,9 @@ class WorkingCopyGPKG(WorkingCopy):
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
 
     def _drop_triggers(self, dbcur, table):
-        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'ins')}")
-        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'upd')}")
-        dbcur.execute(f"DROP TRIGGER {self._meta_name(table, 'del')}")
+        dbcur.execute(f"DROP TRIGGER {self._sno_table(table, 'ins')}")
+        dbcur.execute(f"DROP TRIGGER {self._sno_table(table, 'upd')}")
+        dbcur.execute(f"DROP TRIGGER {self._sno_table(table, 'del')}")
 
     @contextlib.contextmanager
     def _suspend_triggers(self, dbcur, table):
@@ -541,7 +544,7 @@ class WorkingCopyGPKG(WorkingCopy):
             dbcur.execute(
                 f"""
                     SELECT value
-                    FROM {self.META_TABLE}
+                    FROM {self.STATE_TABLE}
                     WHERE table_name=? AND key=?;
                 """,
                 (table_name, "tree"),
@@ -568,7 +571,7 @@ class WorkingCopyGPKG(WorkingCopy):
         # sqlite doesn't let you do param substitutions in CREATE TRIGGER
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(table, 'ins')}
+            CREATE TRIGGER {self._sno_table(table, 'ins')}
                AFTER INSERT
                ON {gpkg.ident(table)}
             BEGIN
@@ -580,7 +583,7 @@ class WorkingCopyGPKG(WorkingCopy):
         )
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(table, 'upd')}
+            CREATE TRIGGER {self._sno_table(table, 'upd')}
                AFTER UPDATE
                ON {gpkg.ident(table)}
             BEGIN
@@ -594,7 +597,7 @@ class WorkingCopyGPKG(WorkingCopy):
         )
         dbcur.execute(
             f"""
-            CREATE TRIGGER {self._meta_name(table, 'del')}
+            CREATE TRIGGER {self._sno_table(table, 'del')}
                AFTER DELETE
                ON {gpkg.ident(table)}
             BEGIN
@@ -702,7 +705,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 self._create_triggers(dbcur, table)
 
             dbcur.execute(
-                f"INSERT OR REPLACE INTO {self.META_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
+                f"INSERT OR REPLACE INTO {self.STATE_TABLE} (table_name, key, value) VALUES (?, ?, ?);",
                 ("*", "tree", target_tree_or_commit.peel(pygit2.Tree).hex),
             )
 
@@ -947,18 +950,18 @@ class WorkingCopyGPKG(WorkingCopy):
                         (dataset, *pk_chunk),
                     )
 
-    def update_meta_table(self, new_tree):
+    def update_state_table_tree(self, new_tree):
         with self.session() as db:
             dbcur = db.cursor()
             L.info(f"Tree sha: {new_tree}")
 
             dbcur.execute(
-                f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
+                f"UPDATE {self.STATE_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                 (str(new_tree),),
             )
             assert (
                 db.changes() == 1
-            ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
+            ), f"{self.STATE_TABLE} update: expected 1Δ, got {db.changes()}"
 
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """
@@ -1099,7 +1102,7 @@ class WorkingCopyGPKG(WorkingCopy):
         If there are uncommitted changes, raises InvalidOperation, unless force=True is given
         (in which case the changes are discarded)
 
-        If track_changes_as_dirty=False (the default) the tree ID in the sno-meta table gets set to the
+        If track_changes_as_dirty=False (the default) the tree ID in the sno-state table gets set to the
         new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
         tracking table is used to record all the changes, so that they can be committed later.
         """
@@ -1224,7 +1227,7 @@ class WorkingCopyGPKG(WorkingCopy):
             if not track_changes_as_dirty:
                 # update the tree id
                 dbcur.execute(
-                    f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
+                    f"UPDATE {self.STATE_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                     (target_tree.hex,),
                 )
 
@@ -1353,7 +1356,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
     GeoPackage Working Copy for v0.1-v0.4 repositories
     """
 
-    META_PREFIX = ".sno-"
+    SNO_TABLE_PREFIX = ".sno-"
+
+    # The state table was called "meta" in GPKG_1 but we have too many things called meta.
+    STATE_NAME = "meta"
 
 
 class WorkingCopy_GPKG_2(WorkingCopyGPKG):
@@ -1362,4 +1368,4 @@ class WorkingCopy_GPKG_2(WorkingCopyGPKG):
     """
 
     # Using this prefix means OGR/QGIS doesn't list these tables as datasets
-    META_PREFIX = "gpkg_sno_"
+    SNO_TABLE_PREFIX = "gpkg_sno_"
