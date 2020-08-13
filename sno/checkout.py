@@ -232,10 +232,7 @@ def restore(ctx, source, pathspec):
         raise NotFound(f"{source} is not a commit or tree", exit_code=NO_COMMIT)
 
     working_copy.reset(
-        commit_or_tree,
-        force=True,
-        update_meta=(head_commit.id == commit_or_tree.id),
-        paths=pathspec,
+        commit_or_tree, force=True, track_changes_as_dirty=True, paths=pathspec,
     )
 
 

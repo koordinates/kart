@@ -855,7 +855,7 @@ class WorkingCopyGPKG(WorkingCopy):
         return ds_diff
 
     def can_find_renames(self, meta_diff):
-        """There's no point looking for renames if the schema has changed."""
+        """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
         if "schema" not in meta_diff:
             return True
 
@@ -863,9 +863,13 @@ class WorkingCopyGPKG(WorkingCopy):
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
-        old_col_ids = [c["id"] for c in schema_delta.old_value]
-        new_col_ids = [c["id"] for c in schema_delta.new_value]
-        return old_col_ids == new_col_ids
+        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        dt = old_schema.diff_type_counts(new_schema)
+        # We could still recognise a renamed feature in the case of type updates (eg int32 -> int64),
+        # but basically any other type of schema modification means there's no point looking for renames.
+        dt.pop("type_updates")
+        return sum(dt.values()) == 0
 
     def find_renames(self, feature_diff, dataset):
         """
@@ -956,57 +960,49 @@ class WorkingCopyGPKG(WorkingCopy):
                 db.changes() == 1
             ), f"{self.META_TABLE} update: expected 1Δ, got {db.changes()}"
 
-    def _is_meta_update_supported(self, src_ds, dest_ds):
+    def _is_meta_update_supported(self, dataset_version, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
         (Any meta change is supported - even in datasets v1 - if we drop and rewrite the table,
         but of course it is less efficient).
+        meta_diff - DeltaDiff object containing the meta changes.
         """
-        meta_diff = src_ds.meta_tree.diff_to_tree(dest_ds.meta_tree)
         if not meta_diff:
             return True
 
-        # Sanity check:
-        for patch in meta_diff:
-            delta = patch.delta
-            if delta.old_file and delta.new_file:
-                assert delta.old_file.path == delta.new_file.path
-
-        if src_ds.version < 2:
+        if dataset_version < 2:
             # Dataset1 doesn't support meta changes at all - except by rewriting the entire table.
             return False
 
-        src_schema = src_ds.schema
-        dest_schema = dest_ds.schema
-        dt = src_schema.diff_type_counts(dest_schema)
-        dt.pop("name_updates")  # We do support name_updates.
-        if sum(dt.values()):
-            return False  # But we don't support any other type of schema update - except by rewriting the entire table.
+        if not "schema" in meta_diff:
+            return True
 
-        return True
+        schema_delta = meta_diff["schema"]
+        if not schema_delta.old_value or not schema_delta.new_value:
+            return False
 
-    def _apply_meta_title(self, src_ds, dest_ds, src_value, dest_value, dbcur):
+        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        dt = old_schema.diff_type_counts(new_schema)
+        # We do support name_updates, but we don't support any other type of schema update - except by rewriting the entire table.
+        dt.pop("name_updates")
+        return sum(dt.values()) == 0
+
+    def _apply_meta_title(self, table_name, src_value, dest_value, dbcur):
         # TODO - find a better way to roundtrip titles while keeping them unique
-        value = f"{dest_ds.name}: {dest_value}"
+        identifier = f"{table_name}: {dest_value}"
         dbcur.execute(
-            '''
-            UPDATE gpkg_contents SET identifier = ?
-            WHERE table_name = ?
-            ''',
-            [value, dest_ds.name],
+            '''UPDATE gpkg_contents SET identifier = ? WHERE table_name = ?''',
+            (identifier, table_name),
         )
 
-    def _apply_meta_description(self, src_ds, dest_ds, src_value, dest_value, dbcur):
+    def _apply_meta_description(self, table_name, src_value, dest_value, dbcur):
         dbcur.execute(
-            '''
-            UPDATE gpkg_contents SET description = ?
-            WHERE table_name = ?
-            ''',
-            [dest_value, dest_ds.name],
+            '''UPDATE gpkg_contents SET description = ? WHERE table_name = ?''',
+            (dest_value, table_name),
         )
 
-    def _apply_meta_schema(self, src_ds, dest_ds, src_value, dest_value, dbcur):
-        table_name = dest_ds.name
+    def _apply_meta_schema(self, table_name, src_value, dest_value, dbcur):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 
@@ -1024,78 +1020,88 @@ class WorkingCopyGPKG(WorkingCopy):
                 f'''ALTER TABLE {gpkg.ident(table_name)} RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}'''
             )
 
-    def _apply_meta_diff(self, src_ds, dest_ds, dbcur, meta_diff_index):
-        L.debug("Meta diff: %s changes", len(meta_diff_index))
-        for d in meta_diff_index.deltas:
-
-            path = d.old_file.path or d.new_file.path
+    def _apply_meta_diff(self, dataset, meta_diff, dbcur):
+        """
+        Change the metadata of this working copy according to the given meta diff.
+        Not all changes are possible or supported - see _is_meta_update_supported.
+        dataset - which table to update.
+        meta_diff - a DeltaDiff object containing meta-item deltas for this dataset.
+        dbcur - DB cursor.
+        """
+        L.debug("Meta diff: %s changes", len(meta_diff))
+        table_name = dataset.name
+        for key in meta_diff:
             try:
-                func = getattr(self, f'_apply_meta_{path.replace("/", "__")}')
+                func = getattr(self, f'_apply_meta_{key.replace("/", "__")}')
             except AttributeError:
                 continue
-            else:
-                # for deltas we care about, we dont' support a whole lot.
-                # in particular we don't currently support deletes
-                if d.status not in (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_ADDED,):
-                    # GIT_DELTA_DELETED
-                    # GIT_DELTA_RENAMED
-                    # GIT_DELTA_COPIED
-                    # GIT_DELTA_IGNORED
-                    # GIT_DELTA_TYPECHANGE
-                    # GIT_DELTA_UNMODIFIED
-                    # GIT_DELTA_UNREADABLE
-                    # GIT_DELTA_UNTRACKED
-                    raise NotImplementedError(f"Delta status: {d.status_char()}")
+            delta = meta_diff[key]
+            func(table_name, delta.old_value, delta.new_value, dbcur)
 
-                src_value = src_ds.get_meta_item(path)
-                dest_value = dest_ds.get_meta_item(path)
-                func(src_ds, dest_ds, src_value, dest_value, dbcur)
-
-    def _apply_feature_diff(self, src_ds, dest_ds, dbcur, feature_diff_index):
-        L.debug("Feature diff: %s changes", len(feature_diff_index))
-        for d in feature_diff_index.deltas:
-            # TODO: improve this by grouping by status then calling
-            # write_features/delete_features passing multiple PKs?
-            if d.status == pygit2.GIT_DELTA_DELETED:
-                old_pk = src_ds.decode_path_to_1pk(os.path.basename(d.old_file.path))
-                L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
-                self.delete_features(dbcur, src_ds, [old_pk])
-            elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                old_pk = src_ds.decode_path_to_1pk(os.path.basename(d.old_file.path))
-                new_pk = dest_ds.decode_path_to_1pk(os.path.basename(d.new_file.path))
-                L.debug(
-                    "reset(): M %s (%s) -> %s (%s)",
-                    d.old_file.path,
-                    old_pk,
-                    d.new_file.path,
-                    new_pk,
-                )
-                self.write_features(dbcur, dest_ds, [new_pk])
-            elif d.status == pygit2.GIT_DELTA_ADDED:
-                new_pk = dest_ds.decode_path_to_1pk(os.path.basename(d.new_file.path))
-                L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)
-                self.write_features(dbcur, dest_ds, [new_pk])
-            else:
-                # GIT_DELTA_RENAMED
-                # GIT_DELTA_COPIED
-                # GIT_DELTA_IGNORED
-                # GIT_DELTA_TYPECHANGE
-                # GIT_DELTA_UNMODIFIED
-                # GIT_DELTA_UNREADABLE
-                # GIT_DELTA_UNTRACKED
-                raise NotImplementedError(f"Delta status: {d.status_char()}")
-
-    def reset(
-        self, target_tree_or_commit, *, force=False, paths=None, update_meta=True,
+    def _apply_feature_diff(
+        self, base_ds, target_ds, dbcur, track_changes_as_dirty=False
     ):
         """
-        Resets the working copy to the given tree (or the tree pointed to by the given commit)
+        Change the features of this working copy from their current state, base_ds - to the desired state, target_ds.
+        base_ds - dataset containing the features that match the WC table currently.
+        target_ds - dataset containing the desired features of the WC table.
+        dbcur - DB cursor.
+        track_changes_as_dirty - whether to track these changes as working-copy edits in the tracking table.
+        """
+        feature_diff_index = base_ds.feature_tree.diff_to_tree(target_ds.feature_tree)
+        if not feature_diff_index:
+            return
+
+        L.debug("Applying feature diff: about %s changes", len(feature_diff_index))
+
+        delete_pks = []
+        insert_and_update_pks = []
+
+        for d in feature_diff_index.deltas:
+            if d.old_file and d.old_file.path.startswith(base_ds.META_PATH):
+                continue
+            if d.new_file and d.new_file.path.startswith(base_ds.META_PATH):
+                continue
+
+            if d.status == pygit2.GIT_DELTA_DELETED:
+                delete_pks.append(base_ds.decode_path_to_1pk(d.old_file.path))
+            elif d.status in (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED):
+                insert_and_update_pks.append(
+                    target_ds.decode_path_to_1pk(d.new_file.path)
+                )
+            else:
+                # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE, UNTRACKED
+                raise NotImplementedError(f"Delta status: {d.status_char()}")
+
+        if not track_changes_as_dirty:
+            # We don't want to track these changes as working copy edits - they will be part of the new WC base.
+            table = base_ds.name
+            ctx = self._suspend_triggers(dbcur, table)
+        else:
+            # We want to track these changes as working copy edits so they can be committed later.
+            ctx = contextlib.nullcontext()
+
+        with ctx:
+            self.delete_features(dbcur, base_ds, delete_pks)
+            self.write_features(dbcur, target_ds, insert_and_update_pks)
+
+    def reset(
+        self,
+        target_tree_or_commit,
+        *,
+        force=False,
+        paths=None,
+        track_changes_as_dirty=False,
+    ):
+        """
+        Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
 
         If there are uncommitted changes, raises InvalidOperation, unless force=True is given
         (in which case the changes are discarded)
 
-        If update_meta=True (the default) the tree ID in the .sno-meta table gets set
-        to the new tree ID. Otherwise it is unchanged.
+        If track_changes_as_dirty=False (the default) the tree ID in the sno-meta table gets set to the
+        new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
+        tracking table is used to record all the changes, so that they can be committed later.
         """
         if not force:
             self.check_not_dirty()
@@ -1108,48 +1114,62 @@ class WorkingCopyGPKG(WorkingCopy):
         else:
             commit = None
             target_tree = target_tree_or_commit
-        L.debug(
-            f"c={commit.id if commit else 'none'} t={target_tree.hex} update-meta={update_meta}",
-        )
+        target_tree_id = target_tree.id.hex
 
+        # base_tree is the tree the working copy is based on.
+        # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.
         base_tree_id = self.get_db_tree()
         base_tree = self.repo[base_tree_id]
-        L.debug("base_tree_id: %s", base_tree_id)
         repo_tree_id = self.repo.head.peel(pygit2.Tree).hex
 
         L.debug(
-            "Working Copy DB is tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree:%s",
+            "reset(): WorkingCopy base_tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree: %s",
             base_tree_id,
             repo_tree_id,
-            target_tree,
+            target_tree_id,
+        )
+        L.debug(
+            f"reset(): commit={commit.id if commit else 'none'} track_changes_as_dirty={track_changes_as_dirty}",
         )
 
         repo_structure = RepositoryStructure(self.repo)
-        src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
-        dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(target_tree)}
+        base_datasets = {
+            ds.name: ds
+            for ds in self._filter_by_paths(repo_structure.iter_at(base_tree), paths)
+        }
+        if base_tree == target_tree:
+            target_datasets = base_datasets
+        else:
+            target_datasets = {
+                ds.name: ds
+                for ds in self._filter_by_paths(
+                    repo_structure.iter_at(target_tree), paths
+                )
+            }
 
-        if paths:
-            for path in paths:
-                src_datasets = {
-                    ds.name: ds
-                    for ds in src_datasets.values()
-                    if os.path.commonpath([ds.path, path]) == path
-                }
-                dest_datasets = {
-                    ds.name: ds
-                    for ds in dest_datasets.values()
-                    if os.path.commonpath([ds.path, path]) == path
-                }
-
-        table_inserts = dest_datasets.keys() - src_datasets.keys()
-        table_deletes = src_datasets.keys() - dest_datasets.keys()
-        table_updates = src_datasets.keys() & dest_datasets.keys()
+        table_inserts = target_datasets.keys() - base_datasets.keys()
+        table_deletes = base_datasets.keys() - target_datasets.keys()
+        table_updates = base_datasets.keys() & target_datasets.keys()
         table_updates_unsupported = set()
 
         for table in table_updates:
-            src_ds = src_datasets[table]
-            dest_ds = dest_datasets[table]
-            update_supported = self._is_meta_update_supported(src_ds, dest_ds)
+            base_ds = base_datasets[table]
+            ds_version = base_ds.version
+
+            # Do we support changing the WC metadata to back to base_ds metadata?
+            rev_wc_meta_diff = self.diff_db_to_tree_meta(base_ds)
+            update_supported = self._is_meta_update_supported(
+                ds_version, rev_wc_meta_diff
+            )
+
+            # And, do we support then changing it from base_ds metadata to target_ds metadata?
+            target_ds = target_datasets[table]
+            if target_ds != base_ds:
+                rev_rev_meta_diff = base_ds.diff_meta(target_ds)
+                update_supported = update_supported and self._is_meta_update_supported(
+                    ds_version, rev_rev_meta_diff
+                )
+
             if not update_supported:
                 table_updates_unsupported.add(table)
 
@@ -1159,117 +1179,102 @@ class WorkingCopyGPKG(WorkingCopy):
             table_deletes.add(table)
 
         L.debug(
-            "table_inserts: %s\ntable_deletes: %s\ntable_updates %s",
+            "reset(): table_inserts: %s, table_deletes: %s, table_updates %s",
             table_inserts,
             table_deletes,
             table_updates,
         )
 
+        structural_changes = table_inserts | table_deletes
+        if track_changes_as_dirty and structural_changes:
+            # We don't yet support tracking changes as dirty if we delete, create, or rewrite an entire table.
+            structural_changes_text = '\n'.join(structural_changes)
+            raise NotYetImplemented(
+                "Sorry, this operation is not possible when there are structural changes."
+                f"Structural changes are affecting:\n{structural_changes_text}"
+            )
+
         # Delete old tables
         if table_deletes:
             self.drop_table(
-                target_tree_or_commit, *[src_datasets[d] for d in table_deletes]
+                target_tree_or_commit, *[base_datasets[d] for d in table_deletes]
             )
         # Write new tables
         if table_inserts:
             # Note: write_full doesn't work if called from within an existing db session.
             self.write_full(
-                target_tree_or_commit, *[dest_datasets[d] for d in table_inserts]
+                target_tree_or_commit, *[target_datasets[d] for d in table_inserts]
             )
 
         with self.session(bulk=1) as db:
             dbcur = db.cursor()
 
             for table in table_updates:
-                src_ds = src_datasets[table]
-                dest_ds = dest_datasets[table]
+                base_ds = base_datasets[table]
+                target_ds = target_datasets[table]
                 self._update_table(
-                    commit,
-                    src_ds,
-                    dest_ds,
+                    base_ds,
+                    target_ds,
                     db,
                     dbcur,
-                    track_changes_as_dirty=not update_meta,
+                    commit,
+                    track_changes_as_dirty=track_changes_as_dirty,
                 )
 
-            if update_meta:
+            if not track_changes_as_dirty:
                 # update the tree id
                 dbcur.execute(
                     f"UPDATE {self.META_TABLE} SET value=? WHERE table_name='*' AND key='tree';",
                     (target_tree.hex,),
                 )
 
+    def _filter_by_paths(self, datasets, paths):
+        """Filters the datasets so that only those matching the paths are returned."""
+        if paths:
+            return [ds for ds in datasets if ds.path.startswith(paths)]
+        else:
+            return datasets
+
     def _update_table(
-        self, commit, src_ds, dest_ds, db, dbcur, track_changes_as_dirty=False
+        self, base_ds, target_ds, db, dbcur, commit=None, track_changes_as_dirty=False
     ):
         """
-        Update the given table in working copy from src_ds to dest_ds.
+        Update the given table in working copy from its current state to target_ds.
         The table must exist in the working copy in the source and continue to exist in the destination,
-        and, the table must not have any unsupported meta changes.
+        and not have any unsupported meta changes - see _is_meta_update_supported.
+        base_ds - the dataset that this working copy table is currently based on.
+        target_ds - the target desired state for this working copy table.
+        db, dbcur - database and database cursor.
+        commit - the commit that contains target_ds, if any.
+        track_changes_if_dirty - whether to track changes made from base_ds -> target_ds as WC edits.
         """
-        # Existing table with update:
-        # check for schema differences
 
-        table = src_ds.name
+        self._apply_meta_diff(base_ds, ~self.diff_db_to_tree_meta(base_ds), dbcur)
+        # WC now has base_ds structure and so we can write base_ds features to WC.
+        self._reset_dirty_rows(base_ds, db, dbcur)
 
-        sql_changed = f"SELECT pk FROM {self.TRACKING_TABLE} " "WHERE table_name=?;"
-        dbcur.execute(sql_changed, (table,))
-        dirty_pk_list = [r[0] for r in dbcur]
-        if dirty_pk_list:
-            with self._suspend_triggers(dbcur, table):
-                # todo: suspend/remove spatial index
-                L.debug("Cleaning up dirty rows...")
-
-                track_count = db.changes()
-                count = self.delete_features(dbcur, src_ds, dirty_pk_list)
-                L.debug(
-                    "reset(): dirty: removed %s features, tracking Δ count=%s",
-                    count,
-                    track_count,
-                )
-                count = self.write_features(
-                    dbcur, src_ds, dirty_pk_list, ignore_missing=True
-                )
-                L.debug(
-                    "reset(): dirty: wrote %s features, tracking Δ count=%s",
-                    count,
-                    track_count,
-                )
-
-                dbcur.execute(
-                    f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,),
-                )
-
-        if src_ds.tree == dest_ds.tree:
-            return
-
-        if not track_changes_as_dirty:
-            ctx = self._suspend_triggers(dbcur, table)
-        else:
-            # We want to track these changes as working copy edits so they can be committed.
-            ctx = contextlib.nullcontext()
-
-        with ctx:
-            self._apply_meta_diff(
-                src_ds,
-                dest_ds,
-                dbcur,
-                src_ds.meta_tree.diff_to_tree(dest_ds.meta_tree),
-            )
+        if target_ds != base_ds:
+            self._apply_meta_diff(base_ds, base_ds.diff_meta(target_ds), dbcur)
+            # WC now has target_ds structure and so we can write target_ds features to WC.
             self._apply_feature_diff(
-                src_ds,
-                dest_ds,
-                dbcur,
-                src_ds.feature_tree.diff_to_tree(dest_ds.feature_tree),
+                base_ds, target_ds, dbcur, track_changes_as_dirty=track_changes_as_dirty
             )
 
-        # Update gpkg_contents
+        self._update_gpkg_contents(target_ds, db, dbcur, commit)
+
+    def _update_gpkg_contents(self, dataset, db, dbcur, commit=None):
+        """
+        Update the metadata for the given table in gpkg_contents to have the new bounding-box / last-updated timestamp.
+        """
         if commit:
             change_time = datetime.utcfromtimestamp(commit.commit_time)
         else:
             change_time = datetime.utcnow()
+        # GPKG Spec Req. 15:
+        gpkg_change_time = change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-        geom_col = dest_ds.geom_column_name
+        table = dataset.name
+        geom_col = dataset.geom_column_name
         if geom_col is not None:
             # FIXME: Why doesn't Extent(geom) work here as an aggregate?
             dbcur.execute(
@@ -1292,28 +1297,55 @@ class WorkingCopyGPKG(WorkingCopy):
                 WHERE
                     table_name=?;
                 """,
-                (
-                    change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
-                    table,
-                ),
+                (gpkg_change_time, table,),
             )
         else:
             dbcur.execute(
-                f"""
-                UPDATE gpkg_contents
-                SET
-                    last_change=?
-                WHERE
-                    table_name=?;
-                """,
-                (
-                    change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # GPKG Spec Req.15
-                    table,
-                ),
+                """UPDATE gpkg_contents SET last_change=? WHERE table_name=?;""",
+                (gpkg_change_time, table),
             )
 
         rowcount = db.changes()
         assert rowcount == 1, f"gpkg_contents update: expected 1Δ, got {rowcount}"
+
+    def _reset_dirty_rows(self, base_ds, db, dbcur):
+        """
+        Reset the dirty rows recorded in the tracking table to match the originals from the dataset.
+        base_ds - the dataset this WC table is based on.
+        db, dbcur - database, database cursor.
+        """
+        table = base_ds.name
+
+        sql_changed = f"SELECT pk FROM {self.TRACKING_TABLE} " "WHERE table_name=?;"
+        dbcur.execute(sql_changed, (table,))
+        dirty_pk_list = [r[0] for r in dbcur]
+        if not dirty_pk_list:
+            return
+
+        # We're resetting the dirty rows so we don't track these changes in the tracking table.
+        with self._suspend_triggers(dbcur, table):
+            # todo: suspend/remove spatial index
+            L.debug("Cleaning up dirty rows...")
+
+            track_count = db.changes()
+            count = self.delete_features(dbcur, base_ds, dirty_pk_list)
+            L.debug(
+                "_reset_dirty_rows(): removed %s features, tracking Δ count=%s",
+                count,
+                track_count,
+            )
+            count = self.write_features(
+                dbcur, base_ds, dirty_pk_list, ignore_missing=True
+            )
+            L.debug(
+                "_reset_dirty_rows(): wrote %s features, tracking Δ count=%s",
+                count,
+                track_count,
+            )
+
+            dbcur.execute(
+                f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,),
+            )
 
 
 class WorkingCopy_GPKG_1(WorkingCopyGPKG):
