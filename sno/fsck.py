@@ -11,50 +11,12 @@ from .structure import RepositoryStructure
 
 
 def _fsck_reset(repo_structure, working_copy, dataset_paths):
+    commit = repo_structure.repo.head.peel(pygit2.Commit)
     datasets = [repo_structure[p] for p in dataset_paths]
 
     for ds in datasets:
-        table = ds.name
-        if ds.has_geometry:
-            gdal_ds = gdal.OpenEx(
-                str(working_copy.full_path),
-                gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
-                ["GPKG"],
-            )
-            gdal_ds.ExecuteSQL(
-                f"SELECT DisableSpatialIndex({gpkg.ident(table)}, {gpkg.ident(ds.geom_column_name)});"
-            )
-            del gdal_ds
+        working_copy.drop_table(commit, ds)
 
-        with working_copy.session() as db:
-            dbcur = db.cursor()
-            dbcur.execute("PRAGMA defer_foreign_keys = ON;")
-            try:
-                working_copy._drop_triggers(dbcur, table)
-
-                dbcur.execute(
-                    """DELETE FROM ".sno-meta" WHERE table_name=?;""", [table]
-                )
-                dbcur.execute(
-                    """DELETE FROM ".sno-track" WHERE table_name=?;""", [table]
-                )
-                dbcur.execute(
-                    "DELETE FROM gpkg_metadata WHERE id IN (SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name=?);",
-                    [table],
-                )
-                dbcur.execute(
-                    "DELETE FROM gpkg_metadata_reference WHERE table_name=?;", [table]
-                )
-                dbcur.execute(
-                    "DELETE FROM gpkg_geometry_columns WHERE table_name=?;", [table]
-                )
-                dbcur.execute("DELETE FROM gpkg_contents WHERE table_name=?;", [table])
-
-                dbcur.execute(f"DROP TABLE {gpkg.ident(table)};")
-            finally:
-                dbcur.execute("PRAGMA defer_foreign_keys = OFF;")
-
-    commit = repo_structure.repo.head.peel(pygit2.Commit)
     for ds in datasets:
         working_copy.write_full(commit, ds)
 
@@ -153,42 +115,48 @@ def fsck(ctx, reset_datasets, fsck_args):
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
             wc_diff = working_copy.diff_db_to_tree(dataset)
+            wc_diff.prune()
+
             if wc_diff:
                 click.secho(
-                    f"! Working copy appears dirty according to the index: {len(wc_diff)} change(s)",
-                    fg="yellow",
+                    f"! Working copy appears dirty according to the index", fg="yellow",
                 )
 
-                meta_diff = wc_diff[dataset.path]["META"]
-                if meta_diff:
-                    click.secho(f"! META ({len(meta_diff)}):", fg="yellow")
+            if "meta" in wc_diff:
+                meta_diff = wc_diff["meta"]
+                click.secho(f'{dataset.name}:meta: ({len(meta_diff)})', fg="yellow")
 
-                    for path in meta_diff.keys():
-                        click.echo(path)
+                for path in meta_diff.keys():
+                    click.echo(f"{dataset.name}:meta:{path}")
 
-                if sum([len(wc_diff[dataset.path][i]) for i in ["I", "U", "D"]]):
-                    # has feature changes
-                    for v in wc_diff[dataset.path]["I"]:
-                        click.echo(f" A  {v[pk]}")
+            if "feature" in wc_diff:
+                feature_diff = wc_diff["feature"]
+                click.secho(
+                    f'{dataset.name}:feature: ({len(feature_diff)})', fg="yellow"
+                )
+                nul = "␀"
 
-                    for h, v in wc_diff[dataset.path]["D"].items():
-                        click.echo(f" D  {v[pk]}")
+                # has feature changes
+                # Note that pygit has its own names and letters for these operations - Add, Delete, Modify, Rename.
+                # But, we call them insert, update and delete elsewhere in sno - so we should be consistent here.
+                for delta in feature_diff.values():
+                    if delta.type == "insert":
+                        click.echo(f" I   {nul:>10} → {delta.key}")
+                    elif delta.type == "delete":
+                        click.echo(f" D   {delta.key:>10} → {nul}")
+                    else:
+                        is_rename = delta.old_key != delta.new_key
+                        is_update = delta.old_value != delta.new_value
 
-                    for h, (v_old, v_new) in wc_diff[dataset.path]["U"].items():
-                        s_old = set(v_old.items())
-                        s_new = set(v_new.items())
-                        diff_add = dict(s_new - s_old)
-                        diff_del = dict(s_old - s_new)
-                        all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))
+                        if is_rename and is_update:
+                            click.echo(f" R+U {delta.old_key:>10} → {delta.new_key}")
+                        elif is_rename:
+                            click.echo(f" R   {delta.old_key:>10} → {delta.new_key}")
+                        elif is_update:
+                            click.echo(f" U   {delta.key:>10} → {nul}")
 
-                        if all_keys == {pk}:
-                            click.echo(f" R  {v_old[pk]} → {v_new[pk]}")
-                        elif pk in all_keys:
-                            click.echo(f" RM {v_old[pk]} → {v_new[pk]}")
-                        else:
-                            click.echo(f" M  {v_old[pk]}")
-
-                # can't proceed with content comparison for dirty working copies
+            # can't proceed with content comparison for dirty working copies
+            if wc_diff:
                 click.echo("Can't do any further checks")
                 return
 
@@ -196,7 +164,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                 click.echo("Checking features...")
                 feature_err_count = 0
                 for pk_hash, feature in dataset.features(fast=False):
-                    h_verify = dataset.encode_1pk_to_path(feature[pk])
+                    h_verify = os.path.basename(dataset.encode_1pk_to_path(feature[pk]))
 
                     if pk_hash != h_verify:
                         has_err = True

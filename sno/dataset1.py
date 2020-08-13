@@ -292,7 +292,7 @@ class Dataset1(DatasetStructure):
         return (tupleizer(blob) for blob in self._iter_feature_blobs(fast=True))
 
     def feature_count(self, fast=True):
-        return sum(1 for blob in self._iter_feature_blobs(fast=True))
+        return sum(1 for blob in self._iter_feature_blobs(fast=fast))
 
     def encode_feature(
         self,

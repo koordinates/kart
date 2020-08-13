@@ -222,7 +222,7 @@ class Dataset2(DatasetStructure):
         raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
         return self.schema.feature_from_raw_dict(raw_dict, keys=keys)
 
-    def features(self, keys=True):
+    def features(self, keys=True, fast=None):
         """
         Returns a generator that calls get_feature once per feature.
         Each entry in the generator is the path of the feature and then the feature itself.
@@ -238,7 +238,7 @@ class Dataset2(DatasetStructure):
                 path=blob.name, data=blob.data, keys=keys
             ),
 
-    def feature_count(self):
+    def feature_count(self, fast=None):
         if self.FEATURE_PATH not in self.tree:
             return 0
         return sum(1 for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH))
