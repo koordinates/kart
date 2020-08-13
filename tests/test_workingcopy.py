@@ -32,10 +32,11 @@ def test_checkout_workingcopy(
     version, archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
 ):
     """ Checkout a working copy to edit """
-    meta_prefix = '.sno-'
     if version == "2":
         archive += "2"
-        meta_prefix = 'gpkg_sno_'
+        sno_state_table = "gpkg_sno_state"
+    else:
+        sno_state_table = ".sno-meta"
 
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
@@ -59,7 +60,7 @@ def test_checkout_workingcopy(
         wc_tree_id = (
             db.cursor()
             .execute(
-                f"""SELECT value FROM "{meta_prefix}meta" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "{sno_state_table}" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )

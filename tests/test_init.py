@@ -308,7 +308,7 @@ def test_init_import(
     import_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    meta_prefix = 'gpkg_sno_' if import_version == '2' else '.sno-'
+    state_table = 'gpkg_sno_state' if import_version == '2' else '.sno-meta'
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.sno"
@@ -350,7 +350,7 @@ def test_init_import(
         wc_tree_id = (
             db.cursor()
             .execute(
-                f"""SELECT value FROM "{meta_prefix}meta" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "{state_table}" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )

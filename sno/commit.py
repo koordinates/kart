@@ -107,7 +107,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
     new_commit = repo[new_commit_id].peel(pygit2.Commit)
 
     working_copy.reset_tracking_table(wc_diff.to_filter())
-    working_copy.update_meta_table(new_commit.peel(pygit2.Tree).id.hex)
+    working_copy.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
 
     jdict = commit_obj_to_json(new_commit, repo, wc_diff)
     if do_json:
