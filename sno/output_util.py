@@ -6,7 +6,7 @@ import sys
 JSON_PARAMS = {
     "compact": {},
     "pretty": {"indent": 2},
-    "extracompact": {"separators": (',', ':')},
+    "extracompact": {"separators": (",", ":")},
 }
 
 
@@ -27,7 +27,7 @@ def format_json_for_output(output, fp, json_style="pretty"):
 
     Adds syntax highlighting if appropriate.
     """
-    if json_style == 'pretty' and fp == sys.stdout and fp.isatty():
+    if json_style == "pretty" and fp == sys.stdout and fp.isatty():
         # Add syntax highlighting
         from pygments import highlight
         from pygments.lexers import JsonLexer
@@ -37,7 +37,7 @@ def format_json_for_output(output, fp, json_style="pretty"):
         return highlight(dumped.encode(), JsonLexer(), TerminalFormatter())
     else:
         # pygments adds a newline, best we do that here too for consistency
-        return json.dumps(output, **JSON_PARAMS[json_style]) + '\n'
+        return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
 
 
 def dump_json_output(output, output_path, json_style="pretty"):
@@ -46,13 +46,39 @@ def dump_json_output(output, output_path, json_style="pretty"):
     """
     fp = resolve_output_path(output_path)
 
-    # TODO: reintroduce JSON syntax highlighting
-    # highlit = json_style == 'pretty' and fp == sys.stdout and fp.isatty()
-
+    highlit = json_style == "pretty" and fp == sys.stdout and fp.isatty()
     json_encoder = ExtendedJsonEncoder(**JSON_PARAMS[json_style])
-    for chunk in json_encoder.iterencode(output):
-        fp.write(chunk)
-    fp.write('\n')
+    if highlit:
+        import pygments
+
+        # Takes patterns from JsonLexer and get_tokens_unprocessed function from ExtendedRegexLexer.
+        # get_tokens_unprocessed enables the lexer to lex incomplete chunks of json
+        class ExtendedJsonLexer(
+            pygments.lexers.JsonLexer, pygments.lexer.ExtendedRegexLexer
+        ):
+            pass
+
+        ex_json_lexer = ExtendedJsonLexer()
+        # The LexerContext stores the state of the lexer after each call to get_tokens_unprocessed
+        lexer_context = pygments.lexer.LexerContext("", 0)
+        formatter = pygments.formatters.TerminalFormatter()
+
+        for chunk in json_encoder.iterencode(output):
+            lexer_context.text = chunk
+            lexer_context.pos = 0
+            lexer_context.end = len(chunk)
+            token_generator = (
+                (token_type, value)
+                for (index, token_type, value) in ex_json_lexer.get_tokens_unprocessed(
+                    context=lexer_context
+                )
+            )
+            fp.write(pygments.format(token_generator, formatter))
+
+    else:
+        for chunk in json_encoder.iterencode(output):
+            fp.write(chunk)
+    fp.write("\n")
 
 
 def resolve_output_path(output_path):
