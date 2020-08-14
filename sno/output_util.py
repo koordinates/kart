@@ -2,27 +2,13 @@ import io
 import json
 import sys
 
-import pygments.token as token
 
+_terminal_formatter = None
 
 JSON_PARAMS = {
     "compact": {},
     "pretty": {"indent": 2},
     "extracompact": {"separators": (",", ":")},
-}
-
-# Colours to use for syntax highlighting if printing to terminal.
-# First colour is for light background, second for dark background.
-# Default is light background, pass bg="dark" to TerminalFormatter to use dark background colours.
-TERMINAL_TOKEN_COLORS = {
-    token.Token: ("", ""),
-    token.Whitespace: ("gray", "brightblack"),
-    token.Keyword: ("magenta", "brightmagenta"),
-    token.Name.Tag: ("yellow", "yellow"),
-    token.String: ("brightblue", "brightblue"),
-    token.Number: ("cyan", "brightcyan"),
-    token.Generic.Error: ("brightred", "brightred"),
-    token.Error: ("_brightred_", "_brightred_"),
 }
 
 
@@ -34,6 +20,30 @@ class ExtendedJsonEncoder(json.JSONEncoder):
             return obj.__json__()
         except AttributeError:
             return json.JSONEncoder.default(self, obj)
+
+
+def get_terminal_formatter():
+    global _terminal_formatter
+    if _terminal_formatter is None:
+        import pygments.token as token
+        from pygments.formatters import TerminalFormatter
+
+        # Colours to use for syntax highlighting if printing to terminal.
+        # First colour is for light background, second for dark background.
+        # Default is light background, pass bg="dark" to TerminalFormatter to use dark background colours.
+        _terminal_formatter = TerminalFormatter(
+            colorscheme={
+                token.Token: ("", ""),
+                token.Whitespace: ("gray", "brightblack"),
+                token.Keyword: ("magenta", "brightmagenta"),
+                token.Name.Tag: ("yellow", "yellow"),
+                token.String: ("brightblue", "brightblue"),
+                token.Number: ("cyan", "brightcyan"),
+                token.Generic.Error: ("brightred", "brightred"),
+                token.Error: ("_brightred_", "_brightred_"),
+            }
+        )
+    return _terminal_formatter
 
 
 def format_json_for_output(output, fp, json_style="pretty"):
@@ -50,11 +60,7 @@ def format_json_for_output(output, fp, json_style="pretty"):
         from pygments.formatters import TerminalFormatter
 
         dumped = json.dumps(output, **JSON_PARAMS[json_style])
-        return highlight(
-            dumped.encode(),
-            JsonLexer(),
-            TerminalFormatter(colorscheme=TERMINAL_TOKEN_COLORS),
-        )
+        return highlight(dumped.encode(), JsonLexer(), get_terminal_formatter())
     else:
         # pygments adds a newline, best we do that here too for consistency
         return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
@@ -81,9 +87,6 @@ def dump_json_output(output, output_path, json_style="pretty"):
         ex_json_lexer = ExtendedJsonLexer()
         # The LexerContext stores the state of the lexer after each call to get_tokens_unprocessed
         lexer_context = pygments.lexer.LexerContext("", 0)
-        formatter = pygments.formatters.TerminalFormatter(
-            colorscheme=TERMINAL_TOKEN_COLORS
-        )
 
         for chunk in json_encoder.iterencode(output):
             lexer_context.text = chunk
@@ -95,7 +98,7 @@ def dump_json_output(output, output_path, json_style="pretty"):
                     context=lexer_context
                 )
             )
-            fp.write(pygments.format(token_generator, formatter))
+            fp.write(pygments.format(token_generator, get_terminal_formatter()))
 
     else:
         for chunk in json_encoder.iterencode(output):
