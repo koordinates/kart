@@ -5,8 +5,14 @@ from pathlib import Path
 
 import click
 
-from .diff_output import *  # noqa - used from globals()
-from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
+from .diff_output import (  # noqa - used from globals()
+    diff_output_text,
+    diff_output_json,
+    diff_output_geojson,
+    diff_output_quiet,
+    diff_output_html,
+)
+from .diff_structs import RepoDiff, DatasetDiff
 from .exceptions import (
     InvalidOperation,
     NotFound,
