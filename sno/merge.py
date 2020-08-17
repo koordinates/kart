@@ -226,7 +226,9 @@ def complete_merging_state(ctx):
     if wc:
         L.debug(f"Updating {wc.path} ...")
         merge_commit = repo[merge_commit_id]
-        wc.reset(merge_commit)
+        # FIXME - this blows away any WC changes the user has, but unfortunately,
+        # we don't have any way of preserving them right now.
+        wc.reset(merge_commit, force=True)
 
     remove_all_merge_repo_files(repo)
     assert RepoState.get_state(repo) != RepoState.MERGING
