@@ -10,7 +10,7 @@ from pathlib import Path
 import pygit2
 from osgeo import gdal
 
-from . import gpkg
+from . import gpkg, gpkg_adapter
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
@@ -309,24 +309,28 @@ class WorkingCopyGPKG(WorkingCopy):
             )
 
     def write_meta(self, dataset):
-        meta_info = dataset.get_meta_item("gpkg_contents")
-        meta_info["table_name"] = dataset.name
+        """
+        Populate the following tables with data from this dataset:
+        gpkg_contents, gpkg_geometry_columns, gpkg_spatial_ref_sys, gpkg_metadata, gpkg_metadata_reference
+        """
+        table_name = dataset.name
+        gpkg_contents = dataset.get_meta_item("gpkg_contents")
+        gpkg_contents["table_name"] = table_name
 
         # FIXME: find a better way to roundtrip identifiers
         identifier_prefix = f"{dataset.name}: "
-        if not meta_info["identifier"].startswith(identifier_prefix):
-            meta_info["identifier"] = identifier_prefix + meta_info['identifier']
+        if not gpkg_contents["identifier"].startswith(identifier_prefix):
+            gpkg_contents["identifier"] = (
+                identifier_prefix + gpkg_contents['identifier']
+            )
 
-        meta_geom = dataset.get_meta_item("gpkg_geometry_columns")
-        meta_srs = dataset.get_meta_item("gpkg_spatial_ref_sys")
-
-        meta_md = dataset.get_meta_item("gpkg_metadata") or {}
-        meta_md_ref = dataset.get_meta_item("gpkg_metadata_reference") or {}
+        gpkg_geometry_columns = dataset.get_meta_item("gpkg_geometry_columns")
+        gpkg_spatial_ref_sys = dataset.get_meta_item("gpkg_spatial_ref_sys")
 
         with self.session() as db:
             dbcur = db.cursor()
             # Update GeoPackage core tables
-            for o in meta_srs:
+            for o in gpkg_spatial_ref_sys:
                 keys, values = zip(*o.items())
                 sql = f"""
                     INSERT OR REPLACE INTO gpkg_spatial_ref_sys
@@ -336,7 +340,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 """
                 dbcur.execute(sql, values)
 
-            keys, values = zip(*meta_info.items())
+            keys, values = zip(*gpkg_contents.items())
             # our repo copy doesn't include all fields from gpkg_contents
             # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y}
             # should deal with the remaining fields
@@ -349,8 +353,8 @@ class WorkingCopyGPKG(WorkingCopy):
             """
             dbcur.execute(sql, values)
 
-            if meta_geom:
-                keys, values = zip(*meta_geom.items())
+            if gpkg_geometry_columns:
+                keys, values = zip(*gpkg_geometry_columns.items())
                 sql = f"""
                     INSERT INTO gpkg_geometry_columns
                         ({','.join([gpkg.ident(k) for k in keys])})
@@ -359,38 +363,48 @@ class WorkingCopyGPKG(WorkingCopy):
                 """
                 dbcur.execute(sql, values)
 
-            # Populate metadata tables
-            # since there's FKs, need to remap joins
-            dbcur = db.cursor()
-            metadata_id_map = {}
-            for o in meta_md:
-                params = dict(o.items())
-                params.pop("id")
+            gpkg_metadata = dataset.get_meta_item("gpkg_metadata")
+            gpkg_metadata_reference = dataset.get_meta_item("gpkg_metadata_reference")
+            if gpkg_metadata and gpkg_metadata_reference:
+                self._write_meta_metadata(
+                    table_name, gpkg_metadata, gpkg_metadata_reference, db, dbcur
+                )
 
-                keys, values = zip(*params.items())
-                sql = f"""
-                    INSERT INTO gpkg_metadata
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    VALUES
-                        ({','.join(['?']*len(keys))});
-                    """
-                dbcur.execute(sql, values)
-                metadata_id_map[o["id"]] = db.last_insert_rowid()
+    def _write_meta_metadata(
+        self, table_name, gpkg_metadata, gpkg_metadata_reference, db, dbcur
+    ):
+        """Populate gpkg_metadata and gpkg_metadata_reference tables."""
+        # gpkg_metadata_reference.md_file_id is a foreign key -> gpkg_metadata.id,
+        # have to make sure these IDs still match once we insert.
+        metadata_id_map = {}
+        for row in gpkg_metadata:
+            params = dict(row.items())
+            params.pop("id")
 
-            for o in meta_md_ref:
-                params = dict(o.items())
-                params["md_file_id"] = metadata_id_map[o["md_file_id"]]
-                params["md_parent_id"] = metadata_id_map.get(o["md_parent_id"], None)
-                params["table_name"] = dataset.name
-
-                keys, values = zip(*params.items())
-                sql = f"""
-                    INSERT INTO gpkg_metadata_reference
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    VALUES
-                        ({','.join(['?']*len(keys))});
+            keys, values = zip(*params.items())
+            sql = f"""
+                INSERT INTO gpkg_metadata
+                    ({','.join([gpkg.ident(k) for k in keys])})
+                VALUES
+                    ({','.join(['?']*len(keys))});
                 """
-                dbcur.execute(sql, values)
+            dbcur.execute(sql, values)
+            metadata_id_map[row["id"]] = db.last_insert_rowid()
+
+        for row in gpkg_metadata_reference:
+            params = dict(row.items())
+            params["md_file_id"] = metadata_id_map[row["md_file_id"]]
+            params["md_parent_id"] = metadata_id_map.get(row["md_parent_id"], None)
+            params["table_name"] = table_name
+
+            keys, values = zip(*params.items())
+            sql = f"""
+                INSERT INTO gpkg_metadata_reference
+                    ({','.join([gpkg.ident(k) for k in keys])})
+                VALUES
+                    ({','.join(['?']*len(keys))});
+            """
+            dbcur.execute(sql, values)
 
     def iter_meta_items(self, dataset):
         """
@@ -410,8 +424,6 @@ class WorkingCopyGPKG(WorkingCopy):
             def get_meta_item(self, path):
                 return gpkg_meta_items[path]
 
-        from . import gpkg_adapter
-
         gpkg_name = os.path.basename(self.path)
         yield from gpkg_adapter.iter_v2_meta_items(
             GpkgTableAsV1Dataset(dataset.name, gpkg_meta_items),
@@ -419,32 +431,32 @@ class WorkingCopyGPKG(WorkingCopy):
         )
 
     def delete_meta(self, dataset):
+        table_name = dataset.name
         with self.session() as db:
             dbcur = db.cursor()
-
+            self._delete_meta_metadata(table_name, dbcur)
             # FOREIGN KEY constraints are still active, so we delete in a particular order:
-            for table in (
-                "gpkg_metadata_reference",
-                "gpkg_geometry_columns",
-                "gpkg_contents",
-            ):
-                dbcur.execute(
-                    f"""DELETE FROM {table} WHERE table_name = ?;""", (dataset.name,)
-                )
+            dbcur.execute(
+                """DELETE FROM gpkg_geometry_columns WHERE table_name = ?;""",
+                (dataset.name,),
+            )
+            dbcur.execute(
+                """DELETE FROM gpkg_contents WHERE table_name = ?;""", (dataset.name,)
+            )
 
-            gpkg_metadata = dataset.get_meta_item("gpkg_metadata") or {}
-            for row in gpkg_metadata:
-                params = dict(row.items())
-                params.pop("id")
-
-                keys, values = zip(*params.items())
-                sql = f"""
-                    DELETE FROM gpkg_metadata WHERE
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    =
-                        ({','.join(['?']*len(keys))});
-                    """
-                dbcur.execute(sql, values)
+    def _delete_meta_metadata(self, table_name, dbcur):
+        dbcur.execute("""PRAGMA defer_foreign_keys = ON""")
+        dbcur.execute(
+            """
+            DELETE FROM gpkg_metadata WHERE id IN
+                (SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name = ?);
+            """,
+            (table_name,),
+        )
+        dbcur.execute(
+            """DELETE FROM gpkg_metadata_reference WHERE table_name = ?;""",
+            (table_name,),
+        )
 
     def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
@@ -991,7 +1003,7 @@ class WorkingCopyGPKG(WorkingCopy):
         dt.pop("name_updates")
         return sum(dt.values()) == 0
 
-    def _apply_meta_title(self, table_name, src_value, dest_value, dbcur):
+    def _apply_meta_title(self, table_name, src_value, dest_value, db, dbcur):
         # TODO - find a better way to roundtrip titles while keeping them unique
         identifier = f"{table_name}: {dest_value}"
         dbcur.execute(
@@ -999,13 +1011,13 @@ class WorkingCopyGPKG(WorkingCopy):
             (identifier, table_name),
         )
 
-    def _apply_meta_description(self, table_name, src_value, dest_value, dbcur):
+    def _apply_meta_description(self, table_name, src_value, dest_value, db, dbcur):
         dbcur.execute(
             '''UPDATE gpkg_contents SET description = ? WHERE table_name = ?''',
             (dest_value, table_name),
         )
 
-    def _apply_meta_schema(self, table_name, src_value, dest_value, dbcur):
+    def _apply_meta_schema(self, table_name, src_value, dest_value, db, dbcur):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 
@@ -1023,7 +1035,20 @@ class WorkingCopyGPKG(WorkingCopy):
                 f'''ALTER TABLE {gpkg.ident(table_name)} RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}'''
             )
 
-    def _apply_meta_diff(self, dataset, meta_diff, dbcur):
+    def _apply_meta_metadata_dataset_json(
+        self, table_name, src_value, dest_value, db, dbcur
+    ):
+        self._delete_meta_metadata(table_name, dbcur)
+        if dest_value:
+            gpkg_metadata = gpkg_adapter.json_to_gpkg_metadata(dest_value, table_name)
+            gpkg_metadata_reference = gpkg_adapter.json_to_gpkg_metadata(
+                dest_value, table_name, reference=True
+            )
+            self._write_meta_metadata(
+                table_name, gpkg_metadata, gpkg_metadata_reference, db, dbcur
+            )
+
+    def _apply_meta_diff(self, dataset, meta_diff, db, dbcur):
         """
         Change the metadata of this working copy according to the given meta diff.
         Not all changes are possible or supported - see _is_meta_update_supported.
@@ -1034,21 +1059,19 @@ class WorkingCopyGPKG(WorkingCopy):
         L.debug("Meta diff: %s changes", len(meta_diff))
         table_name = dataset.name
         for key in meta_diff:
-            try:
-                func = getattr(self, f'_apply_meta_{key.replace("/", "__")}')
-            except AttributeError:
-                continue
+            func_key = key.replace("/", "_").replace(".", "_")
+            func = getattr(self, f'_apply_meta_{func_key}')
             delta = meta_diff[key]
-            func(table_name, delta.old_value, delta.new_value, dbcur)
+            func(table_name, delta.old_value, delta.new_value, db, dbcur)
 
     def _apply_feature_diff(
-        self, base_ds, target_ds, dbcur, track_changes_as_dirty=False
+        self, base_ds, target_ds, db, dbcur, track_changes_as_dirty=False
     ):
         """
         Change the features of this working copy from their current state, base_ds - to the desired state, target_ds.
         base_ds - dataset containing the features that match the WC table currently.
         target_ds - dataset containing the desired features of the WC table.
-        dbcur - DB cursor.
+        db, dbcur - database, database cursor.
         track_changes_as_dirty - whether to track these changes as working-copy edits in the tracking table.
         """
         feature_diff_index = base_ds.feature_tree.diff_to_tree(target_ds.feature_tree)
@@ -1252,15 +1275,19 @@ class WorkingCopyGPKG(WorkingCopy):
         track_changes_if_dirty - whether to track changes made from base_ds -> target_ds as WC edits.
         """
 
-        self._apply_meta_diff(base_ds, ~self.diff_db_to_tree_meta(base_ds), dbcur)
+        self._apply_meta_diff(base_ds, ~self.diff_db_to_tree_meta(base_ds), db, dbcur)
         # WC now has base_ds structure and so we can write base_ds features to WC.
         self._reset_dirty_rows(base_ds, db, dbcur)
 
         if target_ds != base_ds:
-            self._apply_meta_diff(base_ds, base_ds.diff_meta(target_ds), dbcur)
+            self._apply_meta_diff(base_ds, base_ds.diff_meta(target_ds), db, dbcur)
             # WC now has target_ds structure and so we can write target_ds features to WC.
             self._apply_feature_diff(
-                base_ds, target_ds, dbcur, track_changes_as_dirty=track_changes_as_dirty
+                base_ds,
+                target_ds,
+                db,
+                dbcur,
+                track_changes_as_dirty=track_changes_as_dirty,
             )
 
         self._update_gpkg_contents(target_ds, db, dbcur, commit)

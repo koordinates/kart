@@ -3,7 +3,6 @@ import functools
 import os
 import re
 import sys
-from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
@@ -25,7 +24,12 @@ from .exceptions import (
 )
 from .fast_import import fast_import_tables
 from .geometry import ogr_to_gpkg_geom
-from .gpkg_adapter import osgeo_to_gpkg_spatial_ref_sys, osgeo_to_srs_str
+from .gpkg_adapter import (
+    gpkg_metadata_to_json,
+    json_to_gpkg_metadata,
+    osgeo_to_gpkg_spatial_ref_sys,
+    osgeo_to_srs_str,
+)
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
@@ -34,7 +38,6 @@ from .structure_version import (
     STRUCTURE_VERSIONS_CHOICE,
     DEFAULT_STRUCTURE_VERSION,
 )
-from .timestamps import datetime_to_iso8601_utc
 from .utils import ungenerator
 from .working_copy import WorkingCopy
 
@@ -461,6 +464,8 @@ class OgrImporter:
             return ogr_metadata.get('DESCRIPTION') or ''
         elif key == "gpkg_spatial_ref_sys":
             return self.get_meta_spatial_ref_sys()
+        elif key == "metadata/dataset.json":
+            return self.get_v2_metadata_json()
 
     def get_srs_definition(self, srs_name):
         return dict(self.srs_definitions)[srs_name]
@@ -630,7 +635,11 @@ class OgrImporter:
         'GDALMultiDomainMetadata': 'http://gdal.org',
     }
 
-    def _get_xml_metadata(self, xml_metadata):
+    def get_v2_metadata_json(self):
+        xml_metadata = self._meta_overrides.get('xml_metadata')
+        if not xml_metadata:
+            return None
+
         from xml.dom.minidom import parseString
 
         doc = parseString(xml_metadata)
@@ -640,33 +649,7 @@ class OgrImporter:
         else:
             uri = element.namespaceURI or '(unknown)'
 
-        yield "gpkg_metadata_reference", [
-            {
-                'reference_scope': 'table',
-                'table_name': self.table,
-                'column_name': None,
-                'row_id_value': None,
-                'timestamp': datetime_to_iso8601_utc(datetime.now()),
-                'md_file_id': 1,
-                'md_parent_id': None,
-            }
-        ]
-
-        yield "gpkg_metadata", [
-            {
-                "id": 1,
-                "md_scope": "dataset",
-                "md_standard_uri": uri,
-                "mime_type": "text/xml",
-                "metadata": xml_metadata,
-            }
-        ]
-
-    def get_xml_metadata(self):
-        xml_metadata = self._meta_overrides.get('xml_metadata')
-
-        if xml_metadata:
-            yield from self._get_xml_metadata(xml_metadata)
+        return {uri: {"text/xml": xml_metadata}}
 
     def iter_gpkg_meta_items(self):
         """
@@ -679,7 +662,12 @@ class OgrImporter:
         yield "sqlite_table_info", self.get_meta_column_info()
         yield "gpkg_spatial_ref_sys", self.get_meta_spatial_ref_sys()
 
-        yield from self.get_xml_metadata()
+        v2json = self.get_v2_metadata_json()
+        if v2json:
+            yield "gpkg_metadata_reference", json_to_gpkg_metadata(
+                v2json, self.table, reference=True
+            )
+            yield "gpkg_metadata", json_to_gpkg_metadata(v2json, self.table)
 
 
 class ImportGPKG(OgrImporter):
@@ -709,22 +697,19 @@ class ImportGPKG(OgrImporter):
         dbcur.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
         yield from dbcur
 
-    def iter_gpkg_meta_items(self):
-        """
-        Returns metadata from the gpkg_* tables about this GPKG.
-        """
-        # We use the OGR implementation for everything it knows about.
-        # The `gpkg.get_meta_info()` can produce mostly the same stuff,
-        # but it doesn't know about overrides from the `--titles` and `--description` options.
-        done_keys = []
-        for k, v in super().iter_gpkg_meta_items():
-            done_keys.append(k)
-            yield k, v
+    def get_v2_metadata_json(self):
+        if 'xml_metadata' in self._meta_overrides:
+            return super().get_v2_metadata_json()
 
-        # For everything not handled by the OGRImporter implementation, get it from gpkg.get_meta_info()
-        # (this is mostly just XML metadata)
         db = gpkg.db(self.ogr_source)
-        yield from gpkg.get_meta_info(db, layer=self.table, exclude_keys=done_keys)
+        gm_info = dict(
+            gpkg.get_meta_info(
+                db, layer=self.table, keys=("gpkg_metadata", "gpkg_metadata_reference")
+            )
+        )
+        if not gm_info:
+            return None
+        return gpkg_metadata_to_json(**gm_info)
 
 
 class ImportPostgreSQL(OgrImporter):

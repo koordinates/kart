@@ -66,7 +66,7 @@ def db(path, **kwargs):
     return db
 
 
-def get_meta_info(db, layer, exclude_keys=()):
+def get_meta_info(db, layer, keys=None):
     """
     Returns metadata from the gpkg_* tables about this GPKG.
     Keep this in sync with OgrImporter.iter_gpkg_meta for other datasource types.
@@ -128,7 +128,7 @@ def get_meta_info(db, layer, exclude_keys=()):
     }
     try:
         for key, (sql, params, rtype) in QUERIES.items():
-            if key in exclude_keys:
+            if keys is not None and key not in keys:
                 continue
             # check table exists, the metadata ones may not
             if not key.startswith("sqlite_"):

@@ -1,7 +1,11 @@
+from datetime import datetime
 import re
+
+from osgeo.osr import SpatialReference
+
 from .exceptions import NotYetImplemented
 from .schema import Schema, ColumnSchema
-from osgeo.osr import SpatialReference
+from .timestamps import datetime_to_iso8601_utc
 
 
 GPKG_META_ITEMS = (
@@ -38,9 +42,10 @@ def generate_gpkg_meta_item(v2_dataset, path):
         return generate_gpkg_spatial_ref_sys(v2_dataset)
     elif path == "sqlite_table_info":
         return generate_sqlite_table_info(v2_dataset)
-    elif path == "gpkg_metadata" or path == "gpkg_metadata_reference":
-        # TODO - store and generate this metadata.
-        return None
+    elif path == "gpkg_metadata":
+        return generate_gpkg_metadata(v2_dataset)
+    elif path == "gpkg_metadata_reference":
+        return generate_gpkg_metadata_reference(v2_dataset)
 
 
 def is_v2_meta_item(path):
@@ -66,8 +71,10 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
             id_salt or v1_dataset.name,
         ).to_column_dicts()
     elif path == "metadata/dataset.json":
-        # TODO - store and generate this metadata.
-        return None
+        return gpkg_metadata_to_json(
+            v1_dataset.get_meta_item("gpkg_metadata"),
+            v1_dataset.get_meta_item("gpkg_metadata_reference"),
+        )
 
     elif path.startswith("srs/"):
         gpkg_spatial_ref_sys = v1_dataset.get_meta_item("gpkg_spatial_ref_sys") or ()
@@ -380,3 +387,71 @@ def v2_type_to_gpkg_type(column_schema, is_spatial):
     gpkg_type = gpkg_type_info
     length = extra_type_info.get("length", None)
     return f"{gpkg_type}({length})" if length else gpkg_type
+
+
+def generate_gpkg_metadata(v2_dataset):
+    v2json = v2_dataset.get_meta_item("metadata/dataset.json")
+    return json_to_gpkg_metadata(v2json, v2_dataset.name, False) if v2json else None
+
+
+def generate_gpkg_metadata_reference(v2_dataset):
+    v2json = v2_dataset.get_meta_item("metadata/dataset.json")
+    return json_to_gpkg_metadata(v2json, v2_dataset.name, True) if v2json else None
+
+
+def json_to_gpkg_metadata(v2_metadata_json, table_name, reference=False):
+    """Generates either the gpkg_metadata or gpkg_metadata_reference tables from the given metadata."""
+    result = []
+    timestamp = datetime_to_iso8601_utc(datetime.now())
+    md_file_id = 1
+
+    for uri, uri_metadata in sorted(v2_metadata_json.items()):
+        for mime_type, content in sorted(uri_metadata.items()):
+            if reference:
+                row = {
+                    'reference_scope': 'table',
+                    'table_name': table_name,
+                    'column_name': None,
+                    'row_id_value': None,
+                    'timestamp': timestamp,
+                    'md_file_id': md_file_id,
+                    'md_parent_id': None,
+                }
+            else:
+                row = {
+                    "id": md_file_id,
+                    "md_scope": "dataset",
+                    "md_standard_uri": uri,
+                    "mime_type": mime_type,
+                    "metadata": content,
+                }
+
+            result.append(row)
+            md_file_id += 1
+
+    return result
+
+
+def gpkg_metadata_to_json(gpkg_metadata, gpkg_metadata_reference):
+    if not gpkg_metadata or not gpkg_metadata_reference:
+        return None
+
+    result = {}
+    ref_rows = {ref_row["md_file_id"]: ref_row for ref_row in gpkg_metadata_reference}
+
+    for gm_row in gpkg_metadata:
+        if gm_row["md_scope"] != "dataset":
+            continue
+
+        ref = ref_rows[gm_row["id"]]
+        r = (ref["reference_scope"], ref["column_name"], ref["row_id_value"])
+        if r != ("table", None, None):
+            continue
+
+        uri = gm_row["md_standard_uri"]
+        mime_type = gm_row["mime_type"]
+        content = gm_row["metadata"]
+        uri_metadata = result.setdefault(uri, {})
+        uri_metadata[mime_type] = content
+
+    return result
