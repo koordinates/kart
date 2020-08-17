@@ -45,6 +45,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Other changes in this release
 
+ * Added `sno create-patch <refish>` - creates a JSON patch file, which can be applied using `sno apply` [#210](https://github.com/koordinates/sno/issues/210)
  * `sno clone` now support shallow clones (`--depth N`) to avoid cloning a repo's entire history [#174](https://github.com/koordinates/sno/issues/174)
  * `sno log` now supports JSON output with `--output-format json` [#170](https://github.com/koordinates/sno/issues/170)
  * Streaming diffs: less time until first change is shown when diffing large changes. [#156](https://github.com/koordinates/sno/issues/156)

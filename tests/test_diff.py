@@ -1420,6 +1420,31 @@ def test_show_json_format(data_archive_readonly, cli_runner):
         assert '"sno.diff/v1+hexwkb": {"' in r.stdout
 
 
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_create_patch(structure_version, data_archive_readonly, cli_runner):
+    """
+    Show a patch; ref defaults to HEAD
+    """
+    data_archive = "points2" if structure_version == "2" else "points"
+    with data_archive_readonly(data_archive):
+        r = cli_runner.invoke(["create-patch"])
+        assert r.exit_code == 2, r.stderr
+        r = cli_runner.invoke(["create-patch", "HEAD"])
+        assert r.exit_code == 0, r.stderr
+
+        j = json.loads(r.stdout)
+        # check the diff's present, but this test doesn't need to have hundreds of lines
+        # to know exactly what it is (we have diff tests above)
+        assert 'sno.diff/v1+hexwkb' in j
+        assert j['sno.patch/v1'] == {
+            'authorEmail': 'robert@coup.net.nz',
+            'authorName': 'Robert Coup',
+            'authorTime': '2019-06-20T14:28:33Z',
+            'authorTimeOffset': '+01:00',
+            'message': 'Improve naming on Coromandel East coast',
+        }
+
+
 def test_show_shallow_clone(data_archive_readonly, cli_runner, tmp_path, chdir):
     # just checking you can 'show' the first commit of a shallow clone
     with data_archive_readonly("points") as original_path:
