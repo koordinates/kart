@@ -42,13 +42,18 @@ def _get_parent(ctx, refish):
     help="Output format",
 )
 @click.option(
+    "--crs",
+    type=diff.CoordinateReferenceString(encoding="utf-8"),
+    help="Reproject geometries into the given coordinate reference system ('EPSG:<code>', proj text or WKT)",
+)
+@click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
     default="pretty",
     help="How to format the output. Only used with --output-format=json",
 )
 @click.argument("refish", default='HEAD', required=False)
-def show(ctx, *, refish, output_format, json_style, **kwargs):
+def show(ctx, *, refish, output_format, crs, json_style, **kwargs):
     """
     Show the given commit, or HEAD
     """
@@ -58,6 +63,7 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
         ctx,
         show_writer,
         exit_code=False,
+        target_crs=crs,
         commit_spec=f"{parent}...{refish}",
         filters=[],
         json_style=json_style,

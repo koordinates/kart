@@ -6,6 +6,18 @@ import struct
 from osgeo import ogr, osr
 
 
+def make_crs(crs_text):
+    """
+    Creates an OGR SpatialReference object from the given string.
+    Accepted input is very flexible.
+    see https://gdal.org/api/ogrspatialref.html#classOGRSpatialReference_1aec3c6a49533fe457ddc763d699ff8796
+    """
+    crs = osr.SpatialReference()
+    crs.SetFromUserInput(crs_text)
+    crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    return crs
+
+
 def _validate_gpkg_geom(gpkg_geom):
     """
     Validates some basic things about the given GPKG geometry.
@@ -125,11 +137,28 @@ def hex_wkb_to_gpkg_geom(hex_wkb, **kwargs):
     return wkb_to_gpkg_geom(wkb, **kwargs)
 
 
+def wkb_to_ogr(wkb):
+    return ogr.CreateGeometryFromWkb(wkb)
+
+
+def hex_wkb_to_ogr(hex_wkb):
+    if hex_wkb is None:
+        return None
+
+    wkb = binascii.unhexlify(hex_wkb)
+    return wkb_to_ogr(wkb)
+
+
 # can't represent 'POINT EMPTY' in WKB.
 # The GPKG spec says we should use POINT(NaN, NaN) instead.
 # Here's the WKB of that.
 # We can't use WKT here: https://github.com/OSGeo/gdal/issues/2472
 WKB_POINT_EMPTY_LE = b"\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xF8\x7F\x00\x00\x00\x00\x00\x00\xF8\x7F"
+
+
+def ogr_to_hex_wkb(ogr_geom):
+    wkb = ogr_geom.ExportToIsoWkb(ogr.wkbNDR)
+    return binascii.hexlify(wkb).decode("ascii").upper()
 
 
 def ogr_to_gpkg_geom(

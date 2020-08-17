@@ -7,6 +7,7 @@ import pytest
 
 import pygit2
 from sno.diff_structs import Delta, DeltaDiff
+from sno.geometry import hex_wkb_to_ogr
 from sno.structure import RepositoryStructure
 
 
@@ -26,7 +27,7 @@ def _check_html_output(s):
     # find the JSON
     m = re.match(r"\s*const DATA=(.*);\s*$", el.text, flags=re.DOTALL)
     # validate it
-    json.loads(m.group(1))
+    return json.loads(m.group(1))
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
@@ -261,6 +262,72 @@ def test_diff_points(
 
         elif output_format == "html":
             _check_html_output(r.stdout)
+
+
+@pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_diff_reprojection(
+    structure_version, output_format, data_working_copy, geopackage, cli_runner
+):
+    """ diff the working copy against HEAD """
+    data_archive = "points2" if structure_version == "2" else "points"
+    with data_working_copy(data_archive) as (repo, wc):
+        # make some changes
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+            cur.execute(
+                f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
+            )
+            assert db.changes() == 1
+
+        r = cli_runner.invoke(
+            [
+                "diff",
+                f"--output-format={output_format}",
+                "--output=-",
+                f"--crs=epsg:2193",
+            ]
+        )
+
+        def _check_geojson(featurecollection):
+            features = featurecollection['features']
+            assert len(features) == 2
+            assert features[0]['geometry']['coordinates'] == [
+                1958227.0621957763,
+                5787640.540304652,
+            ]
+            assert features[1]['geometry']['coordinates'] == [
+                1958227.0621957763,
+                5787640.540304652,
+            ]
+
+        print("STDOUT", repr(r.stdout))
+        if output_format == "quiet":
+            assert r.exit_code == 1, r
+            assert r.stdout == ""
+        elif output_format == "text":
+            assert r.exit_code == 0, r
+        elif output_format == "geojson":
+            assert r.exit_code == 0, r
+            featurecollection = json.loads(r.stdout)
+            _check_geojson(featurecollection)
+        elif output_format == "json":
+            assert r.exit_code == 0, r
+            odata = json.loads(r.stdout)
+            features = odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+            assert len(features) == 1
+            expected_wkt = "POINT (1958227.06219578 5787640.54030465)"
+            assert (
+                hex_wkb_to_ogr(features[0]["+"]["geom"]).ExportToWkt() == expected_wkt
+            )
+            assert (
+                hex_wkb_to_ogr(features[0]["-"]["geom"]).ExportToWkt() == expected_wkt
+            )
+
+        elif output_format == "html":
+            odata = _check_html_output(r.stdout)
+            _check_geojson(odata['nz_pa_points_topo_150k'])
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)

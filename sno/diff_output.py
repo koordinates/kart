@@ -13,7 +13,7 @@ from sno.schema import Schema
 
 import click
 
-from .geometry import gpkg_geom_to_ogr, gpkg_geom_to_hex_wkb
+from .geometry import gpkg_geom_to_ogr, gpkg_geom_to_hex_wkb, ogr_to_hex_wkb
 from .output_util import dump_json_output, resolve_output_path
 from .utils import ungenerator
 
@@ -318,7 +318,14 @@ def text_row_field(row, key, prefix):
 
 
 @contextlib.contextmanager
-def diff_output_geojson(*, output_path, dataset_count, json_style="pretty", **kwargs):
+def diff_output_geojson(
+    *,
+    output_path,
+    dataset_count,
+    json_style="pretty",
+    dataset_geometry_transforms=None,
+    **kwargs,
+):
     """
     Contextmanager.
 
@@ -375,13 +382,22 @@ def diff_output_geojson(*, output_path, dataset_count, json_style="pretty", **kw
             )
 
         features = []
+        geometry_transform = dataset_geometry_transforms.get(dataset.name)
         for key, delta in sorted(diff.get("feature", {}).items()):
             if delta.old:
                 change_type = "U-" if delta.new else "D"
-                features.append(LazyGeojsonFeatureOutput(change_type, delta.old))
+                features.append(
+                    LazyGeojsonFeatureOutput(
+                        change_type, delta.old, geometry_transform=geometry_transform
+                    )
+                )
             if delta.new:
                 change_type = "U+" if delta.old else "I"
-                features.append(LazyGeojsonFeatureOutput(change_type, delta.new))
+                features.append(
+                    LazyGeojsonFeatureOutput(
+                        change_type, delta.new, geometry_transform=geometry_transform
+                    )
+                )
 
         fc = {"type": "FeatureCollection", "features": features}
         dump_json_output(fc, fp, json_style=json_style)
@@ -392,19 +408,23 @@ def diff_output_geojson(*, output_path, dataset_count, json_style="pretty", **kw
 class LazyGeojsonFeatureOutput:
     """Wrapper of KeyValue that lazily serialises it as GEOJSON when sent to json.dumps"""
 
-    __slots__ = ("change_type", "key_value")
+    __slots__ = ("change_type", "key_value", "geometry_transform")
 
-    def __init__(self, change_type, key_value):
+    def __init__(self, change_type, key_value, geometry_transform=None):
         self.change_type = change_type
         self.key_value = key_value
+        self.geometry_transform = geometry_transform
 
     def __json__(self):
         return geojson_row(
-            self.key_value.get_lazy_value(), self.key_value.key, self.change_type
+            self.key_value.get_lazy_value(),
+            self.key_value.key,
+            self.change_type,
+            geometry_transform=self.geometry_transform,
         )
 
 
-def geojson_row(row, pk_value, change=None):
+def geojson_row(row, pk_value, change=None, geometry_transform=None):
     """
     Turns a row into a dict representing a GeoJSON feature.
     """
@@ -420,6 +440,9 @@ def geojson_row(row, pk_value, change=None):
         v = row[k]
         if isinstance(v, bytes):
             g = gpkg_geom_to_ogr(v)
+            if geometry_transform is not None:
+                # reproject
+                g.Transform(geometry_transform)
             f["geometry"] = json.loads(g.ExportToJson())
         else:
             f["properties"][k] = v
@@ -434,6 +457,7 @@ def diff_output_json(
     dataset_count,
     json_style="pretty",
     dump_function=dump_json_output,
+    dataset_geometry_transforms=None,
     **kwargs,
 ):
     """
@@ -461,12 +485,16 @@ def diff_output_json(
             result["+"] = delta.new.get_lazy_value()
         return result
 
-    def prepare_feature_delta(delta):
+    def prepare_feature_delta(delta, geometry_transform=None):
         result = {}
         if delta.old:
-            result["-"] = LazyJsonFeatureOutput(delta.old)
+            result["-"] = LazyJsonFeatureOutput(
+                delta.old, geometry_transform=geometry_transform
+            )
         if delta.new:
-            result["+"] = LazyJsonFeatureOutput(delta.new)
+            result["+"] = LazyJsonFeatureOutput(
+                delta.new, geometry_transform=geometry_transform
+            )
         return result
 
     repo_result = {}
@@ -479,8 +507,9 @@ def diff_output_json(
                 for key, delta in sorted(ds_diff["meta"].items())
             }
         if "feature" in ds_diff:
+            geometry_transform = dataset_geometry_transforms.get(dataset.name)
             ds_result["feature"] = [
-                prepare_feature_delta(delta)
+                prepare_feature_delta(delta, geometry_transform=geometry_transform)
                 for key, delta in sorted(ds_diff["feature"].items())
             ]
         repo_result[dataset.name] = ds_result
@@ -495,29 +524,47 @@ def diff_output_json(
 class LazyJsonFeatureOutput:
     """Wrapper of KeyValue that lazily serialises it as JSON when sent to json.dumps"""
 
-    __slots__ = "key_value"
+    __slots__ = ("key_value", "geometry_transform")
 
-    def __init__(self, key_value):
+    def __init__(self, key_value, geometry_transform=None):
         self.key_value = key_value
+        self.geometry_transform = geometry_transform
 
     def __json__(self):
-        return json_row(self.key_value.get_lazy_value())
+        return json_row(
+            self.key_value.get_lazy_value(), geometry_transform=self.geometry_transform
+        )
 
 
 @ungenerator(dict)
-def json_row(row):
+def json_row(row, geometry_transform=None):
     """
     Turns a row into a dict for serialization as JSON.
     The geometry is serialized as hexWKB.
     """
     for k, v in row.items():
         if isinstance(v, bytes):
-            v = gpkg_geom_to_hex_wkb(v)
+            if geometry_transform is None:
+                v = gpkg_geom_to_hex_wkb(v)
+            else:
+                # reproject
+                ogr_geom = gpkg_geom_to_ogr(v)
+                ogr_geom.Transform(geometry_transform)
+                v = ogr_to_hex_wkb(ogr_geom)
         yield k, v
 
 
 @contextlib.contextmanager
-def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs):
+def diff_output_html(
+    *,
+    output_path,
+    repo,
+    base,
+    target,
+    dataset_count,
+    dataset_geometry_transforms=None,
+    **kwargs,
+):
     """
     Contextmanager.
     Yields a callable which can be called with dataset diffs
@@ -545,7 +592,10 @@ def diff_output_html(*, output_path, repo, base, target, dataset_count, **kwargs
         tempdir = Path(tempdir)
         # Write a bunch of geojson files to a temporary directory
         with diff_output_geojson(
-            output_path=tempdir, dataset_count=dataset_count, json_style="extracompact",
+            output_path=tempdir,
+            dataset_count=dataset_count,
+            json_style="extracompact",
+            dataset_geometry_transforms=dataset_geometry_transforms,
         ) as json_writer:
             yield json_writer
 

@@ -384,6 +384,15 @@ class DatasetStructure:
         meta_geom = self.get_meta_item("gpkg_geometry_columns")
         return meta_geom["column_name"] if meta_geom else None
 
+    @property
+    @functools.lru_cache(maxsize=1)
+    def crs_wkt(self):
+        crs_identifier = self.crs_identifier
+        if crs_identifier is None:
+            return None
+        else:
+            return self.get_meta_item(f"srs/{crs_identifier}.wkt")
+
     def get_feature(self, pk_value):
         raise NotImplementedError()
 

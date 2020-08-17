@@ -175,6 +175,14 @@ class Dataset2(DatasetStructure):
         """Load the current schema from this dataset."""
         return Schema.loads(self.get_data_at(self.SCHEMA_PATH))
 
+    @property
+    @functools.lru_cache(maxsize=1)
+    def crs_identifier(self):
+        for col in self.schema:
+            if col.data_type == "geometry":
+                return col.extra_type_info["geometrySRS"]
+        return None
+
     def encode_schema(self, schema):
         """
         Given a schema, returns the path and the data which *should be written*
