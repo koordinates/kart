@@ -113,7 +113,7 @@ class KeyValueType(click.ParamType):
 @click.pass_context
 def meta_set(ctx, message, dataset, items):
     """
-    Prints the value of meta keys for the given dataset.
+    Sets multiple meta items for a dataset, and creates a commit.
     """
     rs = RepositoryStructure(ctx.obj.repo)
 
