@@ -13,14 +13,33 @@ from . import diff
 EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
+def _get_parent(ctx, refish):
+    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    # Ensures we were given a reference to a commit, and not a tree or something
+    commit = CommitWithReference.resolve(repo, refish).commit
+
+    try:
+        parents = commit.parents
+    except KeyError:
+        # one or more parents doesn't exist.
+        # This is okay if this is the first commit of a shallow clone.
+        # (how to tell?)
+        return EMPTY_TREE_SHA
+    else:
+        if parents:
+            return f"{refish}^"
+        else:
+            return EMPTY_TREE_SHA
+
+
 @click.command()
 @click.pass_context
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json", "patch"]),
+    type=click.Choice(["text", "json"]),
     default="text",
-    help="Output format. 'patch' is a synonym for 'json'",
+    help="Output format",
 )
 @click.option(
     "--json-style",
@@ -33,30 +52,38 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
     """
     Show the given commit, or HEAD
     """
-    if output_format == 'patch':
-        output_format = 'json'
-
-    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
-    # Ensures we were given a reference to a commit, and not a tree or something
-    commit = CommitWithReference.resolve(repo, refish).commit
-
-    try:
-        parents = commit.parents
-    except KeyError:
-        # one or more parents doesn't exist.
-        # This is okay if this is the first commit of a shallow clone.
-        # (how to tell?)
-        parent = EMPTY_TREE_SHA
-    else:
-        if parents:
-            parent = f"{refish}^"
-        else:
-            parent = EMPTY_TREE_SHA
-    patch_writer = globals()[f"patch_output_{output_format}"]
-
+    show_writer = globals()[f"show_output_{output_format}"]
+    parent = _get_parent(ctx, refish)
     return diff.diff_with_writer(
         ctx,
-        patch_writer,
+        show_writer,
+        exit_code=False,
+        commit_spec=f"{parent}...{refish}",
+        filters=[],
+        json_style=json_style,
+    )
+
+
+@click.command(name='create-patch')
+@click.pass_context
+@click.option(
+    "--json-style",
+    type=click.Choice(["extracompact", "compact", "pretty"]),
+    default="pretty",
+    help="How to format the output",
+)
+# NOTE: this is *required* for now.
+# A future version might create patches from working-copy changes.
+@click.argument("refish")
+def create_patch(ctx, *, refish, json_style, **kwargs):
+    """
+    Creates a JSON patch from the given ref.
+    The patch can be applied with `sno apply`.
+    """
+    parent = _get_parent(ctx, refish)
+    return diff.diff_with_writer(
+        ctx,
+        show_output_json,
         exit_code=False,
         commit_spec=f"{parent}...{refish}",
         filters=[],
@@ -65,7 +92,7 @@ def show(ctx, *, refish, output_format, json_style, **kwargs):
 
 
 @contextlib.contextmanager
-def patch_output_text(*, target, output_path, **kwargs):
+def show_output_text(*, target, output_path, **kwargs):
     """
     Contextmanager.
 
@@ -109,19 +136,19 @@ def patch_output_text(*, target, output_path, **kwargs):
 
 
 @contextlib.contextmanager
-def patch_output_json(*, target, output_path, json_style, **kwargs):
+def show_output_json(*, target, output_path, json_style, **kwargs):
     """
     Contextmanager.
 
-    Same arguments and usage as `patch_output_text`; see that docstring for usage.
+    Same arguments and usage as `show_output_text`; see that docstring for usage.
 
-    On exit, writes the patch as JSON to the given output file.
+    On exit, writes the output as JSON to the given output file.
     If the output file is stdout and isn't piped anywhere,
     the json is prettified first.
 
     The patch JSON contains two top-level keys:
         "sno.diff/v1+hexwkb": contains a JSON diff. See `sno.diff.diff_output_json` docstring.
-        "sno.patch/v1": contains metadata about the commit this patch represents:
+        "sno.patch/v1": contains metadata about the commit:
           {
             "authorEmail": "joe@example.com",
             "authorName": "Joe Bloggs",
