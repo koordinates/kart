@@ -12,7 +12,7 @@ attrs==19.3.0             # via -r requirements/../requirements.txt, -r requirem
 backcall==0.2.0           # via ipython
 cached-property==1.5.1    # via -r requirements/../requirements.txt, -r requirements/test.txt
 certifi==2020.6.20        # via -r requirements/../requirements.txt, -r requirements/test.txt
-cffi==1.14.1              # via -r requirements/../requirements.txt, -r requirements/test.txt
+cffi==1.14.2              # via -r requirements/../requirements.txt, -r requirements/test.txt
 click==7.1.2              # via -r requirements/../requirements.txt, -r requirements/test.txt
 colorama==0.4.3           # via -r requirements/test.txt
 coverage==5.2.1           # via -r requirements/test.txt, pytest-cov
@@ -36,7 +36,8 @@ parso==0.7.1              # via jedi
 pexpect==4.8.0            # via ipython
 pickleshare==0.7.5        # via ipython
 pluggy==0.13.1            # via -r requirements/test.txt, pytest
-prompt-toolkit==3.0.5     # via ipython
+prompt-toolkit==3.0.6     # via ipython
+psutil==5.7.2             # via -r requirements/test.txt, pytest-xdist
 ptyprocess==0.6.0         # via pexpect
 py-cpuinfo==7.0.0         # via -r requirements/test.txt, pytest-benchmark
 py==1.9.0                 # via -r requirements/test.txt, pytest, pytest-forked
@@ -45,15 +46,15 @@ pygments==2.6.1           # via -r requirements/../requirements.txt, -r requirem
 pyparsing==2.4.7          # via -r requirements/test.txt, packaging
 pyrsistent==0.16.0        # via -r requirements/../requirements.txt, -r requirements/test.txt, jsonschema
 pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.txt
-pytest-cov==2.10.0        # via -r requirements/test.txt
+pytest-cov==2.10.1        # via -r requirements/test.txt
 pytest-forked==1.3.0      # via -r requirements/test.txt, pytest-xdist
 pytest-helpers-namespace==2019.1.8  # via -r requirements/test.txt
 pytest-profiling==1.7.0   # via -r requirements/test.txt
 pytest-sugar==0.9.4       # via -r requirements/test.txt
-pytest-xdist==1.34.0      # via -r requirements/test.txt
+pytest-xdist==2.0.0       # via -r requirements/test.txt
 pytest==6.0.1             # via -r requirements/test.txt, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-forked, pytest-helpers-namespace, pytest-profiling, pytest-sugar, pytest-xdist
 rtree==0.9.4              # via -r requirements/../requirements.txt, -r requirements/test.txt
-six==1.15.0               # via -r requirements/../requirements.txt, -r requirements/test.txt, html5lib, jsonschema, packaging, pyrsistent, pytest-profiling, pytest-xdist, traitlets
+six==1.15.0               # via -r requirements/../requirements.txt, -r requirements/test.txt, html5lib, jsonschema, packaging, pyrsistent, pytest-profiling, traitlets
 termcolor==1.1.0          # via -r requirements/test.txt, pytest-sugar
 toml==0.10.1              # via -r requirements/test.txt, pytest
 traitlets==4.3.3          # via ipython
