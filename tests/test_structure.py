@@ -54,6 +54,8 @@ def test_dataset_versions():
     assert structure.DatasetStructure.for_version(2) == Dataset2
 
     for choice in STRUCTURE_VERSIONS_CHOICE.choices:
+        if choice == "auto":
+            continue
         assert structure.DatasetStructure.for_version(choice) is not None
 
 

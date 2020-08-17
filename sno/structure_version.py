@@ -9,8 +9,9 @@ from sno.core import walk_tree
 STRUCTURE_VERSION_PATH = ".sno-format"
 
 STRUCTURE_VERSIONS = (0, 1, 2)
-# Only versions 1 and 2 are currently supported by any commands. If you have version 0, use sno upgrade 00-02
-STRUCTURE_VERSIONS_CHOICE = click.Choice(["1", "2"])
+# Only versions 1 and 2 (or "auto") are currently supported by any commands. If you have version 0, use sno upgrade 00-02
+STRUCTURE_VERSIONS_CHOICE = click.Choice(["auto", "1", "2"])
+STRUCTURE_VERSIONS_DEFAULT_CHOICE = "auto"
 
 DEFAULT_STRUCTURE_VERSION = 1
 

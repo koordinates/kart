@@ -36,6 +36,7 @@ from .schema import Schema, ColumnSchema
 from .structure import RepositoryStructure
 from .structure_version import (
     STRUCTURE_VERSIONS_CHOICE,
+    STRUCTURE_VERSIONS_DEFAULT_CHOICE,
     DEFAULT_STRUCTURE_VERSION,
 )
 from .utils import ungenerator
@@ -927,7 +928,7 @@ def temporary_branch(repo):
 @click.option(
     "--version",
     type=STRUCTURE_VERSIONS_CHOICE,
-    default=str(DEFAULT_STRUCTURE_VERSION),
+    default=STRUCTURE_VERSIONS_DEFAULT_CHOICE,
     hidden=True,
 )
 @call_and_exit_flag(
@@ -1056,7 +1057,7 @@ def import_table(
 @click.option(
     "--version",
     type=STRUCTURE_VERSIONS_CHOICE,
-    default=str(DEFAULT_STRUCTURE_VERSION),
+    default=STRUCTURE_VERSIONS_DEFAULT_CHOICE,
     hidden=True,
 )
 @click.option(
@@ -1105,6 +1106,8 @@ def init(
     if any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
+    if version == "auto":
+        version = DEFAULT_STRUCTURE_VERSION
     if wc_version is None:
         wc_version = version
 

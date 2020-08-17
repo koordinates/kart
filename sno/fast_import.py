@@ -18,7 +18,7 @@ def fast_import_tables(
     repo,
     sources,
     *,
-    structure_version,
+    structure_version="auto",
     incremental=True,
     quiet=False,
     header=None,
@@ -47,7 +47,11 @@ def fast_import_tables(
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    structure_version = int(structure_version)
+    if structure_version == "auto":
+        structure_version = get_structure_version(repo)
+    else:
+        structure_version = int(structure_version)
+
     head_tree = get_head_tree(repo) if incremental else None
 
     if not head_tree:
