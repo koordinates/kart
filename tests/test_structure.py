@@ -476,6 +476,10 @@ def test_import_from_non_gpkg(
                     f.GetFieldDefnRef(i).GetName(): f.GetField(i)
                     for i in range(f.GetFieldCount())
                 }
+                if 'date_adjus' in expected_feature:
+                    expected_feature['date_adjus'] = expected_feature[
+                        'date_adjus'
+                    ].replace('/', '-')
                 expected_feature['FID'] = f.GetFID()
                 if src_layer.GetGeomType() != ogr.wkbNone:
                     g = f.GetGeometryRef()
