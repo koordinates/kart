@@ -81,7 +81,7 @@ class Dataset2(DatasetStructure):
     def feature_tree(self):
         return self.tree / self.FEATURE_PATH
 
-    def get_data_at(self, rel_path, missing_ok=False, as_memoryview=False):
+    def get_data_at(self, rel_path, as_memoryview=False):
         """
         Return the data at the given relative path from within this dataset.
 
@@ -108,8 +108,6 @@ class Dataset2(DatasetStructure):
                         pass
         # if we got here, that means leaf wasn't a blob, or one of the above
         # exceptions happened...
-        if missing_ok:
-            return None
         raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
 
     def iter_meta_items(self, include_hidden=False):
@@ -123,8 +121,6 @@ class Dataset2(DatasetStructure):
         try:
             rel_path = self.META_PATH + name
             data = self.get_data_at(rel_path)
-            if not data:
-                return None
 
             # TODO - make schema path end with ".json"?
             if rel_path == self.SCHEMA_PATH or rel_path.endswith(".json"):

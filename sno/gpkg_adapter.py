@@ -61,7 +61,7 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
 
     elif path == "description":
         description = v1_dataset.get_meta_item("gpkg_contents").get("description")
-        return description if description else None
+        return description
 
     elif path == "schema":
         return gpkg_to_v2_schema(
@@ -90,7 +90,7 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
 def iter_v2_meta_items(v1_dataset, id_salt=None):
     for path in V2_META_ITEMS:
         result = generate_v2_meta_item(v1_dataset, path, id_salt=id_salt)
-        if result:
+        if result is not None:
             yield path, result
 
     gpkg_spatial_ref_sys = v1_dataset.get_meta_item("gpkg_spatial_ref_sys") or ()
@@ -108,7 +108,7 @@ def extract_title(v1_dataset):
     identifier_prefix = f"{v1_dataset.name}: "
     if identifier.startswith(identifier_prefix):
         identifier = identifier[len(identifier_prefix) :]
-    return identifier if identifier else None
+    return identifier
 
 
 def generate_gpkg_contents(v2_dataset):
@@ -117,7 +117,7 @@ def generate_gpkg_contents(v2_dataset):
 
     result = {
         "identifier": generate_unique_identifier(v2_dataset),
-        "description": v2_dataset.get_meta_item("description") or "",
+        "description": v2_dataset.get_meta_item("description"),
         "table_name": v2_dataset.name,
         "data_type": "features" if is_spatial else "attributes",
     }
