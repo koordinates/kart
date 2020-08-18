@@ -5,6 +5,14 @@ def adapt_value_noop(value):
     return value
 
 
+def adapt_ogr_date(value):
+    if value is None:
+        return value
+    # OGR uses this strange format: '2012/07/09'
+    # We convert back to a normal ISO8601 format.
+    return value.replace('/', '-')
+
+
 def adapt_ogr_datetime(value):
     if value is None:
         return value
@@ -20,6 +28,8 @@ def get_type_value_adapter(ogr_type):
 
     For most types this is a noop.
     """
-    if ogr_type == ogr.OFTDateTime:
+    if ogr_type == ogr.OFTDate:
+        return adapt_ogr_date
+    elif ogr_type == ogr.OFTDateTime:
         return adapt_ogr_datetime
     return adapt_value_noop
