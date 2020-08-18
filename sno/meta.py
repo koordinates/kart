@@ -6,7 +6,12 @@ import click
 from .apply import apply_patch
 from .cli_util import StringFromFile
 from .exceptions import InvalidOperation
-from .output_util import dump_json_output, format_json_for_output, resolve_output_path
+from .output_util import (
+    dump_json_output,
+    format_json_for_output,
+    resolve_output_path,
+    wrap_text_to_terminal,
+)
 from .structure import RepositoryStructure
 
 # Changing these items would generally break the repo;
@@ -73,9 +78,10 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
             click.secho(key, bold=True)
             if key.endswith('.json') or not isinstance(value, str):
                 value = format_json_for_output(value, fp, json_style=json_style)
-            lines = value.splitlines()
-            for i, line in enumerate(lines):
-                fp.write(f"{indent}{line}\n")
+                for i, line in enumerate(value.splitlines()):
+                    fp.write(f"{indent}{line}\n")
+            else:
+                fp.write(wrap_text_to_terminal(value, indent=indent))
     else:
         dump_json_output(items, fp, json_style=json_style)
 

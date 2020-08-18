@@ -1,6 +1,8 @@
 import io
 import json
+import shutil
 import sys
+import textwrap
 
 
 _terminal_formatter = None
@@ -64,6 +66,34 @@ def format_json_for_output(output, fp, json_style="pretty"):
     else:
         # pygments adds a newline, best we do that here too for consistency
         return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
+
+
+def wrap_text_to_terminal(text, indent=''):
+    """
+    Wraps block text to the current width of the terminal.
+
+    Optionally adds an indent.
+
+    Respects 'COLUMNS' env var
+    """
+    lines = []
+    term_width = shutil.get_terminal_size().columns
+    for line in text.splitlines():
+        lines.extend(
+            textwrap.wrap(
+                line,
+                width=term_width - len(indent),
+                # textwrap has all the wrong defaults :(
+                replace_whitespace=False,
+                drop_whitespace=False,
+                expand_tabs=False,
+                # without this it tends to break URLs up
+                break_on_hyphens=False,
+            )
+            # double-newlines (ie pretty paragraph breaks) get collapsed without this
+            or ['']
+        )
+    return "".join(f"{indent}{line}\n" for line in lines)
 
 
 def dump_json_output(output, output_path, json_style="pretty"):
