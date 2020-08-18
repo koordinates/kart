@@ -87,15 +87,20 @@ class RepositoryStructure:
         """Returns the dataset version to use for this entire repo."""
         return get_structure_version(self.repo, self.tree, maybe_v0=False)
 
+    @property
+    def dataset_dirname(self):
+        return DatasetStructure.dataset_dirname(self.version)
+
     def decode_path(self, full_path):
         """
-        Given a path in the sno repository - eg "path/to/dataset/.sno-table/49/3e/Bg==" -
+        Given a path in the sno repository - eg "path/to/dataset/.sno-dataset/49/3e/Bg==" -
         returns a tuple in either of the following forms:
         1. (dataset_path, "feature", primary_key)
         2. (dataset_path, "meta", meta_item_path)
         """
-        dataset_path, rel_path = full_path.split("/.sno-table/", 1)
-        rel_path = f".sno-table/{rel_path}"
+        dataset_dirname = self.dataset_dirname
+        dataset_path, rel_path = full_path.split(f"/{dataset_dirname}/", 1)
+        rel_path = f"{dataset_dirname}/{rel_path}"
         return (dataset_path,) + self.get(dataset_path).decode_path(rel_path)
 
     def get(self, path):
@@ -125,6 +130,9 @@ class RepositoryStructure:
         """ Iterate over available datasets in this repository using a specified Tree """
         to_examine = deque([("", tree)])
 
+        dataset_version = self.version
+        dataset_dirname = self.dataset_dirname
+
         while to_examine:
             path, tree = to_examine.popleft()
 
@@ -137,8 +145,8 @@ class RepositoryStructure:
                     else:
                         te_path = o.name
 
-                    if ".sno-table" in o:
-                        ds = DatasetStructure.instantiate(o, te_path, self.version)
+                    if dataset_dirname in o:
+                        ds = DatasetStructure.instantiate(o, te_path, dataset_version)
                         yield ds
                     else:
                         # examine inside this directory
@@ -242,9 +250,6 @@ class IntegrityError(ValueError):
 
 
 class DatasetStructure:
-    DEFAULT_IMPORT_VERSION = "1.0"
-    META_PATH = "meta"
-
     def __init__(self, tree, path):
         if self.__class__ is DatasetStructure:
             raise TypeError("Use DatasetStructure.instantiate()")
@@ -273,16 +278,19 @@ class DatasetStructure:
     @classmethod
     def instantiate(cls, tree, path, version):
         """ Load a DatasetStructure from a Tree """
-        L = logging.getLogger(cls.__qualname__)
-
         if not isinstance(tree, pygit2.Tree):
             raise TypeError(f"Expected Tree object, got {type(tree)}")
 
-        if ".sno-table" not in tree:
-            raise KeyError(f"No dataset at {path} - missing .sno-table/ tree")
+        dataset_dirname = cls.dataset_dirname(version)
+        if dataset_dirname not in tree:
+            raise KeyError(f"No dataset at {path} - missing {dataset_dirname} tree")
 
         version_klass = cls.for_version(version)
         return version_klass(tree, path)
+
+    @classmethod
+    def dataset_dirname(cls, version):
+        return cls.for_version(version).DATASET_DIRNAME
 
     # useful methods
 
@@ -298,19 +306,19 @@ class DatasetStructure:
 
     def ensure_rel_path(self, path):
         """Given either a relative path or a full path, return the equivalent relative path."""
-        if path.startswith(".sno-table/"):
+        if path.startswith(self.DATASET_PATH):
             return path
         return self.rel_path(path)
 
     def decode_path(self, rel_path):
         """
-        Given a path in this layer of the sno repository - eg ".sno-table/49/3e/Bg==" -
+        Given a path in this layer of the sno repository - eg ".sno-dataset/49/3e/Bg==" -
         returns a tuple in either of the following forms:
         1. ("feature", primary_key)
         2. ("meta", metadata_file_path)
         """
-        if rel_path.startswith(".sno-table/"):
-            rel_path = rel_path[len(".sno-table/") :]
+        if rel_path.startswith(self.DATASET_PATH):
+            rel_path = rel_path[len(self.DATASET_PATH) :]
         if rel_path.startswith("meta/"):
             return ("meta", rel_path[len("meta/") :])
         pk = self.decode_path_to_1pk(rel_path)
@@ -505,9 +513,9 @@ class DatasetStructure:
                 "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
             )
 
-            if d.old_file and d.old_file.path.startswith(".sno-table/meta/"):
+            if d.old_file and d.old_file.path.startswith(self.META_PATH):
                 continue
-            elif d.new_file and d.new_file.path.startswith(".sno-table/meta/"):
+            elif d.new_file and d.new_file.path.startswith(self.META_PATH):
                 continue
 
             if d.status in self._INSERT_UPDATE_DELETE:
@@ -647,7 +655,7 @@ class DatasetStructure:
                     )
                     continue
                 index.remove(full_path)
-                if name == "schema":
+                if name == "schema.json":
                     old_schema = Schema.from_column_dicts(delta.old.value)
                     new_schema = Schema.from_column_dicts(delta.new.value)
                     if not old_schema.is_pk_compatible(new_schema):

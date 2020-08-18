@@ -261,8 +261,8 @@ def check_points_diff_output(r, output_format):
     if output_format == "text":
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            "--- nz_pa_points_topo_150k:meta:schema",
-            "+++ nz_pa_points_topo_150k:meta:schema",
+            "--- nz_pa_points_topo_150k:meta:schema.json",
+            "+++ nz_pa_points_topo_150k:meta:schema.json",
             "  [",
             "    {",
             '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
@@ -339,7 +339,7 @@ def check_points_diff_output(r, output_format):
             "sno.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
-                        "schema": {
+                        "schema.json": {
                             "+": [
                                 {
                                     "dataType": "integer",
@@ -496,7 +496,7 @@ def check_points_diff_output(r, output_format):
     elif output_format == "geojson":
         assert r.exit_code == 0, r
         assert (
-            "Warning: meta changes aren't included in GeoJSON output: schema"
+            "Warning: meta changes aren't included in GeoJSON output: schema.json"
             in r.stderr
         )
         assert json.loads(r.stdout) == {
@@ -585,8 +585,8 @@ def check_polygons_diff_output(r, output_format):
     if output_format == "text":
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            "--- nz_waca_adjustments:meta:schema",
-            "+++ nz_waca_adjustments:meta:schema",
+            "--- nz_waca_adjustments:meta:schema.json",
+            "+++ nz_waca_adjustments:meta:schema.json",
             "  [",
             "    {",
             '      "id": "79d3c4ca-3abd-0a30-2045-45169357113c",',
@@ -655,7 +655,7 @@ def check_polygons_diff_output(r, output_format):
             "sno.diff/v1+hexwkb": {
                 "nz_waca_adjustments": {
                     "meta": {
-                        "schema": {
+                        "schema.json": {
                             "+": [
                                 {
                                     "dataType": "integer",
@@ -791,7 +791,7 @@ def check_polygons_diff_output(r, output_format):
     elif output_format == "geojson":
         assert r.exit_code == 0, r
         assert (
-            "Warning: meta changes aren't included in GeoJSON output: schema"
+            "Warning: meta changes aren't included in GeoJSON output: schema.json"
             in r.stderr
         )
         assert json.loads(r.stdout) == {

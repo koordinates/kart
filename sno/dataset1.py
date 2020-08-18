@@ -33,11 +33,13 @@ class Dataset1(DatasetStructure):
             [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
     """
 
+    DATASET_DIRNAME = ".sno-table"
+    DATASET_PATH = ".sno-table/"
     VERSION_PATH = ".sno-table/meta/version"
     VERSION_CONTENTS = {"version": "1.0"}
 
     MSGPACK_EXT_GEOM = 71  # 'G'
-    META_PATH = ".sno-table/meta"
+    META_PATH = ".sno-table/meta/"
 
     ALL_META_ITEMS = gpkg_adapter.GPKG_META_ITEMS
 
@@ -240,7 +242,7 @@ class Dataset1(DatasetStructure):
         pattern for a feature, and yields the following for each:
         >>> feature_builder(path_name, path_data)
         """
-        sno_table_tree = self.tree / ".sno-table"
+        sno_table_tree = self.tree / self.DATASET_DIRNAME
 
         # .sno-table/
         #   [hex(pk-hash):2]/
@@ -374,7 +376,7 @@ class Dataset1(DatasetStructure):
         """For the given import source, yield the meta blobs that should to be written."""
         for name, value in self._import_meta_items(source):
             yield (
-                f"{self.path}/{self.META_PATH}/{name}",
+                f"{self.path}/{self.META_PATH}{name}",
                 json.dumps(value).encode("utf8"),
             )
 

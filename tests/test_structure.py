@@ -78,7 +78,7 @@ def _import_check(repo_path, table, source_gpkg, geopackage, import_version=None
             % table
         )
     elif dataset.version == 2:
-        re_paths = r"^\d{6} blob [0-9a-f]{40}\t%s/.sno-table/feature/.*$" % table
+        re_paths = r"^\d{6} blob [0-9a-f]{40}\t%s/.sno-dataset/feature/.*$" % table
     else:
         raise NotImplementedError(dataset.version)
 

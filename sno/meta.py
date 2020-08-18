@@ -71,7 +71,7 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
         indent = '    '
         for key, value in items.items():
             click.secho(key, bold=True)
-            if key == "schema" or key.endswith('.json') or not isinstance(value, str):
+            if key.endswith('.json') or not isinstance(value, str):
                 value = format_json_for_output(value, fp, json_style=json_style)
             lines = value.splitlines()
             for i, line in enumerate(lines):

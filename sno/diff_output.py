@@ -74,7 +74,7 @@ def diff_output_text(*, output_path, **kwargs):
                 click.secho(f"--- {prefix}{delta.old_key}", bold=True, **pecho)
             if delta.new:
                 click.secho(f"+++ {prefix}{delta.new_key}", bold=True, **pecho)
-            if key == "schema" and delta.old and delta.new:
+            if key == "schema.json" and delta.old and delta.new:
                 # Schema is handled below
                 schema_delta = delta
                 continue

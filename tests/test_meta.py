@@ -52,13 +52,13 @@ class TestMetaGet:
                 assert "title" in r.stdout
                 assert EXPECTED_TITLE in r.stdout
                 assert "description" in r.stdout
-                assert "schema" in r.stdout
+                assert "schema.json" in r.stdout
                 assert "srs/EPSG:4326.wkt" in r.stdout
             else:
                 output = json.loads(r.stdout)
                 assert output["title"] == EXPECTED_TITLE
                 assert output["description"]
-                assert output["schema"]
+                assert output["schema.json"]
                 assert output["srs/EPSG:4326.wkt"]
 
     @pytest.mark.parametrize("output_format", ("text", "json"))

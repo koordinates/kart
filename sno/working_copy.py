@@ -784,8 +784,8 @@ class WorkingCopyGPKG(WorkingCopy):
         """
         meta_old = dict(dataset.iter_meta_items())
         meta_new = dict(self.iter_meta_items(dataset))
-        if "schema" in meta_old and "schema" in meta_new:
-            Schema.align_schema_cols(meta_old["schema"], meta_new["schema"])
+        if "schema.json" in meta_old and "schema.json" in meta_new:
+            Schema.align_schema_cols(meta_old["schema.json"], meta_new["schema.json"])
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED, raise_if_dirty=False):
@@ -804,7 +804,6 @@ class WorkingCopyGPKG(WorkingCopy):
             pk_field = dataset.primary_key
 
             ds_diff = DatasetDiff()
-            do_find_renames = True
 
             ds_diff["meta"] = self.diff_db_to_tree_meta(dataset)
 
@@ -871,10 +870,10 @@ class WorkingCopyGPKG(WorkingCopy):
 
     def can_find_renames(self, meta_diff):
         """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
-        if "schema" not in meta_diff:
+        if "schema.json" not in meta_diff:
             return True
 
-        schema_delta = meta_diff["schema"]
+        schema_delta = meta_diff["schema.json"]
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
@@ -892,12 +891,13 @@ class WorkingCopyGPKG(WorkingCopy):
         changes at most one matching insert and delete into an update per blob-hash.
         Modifies feature_diff in place.
         """
-        hash_feature = lambda f: pygit2.hash(dataset.encode_feature_blob(f)).hex
+
+        def hash_feature(feature):
+            return pygit2.hash(dataset.encode_feature_blob(feature)).hex
 
         inserts = {}
         deletes = {}
 
-        search_size = 0
         for delta in feature_diff.values():
             if delta.type == "insert":
                 inserts[hash_feature(delta.new_value)] = delta
@@ -989,10 +989,10 @@ class WorkingCopyGPKG(WorkingCopy):
             # Dataset1 doesn't support meta changes at all - except by rewriting the entire table.
             return False
 
-        if not "schema" in meta_diff:
+        if not "schema.json" in meta_diff:
             return True
 
-        schema_delta = meta_diff["schema"]
+        schema_delta = meta_diff["schema.json"]
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
@@ -1017,7 +1017,7 @@ class WorkingCopyGPKG(WorkingCopy):
             (dest_value, table_name),
         )
 
-    def _apply_meta_schema(self, table_name, src_value, dest_value, db, dbcur):
+    def _apply_meta_schema_json(self, table_name, src_value, dest_value, db, dbcur):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 

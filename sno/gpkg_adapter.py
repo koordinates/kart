@@ -21,7 +21,7 @@ GPKG_META_ITEMS = (
 V2_META_ITEMS = (
     "title",
     "description",
-    "schema",
+    "schema.json",
     "metadata/dataset.json",
 )
 
@@ -63,7 +63,7 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
         description = v1_dataset.get_meta_item("gpkg_contents").get("description")
         return description
 
-    elif path == "schema":
+    elif path == "schema.json":
         return gpkg_to_v2_schema(
             v1_dataset.get_meta_item("sqlite_table_info"),
             v1_dataset.get_meta_item("gpkg_geometry_columns"),

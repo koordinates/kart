@@ -9,6 +9,7 @@ from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
+from .structure import RepositoryStructure
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True,))
@@ -108,22 +109,24 @@ def commit_obj_to_json(commit, refs, dataset_changes=None):
 def get_dataset_changes_log(repo, args):
     # TODO - git log isn't really designed to efficiently tell us which datasets changed.
     # So this code is a bit more complex that would be ideal, and a bit less efficient.
+    dataset_dirname = f"/{RepositoryStructure(repo).dataset_dirname}/"
     for percentage in (90, 10, 1):
         directory_changes_log = _get_directory_changes_log(repo, percentage, args)
-        if all(_enough_detail(d) for d in directory_changes_log):
+        if all(_enough_detail(d, dataset_dirname) for d in directory_changes_log):
             break
 
-    return [_get_datasets(d) for d in directory_changes_log]
+    return [_get_datasets(d, dataset_dirname) for d in directory_changes_log]
 
 
-def _enough_detail(directories):
-    return all("/.sno-table/" in d for d in directories)
+def _enough_detail(directories, dataset_dirname):
+
+    return all(dataset_dirname in d for d in directories)
 
 
-def _get_datasets(directories):
+def _get_datasets(directories, dataset_dirname):
     datasets = set()
     for d in directories:
-        parts = d.split("/.sno-table/", 1)
+        parts = d.split(dataset_dirname, 1)
         if len(parts) == 2:
             datasets.add(parts[0])
     return list(datasets)

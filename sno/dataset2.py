@@ -41,7 +41,7 @@ class Dataset2(DatasetStructure):
     - Add at any location: `sno import GPKG:my.gpkg:mytable path/to/mylayer`
 
     any/structure/mylayer/
-      .sno-table/
+      .sno-dataset/
         meta/
           schema              = [current schema JSON]
           legend/
@@ -60,17 +60,22 @@ class Dataset2(DatasetStructure):
     which *should be written*. The caller must write these to a commit.
     """
 
-    FEATURE_PATH = ".sno-table/feature/"
-    META_PATH = ".sno-table/meta/"
-    LEGEND_PATH = ".sno-table/meta/legend/"
-    SCHEMA_PATH = ".sno-table/meta/schema"
+    DATASET_DIRNAME = ".sno-dataset"
+    DATASET_PATH = ".sno-dataset/"
 
-    TITLE_PATH = ".sno-table/meta/title"
-    DESCRIPTION_PATH = ".sno-table/meta/description"
+    FEATURE_PATH = DATASET_PATH + "feature/"
+    META_PATH = DATASET_PATH + "meta/"
 
-    SRS_PATH = ".sno-table/meta/srs/"
+    LEGEND_PATH = META_PATH + "legend/"
+    SCHEMA_PATH = META_PATH + "schema.json"
 
-    DATASET_METADATA_PATH = ".sno-table/meta/metadata/dataset.json"
+    TITLE_PATH = META_PATH + "title"
+    DESCRIPTION_PATH = META_PATH + "description"
+
+    SRS_PATH = META_PATH + "srs/"
+
+    METADATA_PATH = META_PATH + "metadata/"
+    DATASET_METADATA_PATH = METADATA_PATH + "dataset.json"
 
     @property
     def version(self):

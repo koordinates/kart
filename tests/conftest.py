@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 import click
 from click.testing import CliRunner
+from sno.structure_version import DEFAULT_STRUCTURE_VERSION
 
 import apsw
 import pygit2
@@ -279,14 +280,10 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
     Returns the path to the repository path
     """
-    from sno.structure import DatasetStructure
-
     L = logging.getLogger("data_imported")
     incr = 0
 
-    def _data_imported(
-        archive, source_gpkg, table, version=DatasetStructure.DEFAULT_IMPORT_VERSION
-    ):
+    def _data_imported(archive, source_gpkg, table, version=DEFAULT_STRUCTURE_VERSION):
         nonlocal incr
 
         params = [archive, source_gpkg, table, version]
