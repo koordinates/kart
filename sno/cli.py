@@ -15,6 +15,7 @@ from . import (
     clone,
     conflicts,
     commit,
+    data,
     diff,
     fsck,
     init,
@@ -164,6 +165,7 @@ cli.add_command(checkout.create_workingcopy)
 cli.add_command(clone.clone)
 cli.add_command(conflicts.conflicts)
 cli.add_command(commit.commit)
+cli.add_command(data.data)
 cli.add_command(diff.diff)
 cli.add_command(fsck.fsck)
 cli.add_command(init.import_table)
