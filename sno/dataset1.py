@@ -116,7 +116,7 @@ class Dataset1(DatasetStructure):
     def crs_identifier(self):
         for col_dict in self.get_meta_item("schema.json"):
             if col_dict["dataType"] == "geometry":
-                return col_dict["geometrySRS"]
+                return col_dict["geometryCRS"]
         return None
 
     @property

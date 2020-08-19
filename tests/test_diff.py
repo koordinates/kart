@@ -267,10 +267,10 @@ def test_diff_points(
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 @pytest.mark.parametrize(*V1_OR_V2)
 def test_diff_reprojection(
-    structure_version, output_format, data_working_copy, geopackage, cli_runner
+    repo_version, output_format, data_working_copy, geopackage, cli_runner
 ):
     """ diff the working copy against HEAD """
-    data_archive = "points2" if structure_version == "2" else "points"
+    data_archive = "points2" if repo_version == "2" else "points"
     with data_working_copy(data_archive) as (repo, wc):
         # make some changes
         db = geopackage(wc)
@@ -302,18 +302,17 @@ def test_diff_reprojection(
                 5787640.540304652,
             ]
 
-        print("STDOUT", repr(r.stdout))
         if output_format == "quiet":
-            assert r.exit_code == 1, r
+            assert r.exit_code == 1, r.stderr
             assert r.stdout == ""
         elif output_format == "text":
-            assert r.exit_code == 0, r
+            assert r.exit_code == 0, r.stderr
         elif output_format == "geojson":
-            assert r.exit_code == 0, r
+            assert r.exit_code == 0, r.stderr
             featurecollection = json.loads(r.stdout)
             _check_geojson(featurecollection)
         elif output_format == "json":
-            assert r.exit_code == 0, r
+            assert r.exit_code == 0, r.stderr
             odata = json.loads(r.stdout)
             features = odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
             assert len(features) == 1

@@ -44,7 +44,7 @@ def _get_parent(ctx, refish):
 @click.option(
     "--crs",
     type=diff.CoordinateReferenceString(encoding="utf-8"),
-    help="Reproject geometries into the given coordinate reference system ('EPSG:<code>', proj text or WKT)",
+    help="Reproject geometries into the given coordinate reference system. Accepts: 'EPSG:<code>'; proj text; OGC WKT; OGC URN; PROJJSON.)",
 )
 @click.option(
     "--json-style",

@@ -145,10 +145,6 @@ class Dataset2(DatasetStructure):
                 return gpkg_adapter.generate_gpkg_meta_item(self, name)
             raise  # This meta-item doesn't exist at all.
 
-    def get_crs_definition(self, crs_name):
-        """Return the CRS definition stored with the given name."""
-        return self.get_meta_item(f"crs/{crs_name}.wkt")
-
     def crs_definitions(self):
         """Return all stored crs definitions in a dict."""
         for blob in find_blobs_in_tree(self.tree / self.CRS_PATH):
@@ -180,7 +176,7 @@ class Dataset2(DatasetStructure):
     def crs_identifier(self):
         for col in self.schema:
             if col.data_type == "geometry":
-                return col.extra_type_info["geometrySRS"]
+                return col.extra_type_info["geometryCRS"]
         return None
 
     def encode_schema(self, schema):

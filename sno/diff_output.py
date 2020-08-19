@@ -9,12 +9,13 @@ import sys
 import tempfile
 import webbrowser
 from pathlib import Path
-from sno.schema import Schema
 
 import click
 
+from .exceptions import InvalidOperation
 from .geometry import gpkg_geom_to_ogr, gpkg_geom_to_hex_wkb, ogr_to_hex_wkb
 from .output_util import dump_json_output, resolve_output_path
+from .schema import Schema
 from .utils import ungenerator
 
 
@@ -442,7 +443,12 @@ def geojson_row(row, pk_value, change=None, geometry_transform=None):
             g = gpkg_geom_to_ogr(v)
             if geometry_transform is not None:
                 # reproject
-                g.Transform(geometry_transform)
+                try:
+                    g.Transform(geometry_transform)
+                except RuntimeError as e:
+                    raise InvalidOperation(
+                        f"Can't reproject geometry at '{change_id}' into target CRS"
+                    ) from e
             f["geometry"] = json.loads(g.ExportToJson())
         else:
             f["properties"][k] = v
@@ -532,12 +538,14 @@ class LazyJsonFeatureOutput:
 
     def __json__(self):
         return json_row(
-            self.key_value.get_lazy_value(), geometry_transform=self.geometry_transform
+            self.key_value.get_lazy_value(),
+            self.key_value.key,
+            geometry_transform=self.geometry_transform,
         )
 
 
 @ungenerator(dict)
-def json_row(row, geometry_transform=None):
+def json_row(row, pk_value, geometry_transform=None):
     """
     Turns a row into a dict for serialization as JSON.
     The geometry is serialized as hexWKB.
@@ -549,7 +557,12 @@ def json_row(row, geometry_transform=None):
             else:
                 # reproject
                 ogr_geom = gpkg_geom_to_ogr(v)
-                ogr_geom.Transform(geometry_transform)
+                try:
+                    ogr_geom.Transform(geometry_transform)
+                except RuntimeError as e:
+                    raise InvalidOperation(
+                        f"Can't reproject geometry with ID '{pk_value}' into target CRS"
+                    ) from e
                 v = ogr_to_hex_wkb(ogr_geom)
         yield k, v
 

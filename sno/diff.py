@@ -173,9 +173,14 @@ def diff_with_writer(
                 crs_wkt = dataset.crs_wkt
                 if crs_wkt is not None:
                     src_crs = make_crs(crs_wkt)
-                    dataset_geometry_transforms[
-                        dataset.name
-                    ] = osr.CoordinateTransformation(src_crs, target_crs)
+                    try:
+                        transform = osr.CoordinateTransformation(src_crs, target_crs)
+                    except RuntimeError as e:
+                        raise InvalidOperation(
+                            f"Can't reproject dataset {dataset_path!r} into target CRS: {e}"
+                        )
+
+                    dataset_geometry_transforms[dataset.name] = transform
 
         writer_params = {
             "repo": repo,
@@ -232,8 +237,10 @@ class CoordinateReferenceString(StringFromFile):
 
         try:
             return make_crs(value)
-        except RuntimeError:
-            self.fail(f"Invalid or unknown coordinate reference system: {value}")
+        except RuntimeError as e:
+            self.fail(
+                f"Invalid or unknown coordinate reference system: {value!r} ({e})"
+            )
 
 
 @click.command()
@@ -256,7 +263,7 @@ class CoordinateReferenceString(StringFromFile):
 @click.option(
     "--crs",
     type=CoordinateReferenceString(encoding="utf-8"),
-    help="Reproject geometries into the given coordinate reference system ('EPSG:<code>', proj text or WKT)",
+    help="Reproject geometries into the given coordinate reference system. Accepts: 'EPSG:<code>'; proj text; OGC WKT; OGC URN; PROJJSON.)",
 )
 @click.option(
     "--output",
