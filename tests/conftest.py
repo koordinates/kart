@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 import click
 from click.testing import CliRunner
-from sno.structure_version import DEFAULT_STRUCTURE_VERSION
+from sno.repository_version import DEFAULT_REPO_VERSION
 
 import apsw
 import pygit2
@@ -283,10 +283,10 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
     L = logging.getLogger("data_imported")
     incr = 0
 
-    def _data_imported(archive, source_gpkg, table, version=DEFAULT_STRUCTURE_VERSION):
+    def _data_imported(archive, source_gpkg, table, repo_version=DEFAULT_REPO_VERSION):
         nonlocal incr
 
-        params = [archive, source_gpkg, table, version]
+        params = [archive, source_gpkg, table, repo_version]
         cache_key = f"data_imported~{'~'.join(params)}"
 
         repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
@@ -300,7 +300,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
             import_path.mkdir()
             with chdir(import_path):
-                r = cli_runner.invoke(["init"])
+                r = cli_runner.invoke(["init", "--repo-version", repo_version])
                 assert r.exit_code == 0, r
 
                 repo = pygit2.Repository(str(import_path))
@@ -310,12 +310,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 del repo
 
                 r = cli_runner.invoke(
-                    [
-                        "import",
-                        f"GPKG:{data / source_gpkg}",
-                        f"--version={version}",
-                        f"{table}:mytable",
-                    ]
+                    ["import", f"GPKG:{data / source_gpkg}", f"{table}:mytable",]
                 )
                 assert r.exit_code == 0, r
 
@@ -775,8 +770,8 @@ def create_conflicts(
     data_working_copy, geopackage, cli_runner, update, insert,
 ):
     @contextlib.contextmanager
-    def ctx(data, structure_version=1):
-        archive = f"{data.ARCHIVE}2" if structure_version == 2 else data.ARCHIVE
+    def ctx(data, repo_version=1):
+        archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
         with data_working_copy(archive) as (repo_path, wc):
             repo = pygit2.Repository(str(repo_path))
             sample_pks = data.SAMPLE_PKS

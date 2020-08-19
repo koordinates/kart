@@ -19,7 +19,7 @@ from .filter_util import UNFILTERED
 from .geometry import geom_envelope
 from .schema import Schema
 from .serialise_util import ensure_bytes, json_pack
-from .structure_version import get_structure_version
+from .repository_version import get_repo_version
 
 
 L = logging.getLogger("sno.structure")
@@ -85,7 +85,7 @@ class RepositoryStructure:
     @property
     def version(self):
         """Returns the dataset version to use for this entire repo."""
-        return get_structure_version(self.repo, self.tree, maybe_v0=False)
+        return get_repo_version(self.repo, self.tree, maybe_v0=False)
 
     @property
     def dataset_dirname(self):
@@ -326,8 +326,7 @@ class DatasetStructure:
 
     @property
     def version(self):
-        """Returns a version string eg '1.0'."""
-        # TODO - get rid of per-dataset version - just use structure_version.
+        """Returns a dataset version number eg 1."""
         raise NotImplementedError()
 
     @property

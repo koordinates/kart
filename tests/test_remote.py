@@ -80,7 +80,7 @@ def test_clone(
             assert wc.exists() and wc.is_file()
 
             table = H.POINTS.LAYER
-            assert repo.config["sno.workingcopy.version"] == "1"
+            assert repo.config["sno.repository.version"] == "1"
             assert repo.config["sno.workingcopy.path"] == wc.name
 
             db = geopackage(wc)

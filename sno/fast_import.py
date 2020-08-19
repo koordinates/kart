@@ -8,7 +8,7 @@ import pygit2
 
 from .exceptions import SubprocessError, InvalidOperation
 from .structure import DatasetStructure
-from .structure_version import get_structure_version, extra_blobs_for_version
+from .repository_version import get_repo_version, extra_blobs_for_version
 
 
 L = logging.getLogger("sno.fast_import")
@@ -18,7 +18,6 @@ def fast_import_tables(
     repo,
     sources,
     *,
-    structure_version="auto",
     incremental=True,
     quiet=False,
     header=None,
@@ -34,7 +33,6 @@ def fast_import_tables(
 
     repo - the sno repo to import into.
     sources - a dict of {path:import-source} where path is the target dataset path to import to
-    structure-version - which dataset structure to use (ie 1 or 2 for datasets V1, datasets V2, ...)
     incremental - True if the resulting commit should contain everything already at HEAD plus the new datasets,
         False if the resulting commit should only contain the new datasets.
     quiet - if True, no progress information is printed to stdout.
@@ -47,24 +45,16 @@ def fast_import_tables(
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    if structure_version == "auto":
-        structure_version = get_structure_version(repo)
-    else:
-        structure_version = int(structure_version)
-
     head_tree = get_head_tree(repo) if incremental else None
 
     if not head_tree:
         # Starting from an effectively empty repo. Write the blobs needed for this repo version.
+        repo_version = get_repo_version(repo)
         incremental = False
-        extra_blobs = list(extra_blobs) + extra_blobs_for_version(structure_version)
+        extra_blobs = list(extra_blobs) + extra_blobs_for_version(repo_version)
     else:
         # Starting from a repo with commits. Make sure we have a matching version.
-        repo_version = get_structure_version(repo, head_tree)
-        if repo_version != structure_version:
-            raise ValueError(
-                f"Version mismatch - repo is version {repo_version}, trying to import as {structure_version}"
-            )
+        repo_version = get_repo_version(repo, head_tree)
 
     for path, source in sources.items():
         if not source.table:
@@ -101,9 +91,7 @@ def fast_import_tables(
                 raise ValueError(f"{blob_path} already exists")
 
         for path, source in sources.items():
-            dataset = DatasetStructure.for_version(structure_version)(
-                tree=None, path=path
-            )
+            dataset = DatasetStructure.for_version(repo_version)(tree=None, path=path)
 
             with source:
                 if limit:

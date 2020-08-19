@@ -290,7 +290,7 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
         ]
 
 
-V1_OR_V2 = ("import_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", ["1", "2"])
 
 
 @pytest.mark.slow
@@ -305,10 +305,10 @@ def test_init_import(
     cli_runner,
     chdir,
     geopackage,
-    import_version,
+    repo_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    state_table = 'gpkg_sno_state' if import_version == '2' else '.sno-meta'
+    state_table = 'gpkg_sno_state' if repo_version == '2' else '.sno-meta'
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.sno"
@@ -320,7 +320,7 @@ def test_init_import(
                 "--import",
                 f"gpkg:{data / gpkg}",
                 str(repo_path),
-                f"--version={import_version}",
+                f"--repo-version={repo_version}",
             ]
         )
         assert r.exit_code == 0, r
@@ -341,7 +341,7 @@ def test_init_import(
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.workingcopy.version"] == str(import_version)
+        assert repo.config["sno.repository.version"] == str(repo_version)
         assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
         db = geopackage(wc)
@@ -403,7 +403,7 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.workingcopy.version"] == "1"
+        assert repo.config["sno.repository.version"] == "1"
         assert repo.config["sno.workingcopy.path"] == "editing.gpkg"
 
         db = geopackage(wc)

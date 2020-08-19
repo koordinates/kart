@@ -7,13 +7,13 @@ from sno.structs import CommitWithReference
 H = pytest.helpers.helpers()
 
 
-V1_OR_V2 = ("structure_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", ["1", "2"])
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
-def test_merge_index_roundtrip(structure_version, create_conflicts, cli_runner):
+def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS, structure_version) as repo:
+    with create_conflicts(H.POLYGONS, repo_version) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
@@ -57,9 +57,9 @@ def test_merge_index_roundtrip(structure_version, create_conflicts, cli_runner):
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
-def test_summarise_conflicts(structure_version, create_conflicts, cli_runner):
+def test_summarise_conflicts(repo_version, create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS, structure_version) as repo:
+    with create_conflicts(H.POLYGONS, repo_version) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         r = cli_runner.invoke(["conflicts", "-s"])
@@ -98,8 +98,8 @@ def test_summarise_conflicts(structure_version, create_conflicts, cli_runner):
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
-def test_list_conflicts(structure_version, create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS, structure_version) as repo:
+def test_list_conflicts(repo_version, create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS, repo_version) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         expected_text = [

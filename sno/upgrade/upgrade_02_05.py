@@ -9,7 +9,7 @@ import pygit2
 from sno import checkout, context
 from sno.exceptions import InvalidOperation
 from sno.structure import RepositoryStructure
-from sno.structure_version import get_structure_version
+from sno.repository_version import get_repo_version, write_repo_version_config
 from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_srs_str
 from sno.fast_import import fast_import_tables
 
@@ -34,7 +34,7 @@ def upgrade(ctx, source, dest):
             f"'{source}': not an existing repository", param_hint="SOURCE"
         )
 
-    version = get_structure_version(source_repo)
+    version = get_repo_version(source_repo)
     if version != 1:
         raise InvalidOperation(
             "source repo is not at sno version 0.2 - (dataset version 1)"
@@ -44,6 +44,7 @@ def upgrade(ctx, source, dest):
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
     dest_repo = pygit2.init_repository(str(dest), bare=True)
+    write_repo_version_config(dest_repo, 2)
 
     # walk _all_ references
     source_walker = source_repo.walk(
@@ -134,7 +135,6 @@ def _upgrade_commit(i, source_repo, source_commit, dest_parents, dest_repo, comm
         incremental=False,
         quiet=True,
         header=header,
-        structure_version=2,
         # We import every commit onto refs/heads/master, even though not all commits are related - this means
         # the master branch head will jump all over the place. git-fast-import only allows this with --force.
         extra_cmd_args=["--force"],

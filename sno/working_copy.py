@@ -1,4 +1,3 @@
-import collections
 import contextlib
 import itertools
 import logging
@@ -16,7 +15,7 @@ from .exceptions import InvalidOperation
 from .filter_util import UNFILTERED
 from .schema import Schema
 from .structure import RepositoryStructure
-from .structure_version import get_structure_version
+from .repository_version import get_repo_version
 
 L = logging.getLogger("sno.working_copy")
 
@@ -41,7 +40,7 @@ class WorkingCopy:
         if not (Path(repo.path) / path).is_file() and not create_if_missing:
             return None
 
-        version = repo_cfg.get_int("sno.workingcopy.version")
+        version = get_repo_version(repo)
         if version not in cls.VALID_VERSIONS:
             raise NotImplementedError(f"Working copy version: {version}")
         if version < 2:
@@ -61,16 +60,11 @@ class WorkingCopy:
             if "sno.workingcopy.path" in repo_cfg
             else None
         )
-        version = (
-            repo_cfg["sno.workingcopy.version"]
-            if "sno.workingcopy.version" in repo_cfg
-            else None
-        )
-        if path is None or version is None:
-            cls.write_config(repo, path, version)
+        if path is None:
+            cls.write_config(repo, path)
 
     @classmethod
-    def write_config(cls, repo, path=None, version=None, bare=False):
+    def write_config(cls, repo, path=None, bare=False):
         repo_cfg = repo.config
 
         def del_repo_cfg(key):
@@ -80,13 +74,10 @@ class WorkingCopy:
         if bare:
             repo_cfg["sno.workingcopy.bare"] = True
             del_repo_cfg("sno.workingcopy.path")
-            del_repo_cfg("sno.workingcopy.version")
             return
 
         path = path or f"{Path(repo.path).resolve().stem}.gpkg"
-        version = version or get_structure_version(repo)
         repo_cfg["sno.workingcopy.path"] = str(path)
-        repo_cfg["sno.workingcopy.version"] = version
         del_repo_cfg("sno.workingcopy.bare")
 
     class Mismatch(ValueError):

@@ -34,10 +34,10 @@ from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
 from .structure import RepositoryStructure
-from .structure_version import (
-    STRUCTURE_VERSIONS_CHOICE,
-    STRUCTURE_VERSIONS_DEFAULT_CHOICE,
-    DEFAULT_STRUCTURE_VERSION,
+from .repository_version import (
+    write_repo_version_config,
+    REPO_VERSIONS_CHOICE,
+    REPO_VERSIONS_DEFAULT_CHOICE,
 )
 from .utils import ungenerator
 from .working_copy import WorkingCopy
@@ -925,12 +925,6 @@ def temporary_branch(repo):
     cls=MutexOption,
     exclusive_with=["all_tables", "tables"],
 )
-@click.option(
-    "--version",
-    type=STRUCTURE_VERSIONS_CHOICE,
-    default=STRUCTURE_VERSIONS_DEFAULT_CHOICE,
-    hidden=True,
-)
 @call_and_exit_flag(
     "--list-formats",
     callback=list_import_formats,
@@ -956,7 +950,6 @@ def import_table(
     message,
     do_list,
     output_format,
-    version,
     primary_key,
     source,
     tables,
@@ -1027,11 +1020,7 @@ def import_table(
 
     with ctx:
         fast_import_tables(
-            repo,
-            loaders,
-            message=message,
-            structure_version=version,
-            max_delta_depth=max_delta_depth,
+            repo, loaders, message=message, max_delta_depth=max_delta_depth,
         )
 
     rs = RepositoryStructure(repo)
@@ -1055,9 +1044,9 @@ def import_table(
     help="Commit message (when used with --import). By default this is auto-generated.",
 )
 @click.option(
-    "--version",
-    type=STRUCTURE_VERSIONS_CHOICE,
-    default=STRUCTURE_VERSIONS_DEFAULT_CHOICE,
+    "--repo-version",
+    type=REPO_VERSIONS_CHOICE,
+    default=REPO_VERSIONS_DEFAULT_CHOICE,
     hidden=True,
 )
 @click.option(
@@ -1073,7 +1062,6 @@ def import_table(
     type=click.Path(dir_okay=False),
     help="Path where the working copy should be created",
 )
-@click.option("--workingcopy-version", "wc_version", type=int)
 @click.option(
     "--max-delta-depth",
     hidden=True,
@@ -1082,15 +1070,7 @@ def import_table(
     help="--depth option to git-fast-import (advanced users only)",
 )
 def init(
-    ctx,
-    message,
-    directory,
-    version,
-    import_from,
-    bare,
-    wc_path,
-    wc_version,
-    max_delta_depth,
+    ctx, message, directory, repo_version, import_from, bare, wc_path, max_delta_depth,
 ):
     """
     Initialise a new repository and optionally import data.
@@ -1106,11 +1086,6 @@ def init(
     if any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
-    if version == "auto":
-        version = DEFAULT_STRUCTURE_VERSION
-    if wc_version is None:
-        wc_version = version
-
     if import_from:
         check_git_user(repo=None)
         source_loader = OgrImporter.open(import_from, None)
@@ -1123,16 +1098,12 @@ def init(
 
     # Create the repository
     repo = pygit2.init_repository(str(repo_path), bare=True)
-
-    WorkingCopy.write_config(repo, wc_path, wc_version, bare)
+    write_repo_version_config(repo, repo_version)
+    WorkingCopy.write_config(repo, wc_path, bare)
 
     if import_from:
         fast_import_tables(
-            repo,
-            loaders,
-            message=message,
-            structure_version=version,
-            max_delta_depth=max_delta_depth,
+            repo, loaders, message=message, max_delta_depth=max_delta_depth,
         )
         head_commit = repo.head.peel(pygit2.Commit)
         checkout.reset_wc_if_needed(repo, head_commit)

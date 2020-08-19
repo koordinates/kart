@@ -10,6 +10,7 @@ import pygit2
 
 from . import checkout
 from .exceptions import translate_subprocess_exit_code
+from .repository_version import get_repo_version
 from .working_copy import WorkingCopy
 
 
@@ -98,8 +99,9 @@ def clone(ctx, bare, wc_path, wc_version, do_progress, depth, url, directory):
         head_ref = repo.head.shorthand  # master, probably
     repo.config[f"branch.{head_ref}.remote"] = "origin"
     repo.config[f"branch.{head_ref}.merge"] = f"refs/heads/{head_ref}"
+    repo.config["sno.repository.version"] = get_repo_version(repo)
 
-    WorkingCopy.write_config(repo, wc_path, wc_version, bare)
+    WorkingCopy.write_config(repo, wc_path, bare)
 
     if not repo.is_empty:
         head_commit = repo.head.peel(pygit2.Commit)

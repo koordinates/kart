@@ -542,20 +542,18 @@ def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
         ]
 
 
-@pytest.mark.parametrize("structure_version", [1, 2])
+@pytest.mark.parametrize("repo_version", [1, 2])
 def test_switch_pre_import_post_import(
-    structure_version, data_working_copy, data_archive_readonly, geopackage, cli_runner
+    repo_version, data_working_copy, data_archive_readonly, geopackage, cli_runner
 ):
     with data_archive_readonly("gpkg-au-census") as data:
-        data_wc_archive = "polygons2" if structure_version == 2 else "polygons"
+        data_wc_archive = "polygons2" if repo_version == 2 else "polygons"
         with data_working_copy(data_wc_archive) as (repo, wc):
-            version_option = f"--version={structure_version}"
             r = cli_runner.invoke(
                 [
                     "import",
                     data / "census2016_sdhca_ot_short.gpkg",
                     "census2016_sdhca_ot_ced_short",
-                    version_option,
                 ]
             )
             assert r.exit_code == 0, r.stderr
