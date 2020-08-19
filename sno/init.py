@@ -350,17 +350,22 @@ class OgrImporter:
     def _check_primary_key_option(self, primary_key_name):
         if primary_key_name is None:
             return None
-        ld = self.ogrlayer.GetLayerDefn()
+        if primary_key_name:
+            ld = self.ogrlayer.GetLayerDefn()
 
-        for i in range(ld.GetFieldCount()):
-            field = ld.GetFieldDefn(i)
-            if primary_key_name == field.GetName():
+            if primary_key_name == self.ogrlayer.GetFIDColumn():
+                # OGR automatically turns 'ogc_fid' column in postgres into an FID,
+                # and removes it from the list of fields below.
                 return primary_key_name
-        else:
-            raise InvalidOperation(
-                f"'{primary_key_name}' was not found in the dataset",
-                param_hint='--primary-key',
-            )
+
+            for i in range(ld.GetFieldCount()):
+                field = ld.GetFieldDefn(i)
+                if primary_key_name == field.GetName():
+                    return primary_key_name
+        raise InvalidOperation(
+            f"'{primary_key_name}' was not found in the dataset",
+            param_hint='--primary-key',
+        )
 
     @ungenerator(dict)
     def _field_cid_map(self):

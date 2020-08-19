@@ -576,6 +576,7 @@ def postgis_db():
             'Requires postgres - read docstring at sno.test_structure.postgis_db'
         )
     conn = psycopg2.connect(os.environ['SNO_POSTGRES_URL'])
+    conn.autocommit = True
     with conn.cursor() as cur:
         # test connection and postgis support
         try:
@@ -594,23 +595,86 @@ def postgis_layer(postgis_db, data_archive):
     @contextlib.contextmanager
     def _postgis_layer(archive_name, gpkg_name, table):
         with data_archive(archive_name) as data:
-            gdal.VectorTranslate(
+            src_ds = gdal.OpenEx(str(data / gpkg_name), gdal.OF_VERBOSE_ERROR)
+            dest_ds = gdal.OpenEx(
                 postgres_conn_str,
-                gdal.OpenEx(str(data / gpkg_name)),
+                gdal.OF_VERBOSE_ERROR | gdal.OF_UPDATE,
+                ['PostgreSQL'],
+            )
+
+            gdal.VectorTranslate(
+                dest_ds,
+                src_ds,
                 format='PostgreSQL',
                 accessMode='overwrite',
                 layerCreationOptions=['LAUNDER=NO'],
                 layers=[table],
             )
         yield
-        c = postgis_db.cursor()
-        c.execute(
-            f"""
-            DROP TABLE IF EXISTS {quote_ident(table)}
-            """
-        )
+        with postgis_db.cursor() as c:
+            c.execute(
+                f"""
+                DROP TABLE IF EXISTS {quote_ident(table)} CASCADE
+                """
+            )
 
     return _postgis_layer
+
+
+def _test_pg_import(
+    tmp_path, cli_runner, chdir, *, table_name, pk_name="id", pk_size=64, import_args=()
+):
+    repo_path = tmp_path / "repo"
+    r = cli_runner.invoke(['init', repo_path])
+    assert r.exit_code == 0, r
+    with chdir(repo_path):
+        r = cli_runner.invoke(
+            [
+                'import',
+                os.environ['SNO_POSTGRES_URL'],
+                table_name,
+                '--version=2',
+                *import_args,
+            ]
+        )
+        assert r.exit_code == 0, r
+    # now check metadata
+    repo = pygit2.Repository(str(repo_path))
+    dataset = structure.RepositoryStructure(repo)[table_name]
+
+    meta_items = dict(dataset.iter_meta_items())
+    assert set(meta_items.keys()) == {
+        'description',
+        'schema.json',
+        'title',
+        'srs/EPSG:4167.wkt',
+    }
+    schema = dataset.get_meta_item('schema.json')
+    for col in schema:
+        col.pop('id')
+    assert schema == [
+        {
+            'name': pk_name,
+            'dataType': 'integer',
+            'primaryKeyIndex': 0,
+            'size': pk_size,
+        },
+        {
+            'name': 'geom',
+            'dataType': 'geometry',
+            'primaryKeyIndex': None,
+            'geometryType': 'MULTIPOLYGON',
+            'geometrySRS': 'EPSG:4167',
+        },
+        {'name': 'date_adjusted', 'dataType': 'datetime', 'primaryKeyIndex': None,},
+        {'name': 'survey_reference', 'dataType': 'text', 'primaryKeyIndex': None,},
+        {
+            'name': 'adjusted_nodes',
+            'dataType': 'integer',
+            'primaryKeyIndex': None,
+            'size': 32,
+        },
+    ]
 
 
 def test_pg_import(
@@ -619,83 +683,58 @@ def test_pg_import(
     with postgis_layer(
         'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
     ):
-        repo_path = tmp_path / "repo"
-        r = cli_runner.invoke(['init', repo_path])
-        assert r.exit_code == 0, r
-        with chdir(repo_path):
-            r = cli_runner.invoke(
-                ['import', os.environ['SNO_POSTGRES_URL'], 'nz_waca_adjustments']
-            )
-            assert r.exit_code == 0, r
-        # now check metadata
-        path = "nz_waca_adjustments"
-        repo = pygit2.Repository(str(repo_path))
-        dataset = structure.RepositoryStructure(repo)[path]
+        _test_pg_import(tmp_path, cli_runner, chdir, table_name="nz_waca_adjustments")
 
-        meta_items = dict(dataset.iter_v1_meta_items())
-        assert set(meta_items.keys()) == {
-            'fields/geom',
-            'version',
-            'fields/id',
-            'gpkg_geometry_columns',
-            'gpkg_spatial_ref_sys',
-            'fields/adjusted_nodes',
-            'primary_key',
-            'gpkg_contents',
-            'fields/survey_reference',
-            'fields/date_adjusted',
-            'sqlite_table_info',
-        }
-        assert meta_items['sqlite_table_info'] == [
-            {
-                'cid': 0,
-                'name': 'id',
-                'type': 'INTEGER',
-                'notnull': 1,
-                'dflt_value': None,
-                'pk': 1,
-            },
-            {
-                'cid': 1,
-                'name': 'geom',
-                'type': 'MULTIPOLYGON',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
-            },
-            {
-                'cid': 2,
-                'name': 'date_adjusted',
-                'type': 'DATETIME',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
-            },
-            {
-                'cid': 3,
-                'name': 'survey_reference',
-                'type': 'TEXT(50)',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
-            },
-            {
-                'cid': 4,
-                'name': 'adjusted_nodes',
-                'type': 'MEDIUMINT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
-            },
-        ]
-        contents = meta_items['gpkg_contents']
-        assert contents == {
-            'table_name': 'nz_waca_adjustments',
-            'description': '',
-            'data_type': 'features',
-            'identifier': '',
-            'srs_id': 4167,
-        }
+
+def test_pg_import_from_view(
+    postgis_db, postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
+):
+    with postgis_layer(
+        'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
+    ):
+        c = postgis_db.cursor()
+        c.execute(
+            """
+            CREATE VIEW nz_waca_adjustments_view AS (
+                SELECT * FROM nz_waca_adjustments
+            )
+        """
+        )
+        _test_pg_import(
+            tmp_path,
+            cli_runner,
+            chdir,
+            table_name="nz_waca_adjustments_view",
+            pk_name="id",
+            pk_size=32,
+            import_args=["--primary-key=id"],
+        )
+
+
+def test_pg_import_from_view_with_ogc_fid(
+    postgis_db, postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
+):
+    with postgis_layer(
+        'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
+    ):
+        c = postgis_db.cursor()
+
+        c.execute(
+            """
+            CREATE VIEW nz_waca_adjustments_view AS (
+                SELECT id AS ogc_fid, date_adjusted, survey_reference, adjusted_nodes, geom
+                FROM nz_waca_adjustments
+            )
+        """
+        )
+        _test_pg_import(
+            tmp_path,
+            cli_runner,
+            chdir,
+            table_name="nz_waca_adjustments_view",
+            pk_name="ogc_fid",
+            import_args=["--primary-key=ogc_fid"],
+        )
 
 
 def test_pk_encoding():
