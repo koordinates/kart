@@ -130,7 +130,7 @@ def test_raw_feature_roundtrip():
     }
 
 
-GEOM_TYPE_INFO = {"geometryType": "MULTIPOLYGON ZM", "geometrySRS": "EPSG:2193"}
+GEOM_TYPE_INFO = {"geometryType": "MULTIPOLYGON ZM", "geometryCRS": "EPSG:2193"}
 
 
 def test_schema_roundtrip(gen_uuid):

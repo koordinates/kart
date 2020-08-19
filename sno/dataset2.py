@@ -72,7 +72,7 @@ class Dataset2(DatasetStructure):
     TITLE_PATH = META_PATH + "title"
     DESCRIPTION_PATH = META_PATH + "description"
 
-    SRS_PATH = META_PATH + "srs/"
+    CRS_PATH = META_PATH + "crs/"
 
     METADATA_PATH = META_PATH + "metadata/"
     DATASET_METADATA_PATH = METADATA_PATH + "dataset.json"
@@ -145,13 +145,13 @@ class Dataset2(DatasetStructure):
                 return gpkg_adapter.generate_gpkg_meta_item(self, name)
             raise  # This meta-item doesn't exist at all.
 
-    def get_srs_definition(self, srs_name):
-        """Return the SRS definition stored with the given name."""
-        return self.get_meta_item(f"srs/{srs_name}.wkt")
+    def get_crs_definition(self, crs_name):
+        """Return the CRS definition stored with the given name."""
+        return self.get_meta_item(f"crs/{crs_name}.wkt")
 
-    def srs_definitions(self):
-        """Return all stored srs definitions in a dict."""
-        for blob in find_blobs_in_tree(self.tree / self.SRS_PATH):
+    def crs_definitions(self):
+        """Return all stored crs definitions in a dict."""
+        for blob in find_blobs_in_tree(self.tree / self.CRS_PATH):
             # -4 -> Remove ".wkt"
             yield blob.name[:-4], ensure_text(blob.data)
 
@@ -311,8 +311,8 @@ class Dataset2(DatasetStructure):
             (self.DATASET_METADATA_PATH, source.get_meta_item("metadata/dataset.json")),
         ]
 
-        for path, definition in source.srs_definitions():
-            rel_meta_blobs.append((f"{self.SRS_PATH}{path}.wkt", definition))
+        for path, definition in source.crs_definitions():
+            rel_meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))
 
         for rel_path, content in rel_meta_blobs:
             if content is None:

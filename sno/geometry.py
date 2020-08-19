@@ -70,7 +70,7 @@ def gpkg_geom_to_hex_wkb(gpkg_geom):
         return binascii.hexlify(wkb).decode("ascii").upper()
 
 
-def gpkg_geom_to_ogr(gpkg_geom, parse_srs=False):
+def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
     """
     Parse GeoPackage geometry values to an OGR Geometry object
     http://www.geopackage.org/spec/#gpb_format
@@ -102,12 +102,12 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_srs=False):
     # We just leave it as-is.
     geom = ogr.CreateGeometryFromWkb(wkb)
 
-    if parse_srs:
-        srid = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
-        if srid > 0:
-            srs = osr.SpatialReference()
-            srs.ImportFromEPSG(srid)
-            geom.AssignSpatialReference(srs)
+    if parse_crs:
+        crs_id = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
+        if crs_id > 0:
+            spatial_ref = osr.SpatialReference()
+            spatial_ref.ImportFromEPSG(crs_id)
+            geom.AssignSpatialReference(spatial_ref)
 
     return geom
 
@@ -154,20 +154,16 @@ def ogr_to_gpkg_geom(
     if _add_envelope:
         flags |= 0x2
 
-    # srs_id
-    srid = 0
-    srs = ogr_geom.GetSpatialReference()
-    if srs:
-        srs.AutoIdentifyEPSG()
-        if srs.IsProjected():
-            srid = int(srs.GetAuthorityCode("PROJCS"))
-        elif srs.IsGeographic():
-            srid = int(srs.GetAuthorityCode("GEOGCS"))
+    srs_id = 0
+    spatial_ref = ogr_geom.GetSpatialReference()
+    if spatial_ref:
+        spatial_ref.AutoIdentifyEPSG()
+        srs_id = int(spatial_ref.GetAuthorityCode(None) or 0)
 
     wkb = ogr_geom.ExportToIsoWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
 
     header = struct.pack(
-        f'{"<" if _little_endian else ">"}ccBBi', b"G", b"P", 0, flags, srid
+        f'{"<" if _little_endian else ">"}ccBBi', b"G", b"P", 0, flags, srs_id
     )
     envelope = b""
     if _add_envelope:

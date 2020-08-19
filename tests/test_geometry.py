@@ -19,15 +19,15 @@ def ewkt_to_ogr(wkt):
     from some EWKT.
     """
     m = SRID_RE.match(wkt)
-    srid = None
+    crs_id = None
     if m:
-        srid, wkt = m.groups()
-        srid = int(srid)
+        crs_id, wkt = m.groups()
+        crs_id = int(crs_id)
     g = ogr.CreateGeometryFromWkt(wkt)
-    if srid:
-        srs = osr.SpatialReference()
-        srs.ImportFromEPSG(srid)
-        g.AssignSpatialReference(srs)
+    if crs_id:
+        spatial_ref = osr.SpatialReference()
+        spatial_ref.ImportFromEPSG(crs_id)
+        g.AssignSpatialReference(spatial_ref)
     return g
 
 
@@ -53,19 +53,17 @@ def ewkt_to_ogr(wkt):
 def test_wkt_gpkg_wkt_roundtrip(wkt):
     orig_ogr_geom = ewkt_to_ogr(wkt)
     gpkg_geom = ogr_to_gpkg_geom(orig_ogr_geom)
-    ogr_geom = gpkg_geom_to_ogr(gpkg_geom, parse_srs=True)
+    ogr_geom = gpkg_geom_to_ogr(gpkg_geom, parse_crs=True)
     assert ogr_geom.Equals(
         orig_ogr_geom
     ), f'{ogr_geom.ExportToIsoWkt()} != {orig_ogr_geom.ExportToIsoWkt()}'
 
-    orig_srs = orig_ogr_geom.GetSpatialReference()
-    srs = ogr_geom.GetSpatialReference()
+    orig_spatial_ref = orig_ogr_geom.GetSpatialReference()
+    spatial_ref = ogr_geom.GetSpatialReference()
 
-    if srs or orig_srs:
-        assert (
-            srs and orig_srs
-        ), f'{srs and srs.ExportToProj4()} != {orig_srs and orig_srs.ExportToProj4()}'
-        assert srs.ExportToProj4() == orig_srs.ExportToProj4()
+    _export_to_proj4 = lambda sr: sr.ExportToProj4() if sr else None
+
+    assert _export_to_proj4(spatial_ref) == _export_to_proj4(orig_spatial_ref)
 
 
 @pytest.mark.parametrize(

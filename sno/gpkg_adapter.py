@@ -49,7 +49,7 @@ def generate_gpkg_meta_item(v2_dataset, path):
 
 
 def is_v2_meta_item(path):
-    return path in V2_META_ITEMS or path.startswith("srs/")
+    return path in V2_META_ITEMS or path.startswith("crs/")
 
 
 def generate_v2_meta_item(v1_dataset, path, id_salt=None):
@@ -76,7 +76,7 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
             v1_dataset.get_meta_item("gpkg_metadata_reference"),
         )
 
-    elif path.startswith("srs/"):
+    elif path.startswith("crs/"):
         gpkg_spatial_ref_sys = v1_dataset.get_meta_item("gpkg_spatial_ref_sys") or ()
         for gsrs in gpkg_spatial_ref_sys:
             definition = gsrs["definition"]
@@ -84,7 +84,7 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
                 continue
             if wkt_to_v2_name(definition) == path:
                 return definition
-        raise KeyError(f"No SRS found for {path}")
+        raise KeyError(f"No CRS found for {path}")
 
 
 def iter_v2_meta_items(v1_dataset, id_salt=None):
@@ -163,10 +163,10 @@ def generate_gpkg_spatial_ref_sys(v2_dataset):
     if not geom_columns:
         return []
 
-    srs_pathname = geom_columns[0].extra_type_info["geometrySRS"]
-    if not srs_pathname:
+    crs_pathname = geom_columns[0].extra_type_info["geometryCRS"]
+    if not crs_pathname:
         return []
-    definition = v2_dataset.get_srs_definition(srs_pathname)
+    definition = v2_dataset.get_crs_definition(crs_pathname)
     return wkt_to_gpkg_spatial_ref_sys(definition)
 
 
@@ -176,7 +176,7 @@ def _gpkg_srs_id(dataset):
 
 
 def wkt_to_gpkg_spatial_ref_sys(wkt):
-    """Given a WKT srs definition, generate a gpkg_spatial_ref_sys meta item."""
+    """Given a WKT crs definition, generate a gpkg_spatial_ref_sys meta item."""
     return _gpkg_spatial_ref_sys(SpatialReference(wkt), wkt)
 
 
@@ -203,15 +203,15 @@ def _gpkg_spatial_ref_sys(spatial_ref, wkt):
 
 
 def wkt_to_v2_name(wkt):
-    return f"srs/{wkt_to_srs_str(wkt)}.wkt"
+    return f"crs/{wkt_to_crs_str(wkt)}.wkt"
 
 
-def wkt_to_srs_str(wkt):
-    """Given a WKT srs definition, generate a sensible identifier for it."""
-    return osgeo_to_srs_str(SpatialReference(wkt))
+def wkt_to_crs_str(wkt):
+    """Given a WKT crs definition, generate a sensible identifier for it."""
+    return osgeo_to_crs_str(SpatialReference(wkt))
 
 
-def osgeo_to_srs_str(spatial_ref):
+def osgeo_to_crs_str(spatial_ref):
     """Given a osgeo SpatialReference, generate a identifier name for it."""
     auth_name = spatial_ref.GetAuthorityName(None)
     auth_code = spatial_ref.GetAuthorityCode(None)
@@ -350,13 +350,13 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
     z = "Z" if ggc["z"] else ""
     m = "M" if ggc["m"] else ""
 
-    srs_str = None
+    crs_str = None
     if gsrs and gsrs[0]["definition"]:
-        srs_str = wkt_to_srs_str(gsrs[0]["definition"])
+        crs_str = wkt_to_crs_str(gsrs[0]["definition"])
 
     extra_type_info = {
         "geometryType": f"{geometry_type} {z}{m}".strip(),
-        "geometrySRS": srs_str,
+        "geometryCRS": crs_str,
     }
     return "geometry", extra_type_info
 

@@ -10,7 +10,7 @@ from sno import checkout, context
 from sno.exceptions import InvalidOperation
 from sno.structure import RepositoryStructure
 from sno.repository_version import get_repo_version, write_repo_version_config
-from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_srs_str
+from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_crs_str
 from sno.fast_import import fast_import_tables
 
 
@@ -181,11 +181,11 @@ class ImportV1Dataset:
         else:
             return self.dataset.get_meta_item(key)
 
-    def srs_definitions(self):
+    def crs_definitions(self):
         gsrs = self.dataset.get_meta_item("gpkg_spatial_ref_sys")
         if gsrs and gsrs[0]["definition"]:
             definition = gsrs[0]["definition"]
-            yield wkt_to_srs_str(definition), definition
+            yield wkt_to_crs_str(definition), definition
 
     def iter_features(self):
         for _, feature in self.dataset.features():

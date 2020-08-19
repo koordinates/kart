@@ -93,7 +93,7 @@ def normalise_feature(row):
     row = dict(row)
     if 'geom' in row:
         # We import via OGR, which strips envelopes by default
-        row['geom'] = ogr_to_gpkg_geom(gpkg_geom_to_ogr(row['geom'], parse_srs=True),)
+        row['geom'] = ogr_to_gpkg_geom(gpkg_geom_to_ogr(row['geom'], parse_crs=True),)
     return row
 
 

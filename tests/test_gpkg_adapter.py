@@ -14,7 +14,7 @@ V2_SCHEMA_DATA = [
         "name": "GEOMETRY",
         "dataType": "geometry",
         "geometryType": "GEOMETRY",
-        "geometrySRS": "EPSG:2193",
+        "geometryCRS": "EPSG:2193",
         "primaryKeyIndex": None,
     },
     {

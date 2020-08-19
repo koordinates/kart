@@ -28,7 +28,7 @@ from .gpkg_adapter import (
     gpkg_metadata_to_json,
     json_to_gpkg_metadata,
     osgeo_to_gpkg_spatial_ref_sys,
-    osgeo_to_srs_str,
+    osgeo_to_crs_str,
 )
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
@@ -444,12 +444,12 @@ class OgrImporter:
         for ogr_feature in self._iter_ogr_features():
             yield self._ogr_feature_to_dict(ogr_feature)
 
-    def _get_meta_srid(self):
-        srs = self.ogrlayer.GetSpatialRef()
-        if not srs:
+    def _get_meta_crs_id(self):
+        spatial_ref = self.ogrlayer.GetSpatialRef()
+        if not spatial_ref:
             return 0
-        srs.AutoIdentifyEPSG()
-        return int(srs.GetAuthorityCode(None))
+        spatial_ref.AutoIdentifyEPSG()
+        return int(spatial_ref.GetAuthorityCode(None) or 0)
 
     def get_meta_contents(self):
         return {
@@ -457,7 +457,7 @@ class OgrImporter:
             'data_type': 'features' if self.is_spatial else 'attributes',
             'identifier': self.get_meta_item('title'),
             'description': self.get_meta_item('description'),
-            'srs_id': self._get_meta_srid(),
+            'srs_id': self._get_meta_crs_id(),
         }
 
     def get_meta_item(self, key):
@@ -473,14 +473,14 @@ class OgrImporter:
         elif key == "metadata/dataset.json":
             return self.get_v2_metadata_json()
 
-    def get_srs_definition(self, srs_name):
-        return dict(self.srs_definitions)[srs_name]
+    def get_crs_definition(self, crs_name):
+        return dict(self.crs_definitions)[crs_name]
 
-    def srs_definitions(self):
+    def crs_definitions(self):
         if self.is_spatial:
-            srs = self.ogrlayer.GetSpatialRef()
-            if srs:
-                yield (osgeo_to_srs_str(srs), srs.ExportToWkt())
+            spatial_ref = self.ogrlayer.GetSpatialRef()
+            if spatial_ref:
+                yield (osgeo_to_crs_str(spatial_ref), spatial_ref.ExportToWkt())
 
     def _get_meta_geometry_type(self):
         # remove Z/M components
@@ -507,7 +507,7 @@ class OgrImporter:
             "table_name": self.table,
             "column_name": self.ogrlayer.GetGeometryColumn() or self.geom_cols[0],
             "geometry_type_name": self._get_meta_geometry_type(),
-            "srs_id": self._get_meta_srid(),
+            "srs_id": self._get_meta_crs_id(),
             "z": int(ogr.GT_HasZ(ogr_geom_type)),
             "m": int(ogr.GT_HasM(ogr_geom_type)),
         }
@@ -523,7 +523,7 @@ class OgrImporter:
         m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
         extra_type_info = {
             "geometryType": f"{geometry_type} {z}{m}".strip(),
-            "geometrySRS": f"EPSG:{self._get_meta_srid()}",
+            "geometryCRS": f"EPSG:{self._get_meta_crs_id()}",
         }
 
         return ColumnSchema(
@@ -631,9 +631,9 @@ class OgrImporter:
             }
 
     def get_meta_spatial_ref_sys(self):
-        srs = self.ogrlayer.GetSpatialRef()
-        if srs:
-            return osgeo_to_gpkg_spatial_ref_sys(srs)
+        spatial_ref = self.ogrlayer.GetSpatialRef()
+        if spatial_ref:
+            return osgeo_to_gpkg_spatial_ref_sys(spatial_ref)
         else:
             return []
 
