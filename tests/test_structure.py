@@ -625,17 +625,11 @@ def _test_pg_import(
     tmp_path, cli_runner, chdir, *, table_name, pk_name="id", pk_size=64, import_args=()
 ):
     repo_path = tmp_path / "repo"
-    r = cli_runner.invoke(['init', repo_path])
+    r = cli_runner.invoke(['init', repo_path, "--repo-version=2"])
     assert r.exit_code == 0, r
     with chdir(repo_path):
         r = cli_runner.invoke(
-            [
-                'import',
-                os.environ['SNO_POSTGRES_URL'],
-                table_name,
-                '--version=2',
-                *import_args,
-            ]
+            ['import', os.environ['SNO_POSTGRES_URL'], table_name, *import_args,]
         )
         assert r.exit_code == 0, r
     # now check metadata
@@ -647,7 +641,7 @@ def _test_pg_import(
         'description',
         'schema.json',
         'title',
-        'srs/EPSG:4167.wkt',
+        'crs/EPSG:4167.wkt',
     }
     schema = dataset.get_meta_item('schema.json')
     for col in schema:
@@ -664,10 +658,10 @@ def _test_pg_import(
             'dataType': 'geometry',
             'primaryKeyIndex': None,
             'geometryType': 'MULTIPOLYGON',
-            'geometrySRS': 'EPSG:4167',
+            'geometryCRS': 'EPSG:4167',
         },
-        {'name': 'date_adjusted', 'dataType': 'datetime', 'primaryKeyIndex': None,},
-        {'name': 'survey_reference', 'dataType': 'text', 'primaryKeyIndex': None,},
+        {'name': 'date_adjusted', 'dataType': 'datetime', 'primaryKeyIndex': None},
+        {'name': 'survey_reference', 'dataType': 'text', 'primaryKeyIndex': None},
         {
             'name': 'adjusted_nodes',
             'dataType': 'integer',
