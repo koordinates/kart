@@ -113,6 +113,14 @@ class Dataset1(DatasetStructure):
 
     @property
     @functools.lru_cache(maxsize=1)
+    def crs_identifier(self):
+        for col_dict in self.get_meta_item("schema.json"):
+            if col_dict["dataType"] == "geometry":
+                return col_dict["geometryCRS"]
+        return None
+
+    @property
+    @functools.lru_cache(maxsize=1)
     def primary_key_type(self):
         schema = self.get_meta_item("sqlite_table_info")
         field = next(f for f in schema if f["name"] == self.primary_key)

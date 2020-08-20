@@ -4,7 +4,9 @@ import sys
 from pathlib import Path
 
 import click
+from osgeo import osr
 
+from .cli_util import StringFromFile
 from .diff_output import (  # noqa - used from globals()
     diff_output_text,
     diff_output_json,
@@ -20,6 +22,7 @@ from .exceptions import (
     UNCATEGORIZED_ERROR,
 )
 from .filter_util import build_feature_filter, UNFILTERED
+from .geometry import make_crs
 from .repo_files import RepoState
 from .structure import RepositoryStructure
 
@@ -100,6 +103,7 @@ def diff_with_writer(
     json_style="pretty",
     commit_spec,
     filters,
+    target_crs=None,
 ):
     """
     Calculates the appropriate diff from the arguments,
@@ -114,6 +118,7 @@ def diff_with_writer(
       exit_code:   If True, the process will exit with code 1 if the diff is non-empty.
       commit_spec: The commit-ref or -refs to diff.
       filters:     Limit the diff to certain datasets or features.
+      target_crs:  An osr.SpatialReference object, or None
     """
     from .working_copy import WorkingCopy
 
@@ -161,6 +166,22 @@ def diff_with_writer(
         if feature_filter is not UNFILTERED:
             all_datasets = all_datasets.intersection(feature_filter.keys())
 
+        dataset_geometry_transforms = {}
+        if target_crs is not None:
+            for dataset_path in all_datasets:
+                dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
+                crs_wkt = dataset.crs_wkt
+                if crs_wkt is not None:
+                    src_crs = make_crs(crs_wkt)
+                    try:
+                        transform = osr.CoordinateTransformation(src_crs, target_crs)
+                    except RuntimeError as e:
+                        raise InvalidOperation(
+                            f"Can't reproject dataset {dataset_path!r} into target CRS: {e}"
+                        )
+
+                    dataset_geometry_transforms[dataset.name] = transform
+
         writer_params = {
             "repo": repo,
             "base": base_rs,
@@ -168,6 +189,7 @@ def diff_with_writer(
             "output_path": output_path,
             "dataset_count": len(all_datasets),
             "json_style": json_style,
+            "dataset_geometry_transforms": dataset_geometry_transforms,
         }
 
         L.debug(
@@ -209,6 +231,18 @@ def diff_with_writer(
             sys.exit(1)
 
 
+class CoordinateReferenceString(StringFromFile):
+    def convert(self, value, param, ctx):
+        value = super().convert(value, param, ctx)
+
+        try:
+            return make_crs(value)
+        except RuntimeError as e:
+            self.fail(
+                f"Invalid or unknown coordinate reference system: {value!r} ({e})"
+            )
+
+
 @click.command()
 @click.pass_context
 @click.option(
@@ -227,6 +261,11 @@ def diff_with_writer(
     help="Make the program exit with codes similar to diff(1). That is, it exits with 1 if there were differences and 0 means no differences.",
 )
 @click.option(
+    "--crs",
+    type=CoordinateReferenceString(encoding="utf-8"),
+    help="Reproject geometries into the given coordinate reference system. Accepts: 'EPSG:<code>'; proj text; OGC WKT; OGC URN; PROJJSON.)",
+)
+@click.option(
     "--output",
     "output_path",
     help="Output to a specific file/directory instead of stdout.",
@@ -240,7 +279,9 @@ def diff_with_writer(
 )
 @click.argument("commit_spec", required=False, nargs=1)
 @click.argument("filters", nargs=-1)
-def diff(ctx, output_format, output_path, exit_code, json_style, commit_spec, filters):
+def diff(
+    ctx, output_format, crs, output_path, exit_code, json_style, commit_spec, filters
+):
     """
     Show changes between two commits, or between a commit and the working copy.
 
@@ -270,4 +311,5 @@ def diff(ctx, output_format, output_path, exit_code, json_style, commit_spec, fi
         json_style=json_style,
         commit_spec=commit_spec,
         filters=filters,
+        target_crs=crs,
     )
