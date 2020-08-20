@@ -1,8 +1,11 @@
-import io
 import json
 import shutil
 import sys
 import textwrap
+
+import pygments
+from pygments.lexers import JsonLexer
+from pygments.lexer import ExtendedRegexLexer, LexerContext
 
 
 _terminal_formatter = None
@@ -57,12 +60,10 @@ def format_json_for_output(output, fp, json_style="pretty"):
     """
     if json_style == "pretty" and fp == sys.stdout and fp.isatty():
         # Add syntax highlighting
-        from pygments import highlight
-        from pygments.lexers import JsonLexer
-        from pygments.formatters import TerminalFormatter
-
         dumped = json.dumps(output, **JSON_PARAMS[json_style])
-        return highlight(dumped.encode(), JsonLexer(), get_terminal_formatter())
+        return pygments.highlight(
+            dumped.encode(), JsonLexer(), get_terminal_formatter()
+        )
     else:
         # pygments adds a newline, best we do that here too for consistency
         return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
@@ -96,6 +97,10 @@ def wrap_text_to_terminal(text, indent=''):
     return "".join(f"{indent}{line}\n" for line in lines)
 
 
+class ExtendedJsonLexer(JsonLexer, ExtendedRegexLexer):
+    pass
+
+
 def dump_json_output(output, output_path, json_style="pretty"):
     """
     Dumps the output to JSON in the output file.
@@ -105,18 +110,12 @@ def dump_json_output(output, output_path, json_style="pretty"):
     highlit = json_style == "pretty" and fp == sys.stdout and fp.isatty()
     json_encoder = ExtendedJsonEncoder(**JSON_PARAMS[json_style])
     if highlit:
-        import pygments
-
         # Takes patterns from JsonLexer and get_tokens_unprocessed function from ExtendedRegexLexer.
         # get_tokens_unprocessed enables the lexer to lex incomplete chunks of json
-        class ExtendedJsonLexer(
-            pygments.lexers.JsonLexer, pygments.lexer.ExtendedRegexLexer
-        ):
-            pass
 
         ex_json_lexer = ExtendedJsonLexer()
         # The LexerContext stores the state of the lexer after each call to get_tokens_unprocessed
-        lexer_context = pygments.lexer.LexerContext("", 0)
+        lexer_context = LexerContext("", 0)
 
         for chunk in json_encoder.iterencode(output):
             lexer_context.text = chunk
