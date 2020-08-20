@@ -30,18 +30,17 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 #### Using Datasets V2
 
- * An entire repository must be either V1 or V2, so to use V2, all data must be imported as V2.
- * Data can be imported as V2 using `sno init --import=<data> --version=2` or `sno import <data> --version=2`
- * Entire repositories can be upgraded from V1 to V2 with `sno upgrade 02-05 <old_repo> <new_repo>`.
- * Most functionality from V1 is available in V2, but there may be some bugs.
+ * An entire repository must be either V1 or V2, so to use V2, the repository must be initialised as V2 with the following command:
+    - `sno init --repo-version=2`
+ * Entire repositories can be upgraded from V1 to V2 using `sno upgrade 02-05 <old_repo> <new_repo>`.
+ * V2 should support everything V1 supports, but it is still in development and issues may be uncovered.
 
-#### Important missing functionality in Datasets V2
+#### Missing functionality in Datasets V2
 
- * Geometry storage format is not yet finalised.
  * String primary keys and tables without primary keys are not yet supported.
- * Changing the primary key column is not yet fully supported.
- * Schema changes might not be correctly interpreted if too many changes are made at once.
-    - It is safest to commit changes to any existing columns, then commit any new columns, then commit any feature changes.
+ * Changing the primary key column is not yet supported.
+ * Schema changes might not be correctly interpreted if too many changes are made at once (eg adding a new column with the same name as a deleted column).
+    - It is safest to commit schema changes to any existing columns, then commit schema changes adding any new columns, then commit any feature changes.
 
 ### Other changes in this release
 
