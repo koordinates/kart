@@ -98,6 +98,11 @@ def wrap_text_to_terminal(text, indent=''):
 
 
 class ExtendedJsonLexer(JsonLexer, ExtendedRegexLexer):
+    """
+    Inherits patterns from JsonLexer and get_tokens_unprocessed function from ExtendedRegexLexer.
+    get_tokens_unprocessed enables the lexer to lex incomplete chunks of json.
+    """
+
     pass
 
 
@@ -110,9 +115,6 @@ def dump_json_output(output, output_path, json_style="pretty"):
     highlit = json_style == "pretty" and fp == sys.stdout and fp.isatty()
     json_encoder = ExtendedJsonEncoder(**JSON_PARAMS[json_style])
     if highlit:
-        # Takes patterns from JsonLexer and get_tokens_unprocessed function from ExtendedRegexLexer.
-        # get_tokens_unprocessed enables the lexer to lex incomplete chunks of json
-
         ex_json_lexer = ExtendedJsonLexer()
         # The LexerContext stores the state of the lexer after each call to get_tokens_unprocessed
         lexer_context = LexerContext("", 0)
