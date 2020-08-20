@@ -19,9 +19,9 @@ ARCHIVE=$1
 shift
 
 DEB_ALL=(
+	ubuntu:focal
 	ubuntu:bionic
 	ubuntu:xenial
-	ubuntu:eoan
 	debian:jessie-slim
 	debian:stretch-slim
 	debian:buster-slim
@@ -33,12 +33,19 @@ RPM_ALL=(
     centos:8
 )
 
+ARCHIVE_PATH="/src/platforms/linux/dist/$ARCHIVE"
+
 if [ "$TYPE" = "deb" ]; then
 	TARGETS=${DEB_ALL[*]}
-	INSTALL="dpkg -i"
+	# `apt install /path/to/my.deb` doesn't work in jessie
+	DO_INSTALL="
+		DEBIAN_FRONTEND=noninteractive; \
+		apt-get update -q -y \
+		&& (dpkg -i \"$ARCHIVE_PATH\" || apt install -f -y --no-install-recommends) \
+	"
 else
 	TARGETS=${RPM_ALL[*]}
-	INSTALL="rpm -i"
+	DO_INSTALL="yum localinstall -y \"$ARCHIVE_PATH\""
 fi
 
 if [ $# != 0 ]; then
@@ -46,7 +53,7 @@ if [ $# != 0 ]; then
 fi
 
 for DIST in ${TARGETS[*]}; do
-	echo -e "\n$DIST..."
+	echo -e "\n▶️  $DIST..."
 	docker run \
 		--rm \
 		-i \
@@ -57,7 +64,7 @@ for DIST in ${TARGETS[*]}; do
 		2>&1 <<-EOF | (while read -r; do echo "  $REPLY"; done)
 			ln -sf /src/platforms/linux/sqlite3 /usr/bin/
 
-			$INSTALL /src/platforms/linux/dist/$ARCHIVE
+			$DO_INSTALL
 			command -v sno
 
 			sno --version

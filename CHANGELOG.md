@@ -56,6 +56,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Commands which are misspelled now suggest the correct spelling [#199](https://github.com/koordinates/sno/issues/199)
  * Bugfix: operations that should immediately fail due to dirty working copy no longer partially succeed. [#181](https://github.com/koordinates/sno/issues/181)
  * Bugfix: some column datatype conversion issues during import and checkout.
+ * Linux: Add openssh client dependency into rpm & deb packages [#121](https://github.com/koordinates/sno/issues/121)
 
 ## 0.4.1
 
