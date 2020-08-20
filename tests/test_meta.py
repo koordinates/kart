@@ -11,15 +11,16 @@ EXPECTED_GCG_JSON = {
 }
 
 EXPECTED_GCG_TEXT = """
-gpkg_geometry_columns
-    {
-      "column_name": "geom",
-      "geometry_type_name": "POINT",
-      "m": 0,
-      "srs_id": 4326,
-      "table_name": "nz_pa_points_topo_150k",
-      "z": 0
-    }
+nz_pa_points_topo_150k
+    gpkg_geometry_columns
+        {
+          "column_name": "geom",
+          "geometry_type_name": "POINT",
+          "m": 0,
+          "srs_id": 4326,
+          "table_name": "nz_pa_points_topo_150k",
+          "z": 0
+        }
 """.strip()
 
 EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
@@ -56,6 +57,7 @@ class TestMetaGet:
                 assert "crs/EPSG:4326.wkt" in r.stdout
             else:
                 output = json.loads(r.stdout)
+                output = output['nz_pa_points_topo_150k']
                 assert output["title"] == EXPECTED_TITLE
                 assert output["description"]
                 assert output["schema.json"]
@@ -81,6 +83,7 @@ class TestMetaGet:
                 assert "sqlite_table_info" not in r.stdout
             else:
                 output = json.loads(r.stdout)
+                output = output['nz_pa_points_topo_150k']
                 assert output["gpkg_geometry_columns"] == EXPECTED_GCG_JSON
                 assert "gpkg_contents" not in output
                 assert "sqlite_table_info" not in output

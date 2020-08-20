@@ -41,49 +41,59 @@ def meta(ctx, **kwargs):
     default="pretty",
     help="How to format the JSON output. Only used with -o json",
 )
-@click.argument('dataset')
+@click.argument('dataset', required=False)
 @click.argument('keys', required=False, nargs=-1)
 @click.pass_context
 def meta_get(ctx, output_format, json_style, dataset, keys):
     """
-    Prints the value of meta keys for the given dataset.
+    Prints the value of meta keys.
+
+    Optionally, output can be filtered to a dataset and a particular key.
     """
     rs = RepositoryStructure(ctx.obj.repo)
 
-    try:
-        ds = rs[dataset]
-    except KeyError:
-        raise click.UsageError(f"No such dataset: {dataset}")
-
-    if keys:
-        items = {}
-        missing_keys = []
-        for key in keys:
-            try:
-                items[key] = ds.get_meta_item(key)
-            except KeyError:
-                missing_keys.append(key)
-
-        if missing_keys:
-            raise click.UsageError(
-                f"Couldn't find items: {', '.join(sorted(missing_keys))}"
-            )
+    if dataset:
+        try:
+            datasets = [rs[dataset]]
+        except KeyError:
+            raise click.UsageError(f"No such dataset: {dataset}")
     else:
-        items = dict(ds.iter_meta_items())
+        datasets = rs
 
     fp = resolve_output_path('-')
+
+    all_items = {}
+    for ds in datasets:
+        items = {}
+        all_items[ds.path] = items
+        if keys:
+            missing_keys = []
+            for key in keys:
+                try:
+                    items[key] = ds.get_meta_item(key)
+                except KeyError:
+                    missing_keys.append(key)
+
+            if missing_keys:
+                raise click.UsageError(
+                    f"Couldn't find items: {', '.join(sorted(missing_keys))}"
+                )
+        else:
+            items.update(dict(ds.iter_meta_items()))
+
     if output_format == 'text':
-        indent = '    '
-        for key, value in items.items():
-            click.secho(key, bold=True)
-            if key.endswith('.json') or not isinstance(value, str):
-                value = format_json_for_output(value, fp, json_style=json_style)
-                for i, line in enumerate(value.splitlines()):
-                    fp.write(f"{indent}{line}\n")
-            else:
-                fp.write(wrap_text_to_terminal(value, indent=indent))
+        for ds_path, items in all_items.items():
+            click.secho(ds_path, bold=True)
+            for key, value in items.items():
+                click.secho(f'    {key}', bold=True)
+                if key.endswith('.json') or not isinstance(value, str):
+                    value = format_json_for_output(value, fp, json_style=json_style)
+                    for i, line in enumerate(value.splitlines()):
+                        fp.write(f"        {line}\n")
+                else:
+                    fp.write(wrap_text_to_terminal(value, indent='        '))
     else:
-        dump_json_output(items, fp, json_style=json_style)
+        dump_json_output(all_items, fp, json_style=json_style)
 
 
 class KeyValueType(click.ParamType):
