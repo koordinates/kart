@@ -144,7 +144,10 @@ def resolve_output_path(output_path):
       * a file-like object
       * the string '-' or None (both will return sys.stdout)
     """
-    if isinstance(output_path, io.IOBase):
+    if hasattr(output_path, 'write'):
+        # filelike object. *usually* this is a io.TextIOWrapper,
+        # but in some circumstances it can be something else.
+        # e.g. click on windows may wrap it with a colorama.ansitowin32.StreamWrapper.
         return output_path
     elif (not output_path) or output_path == "-":
         return sys.stdout
