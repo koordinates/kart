@@ -51,6 +51,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `sno log` now supports JSON output with `--output-format json` [#170](https://github.com/koordinates/sno/issues/170)
  * `sno meta get` now prints text items as text (not encoded as JSON) [#211](https://github.com/koordinates/sno/issues/211)
  * `sno meta get` without arguments now outputs multiple datasets [#217](https://github.com/koordinates/sno/issues/217)
+ * `sno diff` and `sno show` now accept a `--crs` parameter to reproject output [#213](https://github.com/koordinates/sno/issues/213)
  * Streaming diffs: less time until first change is shown when diffing large changes. [#156](https://github.com/koordinates/sno/issues/156)
  * Working copies are now created automatically. [#192](https://github.com/koordinates/sno/issues/192)
  * Commands which are misspelled now suggest the correct spelling [#199](https://github.com/koordinates/sno/issues/199)
