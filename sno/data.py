@@ -1,9 +1,9 @@
-import json
 import sys
 
 import click
 
 from . import status
+from .cli_util import add_help_subcommand
 from .output_util import dump_json_output
 from .structure import RepositoryStructure
 from .repo_files import RepoState
@@ -13,6 +13,7 @@ from .repo_files import RepoState
 # we disallow that.
 
 
+@add_help_subcommand
 @click.group()
 @click.pass_context
 def data(ctx, **kwargs):

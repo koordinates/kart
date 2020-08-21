@@ -4,7 +4,7 @@ import io
 import click
 
 from .apply import apply_patch
-from .cli_util import StringFromFile
+from .cli_util import StringFromFile, add_help_subcommand
 from .exceptions import InvalidOperation
 from .output_util import (
     dump_json_output,
@@ -23,6 +23,7 @@ READONLY_ITEMS = {
 }
 
 
+@add_help_subcommand
 @click.group()
 @click.pass_context
 def meta(ctx, **kwargs):
