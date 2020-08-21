@@ -39,6 +39,7 @@ GPKG_IMPORTS = (
         pytest.param("gpkg-stringpk", "stringpk.gpkg", "stringpk", id="stringpk"),
     ],
 )
+V1_OR_V2 = ("repo_version", ["1", "2"])
 
 
 @pytest.mark.slow
@@ -175,13 +176,22 @@ def test_import_table_with_prompt_with_no_input(
         assert "No table specified" in r.stderr
 
 
-def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_init_import_table_ogr_types(
+    data_archive_readonly, tmp_path, cli_runner, repo_version
+):
     with data_archive_readonly("types") as data:
         repo_path = tmp_path / "repo"
         r = cli_runner.invoke(
-            ["init", "--import", data / "types.gpkg", str(repo_path)],
+            [
+                "init",
+                f"--repo-version={repo_version}",
+                "--import",
+                data / "types.gpkg",
+                str(repo_path),
+            ],
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # There's a bunch of wacky types in here, let's check them
         repo = pygit2.Repository(str(repo_path))
@@ -288,9 +298,6 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
                 'pk': 0,
             },
         ]
-
-
-V1_OR_V2 = ("repo_version", ["1", "2"])
 
 
 @pytest.mark.slow
@@ -403,7 +410,7 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.repository.version"] == "1"
+        assert repo.config["sno.repository.version"] == "2"
         assert repo.config["sno.workingcopy.path"] == "editing.gpkg"
 
         db = geopackage(wc)
@@ -412,14 +419,14 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
         assert wc_rowcount > 0
 
         wc_tree_id = dbcur.execute(
-            """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+            """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
         ).fetchone()[0]
         assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
 
         # make sure we haven't stuffed up the original file
         dbo = geopackage("editing.gpkg")
         dbocur = dbo.cursor()
-        dbocur.execute("SELECT 1 FROM sqlite_master WHERE name='.sno-meta';")
+        dbocur.execute("SELECT 1 FROM sqlite_master WHERE name='gpkg_sno_state';")
         assert dbocur.fetchall() == []
         source_rowcount = dbocur.execute("SELECT COUNT(*) FROM editing;").fetchone()[0]
         assert source_rowcount == wc_rowcount

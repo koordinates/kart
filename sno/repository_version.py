@@ -10,7 +10,7 @@ REPO_VERSION_BLOB_PATH = ".sno.repository.version"
 REPO_VERSION_CONFIG_PATH = "sno.repository.version"
 
 REPO_VERSIONS = (0, 1, 2)
-DEFAULT_REPO_VERSION = 1
+DEFAULT_REPO_VERSION = 2
 
 # Only versions 1 and 2 (or "auto") are currently supported by any commands.
 # If you have version 0, use sno upgrade 00-02

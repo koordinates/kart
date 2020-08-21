@@ -283,7 +283,7 @@ def _column_schema_to_gpkg(cid, column_schema, is_spatial):
         "name": column_schema.name,
         "pk": is_pk,
         "type": v2_type_to_gpkg_type(column_schema, is_spatial),
-        "notnull": 0,
+        "notnull": 1 if is_pk else 0,
         "dflt_value": None,
     }
 
