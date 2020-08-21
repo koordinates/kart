@@ -89,7 +89,7 @@ def create_patch(ctx, *, refish, json_style, **kwargs):
     parent = _get_parent(ctx, refish)
     return diff.diff_with_writer(
         ctx,
-        show_output_json,
+        patch_output,
         exit_code=False,
         commit_spec=f"{parent}...{refish}",
         filters=[],
@@ -154,7 +154,7 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
 
     The patch JSON contains two top-level keys:
         "sno.diff/v1+hexwkb": contains a JSON diff. See `sno.diff.diff_output_json` docstring.
-        "sno.patch/v1": contains metadata about the commit:
+        "sno.show/v1": contains metadata about the commit:
           {
             "authorEmail": "joe@example.com",
             "authorName": "Joe Bloggs",
@@ -164,6 +164,38 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
           }
 
     authorTime is always returned in UTC, in Z-suffixed ISO8601 format.
+    """
+
+    commit = target.head_commit
+    author = commit.author
+    author_time = datetime.fromtimestamp(author.time, timezone.utc)
+    author_time_offset = timedelta(minutes=author.offset)
+
+    def dump_function(data, *args, **kwargs):
+        data['sno.show/v1'] = {
+            'authorName': author.name,
+            'authorEmail': author.email,
+            "authorTime": datetime_to_iso8601_utc(author_time),
+            "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
+            "message": commit.message,
+        }
+        dump_json_output(data, *args, **kwargs)
+
+    with diff.diff_output_json(
+        output_path=output_path,
+        json_style=json_style,
+        dump_function=dump_function,
+        **kwargs,
+    ) as diff_writer:
+        yield diff_writer
+
+
+@contextlib.contextmanager
+def patch_output(*, target, output_path, json_style, **kwargs):
+    """
+    Almost the same as show_output_json but uses the `sno.patch/v1` key instead of `sno.show/v1`
+
+    This is duplicated for clarity, because all this diff callback stuff is complex enough.
     """
 
     commit = target.head_commit

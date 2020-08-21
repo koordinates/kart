@@ -46,7 +46,7 @@ def test_apply_twice(data_archive, cli_runner):
     patch_path = patches / 'points-1U-1D-1I.snopatch'
     with data_archive("points"):
         r = cli_runner.invoke(["apply", str(patch_path)])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["apply", str(patch_path)])
         assert r.exit_code == PATCH_DOES_NOT_APPLY
@@ -73,7 +73,7 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
     with data_archive("points") as repo_dir:
         patch_path = patches / patch_filename
         r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         repo = pygit2.Repository(str(repo_dir))
         commit = repo.head.peel(pygit2.Commit)
@@ -89,9 +89,9 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         bits = r.stdout.split()
         assert bits[0] == 'Commit'
 
-        # Check that the `sno show -o json` output is the same as our original patch file had.
-        r = cli_runner.invoke(['show', '-o', 'json'])
-        assert r.exit_code == 0
+        # Check that the `sno create-patch` output is the same as our original patch file had.
+        r = cli_runner.invoke(['create-patch', "HEAD"])
+        assert r.exit_code == 0, r.stderr
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
@@ -124,10 +124,10 @@ def test_apply_meta_changes(data_archive, cli_runner):
         assert r.exit_code == INVALID_OPERATION, r
     with data_archive("points2"):
         r = cli_runner.invoke(["apply", '-'], input=patch_file,)
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
-        # Check that the `sno show -o json` output is the same as our original patch file had.
-        r = cli_runner.invoke(['show', '-o', 'json'])
+        # Check that the `sno create-patch` output is the same as our original patch file had.
+        r = cli_runner.invoke(['create-patch', "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         meta = patch['sno.diff/v1+hexwkb']['nz_pa_points_topo_150k']['meta']
@@ -144,7 +144,7 @@ def test_apply_with_working_copy(
     with data_working_copy("points") as (repo_dir, wc_path):
         patch_path = patches / patch_filename
         r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         repo = pygit2.Repository(str(repo_dir))
         commit = repo.head.peel(pygit2.Commit)
@@ -173,9 +173,9 @@ def test_apply_with_working_copy(
             names = dict(cur.fetchall())
             assert names == workingcopy_verify_names
 
-        # Check that the `sno show -o json` output is the same as our original patch file had.
-        r = cli_runner.invoke(['show', '-o', 'json'])
-        assert r.exit_code == 0
+        # Check that the `sno create-patch` output is the same as our original patch file had.
+        r = cli_runner.invoke(['create-patch', "HEAD"])
+        assert r.exit_code == 0, r.stderr
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open('r', encoding='utf-8'))
 
@@ -200,7 +200,7 @@ def test_apply_with_working_copy_with_no_commit(
     with data_working_copy("points") as (repo_dir, wc_path):
         patch_path = patches / patch_filename
         r = cli_runner.invoke(["apply", "--no-commit", patch_path])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         repo = pygit2.Repository(str(repo_dir))
 
@@ -222,8 +222,8 @@ def test_apply_with_working_copy_with_no_commit(
 
 def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
     with data_archive("au-census"):
-        r = cli_runner.invoke(["show", "-o", "json", "master"])
-        assert r.exit_code == 0, r
+        r = cli_runner.invoke(["create-patch", "master"])
+        assert r.exit_code == 0, r.stderr
         patch_text = r.stdout
         patch_json = json.loads(patch_text)
         assert set(patch_json['sno.diff/v1+hexwkb'].keys()) == {
@@ -234,10 +234,10 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
         # note: repo's current branch is 'branch1' which doesn't have the commit on it,
         # so the patch applies cleanly.
         r = cli_runner.invoke(["apply", "-"], input=patch_text)
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
-        r = cli_runner.invoke(["show", "-o", "json"])
-        assert r.exit_code == 0, r
+        r = cli_runner.invoke(["create-patch", "HEAD"])
+        assert r.exit_code == 0, r.stderr
         new_patch_json = json.loads(r.stdout)
 
         assert new_patch_json == patch_json
@@ -252,7 +252,7 @@ def test_apply_benchmark(
     with data_working_copy('points') as (repo_dir, wc_path):
         # Create a branch we can use later; don't switch to it
         r = cli_runner.invoke(["branch", "-c", "savepoint"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # Generate a large change and commit it
         db = geopackage(wc_path)
@@ -261,18 +261,18 @@ def test_apply_benchmark(
             "UPDATE nz_pa_points_topo_150k SET name = 'bulk_' || Coalesce(name, 'null')"
         )
         r = cli_runner.invoke(["commit", "-m", "rename everything"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # Make it into a patch
-        r = cli_runner.invoke(["show", "-o", "json"])
-        assert r.exit_code == 0, r
+        r = cli_runner.invoke(["create-patch", "HEAD"])
+        assert r.exit_code == 0, r.stderr
         patch_text = r.stdout
         patch_json = json.loads(patch_text)
         assert patch_json['sno.patch/v1']['message'] == "rename everything"
 
         # Now switch to our savepoint branch and apply the patch
         r = cli_runner.invoke(["checkout", "savepoint"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # wrap the apply command with benchmarking
         orig_apply_patch = apply.apply_patch

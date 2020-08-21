@@ -104,7 +104,7 @@ def test_meta_set(data_archive, cli_runner):
         r = cli_runner.invoke(["show", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         output = json.loads(r.stdout)
-        patch_info = output.pop('sno.patch/v1')
+        patch_info = output.pop('sno.show/v1')
         assert patch_info['message'] == 'Update metadata for nz_pa_points_topo_150k'
         meta = output['sno.diff/v1+hexwkb']['nz_pa_points_topo_150k']['meta']
         assert meta['title'] == {'-': 'NZ Pa Points (Topo, 1:50k)', '+': 'newtitle'}
