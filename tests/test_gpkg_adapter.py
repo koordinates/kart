@@ -58,7 +58,7 @@ def test_adapt_schema():
             'name': 'OBJECTID',
             'pk': 1,
             'type': 'INTEGER',
-            'notnull': 0,
+            'notnull': 1,
             'dflt_value': None,
         },
         {
