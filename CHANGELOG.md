@@ -38,6 +38,7 @@ Existing commands are backward compatible with V1 datasets, however some new fun
  * New structure to `sno diff` output:
     - Text output: Features are now labelled as `<dataset>:feature:<primary_key>`, consistent with meta items that are labelled as `<dataset>:meta:<meta_item_name>`
     - JSON output also uses "feature" and "meta" as keys for the different types of changes, instead of "featureChanges" and "metaChanges".
+ * `sno show -o json` header key changed to `sno.show/v1`, which is not an applyable patch. Use `sno create-patch` to create a patch.
 
 ### Other changes in this release
 

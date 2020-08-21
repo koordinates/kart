@@ -42,7 +42,7 @@ def test_diff_points(
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # make some changes
         db = geopackage(wc)
@@ -341,7 +341,7 @@ def test_diff_polygons(
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # make some changes
         db = geopackage(wc)
@@ -678,7 +678,7 @@ def test_diff_table(
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # make some changes
         db = geopackage(wc)
@@ -1295,7 +1295,7 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         repo = pygit2.Repository(str(repo_path))
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         assert repo.head.name == "refs/heads/changes"
 
         # make some changes
@@ -1306,21 +1306,21 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
         assert repo.head.target.hex == b_commit_id
 
         r = cli_runner.invoke(["checkout", "master"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         assert repo.head.target.hex != b_commit_id
         m_commit_id = insert(db)
         H.git_graph(request, "pre-merge-master")
 
         # Three dots diff should show both sets of changes.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}...{b_commit_id}"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
             "feature"
         ]
         assert len(features) == 4
 
         r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}...{m_commit_id}"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
             "feature"
         ]
@@ -1328,14 +1328,14 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
 
         # Two dots diff should show only one set of changes - the changes on the target branch.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}..{b_commit_id}"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
             "feature"
         ]
         assert len(features) == 3
 
         r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}..{m_commit_id}"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
             "feature"
         ]
@@ -1353,7 +1353,7 @@ def test_show_points_HEAD(
     data_archive = "points2" if repo_version == "2" else "points"
     with data_archive_readonly(data_archive):
         r = cli_runner.invoke(["show", f"--output-format={output_format}", "HEAD"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         if output_format == 'text':
             commit_hash = r.stdout[7:47]
@@ -1409,7 +1409,7 @@ def test_show_points_HEAD(
             # check the diff's present, but this test doesn't need to have hundreds of lines
             # to know exactly what it is (we have diff tests above)
             assert 'sno.diff/v1+hexwkb' in j
-            assert j['sno.patch/v1'] == {
+            assert j['sno.show/v1'] == {
                 'authorEmail': 'robert@coup.net.nz',
                 'authorName': 'Robert Coup',
                 'authorTime': '2019-06-20T14:28:33Z',
@@ -1423,18 +1423,16 @@ def test_show_points_HEAD(
 def test_show_polygons_initial(
     repo_version, output_format, data_archive_readonly, cli_runner
 ):
-    data_archive = "polygons2" if repo_version == "2" else "polygons"
-
     """Make sure we can show the initial commit"""
     with data_archive_readonly("polygons"):
         r = cli_runner.invoke(["log"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         initial_commit = re.findall("commit ([0-9a-f]+)\n", r.stdout)[-1]
 
         r = cli_runner.invoke(
             ["show", f"--output-format={output_format}", initial_commit]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         if output_format == 'text':
             lines = r.stdout.splitlines()
@@ -1468,7 +1466,7 @@ def test_show_polygons_initial(
         elif output_format == 'json':
             j = json.loads(r.stdout)
             assert 'sno.diff/v1+hexwkb' in j
-            assert j["sno.patch/v1"] == {
+            assert j["sno.show/v1"] == {
                 "authorEmail": "robert@coup.net.nz",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-07-22T11:05:39Z",
@@ -1481,7 +1479,7 @@ def test_show_json_format(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
         r = cli_runner.invoke(["show", f"-o", "json", "--json-style=compact", "HEAD"])
 
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         # output is compact, no indentation
         assert '"sno.diff/v1+hexwkb": {"' in r.stdout
 
@@ -1516,7 +1514,7 @@ def test_show_shallow_clone(data_archive_readonly, cli_runner, tmp_path, chdir):
     with data_archive_readonly("points") as original_path:
         clone_path = tmp_path / "shallow-clone"
         r = cli_runner.invoke(["clone", "--depth=1", original_path, clone_path])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         with chdir(clone_path):
             r = cli_runner.invoke(["show"])
