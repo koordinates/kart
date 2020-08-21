@@ -223,104 +223,46 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     There are all sorts of caveats to the meta item emulation, and this attempts
     to avoid them when comparing.
     """
-    meta_items = dict(dataset.iter_v1_meta_items())
-    gpkg_meta_items = dict(gpkg_dataset.iter_v1_meta_items())
+    ds_schema = dataset.get_meta_item('schema.json')
+    gpkg_schema = gpkg_dataset.get_meta_item('schema.json')
 
-    # we don't implement XML metadata for non-gpkg formats
-    del gpkg_meta_items['gpkg_metadata']
-    del gpkg_meta_items['gpkg_metadata_reference']
+    for col in ds_schema:
+        col.pop('id')
+    for col in gpkg_schema:
+        col.pop('id')
+
     # SHP/TAB always call the primary key "FID"
-    gpkg_meta_items[f"fields/{dataset.primary_key}"] = gpkg_meta_items.pop(
-        f"fields/{gpkg_dataset.primary_key}"
-    )
-    gpkg_meta_items["primary_key"] = meta_items["primary_key"]
+    for col in gpkg_schema:
+        if col['name'] == gpkg_dataset.primary_key:
+            col['name'] = 'FID'
+
+    # CHeck the fields are in the right order. Ignore truncation and capitalisation
+    ds_names = [col['name'][:8] for col in ds_schema]
+    gpkg_names = [col['name'][:8] for col in gpkg_schema]
+    assert ds_names == gpkg_names
+
+    # now we've checked order, we can key by name
+    ds_schema = {col.pop('name'): col for col in ds_schema}
+    gpkg_schema = {col.pop('name'): col for col in gpkg_schema}
 
     # SHP/TAB field names must be <10 chars
-    nuke_truncated_fields = set()
-    for f in meta_items.keys():
-        if f.startswith('fields/') and len(f) == 17:
-            # It's likely OGR has truncated this field name.
-            # Truncate the gpkg field to match.
-            match = re.match(r'^fields/(?P<fieldname>\w+?)(?:_?\d+)?$', f)
-            assert match
-            nuke_truncated_fields.add(match.groupdict()["fieldname"])
+    # When they're truncated, an underscore and integer suffix gets appended.
+    # so the fieldname itself is truncated to 8 chars.
+    remove_prefixes = set()
+    for k in list(gpkg_schema.keys()):
+        if k not in gpkg_schema:
+            # already removed
+            continue
+        if len(k) > 10:
+            remove_prefixes.add(k[:8])
 
-    # nuke difficult field names as mentioned above
-    nuke_truncated_fields = tuple(nuke_truncated_fields)
-    for d in (meta_items, gpkg_meta_items):
-        for k in list(d):
-            if k.startswith(tuple(f'fields/{f}' for f in nuke_truncated_fields)):
-                d.pop(k)
-        for f in d['sqlite_table_info']:
-            if f['name'].startswith(nuke_truncated_fields):
-                # truncated them here so we can test the rest of the stuff about the field
-                f['name'] = f"{f['name'][:7]}[trunc]"
-
-    assert meta_items.keys() == gpkg_meta_items.keys()
-    for d in (meta_items, gpkg_meta_items):
-        # SHP/TAB can't possibly preserve identifier/description, those are GPKG specific :/
-        d['gpkg_contents'].pop('description')
-        d['gpkg_contents'].pop('identifier')
-
-        pk_field = [f for f in d['sqlite_table_info'] if f['pk']][0]
-        # SHP/TAB always call the primary key "FID"
-        pk_field['name'] = dataset.primary_key
-        # SHP/TAB don't preserve nullability
-        for f in d['sqlite_table_info']:
-            del f['notnull']
-
-        # OGR SRS names seem different from GPKG ones, and we don't seem to have descriptions at all.
-        # Luckily these don't really matter (do they?)
-        for srs in d['gpkg_spatial_ref_sys']:
-            del srs['description']
-            del srs['srs_name']
-
-            # this one matters, but slight variations may not.
-            # OGR adds AXIS definitions in that GPKG doesn't have. meh
-            assert srs.pop('definition')
-
-        # SHP/TAB don't preserve the MULTI-ness of their geometry type.
-        # also, at least one of our test datasets has gtype=GEOMETRY in GPKG,
-        # but when converted to SHP it ends up with POLYGON
-        # (because it contains only polygons)
-        del d['gpkg_geometry_columns']['geometry_type_name']
-        for f in d['sqlite_table_info']:
-            if f['type'].startswith('MULTI'):
-                f['type'] = f['type'][5:]
-            if f['type'] in (
-                'POLYGON',
-                'POINT',
-                'LINESTRING',
-                'GEOMETRYCOLLECTION',
-                'GEOMETRY',
-            ):
-                # SHP/TAB formats don't preserve the ordering of the geometry column.
-                f['cid'] = -1
-            if f['type'] == 'DATETIME':
-                # wow, SHP doesn't support datetimes(!)
-                # OGR launders these to DATE
-                f['type'] = 'DATE'
-
-        # SHP/TAB formats don't preserve the ordering of the geometry column.
-        # Above, we set the geometry cid to -1
-        # Now we sort by cid, and then remove the cids.
-        # This ensures we're testing the ordering of the other columns, but
-        # means we don't care what their cids are with respect to the geometry column.
-        d['sqlite_table_info'].sort(key=lambda f: f['cid'])
-        for f in d['sqlite_table_info']:
-            f.pop('cid')
-
-        # the GPKG spec allows for z/m values to be set to 2,
-        # which means z/m values are optional.
-        # OGR importer doesn't do that, it's 0 or 1
-        if d['gpkg_geometry_columns']['m'] == 2:
-            d['gpkg_geometry_columns']['m'] = 0
-        if d['gpkg_geometry_columns']['z'] == 2:
-            d['gpkg_geometry_columns']['z'] = 0
-
-    # That was dramatic. Whatever's left should be identical
-    for key in meta_items:
-        assert meta_items[key] == gpkg_meta_items[key], key
+    remove_prefixes = tuple(remove_prefixes)
+    for k in list(gpkg_schema.keys()):
+        if k.startswith(remove_prefixes):
+            gpkg_schema.pop(k)
+    for k in list(ds_schema.keys()):
+        if k.startswith(remove_prefixes):
+            ds_schema.pop(k)
 
 
 @pytest.mark.slow
@@ -497,60 +439,32 @@ def test_shp_import_meta(
         repo = pygit2.Repository(str(repo_path))
         dataset = structure.RepositoryStructure(repo)[path]
 
-        meta_items = dict(dataset.iter_v1_meta_items())
+        meta_items = dict(dataset.iter_meta_items())
         assert set(meta_items) == {
-            'gpkg_contents',
-            'gpkg_geometry_columns',
-            'gpkg_spatial_ref_sys',
-            'primary_key',
-            'sqlite_table_info',
-            'version',
-            'fields/FID',
-            'fields/adjusted_n',
-            'fields/date_adjus',
-            'fields/geom',
-            'fields/survey_ref',
+            'description',
+            'schema.json',
+            'title',
+            'crs/EPSG:4167.wkt',
         }
-        assert meta_items['sqlite_table_info'] == [
+        schema = dataset.get_meta_item('schema.json')
+        for col in schema:
+            col.pop('id')
+        assert schema == [
+            {'name': 'FID', 'dataType': 'integer', 'primaryKeyIndex': 0, 'size': 64},
             {
-                'cid': 0,
-                'name': 'FID',
-                'type': 'INTEGER',
-                'notnull': 1,
-                'dflt_value': None,
-                'pk': 1,
-            },
-            {
-                'cid': 1,
                 'name': 'geom',
-                'type': 'POLYGON',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                'dataType': 'geometry',
+                'primaryKeyIndex': None,
+                'geometryType': 'POLYGON',
+                'geometryCRS': 'EPSG:4167',
             },
+            {'name': 'date_adjus', 'dataType': 'date', 'primaryKeyIndex': None},
+            {'name': 'survey_ref', 'dataType': 'text', 'primaryKeyIndex': None},
             {
-                'cid': 2,
-                'name': 'date_adjus',
-                'type': 'DATE',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
-            },
-            {
-                'cid': 3,
-                'name': 'survey_ref',
-                'type': 'TEXT(50)',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
-            },
-            {
-                'cid': 4,
                 'name': 'adjusted_n',
-                'type': 'MEDIUMINT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                'dataType': 'integer',
+                'primaryKeyIndex': None,
+                'size': 32,
             },
         ]
 
