@@ -6,34 +6,25 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.5.0 (UNRELEASED)
 
-### Breaking changes in this release
+sno v0.5 introduces a new repo layout, which is the default, dubbed 'Datasets V2'
 
- * New structure to `sno diff` output:
-    - Text output: Features are now labelled as `<dataset>:feature:<primary_key>`, consistent with meta items that are labelled as `<dataset>:meta:<meta_item_name>`
-    - JSON output also uses "feature" and "meta" as keys for the different types of changes, instead of "featureChanges" and "metaChanges".
-  * Meta changes are now included in `sno diff` output:
-    - Eg title, description and schema changes.
-    - This is true for Datasets V1 and for Datasets V2 (see below), but meta changes can only be committed in datasets V2.
+Existing commands are backward compatible with V1 datasets, however some new functionality only supports repositories upgraded to the new layout.
 
-### Major changes in this release
 
- * A new repository structure/layout, which supports schema changes. Internally known as Datasets V2.
-    - Unlike Datasets V1, the schema can be modified without rewriting every row in a dataset.
-    - However, new repositories are still V1 repositories unless V2 is explicitly requested, since V2 is still in development.
-    - Tracking issue [#72](https://github.com/koordinates/sno/issues/72)
-    - Diffs, commits and patches all support meta changes
-    - Working copy tracking tables have been renamed [#63](https://github.com/koordinates/sno/issues/63)
+### Datasets V2
 
-#### Using Datasets V1
-
- * Unless specific action is taken, existing repositories will remain V1, and new repositories still default to V1.
-
-#### Using Datasets V2
-
- * An entire repository must be either V1 or V2, so to use V2, the repository must be initialised as V2 with the following command:
-    - `sno init --repo-version=2`
  * Entire repositories can be upgraded from V1 to V2 using `sno upgrade 02-05 <old_repo> <new_repo>`.
- * V2 should support everything V1 supports, but it is still in development and issues may be uncovered.
+ * V2 should support everything V1 supports
+ * All new repositories use the new layout by default. To opt out, use the `--repo-version=1` flag for `sno init`
+ * To upgrade your v1 repository to v2, use `sno upgrade 02-05 SRC_PATH DEST_PATH`
+ * A future release will drop support for v1 repositories
+
+#### New features for V2 repositories only
+
+ * Most schema changes now work
+     - this includes column adds, drops, renames and reordering.
+     - Notably, changing the primary key field of a dataset are not yet supported.
+ * Meta changes are now supported (title, description and XML metadata for each dataset)
 
 #### Missing functionality in Datasets V2
 
@@ -41,6 +32,12 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Changing the primary key column is not yet supported.
  * Schema changes might not be correctly interpreted if too many changes are made at once (eg adding a new column with the same name as a deleted column).
     - It is safest to commit schema changes to any existing columns, then commit schema changes adding any new columns, then commit any feature changes.
+
+### Breaking changes in this release
+
+ * New structure to `sno diff` output:
+    - Text output: Features are now labelled as `<dataset>:feature:<primary_key>`, consistent with meta items that are labelled as `<dataset>:meta:<meta_item_name>`
+    - JSON output also uses "feature" and "meta" as keys for the different types of changes, instead of "featureChanges" and "metaChanges".
 
 ### Other changes in this release
 
