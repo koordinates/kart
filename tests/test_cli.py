@@ -17,4 +17,6 @@ def test_version(cli_runner):
 def test_cli_help():
     click_app = cli.cli
     for name, cmd in click_app.commands.items():
+        if name == 'help':
+            continue
         assert cmd.help, f"`{name}` command has no help text"

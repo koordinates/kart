@@ -29,7 +29,7 @@ from . import (
     query,
     upgrade,
 )
-from .cli_util import call_and_exit_flag
+from .cli_util import call_and_exit_flag, add_help_subcommand
 from .context import Context
 from .exec import execvp
 
@@ -124,6 +124,7 @@ class SnoGroup(click.Group):
             return super().invoke(ctx)
 
 
+@add_help_subcommand
 @click.group(cls=SnoGroup)
 @click.option(
     "-C",

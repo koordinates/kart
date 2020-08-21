@@ -3,6 +3,20 @@ import click
 import jsonschema
 
 
+def add_help_subcommand(group):
+    @group.command(add_help_option=False, hidden=True)
+    @click.argument('topic', default=None, required=False, nargs=1)
+    @click.pass_context
+    def help(ctx, topic, **kw):
+        # https://www.burgundywall.com/post/having-click-help-subcommand
+        if topic is None:
+            print(ctx.parent.get_help())
+        else:
+            print(group.commands[topic].get_help(ctx))
+
+    return group
+
+
 class MutexOption(click.Option):
     """
     Mutually exclusive options
