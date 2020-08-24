@@ -70,6 +70,73 @@ def _validate_gpkg_geom(gpkg_geom):
     return flags
 
 
+def _gpkg_envelope_size(flags):
+    envelope_typ = (flags & 0b00001110) >> 1
+    if envelope_typ == 1:
+        # 2d envelope
+        return 32
+    elif envelope_typ in (2, 3):
+        # 3d envelope (XYZ, XYM)
+        return 48
+    elif envelope_typ == 4:
+        # 4d envelope (XYZM)
+        return 64
+    elif envelope_typ == 0:
+        # no envelope
+        return 0
+    else:
+        raise ValueError("Invalid envelope contents indicator")
+
+
+def _wkb_endianness_and_geometry_type(buf, wkb_offset=0):
+    """
+    Given a buffer containing some WKB at the given offset,
+    returns a two-tuple:
+        * is_little_endian (bool)
+        * WKB geometry type as an integer.
+    """
+    (is_le,) = struct.unpack_from('b', buf, offset=wkb_offset)
+    (typ,) = struct.unpack_from(f'{"<" if is_le else ">"}I', buf, offset=wkb_offset + 1)
+    return is_le, typ
+
+
+def normalise_gpkg_geom(gpkg_geom):
+    """
+    Checks to see if the given gpkg geometry:
+        * is little-endian
+        * has little-endian WKB
+        * has an envelope
+    If so, returns the geometry unmodified.
+    Otherwise, returns a little-endian geometry with an envelope attached.
+    """
+    if gpkg_geom is None:
+        return None
+    flags = _validate_gpkg_geom(gpkg_geom)
+
+    # http://www.geopackage.org/spec/#flags_layout
+    is_le = bool(flags & 0x0001) != 0
+    want_envelope = None
+    if is_le:
+        envelope_size = _gpkg_envelope_size(flags)
+        has_envelope = bool(envelope_size)
+
+        # is this a point? if so, we don't *want* an envelope
+        wkb_offset = 8 + envelope_size
+        wkb_is_le, geom_type = _wkb_endianness_and_geometry_type(
+            gpkg_geom, wkb_offset=wkb_offset
+        )
+        want_envelope = geom_type != ogr.wkbPoint
+
+        if wkb_is_le and has_envelope == want_envelope:
+            # everything is fine, no need to roundtrip via OGR
+            return gpkg_geom
+
+    # roundtrip it, the envelope and LE-ness are done by ogr_to_gpkg_geom
+    return ogr_to_gpkg_geom(
+        gpkg_geom_to_ogr(gpkg_geom, parse_crs=True), _add_envelope=want_envelope
+    )
+
+
 def gpkg_geom_to_wkb(gpkg_geom):
     """
     Parse GeoPackage geometry values.
@@ -81,19 +148,7 @@ def gpkg_geom_to_wkb(gpkg_geom):
         return None
     flags = _validate_gpkg_geom(gpkg_geom)
 
-    envelope_typ = (flags & 0b00001110) >> 1
-    wkb_offset = 8
-    if envelope_typ == 1:
-        wkb_offset += 32
-    elif envelope_typ in (2, 3):
-        wkb_offset += 48
-    elif envelope_typ == 4:
-        wkb_offset += 64
-    elif envelope_typ == 0:
-        pass
-    else:
-        raise ValueError("Invalid envelope contents indicator")
-
+    wkb_offset = 8 + _gpkg_envelope_size(flags)
     wkb = gpkg_geom[wkb_offset:]
 
     if wkb[0] == 0:
@@ -125,19 +180,7 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
     flags = _validate_gpkg_geom(gpkg_geom)
     is_le = (flags & 0b0000001) != 0  # Endian-ness
 
-    envelope_typ = (flags & 0b000001110) >> 1
-    wkb_offset = 8
-    if envelope_typ == 1:
-        wkb_offset += 32
-    elif envelope_typ in (2, 3):
-        wkb_offset += 48
-    elif envelope_typ == 4:
-        wkb_offset += 64
-    elif envelope_typ == 0:
-        pass
-    else:
-        raise ValueError("Invalid envelope contents indicator")
-
+    wkb_offset = 8 + _gpkg_envelope_size(flags)
     wkb = gpkg_geom[wkb_offset:]
 
     # note: the GPKG spec represents 'POINT EMPTY' as 'POINT(nan nan)' (in WKB form)
@@ -147,7 +190,7 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
     geom = ogr.CreateGeometryFromWkb(wkb)
 
     if parse_crs:
-        crs_id = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
+        crs_id = struct.unpack_from(f"{'<' if is_le else '>'}I", gpkg_geom, 4)[0]
         if crs_id > 0:
             spatial_ref = osr.SpatialReference()
             spatial_ref.ImportFromEPSG(crs_id)
@@ -194,7 +237,7 @@ def ogr_to_hex_wkb(ogr_geom):
 
 
 def ogr_to_gpkg_geom(
-    ogr_geom, *, _little_endian=True, _little_endian_wkb=True, _add_envelope=False
+    ogr_geom, *, _little_endian=True, _little_endian_wkb=True, _add_envelope=None
 ):
     """
     Given an OGR geometry object, construct a GPKG geometry value.
@@ -202,7 +245,7 @@ def ogr_to_gpkg_geom(
 
     Normally:
         * this only produces little-endian geometries.
-        * Geometries produced don't include envelopes.
+        * All geometries include envelopes, except points.
 
     Underscore-prefixed kwargs are for use by the tests, don't use them elsewhere.
     """
@@ -211,7 +254,13 @@ def ogr_to_gpkg_geom(
 
     # Flags
     # always produce little endian
-    flags = 0x1
+    flags = 0x1 if _little_endian else 0x0
+    if _add_envelope is None:
+        # don't bother adding bboxes to points.
+        # it makes them significantly bigger (29 --> 61 bytes)
+        # and is unnecessary - any optimisation that can use a bbox
+        # can just trivially parse the point itself
+        _add_envelope = ogr.GT_Flatten(ogr_geom.GetGeometryType()) != ogr.wkbPoint
     if _add_envelope:
         flags |= 0x2
 

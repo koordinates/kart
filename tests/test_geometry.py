@@ -4,10 +4,11 @@ import pytest
 from osgeo import ogr, osr
 
 from sno.geometry import (
-    hex_wkb_to_gpkg_geom,
     gpkg_geom_to_hex_wkb,
-    ogr_to_gpkg_geom,
     gpkg_geom_to_ogr,
+    hex_wkb_to_gpkg_geom,
+    normalise_gpkg_geom,
+    ogr_to_gpkg_geom,
 )
 
 SRID_RE = re.compile(r'^SRID=(\d+);(.*)$')
@@ -102,18 +103,26 @@ def test_wkb_gpkg_wkb_roundtrip(big_endian, little_endian):
 
 
 @pytest.mark.parametrize(
-    'input',
+    'input,input_has_envelope',
     [
         # These geometries are little-endian with no envelope
         pytest.param(
             # POINT EMPTY (well, 'POINT(nan nan)')
             b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+            False,
             id='point-empty',
         ),
         pytest.param(
             # POINT(5 5)
             b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            False,
             id='point',
+        ),
+        pytest.param(
+            # POLYGON((0 0,0 5,5 0,0 0))
+            b'GP\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x01\x03\x00\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+            True,
+            id='polygon',
         ),
     ],
 )
@@ -121,8 +130,15 @@ def test_wkb_gpkg_wkb_roundtrip(big_endian, little_endian):
 @pytest.mark.parametrize('little_endian_wkb', [False, True])
 @pytest.mark.parametrize('with_envelope', [False, True])
 def test_gpkg_wkb_gpkg_roundtrip(
-    input, little_endian, little_endian_wkb, with_envelope
+    input, input_has_envelope, little_endian, little_endian_wkb, with_envelope
 ):
+    """
+    Tests the following functions work and are consistent with each other:
+        * normalise_gpkg_geom
+        * gpkg_geom_to_hex_wkb
+        * hex_wkb_to_gpkg_geom
+    """
+    assert normalise_gpkg_geom(input) == input
     hex_wkb = gpkg_geom_to_hex_wkb(input)
     assert hex_wkb.startswith('01'), "gpkg_geom_to_hex_wkb produced big-endian WKB"
 
@@ -133,13 +149,21 @@ def test_gpkg_wkb_gpkg_roundtrip(
         _little_endian_wkb=little_endian_wkb,
         _add_envelope=with_envelope,
     )
-    if little_endian and little_endian_wkb and not with_envelope:
+    assert normalise_gpkg_geom(gpkg_geom_intermediate) == input
+
+    if little_endian and little_endian_wkb and with_envelope == input_has_envelope:
         assert gpkg_geom_intermediate == input
         return
 
-    if with_envelope:
-        # If we're adding an envelope, the geometry should have gotten bigger...
-        assert len(gpkg_geom_intermediate) > len(input)
+    else:
+        if with_envelope and not input_has_envelope:
+            # If we're adding an envelope, the geometry should have gotten bigger...
+            assert len(gpkg_geom_intermediate) > len(input)
+        elif input_has_envelope and not with_envelope:
+            # If we're removing an envelope, the geometry should have gotten smaller...
+            assert len(gpkg_geom_intermediate) < len(input)
+        else:
+            assert len(gpkg_geom_intermediate) == len(input)
 
     # Now re-roundtrip to convert it back to the original
     # (little-endian, no envelope)
