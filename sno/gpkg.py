@@ -34,7 +34,7 @@ class Row(tuple):
         return tuple(self._desc)
 
     def items(self):
-        return ((k, super().__getitem__(i)) for i, k in enumerate(self._desc))
+        return ((k, self.__getitem__(i)) for i, k in enumerate(self._desc))
 
     def values(self):
         return self

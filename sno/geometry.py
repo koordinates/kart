@@ -7,7 +7,14 @@ from osgeo import ogr, osr
 
 
 class Geometry(bytes):
-    """A bytestring that contains a geometry in Sno's chosen format - StandardGeoPackageBinary."""
+    """
+    Contains a geometry in Sno's chosen format - StandardGeoPackageBinary.
+    See "Geometry encoding" section in DATASETS_v2.md for more information.
+    """
+
+    @classmethod
+    def of(cls, bytes_):
+        return Geometry(bytes_) if bytes_ else None
 
     def __str__(self):
         return "G" + super().__str__()[1:]
@@ -17,6 +24,9 @@ class Geometry(bytes):
 
     def __json__(self):
         return self.to_hex_wkb()
+
+    def to_gpkg_geom(self):
+        return bytes(self)
 
     def to_wkb(self):
         return gpkg_geom_to_wkb(self)

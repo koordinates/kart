@@ -1,18 +1,47 @@
 import base64
 import hashlib
 import json
+import logging
 
 import msgpack
+
+from sno.geometry import Geometry
+
+
+L = logging.getLogger("sno.serialise_util")
+
+# Extension code for Geometry objects.
+_EXTENSION_G = ord("G")
+
+
+def _msg_pack_default(obj):
+    if isinstance(obj, Geometry):
+        return msgpack.ExtType(_EXTENSION_G, bytes(obj))
+    if isinstance(obj, tuple):
+        return list(obj)
+    return obj
+
+
+def _msg_unpack_ext_hook(code, data):
+    if code == _EXTENSION_G:
+        return Geometry.of(data)
+    else:
+        L.warn("Unexpected msgpack extension: %d", code)
+        return msgpack.ExtType(code, data)
 
 
 def msg_pack(data):
     """data (any type) -> bytes"""
-    return msgpack.packb(data, use_bin_type=True)
+    return msgpack.packb(
+        data, use_bin_type=True, strict_types=True, default=_msg_pack_default,
+    )
 
 
 def msg_unpack(bytestring_or_memoryview):
     """bytes/memoryview -> data (any type)"""
-    return msgpack.unpackb(bytestring_or_memoryview, raw=False)
+    return msgpack.unpackb(
+        bytestring_or_memoryview, raw=False, ext_hook=_msg_unpack_ext_hook
+    )
 
 
 # json_pack and json_unpack have the same signature and capabilities as msg_pack and msg_unpack,

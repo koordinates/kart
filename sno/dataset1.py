@@ -45,7 +45,7 @@ class Dataset1(DatasetStructure):
 
     def _msgpack_unpack_ext(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
-            return Geometry(data)  # bytes
+            return Geometry.of(data)  # bytes
         else:
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)

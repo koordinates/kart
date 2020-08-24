@@ -23,7 +23,7 @@ from .exceptions import (
     NO_TABLE,
 )
 from .fast_import import fast_import_tables
-from .geometry import ogr_to_gpkg_geom
+from .geometry import Geometry, ogr_to_gpkg_geom
 from .gpkg_adapter import (
     gpkg_metadata_to_json,
     json_to_gpkg_metadata,
@@ -415,12 +415,12 @@ class OgrImporter:
         return ogr_feature.GetFID()
 
     @ungenerator(dict)
-    def _ogr_feature_to_dict(self, ogr_feature):
+    def _ogr_feature_to_sno_feature(self, ogr_feature):
         for name, adapter in self.field_adapter_map.items():
             if name in self.geom_cols:
                 yield (
                     name,
-                    ogr_to_gpkg_geom(ogr_feature.GetGeometryRef()),
+                    Geometry.of(ogr_to_gpkg_geom(ogr_feature.GetGeometryRef())),
                 )
             elif name == self.primary_key:
                 yield name, self._get_primary_key_value(ogr_feature, name)
@@ -442,7 +442,7 @@ class OgrImporter:
 
     def iter_features(self):
         for ogr_feature in self._iter_ogr_features():
-            yield self._ogr_feature_to_dict(ogr_feature)
+            yield self._ogr_feature_to_sno_feature(ogr_feature)
 
     def _get_meta_crs_id(self):
         spatial_ref = self.ogrlayer.GetSpatialRef()
@@ -693,6 +693,14 @@ class ImportGPKG(OgrImporter):
         db = gpkg.db(self.ogr_source)
         return gpkg.pk(db, self.table)
 
+    @ungenerator(dict)
+    def _gpkg_feature_to_sno_feature(self, gpkg_feature):
+        for key, value in gpkg_feature.items():
+            if key in self.geom_cols:
+                yield (key, Geometry.of(value))
+            else:
+                yield key, value
+
     def iter_features(self):
         """
         Overrides the super implementation for performance reasons
@@ -701,7 +709,8 @@ class ImportGPKG(OgrImporter):
         db = gpkg.db(self.ogr_source)
         dbcur = db.cursor()
         dbcur.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
-        yield from dbcur
+        for gpkg_feature in dbcur:
+            yield self._gpkg_feature_to_sno_feature(gpkg_feature)
 
     def get_v2_metadata_json(self):
         if 'xml_metadata' in self._meta_overrides:

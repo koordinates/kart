@@ -13,7 +13,7 @@ from pathlib import Path
 import click
 
 from .exceptions import InvalidOperation
-from .geometry import gpkg_geom_to_ogr, gpkg_geom_to_hex_wkb, ogr_to_hex_wkb
+from .geometry import Geometry, gpkg_geom_to_ogr, ogr_to_hex_wkb
 from .output_util import dump_json_output, resolve_output_path
 from .schema import Schema
 from .utils import ungenerator
@@ -439,8 +439,8 @@ def geojson_row(row, pk_value, change=None, geometry_transform=None):
 
     for k in row.keys():
         v = row[k]
-        if isinstance(v, bytes):
-            g = gpkg_geom_to_ogr(v)
+        if isinstance(v, Geometry):
+            g = v.to_ogr()
             if geometry_transform is not None:
                 # reproject
                 try:
@@ -551,12 +551,12 @@ def json_row(row, pk_value, geometry_transform=None):
     The geometry is serialized as hexWKB.
     """
     for k, v in row.items():
-        if isinstance(v, bytes):
+        if isinstance(v, Geometry):
             if geometry_transform is None:
-                v = gpkg_geom_to_hex_wkb(v)
+                v = v.to_hex_wkb()
             else:
                 # reproject
-                ogr_geom = gpkg_geom_to_ogr(v)
+                ogr_geom = v.to_ogr()
                 try:
                     ogr_geom.Transform(geometry_transform)
                 except RuntimeError as e:

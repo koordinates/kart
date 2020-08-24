@@ -13,6 +13,7 @@ from . import gpkg, gpkg_adapter
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from .exceptions import InvalidOperation, NotYetImplemented
 from .filter_util import UNFILTERED
+from .geometry import Geometry
 from .schema import Schema
 from .structure import RepositoryStructure
 from .repository_version import get_repo_version
@@ -824,12 +825,17 @@ class WorkingCopyGPKG(WorkingCopy):
             feature_diff = DeltaDiff()
             insert_count = delete_count = 0
 
+            geom_col = dataset.geom_column_name
+
             for row in dbcur:
                 track_pk = row[0]  # This is always a str
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
                 if db_obj[pk_field] is None:
                     db_obj = None
+
+                if db_obj is not None and geom_col is not None:
+                    db_obj[geom_col] = Geometry.of(db_obj[geom_col])
 
                 try:
                     repo_obj = dataset.get_feature(track_pk)
