@@ -242,7 +242,12 @@ def ogr_to_hex_wkb(ogr_geom):
 
 
 def ogr_to_gpkg_geom(
-    ogr_geom, *, _little_endian=True, _little_endian_wkb=True, _add_envelope=None
+    ogr_geom,
+    *,
+    _little_endian=True,
+    _little_endian_wkb=True,
+    _add_envelope=None,
+    _add_srs_id=False,
 ):
     """
     Given an OGR geometry object, construct a GPKG geometry value.
@@ -251,6 +256,7 @@ def ogr_to_gpkg_geom(
     Normally:
         * this only produces little-endian geometries.
         * All geometries include envelopes, except points.
+        * The `srs_id` field of the geometry is always 0.
 
     Underscore-prefixed kwargs are for use by the tests, don't use them elsewhere.
     """
@@ -270,10 +276,11 @@ def ogr_to_gpkg_geom(
         flags |= 0x2
 
     srs_id = 0
-    spatial_ref = ogr_geom.GetSpatialReference()
-    if spatial_ref:
-        spatial_ref.AutoIdentifyEPSG()
-        srs_id = int(spatial_ref.GetAuthorityCode(None) or 0)
+    if _add_srs_id:
+        spatial_ref = ogr_geom.GetSpatialReference()
+        if spatial_ref:
+            spatial_ref.AutoIdentifyEPSG()
+            srs_id = int(spatial_ref.GetAuthorityCode(None) or 0)
 
     wkb = ogr_geom.ExportToIsoWkb(ogr.wkbNDR if _little_endian_wkb else ogr.wkbXDR)
 

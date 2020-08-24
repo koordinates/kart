@@ -53,7 +53,7 @@ def ewkt_to_ogr(wkt):
 )
 def test_wkt_gpkg_wkt_roundtrip(wkt):
     orig_ogr_geom = ewkt_to_ogr(wkt)
-    gpkg_geom = ogr_to_gpkg_geom(orig_ogr_geom)
+    gpkg_geom = ogr_to_gpkg_geom(orig_ogr_geom, _add_srs_id=True)
     ogr_geom = gpkg_geom_to_ogr(gpkg_geom, parse_crs=True)
     assert ogr_geom.Equals(
         orig_ogr_geom
@@ -62,7 +62,8 @@ def test_wkt_gpkg_wkt_roundtrip(wkt):
     orig_spatial_ref = orig_ogr_geom.GetSpatialReference()
     spatial_ref = ogr_geom.GetSpatialReference()
 
-    _export_to_proj4 = lambda sr: sr.ExportToProj4() if sr else None
+    def _export_to_proj4(crs):
+        return crs.ExportToProj4() if crs else None
 
     assert _export_to_proj4(spatial_ref) == _export_to_proj4(orig_spatial_ref)
 
