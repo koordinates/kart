@@ -125,12 +125,12 @@ def normalise_gpkg_geom(gpkg_geom):
         envelope_size = _gpkg_envelope_size(flags)
         has_envelope = bool(envelope_size)
 
-        # is this a point? if so, we don't *want* an envelope
+        # is this a point or an empty geom? if so, we don't *want* an envelope
         wkb_offset = 8 + envelope_size
         wkb_is_le, geom_type = _wkb_endianness_and_geometry_type(
             gpkg_geom, wkb_offset=wkb_offset
         )
-        want_envelope = geom_type != ogr.wkbPoint
+        want_envelope = geom_type != ogr.wkbPoint and not flags & _GPKG_EMPTY_BIT
 
         if wkb_is_le and has_envelope == want_envelope:
             # everything is fine, no need to roundtrip via OGR
@@ -271,7 +271,10 @@ def ogr_to_gpkg_geom(
         # it makes them significantly bigger (29 --> 61 bytes)
         # and is unnecessary - any optimisation that can use a bbox
         # can just trivially parse the point itself
-        _add_envelope = ogr.GT_Flatten(ogr_geom.GetGeometryType()) != ogr.wkbPoint
+        _add_envelope = (
+            ogr.GT_Flatten(ogr_geom.GetGeometryType()) != ogr.wkbPoint
+            and not ogr_geom.IsEmpty()
+        )
     if _add_envelope:
         flags |= 0x2
 
