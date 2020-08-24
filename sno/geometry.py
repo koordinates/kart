@@ -5,6 +5,11 @@ import struct
 
 from osgeo import ogr, osr
 
+# http://www.geopackage.org/spec/#gpb_format
+_GPKG_EMPTY_BIT = 0b1000
+_GPKG_LE_BIT = 0b1
+_GPKG_ENVELOPE_BITS = 0b1110
+
 
 class Geometry(bytes):
     """
@@ -71,7 +76,7 @@ def _validate_gpkg_geom(gpkg_geom):
 
 
 def _gpkg_envelope_size(flags):
-    envelope_typ = (flags & 0b00001110) >> 1
+    envelope_typ = (flags & _GPKG_ENVELOPE_BITS) >> 1
     if envelope_typ == 1:
         # 2d envelope
         return 32
@@ -114,7 +119,7 @@ def normalise_gpkg_geom(gpkg_geom):
     flags = _validate_gpkg_geom(gpkg_geom)
 
     # http://www.geopackage.org/spec/#flags_layout
-    is_le = bool(flags & 0x0001) != 0
+    is_le = bool(flags & _GPKG_LE_BIT) != 0
     want_envelope = None
     if is_le:
         envelope_size = _gpkg_envelope_size(flags)
@@ -178,7 +183,7 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
         return None
 
     flags = _validate_gpkg_geom(gpkg_geom)
-    is_le = (flags & 0b0000001) != 0  # Endian-ness
+    is_le = (flags & _GPKG_LE_BIT) != 0  # Endian-ness
 
     wkb_offset = 8 + _gpkg_envelope_size(flags)
     wkb = gpkg_geom[wkb_offset:]
@@ -254,7 +259,7 @@ def ogr_to_gpkg_geom(
 
     # Flags
     # always produce little endian
-    flags = 0x1 if _little_endian else 0x0
+    flags = _GPKG_LE_BIT if _little_endian else 0
     if _add_envelope is None:
         # don't bother adding bboxes to points.
         # it makes them significantly bigger (29 --> 61 bytes)
@@ -314,15 +319,15 @@ def geom_envelope(gpkg_geom):
     if version != 0:
         raise NotImplementedError("Expected GeoPackage v1 geometry, got %d", version)
 
-    is_le = (flags & 0b0000001) != 0  # Endian-ness
+    is_le = (flags & _GPKG_LE_BIT) != 0  # Endian-ness
 
     if flags & (0b00100000):  # GeoPackageBinary type
         raise NotImplementedError("ExtendedGeoPackageBinary")
 
-    if flags & (0b00010000):  # Empty geometry
+    if flags & _GPKG_EMPTY_BIT:  # Empty geometry
         return None
 
-    envelope_typ = (flags & 0b000001110) >> 1
+    envelope_typ = (flags & _GPKG_ENVELOPE_BITS) >> 1
     # E: envelope contents indicator code (3-bit unsigned integer)
     # 0: no envelope (space saving slower indexing option), 0 bytes
     # 1: envelope is [minx, maxx, miny, maxy], 32 bytes
