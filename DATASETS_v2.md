@@ -10,7 +10,7 @@ This means table rows can be stored using git-style version control, resulting i
 Datasets V2 is very similar to Datasets V1 - the main difference is that the schema of a Datasets V2 table can be changed in isolation without having
 to rewrite every row in the table. Rows that were written with a previous schema are adapted to fit the current schema when read.
 
-In Sno 0.4, only Datasets V1 is supported. In Sno 0.5, both Datasets V1 and Datasets V2 are supported, but a particular Sno repository must be entirely one or the other. When creating a new Sno repository, this can be selected by specifying either `sno init --repo-version=1` or 
+In Sno 0.4, only Datasets V1 is supported. In Sno 0.5, both Datasets V1 and Datasets V2 are supported, but a particular Sno repository must be entirely one or the other. This can be selected by specifying either `sno init --repo-version=1` or `sno init --repo-version=2`. If this is not specified, the default is V1 from Sno 0.2 onwards, but the default is V2 starting at Sno 0.5.
 
 The following is a technical description of Datasets V2.
 
@@ -248,7 +248,7 @@ Finally, the current schema is consulted to find out the current position and na
 }
 ```
 
-Features are stored at a filename that contains an encoding of their primary key, so that an update to the feature that doesn't change its primary key will cause it to be overwritten in place.
+Features are stored at a filename that contains a Base64 encoding of their primary key, so that an update to the feature that doesn't change its primary key will cause it to be overwritten in place.
 
 #### Geometry encoding
 
