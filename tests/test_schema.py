@@ -308,7 +308,7 @@ def check_points_diff_output(r, output_format):
             '      "length": 75',
             "    },",
             "+   {",
-            '+     "id": "8c9667f3-4de2-b91b-7e09-98c6d9af7cab",',
+            '+     "id": "f3ae6064-b43e-988d-bc51-7d5dd5db2b93",',
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "primaryKeyIndex": null,',
@@ -340,6 +340,51 @@ def check_points_diff_output(r, output_format):
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "schema.json": {
+                            "-": [
+                                {
+                                    "dataType": "integer",
+                                    "id": "e97b4015-2765-3a33-b174-2ece5c33343b",
+                                    "name": "fid",
+                                    "primaryKeyIndex": 0,
+                                    "size": 64,
+                                },
+                                {
+                                    "dataType": "geometry",
+                                    "geometryCRS": "EPSG:4326",
+                                    "geometryType": "POINT",
+                                    "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",
+                                    "name": "geom",
+                                    "primaryKeyIndex": None,
+                                },
+                                {
+                                    "dataType": "integer",
+                                    "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",
+                                    "name": "t50_fid",
+                                    "primaryKeyIndex": None,
+                                    "size": 32,
+                                },
+                                {
+                                    "dataType": "text",
+                                    "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",
+                                    "length": 75,
+                                    "name": "name_ascii",
+                                    "primaryKeyIndex": None,
+                                },
+                                {
+                                    "dataType": "text",
+                                    "id": "c3389414-a511-5385-7dcd-891c4ead1663",
+                                    "length": 1,
+                                    "name": "macronated",
+                                    "primaryKeyIndex": None,
+                                },
+                                {
+                                    "dataType": "text",
+                                    "id": "45b00eaa-5700-662d-8a21-9614e40c437b",
+                                    "length": 75,
+                                    "name": "name",
+                                    "primaryKeyIndex": None,
+                                },
+                            ],
                             "+": [
                                 {
                                     "dataType": "integer",
@@ -386,54 +431,9 @@ def check_points_diff_output(r, output_format):
                                 },
                                 {
                                     "dataType": "text",
-                                    "id": "8c9667f3-4de2-b91b-7e09-98c6d9af7cab",
+                                    "id": "f3ae6064-b43e-988d-bc51-7d5dd5db2b93",
                                     "length": 32,
                                     "name": "colour",
-                                    "primaryKeyIndex": None,
-                                },
-                            ],
-                            "-": [
-                                {
-                                    "dataType": "integer",
-                                    "id": "e97b4015-2765-3a33-b174-2ece5c33343b",
-                                    "name": "fid",
-                                    "primaryKeyIndex": 0,
-                                    "size": 64,
-                                },
-                                {
-                                    "dataType": "geometry",
-                                    "geometryCRS": "EPSG:4326",
-                                    "geometryType": "POINT",
-                                    "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",
-                                    "name": "geom",
-                                    "primaryKeyIndex": None,
-                                },
-                                {
-                                    "dataType": "integer",
-                                    "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",
-                                    "name": "t50_fid",
-                                    "primaryKeyIndex": None,
-                                    "size": 32,
-                                },
-                                {
-                                    "dataType": "text",
-                                    "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",
-                                    "length": 75,
-                                    "name": "name_ascii",
-                                    "primaryKeyIndex": None,
-                                },
-                                {
-                                    "dataType": "text",
-                                    "id": "c3389414-a511-5385-7dcd-891c4ead1663",
-                                    "length": 1,
-                                    "name": "macronated",
-                                    "primaryKeyIndex": None,
-                                },
-                                {
-                                    "dataType": "text",
-                                    "id": "45b00eaa-5700-662d-8a21-9614e40c437b",
-                                    "length": 75,
-                                    "name": "name",
                                     "primaryKeyIndex": None,
                                 },
                             ],
@@ -625,7 +625,7 @@ def check_polygons_diff_output(r, output_format):
             '      "size": 32',
             "    },",
             "+   {",
-            '+     "id": "2f109da0-2ccc-aaca-df17-f49ce2cea580",',
+            '+     "id": "cf9095d0-4e7d-6768-e55f-cd48af0faf54",',
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "primaryKeyIndex": null,',
@@ -656,6 +656,43 @@ def check_polygons_diff_output(r, output_format):
                 "nz_waca_adjustments": {
                     "meta": {
                         "schema.json": {
+                            "-": [
+                                {
+                                    "dataType": "integer",
+                                    "id": "79d3c4ca-3abd-0a30-2045-45169357113c",
+                                    "name": "id",
+                                    "primaryKeyIndex": 0,
+                                    "size": 64,
+                                },
+                                {
+                                    "dataType": "geometry",
+                                    "geometryCRS": "EPSG:4167",
+                                    "geometryType": "MULTIPOLYGON",
+                                    "id": "c1d4dea1-c0ad-0255-7857-b5695e3ba2e9",
+                                    "name": "geom",
+                                    "primaryKeyIndex": None,
+                                },
+                                {
+                                    "dataType": "datetime",
+                                    "id": "4d291cbd-ba1a-64d9-02db-6a898f58ae69",
+                                    "name": "date_adjusted",
+                                    "primaryKeyIndex": None,
+                                },
+                                {
+                                    "dataType": "text",
+                                    "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",
+                                    "length": 50,
+                                    "name": "survey_reference",
+                                    "primaryKeyIndex": None,
+                                },
+                                {
+                                    "dataType": "integer",
+                                    "id": "13dc4918-974e-978f-05ce-3b4321077c50",
+                                    "name": "adjusted_nodes",
+                                    "primaryKeyIndex": None,
+                                    "size": 32,
+                                },
+                            ],
                             "+": [
                                 {
                                     "dataType": "integer",
@@ -694,47 +731,10 @@ def check_polygons_diff_output(r, output_format):
                                 },
                                 {
                                     "dataType": "text",
-                                    "id": "2f109da0-2ccc-aaca-df17-f49ce2cea580",
+                                    "id": "cf9095d0-4e7d-6768-e55f-cd48af0faf54",
                                     "length": 32,
                                     "name": "colour",
                                     "primaryKeyIndex": None,
-                                },
-                            ],
-                            "-": [
-                                {
-                                    "dataType": "integer",
-                                    "id": "79d3c4ca-3abd-0a30-2045-45169357113c",
-                                    "name": "id",
-                                    "primaryKeyIndex": 0,
-                                    "size": 64,
-                                },
-                                {
-                                    "dataType": "geometry",
-                                    "geometryCRS": "EPSG:4167",
-                                    "geometryType": "MULTIPOLYGON",
-                                    "id": "c1d4dea1-c0ad-0255-7857-b5695e3ba2e9",
-                                    "name": "geom",
-                                    "primaryKeyIndex": None,
-                                },
-                                {
-                                    "dataType": "datetime",
-                                    "id": "4d291cbd-ba1a-64d9-02db-6a898f58ae69",
-                                    "name": "date_adjusted",
-                                    "primaryKeyIndex": None,
-                                },
-                                {
-                                    "dataType": "text",
-                                    "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",
-                                    "length": 50,
-                                    "name": "survey_reference",
-                                    "primaryKeyIndex": None,
-                                },
-                                {
-                                    "dataType": "integer",
-                                    "id": "13dc4918-974e-978f-05ce-3b4321077c50",
-                                    "name": "adjusted_nodes",
-                                    "primaryKeyIndex": None,
-                                    "size": 32,
                                 },
                             ],
                         }

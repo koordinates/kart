@@ -11,7 +11,7 @@ from osgeo import gdal
 
 from . import gpkg, gpkg_adapter
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
-from .exceptions import InvalidOperation
+from .exceptions import InvalidOperation, NotYetImplemented
 from .filter_util import UNFILTERED
 from .schema import Schema
 from .structure import RepositoryStructure
@@ -416,9 +416,15 @@ class WorkingCopyGPKG(WorkingCopy):
                 return gpkg_meta_items[path]
 
         gpkg_name = os.path.basename(self.path)
+
+        # Column IDs are generated deterministically from the column contents and the current state.
+        # That way, they don't vary at random if the same command is run twice in a row, but
+        # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
+        # for two unrelated columns.
+        id_salt = f"{gpkg_name} {dataset.name} {self.get_db_tree()}"
+
         yield from gpkg_adapter.iter_v2_meta_items(
-            GpkgTableAsV1Dataset(dataset.name, gpkg_meta_items),
-            id_salt=f"{gpkg_name}/{dataset.name}",
+            GpkgTableAsV1Dataset(dataset.name, gpkg_meta_items), id_salt=id_salt
         )
 
     def delete_meta(self, dataset):
@@ -554,7 +560,7 @@ class WorkingCopyGPKG(WorkingCopy):
             )
             row = dbcur.fetchone()
             if not row:
-                raise ValueError(f"No meta entry for {table_name}")
+                raise ValueError(f"No tree entry in state_table for {table_name}")
 
             wc_tree_id = row[0]
             return wc_tree_id
