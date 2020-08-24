@@ -111,8 +111,9 @@ def normalise_gpkg_geom(gpkg_geom):
         * is little-endian
         * has little-endian WKB
         * has an envelope
+        * has srs_id set to 0.
     If so, returns the geometry unmodified.
-    Otherwise, returns a little-endian geometry with an envelope attached.
+    Otherwise, returns a little-endian geometry with an envelope attached and srs_id=0.
     """
     if gpkg_geom is None:
         return None
