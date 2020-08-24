@@ -6,6 +6,28 @@ import struct
 from osgeo import ogr, osr
 
 
+class Geometry(bytes):
+    """A bytestring that contains a geometry in Sno's chosen format - StandardGeoPackageBinary."""
+
+    def __str__(self):
+        return "G" + super().__str__()[1:]
+
+    def __repr__(self):
+        return f"Geometry({super().__str__()})"
+
+    def __json__(self):
+        return self.to_hex_wkb()
+
+    def to_wkb(self):
+        return gpkg_geom_to_wkb(self)
+
+    def to_hex_wkb(self):
+        return gpkg_geom_to_hex_wkb(self)
+
+    def to_ogr(self):
+        return gpkg_geom_to_ogr(self)
+
+
 def make_crs(crs_text):
     """
     Creates an OGR SpatialReference object from the given string.

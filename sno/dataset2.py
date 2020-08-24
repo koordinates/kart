@@ -220,9 +220,7 @@ class Dataset2(DatasetStructure):
         legend = self.get_legend(legend_hash)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
-    def get_feature(
-        self, pk_values=None, *, path=None, data=None, keys=True, ogr_geoms=None
-    ):
+    def get_feature(self, pk_values=None, *, path=None, data=None, keys=True):
         """
         Gets the feature with the given primary key(s) / at the given "full" path.
         The result is either a dict of values keyed by column name (if keys=True)

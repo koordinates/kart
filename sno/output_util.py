@@ -1,7 +1,9 @@
+import datetime
 import json
 import shutil
 import sys
 import textwrap
+import types
 
 import pygments
 from pygments.lexers import JsonLexer
@@ -21,6 +23,12 @@ class ExtendedJsonEncoder(json.JSONEncoder):
     """A JSONEncoder that tries calling __json__() if it can't serialise an object another way."""
 
     def default(self, obj):
+        if isinstance(obj, types.GeneratorType):
+            return list(obj)
+
+        if isinstance(obj, (datetime.date, datetime.datetime, datetime.time)):
+            return obj.isoformat()
+
         try:
             return obj.__json__()
         except AttributeError:

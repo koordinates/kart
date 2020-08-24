@@ -541,7 +541,7 @@ class RichConflictVersion:
     @property
     def feature(self):
         assert self.is_feature
-        feature = self.dataset.get_feature(self.pk, ogr_geoms=False)
+        feature = self.dataset.get_feature(self.pk)
         return feature
 
     @property

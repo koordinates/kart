@@ -832,7 +832,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     db_obj = None
 
                 try:
-                    repo_obj = dataset.get_feature(track_pk, ogr_geoms=False)
+                    repo_obj = dataset.get_feature(track_pk)
                 except KeyError:
                     repo_obj = None
 

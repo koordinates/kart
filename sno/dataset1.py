@@ -9,7 +9,7 @@ import msgpack
 import pygit2
 
 from . import gpkg_adapter
-from .geometry import gpkg_geom_to_ogr
+from .geometry import Geometry
 from .structure import DatasetStructure, IntegrityError
 
 
@@ -45,14 +45,7 @@ class Dataset1(DatasetStructure):
 
     def _msgpack_unpack_ext(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
-            return data  # bytes
-        else:
-            self.L.warn("Unexpected msgpack extension: %d", code)
-            return msgpack.ExtType(code, data)
-
-    def _msgpack_unpack_ext_ogr(self, code, data):
-        if code == self.MSGPACK_EXT_GEOM:
-            return gpkg_geom_to_ogr(data)
+            return Geometry(data)  # bytes
         else:
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)
@@ -160,16 +153,12 @@ class Dataset1(DatasetStructure):
         feature_path = self.encode_1pk_to_path(pk)
         index.remove(feature_path)
 
-    def repo_feature_to_dict(self, blob_path, blob_memoryview, ogr_geoms=False):
+    def repo_feature_to_dict(self, blob_path, blob_memoryview):
         feature = {
             self.primary_key: self.decode_path_to_1pk(blob_path),
         }
         bin_feature = msgpack.unpackb(
-            blob_memoryview,
-            ext_hook=self._msgpack_unpack_ext_ogr
-            if ogr_geoms
-            else self._msgpack_unpack_ext,
-            raw=False,
+            blob_memoryview, ext_hook=self._msgpack_unpack_ext, raw=False,
         )
         for colid, value in sorted(bin_feature.items()):
             field_name = self.cid_field_map[colid]
@@ -196,11 +185,9 @@ class Dataset1(DatasetStructure):
             )
         return leaf
 
-    def get_feature(self, pk_value, *, path=None, ogr_geoms=True):
+    def get_feature(self, pk_value, *, path=None):
         blob = self._get_feature(pk_value=pk_value, path=path)
-        return self.repo_feature_to_dict(
-            blob.name, memoryview(blob), ogr_geoms=ogr_geoms
-        )
+        return self.repo_feature_to_dict(blob.name, memoryview(blob))
 
     def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
         tupleizer = self.build_feature_tupleizer(col_names)
@@ -215,7 +202,7 @@ class Dataset1(DatasetStructure):
 
             yield tupleizer(blob)
 
-    def build_feature_tupleizer(self, tuple_cols, ogr_geoms=False):
+    def build_feature_tupleizer(self, tuple_cols):
         field_cid_map = self.field_cid_map
 
         ftuple_order = []
@@ -228,12 +215,7 @@ class Dataset1(DatasetStructure):
 
         def tupleizer(blob):
             bin_feature = msgpack.unpackb(
-                blob.data,
-                ext_hook=self._msgpack_unpack_ext_ogr
-                if ogr_geoms
-                else self._msgpack_unpack_ext,
-                raw=False,
-                use_list=False,
+                blob.data, ext_hook=self._msgpack_unpack_ext, raw=False, use_list=False,
             )
             return tuple(
                 [
@@ -284,15 +266,10 @@ class Dataset1(DatasetStructure):
 
                     yield leaf
 
-    def features(self, *, ogr_geoms=False, **kwargs):
+    def features(self, **kwargs):
         """ Feature iterator yielding (encoded_pk, feature-dict) pairs """
         return (
-            (
-                blob.name,
-                self.repo_feature_to_dict(
-                    blob.name, memoryview(blob), ogr_geoms=ogr_geoms
-                ),
-            )
+            (blob.name, self.repo_feature_to_dict(blob.name, memoryview(blob)),)
             for blob in self._iter_feature_blobs(fast=False)
         )
 

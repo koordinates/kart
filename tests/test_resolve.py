@@ -30,7 +30,7 @@ def delete_remaining_conflicts(cli_runner):
 
 def get_json_feature(rs, layer, pk):
     try:
-        feature = rs[layer].get_feature(pk, ogr_geoms=False)
+        feature = rs[layer].get_feature(pk)
         return json_row(feature, pk)
     except KeyError:
         return None

@@ -1,32 +1,16 @@
-import datetime
-import json
 import logging
 import re
 import sys
 import time
-import types
 
 import click
-from osgeo import ogr
 
 from . import structure
 from .exceptions import NotFound
+from .output_util import dump_json_output
 
 
 L = logging.getLogger("sno.query")
-
-
-def _json_encode_default(o):
-    if isinstance(o, types.GeneratorType):
-        return list(o)
-
-    if isinstance(o, ogr.Geometry):
-        return json.loads(o.ExportToJson())
-
-    if isinstance(o, (datetime.date, datetime.datetime, datetime.time)):
-        return o.isoformat()
-
-    raise TypeError(f"Object of type {type(o)} is not JSON serializable")
 
 
 @click.command("query", hidden=True)
@@ -128,9 +112,6 @@ def query(ctx, path, command, params):
         raise NotImplementedError(f"Unknown command: {command}")
 
     L.debug("Results in %0.3fs", t1 - t0)
-    json_params = {
-        "indent": 2 if sys.stdout.isatty() else None,
-    }
     t2 = time.monotonic()
-    json.dump(results, sys.stdout, default=_json_encode_default, **json_params)
+    dump_json_output(results, sys.stdout)
     L.debug("Output in %0.3fs", time.monotonic() - t2)
