@@ -134,7 +134,11 @@ def normalise_gpkg_geom(gpkg_geom):
 
         if wkb_is_le and has_envelope == want_envelope:
             # everything is fine, no need to roundtrip via OGR
-            return gpkg_geom
+            # just need to set srs_id to zero if it's not already
+            if gpkg_geom[4:8] == b'\x00\x00\x00\x00':
+                return gpkg_geom
+            else:
+                return Geometry.of(gpkg_geom[:4] + b'\x00\x00\x00\x00' + gpkg_geom[8:])
 
     # roundtrip it, the envelope and LE-ness are done by ogr_to_gpkg_geom
     return ogr_to_gpkg_geom(
@@ -296,7 +300,7 @@ def ogr_to_gpkg_geom(
             f'{"<" if _little_endian else ">"}dddd', *ogr_geom.GetEnvelope()
         )
 
-    return header + envelope + wkb
+    return Geometry(header + envelope + wkb)
 
 
 def geojson_to_gpkg_geom(geojson, **kwargs):
