@@ -70,38 +70,42 @@ def test_wkt_gpkg_wkt_roundtrip(wkt):
 
 
 @pytest.mark.parametrize(
-    'big_endian,little_endian',
+    'input_wkb,expected_gpkg_geom,expected_wkb',
     [
         pytest.param(
             # POINT EMPTY (well, POINT(nan nan))
             '00000000017FF80000000000007FF8000000000000',
+            b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf8\x7f\x00\x00\x00\x00\x00\x00\xf8\x7f',
             '0101000000000000000000F87F000000000000F87F',
             id='point-empty',
         ),
         pytest.param(
             # GEOMETRYCOLLECTION EMPTY
             '000000000700000000',
+            b'GP\x00\x01\x00\x00\x00\x00\x01\x07\x00\x00\x00\x00\x00\x00\x00',
             '010700000000000000',
             id='geometrycollection-empty',
         ),
         pytest.param(
             # TRIANGLE Z ((0 0 0,0 1 0,1 1 0,0 0 0))
             '00000003F9000000010000000400000000000000000000000000000000000000000000000000000000000000003FF000000000000000000000000000003FF00000000000003FF00000000000000000000000000000000000000000000000000000000000000000000000000000',
+            b'GP\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x01\xf9\x03\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
             '01F903000001000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F0000000000000000000000000000000000000000000000000000000000000000',
             id='triangle',
         ),
         pytest.param(
             # CIRCULARSTRING (1 5,6 2,7 3)
             '0000000008000000033FF0000000000000401400000000000040180000000000004000000000000000401C0000000000004008000000000000',
+            b'GP\x00\x03\x00\x00\x00\x00\xbcf\x9a\xd1X\xb1\xef?\x00\x00\x00\x00\x00\x00\x1c@^3\xcdh\xac\xd8\xf7?\x00\x00\x00\x00\x00\x00\x14@\x01\x08\x00\x00\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\xf0?\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x18@\x00\x00\x00\x00\x00\x00\x00@\x00\x00\x00\x00\x00\x00\x1c@\x00\x00\x00\x00\x00\x00\x08@',
             '010800000003000000000000000000F03F0000000000001440000000000000184000000000000000400000000000001C400000000000000840',
             id='circularstring',
         ),
     ],
 )
-def test_wkb_gpkg_wkb_roundtrip(big_endian, little_endian):
-    gpkg_geom = hex_wkb_to_gpkg_geom(big_endian)
-
-    assert gpkg_geom_to_hex_wkb(gpkg_geom) == little_endian
+def test_wkb_gpkg_wkb_roundtrip(request, input_wkb, expected_gpkg_geom, expected_wkb):
+    gpkg_geom = hex_wkb_to_gpkg_geom(input_wkb)
+    assert gpkg_geom == expected_gpkg_geom
+    assert gpkg_geom_to_hex_wkb(gpkg_geom) == expected_wkb
 
 
 @pytest.mark.parametrize(

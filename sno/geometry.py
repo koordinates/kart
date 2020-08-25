@@ -6,7 +6,7 @@ import struct
 from osgeo import ogr, osr
 
 # http://www.geopackage.org/spec/#gpb_format
-_GPKG_EMPTY_BIT = 0b1000
+_GPKG_EMPTY_BIT = 0b10000
 _GPKG_LE_BIT = 0b1
 _GPKG_ENVELOPE_BITS = 0b1110
 
