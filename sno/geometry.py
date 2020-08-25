@@ -195,7 +195,7 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
     geom = ogr.CreateGeometryFromWkb(wkb)
 
     if parse_crs:
-        crs_id = struct.unpack_from(f"{'<' if is_le else '>'}I", gpkg_geom, 4)[0]
+        crs_id = struct.unpack_from(f"{'<' if is_le else '>'}i", gpkg_geom, 4)[0]
         if crs_id > 0:
             spatial_ref = osr.SpatialReference()
             spatial_ref.ImportFromEPSG(crs_id)
