@@ -110,7 +110,6 @@ ALL_DATA_TYPES = {
     "boolean",
     "blob",
     "date",
-    "datetime",
     "float",
     "geometry",
     "integer",

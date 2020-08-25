@@ -307,7 +307,7 @@ _GPKG_TYPE_TO_V2_TYPE = {
     "TEXT": "text",
     "BLOB": "blob",
     "DATE": "date",
-    "DATETIME": "datetime",
+    "DATETIME": "timestamp",
     # GEOMETRY types handled differently
 }
 
@@ -325,7 +325,7 @@ _V2_TYPE_TO_GPKG_TYPE = {
     "text": "TEXT",
     "blob": "BLOB",
     "date": "DATE",
-    "datetime": "DATETIME",
+    "timestamp": "DATETIME",
     # geometry types handled differently
 }
 

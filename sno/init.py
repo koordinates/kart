@@ -88,7 +88,7 @@ class OgrImporter:
         'String': ('text', {}),
         'Binary': ('blob', {}),
         'Date': ('date', {}),
-        'DateTime': ('datetime', {}),
+        'DateTime': ('timestamp', {}),
     }
     OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
         ogr.OFSTBoolean: ('boolean', {}),

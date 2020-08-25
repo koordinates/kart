@@ -574,7 +574,7 @@ def _test_pg_import(
             'geometryType': 'MULTIPOLYGON',
             'geometryCRS': 'EPSG:4167',
         },
-        {'name': 'date_adjusted', 'dataType': 'datetime', 'primaryKeyIndex': None},
+        {'name': 'date_adjusted', 'dataType': 'timestamp', 'primaryKeyIndex': None},
         {'name': 'survey_reference', 'dataType': 'text', 'primaryKeyIndex': None},
         {
             'name': 'adjusted_nodes',

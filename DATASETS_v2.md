@@ -114,14 +114,12 @@ The following data types are supported by sno. When a versioned sno dataset is c
   - stores a string of bytes.
 * `date`
   - stores year + month + day. The timezone that should be used interpret this is not stored.
-* `datetime`
-  - stores year + month + day, plus hour + minute + second. The timezone that should be used interpret this is not stored.
 * `float`
   - stores a floating point number using a fixed number of bits. Floating point values have reasonable but imperfect precision over a huge range.
 * `geometry`
-  - stores a well-known-text geometry eg a point or a polygon
+  - stores a well-known-text geometry eg a point or a polygon.
 * `integer`
-  - stores an integer value, using a fixed number of bits
+  - stores an integer value, using a fixed number of bits.
 * `interval`
   - stores an interval of time as a number of years + months + days + hours + minutes + seconds
 * `numeric`
@@ -129,9 +127,9 @@ The following data types are supported by sno. When a versioned sno dataset is c
 * `text`
   - stores a string of text, using the database's text encoding.
 * `time`
-  - stores hour + minute + second. The timezone that should be used to interpret this is not stored.
+  - stores hour + minute + second, and optionally the timezone that this time was recorded in.
 * `timestamp`
-  - stores the number of seconds since the unix epoch - 1 January 1980, UTC. The timezone that must be used to interpret this number is well-defined: it is UTC.
+  - stores a date + time, and optionally the timezone that this timestamp was recorded in.
 
 ##### Extra type info
 
@@ -252,7 +250,7 @@ Features are stored at a filename that contains a Base64 encoding of their prima
 
 #### Geometry encoding
 
-[MessagePack](https://msgpack.org/) can serialise everything that JSON can serialise, plus byte strings. This means it can be used to serialise most database types, but not geometries unless they are first converted to one of these types. For this reason, geometry fields are serialised to bytestrings before serialising the entire feature using MessagePack. The encoding used to serialise the geometry is as follows.
+[MessagePack](https://msgpack.org/) can serialise everything that JSON can serialise, plus byte strings. This means it can be used to serialise most database types, but not geometries unless they are first converted to one of these types. For this reason, geometry fields are serialised to bytestrings before serialising the entire feature using MessagePack. The geometry bytestring is marked as being a MessagePack extension with the extension code `"G"` (71). The encoding used to serialise the geometry is as follows.
 
 Geometries are encoded using the Standard GeoPackageBinary format specified in [GeoPackage v1.3.0 §2.1.3 Geometry Encoding](http://www.geopackage.org/spec/#gpb_data_blob_format), with additional restrictions:
 
