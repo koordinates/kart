@@ -13,7 +13,7 @@ from . import gpkg, gpkg_adapter
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from .exceptions import InvalidOperation, NotYetImplemented
 from .filter_util import UNFILTERED
-from .geometry import Geometry
+from .geometry import Geometry, normalise_gpkg_geom
 from .schema import Schema
 from .structure import RepositoryStructure
 from .repository_version import get_repo_version
@@ -835,7 +835,11 @@ class WorkingCopyGPKG(WorkingCopy):
                     db_obj = None
 
                 if db_obj is not None and geom_col is not None:
-                    db_obj[geom_col] = Geometry.of(db_obj[geom_col])
+                    # Clean geometries so they have the same properties as the dataset's ones
+                    g = db_obj[geom_col]
+                    if dataset.version >= 2:
+                        g = normalise_gpkg_geom(g)
+                    db_obj[geom_col] = Geometry.of(g)
 
                 try:
                     repo_obj = dataset.get_feature(track_pk)

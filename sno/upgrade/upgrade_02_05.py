@@ -8,6 +8,7 @@ import pygit2
 
 from sno import checkout, context
 from sno.exceptions import InvalidOperation
+from sno.geometry import normalise_gpkg_geom
 from sno.structure import RepositoryStructure
 from sno.repository_version import get_repo_version, write_repo_version_config
 from sno.gpkg_adapter import gpkg_to_v2_schema, wkt_to_crs_str
@@ -188,7 +189,11 @@ class ImportV1Dataset:
             yield wkt_to_crs_str(definition), definition
 
     def iter_features(self):
+        geom_column = self.dataset.geom_column_name
         for _, feature in self.dataset.features():
+            if geom_column:
+                # add bboxes to geometries.
+                feature[geom_column] = normalise_gpkg_geom(feature[geom_column])
             yield feature
 
     @property

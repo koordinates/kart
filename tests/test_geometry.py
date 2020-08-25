@@ -4,13 +4,14 @@ import pytest
 from osgeo import ogr, osr
 
 from sno.geometry import (
-    hex_wkb_to_gpkg_geom,
     gpkg_geom_to_hex_wkb,
-    ogr_to_gpkg_geom,
     gpkg_geom_to_ogr,
+    hex_wkb_to_gpkg_geom,
+    normalise_gpkg_geom,
+    ogr_to_gpkg_geom,
 )
 
-SRID_RE = re.compile(r'^SRID=(\d+);(.*)$')
+SRID_RE = re.compile(r'^SRID=(-?\d+);(.*)$')
 
 
 def ewkt_to_ogr(wkt):
@@ -24,7 +25,7 @@ def ewkt_to_ogr(wkt):
         crs_id, wkt = m.groups()
         crs_id = int(crs_id)
     g = ogr.CreateGeometryFromWkt(wkt)
-    if crs_id:
+    if crs_id and crs_id > 0:
         spatial_ref = osr.SpatialReference()
         spatial_ref.ImportFromEPSG(crs_id)
         g.AssignSpatialReference(spatial_ref)
@@ -38,6 +39,7 @@ def ewkt_to_ogr(wkt):
         'POINT(1 2 3)',
         'POINT(1 2 3 4)',
         'POINT EMPTY',
+        'SRID=-1;POINT(1 2)',
         'SRID=4326;POINT(1 2)',
         'SRID=4326;POINT(1 2 3)',
         'SRID=4326;POINT(1 2 3 4)',
@@ -52,7 +54,7 @@ def ewkt_to_ogr(wkt):
 )
 def test_wkt_gpkg_wkt_roundtrip(wkt):
     orig_ogr_geom = ewkt_to_ogr(wkt)
-    gpkg_geom = ogr_to_gpkg_geom(orig_ogr_geom)
+    gpkg_geom = ogr_to_gpkg_geom(orig_ogr_geom, _add_srs_id=True)
     ogr_geom = gpkg_geom_to_ogr(gpkg_geom, parse_crs=True)
     assert ogr_geom.Equals(
         orig_ogr_geom
@@ -61,7 +63,8 @@ def test_wkt_gpkg_wkt_roundtrip(wkt):
     orig_spatial_ref = orig_ogr_geom.GetSpatialReference()
     spatial_ref = ogr_geom.GetSpatialReference()
 
-    _export_to_proj4 = lambda sr: sr.ExportToProj4() if sr else None
+    def _export_to_proj4(crs):
+        return crs.ExportToProj4() if crs else None
 
     assert _export_to_proj4(spatial_ref) == _export_to_proj4(orig_spatial_ref)
 
@@ -102,18 +105,61 @@ def test_wkb_gpkg_wkb_roundtrip(big_endian, little_endian):
 
 
 @pytest.mark.parametrize(
-    'input',
+    'input,expected',
+    [
+        pytest.param(
+            # POINT(5 5)
+            b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            id='point',
+        ),
+        pytest.param(
+            # SRID=-1;POINT(5 5)
+            # (srid gets replaced by 0)
+            b'GP\x00\x01\xff\xff\xff\xff\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            id='srid-minus-one',
+        ),
+        pytest.param(
+            # SRID=4326;POINT(5 5)
+            # (srid gets replaced by 0)
+            b'GP\x00\x01\xe6\x10\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            id='srid-minus-one',
+        ),
+        pytest.param(
+            # POLYGON((0 0,0 5,5 0,0 0))
+            b'GP\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x01\x03\x00\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+            b'GP\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x01\x03\x00\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+            id='polygon',
+        ),
+    ],
+)
+def test_normalise_geometry(input, expected):
+    assert normalise_gpkg_geom(input) == expected
+
+
+@pytest.mark.parametrize(
+    'input,input_has_envelope',
     [
         # These geometries are little-endian with no envelope
         pytest.param(
             # POINT EMPTY (well, 'POINT(nan nan)')
             b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+            False,
             id='point-empty',
         ),
         pytest.param(
             # POINT(5 5)
             b'GP\x00\x01\x00\x00\x00\x00\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@',
+            False,
             id='point',
+        ),
+        pytest.param(
+            # POLYGON((0 0,0 5,5 0,0 0))
+            b'GP\x00\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x01\x03\x00\x00\x00\x01\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x14@\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
+            True,
+            id='polygon',
         ),
     ],
 )
@@ -121,8 +167,15 @@ def test_wkb_gpkg_wkb_roundtrip(big_endian, little_endian):
 @pytest.mark.parametrize('little_endian_wkb', [False, True])
 @pytest.mark.parametrize('with_envelope', [False, True])
 def test_gpkg_wkb_gpkg_roundtrip(
-    input, little_endian, little_endian_wkb, with_envelope
+    input, input_has_envelope, little_endian, little_endian_wkb, with_envelope
 ):
+    """
+    Tests the following functions work and are consistent with each other:
+        * normalise_gpkg_geom
+        * gpkg_geom_to_hex_wkb
+        * hex_wkb_to_gpkg_geom
+    """
+    assert normalise_gpkg_geom(input) == input
     hex_wkb = gpkg_geom_to_hex_wkb(input)
     assert hex_wkb.startswith('01'), "gpkg_geom_to_hex_wkb produced big-endian WKB"
 
@@ -133,13 +186,21 @@ def test_gpkg_wkb_gpkg_roundtrip(
         _little_endian_wkb=little_endian_wkb,
         _add_envelope=with_envelope,
     )
-    if little_endian and little_endian_wkb and not with_envelope:
+    assert normalise_gpkg_geom(gpkg_geom_intermediate) == input
+
+    if little_endian and little_endian_wkb and with_envelope == input_has_envelope:
         assert gpkg_geom_intermediate == input
         return
 
-    if with_envelope:
-        # If we're adding an envelope, the geometry should have gotten bigger...
-        assert len(gpkg_geom_intermediate) > len(input)
+    else:
+        if with_envelope and not input_has_envelope:
+            # If we're adding an envelope, the geometry should have gotten bigger...
+            assert len(gpkg_geom_intermediate) > len(input)
+        elif input_has_envelope and not with_envelope:
+            # If we're removing an envelope, the geometry should have gotten smaller...
+            assert len(gpkg_geom_intermediate) < len(input)
+        else:
+            assert len(gpkg_geom_intermediate) == len(input)
 
     # Now re-roundtrip to convert it back to the original
     # (little-endian, no envelope)
