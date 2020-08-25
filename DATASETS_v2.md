@@ -257,5 +257,8 @@ Geometries are encoded using the Standard GeoPackageBinary format specified in [
 1. Geometries must use the StandardGeoPackageBinary type.
 2. GeoPackage binary headers must always use little-endian byte ordering.
 3. The WKB geometry must always use little-endian byte ordering.
-4. All non-empty geometries must have a 2D envelope, except for POINT types.
+4. All non-empty geometries must have an envelope, except for POINT types:
+   - Points and empty geometries have no envelope.
+   - Geometries with a Z component have an XYZ envelope.
+   - Other geometries have an XY envelope.
 5. The `srs_id` is always 0, since this information not stored in the geometry object but is stored on a per-column basis in `meta/schema.json` in the `geometryCRS` field.
