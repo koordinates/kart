@@ -63,7 +63,10 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                     "This repo doesn't support meta changes, use `sno upgrade`"
                 )
             meta_diff = DeltaDiff(
-                Delta((k, v.get('-')), (k, v.get('+')))
+                Delta(
+                    (k, v['-']) if '-' in v else None,
+                    (k, v.get('+')) if '+' in v else None,
+                )
                 for (k, v) in meta_changes.items()
             )
             repo_diff.recursive_set([dataset.path, "meta"], meta_diff)
