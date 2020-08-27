@@ -222,11 +222,6 @@ class RepositoryStructure:
         NOTE: Doesn't update working-copy meta or tracking tables, this is the
         responsibility of the caller.
         """
-        tree = self.tree
-
-        git_index = pygit2.Index()
-        git_index.read_tree(tree)
-
         new_tree_oid = self.create_tree_from_diff(wcdiff)
         L.info("Committing...")
         user = self.repo.default_signature
