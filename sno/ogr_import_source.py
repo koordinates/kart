@@ -43,7 +43,7 @@ FORMAT_TO_OGR_MAP = {
 LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {'PG'}
 
 
-class OgrImporter:
+class OgrImportSource:
     """
     Imports from an OGR source, currently from a whitelist of formats.
     """
@@ -160,7 +160,7 @@ class OgrImporter:
             ) from e
 
         try:
-            klass = globals()[f'Import{ds.GetDriver().ShortName}']
+            klass = globals()[f'{ds.GetDriver().ShortName}ImportSource']
         except KeyError:
             klass = cls
         else:
@@ -645,7 +645,7 @@ class OgrImporter:
 
     def iter_gpkg_meta_items(self):
         """
-        Imitates the ImportGPKG implementation, and we just use the gpkg field/table names
+        Imitates the GPKGImportSource implementation, and we just use the gpkg field/table names
         for compatibility, because there's no particular need to change it...
         Keep both implementations in sync!
         """
@@ -662,7 +662,7 @@ class OgrImporter:
             yield "gpkg_metadata", json_to_gpkg_metadata(v2json, self.table)
 
 
-class ImportGPKG(OgrImporter):
+class GPKGImportSource(OgrImportSource):
     @classmethod
     def quote_ident_part(cls, part):
         """
@@ -713,7 +713,7 @@ class ImportGPKG(OgrImporter):
         return gpkg_metadata_to_json(**gm_info)
 
 
-class ImportPostgreSQL(OgrImporter):
+class PostgreSQLImportSource(OgrImportSource):
     @classmethod
     def postgres_url_to_ogr_conn_str(cls, url):
         """

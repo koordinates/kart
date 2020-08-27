@@ -11,7 +11,7 @@ import pygit2
 import pytest
 
 from sno import gpkg, structure, fast_import
-from sno.ogr_import_source import OgrImporter, ImportPostgreSQL
+from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
@@ -502,7 +502,7 @@ def postgis_db():
 
 @pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
-    postgres_conn_str = ImportPostgreSQL.postgres_url_to_ogr_conn_str(
+    postgres_conn_str = PostgreSQLImportSource.postgres_url_to_ogr_conn_str(
         os.environ['SNO_POSTGRES_URL']
     )
 
@@ -839,7 +839,7 @@ def test_write_feature_performance(
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = OgrImporter.open(data / source_gpkg, table=table)
+            source = OgrImportSource.open(data / source_gpkg, table=table)
             with source:
                 dataset = structure.DatasetStructure.for_version(repo_version)(
                     None, table
@@ -885,7 +885,9 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
 
             repo = pygit2.Repository(str(repo_path))
 
-            source = OgrImporter.open(data / "nz-pa-points-topo-150k.gpkg", table=table)
+            source = OgrImportSource.open(
+                data / "nz-pa-points-topo-150k.gpkg", table=table
+            )
 
             fast_import.fast_import_tables(repo, {table: source})
 

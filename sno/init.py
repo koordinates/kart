@@ -12,7 +12,7 @@ from . import checkout
 from .core import check_git_user
 from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromFile
 from .exceptions import InvalidOperation
-from .ogr_import_source import OgrImporter, FORMAT_TO_OGR_MAP
+from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .fast_import import fast_import_tables
 from .structure import RepositoryStructure
 from .repository_version import (
@@ -190,7 +190,7 @@ def import_table(
         repo = ctx.obj.repo
         check_git_user(repo)
 
-    source_loader = OgrImporter.open(source, None)
+    source_loader = OgrImportSource.open(source, None)
     if do_list:
         source_loader.print_table_list(do_json=output_format == 'json')
         return
@@ -295,7 +295,7 @@ def init(
 
     if import_from:
         check_git_user(repo=None)
-        source_loader = OgrImporter.open(import_from, None)
+        source_loader = OgrImportSource.open(import_from, None)
 
         # Import all tables.
         # If you need finer grained control than this,

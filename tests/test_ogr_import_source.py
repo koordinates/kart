@@ -1,10 +1,10 @@
 import pytest
 
-from sno.ogr_import_source import ImportPostgreSQL
+from sno.ogr_import_source import PostgreSQLImportSource
 
 
 def test_postgres_url_parsing():
-    func = ImportPostgreSQL.postgres_url_to_ogr_conn_str
+    func = PostgreSQLImportSource.postgres_url_to_ogr_conn_str
     with pytest.raises(ValueError):
         func('https://example.com/')
 
