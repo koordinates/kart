@@ -8,7 +8,7 @@ import pygit2
 from sno import gpkg_adapter
 from sno.geometry import normalise_gpkg_geom
 from sno.schema import Schema
-from sno.structure import DatasetStructure
+from sno.base_dataset import BaseDataset
 
 
 def get_upgrade_sources(source_repo, source_commit):
@@ -34,30 +34,26 @@ def _iter_datasets(tree):
                     te_path = o.name
 
                 if "meta" in o and "version" in o / "meta":
-                    yield ImportV0Dataset(o, te_path)
+                    yield Dataset0(o, te_path)
                 else:
                     # examine inside this directory
                     to_examine.append((te_path, o))
 
 
-class ImportV0Dataset(DatasetStructure):
+class Dataset0(BaseDataset):
     """
     A V0 dataset / import source.
     """
 
     # TODO - merge the dataset interface with the import source interface.
 
+    META_PATH = "meta/"
+    FEATURE_PATH = "feature/"
+
     def __init__(self, tree, path):
         super().__init__(tree, path)
+        # TODO - remove self.table from import-source interface
         self.table = self.path
-        self.source = "v0-sno-repo"
-
-    META_PATH = "meta/"
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def schema(self):
-        return Schema.from_column_dicts(self.get_meta_item("schema.json"))
 
     def _iter_feature_dirs(self):
         """
@@ -85,24 +81,25 @@ class ImportV0Dataset(DatasetStructure):
 
     @functools.lru_cache()
     def get_meta_item(self, name):
-        # Dataset V1 items are always JSON.
-        try:
-            return json.loads(super().get_meta_item(name))
-        except KeyError:
-            if gpkg_adapter.is_gpkg_meta_item(name):
-                return None  # We happen not to have this meta-item, but it is real.
-            elif gpkg_adapter.is_v2_meta_item(name):
-                return gpkg_adapter.generate_v2_meta_item(self, name)
-            raise  # This meta-item doesn't exist at all.
+        return gpkg_adapter.generate_v2_meta_item(self, name)
+
+    @functools.lru_cache()
+    def get_gpkg_meta_item(self, name):
+        rel_path = self.META_PATH + name
+        data = self.get_data_at(
+            rel_path, missing_ok=(name in gpkg_adapter.GPKG_META_ITEMS)
+        )
+        # For V0 / V1, all data is serialised using json.dumps
+        return json.loads(data) if data is not None else None
 
     def crs_definitions(self):
-        gsrs = self.get_meta_item("gpkg_spatial_ref_sys")
+        gsrs = self.get_gpkg_meta_item("gpkg_spatial_ref_sys")
         if gsrs and gsrs[0]["definition"]:
             definition = gsrs[0]["definition"]
             yield gpkg_adapter.wkt_to_crs_str(definition), definition
 
     def iter_features(self):
-        ggc = self.get_meta_item("gpkg_geometry_columns")
+        ggc = self.get_gpkg_meta_item("gpkg_geometry_columns")
         geom_field = ggc["column_name"] if ggc else None
 
         for feature_dir in self._iter_feature_dirs():
@@ -125,12 +122,3 @@ class ImportV0Dataset(DatasetStructure):
         for feature_dirs in self._iter_feature_dirs():
             count += 1
         return count
-
-    def __str__(self):
-        return self.path
-
-    def __enter__(self):
-        pass
-
-    def __exit__(self, *args):
-        pass

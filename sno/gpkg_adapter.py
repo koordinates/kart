@@ -53,6 +53,13 @@ def is_v2_meta_item(path):
 
 
 def generate_v2_meta_item(v1_dataset, path, id_salt=None):
+    # This is in the process of being upgraded.
+    # TODO change the name to get_gpkg_meta_item everywhere.
+    if hasattr(v1_dataset, "get_gpkg_meta_item"):
+        get_gpkg_meta_item = v1_dataset.get_gpkg_meta_item
+    else:
+        get_gpkg_meta_item = v1_dataset.get_meta_item
+
     if not is_v2_meta_item(path):
         raise KeyError(f"Not a v2 meta_item: {path}")
 
@@ -60,24 +67,24 @@ def generate_v2_meta_item(v1_dataset, path, id_salt=None):
         return extract_title(v1_dataset)
 
     elif path == "description":
-        description = v1_dataset.get_meta_item("gpkg_contents").get("description")
+        description = get_gpkg_meta_item("gpkg_contents").get("description")
         return description
 
     elif path == "schema.json":
         return gpkg_to_v2_schema(
-            v1_dataset.get_meta_item("sqlite_table_info"),
-            v1_dataset.get_meta_item("gpkg_geometry_columns"),
-            v1_dataset.get_meta_item("gpkg_spatial_ref_sys"),
+            get_gpkg_meta_item("sqlite_table_info"),
+            get_gpkg_meta_item("gpkg_geometry_columns"),
+            get_gpkg_meta_item("gpkg_spatial_ref_sys"),
             id_salt or v1_dataset.name,
         ).to_column_dicts()
     elif path == "metadata/dataset.json":
         return gpkg_metadata_to_json(
-            v1_dataset.get_meta_item("gpkg_metadata"),
-            v1_dataset.get_meta_item("gpkg_metadata_reference"),
+            get_gpkg_meta_item("gpkg_metadata"),
+            get_gpkg_meta_item("gpkg_metadata_reference"),
         )
 
     elif path.startswith("crs/"):
-        gpkg_spatial_ref_sys = v1_dataset.get_meta_item("gpkg_spatial_ref_sys") or ()
+        gpkg_spatial_ref_sys = get_gpkg_meta_item("gpkg_spatial_ref_sys") or ()
         for gsrs in gpkg_spatial_ref_sys:
             definition = gsrs["definition"]
             if not definition or definition == "undefined":
@@ -103,7 +110,15 @@ def iter_v2_meta_items(v1_dataset, id_salt=None):
 
 def extract_title(v1_dataset):
     """Extract the dataset title from a v1 dataset."""
-    identifier = v1_dataset.get_meta_item("gpkg_contents").get("identifier")
+
+    # This is in the process of being upgraded.
+    # TODO change the name to get_gpkg_meta_item everywhere.
+    if hasattr(v1_dataset, "get_gpkg_meta_item"):
+        get_gpkg_meta_item = v1_dataset.get_gpkg_meta_item
+    else:
+        get_gpkg_meta_item = v1_dataset.get_meta_item
+
+    identifier = get_gpkg_meta_item("gpkg_contents").get("identifier")
     # FIXME: find a better way of roundtripping identifiers?
     identifier_prefix = f"{v1_dataset.name}: "
     if identifier.startswith(identifier_prefix):
