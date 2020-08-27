@@ -11,7 +11,7 @@ import pygit2
 import pytest
 
 from sno import gpkg, structure, fast_import
-from sno.init import OgrImporter, ImportPostgreSQL
+from sno.ogr_import_source import OgrImporter, ImportPostgreSQL
 from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
