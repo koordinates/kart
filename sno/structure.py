@@ -20,6 +20,7 @@ from .geometry import geom_envelope
 from .schema import Schema
 from .serialise_util import ensure_bytes, json_pack
 from .repository_version import get_repo_version
+from .tree_util import replace_subtree
 
 
 L = logging.getLogger("sno.structure")
@@ -599,46 +600,6 @@ class DatasetStructure:
         meta_new = dict(new.iter_meta_items()) if new else {}
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
-    def _replace_subtree(self, repo, root_tree, subpath, subtree_or_blob):
-        """
-        Given a root tree, creates a new root tree by replacing whatever's
-        at the given path with the given subtree or blob.
-
-        If the given blob is None, that path is deleted.
-        This never conflicts. If the containing dirs don't exist, they are created.
-
-        Returns the new root tree.
-        """
-        if isinstance(subpath, str):
-            subpath = [piece for piece in subpath.split('/') if piece]
-        if not subpath:
-            # replace root_tree with subtree
-            return subtree_or_blob
-        else:
-            [head, *rest] = subpath
-            builder = repo.TreeBuilder(root_tree)
-            remove = False
-            try:
-                old_subtree = root_tree / head
-                remove = True
-            except KeyError:
-                old_subtree = repo.get('4b825dc642cb6eb9a060e54bf8d69288fbee4904')
-            replaced = self._replace_subtree(repo, old_subtree, rest, subtree_or_blob)
-            if remove:
-                builder.remove(head)
-            if replaced is not None:
-                # insert/replace
-                typ = (
-                    pygit2.GIT_FILEMODE_TREE
-                    if isinstance(replaced, pygit2.Tree)
-                    else pygit2.GIT_FILEMODE_BLOB
-                )
-                if isinstance(replaced, pygit2.Tree):
-                    replaced = replaced.oid
-                builder.insert(head, replaced, typ)
-
-            return repo.get(builder.write())
-
     def _recursive_build_feature_tree(
         self, *, repo, orig_tree, deltas_dict, encode_kwargs, pk_field, geom_column_name
     ):
@@ -770,7 +731,7 @@ class DatasetStructure:
                         f"{self.path}: Trying to delete nonexistent meta item: {name}"
                     )
                     continue
-                meta_tree = self._replace_subtree(repo, meta_tree, name, None)
+                meta_tree = replace_subtree(repo, meta_tree, name, None)
 
             elif delta.type == "insert":
                 if name in meta_tree:
@@ -783,7 +744,7 @@ class DatasetStructure:
                     blob_id = repo.create_blob(json_pack(delta.new.value))
                 else:
                     blob_id = repo.create_blob(ensure_bytes(delta.new.value))
-                meta_tree = self._replace_subtree(repo, meta_tree, name, blob_id)
+                meta_tree = replace_subtree(repo, meta_tree, name, blob_id)
 
             elif delta.type == "update":
                 if name not in meta_tree:
@@ -799,7 +760,7 @@ class DatasetStructure:
                         f"{self.path}: Trying to update already-changed meta item: {name}"
                     )
                     continue
-                meta_tree = self._replace_subtree(repo, meta_tree, name, None)
+                meta_tree = replace_subtree(repo, meta_tree, name, None)
                 if name == "schema.json":
                     old_schema = Schema.from_column_dicts(delta.old.value)
                     new_schema = Schema.from_column_dicts(delta.new.value)
@@ -820,9 +781,9 @@ class DatasetStructure:
                     to_write = [(name, ensure_bytes(delta.new.value))]
                 for path, data in to_write:
                     blob_id = repo.create_blob(data)
-                    meta_tree = self._replace_subtree(repo, meta_tree, path, blob_id)
+                    meta_tree = replace_subtree(repo, meta_tree, path, blob_id)
 
-        orig_tree = self._replace_subtree(repo, orig_tree, meta_path, meta_tree)
+        orig_tree = replace_subtree(repo, orig_tree, meta_path, meta_tree)
 
         geom_column_name = self.geom_column_name
         deltas_by_directory = {}
