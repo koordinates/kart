@@ -9,21 +9,14 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 import click
 from osgeo import gdal, ogr
 
-from . import gpkg
+from . import crs_util, gpkg, gpkg_adapter
 from .exceptions import (
     InvalidOperation,
     NotFound,
-    NotYetImplemented,
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
 from .geometry import Geometry, ogr_to_gpkg_geom
-from .gpkg_adapter import (
-    gpkg_metadata_to_json,
-    json_to_gpkg_metadata,
-    osgeo_to_gpkg_spatial_ref_sys,
-    osgeo_to_crs_str,
-)
 from .import_source import ImportSource
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
@@ -377,30 +370,8 @@ class OgrImportSource(ImportSource):
             param_hint='--primary-key',
         )
 
-    @ungenerator(dict)
-    def _field_cid_map(self):
-        ld = self.ogrlayer.GetLayerDefn()
-
-        yield self.primary_key, 0
-        start = 1
-
-        # OGR
-        if self.geom_cols:
-            gc = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
-            yield gc, 1
-            start += 1
-
-        # The FID field may or may not be in this list, depending on the OGR driver.
-        # either way, the @ungenerator(dict) removes dupes...
-        for i in range(ld.GetFieldCount()):
-            field = ld.GetFieldDefn(i)
-            name = field.GetName()
-            yield name, i + start
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def field_cid_map(self):
-        return self._field_cid_map()
+    def _get_primary_key_value(self, ogr_feature, name):
+        return ogr_feature.GetFID()
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -421,9 +392,6 @@ class OgrImportSource(ImportSource):
             name = field.GetName()
             yield name, get_type_value_adapter(field.GetType())
 
-    def _get_primary_key_value(self, ogr_feature, name):
-        return ogr_feature.GetFID()
-
     @ungenerator(dict)
     def _ogr_feature_to_sno_feature(self, ogr_feature):
         for name, adapter in self.field_adapter_map.items():
@@ -441,56 +409,54 @@ class OgrImportSource(ImportSource):
     def _iter_ogr_features(self):
         l = self.ogrlayer
         l.ResetReading()
-        while True:
-            f = l.GetNextFeature()
-            if f is None:
-                # end of iter
-                l.ResetReading()
-                return
-            # Turn an OGRFeature into a name:value dict
+        f = l.GetNextFeature()
+        while f is not None:
             yield f
+            f = l.GetNextFeature()
+        # end of iter
+        l.ResetReading()
 
     def features(self):
         for ogr_feature in self._iter_ogr_features():
             yield self._ogr_feature_to_sno_feature(ogr_feature)
 
-    def _get_meta_crs_id(self):
+    @functools.lru_cache()
+    def get_meta_item(self, name):
+        if name in self._meta_overrides:
+            return self._meta_overrides[name]
+        ogr_metadata = self.ogrlayer.GetMetadata()
+        if name == "title":
+            return ogr_metadata.get('IDENTIFIER') or ''
+        elif name == "description":
+            return ogr_metadata.get('DESCRIPTION') or ''
+        elif name == "schema.json":
+            return self.schema.to_column_dicts()
+        elif name == "metadata/dataset.json":
+            return self.get_v2_metadata_json()
+        elif name.startswith("crs/"):
+            return self.get_crs_definition(name)
+        raise KeyError(f"No meta item found with name: {name}")
+
+    @functools.lru_cache()
+    def get_gpkg_meta_item(self, name):
+        return gpkg_adapter.generate_gpkg_meta_item(self, name)
+
+    def get_crs_identifer(self):
         spatial_ref = self.ogrlayer.GetSpatialRef()
         if not spatial_ref:
-            return 0
+            return None
         spatial_ref.AutoIdentifyEPSG()
-        return int(spatial_ref.GetAuthorityCode(None) or 0)
-
-    def get_meta_contents(self):
-        return {
-            'table_name': self.table,
-            'data_type': 'features' if self.is_spatial else 'attributes',
-            'identifier': self.get_meta_item('title'),
-            'description': self.get_meta_item('description'),
-            'srs_id': self._get_meta_crs_id(),
-        }
-
-    def get_meta_item(self, key):
-        if key in self._meta_overrides:
-            return self._meta_overrides[key]
-        ogr_metadata = self.ogrlayer.GetMetadata()
-        if key == "title":
-            return ogr_metadata.get('IDENTIFIER') or ''
-        elif key == "description":
-            return ogr_metadata.get('DESCRIPTION') or ''
-        elif key == "gpkg_spatial_ref_sys":
-            return self.get_meta_spatial_ref_sys()
-        elif key == "metadata/dataset.json":
-            return self.get_v2_metadata_json()
-
-    def get_crs_definition(self, crs_name):
-        return dict(self.crs_definitions)[crs_name]
+        return crs_util.get_identifier(spatial_ref)
 
     def crs_definitions(self):
         if self.is_spatial:
             spatial_ref = self.ogrlayer.GetSpatialRef()
             if spatial_ref:
-                yield (osgeo_to_crs_str(spatial_ref), spatial_ref.ExportToWkt())
+                spatial_ref.AutoIdentifyEPSG()
+                yield (
+                    crs_util.get_identifier(spatial_ref),
+                    spatial_ref.ExportToWkt(),
+                )
 
     def _get_meta_geometry_type(self):
         # remove Z/M components
@@ -507,21 +473,6 @@ class OgrImportSource(ImportSource):
             .upper()
         )
 
-    def get_meta_geometry_columns(self):
-        if not self.is_spatial:
-            return None
-
-        ogr_geom_type = self.ogrlayer.GetGeomType()
-
-        return {
-            "table_name": self.table,
-            "column_name": self.ogrlayer.GetGeometryColumn() or self.geom_cols[0],
-            "geometry_type_name": self._get_meta_geometry_type(),
-            "srs_id": self._get_meta_crs_id(),
-            "z": int(ogr.GT_HasZ(ogr_geom_type)),
-            "m": int(ogr.GT_HasM(ogr_geom_type)),
-        }
-
     def get_geometry_v2_column_schema(self):
         if not self.is_spatial:
             return None
@@ -533,25 +484,15 @@ class OgrImportSource(ImportSource):
         m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
         extra_type_info = {
             "geometryType": f"{geometry_type} {z}{m}".strip(),
-            "geometryCRS": f"EPSG:{self._get_meta_crs_id()}",
         }
+
+        crs_identifier = self.get_crs_identifer()
+        if crs_identifier:
+            extra_type_info["geometryCRS"] = crs_identifier
 
         return ColumnSchema(
             ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
         )
-
-    def _ogr_type_to_sqlite_type(self, fd):
-        subtype = fd.GetSubType()
-        if subtype == ogr.OFSTNone:
-            type_name = self.OGR_TYPE_TO_SQLITE_TYPE[fd.GetTypeName()]
-        else:
-            type_name = self.OGR_SUBTYPE_TO_SQLITE_TYPE[subtype]
-
-        if type_name in ('TEXT', 'BLOB'):
-            width = fd.GetWidth()
-            if width:
-                type_name += f'({width})'
-        return type_name
 
     def _field_to_v2_column_schema(self, fd):
         ogr_type = fd.GetTypeName()
@@ -602,51 +543,6 @@ class OgrImportSource(ImportSource):
 
         return Schema(special_columns + other_columns)
 
-    @ungenerator(list)
-    def get_meta_column_info(self):
-        ld = self.ogrlayer.GetLayerDefn()
-        for name, cid in self.field_cid_map.items():
-            default = None
-            field_index = ld.GetFieldIndex(name)
-            if field_index < 0:
-                # some datasources don't have FID and geometry fields in the fields list
-                if name == self.primary_key:
-                    nullable = False
-                    type_name = 'INTEGER'
-                else:
-                    nullable = True
-                    type_name = self._get_meta_geometry_type()
-            else:
-                fd = ld.GetFieldDefn(field_index)
-                type_name = self._ogr_type_to_sqlite_type(fd)
-                nullable = fd.IsNullable()
-                default = fd.GetDefault()
-
-            if name == self.primary_key and self.is_spatial:
-                if type_name in ("SMALLINT", "MEDIUMINT", "INTEGER"):
-                    type_name = "INTEGER"
-                else:
-                    raise NotYetImplemented(
-                        "GPKG features only support integer primary keys"
-                        f" - converting from {type_name} not yet supported"
-                    )
-
-            yield {
-                "cid": cid,
-                "name": name,
-                "type": type_name,
-                "notnull": int(not nullable),
-                "dflt_value": default,
-                "pk": int(name == self.primary_key),
-            }
-
-    def get_meta_spatial_ref_sys(self):
-        spatial_ref = self.ogrlayer.GetSpatialRef()
-        if spatial_ref:
-            return osgeo_to_gpkg_spatial_ref_sys(spatial_ref)
-        else:
-            return []
-
     _KNOWN_METADATA_URIS = {
         'GDALMultiDomainMetadata': 'http://gdal.org',
     }
@@ -666,24 +562,6 @@ class OgrImportSource(ImportSource):
             uri = element.namespaceURI or '(unknown)'
 
         return {uri: {"text/xml": xml_metadata}}
-
-    def iter_gpkg_meta_items(self):
-        """
-        Imitates the GPKGImportSource implementation, and we just use the gpkg field/table names
-        for compatibility, because there's no particular need to change it...
-        Keep both implementations in sync!
-        """
-        yield "gpkg_contents", self.get_meta_contents()
-        yield "gpkg_geometry_columns", self.get_meta_geometry_columns()
-        yield "sqlite_table_info", self.get_meta_column_info()
-        yield "gpkg_spatial_ref_sys", self.get_meta_spatial_ref_sys()
-
-        v2json = self.get_v2_metadata_json()
-        if v2json:
-            yield "gpkg_metadata_reference", json_to_gpkg_metadata(
-                v2json, self.table, reference=True
-            )
-            yield "gpkg_metadata", json_to_gpkg_metadata(v2json, self.table)
 
 
 class GPKGImportSource(OgrImportSource):
@@ -728,13 +606,13 @@ class GPKGImportSource(OgrImportSource):
 
         db = gpkg.db(self.ogr_source)
         gm_info = dict(
-            gpkg.get_meta_info(
+            gpkg.get_meta_items(
                 db, layer=self.table, keys=("gpkg_metadata", "gpkg_metadata_reference")
             )
         )
         if not gm_info:
             return None
-        return gpkg_metadata_to_json(**gm_info)
+        return gpkg_adapter.gpkg_metadata_to_json(**gm_info)
 
 
 class PostgreSQLImportSource(OgrImportSource):

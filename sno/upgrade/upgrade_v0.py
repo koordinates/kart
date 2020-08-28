@@ -86,16 +86,13 @@ class Dataset0(BaseDataset):
     def get_gpkg_meta_item(self, name):
         rel_path = self.META_PATH + name
         data = self.get_data_at(
-            rel_path, missing_ok=(name in gpkg_adapter.GPKG_META_ITEMS)
+            rel_path, missing_ok=(name in gpkg_adapter.GPKG_META_ITEM_NAMES)
         )
         # For V0 / V1, all data is serialised using json.dumps
         return json.loads(data) if data is not None else None
 
     def crs_definitions(self):
-        gsrs = self.get_gpkg_meta_item("gpkg_spatial_ref_sys")
-        if gsrs and gsrs[0]["definition"]:
-            definition = gsrs[0]["definition"]
-            yield gpkg_adapter.wkt_to_crs_str(definition), definition
+        return gpkg_adapter.all_v2_crs_definitions(self)
 
     def features(self):
         ggc = self.get_gpkg_meta_item("gpkg_geometry_columns")

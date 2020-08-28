@@ -440,7 +440,7 @@ def test_shp_import_meta(
         repo = pygit2.Repository(str(repo_path))
         dataset = structure.RepositoryStructure(repo)[path]
 
-        meta_items = dict(dataset.iter_meta_items())
+        meta_items = dict(dataset.meta_items())
         assert set(meta_items) == {
             'description',
             'schema.json',
@@ -551,7 +551,7 @@ def _test_pg_import(
     repo = pygit2.Repository(str(repo_path))
     dataset = structure.RepositoryStructure(repo)[table_name]
 
-    meta_items = dict(dataset.iter_meta_items())
+    meta_items = dict(dataset.meta_items())
     assert set(meta_items.keys()) == {
         'description',
         'schema.json',
@@ -851,7 +851,7 @@ def test_write_feature_performance(
                 if repo_version == "1":
                     kwargs = {
                         "geom_cols": source.geom_cols,
-                        "field_cid_map": source.field_cid_map,
+                        "field_cid_map": dataset.get_field_cid_map(source),
                         "primary_key": source.primary_key,
                         "cast_primary_key": False,
                     }
@@ -900,7 +900,7 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1
             assert dataset.version == int(repo_version)
-            assert list(dataset.iter_meta_items())
+            assert list(dataset.meta_items())
 
             # has the right number of features
             feature_count = sum(1 for f in dataset.features())

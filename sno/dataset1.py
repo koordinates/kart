@@ -41,8 +41,6 @@ class Dataset1(DatasetStructure):
     MSGPACK_EXT_GEOM = 71  # 'G'
     META_PATH = ".sno-table/meta/"
 
-    ALL_META_ITEMS = gpkg_adapter.GPKG_META_ITEMS
-
     def _msgpack_unpack_ext(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
             return Geometry.of(data)  # bytes
@@ -54,23 +52,25 @@ class Dataset1(DatasetStructure):
     def version(self):
         return 1
 
-    def iter_meta_items(self, include_hidden=False):
-        return gpkg_adapter.iter_v2_meta_items(self)
-
-    def iter_v1_meta_items(self):
-        yield from self._iter_meta_items()
+    def gpkg_meta_items(self):
+        yield from self._meta_items()
 
     @functools.lru_cache()
-    def get_meta_item(self, name):
+    def get_gpkg_meta_item(self, name):
         # Dataset V1 items are always JSON.
         try:
             return json.loads(super().get_meta_item(name))
         except KeyError:
             if gpkg_adapter.is_gpkg_meta_item(name):
                 return None  # We happen not to have this meta-item, but it is real.
-            elif gpkg_adapter.is_v2_meta_item(name):
-                return gpkg_adapter.generate_v2_meta_item(self, name)
             raise  # This meta-item doesn't exist at all.
+
+    def meta_items(self):
+        return gpkg_adapter.all_v2_meta_items(self)
+
+    @functools.lru_cache()
+    def get_meta_item(self, name):
+        return gpkg_adapter.generate_v2_meta_item(self, name)
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -102,7 +102,7 @@ class Dataset1(DatasetStructure):
 
     @property
     def primary_key(self):
-        return self.get_meta_item("primary_key")
+        return self.get_gpkg_meta_item("primary_key")
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -115,8 +115,8 @@ class Dataset1(DatasetStructure):
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key_type(self):
-        schema = self.get_meta_item("sqlite_table_info")
-        field = next(f for f in schema if f["name"] == self.primary_key)
+        sqlite_table_info = self.get_gpkg_meta_item("sqlite_table_info")
+        field = next(f for f in sqlite_table_info if f["name"] == self.primary_key)
         return field["type"]
 
     def cast_primary_key(self, pk_value):
@@ -338,17 +338,17 @@ class Dataset1(DatasetStructure):
                 primary_key
                 fields/
                   myfield
-        and includes source.iter_gpkg_meta_items()
+        and includes source.gpkg_meta_items()
         """
         yield ("version", self.VERSION_CONTENTS)
 
-        for colname, colid in source.field_cid_map.items():
-            yield (f"fields/{colname}", colid)
+        for i, column in enumerate(source.schema):
+            yield (f"fields/{column.name}", i)
 
         pk_field = source.primary_key
         yield ("primary_key", pk_field)
 
-        for name, value in source.iter_gpkg_meta_items():
+        for name, value in source.gpkg_meta_items():
             viter = value if isinstance(value, (list, tuple)) else [value]
 
             for v in viter:
@@ -369,6 +369,8 @@ class Dataset1(DatasetStructure):
         """For the given import source, yields the feature blobs that should be written."""
         pk_field = source.primary_key
 
+        field_cid_map = self.get_field_cid_map(source)
+
         for row in resultset:
             feature_path = self.encode_1pk_to_path(
                 row[pk_field], cast_primary_key=False
@@ -379,7 +381,7 @@ class Dataset1(DatasetStructure):
                 if field == pk_field:
                     continue
 
-                field_id = source.field_cid_map[field]
+                field_id = field_cid_map[field]
                 value = row[field]
                 if field in source.geom_cols:
                     if value is not None:
@@ -388,3 +390,6 @@ class Dataset1(DatasetStructure):
                 bin_feature[field_id] = value
 
             yield (feature_path, msgpack.packb(bin_feature, use_bin_type=True))
+
+    def get_field_cid_map(self, source):
+        return {column.name: i for i, column in enumerate(source.schema)}

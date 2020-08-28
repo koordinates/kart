@@ -205,7 +205,7 @@ class WorkingCopyGPKG(WorkingCopy):
     def _get_columns(self, dataset):
         pk_field = None
         cols = {}
-        for col in dataset.get_meta_item("sqlite_table_info"):
+        for col in dataset.get_gpkg_meta_item("sqlite_table_info"):
             col_spec = f"{gpkg.ident(col['name'])} {col['type']}"
             if col["pk"]:
                 col_spec += " PRIMARY KEY"
@@ -306,7 +306,7 @@ class WorkingCopyGPKG(WorkingCopy):
         gpkg_contents, gpkg_geometry_columns, gpkg_spatial_ref_sys, gpkg_metadata, gpkg_metadata_reference
         """
         table_name = dataset.name
-        gpkg_contents = dataset.get_meta_item("gpkg_contents")
+        gpkg_contents = dataset.get_gpkg_meta_item("gpkg_contents")
         gpkg_contents["table_name"] = table_name
 
         # FIXME: find a better way to roundtrip identifiers
@@ -316,8 +316,8 @@ class WorkingCopyGPKG(WorkingCopy):
                 identifier_prefix + gpkg_contents['identifier']
             )
 
-        gpkg_geometry_columns = dataset.get_meta_item("gpkg_geometry_columns")
-        gpkg_spatial_ref_sys = dataset.get_meta_item("gpkg_spatial_ref_sys")
+        gpkg_geometry_columns = dataset.get_gpkg_meta_item("gpkg_geometry_columns")
+        gpkg_spatial_ref_sys = dataset.get_gpkg_meta_item("gpkg_spatial_ref_sys")
 
         with self.session() as db:
             dbcur = db.cursor()
@@ -355,8 +355,10 @@ class WorkingCopyGPKG(WorkingCopy):
                 """
                 dbcur.execute(sql, values)
 
-            gpkg_metadata = dataset.get_meta_item("gpkg_metadata")
-            gpkg_metadata_reference = dataset.get_meta_item("gpkg_metadata_reference")
+            gpkg_metadata = dataset.get_gpkg_meta_item("gpkg_metadata")
+            gpkg_metadata_reference = dataset.get_gpkg_meta_item(
+                "gpkg_metadata_reference"
+            )
             if gpkg_metadata and gpkg_metadata_reference:
                 self._write_meta_metadata(
                     table_name, gpkg_metadata, gpkg_metadata_reference, db, dbcur
@@ -398,7 +400,7 @@ class WorkingCopyGPKG(WorkingCopy):
             """
             dbcur.execute(sql, values)
 
-    def iter_meta_items(self, dataset):
+    def meta_items(self, dataset):
         """
         Extract all the metadata of this GPKG and convert to dataset V2 format.
         Note that the extracted schema will not be aligned to any existing schema
@@ -406,7 +408,7 @@ class WorkingCopyGPKG(WorkingCopy):
         Calling Schema.align_* is required to find how the columns matches the existing schema.
         """
         with self.session() as db:
-            gpkg_meta_items = dict(gpkg.get_meta_info(db, dataset.name))
+            gpkg_meta_items = dict(gpkg.get_meta_items(db, dataset.name))
 
         class GpkgTableAsV1Dataset:
             def __init__(self, name, gpkg_meta_items):
@@ -424,7 +426,7 @@ class WorkingCopyGPKG(WorkingCopy):
         # for two unrelated columns.
         id_salt = f"{gpkg_name} {dataset.name} {self.get_db_tree()}"
 
-        yield from gpkg_adapter.iter_v2_meta_items(
+        yield from gpkg_adapter.all_v2_meta_items(
             GpkgTableAsV1Dataset(dataset.name, gpkg_meta_items), id_salt=id_salt
         )
 
@@ -780,8 +782,8 @@ class WorkingCopyGPKG(WorkingCopy):
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         How the metadata is formatted depends on the version of the dataset.
         """
-        meta_old = dict(dataset.iter_meta_items())
-        meta_new = dict(self.iter_meta_items(dataset))
+        meta_old = dict(dataset.meta_items())
+        meta_new = dict(self.meta_items(dataset))
         if "schema.json" in meta_old and "schema.json" in meta_new:
             Schema.align_schema_cols(meta_old["schema.json"], meta_new["schema.json"])
         return DeltaDiff.diff_dicts(meta_old, meta_new)

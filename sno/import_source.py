@@ -1,6 +1,7 @@
 import click
 import functools
 
+from . import gpkg_adapter
 from .meta_items import META_ITEM_NAMES
 from .schema import Schema
 
@@ -17,7 +18,7 @@ class ImportSource:
         dest_paths = {}
         for s1 in import_sources:
             s1.check_fully_specified()
-            dest_path = s1.dest_path.strip("/")
+            dest_path = s1.dest_path
             if dest_path not in dest_paths:
                 dest_paths[dest_path] = s1
             else:
@@ -44,6 +45,10 @@ class ImportSource:
             return self._dest_path
         return self.default_dest_path()
 
+    @dest_path.setter
+    def dest_path(self, dest_path):
+        self._dest_path = dest_path.strip("/")
+
     def default_dest_path(self):
         """
         The default destination path where this dataset should be imported.
@@ -51,9 +56,9 @@ class ImportSource:
         """
         raise NotImplementedError()
 
-    @dest_path.setter
-    def dest_path(self, dest_path):
-        self._dest_path = dest_path
+    @property
+    def dest_table_name(self):
+        return self.dest_path.replace("/", "__")
 
     def get_meta_item(self, name):
         """Find or generate a V2 meta item."""
@@ -61,29 +66,24 @@ class ImportSource:
         # >>> return gpkg_adapter.generate_v2_meta_item(self, name)
         raise NotImplementedError()
 
-    def get_gpkg_meta_item(self, name):
-        """Find or generate a gpkg / V1 meta item."""
-        # If self.get_meta_item works already, this method can be implemented as follows:
-        # >>> return gpkg_adapter.generate_gpkg_meta_item(self, name)
-
-        raise NotImplementedError()
-
-    def iter_meta_items(self):
+    def meta_items(self):
         """Iterates over all the meta items that need to be imported."""
         for name in META_ITEM_NAMES:
             meta_item = self.get_meta_item(name)
             if meta_item is not None:
                 yield name, meta_item
 
-        for identifier, definition in self.iter_crs_definitions():
+        for identifier, definition in self.crs_definitions():
             yield f"crs/{identifier}.wkt", definition
 
-    def iter_crs_definitions(self):
+    def crs_definitions(self):
         """
         Yields a (identifier, definition) tuple for every CRS definition.
         The identifier should be a string that uniquely identifies the CRS eg "EPSG:4326"
         The definition should be a string containing a WKT definition eg 'GEOGCS["WGS 84"...'
         """
+        # If self.get_gpkg_meta_item works already, this method can be implemented as follows:
+        # >>> return gpkg_adapter.all_v2_crs_definitions(self)
         raise NotImplementedError()
 
     def get_crs_definition(self, identifier=None):
@@ -92,15 +92,32 @@ class ImportSource:
         or the only CRS definition if no identifer is supplied.
         """
         # Subclasses may overrdie this to make it more efficient.
-        all_crs_definitions = dict(self.iter_crs_definitions())
+        crs_definitions_dict = dict(self.crs_definitions())
         if identifier is not None:
-            return all_crs_definitions[identifier]
-        num_defs = len(all_crs_definitions)
+            if identifier.startswith("crs/") and identifier.endswith(".wkt"):
+                identifier = identifier[4:-4]
+            return crs_definitions_dict[identifier]
+
+        num_defs = len(crs_definitions_dict)
         if num_defs == 1:
-            return next(iter(all_crs_definitions.values()))
+            return next(iter(crs_definitions_dict.values()))
         raise ValueError(
             f"get_crs_definition() only works when there is exactly 1 CRS definition, but there is {num_defs}"
         )
+
+    def get_gpkg_meta_item(self, name):
+        """Find or generate a gpkg / V1 meta item."""
+        # If self.get_meta_item works already, this method can be implemented as follows:
+        # >>> return gpkg_adapter.generate_gpkg_meta_item(self, name)
+
+        raise NotImplementedError()
+
+    def gpkg_meta_items(self):
+        """Iterates over all gpkg meta items that need to be imported for V1."""
+        for name in gpkg_adapter.GPKG_META_ITEM_NAMES:
+            meta_item = self.get_gpkg_meta_item(name)
+            if meta_item is not None:
+                yield name, meta_item
 
     @property
     @functools.lru_cache(maxsize=1)

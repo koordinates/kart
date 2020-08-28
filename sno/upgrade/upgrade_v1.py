@@ -1,7 +1,7 @@
+from sno import gpkg_adapter
 from sno.geometry import normalise_gpkg_geom
 from sno.import_source import ImportSource
 from sno.structure import RepositoryStructure
-from sno.gpkg_adapter import wkt_to_crs_str
 
 
 def get_upgrade_sources(source_repo, source_commit):
@@ -24,13 +24,10 @@ class ImportV1Dataset(ImportSource):
         return self.dataset.get_meta_item(key)
 
     def get_gpkg_meta_item(self, key):
-        return self.dataset.get_meta_item(key)
+        return self.dataset.get_gpkg_meta_item(key)
 
     def crs_definitions(self):
-        gsrs = self.dataset.get_meta_item("gpkg_spatial_ref_sys")
-        if gsrs and gsrs[0]["definition"]:
-            definition = gsrs[0]["definition"]
-            yield wkt_to_crs_str(definition), definition
+        return gpkg_adapter.all_v2_crs_definitions(self)
 
     def features(self):
         geom_column = self.dataset.geom_column_name

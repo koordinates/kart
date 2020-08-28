@@ -3,6 +3,8 @@ import os
 
 import pygit2
 
+from . import gpkg_adapter
+from .meta_items import META_ITEM_NAMES
 from .structure import DatasetStructure
 from .schema import Legend, Schema
 from .serialise_util import (
@@ -86,7 +88,7 @@ class Dataset2(DatasetStructure):
     def feature_tree(self):
         return self.tree / self.FEATURE_PATH
 
-    def get_data_at(self, rel_path, as_memoryview=False):
+    def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False):
         """
         Return the data at the given relative path from within this dataset.
 
@@ -113,37 +115,34 @@ class Dataset2(DatasetStructure):
                         pass
         # if we got here, that means leaf wasn't a blob, or one of the above
         # exceptions happened...
+        if missing_ok:
+            return None
         raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
 
-    def iter_meta_items(self, include_hidden=False):
+    def meta_items(self, include_hidden=False):
         exclude = () if include_hidden else ("legend", "version")
-        return self._iter_meta_items(exclude=exclude)
+        return self._meta_items(exclude=exclude)
 
     @functools.lru_cache()
     def get_meta_item(self, name):
         if name == "version":
             return 2
-        try:
-            rel_path = self.META_PATH + name
-            data = self.get_data_at(rel_path)
 
-            # TODO - make schema path end with ".json"?
-            if rel_path == self.SCHEMA_PATH or rel_path.endswith(".json"):
-                return json_unpack(data)
-            elif not rel_path.startswith(self.LEGEND_PATH):
-                return ensure_text(data)
-            else:
-                return data
+        rel_path = self.META_PATH + name
+        data = self.get_data_at(rel_path, missing_ok=name in META_ITEM_NAMES)
+        if data is None:
+            return data
 
-        except KeyError:
-            from . import gpkg_adapter
+        if rel_path.endswith(".json"):
+            return json_unpack(data)
+        elif rel_path.startswith(self.LEGEND_PATH):
+            return data
+        else:
+            return ensure_text(data)
 
-            if name in gpkg_adapter.V2_META_ITEMS:
-                return None  # We happen not to have this meta-item, but it is real.
-            elif gpkg_adapter.is_gpkg_meta_item(name):
-                # These items are not stored, but generated from other items that are stored.
-                return gpkg_adapter.generate_gpkg_meta_item(self, name)
-            raise  # This meta-item doesn't exist at all.
+    @functools.lru_cache()
+    def get_gpkg_meta_item(self, name):
+        return gpkg_adapter.generate_gpkg_meta_item(self, name)
 
     def crs_definitions(self):
         """Return all stored crs definitions in a dict."""

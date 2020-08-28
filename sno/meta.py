@@ -65,22 +65,10 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
 
     all_items = {}
     for ds in datasets:
-        items = {}
-        all_items[ds.path] = items
         if keys:
-            missing_keys = []
-            for key in keys:
-                try:
-                    items[key] = ds.get_meta_item(key)
-                except KeyError:
-                    missing_keys.append(key)
-
-            if missing_keys:
-                raise click.UsageError(
-                    f"Couldn't find items: {', '.join(sorted(missing_keys))}"
-                )
+            all_items[ds.path] = get_meta_items(ds, keys)
         else:
-            items.update(dict(ds.iter_meta_items()))
+            all_items[ds.path] = dict(ds.meta_items())
 
     if output_format == 'text':
         for ds_path, items in all_items.items():
@@ -95,6 +83,24 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
                     fp.write(wrap_text_to_terminal(value, indent='        '))
     else:
         dump_json_output(all_items, fp, json_style=json_style)
+
+
+def get_meta_items(ds, keys):
+    items = {}
+    for key in keys:
+        for func in (ds.get_meta_item, ds.get_gpkg_meta_item):
+            try:
+                items[key] = func(key)
+                break
+            except KeyError:
+                continue
+
+    missing_keys = list(keys - items.keys())
+    if missing_keys:
+        raise click.UsageError(
+            f"Couldn't find items: {', '.join(sorted(missing_keys))}"
+        )
+    return items
 
 
 class KeyValueType(click.ParamType):
@@ -147,7 +153,7 @@ def meta_set(ctx, message, dataset, items):
     if message is None:
         message = f'Update metadata for {dataset}'
 
-    existing_meta_items = dict(ds.iter_meta_items())
+    existing_meta_items = dict(ds.meta_items())
 
     def _meta_change_dict(key, value):
         change = {

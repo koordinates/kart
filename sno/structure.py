@@ -327,7 +327,7 @@ class DatasetStructure:
     def meta_tree(self):
         return self.tree / self.META_PATH
 
-    def _iter_meta_items(self, exclude=()):
+    def _meta_items(self, exclude=()):
         """Iterate over all meta items found in the meta tree."""
         exclude = set(exclude)
         for top_tree, top_path, subtree_names, blob_names in core.walk_tree(
@@ -342,14 +342,14 @@ class DatasetStructure:
 
             subtree_names[:] = [n for n in subtree_names if n not in exclude]
 
-    def iter_meta_items(self):
+    def meta_items(self):
         """
         Iterates through all meta items as (name, contents) tuples.
         This implementation returns everything stored in the meta tree.
         Subclasses can extend to also return generated meta-items,
         or to hide meta-items that are implementation details.
         """
-        yield from self._iter_meta_items()
+        yield from self._meta_items()
 
     def get_meta_item(self, name, missing_ok=False):
         """
@@ -374,7 +374,7 @@ class DatasetStructure:
     @property
     @functools.lru_cache(maxsize=1)
     def geom_column_name(self):
-        meta_geom = self.get_meta_item("gpkg_geometry_columns")
+        meta_geom = self.get_gpkg_meta_item("gpkg_geometry_columns")
         return meta_geom["column_name"] if meta_geom else None
 
     def get_crs_definition(self, crs_name):
@@ -596,8 +596,8 @@ class DatasetStructure:
         else:
             old, new = self, other
 
-        meta_old = dict(old.iter_meta_items()) if old else {}
-        meta_new = dict(new.iter_meta_items()) if new else {}
+        meta_old = dict(old.meta_items()) if old else {}
+        meta_new = dict(new.meta_items()) if new else {}
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def _recursive_build_feature_tree(
