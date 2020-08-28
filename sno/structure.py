@@ -20,6 +20,7 @@ from .geometry import geom_envelope
 from .schema import Schema
 from .serialise_util import ensure_bytes, json_pack
 from .repository_version import get_repo_version
+from .tree_util import replace_subtree
 
 
 L = logging.getLogger("sno.structure")
@@ -197,21 +198,18 @@ class RepositoryStructure:
         If orig_tree is not None, the diff is applied from that tree.
         Otherwise, uses the tree at the head of the repo.
         """
-        if orig_tree is None:
-            orig_tree = self.tree
+        tree = orig_tree
+        if tree is None:
+            tree = self.tree
 
-        git_index = pygit2.Index()
-        git_index.read_tree(orig_tree)
-
-        for ds in self.iter_at(orig_tree):
+        for ds in self.iter_at(tree):
             ds_diff = diff.get(ds.path)
             if ds_diff:
-                ds.write_index(ds_diff, git_index, self.repo)
+                new_tree_oid = ds.write_to_new_tree(ds_diff, self.repo, orig_tree=tree)
+                tree = self.repo.get(new_tree_oid)
 
-        L.info("Writing tree...")
-        new_tree_oid = git_index.write_tree(self.repo)
-        L.info(f"Tree sha: {new_tree_oid}")
-        return new_tree_oid
+        L.info(f"Tree sha: {tree.oid}")
+        return tree.oid
 
     def commit(
         self, wcdiff, message, *, author=None, committer=None, allow_empty=False,
@@ -602,11 +600,112 @@ class DatasetStructure:
         meta_new = dict(new.iter_meta_items()) if new else {}
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
-    def write_index(self, dataset_diff, index, repo):
+    def _recursive_build_feature_tree(
+        self, *, repo, orig_tree, deltas_dict, encode_kwargs, pk_field, geom_column_name
+    ):
         """
-        Given a diff that only affects this dataset, write it to the given index + repo.
-        Blobs will be created in the repo, and referenced in the index, but the index is
-        not committed - this is the responsibility of the caller.
+        Recursively builds a new tree object by applying deltas to the orig_tree.
+        """
+        conflicts = False
+        if orig_tree is None:
+            builder = repo.TreeBuilder()
+        else:
+            builder = repo.TreeBuilder(orig_tree)
+        for k, v in deltas_dict.items():
+            if isinstance(v, dict):
+                orig_subtree = None
+                if orig_tree is not None:
+                    try:
+                        orig_subtree = orig_tree / k
+                    except KeyError:
+                        pass
+
+                new_subtree, new_conflicts = self._recursive_build_feature_tree(
+                    repo=repo,
+                    orig_tree=orig_subtree,
+                    deltas_dict=v,
+                    encode_kwargs=encode_kwargs,
+                    pk_field=pk_field,
+                    geom_column_name=geom_column_name,
+                )
+                conflicts = conflicts or new_conflicts
+                if new_subtree != orig_subtree:
+                    if orig_tree is not None and k in orig_tree:
+                        builder.remove(k)
+                    builder.insert(k, new_subtree, pygit2.GIT_FILEMODE_TREE)
+            else:
+                # actually apply blob deltas
+                delta = v
+                if delta.type == "delete":
+                    if (not orig_tree) or k not in orig_tree:
+                        conflicts = True
+                        pk = delta.old.value[pk_field]
+                        click.echo(
+                            f"{self.path}: Trying to delete nonexistent feature: {pk}"
+                        )
+                        continue
+                    builder.remove(k)
+
+                elif delta.type == "insert":
+                    feature_path, feature_data = self.encode_feature(
+                        delta.new.value, **encode_kwargs
+                    )
+                    if orig_tree and k in orig_tree:
+                        conflicts = True
+                        pk = delta.new.value[pk_field]
+                        click.echo(
+                            f"{self.path}: Trying to create feature that already exists: {pk}"
+                        )
+                        continue
+                    blob_id = repo.create_blob(feature_data)
+                    builder.insert(k, blob_id, pygit2.GIT_FILEMODE_BLOB)
+
+                elif delta.type == "update":
+                    pk = self.decode_path_to_1pk(k)
+                    old_pk = delta.old.value[pk_field]
+                    if pk == old_pk:
+                        # k refers to the *old* object
+                        # (it *may* also be the new object if this isn't a rename)
+                        if (not orig_tree) or k not in orig_tree:
+                            conflicts = True
+                            click.echo(
+                                f"{self.path}: Trying to update nonexistent feature: {old_pk}"
+                            )
+                            continue
+                        actual_existing_feature = self.get_feature(old_pk)
+                        old_feature = delta.old.value
+                        if geom_column_name:
+                            # FIXME: actually compare the geometries here.
+                            # Turns out this is quite hard - geometries are hard to compare sanely.
+                            # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
+                            # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
+                            actual_existing_feature.pop(geom_column_name)
+                            old_feature = old_feature.copy()
+                            old_feature.pop(geom_column_name)
+                        if actual_existing_feature != old_feature:
+                            conflicts = True
+                            click.echo(
+                                f"{self.path}: Trying to update already-changed feature: {old_pk}"
+                            )
+                            continue
+                        builder.remove(k)
+
+                    new_pk = delta.new.value[pk_field]
+                    if pk == new_pk:
+                        # k refers to the *old* object
+                        # (it *may* also be the old object if this isn't a rename)
+                        new_feature_path, new_feature_data = self.encode_feature(
+                            delta.new.value, **encode_kwargs
+                        )
+                        blob_id = repo.create_blob(new_feature_data)
+                        builder.insert(k, blob_id, pygit2.GIT_FILEMODE_BLOB)
+        return builder.write(), conflicts
+
+    def write_to_new_tree(self, dataset_diff, repo, *, orig_tree):
+        """
+        Given a diff that only affects this dataset, write it to the given treebuilder.
+        Blobs will be created in the repo, and referenced in the returned tree, but
+        no commit is created - this is the responsibility of the caller.
         """
         # TODO - support multiple primary keys.
         # TODO - support writing new schemas
@@ -620,35 +719,35 @@ class DatasetStructure:
                 f"Meta changes are not supported for version {self.version}"
             )
 
+        meta_path = self.full_path(self.META_PATH)
+        meta_tree = orig_tree / meta_path
         for delta in dataset_diff.get("meta", {}).values():
             name = delta.key
-            rel_path = f"{self.META_PATH}{name}"
-            full_path = self.full_path(rel_path)
+
             if delta.type == "delete":
-                if full_path not in index:
+                if name not in meta_tree:
                     conflicts = True
                     click.echo(
                         f"{self.path}: Trying to delete nonexistent meta item: {name}"
                     )
                     continue
-                index.remove(full_path)
+                meta_tree = replace_subtree(repo, meta_tree, name, None)
 
             elif delta.type == "insert":
-                if full_path in index:
+                if name in meta_tree:
                     conflicts = True
                     click.echo(
                         f"{self.path}: Trying to create meta item that already exists: {name}"
                     )
                     continue
-                if full_path.endswith(".json"):
+                if name.endswith(".json"):
                     blob_id = repo.create_blob(json_pack(delta.new.value))
                 else:
                     blob_id = repo.create_blob(ensure_bytes(delta.new.value))
-                entry = pygit2.IndexEntry(full_path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-                index.add(entry)
+                meta_tree = replace_subtree(repo, meta_tree, name, blob_id)
 
             elif delta.type == "update":
-                if full_path not in index:
+                if name not in meta_tree:
                     conflicts = True
                     click.echo(
                         f"{self.path}: Trying to update nonexistent meta item: {name}"
@@ -661,7 +760,7 @@ class DatasetStructure:
                         f"{self.path}: Trying to update already-changed meta item: {name}"
                     )
                     continue
-                index.remove(full_path)
+                meta_tree = replace_subtree(repo, meta_tree, name, None)
                 if name == "schema.json":
                     old_schema = Schema.from_column_dicts(delta.old.value)
                     new_schema = Schema.from_column_dicts(delta.new.value)
@@ -671,87 +770,50 @@ class DatasetStructure:
                         )
 
                     encode_kwargs = {"schema": new_schema}
-                    to_write = [
-                        self.encode_schema(new_schema),
-                        self.encode_legend(new_schema.legend),
-                    ]
-                elif full_path.endswith(".json"):
-                    to_write = [(full_path, json_pack(delta.new.value))]
+                    to_write = []
+                    key, value = self.encode_schema(new_schema)
+                    to_write.append((key[len(meta_path) :].lstrip('/'), value))
+                    key, value = self.encode_legend(new_schema.legend)
+                    to_write.append((key[len(meta_path) :].lstrip('/'), value))
+                elif name.endswith(".json"):
+                    to_write = [(name, json_pack(delta.new.value))]
                 else:
-                    to_write = [(full_path, ensure_bytes(delta.new.value))]
+                    to_write = [(name, ensure_bytes(delta.new.value))]
                 for path, data in to_write:
                     blob_id = repo.create_blob(data)
-                    entry = pygit2.IndexEntry(path, blob_id, pygit2.GIT_FILEMODE_BLOB)
-                    index.add(entry)
+                    meta_tree = replace_subtree(repo, meta_tree, path, blob_id)
+
+        orig_tree = replace_subtree(repo, orig_tree, meta_path, meta_tree)
 
         geom_column_name = self.geom_column_name
+        deltas_by_directory = {}
         for delta in dataset_diff.get("feature", {}).values():
             if delta.type == "delete":
-                pk = delta.old.value[pk_field]
-                feature_path = self.encode_1pk_to_path(pk)
-                if feature_path not in index:
-                    conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to delete nonexistent feature: {pk}"
-                    )
-                    continue
-                index.remove(feature_path)
-
+                pks = {delta.old.value[pk_field]}
             elif delta.type == "insert":
-                pk = delta.new.value[pk_field]
-                feature_path, feature_data = self.encode_feature(
-                    delta.new.value, **encode_kwargs
-                )
-                if feature_path in index:
-                    conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to create feature that already exists: {pk}"
-                    )
-                    continue
-                blob_id = repo.create_blob(feature_data)
-                entry = pygit2.IndexEntry(
-                    feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-                )
-                index.add(entry)
-
+                pks = {delta.new.value[pk_field]}
             elif delta.type == "update":
-                old_pk = delta.old.value[pk_field]
-                old_feature_path = self.encode_1pk_to_path(old_pk)
-                if old_feature_path not in index:
-                    conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to update nonexistent feature: {old_pk}"
-                    )
-                    continue
+                pks = {delta.old.value[pk_field], delta.new.value[pk_field]}
 
-                actual_existing_feature = self.get_feature(old_pk)
-                old_feature = delta.old.value
-                if geom_column_name:
-                    # FIXME: actually compare the geometries here.
-                    # Turns out this is quite hard - geometries are hard to compare sanely.
-                    # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
-                    # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
-                    actual_existing_feature.pop(geom_column_name)
-                    old_feature = old_feature.copy()
-                    old_feature.pop(geom_column_name)
-                if actual_existing_feature != old_feature:
-                    conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to update already-changed feature: {old_pk}"
-                    )
-                    continue
+            for pk in pks:
+                feature_path = self.encode_1pk_to_path(pk)
+                pieces = feature_path.rsplit('/')
+                dir_ = deltas_by_directory
+                for piece in pieces[:-1]:
+                    dir_ = dir_.setdefault(piece, {})
+                dir_[pieces[-1]] = delta
 
-                index.remove(old_feature_path)
-                new_feature_path, new_feature_data = self.encode_feature(
-                    delta.new.value, **encode_kwargs
-                )
-                blob_id = repo.create_blob(new_feature_data)
-                entry = pygit2.IndexEntry(
-                    new_feature_path, blob_id, pygit2.GIT_FILEMODE_BLOB
-                )
-                index.add(entry)
+        new_tree, conflicts = self._recursive_build_feature_tree(
+            orig_tree=orig_tree,
+            repo=repo,
+            deltas_dict=deltas_by_directory,
+            encode_kwargs=encode_kwargs,
+            pk_field=pk_field,
+            geom_column_name=geom_column_name,
+        )
 
         if conflicts:
             raise InvalidOperation(
                 "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
             )
+        return new_tree
