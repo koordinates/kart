@@ -17,6 +17,10 @@ class BaseDataset(ImportSource):
         self.name = self.path.replace("/", "__")
         self.L = logging.getLogger(self.__class__.__qualname__)
 
+    def default_dest_path(self):
+        # ImportSource method - by default, a dataset should import with the same path it already has.
+        return self.path
+
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):

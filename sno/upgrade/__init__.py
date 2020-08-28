@@ -126,7 +126,7 @@ def _upgrade_commit(
 
     sources = _get_upgrade_sources(source_repo, source_commit, source_version)
     dataset_count = len(sources)
-    feature_count = sum(s.row_count for s in sources.values())
+    feature_count = sum(s.feature_count for s in sources)
 
     s = source_commit
     author_time = _raw_time(s.author.time, s.author.offset)

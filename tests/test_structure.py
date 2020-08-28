@@ -14,6 +14,7 @@ from sno import gpkg, structure, fast_import
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
+from sno.exceptions import INVALID_OPERATION
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from sno.repository_version import REPO_VERSIONS_CHOICE
 
@@ -764,11 +765,10 @@ def test_import_multiple(
                 assert len([c for c in repo.walk(repo.head.target)]) == i + 1
 
                 if i + 1 == len(LAYERS):
-                    # importing to an existing path/layer should fail
-                    with pytest.raises(ValueError, match=f"{table}/ already exists"):
-                        r = cli_runner.invoke(
-                            ["import", f"GPKG:{data / source_gpkg}", table]
-                        )
+                    r = cli_runner.invoke(
+                        ["import", f"GPKG:{data / source_gpkg}", table]
+                    )
+                    assert r.exit_code == INVALID_OPERATION
 
     # has two commits
     assert len([c for c in repo.walk(repo.head.target)]) == len(LAYERS)
@@ -844,7 +844,7 @@ def test_write_feature_performance(
                 dataset = structure.DatasetStructure.for_version(repo_version)(
                     None, table
                 )
-                feature_iter = itertools.cycle(source.iter_features())
+                feature_iter = itertools.cycle(source.features())
 
                 index = pygit2.Index()
 
@@ -889,7 +889,7 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
                 data / "nz-pa-points-topo-150k.gpkg", table=table
             )
 
-            fast_import.fast_import_tables(repo, {table: source})
+            fast_import.fast_import_tables(repo, [source])
 
             assert not repo.is_empty
             assert repo.head.name == "refs/heads/master"
@@ -904,4 +904,4 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
 
             # has the right number of features
             feature_count = sum(1 for f in dataset.features())
-            assert feature_count == source.row_count
+            assert feature_count == source.feature_count

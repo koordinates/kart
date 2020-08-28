@@ -7,14 +7,13 @@ import pygit2
 
 from sno import gpkg_adapter
 from sno.geometry import normalise_gpkg_geom
-from sno.schema import Schema
 from sno.base_dataset import BaseDataset
 
 
 def get_upgrade_sources(source_repo, source_commit):
     """Return upgrade sources for all V0 datasets at the given commit."""
     source_tree = source_commit.peel(pygit2.Tree)
-    return {dataset.path: dataset for dataset in _iter_datasets(source_tree)}
+    return list(_iter_datasets(source_tree))
 
 
 def _iter_datasets(tree):
@@ -98,7 +97,7 @@ class Dataset0(BaseDataset):
             definition = gsrs[0]["definition"]
             yield gpkg_adapter.wkt_to_crs_str(definition), definition
 
-    def iter_features(self):
+    def features(self):
         ggc = self.get_gpkg_meta_item("gpkg_geometry_columns")
         geom_field = ggc["column_name"] if ggc else None
 

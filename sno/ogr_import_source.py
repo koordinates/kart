@@ -2,6 +2,7 @@ import functools
 import os
 import re
 import sys
+from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 
@@ -23,6 +24,7 @@ from .gpkg_adapter import (
     osgeo_to_gpkg_spatial_ref_sys,
     osgeo_to_crs_str,
 )
+from .import_source import ImportSource
 from .ogr_util import adapt_value_noop, get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
@@ -43,7 +45,7 @@ FORMAT_TO_OGR_MAP = {
 LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {'PG'}
 
 
-class OgrImportSource:
+class OgrImportSource(ImportSource):
     """
     Imports from an OGR source, currently from a whitelist of formats.
     """
@@ -212,6 +214,28 @@ class OgrImportSource:
             k: v for k, v in meta_overrides.items() if v is not None
         }
 
+    def default_dest_path(self):
+        return self.table
+
+    def import_source_desc(self):
+        return f"Import from {self.source_name}:{self.table} to {self.dest_path}/"
+
+    def aggregate_import_source_desc(self, import_sources):
+        if len(import_sources) == 1:
+            return next(iter(import_sources)).import_source_desc()
+
+        desc = f"Import {len(import_sources)} datasets from {self.source_name}:"
+        for source in import_sources:
+            if source.dest_path == source.table:
+                desc += f"\n * {source.table}/"
+            else:
+                desc += f"\n * {source.dest_path} (from {source.table})"
+        return desc
+
+    @property
+    def source_name(self):
+        return Path(self.source).name
+
     def clone_for_table(self, table, primary_key=None, **meta_overrides):
         meta_overrides = {**self._meta_overrides, **meta_overrides}
         return self.__class__(
@@ -294,7 +318,7 @@ class OgrImportSource:
 
     @property
     @functools.lru_cache(maxsize=1)
-    def row_count(self):
+    def feature_count(self):
         return self.ogrlayer.GetFeatureCount(force=False)
 
     @property
@@ -426,7 +450,7 @@ class OgrImportSource:
             # Turn an OGRFeature into a name:value dict
             yield f
 
-    def iter_features(self):
+    def features(self):
         for ogr_feature in self._iter_ogr_features():
             yield self._ogr_feature_to_sno_feature(ogr_feature)
 
@@ -687,7 +711,7 @@ class GPKGImportSource(OgrImportSource):
             else:
                 yield key, value
 
-    def iter_features(self):
+    def features(self):
         """
         Overrides the super implementation for performance reasons
         (it turns out that OGR feature iterators for GPKG are quite slow!)

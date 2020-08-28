@@ -1,3 +1,4 @@
+import click
 import functools
 
 from .meta_items import META_ITEM_NAMES
@@ -10,18 +11,45 @@ class ImportSource:
     A read-only interface.
     """
 
+    @classmethod
+    def check_valid(cls, import_sources, param_hint=None):
+        """Given an iterable of ImportSources, checks that all are fully specified and none of their dest_paths collide."""
+        dest_paths = {}
+        for s1 in import_sources:
+            s1.check_fully_specified()
+            dest_path = s1.dest_path.strip("/")
+            if dest_path not in dest_paths:
+                dest_paths[dest_path] = s1
+            else:
+                s2 = dest_paths[dest_path]
+                raise click.BadParameter(
+                    f"Can't import both {s1} and {s2} as {dest_path}",
+                    param_hint=param_hint,
+                )
+
+    def check_fully_specified(self):
+        """
+        Some ImportSources can be constructed only partially specified, but they will not work as an import source
+        until they are fully specified. This checks that self is fully specified and raises an error if it is not.
+        """
+        pass
+
     @property
     def dest_path(self):
         """
         The destination path where this dataset should be imported.
-        Defaults to self.path if nothing else is set, which works for dataset-like objects that already have a path.
+        ImportSource.dest_path can be set, otherwise defaults to ImportSource.default_dest_path()
         """
         if hasattr(self, "_dest_path"):
             return self._dest_path
-        elif hasattr(self, "path"):
-            return self.path
-        else:
-            raise ValueError(f"No dest_path is set for {self}")
+        return self.default_dest_path()
+
+    def default_dest_path(self):
+        """
+        The default destination path where this dataset should be imported.
+        This should be generated based on the source path / source table name of the ImportSource.
+        """
+        raise NotImplementedError()
 
     @dest_path.setter
     def dest_path(self, dest_path):
@@ -116,11 +144,12 @@ class ImportSource:
     def import_source_desc(self):
         """Return a description of this ImportSource."""
         # Subclasses should override if str() does not return the right information.
-        return str(self)
+        return f"Import from {self} to {self.dest_path}/"
 
     def aggregate_import_source_desc(self, import_sources):
         """
-        Return a description of this collection of import_sources. For example:
+        Return a description of this collection of import_sources (which should contain self).
+        For example:
 
         Import 3 datasets from example.gpkg:
         first_table

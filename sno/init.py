@@ -12,6 +12,7 @@ from . import checkout
 from .core import check_git_user
 from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromFile
 from .exceptions import InvalidOperation
+from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .fast_import import fast_import_tables
 from .structure import RepositoryStructure
@@ -190,48 +191,48 @@ def import_table(
         repo = ctx.obj.repo
         check_git_user(repo)
 
-    source_loader = OgrImportSource.open(source, None)
+    base_import_source = OgrImportSource.open(source, None)
     if do_list:
-        source_loader.print_table_list(do_json=output_format == 'json')
+        base_import_source.print_table_list(do_json=output_format == 'json')
         return
     elif all_tables:
-        tables = source_loader.get_tables().keys()
+        tables = base_import_source.get_tables().keys()
     else:
         if not tables:
-            tables = [source_loader.prompt_for_table("Select a table to import")]
+            tables = [base_import_source.prompt_for_table("Select a table to import")]
 
-    loaders = {}
+    import_sources = []
     for table in tables:
         (src_table, *rest) = table.split(':', 1)
-        dst_table = rest[0] if rest else src_table
-        if not dst_table:
+        dest_path = rest[0] if rest else src_table
+        if not dest_path:
             raise click.BadParameter("Invalid table name", param_hint="tables")
         if is_windows:
-            dst_table = dst_table.replace("\\", "/")  # git paths use / as a delimiter
+            dest_path = dest_path.replace("\\", "/")  # git paths use / as a delimiter
 
-        if dst_table in loaders:
-            raise click.UsageError(
-                f'table "{dst_table}" was specified more than once', param_hint="tables"
-            )
-        info = table_info.get(dst_table, {})
-        loaders[dst_table] = source_loader.clone_for_table(
+        info = table_info.get(dest_path, {})
+        import_source = base_import_source.clone_for_table(
             src_table,
             primary_key=primary_key,
             title=info.get('title'),
             description=info.get('description'),
             xml_metadata=info.get('xmlMetadata'),
         )
+        import_source.dest_path = dest_path
+        import_sources.append(import_source)
+
+    ImportSource.check_valid(import_sources, param_hint="tables")
 
     # Workaround the fact that fast import doesn't work when head is detached.
     ctx = temporary_branch(repo) if repo.head_is_detached else contextlib.nullcontext()
 
     with ctx:
         fast_import_tables(
-            repo, loaders, message=message, max_delta_depth=max_delta_depth,
+            repo, import_sources, message=message, max_delta_depth=max_delta_depth,
         )
 
     rs = RepositoryStructure(repo)
-    _add_datasets_to_working_copy(repo, *[rs[dst_table] for dst_table in loaders])
+    _add_datasets_to_working_copy(repo, *[rs[s.dest_path] for s in import_sources])
 
 
 @click.command()
@@ -295,13 +296,13 @@ def init(
 
     if import_from:
         check_git_user(repo=None)
-        source_loader = OgrImportSource.open(import_from, None)
+        base_source = OgrImportSource.open(import_from, None)
 
         # Import all tables.
         # If you need finer grained control than this,
         # use `sno init` and *then* `sno import` as a separate command.
-        tables = source_loader.get_tables().keys()
-        loaders = {t: source_loader.clone_for_table(t) for t in tables}
+        tables = base_source.get_tables().keys()
+        sources = [base_source.clone_for_table(t) for t in tables]
 
     # Create the repository
     repo = pygit2.init_repository(str(repo_path), bare=True)
@@ -310,7 +311,7 @@ def init(
 
     if import_from:
         fast_import_tables(
-            repo, loaders, message=message, max_delta_depth=max_delta_depth,
+            repo, sources, message=message, max_delta_depth=max_delta_depth,
         )
         head_commit = repo.head.peel(pygit2.Commit)
         checkout.reset_wc_if_needed(repo, head_commit)

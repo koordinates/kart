@@ -1,12 +1,12 @@
 import logging
 import subprocess
 import time
-from pathlib import Path
 
 import click
 import pygit2
 
 from .exceptions import SubprocessError, InvalidOperation
+from .import_source import ImportSource
 from .structure import DatasetStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
 
@@ -32,7 +32,7 @@ def fast_import_tables(
     Imports all of the given sources as new datasets, and commit the result.
 
     repo - the sno repo to import into.
-    sources - a dict of {path:import-source} where path is the target dataset path to import to
+    sources - an iterable of ImportSource objects. Each source is to be imported to source.dest_path.
     incremental - True if the resulting commit should contain everything already at HEAD plus the new datasets,
         False if the resulting commit should only contain the new datasets.
     quiet - if True, no progress information is printed to stdout.
@@ -56,12 +56,12 @@ def fast_import_tables(
         # Starting from a repo with commits. Make sure we have a matching version.
         repo_version = get_repo_version(repo, head_tree)
 
-    for path, source in sources.items():
-        if not source.table:
-            raise ValueError("No table specified")
-
-        if incremental and path in head_tree:
-            raise ValueError(f"{path}/ already exists")
+    ImportSource.check_valid(sources)
+    for source in sources:
+        if incremental and source.dest_path in head_tree:
+            raise InvalidOperation(
+                f"Cannot import to {source.dest_path}/ - already exists in repository"
+            )
 
     cmd = [
         "git",
@@ -90,21 +90,23 @@ def fast_import_tables(
             if incremental and blob_path in head_tree:
                 raise ValueError(f"{blob_path} already exists")
 
-        for path, source in sources.items():
-            dataset = DatasetStructure.for_version(repo_version)(tree=None, path=path)
+        for source in sources:
+            dataset = DatasetStructure.for_version(repo_version)(
+                tree=None, path=source.dest_path
+            )
 
             with source:
                 if limit:
-                    num_rows = min(limit, source.row_count)
-                    click.echo(
-                        f"Importing {num_rows:,d} of {source.row_count:,d} features from {source} to {path}/ ..."
-                    )
+                    num_rows = min(limit, source.feature_count)
+                    num_rows_text = f"{num_rows:,d} of {source.feature_count:,d}"
                 else:
-                    num_rows = source.row_count
-                    if not quiet:
-                        click.echo(
-                            f"Importing {num_rows:,d} features from {source} to {path}/ ..."
-                        )
+                    num_rows = source.feature_count
+                    num_rows_text = f"{num_rows:,d}"
+
+                if not quiet:
+                    click.echo(
+                        f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
+                    )
 
                 for i, blob_path in write_blobs_to_stream(
                     p.stdin, dataset.import_iter_meta_blobs(repo, source)
@@ -113,7 +115,7 @@ def fast_import_tables(
 
                 # features
                 t1 = time.monotonic()
-                src_iterator = source.iter_features()
+                src_iterator = source.features()
 
                 for i, blob_path in write_blobs_to_stream(
                     p.stdin, dataset.import_iter_feature_blobs(src_iterator, source)
@@ -191,6 +193,10 @@ def generate_header(repo, sources, message):
 
 
 def generate_message(sources):
+    first_source = next(iter(sources))
+    return first_source.aggregate_import_source_desc(sources)
+
+    """
     if len(sources) == 1:
         for path, source in sources.items():
             message = f"Import from {Path(source.source).name} to {path}/"
@@ -203,3 +209,4 @@ def generate_message(sources):
             else:
                 message += f"\n* {path} (from {source.table})"
     return message
+    """
