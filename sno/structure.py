@@ -69,6 +69,8 @@ class RepositoryStructure:
 
     def __getitem__(self, path):
         """ Get a specific dataset by path """
+        if self.tree is None:
+            raise KeyError(path)
         return self.get_at(path, self.tree)
 
     def __eq__(self, other):
@@ -105,6 +107,8 @@ class RepositoryStructure:
         return (dataset_path,) + self.get(dataset_path).decode_path(rel_path)
 
     def get(self, path):
+        if self.tree is None:
+            return None
         try:
             return self.get_at(path, self.tree)
         except KeyError:
