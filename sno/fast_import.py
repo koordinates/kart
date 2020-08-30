@@ -22,10 +22,10 @@ def fast_import_tables(
     quiet=False,
     header=None,
     message=None,
+    replace_existing=False,
     limit=None,
     max_pack_size="2G",
     max_delta_depth=0,
-    extra_blobs=(),
     extra_cmd_args=(),
 ):
     """
@@ -38,10 +38,10 @@ def fast_import_tables(
     quiet - if True, no progress information is printed to stdout.
     header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
     message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
+    replace_existing - whether to replace existing datasets, or throw an error.
     limit - maximum number of features to import per source.
     max_pack_size - maximum size of pack files. Affects performance.
     max_delta_depth - maximum depth of delta-compression chains. Affects performance.
-    extra_blobs - any extra blobs that also need to be written in the same commit.
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
@@ -51,17 +51,19 @@ def fast_import_tables(
         # Starting from an effectively empty repo. Write the blobs needed for this repo version.
         repo_version = get_repo_version(repo)
         incremental = False
-        extra_blobs = list(extra_blobs) + extra_blobs_for_version(repo_version)
+        extra_blobs = extra_blobs_for_version(repo_version)
     else:
         # Starting from a repo with commits. Make sure we have a matching version.
         repo_version = get_repo_version(repo, head_tree)
+        extra_blobs = ()
 
     ImportSource.check_valid(sources)
-    for source in sources:
-        if incremental and source.dest_path in head_tree:
-            raise InvalidOperation(
-                f"Cannot import to {source.dest_path}/ - already exists in repository"
-            )
+    if not replace_existing:
+        for source in sources:
+            if incremental and source.dest_path in head_tree:
+                raise InvalidOperation(
+                    f"Cannot import to {source.dest_path}/ - already exists in repository"
+                )
 
     cmd = [
         "git",
@@ -91,6 +93,8 @@ def fast_import_tables(
                 raise ValueError(f"{blob_path} already exists")
 
         for source in sources:
+            if replace_existing:
+                p.stdin.write(f"D {source.dest_path}\n".encode('utf8'))
             dataset = DatasetStructure.for_version(repo_version)(
                 tree=None, path=source.dest_path
             )
