@@ -774,7 +774,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 if dataset.has_geometry:
                     self._drop_spatial_index(dataset)
 
-                dbcur.execute(f"""DROP TABLE {gpkg.ident(table)};""")
+                dbcur.execute(f"""DROP TABLE IF EXISTS {gpkg.ident(table)};""")
                 self.delete_meta(dataset)
 
                 dbcur.execute(

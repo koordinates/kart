@@ -14,7 +14,7 @@ from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromF
 from .exceptions import InvalidOperation
 from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
-from .fast_import import fast_import_tables
+from .fast_import import fast_import_tables, ReplaceExisting
 from .structure import RepositoryStructure
 from .repository_version import (
     write_repo_version_config,
@@ -40,7 +40,7 @@ def list_import_formats(ctx, param, value):
         click.echo(n)
 
 
-def _add_datasets_to_working_copy(repo, *datasets):
+def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     wc = WorkingCopy.get(repo, create_if_missing=True)
     if not wc:
         return
@@ -53,6 +53,8 @@ def _add_datasets_to_working_copy(repo, *datasets):
         click.echo(f'Updating {wc.path} ...')
 
     for dataset in datasets:
+        if replace_existing:
+            wc.drop_table(commit, dataset)
         wc.write_full(commit, dataset)
 
 
@@ -146,6 +148,11 @@ def temporary_branch(repo):
     help="Which field to use as the primary key. Must be unique. Auto-detected when possible.",
 )
 @click.option(
+    "--replace-existing",
+    is_flag=True,
+    help="Replace existing dataset(s) of the same name.",
+)
+@click.option(
     "--max-delta-depth",
     hidden=True,
     default=0,
@@ -162,6 +169,7 @@ def import_table(
     source,
     tables,
     table_info,
+    replace_existing,
     max_delta_depth,
 ):
     """
@@ -218,6 +226,20 @@ def import_table(
             description=info.get('description'),
             xml_metadata=info.get('xmlMetadata'),
         )
+        if replace_existing:
+            rs = RepositoryStructure(repo)
+            try:
+                existing_ds = rs[dest_path]
+            except KeyError:
+                # no such existing dataset. no problems
+                pass
+            else:
+                # Align the column IDs to the existing schema.
+                # This is important, otherwise importing the same data twice
+                # will result in a new schema object, and thus a new blob for every feature.
+                import_source.schema = existing_ds.schema.align_to_self(
+                    import_source.schema
+                )
         import_source.dest_path = dest_path
         import_sources.append(import_source)
 
@@ -228,11 +250,21 @@ def import_table(
 
     with ctx:
         fast_import_tables(
-            repo, import_sources, message=message, max_delta_depth=max_delta_depth,
+            repo,
+            import_sources,
+            message=message,
+            max_delta_depth=max_delta_depth,
+            replace_existing=ReplaceExisting.GIVEN
+            if replace_existing
+            else ReplaceExisting.NONE,
         )
 
     rs = RepositoryStructure(repo)
-    _add_datasets_to_working_copy(repo, *[rs[s.dest_path] for s in import_sources])
+    _add_datasets_to_working_copy(
+        repo,
+        *[rs[s.dest_path] for s in import_sources],
+        replace_existing=replace_existing,
+    )
 
 
 @click.command()

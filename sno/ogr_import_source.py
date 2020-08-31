@@ -512,32 +512,41 @@ class OgrImportSource(ImportSource):
         )
 
     @property
-    @functools.lru_cache(maxsize=1)
     def schema(self):
-        ld = self.ogrlayer.GetLayerDefn()
+        try:
+            return self._schema
+        except AttributeError:
+            ld = self.ogrlayer.GetLayerDefn()
 
-        ogr_pk_index = ld.GetFieldIndex(self.primary_key)
-        if ogr_pk_index != -1:
-            pk_column = self._field_to_v2_column_schema(ld.GetFieldDefn(ogr_pk_index))
-        else:
-            # FID field, isn't an OGR field
-            pk_column = ColumnSchema(
-                ColumnSchema.new_id(), self.primary_key, "integer", 0, size=64
+            ogr_pk_index = ld.GetFieldIndex(self.primary_key)
+            if ogr_pk_index != -1:
+                pk_column = self._field_to_v2_column_schema(
+                    ld.GetFieldDefn(ogr_pk_index)
+                )
+            else:
+                # FID field, isn't an OGR field
+                pk_column = ColumnSchema(
+                    ColumnSchema.new_id(), self.primary_key, "integer", 0, size=64
+                )
+
+            geometry_column = self.get_geometry_v2_column_schema()
+            special_columns = (
+                [pk_column, geometry_column] if geometry_column else [pk_column]
             )
 
-        geometry_column = self.get_geometry_v2_column_schema()
-        special_columns = (
-            [pk_column, geometry_column] if geometry_column else [pk_column]
-        )
+            fds = [ld.GetFieldDefn(i) for i in range(ld.GetFieldCount())]
+            other_columns = [
+                self._field_to_v2_column_schema(fd)
+                for fd in fds
+                if fd.GetName() != self.primary_key
+            ]
 
-        fds = [ld.GetFieldDefn(i) for i in range(ld.GetFieldCount())]
-        other_columns = [
-            self._field_to_v2_column_schema(fd)
-            for fd in fds
-            if fd.GetName() != self.primary_key
-        ]
+            self._schema = Schema(special_columns + other_columns)
+            return self._schema
 
-        return Schema(special_columns + other_columns)
+    @schema.setter
+    def schema(self, value):
+        self._schema = value
 
     _KNOWN_METADATA_URIS = {
         'GDALMultiDomainMetadata': 'http://gdal.org',

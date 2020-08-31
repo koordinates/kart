@@ -175,6 +175,66 @@ def test_import_table_with_prompt_with_no_input(
         assert "No table specified" in r.stderr
 
 
+def test_import_replace_existing(
+    data_archive, tmp_path, cli_runner, chdir, geopackage,
+):
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Now modify the source GPKG
+            db = geopackage(data / "nz-waca-adjustments.gpkg")
+            dbcur = db.cursor()
+            dbcur.execute(
+                "UPDATE nz_waca_adjustments SET survey_reference = 'edited' WHERE id = 1424927"
+            )
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    "--replace-existing",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["show", "-o", "json"])
+            assert r.exit_code == 0, r.stderr
+            output = json.loads(r.stdout)
+            assert output['sno.diff/v1+hexwkb'] == {
+                'mytable': {
+                    'feature': [
+                        {
+                            '-': {
+                                'id': 1424927,
+                                'geom': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
+                                'date_adjusted': '2011-03-25T07:30:45Z',
+                                'survey_reference': None,
+                                'adjusted_nodes': 1122,
+                            },
+                            '+': {
+                                'id': 1424927,
+                                'geom': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
+                                'date_adjusted': '2011-03-25T07:30:45Z',
+                                'survey_reference': 'edited',
+                                'adjusted_nodes': 1122,
+                            },
+                        }
+                    ]
+                }
+            }
+
+
 @pytest.mark.parametrize(*V1_OR_V2)
 def test_init_import_table_ogr_types(
     data_archive_readonly, tmp_path, cli_runner, repo_version
