@@ -1,7 +1,7 @@
 Datasets V2
 -----------
 
-### Background 
+### Background
 
 Sno 0.2 introduced Datasets V1, and Sno 0.5 introduced Datasets V2.
 Datasets V1 and V2 are storage formats for database tables where each table row is stored in a separate file.
@@ -16,7 +16,7 @@ The following is a technical description of Datasets V2.
 
 ### Overall structure
 
-A V2 dataset is a folder named `.sno-dataset` that contains two folders. These are `meta` which contains information about the database table itself - its title, description, and schema - and 'feature' which contains the table rows. The schema file contains the structure of the table rows, ie the names and type of each column. The "name" of the V2 Dataset is the path to the `.sno-dataset` folder. 
+A V2 dataset is a folder named `.sno-dataset` that contains two folders. These are `meta` which contains information about the database table itself - its title, description, and schema - and 'feature' which contains the table rows. The schema file contains the structure of the table rows, ie the names and type of each column. The "name" of the V2 Dataset is the path to the `.sno-dataset` folder.
 
 For example, here is the basic folder structure of a dataset named contours/500m:
 
@@ -27,7 +27,7 @@ contours/500m/.sno-dataset/
 contours/500m/.sno-dataset/meta/
 contours/500m/.sno-dataset/meta/title              # Title of the dataset
 contours/500m/.sno-dataset/meta/description        # Description of the dataset
-contours/500m/.sno-dataset/meta/schema.json        # Schema of the dataset 
+contours/500m/.sno-dataset/meta/schema.json        # Schema of the dataset
 contours/500m/.sno-dataset/meta/...                # Other dataset metadata
 
 contours/500m/.sno-dataset/feature/...             # Database table rows
@@ -37,7 +37,7 @@ contours/500m/.sno-dataset/feature/...             # Database table rows
 
 The following items are stored in the meta part of the dataset, and have the following structure.
 
-#### `meta/title` 
+#### `meta/title`
 Contains the title of the dataset, encoded using UTF-8. The title is freeform text, clients could if they desired include HTML tags or markdown in the title.
 
 #### `meta/description`
@@ -123,7 +123,7 @@ The following data types are supported by sno. When a versioned sno dataset is c
 * `interval`
   - stores an interval of time as a number of years + months + days + hours + minutes + seconds
 * `numeric`
-  - stores a decimal number using a fixed number of digits of precision. 
+  - stores a decimal number using a fixed number of digits of precision.
 * `text`
   - stores a string of text, using the database's text encoding.
 * `time`
@@ -164,7 +164,7 @@ The extra fields that are supported are as follows:
 
 ###### Extra type info for `"dataType": "numeric"`
 - `precision`
-  * The maximum number of total digits for the numeric type. 
+  * The maximum number of total digits for the numeric type.
 - `scale`
   * How many of the digits are to the right of the decimal point.
 For example, the number "1234.5678" can be stored in a numeric type with a precision of 8 and a scale of 4.
@@ -191,7 +191,7 @@ Each legend has a unique filename based on the sha256 hash of its contents. Lege
 A dataset should contain coordinate-reference-system (CRS) definitions for any CRS needed to interpret its geometry. These are stored in [Well-Known-Text format](http://docs.opengeospatial.org/is/18-010r7/18-010r7.html) (WKT). The identifier that is part of the filename here should be the same as the `geometryCRS` identifier in the schema.
 
 #### `meta/metadata/dataset.json`
-A dataset may contain other structured metadata files that apply to the entire dataset, for instance XML metadata according to the http://www.isotc211.org/2005/gmd schema. These are stored in the `metadata/dataset.json` file, where they are keyed first by the metadata standard that is being adhered to, and then by the mimetype of the file. 
+A dataset may contain other structured metadata files that apply to the entire dataset, for instance XML metadata according to the http://www.isotc211.org/2005/gmd schema. These are stored in the `metadata/dataset.json` file, where they are keyed first by the metadata standard that is being adhered to, and then by the mimetype of the file.
 
 Here is a truncated example of a `dataset.json` file with only one entry:
 ```json
@@ -213,7 +213,7 @@ For instance, a single feature might be stored as the following:
   [
     1445288,
     "GP0001e61000000101cce1b0dce@7fx8f4Dc0",
-    1260047, 
+    1260047,
     "Pukerua Bay Police Station",
     "2018-11-05"
   ]
@@ -227,7 +227,7 @@ Decoding a feature works as follows - first, look up the legend with the given n
 {
   "500f5ecc-c02c-e8db-052a-84efb4d08a00": 1445288,
   "b8ae8ff3-1691-7f6f-bbe0-c03c648b6d67": "GP0001e61000000101cce1b0dce@7fx8f4Dc0",
-  "4324e825-ffed-8aff-ceac-53a7dde7e2f7": 1260047, 
+  "4324e825-ffed-8aff-ceac-53a7dde7e2f7": 1260047,
   "878f8e4e-433a-b7bb-74d5-b360ccfb3607": "Pukerua Bay Police Station",
   "c8e75111-0506-a898-4d0e-ed1aa8c81280": "2018-11-05"
 }
@@ -239,7 +239,7 @@ Finally, the current schema is consulted to find out the current position and na
 {
   "fid": 1445288,
   "geom": "GP0001e61000000101cce1b0dce@7fx8f4Dc0",
-  "building_id": 1260047, 
+  "building_id": 1260047,
   "name": "Pukerua Bay Police Station",
   "star_rating": null,
   "last_modified": "2018-11-05"
