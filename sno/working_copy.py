@@ -495,7 +495,11 @@ class WorkingCopyGPKG(WorkingCopy):
         L.debug(
             "Dropping spatial index for %s.%s: %s", dataset.table_name, geom_col, sql
         )
-        gdal_ds.ExecuteSQL(sql)
+        try:
+            gdal_ds.ExecuteSQL(sql)
+        except RuntimeError:
+            # no such dataset? nothing to drop.
+            pass
         del gdal_ds
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
 
