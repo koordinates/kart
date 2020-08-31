@@ -14,7 +14,7 @@ from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromF
 from .exceptions import InvalidOperation
 from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
-from .fast_import import fast_import_tables
+from .fast_import import fast_import_tables, ReplaceExisting
 from .structure import RepositoryStructure
 from .repository_version import (
     write_repo_version_config,
@@ -254,7 +254,9 @@ def import_table(
             import_sources,
             message=message,
             max_delta_depth=max_delta_depth,
-            replace_existing=replace_existing,
+            replace_existing=ReplaceExisting.GIVEN
+            if replace_existing
+            else ReplaceExisting.NONE,
         )
 
     rs = RepositoryStructure(repo)

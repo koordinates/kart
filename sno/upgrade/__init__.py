@@ -9,7 +9,7 @@ from pathlib import Path
 from . import upgrade_v0, upgrade_v1
 from sno import checkout, context
 from sno.exceptions import InvalidOperation
-from sno.fast_import import fast_import_tables
+from sno.fast_import import fast_import_tables, ReplaceExisting
 from sno.repository_version import get_repo_version, write_repo_version_config
 
 
@@ -143,7 +143,7 @@ def _upgrade_commit(
     fast_import_tables(
         dest_repo,
         sources,
-        incremental=False,
+        replace_existing=ReplaceExisting.ALL,
         quiet=True,
         header=header,
         # We import every commit onto refs/heads/master, even though not all commits are related - this means

@@ -1,6 +1,7 @@
 import logging
 import subprocess
 import time
+from enum import Enum, auto
 
 import click
 import pygit2
@@ -14,15 +15,27 @@ from .repository_version import get_repo_version, extra_blobs_for_version
 L = logging.getLogger("sno.fast_import")
 
 
+class ReplaceExisting(Enum):
+    # Don't replace any existing datasets.
+    # Imports will start from the existing HEAD state.
+    NONE = auto()
+
+    # Any datasets in the import will replace existing datasets with the same name.
+    # Datasets not in the import will be untouched.
+    GIVEN = auto()
+
+    # All existing datasets will be replaced by the given datasets.
+    ALL = auto()
+
+
 def fast_import_tables(
     repo,
     sources,
     *,
-    incremental=True,
     quiet=False,
     header=None,
     message=None,
-    replace_existing=False,
+    replace_existing=ReplaceExisting.NONE,
     limit=None,
     max_pack_size="2G",
     max_delta_depth=0,
@@ -33,24 +46,22 @@ def fast_import_tables(
 
     repo - the sno repo to import into.
     sources - an iterable of ImportSource objects. Each source is to be imported to source.dest_path.
-    incremental - True if the resulting commit should contain everything already at HEAD plus the new datasets,
-        False if the resulting commit should only contain the new datasets.
     quiet - if True, no progress information is printed to stdout.
     header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
     message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
-    replace_existing - whether to replace existing datasets, or throw an error.
+    replace_existing - See ReplaceExisting enum
     limit - maximum number of features to import per source.
     max_pack_size - maximum size of pack files. Affects performance.
     max_delta_depth - maximum depth of delta-compression chains. Affects performance.
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    head_tree = get_head_tree(repo) if incremental else None
+    head_tree = None if replace_existing == ReplaceExisting.ALL else get_head_tree(repo)
 
     if not head_tree:
         # Starting from an effectively empty repo. Write the blobs needed for this repo version.
         repo_version = get_repo_version(repo)
-        incremental = False
+        replace_existing = ReplaceExisting.ALL
         extra_blobs = extra_blobs_for_version(repo_version)
     else:
         # Starting from a repo with commits. Make sure we have a matching version.
@@ -58,9 +69,9 @@ def fast_import_tables(
         extra_blobs = ()
 
     ImportSource.check_valid(sources)
-    if not replace_existing:
+    if replace_existing == ReplaceExisting.NONE:
         for source in sources:
-            if incremental and source.dest_path in head_tree:
+            if source.dest_path in head_tree:
                 raise InvalidOperation(
                     f"Cannot import to {source.dest_path}/ - already exists in repository"
                 )
@@ -83,17 +94,17 @@ def fast_import_tables(
 
     p = subprocess.Popen(cmd, cwd=repo.path, stdin=subprocess.PIPE,)
     try:
-        if incremental:
+        if replace_existing != ReplaceExisting.ALL:
             header += f"from {get_head_branch(repo)}^0\n"
         p.stdin.write(header.encode("utf8"))
 
-        # Write an extra blobs supplied by the client or needed for this version.
+        # Write any extra blobs supplied by the client or needed for this version.
         for i, blob_path in write_blobs_to_stream(p.stdin, extra_blobs):
-            if incremental and blob_path in head_tree:
+            if replace_existing != ReplaceExisting.ALL and blob_path in head_tree:
                 raise ValueError(f"{blob_path} already exists")
 
         for source in sources:
-            if replace_existing:
+            if replace_existing == ReplaceExisting.GIVEN:
                 p.stdin.write(f"D {source.dest_path}\n".encode('utf8'))
             dataset = DatasetStructure.for_version(repo_version)(
                 tree=None, path=source.dest_path
