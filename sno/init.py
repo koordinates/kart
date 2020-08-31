@@ -228,6 +228,10 @@ def import_table(
         )
         if replace_existing:
             rs = RepositoryStructure(repo)
+            if rs.version < 2:
+                raise InvalidOperation(
+                    f"--replace-existing is not supported for V{rs.version} datasets"
+                )
             try:
                 existing_ds = rs[dest_path]
             except KeyError:
