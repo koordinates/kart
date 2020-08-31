@@ -358,7 +358,7 @@ class Dataset1(DatasetStructure):
                 json.dumps(value).encode("utf8"),
             )
 
-    def import_iter_feature_blobs(self, resultset, source):
+    def import_iter_feature_blobs(self, resultset, source, replacing_dataset=None):
         """For the given import source, yields the feature blobs that should be written."""
         pk_field = source.primary_key
 

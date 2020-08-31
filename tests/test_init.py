@@ -3,6 +3,7 @@ import pytest
 import pygit2
 
 
+from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
     INVALID_OPERATION,
@@ -233,6 +234,127 @@ def test_import_replace_existing(
                     ]
                 }
             }
+
+
+def test_import_replace_existing_with_compatible_schema_changes(
+    data_archive, tmp_path, cli_runner, chdir, geopackage,
+):
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Now replace with a table which
+            # * doesn't include the `survey_reference` column
+            # * has the columns in a different order
+            # * has a new column
+            db = geopackage(data / "nz-waca-adjustments.gpkg")
+            dbcur = db.cursor()
+            dbcur.execute(
+                """
+                    CREATE TABLE IF NOT EXISTS "nz_waca_adjustments_2" (
+                        "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        "geom" MULTIPOLYGON,
+                        "date_adjusted" DATETIME,
+                        "adjusted_nodes" MEDIUMINT,
+                        "newcolumn" TEXT
+                    );
+                    INSERT INTO nz_waca_adjustments_2 (id, geom, date_adjusted, adjusted_nodes, newcolumn)
+                        SELECT id, geom, date_adjusted, adjusted_nodes, NULL FROM nz_waca_adjustments
+                    ;
+                    DROP TABLE nz_waca_adjustments;
+                    ALTER TABLE nz_waca_adjustments_2 RENAME TO nz_waca_adjustments;
+                """
+            )
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    "--replace-existing",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["show", "-o", "json"])
+            assert r.exit_code == 0, r.stderr
+            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+
+            # The schema changed, but the features didn't.
+            assert diff["meta"]["schema.json"]
+            assert not diff.get("feature")
+
+            repo = pygit2.Repository(str(repo_path))
+            head_rs = RepositoryStructure.lookup(repo, "HEAD")
+            old_rs = RepositoryStructure.lookup(repo, "HEAD^")
+            assert head_rs.tree != old_rs.tree
+            new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
+            old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
+            assert new_feature_tree == old_feature_tree
+
+
+def test_import_replace_existing_with_column_renames(
+    data_archive, tmp_path, cli_runner, chdir, geopackage,
+):
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Now reanme
+            # * doesn't include the `survey_reference` column
+            # * has the columns in a different order
+            # * has a new column
+            db = geopackage(data / "nz-waca-adjustments.gpkg")
+            dbcur = db.cursor()
+            dbcur.execute(
+                """
+                ALTER TABLE nz_waca_adjustments RENAME COLUMN survey_reference TO renamed_survey_reference;
+                """
+            )
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    "--replace-existing",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["show", "-o", "json"])
+            assert r.exit_code == 0, r.stderr
+            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+
+            # The schema changed, but the features didn't.
+            assert diff["meta"]["schema.json"]
+            assert not diff.get("feature")
+
+            repo = pygit2.Repository(str(repo_path))
+            head_rs = RepositoryStructure.lookup(repo, "HEAD")
+            old_rs = RepositoryStructure.lookup(repo, "HEAD^")
+            assert head_rs.tree != old_rs.tree
+            new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
+            old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
+            assert new_feature_tree == old_feature_tree
 
 
 @pytest.mark.parametrize(*V1_OR_V2)

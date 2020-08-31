@@ -6,9 +6,10 @@ from enum import Enum, auto
 import click
 import pygit2
 
+from . import core
 from .exceptions import SubprocessError, InvalidOperation
 from .import_source import ImportSource
-from .structure import DatasetStructure
+from .structure import DatasetStructure, RepositoryStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
 
 
@@ -104,8 +105,23 @@ def fast_import_tables(
                 raise ValueError(f"{blob_path} already exists")
 
         for source in sources:
+            replacing_dataset = None
             if replace_existing == ReplaceExisting.GIVEN:
+                # Delete the existing dataset, before we re-import it.
                 p.stdin.write(f"D {source.dest_path}\n".encode('utf8'))
+
+                try:
+                    replacing_dataset = RepositoryStructure(repo)[source.dest_path]
+                except KeyError:
+                    pass
+                else:
+                    # We just deleted the legends, but we still need them to reimport
+                    # data efficiently. Copy them from the original dataset.
+                    for x in write_blobs_to_stream(
+                        p.stdin, replacing_dataset.iter_legend_blob_data()
+                    ):
+                        pass
+
             dataset = DatasetStructure.for_version(repo_version)(
                 tree=None, path=source.dest_path
             )
@@ -123,7 +139,7 @@ def fast_import_tables(
                         f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
                     )
 
-                for i, blob_path in write_blobs_to_stream(
+                for x in write_blobs_to_stream(
                     p.stdin, dataset.import_iter_meta_blobs(repo, source)
                 ):
                     pass
@@ -133,7 +149,10 @@ def fast_import_tables(
                 src_iterator = source.features()
 
                 for i, blob_path in write_blobs_to_stream(
-                    p.stdin, dataset.import_iter_feature_blobs(src_iterator, source)
+                    p.stdin,
+                    dataset.import_iter_feature_blobs(
+                        src_iterator, source, replacing_dataset=replacing_dataset
+                    ),
                 ):
                     if i and i % 100000 == 0 and not quiet:
                         click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")

@@ -322,8 +322,49 @@ class Dataset2(DatasetStructure):
             content = json_pack(content) if is_json else ensure_bytes(content)
             yield self.full_path(rel_path), content
 
-    def import_iter_feature_blobs(self, resultset, source):
+    def iter_legend_blob_data(self):
+        """
+        Generates (full_path, blob_data) tuples for each legend in this dataset
+        """
+        legend_tree = self.meta_tree / 'legend'
+        for blob in legend_tree:
+            yield (
+                self.full_path(self.LEGEND_PATH + blob.name),
+                blob.data,
+            )
+
+    def import_iter_feature_blobs(self, resultset, source, replacing_dataset=None):
         schema = source.schema
+        if replacing_dataset is not None and replacing_dataset.schema != source.schema:
+            # Optimisation: Try to avoid rewriting features for compatible schema changes.
+            change_types = replacing_dataset.schema.diff_type_counts(source.schema)
+            if not change_types["pk_updates"]:
+                # We can probably avoid rewriting all features.
+                for feature in resultset:
+                    pk_values = (feature[replacing_dataset.primary_key],)
+                    rel_path = self.encode_pks_to_path(pk_values, relative=True)
+                    try:
+                        existing_data = replacing_dataset.get_data_at(
+                            rel_path, as_memoryview=True
+                        )
+                    except KeyError:
+                        # this feature isn't in the dataset we're replacing
+                        yield self.encode_feature(feature, schema)
+                        continue
+
+                    existing_feature_raw_dict = replacing_dataset.get_raw_feature_dict(
+                        pk_values, data=existing_data
+                    )
+                    # This adapts the existing feature to the new schema
+                    existing_feature = schema.feature_from_raw_dict(
+                        existing_feature_raw_dict
+                    )
+                    if existing_feature == feature:
+                        # Nothing changed? No need to rewrite the feature blob
+                        yield self.encode_pks_to_path(pk_values), existing_data
+                    else:
+                        yield self.encode_feature(feature, schema)
+                return
         for feature in resultset:
             yield self.encode_feature(feature, schema)
 
