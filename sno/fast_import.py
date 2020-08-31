@@ -6,9 +6,10 @@ from enum import Enum, auto
 import click
 import pygit2
 
+from . import core
 from .exceptions import SubprocessError, InvalidOperation
 from .import_source import ImportSource
-from .structure import DatasetStructure
+from .structure import DatasetStructure, RepositoryStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
 
 
@@ -104,8 +105,57 @@ def fast_import_tables(
                 raise ValueError(f"{blob_path} already exists")
 
         for source in sources:
+            replacing_dataset = None
             if replace_existing == ReplaceExisting.GIVEN:
                 p.stdin.write(f"D {source.dest_path}\n".encode('utf8'))
+
+                # Optimisation: Try to avoid rewriting features for compatible schema changes.
+                # i.e. we can avoid rewriting feature blobs if the only schema changes are:
+                #  * dropped columns
+                #  * renamed columns
+                #  * reordered columns
+                try:
+                    replacing_dataset = RepositoryStructure(repo)[source.dest_path]
+                except KeyError:
+                    pass
+                else:
+                    # If the schemas are *identical, there's no need to pass this dataset object on.
+                    # Features won't be rewritten anyway.
+                    if replacing_dataset.schema == source.schema:
+                        replacing_dataset = None
+                    else:
+                        # Check that the schemas are compatible.
+                        new_col_ids = {col.id for col in source.schema}
+                        old_col_ids = {col.id for col in replacing_dataset.schema}
+                        new_types = {col.id: col.data_type for col in source.schema}
+                        old_types = {
+                            col.id: col.data_type
+                            for col in replacing_dataset.schema
+                            if col.id in new_col_ids
+                        }
+                        if new_col_ids - old_col_ids or new_types != old_types:
+                            # a column has been added, or a column's data_type has changed.
+                            # In this case all rows will be rewritten; can't avoid that.
+                            replacing_dataset = None
+
+                if replacing_dataset is not None:
+                    # If we're replacing the dataset, we need to re-write all it's legends,
+                    # since we just deleted them above.
+                    legend_tree = replacing_dataset.meta_tree / 'legend'
+                    for i, blob_path in write_blobs_to_stream(
+                        p.stdin,
+                        (
+                            (
+                                replacing_dataset.full_path(
+                                    replacing_dataset.LEGEND_PATH + blob.name
+                                ),
+                                blob.data,
+                            )
+                            for blob in legend_tree
+                        ),
+                    ):
+                        pass
+
             dataset = DatasetStructure.for_version(repo_version)(
                 tree=None, path=source.dest_path
             )
@@ -133,7 +183,10 @@ def fast_import_tables(
                 src_iterator = source.features()
 
                 for i, blob_path in write_blobs_to_stream(
-                    p.stdin, dataset.import_iter_feature_blobs(src_iterator, source)
+                    p.stdin,
+                    dataset.import_iter_feature_blobs(
+                        src_iterator, source, replacing_dataset=replacing_dataset
+                    ),
                 ):
                     if i and i % 100000 == 0 and not quiet:
                         click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
