@@ -25,6 +25,7 @@ Existing commands are backward compatible with V1 datasets, however some new fun
      - this includes column adds, drops, renames and reordering.
      - Notably, changing the primary key field of a dataset are not yet supported.
  * Meta changes are now supported (title, description and XML metadata for each dataset)
+ * `import` now has a `--replace-existing` flag to replace existing dataset(s).
 
 #### Missing functionality in Datasets V2
 
