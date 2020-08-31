@@ -180,7 +180,7 @@ def diff_with_writer(
                             f"Can't reproject dataset {dataset_path!r} into target CRS: {e}"
                         )
 
-                    dataset_geometry_transforms[dataset.name] = transform
+                    dataset_geometry_transforms[dataset_path] = transform
 
         writer_params = {
             "repo": repo,

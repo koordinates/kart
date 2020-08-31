@@ -348,14 +348,7 @@ class Dataset1(DatasetStructure):
         pk_field = source.primary_key
         yield ("primary_key", pk_field)
 
-        for name, value in source.gpkg_meta_items():
-            viter = value if isinstance(value, (list, tuple)) else [value]
-
-            for v in viter:
-                if v and "table_name" in v:
-                    v["table_name"] = self.name
-
-            yield (name, value)
+        yield from gpkg_adapter.all_gpkg_meta_items(source, self.table_name)
 
     def import_iter_meta_blobs(self, repo, source):
         """For the given import source, yield the meta blobs that should to be written."""

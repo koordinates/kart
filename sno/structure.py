@@ -249,7 +249,7 @@ class DatasetStructure:
 
         self.tree = tree
         self.path = path.strip("/")
-        self.name = self.path.replace("/", "__")
+        self.table_name = self.path.replace("/", "__")
         self.L = logging.getLogger(self.__class__.__qualname__)
 
     def __repr__(self):

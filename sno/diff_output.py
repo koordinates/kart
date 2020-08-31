@@ -371,7 +371,7 @@ def diff_output_geojson(
         elif isinstance(output_path, io.StringIO):
             fp = output_path
         elif output_path.is_dir():
-            fp = (output_path / f"{dataset.name}.geojson").open("w")
+            fp = (output_path / f"{dataset.table_name}.geojson").open("w")
         else:
             fp = output_path.open("w")
 
@@ -383,7 +383,7 @@ def diff_output_geojson(
             )
 
         features = []
-        geometry_transform = dataset_geometry_transforms.get(dataset.name)
+        geometry_transform = dataset_geometry_transforms.get(dataset.path)
         for key, delta in sorted(diff.get("feature", {}).items()):
             if delta.old:
                 change_type = "U-" if delta.new else "D"
@@ -513,12 +513,12 @@ def diff_output_json(
                 for key, delta in sorted(ds_diff["meta"].items())
             }
         if "feature" in ds_diff:
-            geometry_transform = dataset_geometry_transforms.get(dataset.name)
+            geometry_transform = dataset_geometry_transforms.get(dataset.path)
             ds_result["feature"] = [
                 prepare_feature_delta(delta, geometry_transform=geometry_transform)
                 for key, delta in sorted(ds_diff["feature"].items())
             ]
-        repo_result[dataset.name] = ds_result
+        repo_result[dataset.path] = ds_result
 
     yield _out
 

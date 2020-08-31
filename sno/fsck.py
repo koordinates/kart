@@ -83,9 +83,10 @@ def fsck(ctx, reset_datasets, fsck_args):
         has_err = False
         for dataset in rs:
             click.secho(
-                f"\nDataset: '{dataset.path}/' (table: '{dataset.name}')", bold=True
+                f"\nDataset: '{dataset.path}/' (table: '{dataset.table_name}')",
+                bold=True,
             )
-            table = dataset.name
+            table = dataset.table_name
 
             pk = gpkg.pk(db, table)
             click.echo(f'Primary key field for table: "{pk}"')
@@ -124,15 +125,15 @@ def fsck(ctx, reset_datasets, fsck_args):
 
             if "meta" in wc_diff:
                 meta_diff = wc_diff["meta"]
-                click.secho(f'{dataset.name}:meta: ({len(meta_diff)})', fg="yellow")
+                click.secho(f'{dataset.path}:meta: ({len(meta_diff)})', fg="yellow")
 
                 for path in meta_diff.keys():
-                    click.echo(f"{dataset.name}:meta:{path}")
+                    click.echo(f"{dataset.path}:meta:{path}")
 
             if "feature" in wc_diff:
                 feature_diff = wc_diff["feature"]
                 click.secho(
-                    f'{dataset.name}:feature: ({len(feature_diff)})', fg="yellow"
+                    f'{dataset.path}:feature: ({len(feature_diff)})', fg="yellow"
                 )
                 nul = "␀"
 

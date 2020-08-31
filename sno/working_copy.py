@@ -305,12 +305,12 @@ class WorkingCopyGPKG(WorkingCopy):
         Populate the following tables with data from this dataset:
         gpkg_contents, gpkg_geometry_columns, gpkg_spatial_ref_sys, gpkg_metadata, gpkg_metadata_reference
         """
-        table_name = dataset.name
+        table_name = dataset.table_name
         gpkg_contents = dataset.get_gpkg_meta_item("gpkg_contents")
         gpkg_contents["table_name"] = table_name
 
         # FIXME: find a better way to roundtrip identifiers
-        identifier_prefix = f"{dataset.name}: "
+        identifier_prefix = f"{dataset.table_name}: "
         if not gpkg_contents["identifier"].startswith(identifier_prefix):
             gpkg_contents["identifier"] = (
                 identifier_prefix + gpkg_contents['identifier']
@@ -408,7 +408,7 @@ class WorkingCopyGPKG(WorkingCopy):
         Calling Schema.align_* is required to find how the columns matches the existing schema.
         """
         with self.session() as db:
-            gpkg_meta_items = dict(gpkg.get_meta_items(db, dataset.name))
+            gpkg_meta_items = dict(gpkg.get_meta_items(db, dataset.table_name))
 
         class GpkgTableMetaItems:
             def __init__(self, name, gpkg_meta_items):
@@ -424,24 +424,25 @@ class WorkingCopyGPKG(WorkingCopy):
         # That way, they don't vary at random if the same command is run twice in a row, but
         # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
         # for two unrelated columns.
-        id_salt = f"{gpkg_name} {dataset.name} {self.get_db_tree()}"
+        id_salt = f"{gpkg_name} {dataset.table_name} {self.get_db_tree()}"
 
         yield from gpkg_adapter.all_v2_meta_items(
-            GpkgTableMetaItems(dataset.name, gpkg_meta_items), id_salt=id_salt
+            GpkgTableMetaItems(dataset.table_name, gpkg_meta_items), id_salt=id_salt
         )
 
     def delete_meta(self, dataset):
-        table_name = dataset.name
+        table_name = dataset.table_name
         with self.session() as db:
             dbcur = db.cursor()
             self._delete_meta_metadata(table_name, dbcur)
             # FOREIGN KEY constraints are still active, so we delete in a particular order:
             dbcur.execute(
                 """DELETE FROM gpkg_geometry_columns WHERE table_name = ?;""",
-                (dataset.name,),
+                (dataset.table_name,),
             )
             dbcur.execute(
-                """DELETE FROM gpkg_contents WHERE table_name = ?;""", (dataset.name,)
+                """DELETE FROM gpkg_contents WHERE table_name = ?;""",
+                (dataset.table_name,),
             )
 
     def _delete_meta_metadata(self, table_name, dbcur):
@@ -470,8 +471,10 @@ class WorkingCopyGPKG(WorkingCopy):
             gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
             ["GPKG"],
         )
-        sql = f"SELECT CreateSpatialIndex({gpkg.param_str(dataset.name)}, {gpkg.param_str(geom_col)});"
-        L.debug("Creating spatial index for %s.%s: %s", dataset.name, geom_col, sql)
+        sql = f"SELECT CreateSpatialIndex({gpkg.param_str(dataset.table_name)}, {gpkg.param_str(geom_col)});"
+        L.debug(
+            "Creating spatial index for %s.%s: %s", dataset.table_name, geom_col, sql
+        )
         gdal_ds.ExecuteSQL(sql)
         del gdal_ds
         L.info("Created spatial index in %ss", time.monotonic() - t0)
@@ -488,8 +491,10 @@ class WorkingCopyGPKG(WorkingCopy):
             gdal.OF_VECTOR | gdal.OF_UPDATE | gdal.OF_VERBOSE_ERROR,
             ["GPKG"],
         )
-        sql = f"SELECT DisableSpatialIndex({gpkg.param_str(dataset.name)}, {gpkg.param_str(geom_col)});"
-        L.debug("Dropping spatial index for %s.%s: %s", dataset.name, geom_col, sql)
+        sql = f"SELECT DisableSpatialIndex({gpkg.param_str(dataset.table_name)}, {gpkg.param_str(geom_col)});"
+        L.debug(
+            "Dropping spatial index for %s.%s: %s", dataset.table_name, geom_col, sql
+        )
         gdal_ds.ExecuteSQL(sql)
         del gdal_ds
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
@@ -508,7 +513,7 @@ class WorkingCopyGPKG(WorkingCopy):
             self._create_triggers(dbcur, table)
 
     def update_gpkg_contents(self, dataset, change_time):
-        table = dataset.name
+        table = dataset.table_name
 
         with self.session() as db:
             dbcur = db.cursor()
@@ -651,7 +656,7 @@ class WorkingCopyGPKG(WorkingCopy):
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
         with self.session(bulk=(0 if safe else 2)) as db:
             for dataset in datasets:
-                table = dataset.name
+                table = dataset.table_name
 
                 dbcur = db.cursor()
                 self.write_meta(dataset)
@@ -709,7 +714,7 @@ class WorkingCopyGPKG(WorkingCopy):
         with self.session() as db:
             dbcur = db.cursor()
             for dataset in datasets:
-                table = dataset.name
+                table = dataset.table_name
 
                 self.update_gpkg_contents(dataset, change_time)
 
@@ -726,7 +731,7 @@ class WorkingCopyGPKG(WorkingCopy):
         col_names = cols.keys()
 
         sql_write_feature = f"""
-            INSERT OR REPLACE INTO {gpkg.ident(dataset.name)}
+            INSERT OR REPLACE INTO {gpkg.ident(dataset.table_name)}
                 ({','.join([gpkg.ident(k) for k in col_names])})
             VALUES
                 ({','.join(['?'] * len(col_names))});
@@ -749,7 +754,7 @@ class WorkingCopyGPKG(WorkingCopy):
         cols, pk_field = self._get_columns(dataset)
 
         sql_del_feature = f"""
-            DELETE FROM {gpkg.ident(dataset.name)}
+            DELETE FROM {gpkg.ident(dataset.table_name)}
             WHERE {gpkg.ident(pk_field)}=?;
         """
 
@@ -765,7 +770,7 @@ class WorkingCopyGPKG(WorkingCopy):
         with self.session() as db:
             dbcur = db.cursor()
             for dataset in datasets:
-                table = dataset.name
+                table = dataset.table_name
                 if dataset.has_geometry:
                     self._drop_spatial_index(dataset)
 
@@ -800,7 +805,7 @@ class WorkingCopyGPKG(WorkingCopy):
         with self.session() as db:
             dbcur = db.cursor()
 
-            table = dataset.name
+            table = dataset.table_name
             pk_field = dataset.primary_key
 
             ds_diff = DatasetDiff()
@@ -1066,7 +1071,7 @@ class WorkingCopyGPKG(WorkingCopy):
         dbcur - DB cursor.
         """
         L.debug("Meta diff: %s changes", len(meta_diff))
-        table_name = dataset.name
+        table_name = dataset.table_name
         for key in meta_diff:
             func_key = key.replace("/", "_").replace(".", "_")
             func = getattr(self, f'_apply_meta_{func_key}')
@@ -1110,7 +1115,7 @@ class WorkingCopyGPKG(WorkingCopy):
 
         if not track_changes_as_dirty:
             # We don't want to track these changes as working copy edits - they will be part of the new WC base.
-            table = base_ds.name
+            table = base_ds.table_name
             ctx = self._suspend_triggers(dbcur, table)
         else:
             # We want to track these changes as working copy edits so they can be committed later.
@@ -1169,14 +1174,14 @@ class WorkingCopyGPKG(WorkingCopy):
 
         repo_structure = RepositoryStructure(self.repo)
         base_datasets = {
-            ds.name: ds
+            ds.table_name: ds
             for ds in self._filter_by_paths(repo_structure.iter_at(base_tree), paths)
         }
         if base_tree == target_tree:
             target_datasets = base_datasets
         else:
             target_datasets = {
-                ds.name: ds
+                ds.table_name: ds
                 for ds in self._filter_by_paths(
                     repo_structure.iter_at(target_tree), paths
                 )
@@ -1312,7 +1317,7 @@ class WorkingCopyGPKG(WorkingCopy):
         # GPKG Spec Req. 15:
         gpkg_change_time = change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-        table = dataset.name
+        table = dataset.table_name
         geom_col = dataset.geom_column_name
         if geom_col is not None:
             # FIXME: Why doesn't Extent(geom) work here as an aggregate?
@@ -1353,7 +1358,7 @@ class WorkingCopyGPKG(WorkingCopy):
         base_ds - the dataset this WC table is based on.
         db, dbcur - database, database cursor.
         """
-        table = base_ds.name
+        table = base_ds.table_name
 
         sql_changed = f"SELECT pk FROM {self.TRACKING_TABLE} " "WHERE table_name=?;"
         dbcur.execute(sql_changed, (table,))

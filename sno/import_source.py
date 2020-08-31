@@ -1,7 +1,6 @@
 import click
 import functools
 
-from . import gpkg_adapter
 from .meta_items import META_ITEM_NAMES
 from .schema import Schema
 
@@ -56,10 +55,6 @@ class ImportSource:
         """
         raise NotImplementedError()
 
-    @property
-    def dest_table_name(self):
-        return self.dest_path.replace("/", "__")
-
     def get_meta_item(self, name):
         """Find or generate a V2 meta item."""
         # If self.get_gpkg_meta_item works already, this method can be implemented as follows:
@@ -104,20 +99,6 @@ class ImportSource:
         raise ValueError(
             f"get_crs_definition() only works when there is exactly 1 CRS definition, but there is {num_defs}"
         )
-
-    def get_gpkg_meta_item(self, name):
-        """Find or generate a gpkg / V1 meta item."""
-        # If self.get_meta_item works already, this method can be implemented as follows:
-        # >>> return gpkg_adapter.generate_gpkg_meta_item(self, name)
-
-        raise NotImplementedError()
-
-    def gpkg_meta_items(self):
-        """Iterates over all gpkg meta items that need to be imported for V1."""
-        for name in gpkg_adapter.GPKG_META_ITEM_NAMES:
-            meta_item = self.get_gpkg_meta_item(name)
-            if meta_item is not None:
-                yield name, meta_item
 
     @property
     @functools.lru_cache(maxsize=1)

@@ -437,10 +437,6 @@ class OgrImportSource(ImportSource):
             return self.get_crs_definition(name)
         raise KeyError(f"No meta item found with name: {name}")
 
-    @functools.lru_cache()
-    def get_gpkg_meta_item(self, name):
-        return gpkg_adapter.generate_gpkg_meta_item(self, name)
-
     def get_crs_identifer(self):
         spatial_ref = self.ogrlayer.GetSpatialRef()
         if not spatial_ref:

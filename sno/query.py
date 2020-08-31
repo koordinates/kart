@@ -37,13 +37,13 @@ def query(ctx, path, command, params):
         USAGE = "index"
 
         t0 = time.monotonic()
-        dataset.build_spatial_index(dataset.name)
+        dataset.build_spatial_index(dataset.table_name)
         t1 = time.monotonic()
         L.debug("Indexed {dataset} in %0.3fs", t1 - t0)
         return
 
     try:
-        dataset.get_spatial_index(dataset.name)
+        dataset.get_spatial_index(dataset.table_name)
     except OSError:
         raise NotFound("No spatial index found. Run `sno query {path} index`")
 

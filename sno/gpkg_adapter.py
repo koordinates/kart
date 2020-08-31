@@ -25,26 +25,33 @@ GPKG_META_ITEM_NAMES = (
 )
 
 
-def is_gpkg_meta_item(path):
-    return path in GPKG_META_ITEM_NAMES
+def is_gpkg_meta_item(name):
+    return name in GPKG_META_ITEM_NAMES
 
 
-def generate_gpkg_meta_item(v2_obj, path):
+def generate_gpkg_meta_item(v2_obj, name, table_name):
     """Generate the requested gpkg_meta_item, given a V2 object that supports get_meta_item."""
-    if not is_gpkg_meta_item(path):
-        raise KeyError(f"Not a gpkg meta_item: {path}")
+    if not is_gpkg_meta_item(name):
+        raise KeyError(f"Not a gpkg meta_item: {name}")
 
-    if path == "gpkg_contents":
-        return generate_gpkg_contents(v2_obj)
-    elif path == "gpkg_geometry_columns":
-        return generate_gpkg_geometry_columns(v2_obj)
-    elif path == "gpkg_spatial_ref_sys":
+    if name == "gpkg_contents":
+        return generate_gpkg_contents(v2_obj, table_name)
+    elif name == "gpkg_geometry_columns":
+        return generate_gpkg_geometry_columns(v2_obj, table_name)
+    elif name == "gpkg_spatial_ref_sys":
         return generate_gpkg_spatial_ref_sys(v2_obj)
-    elif path == "sqlite_table_info":
+    elif name == "sqlite_table_info":
         return generate_sqlite_table_info(v2_obj)
-    elif path in ("gpkg_metadata", "gpkg_metadata_reference"):
-        is_reference = path == "gpkg_metadata_reference"
-        return generate_gpkg_metadata(v2_obj, reference=is_reference)
+    elif name in ("gpkg_metadata", "gpkg_metadata_reference"):
+        is_reference = name == "gpkg_metadata_reference"
+        return generate_gpkg_metadata(v2_obj, table_name, reference=is_reference)
+
+
+def all_gpkg_meta_items(v2_obj, table_name):
+    for name in GPKG_META_ITEM_NAMES:
+        gpkg_meta_item = generate_gpkg_meta_item(v2_obj, name, table_name)
+        if gpkg_meta_item is not None:
+            yield name, gpkg_meta_item
 
 
 def is_v2_meta_item(path):
@@ -72,7 +79,7 @@ def generate_v2_meta_item(gpkg_obj, path, id_salt=None):
             gpkg_obj.get_gpkg_meta_item("sqlite_table_info"),
             gpkg_obj.get_gpkg_meta_item("gpkg_geometry_columns"),
             gpkg_obj.get_gpkg_meta_item("gpkg_spatial_ref_sys"),
-            id_salt or gpkg_obj.name,
+            id_salt or get_table_name(gpkg_obj),
         ).to_column_dicts()
     elif path == "metadata/dataset.json":
         return gpkg_metadata_to_json(
@@ -110,34 +117,34 @@ def all_v2_crs_definitions(gpkg_obj):
         yield crs_util.get_identifier(definition), definition
 
 
+def get_table_name(gpkg_obj):
+    return gpkg_obj.get_gpkg_meta_item("gpkg_contents").get("table_name", "")
+
+
 def extract_title(gpkg_obj):
     """Extract the dataset title from a v1 dataset."""
-    identifier = gpkg_obj.get_gpkg_meta_item("gpkg_contents").get("identifier")
+    gpkg_contents = gpkg_obj.get_gpkg_meta_item("gpkg_contents")
+    identifier = gpkg_contents.get("identifier", "")
+    table_name = gpkg_contents.get("table_name", "")
     # FIXME: find a better way of roundtripping identifiers?
-    identifier_prefix = _get_identifier_prefix(gpkg_obj)
+    identifier_prefix = _get_identifier_prefix(table_name)
     if identifier.startswith(identifier_prefix):
         identifier = identifier[len(identifier_prefix) :]
     return identifier
 
 
-def _get_table_name(dataset):
-    return (
-        dataset.dest_table_name if hasattr(dataset, "dest_table_name") else dataset.name
-    )
+def _get_identifier_prefix(table_name):
+    return f"{table_name}: "
 
 
-def _get_identifier_prefix(dataset):
-    return f"{_get_table_name(dataset)}: "
-
-
-def generate_gpkg_contents(v2_obj):
+def generate_gpkg_contents(v2_obj, table_name):
     """Generate a gpkg_contents meta item from a v2 dataset."""
     is_spatial = bool(_get_geometry_columns(v2_obj.schema))
 
     result = {
-        "identifier": generate_unique_identifier(v2_obj),
+        "identifier": generate_unique_identifier(v2_obj, table_name),
         "description": v2_obj.get_meta_item("description"),
-        "table_name": _get_table_name(v2_obj),
+        "table_name": table_name,
         "data_type": "features" if is_spatial else "attributes",
     }
     if is_spatial:
@@ -145,16 +152,16 @@ def generate_gpkg_contents(v2_obj):
     return result
 
 
-def generate_unique_identifier(v2_obj):
+def generate_unique_identifier(v2_obj, table_name):
     # FIXME: find a better way of roundtripping identifiers?
     identifier = v2_obj.get_meta_item("title") or ""
-    identifier_prefix = _get_identifier_prefix(v2_obj)
+    identifier_prefix = _get_identifier_prefix(table_name)
     if not identifier.startswith(identifier_prefix):
         identifier = identifier_prefix + identifier
     return identifier
 
 
-def generate_gpkg_geometry_columns(v2_obj):
+def generate_gpkg_geometry_columns(v2_obj, table_name):
     """Generate a gpkg_geometry_columns meta item from a dataset."""
     geom_columns = _get_geometry_columns(v2_obj.schema)
     if not geom_columns:
@@ -167,7 +174,7 @@ def generate_gpkg_geometry_columns(v2_obj):
     m = 1 if "M" in zm else 0
 
     return {
-        "table_name": _get_table_name(v2_obj),
+        "table_name": table_name,
         "column_name": geom_columns[0].name,
         "geometry_type_name": type_name,
         "srs_id": _gpkg_srs_id(v2_obj),
@@ -189,8 +196,8 @@ def generate_gpkg_spatial_ref_sys(v2_obj):
     return wkt_to_gpkg_spatial_ref_sys(definition)
 
 
-def _gpkg_srs_id(dataset):
-    gsrs = dataset.get_gpkg_meta_item("gpkg_spatial_ref_sys")
+def _gpkg_srs_id(v2_obj):
+    gsrs = generate_gpkg_spatial_ref_sys(v2_obj)
     return gsrs[0]["srs_id"] if gsrs else 0
 
 
@@ -389,9 +396,8 @@ def v2_type_to_gpkg_type(column_schema, is_spatial):
     return f"{gpkg_type}({length})" if length else gpkg_type
 
 
-def generate_gpkg_metadata(v2_obj, reference=False):
+def generate_gpkg_metadata(v2_obj, table_name, reference=False):
     v2json = v2_obj.get_meta_item("metadata/dataset.json")
-    table_name = _get_table_name(v2_obj)
     return json_to_gpkg_metadata(v2json, table_name, reference) if v2json else None
 
 

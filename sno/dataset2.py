@@ -142,7 +142,7 @@ class Dataset2(DatasetStructure):
 
     @functools.lru_cache()
     def get_gpkg_meta_item(self, name):
-        return gpkg_adapter.generate_gpkg_meta_item(self, name)
+        return gpkg_adapter.generate_gpkg_meta_item(self, name, self.table_name)
 
     def crs_definitions(self):
         """Return all stored crs definitions in a dict."""
