@@ -107,52 +107,18 @@ def fast_import_tables(
         for source in sources:
             replacing_dataset = None
             if replace_existing == ReplaceExisting.GIVEN:
+                # Delete the existing dataset, before we re-import it.
                 p.stdin.write(f"D {source.dest_path}\n".encode('utf8'))
 
-                # Optimisation: Try to avoid rewriting features for compatible schema changes.
-                # i.e. we can avoid rewriting feature blobs if the only schema changes are:
-                #  * dropped columns
-                #  * renamed columns
-                #  * reordered columns
                 try:
                     replacing_dataset = RepositoryStructure(repo)[source.dest_path]
                 except KeyError:
                     pass
                 else:
-                    # If the schemas are *identical, there's no need to pass this dataset object on.
-                    # Features won't be rewritten anyway.
-                    if replacing_dataset.schema == source.schema:
-                        replacing_dataset = None
-                    else:
-                        # Check that the schemas are compatible.
-                        new_col_ids = {col.id for col in source.schema}
-                        old_col_ids = {col.id for col in replacing_dataset.schema}
-                        new_types = {col.id: col.data_type for col in source.schema}
-                        old_types = {
-                            col.id: col.data_type
-                            for col in replacing_dataset.schema
-                            if col.id in new_col_ids
-                        }
-                        if new_col_ids - old_col_ids or new_types != old_types:
-                            # a column has been added, or a column's data_type has changed.
-                            # In this case all rows will be rewritten; can't avoid that.
-                            replacing_dataset = None
-
-                if replacing_dataset is not None:
-                    # If we're replacing the dataset, we need to re-write all it's legends,
-                    # since we just deleted them above.
-                    legend_tree = replacing_dataset.meta_tree / 'legend'
-                    for i, blob_path in write_blobs_to_stream(
-                        p.stdin,
-                        (
-                            (
-                                replacing_dataset.full_path(
-                                    replacing_dataset.LEGEND_PATH + blob.name
-                                ),
-                                blob.data,
-                            )
-                            for blob in legend_tree
-                        ),
+                    # We just deleted the legends, but we still need them to reimport
+                    # data efficiently. Copy them from the original dataset.
+                    for x in write_blobs_to_stream(
+                        p.stdin, replacing_dataset.iter_legend_blob_data()
                     ):
                         pass
 
@@ -173,7 +139,7 @@ def fast_import_tables(
                         f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
                     )
 
-                for i, blob_path in write_blobs_to_stream(
+                for x in write_blobs_to_stream(
                     p.stdin, dataset.import_iter_meta_blobs(repo, source)
                 ):
                     pass

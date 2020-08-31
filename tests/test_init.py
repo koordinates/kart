@@ -253,8 +253,10 @@ def test_import_replace_existing_with_compatible_schema_changes(
             )
             assert r.exit_code == 0, r.stderr
 
-            # Now make a view which doesn't include the `survey_reference` column,
-            # and has the columns in a different order
+            # Now replace with a table which
+            # * doesn't include the `survey_reference` column
+            # * has the columns in a different order
+            # * has a new column
             db = geopackage(data / "nz-waca-adjustments.gpkg")
             dbcur = db.cursor()
             dbcur.execute(
@@ -263,10 +265,11 @@ def test_import_replace_existing_with_compatible_schema_changes(
                         "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         "geom" MULTIPOLYGON,
                         "date_adjusted" DATETIME,
-                        "adjusted_nodes" MEDIUMINT
+                        "adjusted_nodes" MEDIUMINT,
+                        "newcolumn" TEXT
                     );
-                    INSERT INTO nz_waca_adjustments_2 (id, geom, date_adjusted, adjusted_nodes)
-                        SELECT id, geom, date_adjusted, adjusted_nodes FROM nz_waca_adjustments
+                    INSERT INTO nz_waca_adjustments_2 (id, geom, date_adjusted, adjusted_nodes, newcolumn)
+                        SELECT id, geom, date_adjusted, adjusted_nodes, NULL FROM nz_waca_adjustments
                     ;
                     DROP TABLE nz_waca_adjustments;
                     ALTER TABLE nz_waca_adjustments_2 RENAME TO nz_waca_adjustments;
