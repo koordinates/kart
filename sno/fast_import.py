@@ -19,7 +19,7 @@ L = logging.getLogger("sno.fast_import")
 class ReplaceExisting(Enum):
     # Don't replace any existing datasets.
     # Imports will start from the existing HEAD state.
-    NONE = auto()
+    DONT_REPLACE = auto()
 
     # Any datasets in the import will replace existing datasets with the same name.
     # Datasets not in the import will be untouched.
@@ -36,7 +36,7 @@ def fast_import_tables(
     quiet=False,
     header=None,
     message=None,
-    replace_existing=ReplaceExisting.NONE,
+    replace_existing=ReplaceExisting.DONT_REPLACE,
     limit=None,
     max_pack_size="2G",
     max_delta_depth=0,
@@ -70,7 +70,7 @@ def fast_import_tables(
         extra_blobs = ()
 
     ImportSource.check_valid(sources)
-    if replace_existing == ReplaceExisting.NONE:
+    if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:
             if source.dest_path in head_tree:
                 raise InvalidOperation(

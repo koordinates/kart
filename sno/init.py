@@ -260,7 +260,7 @@ def import_table(
             max_delta_depth=max_delta_depth,
             replace_existing=ReplaceExisting.GIVEN
             if replace_existing
-            else ReplaceExisting.NONE,
+            else ReplaceExisting.DONT_REPLACE,
         )
 
     rs = RepositoryStructure(repo)
