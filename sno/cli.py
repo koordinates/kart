@@ -67,9 +67,14 @@ def print_version(ctx):
         *[int(k) for k in re.findall(r"\d\d", str(psycopg2.__libpq_version__))]
     )
 
+    proj_version = "{}.{}.{}".format(
+        osgeo.osr.GetPROJVersionMajor(), osgeo.osr.GetPROJVersionMinor(), osgeo.osr.GetPROJVersionMicro()
+    )
+
     click.echo(
         (
-            f"» GDAL v{osgeo._gdal.__version__}\n"
+            f"» GDAL v{osgeo._gdal.__version__}; "
+            f"PROJ v{proj_version}\n"
             f"» PyGit2 v{pygit2.__version__}; "
             f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
             f"Git v{git_version}\n"
