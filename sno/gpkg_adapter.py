@@ -114,7 +114,7 @@ def all_v2_crs_definitions(gpkg_obj):
         definition = gsrs["definition"]
         if not definition or definition == "undefined":
             continue
-        yield crs_util.get_identifier(definition), definition
+        yield crs_util.get_identifier_str(definition), definition
 
 
 def get_table_name(gpkg_obj):
@@ -203,11 +203,9 @@ def _gpkg_srs_id(v2_obj):
 
 def wkt_to_gpkg_spatial_ref_sys(wkt):
     """Given a WKT crs definition, generate a gpkg_spatial_ref_sys meta item."""
-    # TODO: Better support for custom WKT. https://github.com/koordinates/sno/issues/148
     spatial_ref = SpatialReference(wkt)
-    spatial_ref.AutoIdentifyEPSG()
     organization = spatial_ref.GetAuthorityName(None) or "NONE"
-    srs_id = spatial_ref.GetAuthorityCode(None) or 0
+    srs_id = crs_util.get_identifier_int(spatial_ref)
     return [
         {
             "srs_name": spatial_ref.GetName(),
@@ -221,7 +219,7 @@ def wkt_to_gpkg_spatial_ref_sys(wkt):
 
 
 def wkt_to_v2_name(wkt):
-    identifier = crs_util.get_identifier(wkt)
+    identifier = crs_util.get_identifier_str(wkt)
     return f"crs/{identifier}.wkt"
 
 
@@ -355,7 +353,7 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
 
     crs_identifier = None
     if gsrs and gsrs[0]["definition"]:
-        crs_identifier = crs_util.get_identifier(gsrs[0]["definition"])
+        crs_identifier = crs_util.get_identifier_str(gsrs[0]["definition"])
 
     extra_type_info = {
         "geometryType": f"{geometry_type} {z}{m}".strip(),

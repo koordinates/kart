@@ -437,20 +437,12 @@ class OgrImportSource(ImportSource):
             return self.get_crs_definition(name)
         raise KeyError(f"No meta item found with name: {name}")
 
-    def get_crs_identifer(self):
-        spatial_ref = self.ogrlayer.GetSpatialRef()
-        if not spatial_ref:
-            return None
-        spatial_ref.AutoIdentifyEPSG()
-        return crs_util.get_identifier(spatial_ref)
-
     def crs_definitions(self):
         if self.is_spatial:
             spatial_ref = self.ogrlayer.GetSpatialRef()
-            if spatial_ref:
-                spatial_ref.AutoIdentifyEPSG()
+            if spatial_ref is not None:
                 yield (
-                    crs_util.get_identifier(spatial_ref),
+                    crs_util.get_identifier_str(spatial_ref),
                     spatial_ref.ExportToWkt(),
                 )
 
@@ -482,9 +474,9 @@ class OgrImportSource(ImportSource):
             "geometryType": f"{geometry_type} {z}{m}".strip(),
         }
 
-        crs_identifier = self.get_crs_identifer()
-        if crs_identifier:
-            extra_type_info["geometryCRS"] = crs_identifier
+        crs_definitions = list(self.crs_definitions())
+        if crs_definitions:
+            extra_type_info["geometryCRS"] = crs_definitions[0][0]
 
         return ColumnSchema(
             ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
@@ -605,19 +597,24 @@ class GPKGImportSource(OgrImportSource):
         for gpkg_feature in dbcur:
             yield self._gpkg_feature_to_sno_feature(gpkg_feature)
 
+    @functools.lru_cache(maxsize=1)
+    def gpkg_meta_items_obj(self):
+        db = gpkg.db(self.ogr_source)
+        return gpkg.get_gpkg_meta_items_obj(db, self.table)
+
     def get_v2_metadata_json(self):
-        if 'xml_metadata' in self._meta_overrides:
+        if (
+            'xml_metadata' in self._meta_overrides
+            or "metadata/dataset.json" in self._meta_overrides
+        ):
             return super().get_v2_metadata_json()
 
-        db = gpkg.db(self.ogr_source)
-        gm_info = dict(
-            gpkg.get_meta_items(
-                db, layer=self.table, keys=("gpkg_metadata", "gpkg_metadata_reference")
-            )
+        return gpkg_adapter.generate_v2_meta_item(
+            self.gpkg_meta_items_obj(), "metadata/dataset.json"
         )
-        if not gm_info:
-            return None
-        return gpkg_adapter.gpkg_metadata_to_json(**gm_info)
+
+    def crs_definitions(self):
+        yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items_obj())
 
 
 class PostgreSQLImportSource(OgrImportSource):

@@ -2,7 +2,7 @@ import collections
 
 import apsw
 
-from sno import spatialite_path
+from sno import gpkg_adapter, spatialite_path
 
 
 def ident(identifier):
@@ -66,7 +66,40 @@ def db(path, **kwargs):
     return db
 
 
-def get_meta_items(db, layer, keys=None):
+def get_gpkg_meta_items_obj(db, layer):
+    """
+    Returns an object that supports .gpkg_meta_items and .get_gpkg_meta_item, for a single layer -
+    to be used with gpkg_adapter
+    """
+
+    class GpkgTableMetaItems:
+        """Collection of gpkg_meta_items for a particular table."""
+
+        def __init__(self, db, layer):
+            self.db_repr = repr(db)
+            self.layer_repr = repr(layer)
+            self._gpkg_meta_items = dict(get_gpkg_meta_items(db, layer))
+
+        def gpkg_meta_items(self):
+            yield from self._gpkg_meta_items.items()
+
+        def get_gpkg_meta_item(self, name):
+            try:
+                return self._gpkg_meta_items[name]
+            except KeyError:
+                if name in gpkg_adapter.GPKG_META_ITEM_NAMES:
+                    return None
+                raise
+
+        def __repr__(self):
+            return f'{self.__class__.__name__}({self.db_repr}, {self.layer_repr})'
+
+        __str__ = __repr__
+
+    return GpkgTableMetaItems(db, layer)
+
+
+def get_gpkg_meta_items(db, layer, keys=None):
     """
     Returns metadata from the gpkg_* tables about this GPKG.
     Keep this in sync with OgrImportSource.gpkg_meta_items for other datasource types.
