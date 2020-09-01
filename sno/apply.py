@@ -11,22 +11,86 @@ from .exceptions import (
     NO_TABLE,
     NO_WORKING_COPY,
     NotFound,
+    NotYetImplemented,
     InvalidOperation,
 )
 from .diff_structs import RepoDiff, DeltaDiff, Delta
 from .geometry import hex_wkb_to_gpkg_geom
+from .schema import Schema
 from .structure import RepositoryStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 from .working_copy import WorkingCopy
 
 
-def unjson_feature(dataset, f):
-    if f is None:
-        return f
-    f = copy.deepcopy(f)
-    if dataset.geom_column_name:
-        # add geometry in
-        f[dataset.geom_column_name] = hex_wkb_to_gpkg_geom(f[dataset.geom_column_name])
+V1_NO_META_UPDATE = (
+    "Sorry, patches that make meta changes are not supported until Datasets V2 (Sno 0.5)\n"
+    "Use `sno upgrade`"
+)
+# TODO: support this for V2.
+NO_DATASET_CREATE_DELETE = (
+    "Sorry, patches that create or delete datasets are not yet supported."
+)
+NO_COMMIT_NO_DATASET_CREATE_DELETE = (
+    "Sorry, patches that create or delete datasets cannot be applied with --no-commit"
+)
+
+
+class MetaChangeType:
+    CREATE_DATASET = "+"
+    DELETE_DATASET = "-"
+    META_UPDATE = "+/-"
+
+
+def _meta_change_type(ds_diff_dict):
+    meta_diff = ds_diff_dict.get("meta", {})
+    if not meta_diff:
+        return None
+    schema_diff = meta_diff.get("schema.json", {})
+    if "+" in schema_diff and "-" not in schema_diff:
+        return MetaChangeType.CREATE_DATASET
+    elif "-" in schema_diff and "+" not in schema_diff:
+        return MetaChangeType.DELETE_DATASET
+    return MetaChangeType.META_UPDATE
+
+
+def check_change_supported(repo_version, dataset, ds_path, meta_change_type, commit):
+    desc = None
+    if meta_change_type == MetaChangeType.CREATE_DATASET:
+        desc = f"Patch creates dataset '{ds_path}'"
+    elif meta_change_type == MetaChangeType.DELETE_DATASET:
+        desc = f"Patch deletes dataset '{ds_path}'"
+    else:
+        desc = f"Patch contains meta changes for dataset '{ds_path}'"
+
+    # TODO - support creates and deletes for datasets V2.
+    if meta_change_type in (
+        MetaChangeType.CREATE_DATASET,
+        MetaChangeType.DELETE_DATASET,
+    ):
+        raise NotYetImplemented(f"{desc}\n{NO_DATASET_CREATE_DELETE}")
+
+    if repo_version < 2 and meta_change_type == MetaChangeType.META_UPDATE:
+        raise NotYetImplemented(f"{desc}\n{V1_NO_META_UPDATE}")
+
+    if dataset is None and meta_change_type != MetaChangeType.CREATE_DATASET:
+        raise NotFound(
+            f"Patch contains dataset '{ds_path}' which is not in this repository",
+            exit_code=NO_TABLE,
+        )
+    if dataset is not None and meta_change_type == MetaChangeType.CREATE_DATASET:
+        raise InvalidOperation(
+            f"Patch creates dataset '{ds_path}' which already exists in this repository"
+        )
+    if not commit and meta_change_type in (
+        MetaChangeType.CREATE_DATASET,
+        MetaChangeType.DELETE_DATASET,
+    ):
+        raise InvalidOperation(f"{desc}\n{NO_COMMIT_NO_DATASET_CREATE_DELETE}")
+
+
+def unjson_feature(geom_column_name, f):
+    if f is not None and geom_column_name is not None:
+        f[geom_column_name] = hex_wkb_to_gpkg_geom(f[geom_column_name])
     return f
 
 
@@ -47,21 +111,14 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         wc.check_not_dirty()
 
     repo_diff = RepoDiff()
-    for ds_name, ds_diff_dict in json_diff.items():
-        dataset = rs.get(ds_name)
-        if dataset is None:
-            raise NotFound(
-                f"Patch contains dataset '{ds_name}' which is not in this repository",
-                exit_code=NO_TABLE,
-            )
+    for ds_path, ds_diff_dict in json_diff.items():
+        dataset = rs.get(ds_path)
+        meta_change_type = _meta_change_type(ds_diff_dict)
+        check_change_supported(rs.version, dataset, ds_path, meta_change_type, commit)
 
         meta_changes = ds_diff_dict.get('meta', {})
 
         if meta_changes:
-            if dataset.version < 2:
-                raise InvalidOperation(
-                    "This repo doesn't support meta changes, use `sno upgrade`"
-                )
             meta_diff = DeltaDiff(
                 Delta(
                     (k, v['-']) if '-' in v else None,
@@ -69,10 +126,18 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                 )
                 for (k, v) in meta_changes.items()
             )
-            repo_diff.recursive_set([dataset.path, "meta"], meta_diff)
+            repo_diff.recursive_set([ds_path, "meta"], meta_diff)
+
+        if dataset is not None:
+            pk_name = dataset.primary_key
+            geom_column_name = dataset.geom_column_name
+        else:
+            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+            pk_name = schema.pk_columns[0].name
+            geom_columns = schema.geometry_columns
+            geom_column_name = geom_columns[0].name if geom_columns else None
 
         feature_changes = ds_diff_dict.get('feature', [])
-        pk_name = dataset.primary_key
 
         def extract_key(feature):
             if feature is None:
@@ -81,15 +146,15 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
 
         def parse_delta(change):
             return Delta(
-                extract_key(unjson_feature(dataset, change.get('-'))),
-                extract_key(unjson_feature(dataset, change.get('+'))),
+                extract_key(unjson_feature(geom_column_name, change.get('-'))),
+                extract_key(unjson_feature(geom_column_name, change.get('+'))),
             )
 
         if feature_changes:
             feature_diff = DeltaDiff(
                 (parse_delta(change) for change in feature_changes)
             )
-            repo_diff.recursive_set([dataset.path, "feature"], feature_diff)
+            repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
     if commit:
         if not repo_diff and not allow_empty:

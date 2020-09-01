@@ -139,7 +139,7 @@ def _get_identifier_prefix(table_name):
 
 def generate_gpkg_contents(v2_obj, table_name):
     """Generate a gpkg_contents meta item from a v2 dataset."""
-    is_spatial = bool(_get_geometry_columns(v2_obj.schema))
+    is_spatial = bool(v2_obj.schema.geometry_columns)
 
     result = {
         "identifier": generate_unique_identifier(v2_obj, table_name),
@@ -163,7 +163,7 @@ def generate_unique_identifier(v2_obj, table_name):
 
 def generate_gpkg_geometry_columns(v2_obj, table_name):
     """Generate a gpkg_geometry_columns meta item from a dataset."""
-    geom_columns = _get_geometry_columns(v2_obj.schema)
+    geom_columns = v2_obj.schema.geometry_columns
     if not geom_columns:
         return None
 
@@ -185,7 +185,7 @@ def generate_gpkg_geometry_columns(v2_obj, table_name):
 
 def generate_gpkg_spatial_ref_sys(v2_obj):
     """Generate a gpkg_spatial_ref_sys meta item from a dataset."""
-    geom_columns = _get_geometry_columns(v2_obj.schema)
+    geom_columns = v2_obj.schema.geometry_columns
     if not geom_columns:
         return []
 
@@ -227,15 +227,11 @@ def wkt_to_v2_name(wkt):
 
 def generate_sqlite_table_info(v2_obj):
     """Generate a sqlite_table_info meta item from a dataset."""
-    is_spatial = bool(_get_geometry_columns(v2_obj.schema))
+    is_spatial = bool(v2_obj.schema.geometry_columns)
     return [
         _column_schema_to_gpkg(i, col, is_spatial)
         for i, col in enumerate(v2_obj.schema)
     ]
-
-
-def _get_geometry_columns(schema):
-    return [c for c in schema.columns if c.data_type == "geometry"]
 
 
 def gpkg_to_v2_schema(

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pygit2
 import pytest
-from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, INVALID_OPERATION
+from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, NOT_YET_IMPLEMENTED
 
 
 H = pytest.helpers.helpers()
@@ -121,7 +121,7 @@ def test_apply_meta_changes(data_archive, cli_runner):
     with data_archive("points"):
         # this won't work, v1 doesn't support this patch
         r = cli_runner.invoke(["apply", '-'], input=patch_file,)
-        assert r.exit_code == INVALID_OPERATION, r
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r
     with data_archive("points2"):
         r = cli_runner.invoke(["apply", '-'], input=patch_file,)
         assert r.exit_code == 0, r.stderr

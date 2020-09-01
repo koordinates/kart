@@ -1,4 +1,5 @@
 from collections import namedtuple
+import functools
 import uuid
 
 from .serialise_util import (
@@ -214,6 +215,11 @@ class Schema:
     @property
     def pk_columns(self):
         return self._pk_columns
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def geometry_columns(self):
+        return [c for c in self.columns if c.data_type == "geometry"]
 
     def __getitem__(self, i):
         """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID."""
