@@ -108,7 +108,7 @@ def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
         VALUES
             ({','.join(['?'] * len(keys))});
     """
-    dbcur.execute(sql, values)
+    return dbcur.execute(sql, values)
 
 
 class WorkingCopyGPKG(WorkingCopy):
