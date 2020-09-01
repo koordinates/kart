@@ -99,7 +99,7 @@ class SQLCommand(Enum):
 def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
     """
     Inserts a row into a database table.
-    sql_command should be a member of SQLCommand
+    sql_command should be a member of SQLCommand (INSERT or INSERT_OR_REPLACE)
     """
     keys, values = zip(*row_dict.items())
     sql = f"""
@@ -347,32 +347,11 @@ class WorkingCopyGPKG(WorkingCopy):
                 sql_insert_dict(
                     dbcur, SQLCommand.INSERT_OR_REPLACE, "gpkg_spatial_ref_sys", o
                 )
-                '''
-                keys, values = zip(*o.items())
-                sql = f"""
-                    INSERT OR REPLACE INTO gpkg_spatial_ref_sys
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    VALUES
-                        ({','.join(['?'] * len(keys))});
-                """
-                dbcur.execute(sql, values)
-                '''
 
             # our repo copy doesn't include all fields from gpkg_contents
             # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y}
             # should deal with the remaining fields
             sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_contents", gpkg_contents)
-            '''
-            keys, values = zip(*gpkg_contents.items())
-            
-            sql = f"""
-                INSERT INTO gpkg_contents
-                    ({','.join([gpkg.ident(k) for k in keys])})
-                VALUES
-                    ({','.join(['?'] * len(keys))});
-            """
-            dbcur.execute(sql, values)
-            '''
 
             if gpkg_geometry_columns:
                 sql_insert_dict(
@@ -381,16 +360,6 @@ class WorkingCopyGPKG(WorkingCopy):
                     "gpkg_geometry_columns",
                     gpkg_geometry_columns,
                 )
-                '''
-                keys, values = zip(*gpkg_geometry_columns.items())
-                sql = f"""
-                    INSERT INTO gpkg_geometry_columns
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    VALUES
-                        ({','.join(['?']*len(keys))});
-                """
-                dbcur.execute(sql, values)
-                '''
 
             gpkg_metadata = dataset.get_gpkg_meta_item("gpkg_metadata")
             gpkg_metadata_reference = dataset.get_gpkg_meta_item(
@@ -412,14 +381,7 @@ class WorkingCopyGPKG(WorkingCopy):
             params = dict(row.items())
             params.pop("id")
 
-            keys, values = zip(*params.items())
-            sql = f"""
-                INSERT INTO gpkg_metadata
-                    ({','.join([gpkg.ident(k) for k in keys])})
-                VALUES
-                    ({','.join(['?']*len(keys))});
-                """
-            dbcur.execute(sql, values)
+            sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_metadata", params)
             metadata_id_map[row["id"]] = db.last_insert_rowid()
 
         for row in gpkg_metadata_reference:
@@ -428,14 +390,7 @@ class WorkingCopyGPKG(WorkingCopy):
             params["md_parent_id"] = metadata_id_map.get(row["md_parent_id"], None)
             params["table_name"] = table_name
 
-            keys, values = zip(*params.items())
-            sql = f"""
-                INSERT INTO gpkg_metadata_reference
-                    ({','.join([gpkg.ident(k) for k in keys])})
-                VALUES
-                    ({','.join(['?']*len(keys))});
-            """
-            dbcur.execute(sql, values)
+            sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_metadata_reference", params)
 
     def meta_items(self, dataset):
         """
