@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime
 from pathlib import Path
+from enum import Enum
 
 import pygit2
 from osgeo import gdal
@@ -88,6 +89,26 @@ class WorkingCopy:
 
         def __str__(self):
             return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.match_tree_id}"
+
+
+class SQLCommand(Enum):
+    INSERT = "INSERT"
+    INSERT_OR_REPLACE = "INSERT OR REPLACE"
+
+
+def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
+    """
+    Inserts a row into a database table.
+    sql_command should be a member of SQLCommand (INSERT or INSERT_OR_REPLACE)
+    """
+    keys, values = zip(*row_dict.items())
+    sql = f"""
+        {sql_command.value} INTO {table_name}
+            ({','.join([gpkg.ident(k) for k in keys])})
+        VALUES
+            ({','.join(['?'] * len(keys))});
+    """
+    return dbcur.execute(sql, values)
 
 
 class WorkingCopyGPKG(WorkingCopy):
@@ -212,7 +233,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 pk_field = col["name"]
                 # TODO: Should INTEGER PRIMARY KEYs ever be non-AUTOINCREMENT?
                 # See https://github.com/koordinates/sno/issues/188
-                if col['type'] == "INTEGER":
+                if col["type"] == "INTEGER":
                     col_spec += " AUTOINCREMENT"
             if col["notnull"]:
                 col_spec += " NOT NULL"
@@ -313,7 +334,7 @@ class WorkingCopyGPKG(WorkingCopy):
         identifier_prefix = f"{dataset.table_name}: "
         if not gpkg_contents["identifier"].startswith(identifier_prefix):
             gpkg_contents["identifier"] = (
-                identifier_prefix + gpkg_contents['identifier']
+                identifier_prefix + gpkg_contents["identifier"]
             )
 
         gpkg_geometry_columns = dataset.get_gpkg_meta_item("gpkg_geometry_columns")
@@ -323,37 +344,22 @@ class WorkingCopyGPKG(WorkingCopy):
             dbcur = db.cursor()
             # Update GeoPackage core tables
             for o in gpkg_spatial_ref_sys:
-                keys, values = zip(*o.items())
-                sql = f"""
-                    INSERT OR REPLACE INTO gpkg_spatial_ref_sys
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    VALUES
-                        ({','.join(['?'] * len(keys))});
-                """
-                dbcur.execute(sql, values)
+                sql_insert_dict(
+                    dbcur, SQLCommand.INSERT_OR_REPLACE, "gpkg_spatial_ref_sys", o
+                )
 
-            keys, values = zip(*gpkg_contents.items())
             # our repo copy doesn't include all fields from gpkg_contents
             # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y}
             # should deal with the remaining fields
-
-            sql = f"""
-                INSERT INTO gpkg_contents
-                    ({','.join([gpkg.ident(k) for k in keys])})
-                VALUES
-                    ({','.join(['?'] * len(keys))});
-            """
-            dbcur.execute(sql, values)
+            sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_contents", gpkg_contents)
 
             if gpkg_geometry_columns:
-                keys, values = zip(*gpkg_geometry_columns.items())
-                sql = f"""
-                    INSERT INTO gpkg_geometry_columns
-                        ({','.join([gpkg.ident(k) for k in keys])})
-                    VALUES
-                        ({','.join(['?']*len(keys))});
-                """
-                dbcur.execute(sql, values)
+                sql_insert_dict(
+                    dbcur,
+                    SQLCommand.INSERT,
+                    "gpkg_geometry_columns",
+                    gpkg_geometry_columns,
+                )
 
             gpkg_metadata = dataset.get_gpkg_meta_item("gpkg_metadata")
             gpkg_metadata_reference = dataset.get_gpkg_meta_item(
@@ -375,14 +381,7 @@ class WorkingCopyGPKG(WorkingCopy):
             params = dict(row.items())
             params.pop("id")
 
-            keys, values = zip(*params.items())
-            sql = f"""
-                INSERT INTO gpkg_metadata
-                    ({','.join([gpkg.ident(k) for k in keys])})
-                VALUES
-                    ({','.join(['?']*len(keys))});
-                """
-            dbcur.execute(sql, values)
+            sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_metadata", params)
             metadata_id_map[row["id"]] = db.last_insert_rowid()
 
         for row in gpkg_metadata_reference:
@@ -391,14 +390,7 @@ class WorkingCopyGPKG(WorkingCopy):
             params["md_parent_id"] = metadata_id_map.get(row["md_parent_id"], None)
             params["table_name"] = table_name
 
-            keys, values = zip(*params.items())
-            sql = f"""
-                INSERT INTO gpkg_metadata_reference
-                    ({','.join([gpkg.ident(k) for k in keys])})
-                VALUES
-                    ({','.join(['?']*len(keys))});
-            """
-            dbcur.execute(sql, values)
+            sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_metadata_reference", params)
 
     def meta_items(self, dataset):
         """
@@ -1025,13 +1017,13 @@ class WorkingCopyGPKG(WorkingCopy):
         # TODO - find a better way to roundtrip titles while keeping them unique
         identifier = f"{table_name}: {dest_value}"
         dbcur.execute(
-            '''UPDATE gpkg_contents SET identifier = ? WHERE table_name = ?''',
+            """UPDATE gpkg_contents SET identifier = ? WHERE table_name = ?""",
             (identifier, table_name),
         )
 
     def _apply_meta_description(self, table_name, src_value, dest_value, db, dbcur):
         dbcur.execute(
-            '''UPDATE gpkg_contents SET description = ? WHERE table_name = ?''',
+            """UPDATE gpkg_contents SET description = ? WHERE table_name = ?""",
             (dest_value, table_name),
         )
 
@@ -1050,7 +1042,7 @@ class WorkingCopyGPKG(WorkingCopy):
             src_name = src_schema[col_id].name
             dest_name = dest_schema[col_id].name
             dbcur.execute(
-                f'''ALTER TABLE {gpkg.ident(table_name)} RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}'''
+                f"""ALTER TABLE {gpkg.ident(table_name)} RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}"""
             )
 
     def _apply_meta_metadata_dataset_json(
@@ -1078,7 +1070,7 @@ class WorkingCopyGPKG(WorkingCopy):
         table_name = dataset.table_name
         for key in meta_diff:
             func_key = key.replace("/", "_").replace(".", "_")
-            func = getattr(self, f'_apply_meta_{func_key}')
+            func = getattr(self, f"_apply_meta_{func_key}")
             delta = meta_diff[key]
             func(table_name, delta.old_value, delta.new_value, db, dbcur)
 
@@ -1232,7 +1224,7 @@ class WorkingCopyGPKG(WorkingCopy):
         structural_changes = table_inserts | table_deletes
         if track_changes_as_dirty and structural_changes:
             # We don't yet support tracking changes as dirty if we delete, create, or rewrite an entire table.
-            structural_changes_text = '\n'.join(structural_changes)
+            structural_changes_text = "\n".join(structural_changes)
             raise NotYetImplemented(
                 "Sorry, this operation is not possible when there are structural changes."
                 f"Structural changes are affecting:\n{structural_changes_text}"
