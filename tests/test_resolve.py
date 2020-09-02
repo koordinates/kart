@@ -1,6 +1,8 @@
 import json
 import pytest
 
+import pygit2
+
 from sno.diff_output import json_row
 from sno.exceptions import INVALID_OPERATION
 from sno.merge_util import MergeIndex
@@ -37,9 +39,7 @@ def get_json_feature(rs, layer, pk):
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
-def test_resolve_with_version(
-    repo_version, create_conflicts, cli_runner, disable_editor
-):
+def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
     with create_conflicts(H.POLYGONS, repo_version) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r
@@ -93,8 +93,9 @@ def test_resolve_with_version(
         assert merge_index.resolves[ck2] == [merge_index.conflicts[ck2].theirs]
         assert merge_index.resolves[ck3] == []
 
-        r = cli_runner.invoke(["merge", "--continue"])
+        r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r
+        assert repo.head.peel(pygit2.Commit).message == "merge commit"
         assert RepoState.get_state(repo) != RepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")
@@ -111,7 +112,7 @@ def test_resolve_with_version(
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
-def test_resolve_with_file(repo_version, create_conflicts, cli_runner, disable_editor):
+def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
     with create_conflicts(H.POLYGONS, repo_version) as repo:
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r
@@ -166,8 +167,10 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner, disable_e
 
         delete_remaining_conflicts(cli_runner)
 
-        r = cli_runner.invoke(["merge", "--continue"])
+        r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r
+        assert repo.head.peel(pygit2.Commit).message == "merge commit"
+        assert RepoState.get_state(repo) != RepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")
         ours = RepositoryStructure.lookup(repo, "ours_branch")

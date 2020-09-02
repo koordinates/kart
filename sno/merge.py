@@ -197,10 +197,11 @@ def complete_merging_state(ctx):
     merge_tree_id = merge_index.write_resolved_tree(repo)
     L.debug(f"Merge tree: {merge_tree_id}")
 
-    # TODO - support -m commit-message
-    merge_message = get_commit_message(
-        merge_context, merge_tree_id, repo, read_msg_file=True
-    )
+    merge_message = ctx.params.get("message")
+    if not merge_message:
+        merge_message = get_commit_message(
+            merge_context, merge_tree_id, repo, read_msg_file=True
+        )
 
     user = repo.default_signature
     merge_commit_id = repo.create_commit(
@@ -344,23 +345,25 @@ def merge_status_to_text(jdict, fresh):
     help="Don't perform a merge - just show what would be done",
 )
 @click.option(
+    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+)
+@click.option(
     "--message",
     "-m",
     type=StringFromFile(encoding='utf-8'),
     help="Use the given message as the commit message.",
-)
-@click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
-)
-@call_and_exit_flag(
-    '--abort',
-    callback=abort_merging_state,
-    help="Abandon an ongoing merge, revert repository to the state before the merge began",
+    is_eager=True,  # -m is eager and --continue is non-eager so we can access -m from complete_merging_state callback.
 )
 @call_and_exit_flag(
     '--continue',
     callback=complete_merging_state,
     help="Completes and commits a merge once all conflicts are resolved and leaves the merging state",
+    is_eager=False,
+)
+@call_and_exit_flag(
+    '--abort',
+    callback=abort_merging_state,
+    help="Abandon an ongoing merge, revert repository to the state before the merge began",
 )
 @click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
