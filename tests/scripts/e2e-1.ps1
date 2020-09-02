@@ -71,7 +71,7 @@ try {
     }
 
     Exec { sno status }
-    Exec { sno diff }
+    Exec { sno diff --crs=EPSG:3857 }
     Exec { sno commit -m 'my-commit' }
     Exec { sno switch 'master' }
     Exec { sno status }

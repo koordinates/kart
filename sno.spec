@@ -5,16 +5,17 @@
 # flake8: noqa E13
 
 import os
-import platform
 import re
 import shutil
 import subprocess
+
+from PyInstaller.compat import is_win, is_darwin, is_linux
 
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
     sno_version = version_file.read().strip()
 
-if platform.system() == "Windows":
+if is_win:
     with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
         vr_doc = vr_template.read()
         sno_version_nums = re.match(r'(\d+\.\d+(?:\.\d+)?)', sno_version).group(1)
@@ -56,8 +57,10 @@ a = Analysis(
     noarchive=False,
 )
 
-if platform.system() == "Windows":
+if is_win:
     a.datas += Tree('vendor/dist/git', prefix='git')
+    # GDAL/osgeo hook doesn't include Proj
+    a.datas += Tree('venv/Lib/site-packages/osgeo/data/proj', prefix=os.path.join('osgeo', 'data', 'proj'))
 else:
     a.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
     libexec_root = 'vendor/dist/env/libexec'
@@ -65,7 +68,7 @@ else:
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=None)
 
-if platform.system() == "Windows":
+if is_win:
     exe_name = 'sno'
     exe_icon = 'platforms/windows/sno.ico'
 else:
@@ -111,7 +114,7 @@ app = BUNDLE(
 # PyInstaller by defaults dereferences symlinks in data directories
 # Git has about 200 so it's a big size loss
 # Fix it
-if platform.system() == "Darwin":
+if is_darwin:
 
     # fix symlinks/binaries in libexec/git-core/
     dist_bin_root = os.path.join(DISTPATH, 'Sno.app', 'Contents', 'MacOS')
@@ -161,7 +164,7 @@ if platform.system() == "Darwin":
             # copy anything else (keeps symlinks too)
             shutil.copy(fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False)
 
-elif platform.system() == "Linux":
+elif is_linux:
     # fix symlinks/binaries in libexec/git-core/
     dist_libexec_root = os.path.join(DISTPATH, 'sno', 'libexec')
 
