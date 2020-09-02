@@ -184,7 +184,7 @@ endif
 
 .PHONY: ci-test
 ci-test:
-	pytest \
+	CI=true pytest \
 		-vv \
 		--log-level=DEBUG \
 		-p no:sugar \
@@ -192,7 +192,7 @@ ci-test:
 		--cov-report html:test-results/coverage/ \
 		--junit-xml=test-results/junit.xml \
 		--benchmark-enable \
-		--numprocesses=0
+		-p no:xdist
 
 # Cleanup
 

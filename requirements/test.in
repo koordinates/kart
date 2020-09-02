@@ -1,4 +1,4 @@
--r ../requirements.txt
+-c ../requirements.txt
 
 pytest
     # pytest 6+ depends on these on windows, but we generally run pip-compile on macOS...
@@ -10,6 +10,5 @@ pytest-sugar
 pytest-helpers-namespace
 pytest-benchmark[aspect]
 pytest-profiling
-pytest-xdist
 lovely-pytest-docker
 html5lib

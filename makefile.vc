@@ -61,6 +61,7 @@ test: $(app) venv\.test.installed
 	pytest -v --cov-report term --cov-report html:coverage
 
 ci-test:
+	set CI=true
 	pytest \
 		--verbose \
 		-p no:sugar \
@@ -68,7 +69,7 @@ ci-test:
 		--cov-report html:test-results\coverage/ \
 		--junit-xml=test-results\junit.xml \
 		--benchmark-enable \
-		--numprocesses=0
+		-p no:xdist
 
 # Packaging
 

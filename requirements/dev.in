@@ -1,5 +1,6 @@
--r ../requirements.txt
--r test.txt
+-c ../requirements.txt
+-c test.txt
 
 ipdb
 ipython
+pytest-xdist

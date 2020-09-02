@@ -29,6 +29,17 @@ L = logging.getLogger("sno.tests")
 
 
 def pytest_addoption(parser):
+    if 'CI' in os.environ:
+        # pytest.ini sets --numprocesses=auto
+        # for parallelism in local dev.
+        # But in CI we disable xdist because it causes a crash in windows builds.
+        # (simply doing --numprocesses=0 is insufficient; the plugin needs to be
+        # disabled completely)
+        # However, there's no way to *remove* an option that's in pytest.ini's addopts.
+        # So here we just define the option so it parses, and then ignore it.
+        parser.addoption(
+            "--numprocesses", action="store", default=0, help="<ignored>",
+        )
     parser.addoption(
         "--preserve-data",
         action="store_true",
