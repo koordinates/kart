@@ -46,7 +46,7 @@ sqlite3 --bail test.gpkg "
   INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
 "
 sno status
-sno diff
+sno diff --crs=EPSG:3857
 sno commit -m my-commit
 sno switch master
 sno status
