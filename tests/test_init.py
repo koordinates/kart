@@ -1,7 +1,8 @@
 import json
+import shutil
+
 import pytest
 import pygit2
-
 
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
@@ -749,7 +750,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir, geopac
 
 @pytest.mark.slow
 def test_init_import_home_resolve(
-    data_archive, tmp_path, cli_runner, chdir, monkeypatch
+    data_archive, tmp_path, cli_runner, chdir, monkeypatch, git_user_config
 ):
     """ Import from a ~-specified gpkg path """
     repo_path = tmp_path / "data.sno"
@@ -761,6 +762,11 @@ def test_init_import_home_resolve(
     with data_archive("gpkg-points") as source_path:
         with chdir(repo_path):
             monkeypatch.setenv("HOME", str(source_path))
+
+            # make sure we have a .gitconfig file in HOME,
+            # otherwise sno can't find the user information for the commit
+            orig_home = git_user_config[2]
+            shutil.copy2(orig_home / ".gitconfig", source_path)
 
             r = cli_runner.invoke(
                 [

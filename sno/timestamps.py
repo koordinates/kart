@@ -49,3 +49,26 @@ def commit_time_to_text(iso8601z, iso8601_tz):
     dt = iso8601_utc_to_datetime(iso8601z)
     tz = timezone(iso8601_tz_to_timedelta(iso8601_tz))
     return dt.astimezone(tz).strftime("%c %z")
+
+
+def minutes_to_tz_offset(tz_offset_minutes):
+    """
+    Takes a pygit2 tz offset (integer number of minutes)
+    and converts it to a timestamp offset string ('+HHMM')
+    """
+    hours, minutes = divmod(abs(tz_offset_minutes), 60)
+    sign = "+" if tz_offset_minutes >= 0 else "-"
+    return f"{sign}{hours:02}{minutes:02}"
+
+
+def tz_offset_to_minutes(tz_offset_string):
+    """
+    Takes a timestamp offset string ('+HHMM') and converts it to
+    an integer number of minutes (for pygit2.Signature.offset)
+    """
+    as_int = int(tz_offset_string.replace(':', ''))
+    hours, minutes = divmod(abs(as_int), 100)
+    total_minutes = 60 * hours + minutes
+    if as_int < 0:
+        total_minutes = -total_minutes
+    return total_minutes

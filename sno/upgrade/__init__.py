@@ -11,6 +11,7 @@ from sno import checkout, context
 from sno.exceptions import InvalidOperation
 from sno.fast_import import fast_import_tables, ReplaceExisting
 from sno.repository_version import get_repo_version, write_repo_version_config
+from sno.timestamps import minutes_to_tz_offset
 
 
 @click.command()
@@ -114,12 +115,6 @@ def upgrade(ctx, source, dest):
     click.secho("\nUpgrade complete", fg="green", bold=True)
 
 
-def _raw_time(timestamp, tz_offset_minutes):
-    hours, minutes = divmod(abs(tz_offset_minutes), 60)
-    sign = "+" if tz_offset_minutes >= 0 else "-"
-    return f"{timestamp} {sign}{hours:02}{minutes:02}"
-
-
 def _upgrade_commit(
     i, source_repo, source_commit, source_version, dest_parents, dest_repo, commit_map,
 ):
@@ -129,8 +124,8 @@ def _upgrade_commit(
     feature_count = sum(s.feature_count for s in sources)
 
     s = source_commit
-    author_time = _raw_time(s.author.time, s.author.offset)
-    commit_time = _raw_time(s.commit_time, s.commit_time_offset)
+    author_time = f'{s.author.time} {minutes_to_tz_offset(s.author.offset)}'
+    commit_time = f'{s.commit_time} {minutes_to_tz_offset(s.commit_time_offset)}'
     header = (
         # We import every commit onto refs/heads/master and fix the branch heads later.
         "commit refs/heads/master\n"
