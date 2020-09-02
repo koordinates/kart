@@ -9,6 +9,7 @@ from .exceptions import InvalidOperation
 from .output_util import (
     dump_json_output,
     format_json_for_output,
+    format_wkt_for_output,
     resolve_output_path,
     wrap_text_to_terminal,
 )
@@ -17,9 +18,9 @@ from .structure import RepositoryStructure
 # Changing these items would generally break the repo;
 # we disallow that.
 READONLY_ITEMS = {
-    'primary_key',
-    'sqlite_table_info',
-    'fields',
+    "primary_key",
+    "sqlite_table_info",
+    "fields",
 }
 
 
@@ -32,7 +33,7 @@ def meta(ctx, **kwargs):
     """
 
 
-@meta.command(name='get')
+@meta.command(name="get")
 @click.option(
     "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
 )
@@ -42,8 +43,8 @@ def meta(ctx, **kwargs):
     default="pretty",
     help="How to format the JSON output. Only used with -o json",
 )
-@click.argument('dataset', required=False)
-@click.argument('keys', required=False, nargs=-1)
+@click.argument("dataset", required=False)
+@click.argument("keys", required=False, nargs=-1)
 @click.pass_context
 def meta_get(ctx, output_format, json_style, dataset, keys):
     """
@@ -61,7 +62,7 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
     else:
         datasets = rs
 
-    fp = resolve_output_path('-')
+    fp = resolve_output_path("-")
 
     all_items = {}
     for ds in datasets:
@@ -70,17 +71,21 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
         else:
             all_items[ds.path] = dict(ds.meta_items())
 
-    if output_format == 'text':
+    if output_format == "text":
         for ds_path, items in all_items.items():
             click.secho(ds_path, bold=True)
             for key, value in items.items():
-                click.secho(f'    {key}', bold=True)
-                if key.endswith('.json') or not isinstance(value, str):
+                click.secho(f"    {key}", bold=True)
+                if key.endswith(".json") or not isinstance(value, str):
                     value = format_json_for_output(value, fp, json_style=json_style)
                     for i, line in enumerate(value.splitlines()):
                         fp.write(f"        {line}\n")
+                elif key.endswith(".wkt"):
+                    value = format_wkt_for_output(value, fp)
+                    for i, line in enumerate(value.splitlines()):
+                        fp.write(f"        {line}\n")
                 else:
-                    fp.write(wrap_text_to_terminal(value, indent='        '))
+                    fp.write(wrap_text_to_terminal(value, indent="        "))
     else:
         dump_json_output(all_items, fp, json_style=json_style)
 
@@ -107,7 +112,7 @@ class KeyValueType(click.ParamType):
     name = "key=value"
 
     def convert(self, value, param, ctx):
-        value = tuple(value.split('=', 1))
+        value = tuple(value.split("=", 1))
         if len(value) != 2:
             self.fail(f"{value} should be of the form KEY=VALUE", param, ctx)
 
@@ -118,20 +123,20 @@ class KeyValueType(click.ParamType):
         return key, value
 
 
-@meta.command(name='set')
+@meta.command(name="set")
 @click.option(
     "--message",
     "-m",
     help="Use the given message as the commit message",
     type=StringFromFile(encoding="utf-8"),
 )
-@click.argument('dataset')
+@click.argument("dataset")
 @click.argument(
-    'items',
+    "items",
     type=KeyValueType(),
     required=True,
     nargs=-1,
-    metavar='KEY=VALUE [KEY=VALUE...]',
+    metavar="KEY=VALUE [KEY=VALUE...]",
 )
 @click.pass_context
 def meta_set(ctx, message, dataset, items):
@@ -151,16 +156,16 @@ def meta_set(ctx, message, dataset, items):
         )
 
     if message is None:
-        message = f'Update metadata for {dataset}'
+        message = f"Update metadata for {dataset}"
 
     existing_meta_items = dict(ds.meta_items())
 
     def _meta_change_dict(key, value):
         change = {
-            '+': value,
+            "+": value,
         }
         if key in existing_meta_items:
-            change['-'] = existing_meta_items[key]
+            change["-"] = existing_meta_items[key]
         return change
 
     patch = {
