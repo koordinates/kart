@@ -1,7 +1,7 @@
 ---
 name: Build
 
-on: [push]
+on: [push, pull_request]
 
 env:
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
