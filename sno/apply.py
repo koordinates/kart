@@ -6,6 +6,7 @@ import click
 
 import pygit2
 
+from .git_util import author_signature
 from .exceptions import (
     NO_CHANGES,
     NO_TABLE,
@@ -102,31 +103,29 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
                 "Patch contains no author information, and --no-commit was not supplied"
             )
 
-        default_sig = repo.default_signature
-        if 'authorTime' in metadata:
-            timestamp = int(
-                datetime.timestamp(iso8601_utc_to_datetime(metadata['authorTime']))
+        author_kwargs = {}
+        for k, patch_kwarg in (
+            ('time', 'authorTime'),
+            ('email', 'authorEmail'),
+            ('offset', 'authorTimeOffset'),
+            ('name', 'authorName'),
+        ):
+            if patch_kwarg in metadata:
+                author_kwargs[k] = metadata[patch_kwarg]
+
+        if 'time' in author_kwargs:
+            author_kwargs['time'] = int(
+                datetime.timestamp(iso8601_utc_to_datetime(author_kwargs['time']))
             )
-        else:
-            timestamp = default_sig.time
-        if 'authorTimeOffset' in metadata:
-            offset = int(
-                iso8601_tz_to_timedelta(metadata['authorTimeOffset']).total_seconds()
+        if 'offset' in author_kwargs:
+            author_kwargs['offset'] = int(
+                iso8601_tz_to_timedelta(author_kwargs['offset']).total_seconds()
                 / 60  # minutes
             )
-        else:
-            offset = default_sig.offset
 
+        author = author_signature(repo, **author_kwargs)
         oid = rs.commit(
-            repo_diff,
-            metadata['message'],
-            author=pygit2.Signature(
-                name=metadata.get('authorName', default_sig.name),
-                email=metadata.get('authorEmail', default_sig.email),
-                time=timestamp,
-                offset=offset,
-            ),
-            allow_empty=allow_empty,
+            repo_diff, metadata['message'], author=author, allow_empty=allow_empty,
         )
         click.echo(f"Commit {oid.hex}")
 

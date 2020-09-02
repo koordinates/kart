@@ -6,7 +6,7 @@ from enum import Enum, auto
 import click
 import pygit2
 
-from . import core
+from . import git_util
 from .exceptions import SubprocessError, InvalidOperation
 from .import_source import ImportSource
 from .structure import DatasetStructure, RepositoryStructure
@@ -218,10 +218,12 @@ def generate_header(repo, sources, message):
     if message is None:
         message = generate_message(sources)
 
-    user = repo.default_signature
+    author = git_util.author_signature(repo)
+    committer = git_util.committer_signature(repo)
     return (
         f"commit {get_head_branch(repo)}\n"
-        f"committer {user.name} <{user.email}> now\n"
+        f"author {author.name} <{author.email}> now\n"
+        f"committer {committer.name} <{committer.email}> now\n"
         f"data {len(message.encode('utf8'))}\n{message}\n"
     )
 

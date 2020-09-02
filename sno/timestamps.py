@@ -66,9 +66,9 @@ def tz_offset_to_minutes(tz_offset_string):
     Takes a timestamp offset string ('+HHMM') and converts it to
     an integer number of minutes (for pygit2.Signature.offset)
     """
-    as_int = int(tz_offset_string)
+    as_int = int(tz_offset_string.replace(':', ''))
     hours, minutes = divmod(abs(as_int), 100)
     total_minutes = 60 * hours + minutes
     if as_int < 0:
-        total_minutes *= -1
+        total_minutes = -total_minutes
     return total_minutes
