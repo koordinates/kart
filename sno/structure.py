@@ -6,7 +6,7 @@ from collections import deque
 import click
 import pygit2
 
-from . import core
+from . import core, git_util
 from .diff_structs import DatasetDiff, DeltaDiff, Delta
 from .exceptions import (
     InvalidOperation,
@@ -20,7 +20,6 @@ from .geometry import geom_envelope
 from .schema import Schema
 from .serialise_util import ensure_bytes, json_pack
 from .repository_version import get_repo_version
-from .tree_util import replace_subtree
 
 
 L = logging.getLogger("sno.structure")
@@ -226,12 +225,11 @@ class RepositoryStructure:
         """
         new_tree_oid = self.create_tree_from_diff(wcdiff)
         L.info("Committing...")
-        user = self.repo.default_signature
         # this will also update the ref (branch) to point to the current commit
         new_commit = self.repo.create_commit(
             "HEAD",  # reference_name
-            author or user,  # author
-            committer or user,  # committer
+            author or git_util.author_signature(self.repo),
+            committer or git_util.committer_signature(self.repo),
             message,  # message
             new_tree_oid,  # tree
             [self.repo.head.target],  # parents
@@ -735,7 +733,7 @@ class DatasetStructure:
                         f"{self.path}: Trying to delete nonexistent meta item: {name}"
                     )
                     continue
-                meta_tree = replace_subtree(repo, meta_tree, name, None)
+                meta_tree = git_util.replace_subtree(repo, meta_tree, name, None)
 
             elif delta.type == "insert":
                 if name in meta_tree:
@@ -748,7 +746,7 @@ class DatasetStructure:
                     blob_id = repo.create_blob(json_pack(delta.new.value))
                 else:
                     blob_id = repo.create_blob(ensure_bytes(delta.new.value))
-                meta_tree = replace_subtree(repo, meta_tree, name, blob_id)
+                meta_tree = git_util.replace_subtree(repo, meta_tree, name, blob_id)
 
             elif delta.type == "update":
                 if name not in meta_tree:
@@ -764,7 +762,7 @@ class DatasetStructure:
                         f"{self.path}: Trying to update already-changed meta item: {name}"
                     )
                     continue
-                meta_tree = replace_subtree(repo, meta_tree, name, None)
+                meta_tree = git_util.replace_subtree(repo, meta_tree, name, None)
                 if name == "schema.json":
                     old_schema = Schema.from_column_dicts(delta.old.value)
                     new_schema = Schema.from_column_dicts(delta.new.value)
@@ -785,9 +783,9 @@ class DatasetStructure:
                     to_write = [(name, ensure_bytes(delta.new.value))]
                 for path, data in to_write:
                     blob_id = repo.create_blob(data)
-                    meta_tree = replace_subtree(repo, meta_tree, path, blob_id)
+                    meta_tree = git_util.replace_subtree(repo, meta_tree, path, blob_id)
 
-        orig_tree = replace_subtree(repo, orig_tree, meta_path, meta_tree)
+        orig_tree = git_util.replace_subtree(repo, orig_tree, meta_path, meta_tree)
 
         geom_column_name = self.geom_column_name
         deltas_by_directory = {}

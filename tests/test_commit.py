@@ -301,3 +301,25 @@ def test_empty(tmp_path, cli_runner, chdir):
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == NO_REPOSITORY, r
         assert "not an existing repository" in r.stderr
+
+
+def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
+    with data_working_copy("points") as (repo_dir, wc_path):
+        repo = pygit2.Repository(str(repo_dir))
+
+        # normal
+        r = cli_runner.invoke(
+            ["commit", "--allow-empty", "-m", "test"],
+            env={
+                'GIT_AUTHOR_DATE': '1000000000 +1230',
+                'GIT_AUTHOR_NAME': 'bob',
+                'GIT_AUTHOR_EMAIL': 'user@example.com',
+            },
+        )
+        assert r.exit_code == 0, r
+
+        author = repo.head.peel(pygit2.Commit).author
+        assert author.name == 'bob'
+        assert author.email == 'user@example.com'
+        assert author.time == 1000000000
+        assert author.offset == 750
