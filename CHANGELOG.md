@@ -13,10 +13,9 @@ Existing commands are backward compatible with V1 datasets, however some new fun
 
 ### Datasets V2
 
- * Entire repositories can be upgraded from V1 to V2 using `sno upgrade 02-05 <old_repo> <new_repo>`.
+ * Entire repositories can be upgraded from V1 to V2 using `sno upgrade EXISTING_REPO NEW_REPO`.
  * V2 should support everything V1 supports
  * All new repositories use the new layout by default. To opt out, use the `--repo-version=1` flag for `sno init`
- * To upgrade your v1 repository to v2, use `sno upgrade 02-05 SRC_PATH DEST_PATH`
  * A future release will drop support for v1 repositories
 
 #### New features for V2 repositories only
@@ -41,7 +40,7 @@ Existing commands are backward compatible with V1 datasets, however some new fun
     - Text output: Features are now labelled as `<dataset>:feature:<primary_key>`, consistent with meta items that are labelled as `<dataset>:meta:<meta_item_name>`
     - JSON output also uses "feature" and "meta" as keys for the different types of changes, instead of "featureChanges" and "metaChanges".
  * `sno show -o json` header key changed to `sno.show/v1`, which is not an applyable patch. Use `sno create-patch` to create a patch.
- * `sno upgrade` now only takes two arguments: `sno upgrade [source] [dest]`. No other arguments are required or accepted, exactly how to upgrade the repository is detected automatically. 
+ * `sno upgrade` now only takes two arguments: `sno upgrade EXISTING_REPO NEW_REPO`. No other arguments are required or accepted, exactly how to upgrade the repository is detected automatically.
 
 ### Other changes in this release
 
