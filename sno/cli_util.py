@@ -113,10 +113,10 @@ class JsonFromFile(StringFromFile):
         return value
 
 
-def call_and_exit_flag(*args, callback, **kwargs):
+def call_and_exit_flag(*args, callback, is_eager=True, **kwargs):
     """
     Add an is_flag option that, when set, eagerly calls the given callback with only the context as a parameter.
-    The callback may want to exit the program once it has completed, using ctx.exit(0)
+    The process exits once the callback is finished.
     Usage:
     @call_and_exit_flag("--version", callback=print_version, help="Print the version number")
     """
@@ -131,6 +131,6 @@ def call_and_exit_flag(*args, callback, **kwargs):
         is_flag=True,
         callback=actual_callback,
         expose_value=False,
-        is_eager=True,
+        is_eager=is_eager,
         **kwargs,
     )
