@@ -17,7 +17,7 @@ from .working_copy import WorkingCopy
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`sno commit`) or"
-    " just discard them by adding the option `--discard_changes`."
+    " just discard them by adding the option `--discard-changes`."
 )
 
 
