@@ -8,7 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 sno v0.5 introduces a new repo layout, which is the default, dubbed 'Datasets V2'
 
-Existing commands are backward compatible with V1 datasets, however some new functionality only supports repositories upgraded to the new layout.
+Existing commands are backward compatible with V1 datasets, however some new functionality is only supported in repositories upgraded to the new layout.
 
 
 ### Datasets V2
@@ -29,9 +29,10 @@ Existing commands are backward compatible with V1 datasets, however some new fun
 
 #### Missing functionality in Datasets V2
 
- * String primary keys and tables without primary keys are not yet supported.
- * Changing the primary key column is not yet supported.
- * Schema changes might not be correctly interpreted if too many changes are made at once (eg adding a new column with the same name as a deleted column).
+ * String primary keys and tables without primary keys are not yet supported. [#212](https://github.com/koordinates/sno/issues/212)
+ * Changing the primary key column is not yet supported. [#238](https://github.com/koordinates/sno/issues/238)
+ * Patches which create or delete datasets are not supported. [#239](https://github.com/koordinates/sno/issues/239)
+ * Schema changes might not be correctly interpreted if too many changes are made at once (eg adding a new column with the same name as a deleted column - sno may incorrectly assume it is the same column).
     - It is safest to commit schema changes to any existing columns, then commit schema changes adding any new columns, then commit any feature changes.
 
 ### Breaking changes in this release
