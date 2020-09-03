@@ -11,6 +11,7 @@ from .exceptions import SubprocessError, InvalidOperation
 from .import_source import ImportSource
 from .structure import DatasetStructure, RepositoryStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
+from .timestamps import minutes_to_tz_offset
 
 
 L = logging.getLogger("sno.fast_import")
@@ -88,7 +89,6 @@ def fast_import_tables(
 
     if header is None:
         header = generate_header(repo, sources, message)
-        cmd.append("--date-format=now")
 
     if not quiet:
         click.echo("Starting git-fast-import...")
@@ -222,8 +222,8 @@ def generate_header(repo, sources, message):
     committer = git_util.committer_signature(repo)
     return (
         f"commit {get_head_branch(repo)}\n"
-        f"author {author.name} <{author.email}> now\n"
-        f"committer {committer.name} <{committer.email}> now\n"
+        f"author {author.name} <{author.email}> {author.time} {minutes_to_tz_offset(author.offset)}\n"
+        f"committer {committer.name} <{committer.email}> {committer.time} {minutes_to_tz_offset(committer.offset)}\n"
         f"data {len(message.encode('utf8'))}\n{message}\n"
     )
 

@@ -574,6 +574,52 @@ def test_init_import(
             cli_runner.invoke(["show", "-o", "json"])
 
 
+def test_init_import_commit_headers(
+    data_archive, tmp_path, cli_runner, chdir, geopackage,
+):
+    with data_archive("gpkg-points") as data:
+        repo_path = tmp_path / "data.sno"
+        repo_path.mkdir()
+
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--import",
+                str(data / 'nz-pa-points-topo-150k.gpkg'),
+                str(repo_path),
+            ],
+            env={
+                'GIT_AUTHOR_DATE': '2000-1-1T00:00:00Z',
+                'GIT_AUTHOR_NAME': 'author',
+                'GIT_AUTHOR_EMAIL': 'author@example.com',
+                'GIT_COMMITTER_DATE': '2010-1-1T00:00:00Z',
+                'GIT_COMMITTER_NAME': 'committer',
+                'GIT_COMMITTER_EMAIL': 'committer@example.com',
+            },
+        )
+        assert r.exit_code == 0, r.stderr
+        assert (repo_path / "HEAD").exists()
+        r = cli_runner.invoke(["-C", str(repo_path), "log", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        log_entry = json.loads(r.stdout)[0]
+        log_entry.pop('commit')
+        log_entry.pop('abbrevCommit')
+        assert log_entry == {
+            "message": "Import from nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k to nz_pa_points_topo_150k/",
+            "refs": ["HEAD -> master"],
+            "authorName": "author",
+            "authorEmail": "author@example.com",
+            "authorTime": "2000-01-01T00:00:00Z",
+            "authorTimeOffset": "+00:00",
+            "committerEmail": "committer@example.com",
+            "committerName": "committer",
+            "commitTime": "2010-01-01T00:00:00Z",
+            "commitTimeOffset": "+00:00",
+            "parents": [],
+            "abbrevParents": [],
+        }
+
+
 def test_init_import_name_clash(data_archive, cli_runner, geopackage):
     """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
     with data_archive("gpkg-editing") as data:
