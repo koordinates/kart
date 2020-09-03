@@ -10,6 +10,7 @@ from .output_util import (
     dump_json_output,
     format_json_for_output,
     format_wkt_for_output,
+    write_with_indent,
     resolve_output_path,
     wrap_text_to_terminal,
 )
@@ -76,16 +77,15 @@ def meta_get(ctx, output_format, json_style, dataset, keys):
             click.secho(ds_path, bold=True)
             for key, value in items.items():
                 click.secho(f"    {key}", bold=True)
+                value_indent = "        "
                 if key.endswith(".json") or not isinstance(value, str):
                     value = format_json_for_output(value, fp, json_style=json_style)
-                    for i, line in enumerate(value.splitlines()):
-                        fp.write(f"        {line}\n")
+                    write_with_indent(fp, value, indent=value_indent)
                 elif key.endswith(".wkt"):
                     value = format_wkt_for_output(value, fp)
-                    for i, line in enumerate(value.splitlines()):
-                        fp.write(f"        {line}\n")
+                    write_with_indent(fp, value, indent=value_indent)
                 else:
-                    fp.write(wrap_text_to_terminal(value, indent="        "))
+                    fp.write(wrap_text_to_terminal(value, indent=value_indent))
     else:
         dump_json_output(all_items, fp, json_style=json_style)
 

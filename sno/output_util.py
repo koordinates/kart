@@ -114,6 +114,11 @@ def wkt_whitespace_format(token_iter):
     yield pygments.token.Whitespace, "\n"
 
 
+def write_with_indent(fp, text, indent=""):
+    for line in text.splitlines():
+        fp.write(f"{indent}{line}\n")
+
+
 def wrap_text_to_terminal(text, indent=""):
     """
     Wraps block text to the current width of the terminal.
