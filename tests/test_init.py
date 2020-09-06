@@ -568,6 +568,25 @@ def test_init_import(
         else:
             assert not xml_metadata
 
+        srs_definition = (
+            db.cursor()
+            .execute(
+                f"""
+            SELECT srs.definition
+            FROM gpkg_spatial_ref_sys srs JOIN gpkg_geometry_columns geom
+            ON srs.srs_id = geom.srs_id
+            WHERE geom.table_name = '{table}'
+            """
+            )
+            .fetchone()
+        )
+        if table == "nz_pa_points_topo_150k":
+            assert srs_definition[0].startswith('GEOGCS["WGS 84",DATUM["WGS_1984"')
+        elif table == "nz_waca_adjustments":
+            assert srs_definition[0].startswith(
+                'GEOGCS["NZGD2000",DATUM["New_Zealand_Geodetic_Datum_2000"'
+            )
+
         H.verify_gpkg_extent(db, table)
         with chdir(repo_path):
             # check that we can view the commit we created

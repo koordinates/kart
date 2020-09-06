@@ -400,15 +400,7 @@ class WorkingCopyGPKG(WorkingCopy):
         Calling Schema.align_* is required to find how the columns matches the existing schema.
         """
         with self.session() as db:
-            gpkg_meta_items = dict(gpkg.get_meta_items(db, dataset.table_name))
-
-        class GpkgTableMetaItems:
-            def __init__(self, name, gpkg_meta_items):
-                self.name = name
-                self.gpkg_meta_items = gpkg_meta_items
-
-            def get_gpkg_meta_item(self, path):
-                return gpkg_meta_items[path]
+            gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(db, dataset.table_name)
 
         gpkg_name = os.path.basename(self.path)
 
@@ -418,9 +410,7 @@ class WorkingCopyGPKG(WorkingCopy):
         # for two unrelated columns.
         id_salt = f"{gpkg_name} {dataset.table_name} {self.get_db_tree()}"
 
-        yield from gpkg_adapter.all_v2_meta_items(
-            GpkgTableMetaItems(dataset.table_name, gpkg_meta_items), id_salt=id_salt
-        )
+        yield from gpkg_adapter.all_v2_meta_items(gpkg_meta_items_obj, id_salt=id_salt)
 
     def delete_meta(self, dataset):
         table_name = dataset.table_name
