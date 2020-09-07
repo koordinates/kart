@@ -84,13 +84,12 @@ def format_wkt_for_output(output, fp):
     If the given filelike object is a terminal, adds whitespace and syntax highlighting to the output.
     Doesn't actually write the output, just returns it.
     """
+    tokens_with_whitespace = wkt_whitespace_format(WKTLexer().get_tokens(output))
     if fp == sys.stdout and fp.isatty():
-        token_iter = WKTLexer().get_tokens(output)
-        return pygments.format(
-            wkt_whitespace_format(token_iter), get_terminal_formatter()
-        )
+        return pygments.format(tokens_with_whitespace, get_terminal_formatter())
     else:
-        return output
+        token_value = (value for token_type, value in tokens_with_whitespace)
+        return "".join(token_value)
 
 
 def wkt_whitespace_format(token_iter):
