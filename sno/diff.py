@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 from osgeo import osr
 
-from .cli_util import StringFromFile
+from .crs_util import CoordinateReferenceString
 from .diff_output import (  # noqa - used from globals()
     diff_output_text,
     diff_output_json,
@@ -170,16 +170,8 @@ def diff_with_writer(
         if target_crs is not None:
             for dataset_path in all_datasets:
                 dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
-                crs_wkt = dataset.crs_wkt
-                if crs_wkt is not None:
-                    src_crs = make_crs(crs_wkt)
-                    try:
-                        transform = osr.CoordinateTransformation(src_crs, target_crs)
-                    except RuntimeError as e:
-                        raise InvalidOperation(
-                            f"Can't reproject dataset {dataset_path!r} into target CRS: {e}"
-                        )
-
+                transform = dataset.get_geometry_transform(target_crs)
+                if transform is not None:
                     dataset_geometry_transforms[dataset_path] = transform
 
         writer_params = {
@@ -229,18 +221,6 @@ def diff_with_writer(
     else:
         if exit_code and num_changes:
             sys.exit(1)
-
-
-class CoordinateReferenceString(StringFromFile):
-    def convert(self, value, param, ctx):
-        value = super().convert(value, param, ctx)
-
-        try:
-            return make_crs(value)
-        except RuntimeError as e:
-            self.fail(
-                f"Invalid or unknown coordinate reference system: {value!r} ({e})"
-            )
 
 
 @click.command()

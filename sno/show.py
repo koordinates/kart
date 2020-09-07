@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 import click
 
+from .crs_util import CoordinateReferenceString
 from .repo_files import RepoState
 from .output_util import dump_json_output, resolve_output_path
 from .structs import CommitWithReference
@@ -43,7 +44,7 @@ def _get_parent(ctx, refish):
 )
 @click.option(
     "--crs",
-    type=diff.CoordinateReferenceString(encoding="utf-8"),
+    type=CoordinateReferenceString(encoding="utf-8"),
     help="Reproject geometries into the given coordinate reference system. Accepts: 'EPSG:<code>'; proj text; OGC WKT; OGC URN; PROJJSON.)",
 )
 @click.option(

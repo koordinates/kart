@@ -3,6 +3,7 @@ import sys
 
 import click
 
+from .crs_util import CoordinateReferenceString
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .filter_util import build_feature_filter, UNFILTERED
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
@@ -25,6 +26,7 @@ def list_conflicts(
     conflict_filter=UNFILTERED,
     summarise=0,
     flat=False,
+    target_crs=None,
 ):
     """
         Lists all the conflicts in merge_index, categorised into nested dicts.
@@ -64,7 +66,9 @@ def list_conflicts(
 
     for conflict in conflicts:
         if not summarise:
-            conflict_output = conflict.output(output_format, include_label=flat)
+            conflict_output = conflict.output(
+                output_format, include_label=flat, target_crs=target_crs
+            )
 
         if flat:
             if isinstance(conflict_output, dict):
@@ -251,8 +255,15 @@ def conflicts_json_as_geojson(json_obj):
     hidden=True,
     help="Output all conflicts in a flat list, instead of in a hierarchy.",
 )
+@click.option(
+    "--crs",
+    type=CoordinateReferenceString(encoding="utf-8"),
+    help="Reproject geometries into the given coordinate reference system. Accepts: 'EPSG:<code>'; proj text; OGC WKT; OGC URN; PROJJSON.)",
+)
 @click.argument("filters", nargs=-1)
-def conflicts(ctx, output_format, exit_code, json_style, summarise, flat, filters):
+def conflicts(
+    ctx, output_format, exit_code, json_style, summarise, flat, crs, filters,
+):
     """
     Lists merge conflicts that need to be resolved before the ongoing merge can be completed.
 
@@ -268,7 +279,13 @@ def conflicts(ctx, output_format, exit_code, json_style, summarise, flat, filter
     merge_context = MergeContext.read_from_repo(repo)
     conflict_filter = build_feature_filter(filters)
     result = list_conflicts(
-        merge_index, merge_context, output_format, conflict_filter, summarise, flat
+        merge_index,
+        merge_context,
+        output_format,
+        conflict_filter,
+        summarise,
+        flat,
+        crs,
     )
 
     if output_format == "text":

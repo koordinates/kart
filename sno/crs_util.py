@@ -1,6 +1,24 @@
 from osgeo.osr import SpatialReference
 
 
+from .cli_util import StringFromFile
+from .geometry import make_crs
+
+
+class CoordinateReferenceString(StringFromFile):
+    """Click option to specify a CRS."""
+
+    def convert(self, value, param, ctx):
+        value = super().convert(value, param, ctx)
+
+        try:
+            return make_crs(value)
+        except RuntimeError as e:
+            self.fail(
+                f"Invalid or unknown coordinate reference system: {value!r} ({e})"
+            )
+
+
 def get_identifier_str(crs):
     """
     Given a CRS, generate a stable, unique identifier for it of type 'str'. Eg: "EPSG:2193"

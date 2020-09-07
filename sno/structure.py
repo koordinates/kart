@@ -5,6 +5,7 @@ from collections import deque
 
 import click
 import pygit2
+from osgeo import osr
 
 from . import core, git_util
 from .diff_structs import DatasetDiff, DeltaDiff, Delta
@@ -16,7 +17,7 @@ from .exceptions import (
     PATCH_DOES_NOT_APPLY,
 )
 from .filter_util import UNFILTERED
-from .geometry import geom_envelope
+from .geometry import geom_envelope, make_crs
 from .schema import Schema
 from .serialise_util import ensure_bytes, json_pack
 from .repository_version import get_repo_version
@@ -472,6 +473,23 @@ class DatasetStructure:
     )
     _INSERT_UPDATE = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED)
     _UPDATE_DELETE = (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_DELETED)
+
+    @functools.lru_cache()
+    def get_geometry_transform(self, target_crs):
+        """
+        Find the transform to reproject this dataset into the target CRS.
+        Returns None if the CRS for this dataset is unknown.
+        """
+        crs_wkt = self.crs_wkt
+        if crs_wkt is None:
+            return None
+        try:
+            src_crs = make_crs(crs_wkt)
+            return osr.CoordinateTransformation(src_crs, target_crs)
+        except RuntimeError as e:
+            raise InvalidOperation(
+                f"Can't reproject dataset {self.path!r} into target CRS: {e}"
+            )
 
     def diff(self, other, ds_filter=UNFILTERED, reverse=False):
         """

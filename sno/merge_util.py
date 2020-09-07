@@ -549,7 +549,7 @@ class RichConflictVersion:
         assert self.is_meta
         return self.dataset.get_meta_item(self.meta_path)
 
-    def output(self, output_format):
+    def output(self, output_format, target_crs=None):
         """
         Output this version of this feature or meta_item in the
         given output_format - one of "text", "json" or "geojson".
@@ -562,10 +562,15 @@ class RichConflictVersion:
 
         if output_format == "text":
             return text_row(self.feature)
-        elif output_format == "json":
-            return json_row(self.feature, self.pk)
-        elif output_format == "geojson":
-            return geojson_row(self.feature, self.pk)
+
+        transform_func = json_row if output_format == "json" else geojson_row
+        geometry_transform = None
+        if target_crs is not None:
+            geometry_transform = self.dataset.get_geometry_transform(target_crs)
+
+        return transform_func(
+            self.feature, self.pk, geometry_transform=geometry_transform
+        )
 
     def matches_filter(self, repo_filter):
         if repo_filter == UNFILTERED:
@@ -649,10 +654,13 @@ class RichConflict:
         """
         return ":".join(str(p) for p in self.decoded_path)
 
-    def output(self, output_format, include_label=False):
+    def output(self, output_format, include_label=False, target_crs=None):
         """Output this conflict in the given output_format - text, json or geojson."""
         l = f"{self.label}:" if include_label else ""
-        return {l + v.version_name: v.output(output_format) for v in self.true_versions}
+        return {
+            (l + v.version_name): v.output(output_format, target_crs=target_crs)
+            for v in self.true_versions
+        }
 
     def matches_filter(self, conflict_filter):
         """Returns True if this conflict matches (or part of this conflict matches) the given filter."""

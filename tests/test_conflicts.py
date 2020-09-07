@@ -247,3 +247,57 @@ def test_list_conflicts(repo_version, create_conflicts, cli_runner):
         assert len(features_geojson) == 11  # 3 ancestors, 4 ours, 4 theirs.
         for version in expected_geojson["features"]:
             assert version in features_geojson
+
+
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_list_conflicts_transform_crs(repo_version, create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS, repo_version) as repo:
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+
+        r = cli_runner.invoke(
+            ["conflicts", "-o", "json", "nz_pa_points_topo_150k:feature:4"]
+        )
+        assert r.exit_code == 0, r
+        json_layer = json.loads(r.stdout)["sno.conflicts/v1"][H.POINTS.LAYER]
+        assert (
+            json_layer["feature"]["4"]["ancestor"]["geom"]
+            == "0101000000E699C7FE092966404E7743C1B50B43C0"
+        )
+
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "-o",
+                "json",
+                "nz_pa_points_topo_150k:feature:4",
+                "--crs",
+                "EPSG:2193",
+            ]
+        )
+        assert r.exit_code == 0, r
+        json_layer = json.loads(r.stdout)["sno.conflicts/v1"][H.POINTS.LAYER]
+        assert (
+            json_layer["feature"]["4"]["ancestor"]["geom"]
+            == "01010000006B88290F36253E41B8AD226F01085641"
+        )
+
+        r = cli_runner.invoke(
+            ["conflicts", "-o", "geojson", "nz_pa_points_topo_150k:feature:4"]
+        )
+        assert r.exit_code == 0, r
+        coords = json.loads(r.stdout)["features"][0]["geometry"]["coordinates"]
+        assert coords == [177.28247012123683, -38.09148422044983]
+
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "-o",
+                "geojson",
+                "nz_pa_points_topo_150k:feature:4",
+                "--crs",
+                "EPSG:2193",
+            ]
+        )
+        assert r.exit_code == 0, r
+        coords = json.loads(r.stdout)["features"][0]["geometry"]["coordinates"]
+        assert coords == [1975606.0592274915, 5775365.736491613]
