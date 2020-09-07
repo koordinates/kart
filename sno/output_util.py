@@ -9,6 +9,8 @@ import pygments
 from pygments.lexers import JsonLexer
 from pygments.lexer import ExtendedRegexLexer, LexerContext
 
+from .wkt_lexer import WKTLexer
+
 
 _terminal_formatter = None
 
@@ -77,7 +79,46 @@ def format_json_for_output(output, fp, json_style="pretty"):
         return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
 
 
-def wrap_text_to_terminal(text, indent=''):
+def format_wkt_for_output(output, fp):
+    """
+    If the given filelike object is a terminal, adds whitespace and syntax highlighting to the output.
+    Doesn't actually write the output, just returns it.
+    """
+    tokens_with_whitespace = wkt_whitespace_format(WKTLexer().get_tokens(output))
+    if fp == sys.stdout and fp.isatty():
+        return pygments.format(tokens_with_whitespace, get_terminal_formatter())
+    else:
+        token_value = (value for token_type, value in tokens_with_whitespace)
+        return "".join(token_value)
+
+
+def wkt_whitespace_format(token_iter):
+    """
+    Takes an iterator of tokens (from WKTLexer.get_tokens).
+    Strips any existing whitespace and adds new whitespace to make it readable.
+    Each keyword will be on a new line, with indentation according to the level of nesting.
+    """
+    indent = 0
+    for token_type, value in token_iter:
+        if token_type is pygments.token.Whitespace:
+            continue
+        if token_type is pygments.token.Punctuation:
+            if value in ("[", "("):
+                indent = indent + 1
+            elif value in ("]", ")"):
+                indent = max(indent - 1, 0)
+        if token_type is pygments.token.Keyword and indent > 0:
+            yield pygments.token.Whitespace, "\n" + "    " * indent
+        yield token_type, value
+    yield pygments.token.Whitespace, "\n"
+
+
+def write_with_indent(fp, text, indent=""):
+    for line in text.splitlines():
+        fp.write(f"{indent}{line}\n")
+
+
+def wrap_text_to_terminal(text, indent=""):
     """
     Wraps block text to the current width of the terminal.
 
@@ -100,7 +141,7 @@ def wrap_text_to_terminal(text, indent=''):
                 break_on_hyphens=False,
             )
             # double-newlines (ie pretty paragraph breaks) get collapsed without this
-            or ['']
+            or [""]
         )
     return "".join(f"{indent}{line}\n" for line in lines)
 
@@ -153,7 +194,7 @@ def resolve_output_path(output_path):
       * a file-like object
       * the string '-' or None (both will return sys.stdout)
     """
-    if hasattr(output_path, 'write'):
+    if hasattr(output_path, "write"):
         # filelike object. *usually* this is a io.TextIOWrapper,
         # but in some circumstances it can be something else.
         # e.g. click on windows may wrap it with a colorama.ansitowin32.StreamWrapper.
