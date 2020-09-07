@@ -12,7 +12,7 @@ from osgeo import gdal
 
 from . import gpkg, gpkg_adapter
 from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
-from .exceptions import InvalidOperation, NotYetImplemented
+from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_WORKING_COPY
 from .filter_util import UNFILTERED
 from .geometry import Geometry, normalise_gpkg_geom
 from .schema import Schema
@@ -554,7 +554,12 @@ class WorkingCopyGPKG(WorkingCopy):
             )
             row = dbcur.fetchone()
             if not row:
-                raise ValueError(f"No tree entry in state_table for {table_name}")
+                L.debug(f"No tree entry in state_table for {table_name}")
+                # This happens if you start trying to use the working copy when it is half written.
+                raise NotFound(
+                    f"Working copy at {self.path} is not fully initialised",
+                    NO_WORKING_COPY,
+                )
 
             wc_tree_id = row[0]
             return wc_tree_id
