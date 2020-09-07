@@ -288,6 +288,7 @@ class Dataset1(DatasetStructure):
         geom_cols=None,
         primary_key=None,
         cast_primary_key=True,
+        relative=False,
     ):
         """
         Given a feature, returns the path and the data that *should be written*
@@ -296,7 +297,9 @@ class Dataset1(DatasetStructure):
         if primary_key is None:
             primary_key = self.primary_key
         return (
-            self.encode_1pk_to_path(feature[primary_key], cast_primary_key),
+            self.encode_1pk_to_path(
+                feature[primary_key], cast_primary_key, relative=relative
+            ),
             self.encode_feature_blob(feature, field_cid_map, geom_cols, primary_key),
         )
 

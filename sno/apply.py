@@ -139,7 +139,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         def extract_key(feature):
             if feature is None:
                 return None
-            return str(feature[pk_name]), feature
+            return feature[pk_name], feature
 
         def parse_delta(change):
             return Delta(
