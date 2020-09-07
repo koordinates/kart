@@ -1,0 +1,33 @@
+{
+  "sno.diff/v1+hexwkb": {
+    "nz_pa_points_topo_150k": {
+      "feature": [
+        {
+          "+": {
+            "fid": 1095,
+            "geom": "0101000000DD1A926B95F16540D5B4783B715642C0",
+            "t50_fid": 2427339,
+            "name_ascii": "Harataunga (Rakairoa)\n",
+            "macronated": "Y",
+            "name": "Harataunga (R\u0101kairoa)\n"
+          },
+          "-": {
+            "fid": 1095,
+            "geom": "0101000000DD1A926B95F16540D5B4783B715642C0",
+            "t50_fid": 2427339,
+            "name_ascii": "Harataunga (Rakairoa)\n",
+            "macronated": "Y",
+            "name": "Harataunga (R\u0101kairoa)\n"
+          }
+        }
+      ]
+    }
+  },
+  "sno.patch/v1": {
+    "authorEmail": "robert@example.com",
+    "authorName": "Robert Coup",
+    "authorTime": "2019-06-20T14:28:33Z",
+    "authorTimeOffset": "+01:00",
+    "message": "Improve naming on Coromandel East coast"
+  }
+}

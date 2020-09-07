@@ -25,6 +25,15 @@ def test_apply_empty_patch(data_archive_readonly, cli_runner):
         assert 'No changes to commit' in r.stderr
 
 
+def test_apply_nonempty_patch_which_makes_no_changes(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points2"):
+        # Despite appearances, this patch is empty because it makes a change
+        # which has no actual effect.
+        r = cli_runner.invoke(["apply", patches / 'points-empty-2.snopatch'])
+        assert r.exit_code == 44, r
+        assert 'No changes to commit' in r.stderr
+
+
 def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
     patch_data = json.dumps(
         {

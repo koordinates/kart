@@ -1,14 +1,10 @@
-import copy
 import json
 from datetime import datetime
 
 import click
 
-import pygit2
-
 from .git_util import author_signature
 from .exceptions import (
-    NO_CHANGES,
     NO_TABLE,
     NO_WORKING_COPY,
     NotFound,
@@ -158,8 +154,6 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
     if commit:
-        if not repo_diff and not allow_empty:
-            raise NotFound("No changes to commit", exit_code=NO_CHANGES)
         try:
             metadata = patch['sno.patch/v1']
         except KeyError:

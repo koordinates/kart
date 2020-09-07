@@ -13,6 +13,7 @@ from .exceptions import (
     InvalidOperation,
     NotFound,
     NotYetImplemented,
+    NO_CHANGES,
     NO_COMMIT,
     PATCH_DOES_NOT_APPLY,
 )
@@ -225,6 +226,8 @@ class RepositoryStructure:
         responsibility of the caller.
         """
         new_tree_oid = self.create_tree_from_diff(wcdiff)
+        if (not allow_empty) and new_tree_oid == self.tree.oid:
+            raise NotFound("No changes to commit", exit_code=NO_CHANGES)
         L.info("Committing...")
         # this will also update the ref (branch) to point to the current commit
         new_commit = self.repo.create_commit(

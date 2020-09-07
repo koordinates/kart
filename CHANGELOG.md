@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.6.0 (UNRELEASED)
+
+ * `apply` no longer creates empty commits unless you specify `--allow-empty` [#243](https://github.com/koordinates/sno/issues/243)
+
 ## 0.5.0
 
 sno v0.5 introduces a new repo layout, which is the default, dubbed 'Datasets V2'
