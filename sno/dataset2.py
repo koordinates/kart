@@ -1,9 +1,11 @@
 import functools
 import os
 
+import click
 import pygit2
 
 from . import gpkg_adapter
+from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
 from .meta_items import META_ITEM_NAMES
 from .structure import DatasetStructure
 from .schema import Legend, Schema
@@ -68,6 +70,7 @@ class Dataset2(DatasetStructure):
     FEATURE_PATH = DATASET_PATH + "feature/"
     META_PATH = DATASET_PATH + "meta/"
 
+    LEGEND_DIRNAME = "legend"
     LEGEND_PATH = META_PATH + "legend/"
     SCHEMA_PATH = META_PATH + "schema.json"
 
@@ -262,18 +265,18 @@ class Dataset2(DatasetStructure):
             raise ValueError(f"Expected a single pk_value, got {decoded}")
         return decoded[0]
 
-    def encode_raw_feature_dict(self, raw_feature_dict, legend):
+    def encode_raw_feature_dict(self, raw_feature_dict, legend, relative=False):
         """
-        Given a "raw" feature dict (keyed by column IDs) and a schema, returns the path
+        Given a "raw" feature dict (keyed by column IDs) and a legend, returns the path
         and the data which *should be written* to write this feature. This is almost the
         inverse of get_raw_feature_dict, except Dataset2 doesn't write the data.
         """
         pk_values, non_pk_values = legend.raw_dict_to_value_tuples(raw_feature_dict)
-        path = self.encode_pks_to_path(pk_values)
+        path = self.encode_pks_to_path(pk_values, relative=relative)
         data = msg_pack([legend.hexhash(), non_pk_values])
         return path, data
 
-    def encode_feature(self, feature, schema=None):
+    def encode_feature(self, feature, schema=None, relative=False):
         """
         Given a feature (either a dict keyed by column name, or a list / tuple in schema order),
         returns the path and the data which *should be written* to write this feature. This is
@@ -282,7 +285,7 @@ class Dataset2(DatasetStructure):
         if schema is None:
             schema = self.schema
         raw_dict = schema.feature_to_raw_dict(feature)
-        return self.encode_raw_feature_dict(raw_dict, schema.legend)
+        return self.encode_raw_feature_dict(raw_dict, schema.legend, relative=relative)
 
     def encode_pks_to_path(self, pk_values, relative=False):
         """
@@ -392,3 +395,77 @@ class Dataset2(DatasetStructure):
                     continue
                 else:
                     raise
+
+    def apply_meta_diff(self, meta_diff, tree_builder):
+        """Apply a meta diff to this dataset. Checks for conflicts."""
+        if not meta_diff:
+            return
+
+        conflicts = False
+
+        meta_tree = self.meta_tree
+        with tree_builder.cd(self.META_PATH):
+            for delta in meta_diff.values():
+                name = delta.key
+                old_value = delta.old_value
+                new_value = delta.new_value
+
+                # Schema.json needs some special-casing - for one thing, we need to write the legend too.
+                if name == "schema.json":
+                    old_schema = (
+                        Schema.from_column_dicts(old_value) if old_value else None
+                    )
+                    new_schema = (
+                        Schema.from_column_dicts(new_value) if new_value else None
+                    )
+
+                    if old_schema and new_schema:
+                        if not old_schema.is_pk_compatible(new_schema):
+                            raise NotYetImplemented(
+                                "Schema changes that involve primary key changes are not yet supported"
+                            )
+                    if new_schema:
+                        legend = new_schema.legend
+                        tree_builder.insert(
+                            f"{self.LEGEND_DIRNAME}/{legend.hexhash()}", legend.dumps()
+                        )
+
+                # Conflict detection
+                if delta.type == "delete" and name not in meta_tree:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to delete nonexistent meta item: {name}"
+                    )
+                    continue
+                if delta.type == "insert" and name in meta_tree:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to create meta item that already exists: {name}"
+                    )
+                    continue
+
+                if delta.type == "update" and name not in meta_tree:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update nonexistent meta item: {name}"
+                    )
+                    continue
+                if delta.type == "update" and self.get_meta_item(name) != old_value:
+                    conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update out-of-date meta item: {name}"
+                    )
+                    continue
+
+                # General case
+                if new_value and name.endswith(".json"):
+                    tree_builder.insert(name, json_pack(new_value))
+                elif new_value:
+                    tree_builder.insert(name, ensure_bytes(new_value))
+                else:
+                    tree_builder.remove(name)
+
+        if conflicts:
+            raise InvalidOperation(
+                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+            )
