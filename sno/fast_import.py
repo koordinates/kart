@@ -95,11 +95,10 @@ def fast_import_tables(
         import_branch = f'refs/heads/{uuid.uuid4()}'
 
         # may be None, if head is detached
-        orig_branch = get_head_branch(repo, allow_detached=True)
-        header = generate_header(repo, sources, message, branch=import_branch)
-    else:
         orig_branch = get_head_branch(repo)
-        import_branch = orig_branch
+        header = generate_header(repo, sources, message, import_branch)
+    else:
+        import_branch = None
     orig_commit = get_head_commit(repo)
 
     if not quiet:
@@ -199,7 +198,8 @@ def fast_import_tables(
     if not quiet:
         click.echo(f"Closed in {(t3-t2):.0f}s")
 
-    if import_branch != orig_branch:
+    if import_branch is not None:
+        # we created a temp branch for the import above.
         try:
             if head_tree and not allow_empty:
                 if repo.revparse_single(import_branch).peel(pygit2.Tree) == head_tree:
@@ -244,19 +244,13 @@ def get_head_commit(repo):
         return None
 
 
-def get_head_branch(repo, allow_detached=False):
+def get_head_branch(repo):
     """
     Returns the branch that HEAD is currently on.
-    If HEAD is detached, raises InvalidOperation, unless allow_detached=True,
-    in which case None is returned.
+    If HEAD is detached, returns None
     """
     if repo.head_is_detached:
-        if allow_detached:
-            return None
-        else:
-            raise InvalidOperation(
-                'Cannot fast-import when in "detached HEAD" state - ie, when not on a branch'
-            )
+        return None
     return repo.head.name if not repo.is_empty else "refs/heads/master"
 
 
@@ -270,14 +264,12 @@ def write_blobs_to_stream(stream, blobs):
         yield i, blob_path
 
 
-def generate_header(repo, sources, message, branch=None):
+def generate_header(repo, sources, message, branch):
     if message is None:
         message = generate_message(sources)
 
     author = git_util.author_signature(repo)
     committer = git_util.committer_signature(repo)
-    if branch is None:
-        branch = get_head_branch(repo)
     return (
         f"commit {branch}\n"
         f"author {author.name} <{author.email}> {author.time} {minutes_to_tz_offset(author.offset)}\n"
