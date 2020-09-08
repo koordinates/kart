@@ -32,7 +32,7 @@ pytest-xdist==2.1.0       # via -r requirements/dev.in
 pytest==6.0.1             # via -c requirements/test.txt, pytest-forked, pytest-xdist
 six==1.15.0               # via -c requirements/../requirements.txt, -c requirements/test.txt, packaging
 toml==0.10.1              # via -c requirements/test.txt, pytest
-traitlets==5.0.3          # via ipython
+traitlets==5.0.4          # via ipython
 wcwidth==0.2.5            # via prompt-toolkit
 zipp==3.1.0               # via -c requirements/../requirements.txt, -c requirements/test.txt, importlib-metadata
 

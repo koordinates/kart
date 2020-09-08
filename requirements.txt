@@ -16,9 +16,9 @@ msgpack==0.6.2            # via -r requirements/requirements.in
 pycparser==2.20           # via cffi
 #pygit2==1.1.0             # via -r requirements/requirements.in
 pygments==2.6.1           # via -r requirements/requirements.in
-pyrsistent==0.16.0        # via jsonschema
+pyrsistent==0.17.0        # via jsonschema
 rtree==0.9.4              # via -r requirements/requirements.in
-six==1.15.0               # via jsonschema, pyrsistent
+six==1.15.0               # via jsonschema
 zipp==3.1.0               # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
