@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from enum import Enum, auto
 
 import click
 
@@ -20,22 +21,22 @@ from .working_copy import WorkingCopy
 
 
 V1_NO_META_UPDATE = (
-    "Sorry, patches that make meta changes are not supported until Datasets V2 (Sno 0.5)\n"
+    "Sorry, patches that make meta changes are not supported until Datasets V2\n"
     "Use `sno upgrade`"
 )
-# TODO: support this for V2.
-NO_DATASET_CREATE_DELETE = (
-    "Sorry, patches that create or delete datasets are not yet supported."
+V1_NO_DATASET_CREATE_DELETE = (
+    "Sorry, patches that create or delete datasets are not supported until Datasets V2\n"
+    "Use `sno upgrade`"
 )
 NO_COMMIT_NO_DATASET_CREATE_DELETE = (
     "Sorry, patches that create or delete datasets cannot be applied with --no-commit"
 )
 
 
-class MetaChangeType:
-    CREATE_DATASET = "+"
-    DELETE_DATASET = "-"
-    META_UPDATE = "+/-"
+class MetaChangeType(Enum):
+    CREATE_DATASET = auto()
+    DELETE_DATASET = auto()
+    META_UPDATE = auto()
 
 
 def _meta_change_type(ds_diff_dict):
@@ -59,19 +60,17 @@ def check_change_supported(repo_version, dataset, ds_path, meta_change_type, com
     else:
         desc = f"Patch contains meta changes for dataset '{ds_path}'"
 
-    # TODO - support creates and deletes for datasets V2.
-    if meta_change_type in (
-        MetaChangeType.CREATE_DATASET,
-        MetaChangeType.DELETE_DATASET,
-    ):
-        raise NotYetImplemented(f"{desc}\n{NO_DATASET_CREATE_DELETE}")
-
-    if repo_version < 2 and meta_change_type == MetaChangeType.META_UPDATE:
-        raise NotYetImplemented(f"{desc}\n{V1_NO_META_UPDATE}")
+    if repo_version < 2 and meta_change_type is not None:
+        message = (
+            V1_NO_META_UPDATE
+            if meta_change_type == MetaChangeType.META_UPDATE
+            else V1_NO_DATASET_CREATE_DELETE
+        )
+        raise NotYetImplemented(f"{desc}\n{message}")
 
     if dataset is None and meta_change_type != MetaChangeType.CREATE_DATASET:
         raise NotFound(
-            f"Patch contains dataset '{ds_path}' which is not in this repository",
+            f"Patch contains changes for dataset '{ds_path}' which is not in this repository",
             exit_code=NO_TABLE,
         )
     if dataset is not None and meta_change_type == MetaChangeType.CREATE_DATASET:

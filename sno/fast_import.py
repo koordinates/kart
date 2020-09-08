@@ -60,7 +60,11 @@ def fast_import_tables(
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    head_tree = None if replace_existing == ReplaceExisting.ALL else get_head_tree(repo)
+    head_tree = (
+        None
+        if replace_existing == ReplaceExisting.ALL
+        else git_util.get_head_tree(repo)
+    )
 
     if not head_tree:
         # Starting from an effectively empty repo. Write the blobs needed for this repo version.
@@ -95,20 +99,16 @@ def fast_import_tables(
         import_branch = f'refs/heads/{uuid.uuid4()}'
 
         # may be None, if head is detached
-        orig_branch = get_head_branch(repo)
+        orig_branch = git_util.get_head_branch(repo)
         header = generate_header(repo, sources, message, import_branch)
     else:
         import_branch = None
-    orig_commit = get_head_commit(repo)
+    orig_commit = git_util.get_head_commit(repo)
 
     if not quiet:
         click.echo("Starting git-fast-import...")
 
-    p = subprocess.Popen(
-        cmd,
-        cwd=repo.path,
-        stdin=subprocess.PIPE,
-    )
+    p = subprocess.Popen(cmd, cwd=repo.path, stdin=subprocess.PIPE,)
     try:
         if replace_existing != ReplaceExisting.ALL:
             header += f"from {orig_commit.oid}\n"
@@ -220,38 +220,6 @@ def fast_import_tables(
         finally:
             # remove the import branch
             repo.references.delete(import_branch)
-
-
-def get_head_tree(repo):
-    """Returns the tree at the current repo HEAD."""
-    if repo.is_empty:
-        return None
-    try:
-        return repo.head.peel(pygit2.Tree)
-    except pygit2.GitError:
-        # This happens when the repo is not empty, but the current HEAD has no commits.
-        return None
-
-
-def get_head_commit(repo):
-    """Returns the commit that HEAD is currently on."""
-    if repo.is_empty:
-        return None
-    try:
-        return repo.head.peel(pygit2.Commit)
-    except pygit2.GitError:
-        # This happens when the repo is not empty, but the current HEAD has no commits.
-        return None
-
-
-def get_head_branch(repo):
-    """
-    Returns the branch that HEAD is currently on.
-    If HEAD is detached, returns None
-    """
-    if repo.head_is_detached:
-        return None
-    return repo.head.name if not repo.is_empty else "refs/heads/master"
 
 
 def write_blobs_to_stream(stream, blobs):

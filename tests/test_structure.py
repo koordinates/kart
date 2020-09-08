@@ -98,6 +98,17 @@ def normalise_feature(row):
     return row
 
 
+def without_ids(column_dicts):
+    # Note that datasets use lru-caches for meta items, so we make sure not to modify the meta items.
+    return [col_without_id(c) for c in column_dicts]
+
+
+def col_without_id(column_dict):
+    result = column_dict.copy()
+    result.pop("id")
+    return result
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize(
     GPKG_IMPORTS[0],
@@ -224,20 +235,15 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     There are all sorts of caveats to the meta item emulation, and this attempts
     to avoid them when comparing.
     """
-    ds_schema = dataset.get_meta_item('schema.json')
-    gpkg_schema = gpkg_dataset.get_meta_item('schema.json')
-
-    for col in ds_schema:
-        col.pop('id')
-    for col in gpkg_schema:
-        col.pop('id')
+    ds_schema = without_ids(dataset.get_meta_item('schema.json'))
+    gpkg_schema = without_ids(gpkg_dataset.get_meta_item('schema.json'))
 
     # SHP/TAB always call the primary key "FID"
     for col in gpkg_schema:
         if col['name'] == gpkg_dataset.primary_key:
             col['name'] = 'FID'
 
-    # CHeck the fields are in the right order. Ignore truncation and capitalisation
+    # Check the fields are in the right order. Ignore truncation and capitalisation
     ds_names = [col['name'][:8] for col in ds_schema]
     gpkg_names = [col['name'][:8] for col in gpkg_schema]
     assert ds_names == gpkg_names
@@ -383,11 +389,7 @@ def test_import_from_non_gpkg(
             repo = pygit2.Repository(str(repo_path))
             dataset = structure.RepositoryStructure(repo)[table]
 
-            if dataset.version == 1:
-                _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
-            elif dataset.version == 2:
-                # TODO: Dataset2 needs to store more metadata.
-                pass
+            _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
 
             if num_rows > 0:
                 # compare the first feature in the repo against the source DB
@@ -447,9 +449,7 @@ def test_shp_import_meta(
             'title',
             'crs/EPSG:4167.wkt',
         }
-        schema = dataset.get_meta_item('schema.json')
-        for col in schema:
-            col.pop('id')
+        schema = without_ids(dataset.get_meta_item('schema.json'))
         assert schema == [
             {'name': 'FID', 'dataType': 'integer', 'primaryKeyIndex': 0, 'size': 64},
             {
@@ -558,9 +558,7 @@ def _test_pg_import(
         'title',
         'crs/EPSG:4167.wkt',
     }
-    schema = dataset.get_meta_item('schema.json')
-    for col in schema:
-        col.pop('id')
+    schema = without_ids(dataset.get_meta_item('schema.json'))
     assert schema == [
         {
             'name': pk_name,
