@@ -6,7 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.6.0 (UNRELEASED)
 
- * `apply` no longer creates empty commits unless you specify `--allow-empty` [#243](https://github.com/koordinates/sno/issues/243)
+ * `apply` and `import` no longer create empty commits unless you specify `--allow-empty` [#243](https://github.com/koordinates/sno/issues/243), [#245](https://github.com/koordinates/sno/issues/245)
 
 ## 0.5.0
 

@@ -1,13 +1,14 @@
 import logging
 import subprocess
 import time
+import uuid
 from enum import Enum, auto
 
 import click
 import pygit2
 
 from . import git_util
-from .exceptions import SubprocessError, InvalidOperation
+from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .structure import DatasetStructure, RepositoryStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
@@ -38,6 +39,7 @@ def fast_import_tables(
     header=None,
     message=None,
     replace_existing=ReplaceExisting.DONT_REPLACE,
+    allow_empty=False,
     limit=None,
     max_pack_size="2G",
     max_delta_depth=0,
@@ -87,16 +89,26 @@ def fast_import_tables(
         f"--depth={max_delta_depth}",
     ] + list(extra_cmd_args)
 
+    orig_branch = get_head_branch(repo)
     if header is None:
-        header = generate_header(repo, sources, message)
+        # import onto a temp branch. then reset the head branch afterwards.
+        # this allows us to check the result before updating the orig branch.
+        import_branch = f'refs/heads/{uuid.uuid4()}'
+        header = generate_header(repo, sources, message, branch=import_branch)
+    else:
+        import_branch = orig_branch
 
     if not quiet:
         click.echo("Starting git-fast-import...")
 
-    p = subprocess.Popen(cmd, cwd=repo.path, stdin=subprocess.PIPE,)
+    p = subprocess.Popen(
+        cmd,
+        cwd=repo.path,
+        stdin=subprocess.PIPE,
+    )
     try:
         if replace_existing != ReplaceExisting.ALL:
-            header += f"from {get_head_branch(repo)}^0\n"
+            header += f"from {orig_branch}^0\n"
         p.stdin.write(header.encode("utf8"))
 
         # Write any extra blobs supplied by the client or needed for this version.
@@ -183,6 +195,23 @@ def fast_import_tables(
     if not quiet:
         click.echo(f"Closed in {(t3-t2):.0f}s")
 
+    if import_branch != orig_branch:
+        try:
+            if head_tree and not allow_empty:
+                if repo.revparse_single(import_branch).peel(pygit2.Tree) == head_tree:
+                    raise NotFound("No changes to commit", exit_code=NO_CHANGES)
+            # reset the original branch head to the import branch, so it gets the new commits
+            if head_tree:
+                # repo was non-empty before this, so orig_branch exists already.
+                # we have to delete and re-create it at the new commit.
+                repo.references.delete(orig_branch)
+            repo.references.create(
+                orig_branch, repo.references[import_branch].peel(pygit2.Commit).oid
+            )
+        finally:
+            # remove the import branch
+            repo.references.delete(import_branch)
+
 
 def get_head_tree(repo):
     """Returns the tree at the current repo HEAD."""
@@ -214,14 +243,16 @@ def write_blobs_to_stream(stream, blobs):
         yield i, blob_path
 
 
-def generate_header(repo, sources, message):
+def generate_header(repo, sources, message, branch=None):
     if message is None:
         message = generate_message(sources)
 
     author = git_util.author_signature(repo)
     committer = git_util.committer_signature(repo)
+    if branch is None:
+        branch = get_head_branch(repo)
     return (
-        f"commit {get_head_branch(repo)}\n"
+        f"commit {branch}\n"
         f"author {author.name} <{author.email}> {author.time} {minutes_to_tz_offset(author.offset)}\n"
         f"committer {committer.name} <{committer.email}> {committer.time} {minutes_to_tz_offset(committer.offset)}\n"
         f"data {len(message.encode('utf8'))}\n{message}\n"

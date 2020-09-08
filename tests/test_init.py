@@ -89,7 +89,10 @@ def test_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner, c
         assert r.exit_code == 0
         with chdir(repo_path):
             r = cli_runner.invoke(
-                ["import", data / "census2016_sdhca_ot_short.gpkg",],
+                [
+                    "import",
+                    data / "census2016_sdhca_ot_short.gpkg",
+                ],
                 input="census2016_sdhca_ot_ced_short\n",
             )
             # Table was specified interactively via prompt
@@ -178,7 +181,11 @@ def test_import_table_with_prompt_with_no_input(
 
 
 def test_import_replace_existing(
-    data_archive, tmp_path, cli_runner, chdir, geopackage,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
         repo_path = tmp_path / 'emptydir'
@@ -237,8 +244,45 @@ def test_import_replace_existing(
             }
 
 
+def test_import_replace_existing_with_no_changes(
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
+):
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / 'emptydir'
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # now import the same thing over the top (no changes)
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    "--replace-existing",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 44, r.stderr
+
+
 def test_import_replace_existing_with_compatible_schema_changes(
-    data_archive, tmp_path, cli_runner, chdir, geopackage,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
         repo_path = tmp_path / 'emptydir'
@@ -304,7 +348,11 @@ def test_import_replace_existing_with_compatible_schema_changes(
 
 
 def test_import_replace_existing_with_column_renames(
-    data_archive, tmp_path, cli_runner, chdir, geopackage,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
         repo_path = tmp_path / 'emptydir'
@@ -594,7 +642,11 @@ def test_init_import(
 
 
 def test_init_import_commit_headers(
-    data_archive, tmp_path, cli_runner, chdir, geopackage,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
 ):
     with data_archive("gpkg-points") as data:
         repo_path = tmp_path / "data.sno"

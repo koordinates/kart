@@ -83,7 +83,8 @@ def temporary_branch(repo):
 @click.pass_context
 @click.argument("source")
 @click.argument(
-    "tables", nargs=-1,
+    "tables",
+    nargs=-1,
 )
 @click.option(
     "--all-tables",
@@ -141,7 +142,10 @@ def temporary_branch(repo):
     help="List available import formats, and then exit",
 )
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.option(
     "--primary-key",
@@ -151,6 +155,16 @@ def temporary_branch(repo):
     "--replace-existing",
     is_flag=True,
     help="Replace existing dataset(s) of the same name.",
+)
+@click.option(
+    "--allow-empty",
+    is_flag=True,
+    default=False,
+    help=(
+        "Usually recording a commit that has the exact same tree as its sole "
+        "parent commit is a mistake, and the command prevents you from making "
+        "such a commit. This option bypasses the safety"
+    ),
 )
 @click.option(
     "--max-delta-depth",
@@ -170,6 +184,7 @@ def import_table(
     tables,
     table_info,
     replace_existing,
+    allow_empty,
     max_delta_depth,
 ):
     """
@@ -261,6 +276,7 @@ def import_table(
             replace_existing=ReplaceExisting.GIVEN
             if replace_existing
             else ReplaceExisting.DONT_REPLACE,
+            allow_empty=allow_empty,
         )
 
     rs = RepositoryStructure(repo)
@@ -314,7 +330,14 @@ def import_table(
     help="--depth option to git-fast-import (advanced users only)",
 )
 def init(
-    ctx, message, directory, repo_version, import_from, bare, wc_path, max_delta_depth,
+    ctx,
+    message,
+    directory,
+    repo_version,
+    import_from,
+    bare,
+    wc_path,
+    max_delta_depth,
 ):
     """
     Initialise a new repository and optionally import data.
@@ -347,7 +370,10 @@ def init(
 
     if import_from:
         fast_import_tables(
-            repo, sources, message=message, max_delta_depth=max_delta_depth,
+            repo,
+            sources,
+            message=message,
+            max_delta_depth=max_delta_depth,
         )
         head_commit = repo.head.peel(pygit2.Commit)
         checkout.reset_wc_if_needed(repo, head_commit)
