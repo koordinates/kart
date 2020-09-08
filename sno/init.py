@@ -58,32 +58,12 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
         wc.write_full(commit, dataset)
 
 
-@contextlib.contextmanager
-def temporary_branch(repo):
-    """
-    Contextmanager.
-    Creates a branch for HEAD to point at, then deletes it again so HEAD is detached again.
-    """
-    TEMP_BRANCH_NAME = '__temp-fast-import-branch'
-    if TEMP_BRANCH_NAME in repo.branches:
-        del repo.branches[TEMP_BRANCH_NAME]
-
-    temp_branch = repo.branches.local.create(
-        TEMP_BRANCH_NAME, repo.head.peel(pygit2.Commit)
-    )
-    repo.set_head(temp_branch.name)
-    try:
-        yield temp_branch
-    finally:
-        repo.set_head(repo.head.target)
-        repo.branches.delete(temp_branch.branch_name)
-
-
 @click.command("import")
 @click.pass_context
 @click.argument("source")
 @click.argument(
-    "tables", nargs=-1,
+    "tables",
+    nargs=-1,
 )
 @click.option(
     "--all-tables",
@@ -141,7 +121,10 @@ def temporary_branch(repo):
     help="List available import formats, and then exit",
 )
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.option(
     "--primary-key",
@@ -151,6 +134,16 @@ def temporary_branch(repo):
     "--replace-existing",
     is_flag=True,
     help="Replace existing dataset(s) of the same name.",
+)
+@click.option(
+    "--allow-empty",
+    is_flag=True,
+    default=False,
+    help=(
+        "Usually recording a commit that has the exact same tree as its sole "
+        "parent commit is a mistake, and the command prevents you from making "
+        "such a commit. This option bypasses the safety"
+    ),
 )
 @click.option(
     "--max-delta-depth",
@@ -170,6 +163,7 @@ def import_table(
     tables,
     table_info,
     replace_existing,
+    allow_empty,
     max_delta_depth,
 ):
     """
@@ -249,19 +243,16 @@ def import_table(
 
     ImportSource.check_valid(import_sources, param_hint="tables")
 
-    # Workaround the fact that fast import doesn't work when head is detached.
-    ctx = temporary_branch(repo) if repo.head_is_detached else contextlib.nullcontext()
-
-    with ctx:
-        fast_import_tables(
-            repo,
-            import_sources,
-            message=message,
-            max_delta_depth=max_delta_depth,
-            replace_existing=ReplaceExisting.GIVEN
-            if replace_existing
-            else ReplaceExisting.DONT_REPLACE,
-        )
+    fast_import_tables(
+        repo,
+        import_sources,
+        message=message,
+        max_delta_depth=max_delta_depth,
+        replace_existing=ReplaceExisting.GIVEN
+        if replace_existing
+        else ReplaceExisting.DONT_REPLACE,
+        allow_empty=allow_empty,
+    )
 
     rs = RepositoryStructure(repo)
     _add_datasets_to_working_copy(
@@ -314,7 +305,14 @@ def import_table(
     help="--depth option to git-fast-import (advanced users only)",
 )
 def init(
-    ctx, message, directory, repo_version, import_from, bare, wc_path, max_delta_depth,
+    ctx,
+    message,
+    directory,
+    repo_version,
+    import_from,
+    bare,
+    wc_path,
+    max_delta_depth,
 ):
     """
     Initialise a new repository and optionally import data.
@@ -347,7 +345,10 @@ def init(
 
     if import_from:
         fast_import_tables(
-            repo, sources, message=message, max_delta_depth=max_delta_depth,
+            repo,
+            sources,
+            message=message,
+            max_delta_depth=max_delta_depth,
         )
         head_commit = repo.head.peel(pygit2.Commit)
         checkout.reset_wc_if_needed(repo, head_commit)

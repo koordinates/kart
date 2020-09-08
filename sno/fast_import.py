@@ -1,13 +1,14 @@
 import logging
 import subprocess
 import time
+import uuid
 from enum import Enum, auto
 
 import click
 import pygit2
 
 from . import git_util
-from .exceptions import SubprocessError, InvalidOperation
+from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .structure import DatasetStructure, RepositoryStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
@@ -38,6 +39,7 @@ def fast_import_tables(
     header=None,
     message=None,
     replace_existing=ReplaceExisting.DONT_REPLACE,
+    allow_empty=False,
     limit=None,
     max_pack_size="2G",
     max_delta_depth=0,
@@ -88,15 +90,28 @@ def fast_import_tables(
     ] + list(extra_cmd_args)
 
     if header is None:
-        header = generate_header(repo, sources, message)
+        # import onto a temp branch. then reset the head branch afterwards.
+        # this allows us to check the result before updating the orig branch.
+        import_branch = f'refs/heads/{uuid.uuid4()}'
+
+        # may be None, if head is detached
+        orig_branch = get_head_branch(repo)
+        header = generate_header(repo, sources, message, import_branch)
+    else:
+        import_branch = None
+    orig_commit = get_head_commit(repo)
 
     if not quiet:
         click.echo("Starting git-fast-import...")
 
-    p = subprocess.Popen(cmd, cwd=repo.path, stdin=subprocess.PIPE,)
+    p = subprocess.Popen(
+        cmd,
+        cwd=repo.path,
+        stdin=subprocess.PIPE,
+    )
     try:
         if replace_existing != ReplaceExisting.ALL:
-            header += f"from {get_head_branch(repo)}^0\n"
+            header += f"from {orig_commit.oid}\n"
         p.stdin.write(header.encode("utf8"))
 
         # Write any extra blobs supplied by the client or needed for this version.
@@ -183,6 +198,29 @@ def fast_import_tables(
     if not quiet:
         click.echo(f"Closed in {(t3-t2):.0f}s")
 
+    if import_branch is not None:
+        # we created a temp branch for the import above.
+        try:
+            if head_tree and not allow_empty:
+                if repo.revparse_single(import_branch).peel(pygit2.Tree) == head_tree:
+                    raise NotFound("No changes to commit", exit_code=NO_CHANGES)
+            latest_commit_oid = repo.references[import_branch].peel(pygit2.Commit).oid
+            if orig_branch:
+                # reset the original branch head to the import branch, so it gets the new commits
+                if head_tree:
+                    # repo was non-empty before this, and head was not detached.
+                    # so orig_branch exists already.
+                    # we have to delete and re-create it at the new commit.
+                    repo.references.delete(orig_branch)
+                repo.references.create(orig_branch, latest_commit_oid)
+            else:
+                # head was detached before this. just update head to the new commit,
+                # so it's still detached.
+                repo.set_head(latest_commit_oid)
+        finally:
+            # remove the import branch
+            repo.references.delete(import_branch)
+
 
 def get_head_tree(repo):
     """Returns the tree at the current repo HEAD."""
@@ -195,12 +233,24 @@ def get_head_tree(repo):
         return None
 
 
+def get_head_commit(repo):
+    """Returns the commit that HEAD is currently on."""
+    if repo.is_empty:
+        return None
+    try:
+        return repo.head.peel(pygit2.Commit)
+    except pygit2.GitError:
+        # This happens when the repo is not empty, but the current HEAD has no commits.
+        return None
+
+
 def get_head_branch(repo):
-    """Returns the branch that HEAD is currently on."""
+    """
+    Returns the branch that HEAD is currently on.
+    If HEAD is detached, returns None
+    """
     if repo.head_is_detached:
-        raise InvalidOperation(
-            'Cannot fast-import when in "detached HEAD" state - ie, when not on a branch'
-        )
+        return None
     return repo.head.name if not repo.is_empty else "refs/heads/master"
 
 
@@ -214,14 +264,14 @@ def write_blobs_to_stream(stream, blobs):
         yield i, blob_path
 
 
-def generate_header(repo, sources, message):
+def generate_header(repo, sources, message, branch):
     if message is None:
         message = generate_message(sources)
 
     author = git_util.author_signature(repo)
     committer = git_util.committer_signature(repo)
     return (
-        f"commit {get_head_branch(repo)}\n"
+        f"commit {branch}\n"
         f"author {author.name} <{author.email}> {author.time} {minutes_to_tz_offset(author.offset)}\n"
         f"committer {committer.name} <{committer.email}> {committer.time} {minutes_to_tz_offset(committer.offset)}\n"
         f"data {len(message.encode('utf8'))}\n{message}\n"
