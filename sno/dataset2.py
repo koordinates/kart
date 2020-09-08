@@ -400,7 +400,7 @@ class Dataset2(DatasetStructure):
         meta_tree = self.meta_tree if self.tree is not None else ()
 
         conflicts = False
-        with tree_builder.cd(self.META_PATH):
+        with tree_builder.chdir(self.META_PATH):
             for delta in meta_diff.values():
                 name = delta.key
                 old_value = delta.old_value

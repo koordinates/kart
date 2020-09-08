@@ -659,7 +659,7 @@ class DatasetStructure:
         no commit is created - this is the responsibility of the caller.
         """
         # TODO - support multiple primary keys.
-        with tree_builder.cd(self.path):
+        with tree_builder.chdir(self.path):
             meta_diff = dataset_diff.get("meta")
             schema = None
             if meta_diff:

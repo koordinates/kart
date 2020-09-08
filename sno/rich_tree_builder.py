@@ -4,9 +4,6 @@ import pygit2
 
 from .repository_version import get_repo_version, extra_blobs_for_version
 
-# Hash for git's empty tree.
-EMPTY_TREE_ID = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
-
 
 class RichTreeBuilder:
     """
@@ -23,16 +20,14 @@ class RichTreeBuilder:
         """
         self.repo = repo
         self.root_tree = (
-            initial_root_tree
-            if initial_root_tree is not None
-            else repo.get(EMPTY_TREE_ID)
+            initial_root_tree if initial_root_tree is not None else _empty_tree(repo)
         )
 
         self.root_dict = {}
         self.cur_path = []
         self.path_stack = []
 
-        if auto_include_version_blobs and initial_root_tree is None:
+        if auto_include_version_blobs and not self.root_tree:
             extra_blobs = extra_blobs_for_version(get_repo_version(repo))
             for path, blob in extra_blobs:
                 self.insert(path, blob)
@@ -44,37 +39,31 @@ class RichTreeBuilder:
         """
         if isinstance(path, str):
             if path.startswith("/"):
-                raise RuntimeError(
-                    "RichTreeBuilder.cd() does not support absolute paths"
-                )
+                raise RuntimeError("RichTreeBuilder does not support absolute paths")
+            if "\\" in path:
+                raise RuntimeError(f"Paths should be '/' separated: {path}")
             path = path.strip("/").split("/")
         return self.cur_path + path
 
     @contextlib.contextmanager
-    def cd(self, path):
+    def chdir(self, path):
         """
         Change the current directory used to resolve paths by the given relative path.
         Returns a context manager - when the context manager is closed, the original current directory is restored.
 
         Example:
-        >>> with rich_tree_builder.cd("a/b/c/.sno-dataset"):
+        >>> with rich_tree_builder.chdir("a/b/c/.sno-dataset"):
         >>>    # Make edits inside a/b/c/.sno-dataset:
         >>>    rich_tree_builder.remove("meta/title")
         >>> # Context manager closes, current path is reset to the default.
         """
         path = self._resolve_path(path)
-        self._pushd()
+        self.path_stack.append(self.cur_path)
         self.cur_path = path
         try:
             yield
         finally:
-            self._popd()
-
-    def _pushd(self):
-        self.path_stack.append(self.cur_path)
-
-    def _popd(self):
-        self.cur_path = self.path_stack.pop()
+            self.cur_path = self.path_stack.pop()
 
     def insert(self, path, writeable):
         """Writes the given data - a tree, a blob, a bytes, or None - at the given relative path."""
@@ -118,15 +107,18 @@ def copy_and_modify_tree(repo, tree, changes):
     either pygit2.Tree, a pygi2.Blob, a bytes, or None (None means delete the data at the specified path).
     Conflicts are not detected.
     """
+    if tree is None:
+        tree = _empty_tree(repo)
     if not changes:
         return tree
+
     pygit_builder = repo.TreeBuilder(tree)
     for name, new_value in changes.items():
         if isinstance(new_value, dict):
             try:
                 subtree = tree / name
             except KeyError:
-                subtree = repo.get(EMPTY_TREE_ID)
+                subtree = None
             subtree = copy_and_modify_tree(repo, subtree, new_value)
             pygit_builder.insert(name, subtree.oid, pygit2.GIT_FILEMODE_TREE)
         elif isinstance(new_value, pygit2.Tree):
@@ -143,3 +135,8 @@ def copy_and_modify_tree(repo, tree, changes):
                 pass  # Conflicts are not detected.
 
     return repo.get(pygit_builder.write())
+
+
+def _empty_tree(repo):
+    """Returns the empty tree object for this repo."""
+    return repo.get(repo.TreeBuilder().write())
