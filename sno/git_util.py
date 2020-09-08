@@ -6,6 +6,38 @@ import pygit2
 from .timestamps import tz_offset_to_minutes
 
 
+def get_head_tree(repo):
+    """Returns the tree at the current repo HEAD."""
+    if repo.is_empty:
+        return None
+    try:
+        return repo.head.peel(pygit2.Tree)
+    except pygit2.GitError:
+        # This happens when the repo is not empty, but the current HEAD has no commits.
+        return None
+
+
+def get_head_commit(repo):
+    """Returns the commit at the current repo HEAD."""
+    if repo.is_empty:
+        return None
+    try:
+        return repo.head.peel(pygit2.Commit)
+    except pygit2.GitError:
+        # This happens when the repo is not empty, but the current HEAD has no commits.
+        return None
+
+
+def get_head_branch(repo):
+    """
+    Returns the branch that HEAD is currently on.
+    If HEAD is detached, returns None
+    """
+    if repo.head_is_detached:
+        return None
+    return repo.references["HEAD"].target
+
+
 _GIT_VAR_OUTPUT_RE = re.compile(
     r"^(?P<name>.*) <(?P<email>[^>]*)> (?P<time>\d+) (?P<offset>[+-]?\d+)$"
 )

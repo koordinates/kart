@@ -1,0 +1,162 @@
+{
+  "sno.diff/v1+hexwkb": {
+    "nz_waca_adjustments": {
+      "meta": {
+        "crs/EPSG:4167.wkt": {
+          "+": "GEOGCS[\"NZGD2000\",DATUM[\"New_Zealand_Geodetic_Datum_2000\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY[\"EPSG\",\"6167\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4167\"]]"
+        },
+        "description": {
+          "+": "This layer provides the extents of the data incorporated into an adjustment which has been completed as a Wide Area Cadastral Adjustment (WACA). These adjustments are undertaken in areas where there is already substantial survey-accurate data, but there are some inconsistencies in the data resulting from small changes to geodetic control coordinates and/or the progressive submission of additional Cadastral Survey Datasets (CSDs). The improvement of coordinates is controlled by a mathematical adjustment process using a Least Squares methodology. The adjustment/integration process results in increased mapping accuracy of surrounding spatial objects (e.g. parcels), the effect of which is some new observations or parcels appear to move. The extent of the change largely depends upon the accuracy of the underlying data. In general, movements will be no more than 10cm, as the WACAs target areas where coordinates already have fairly high spatial accuracy.\n\nLicense: Creative Commons Attribution 4.0 International (https://data.linz.govt.nz/license/attribution-4-0-international/)\nSource: https://data.linz.govt.nz/layer/50836-nz-waca-adjustments/\nData last updated: 28 Jun 2019\nDownloaded from LINZ Data Service (https://data.linz.govt.nz/) on 01 Jul 2019"
+        },
+        "metadata/dataset.json": {
+          "+": {
+            "http://gdal.org": {
+              "text/xml": "<GDALMultiDomainMetadata>\n  <Metadata>\n    <MDI key=\"GPKG_METADATA_ITEM_1\">&lt;gmd:MD_Metadata xmlns:gco=\"http://www.isotc211.org/2005/gco\" xmlns:gmd=\"http://www.isotc211.org/2005/gmd\" xmlns:gml=\"http://www.opengis.net/gml\" xmlns:gts=\"http://www.isotc211.org/2005/gts\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xmlns=\"http://www.isotc211.org/2005/gmd\"&gt;&lt;gmd:fileIdentifier&gt;&lt;gco:CharacterString&gt;48c8f8a4-3398-b7f4-b5cf-57c687397785&lt;/gco:CharacterString&gt;&lt;/gmd:fileIdentifier&gt;&lt;gmd:language&gt;&lt;gco:CharacterString&gt;eng&lt;/gco:CharacterString&gt;&lt;/gmd:language&gt;&lt;gmd:characterSet&gt;&lt;gmd:MD_CharacterSetCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_CharacterSetCode\" codeListValue=\"utf8\"&gt;utf8&lt;/gmd:MD_CharacterSetCode&gt;&lt;/gmd:characterSet&gt;&lt;gmd:hierarchyLevel&gt;&lt;gmd:MD_ScopeCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/GAScopeCodeList.xml#MD_ScopeCode\" codeListValue=\"dataset\"&gt;dataset&lt;/gmd:MD_ScopeCode&gt;&lt;/gmd:hierarchyLevel&gt;&lt;gmd:hierarchyLevelName&gt;&lt;gco:CharacterString&gt;dataset&lt;/gco:CharacterString&gt;&lt;/gmd:hierarchyLevelName&gt;&lt;gmd:contact&gt;&lt;gmd:CI_ResponsibleParty&gt;&lt;gmd:individualName&gt;&lt;gco:CharacterString&gt;omit&lt;/gco:CharacterString&gt;&lt;/gmd:individualName&gt;&lt;gmd:organisationName&gt;&lt;gco:CharacterString&gt;LINZ - Land Information New Zealand&lt;/gco:CharacterString&gt;&lt;/gmd:organisationName&gt;&lt;gmd:positionName&gt;&lt;gco:CharacterString/&gt;&lt;/gmd:positionName&gt;&lt;gmd:contactInfo&gt;&lt;gmd:CI_Contact&gt;&lt;gmd:phone&gt;&lt;gmd:CI_Telephone&gt;&lt;gmd:voice&gt;&lt;gco:CharacterString&gt;04 4600110&lt;/gco:CharacterString&gt;&lt;/gmd:voice&gt;&lt;/gmd:CI_Telephone&gt;&lt;/gmd:phone&gt;&lt;gmd:address&gt;&lt;gmd:CI_Address&gt;&lt;gmd:deliveryPoint&gt;&lt;gco:CharacterString&gt;155 The Terrace&lt;/gco:CharacterString&gt;&lt;/gmd:deliveryPoint&gt;&lt;gmd:city&gt;&lt;gco:CharacterString&gt;Wellington&lt;/gco:CharacterString&gt;&lt;/gmd:city&gt;&lt;gmd:postalCode&gt;&lt;gco:CharacterString&gt;6011&lt;/gco:CharacterString&gt;&lt;/gmd:postalCode&gt;&lt;gmd:country&gt;&lt;gco:CharacterString&gt;New Zealand&lt;/gco:CharacterString&gt;&lt;/gmd:country&gt;&lt;gmd:electronicMailAddress&gt;&lt;gco:CharacterString&gt;info@linz.govt.nz&lt;/gco:CharacterString&gt;&lt;/gmd:electronicMailAddress&gt;&lt;/gmd:CI_Address&gt;&lt;/gmd:address&gt;&lt;/gmd:CI_Contact&gt;&lt;/gmd:contactInfo&gt;&lt;gmd:role&gt;&lt;gmd:CI_RoleCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode\" codeListValue=\"resourceProvider\"&gt;resourceProvider&lt;/gmd:CI_RoleCode&gt;&lt;/gmd:role&gt;&lt;/gmd:CI_ResponsibleParty&gt;&lt;/gmd:contact&gt;&lt;gmd:dateStamp&gt;&lt;gco:Date&gt;2012-01-28&lt;/gco:Date&gt;&lt;/gmd:dateStamp&gt;&lt;gmd:metadataStandardName&gt;&lt;gco:CharacterString&gt;ANZLIC Metadata Profile: An Australian/New Zealand Profile of AS/NZS ISO 19115:2005, Geographic information - Metadata&lt;/gco:CharacterString&gt;&lt;/gmd:metadataStandardName&gt;&lt;gmd:metadataStandardVersion&gt;&lt;gco:CharacterString&gt;1.1&lt;/gco:CharacterString&gt;&lt;/gmd:metadataStandardVersion&gt;&lt;gmd:referenceSystemInfo&gt;&lt;gmd:MD_ReferenceSystem&gt;&lt;gmd:referenceSystemIdentifier&gt;&lt;gmd:RS_Identifier&gt;&lt;gmd:code&gt;&lt;gco:CharacterString&gt;urn:ogc:def:crs:EPSG::4167&lt;/gco:CharacterString&gt;&lt;/gmd:code&gt;&lt;/gmd:RS_Identifier&gt;&lt;/gmd:referenceSystemIdentifier&gt;&lt;/gmd:MD_ReferenceSystem&gt;&lt;/gmd:referenceSystemInfo&gt;&lt;gmd:identificationInfo&gt;&lt;gmd:MD_DataIdentification&gt;&lt;gmd:citation&gt;&lt;gmd:CI_Citation&gt;&lt;gmd:title&gt;&lt;gco:CharacterString&gt;NZ WACA Adjustments&lt;/gco:CharacterString&gt;&lt;/gmd:title&gt;&lt;gmd:date&gt;&lt;gmd:CI_Date&gt;&lt;gmd:date&gt;&lt;gco:Date&gt;2011-04&lt;/gco:Date&gt;&lt;/gmd:date&gt;&lt;gmd:dateType&gt;&lt;gmd:CI_DateTypeCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_DateTypeCode\" codeListValue=\"creation\"&gt;creation&lt;/gmd:CI_DateTypeCode&gt;&lt;/gmd:dateType&gt;&lt;/gmd:CI_Date&gt;&lt;/gmd:date&gt;&lt;/gmd:CI_Citation&gt;&lt;/gmd:citation&gt;&lt;gmd:abstract&gt;&lt;gco:CharacterString&gt;This layer provides the extents of the data incorporated into an adjustment which has been completed as a Wide Area Cadastral Adjustment (WACA). These adjustments are undertaken in areas where there is already substantial survey-accurate data, but there are some inconsistencies in the data resulting from small changes to geodetic control coordinates and/or the progressive submission of additional Cadastral Survey Datasets (CSDs). The improvement of coordinates is controlled by a mathematical adjustment process using a Least Squares methodology. The adjustment/integration process results in increased mapping accuracy of surrounding spatial objects (e.g. parcels), the effect of which is some new observations or parcels appear to move. The extent of the change largely depends upon the accuracy of the underlying data. In general, movements will be no more than 10cm, as the WACAs target areas where coordinates already have fairly high spatial accuracy.&lt;/gco:CharacterString&gt;&lt;/gmd:abstract&gt;&lt;gmd:purpose&gt;&lt;gco:CharacterString&gt;This layer provides the extents of influence of work to integrate survey information undertaken as part of a Wide Area Cadastral Adjustment (WACA).&lt;/gco:CharacterString&gt;&lt;/gmd:purpose&gt;&lt;gmd:status&gt;&lt;gmd:MD_ProgressCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_ProgressCode\" codeListValue=\"onGoing\"&gt;onGoing&lt;/gmd:MD_ProgressCode&gt;&lt;/gmd:status&gt;&lt;gmd:pointOfContact&gt;&lt;gmd:CI_ResponsibleParty&gt;&lt;gmd:individualName&gt;&lt;gco:CharacterString&gt;Omit&lt;/gco:CharacterString&gt;&lt;/gmd:individualName&gt;&lt;gmd:organisationName&gt;&lt;gco:CharacterString&gt;LINZ - Land Information New Zealand&lt;/gco:CharacterString&gt;&lt;/gmd:organisationName&gt;&lt;gmd:positionName&gt;&lt;gco:CharacterString&gt;Data Manager - Customer Systems&lt;/gco:CharacterString&gt;&lt;/gmd:positionName&gt;&lt;gmd:contactInfo&gt;&lt;gmd:CI_Contact&gt;&lt;gmd:phone&gt;&lt;gmd:CI_Telephone&gt;&lt;gmd:voice&gt;&lt;gco:CharacterString&gt;+64 4 460 0110&lt;/gco:CharacterString&gt;&lt;/gmd:voice&gt;&lt;gmd:facsimile&gt;&lt;gco:CharacterString/&gt;&lt;/gmd:facsimile&gt;&lt;/gmd:CI_Telephone&gt;&lt;/gmd:phone&gt;&lt;gmd:address&gt;&lt;gmd:CI_Address&gt;&lt;gmd:deliveryPoint&gt;&lt;gco:CharacterString&gt;155 The Terrace&lt;/gco:CharacterString&gt;&lt;/gmd:deliveryPoint&gt;&lt;gmd:city&gt;&lt;gco:CharacterString&gt;Wellington&lt;/gco:CharacterString&gt;&lt;/gmd:city&gt;&lt;gmd:administrativeArea&gt;&lt;gco:CharacterString/&gt;&lt;/gmd:administrativeArea&gt;&lt;gmd:postalCode&gt;&lt;gco:CharacterString&gt;6011&lt;/gco:CharacterString&gt;&lt;/gmd:postalCode&gt;&lt;gmd:country&gt;&lt;gco:CharacterString&gt;New Zealand&lt;/gco:CharacterString&gt;&lt;/gmd:country&gt;&lt;gmd:electronicMailAddress&gt;&lt;gco:CharacterString&gt;info@linz.govt.nz&lt;/gco:CharacterString&gt;&lt;/gmd:electronicMailAddress&gt;&lt;/gmd:CI_Address&gt;&lt;/gmd:address&gt;&lt;/gmd:CI_Contact&gt;&lt;/gmd:contactInfo&gt;&lt;gmd:role&gt;&lt;gmd:CI_RoleCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode\" codeListValue=\"pointOfContact\"&gt;pointOfContact&lt;/gmd:CI_RoleCode&gt;&lt;/gmd:role&gt;&lt;/gmd:CI_ResponsibleParty&gt;&lt;/gmd:pointOfContact&gt;&lt;gmd:resourceMaintenance&gt;&lt;gmd:MD_MaintenanceInformation&gt;&lt;gmd:maintenanceAndUpdateFrequency&gt;&lt;gmd:MD_MaintenanceFrequencyCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_MaintenanceFrequencyCode\" codeListValue=\"weekly\"&gt;weekly&lt;/gmd:MD_MaintenanceFrequencyCode&gt;&lt;/gmd:maintenanceAndUpdateFrequency&gt;&lt;/gmd:MD_MaintenanceInformation&gt;&lt;/gmd:resourceMaintenance&gt;&lt;gmd:resourceFormat&gt;&lt;gmd:MD_Format&gt;&lt;gmd:name&gt;&lt;gco:CharacterString&gt;*.xml&lt;/gco:CharacterString&gt;&lt;/gmd:name&gt;&lt;gmd:version&gt;&lt;gco:CharacterString&gt;Unknown&lt;/gco:CharacterString&gt;&lt;/gmd:version&gt;&lt;/gmd:MD_Format&gt;&lt;/gmd:resourceFormat&gt;&lt;gmd:descriptiveKeywords&gt;&lt;gmd:MD_Keywords&gt;&lt;gmd:keyword&gt;&lt;gco:CharacterString&gt;New Zealand&lt;/gco:CharacterString&gt;&lt;/gmd:keyword&gt;&lt;gmd:type&gt;&lt;gmd:MD_KeywordTypeCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_KeywordTypeCode\" codeListValue=\"theme\"&gt;theme&lt;/gmd:MD_KeywordTypeCode&gt;&lt;/gmd:type&gt;&lt;gmd:thesaurusName&gt;&lt;gmd:CI_Citation&gt;&lt;gmd:title&gt;&lt;gco:CharacterString&gt;ANZLIC Jurisdictions&lt;/gco:CharacterString&gt;&lt;/gmd:title&gt;&lt;gmd:date&gt;&lt;gmd:CI_Date&gt;&lt;gmd:date&gt;&lt;gco:Date&gt;2008-10-29&lt;/gco:Date&gt;&lt;/gmd:date&gt;&lt;gmd:dateType&gt;&lt;gmd:CI_DateTypeCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_DateTypeCode\" codeListValue=\"revision\"&gt;revision&lt;/gmd:CI_DateTypeCode&gt;&lt;/gmd:dateType&gt;&lt;/gmd:CI_Date&gt;&lt;/gmd:date&gt;&lt;gmd:edition&gt;&lt;gco:CharacterString&gt;Version 2.1&lt;/gco:CharacterString&gt;&lt;/gmd:edition&gt;&lt;gmd:editionDate&gt;&lt;gco:Date&gt;2008-10-29&lt;/gco:Date&gt;&lt;/gmd:editionDate&gt;&lt;gmd:identifier&gt;&lt;gmd:MD_Identifier&gt;&lt;gmd:code&gt;&lt;gco:CharacterString&gt;http://asdd.ga.gov.au/asdd/profileinfo/anzlic-jurisdic.xml#anzlic-jurisdic&lt;/gco:CharacterString&gt;&lt;/gmd:code&gt;&lt;/gmd:MD_Identifier&gt;&lt;/gmd:identifier&gt;&lt;gmd:citedResponsibleParty&gt;&lt;gmd:CI_ResponsibleParty&gt;&lt;gmd:organisationName&gt;&lt;gco:CharacterString&gt;ANZLIC the Spatial Information Council&lt;/gco:CharacterString&gt;&lt;/gmd:organisationName&gt;&lt;gmd:role&gt;&lt;gmd:CI_RoleCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#CI_RoleCode\" codeListValue=\"custodian\"&gt;custodian&lt;/gmd:CI_RoleCode&gt;&lt;/gmd:role&gt;&lt;/gmd:CI_ResponsibleParty&gt;&lt;/gmd:citedResponsibleParty&gt;&lt;/gmd:CI_Citation&gt;&lt;/gmd:thesaurusName&gt;&lt;/gmd:MD_Keywords&gt;&lt;/gmd:descriptiveKeywords&gt;&lt;gmd:resourceConstraints&gt;&lt;gmd:MD_SecurityConstraints&gt;&lt;gmd:classification&gt;&lt;gmd:MD_ClassificationCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_ClassificationCode\" codeListValue=\"unclassified\"&gt;unclassified&lt;/gmd:MD_ClassificationCode&gt;&lt;/gmd:classification&gt;&lt;/gmd:MD_SecurityConstraints&gt;&lt;/gmd:resourceConstraints&gt;&lt;gmd:resourceConstraints&gt;&lt;gmd:MD_LegalConstraints&gt;&lt;gmd:useLimitation&gt;&lt;gco:CharacterString&gt;Crown copyright reserved&lt;/gco:CharacterString&gt;&lt;/gmd:useLimitation&gt;&lt;gmd:useConstraints&gt;&lt;gmd:MD_RestrictionCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_RestrictionCode\" codeListValue=\"copyright\"&gt;copyright&lt;/gmd:MD_RestrictionCode&gt;&lt;/gmd:useConstraints&gt;&lt;/gmd:MD_LegalConstraints&gt;&lt;/gmd:resourceConstraints&gt;&lt;gmd:resourceConstraints&gt;&lt;gmd:MD_LegalConstraints&gt;&lt;gmd:useLimitation&gt;&lt;gco:CharacterString&gt;Released under Creative Commons Attribution 4.0 International with:\n\nFollowing Disclaimers:\n1. This data is made available through the LINZ Data Service and is based on information contained with Landonline (New Zealand's Official Title and Cadastral System)\n\n\nFollowing Attribution:\nIf you publish, distribute or otherwise disseminate this work to the public without adapting it, the following attribution to Land Information New Zealand should be used:\n         'CC BY 4.0 Land Information New Zealand\u2019\n\nIf you adapt this work in any way or include it in a collection, and publish, distribute or otherwise disseminate that adaptation or collection to the public, the following attribution to Land Information New Zealand should be used:\n        \u2018Contains data sourced from the LINZ Data Service and licensed for reuse under CC BY 4.0.'\n\nIf \"attribution stacking\" problems exist then the requirement to display the above attribution statements is waived and in lieu the attribution statement is to be made in any terms or conditions associated with the work/ product/ application/ etc.&lt;/gco:CharacterString&gt;&lt;/gmd:useLimitation&gt;&lt;gmd:useConstraints&gt;&lt;gmd:MD_RestrictionCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_RestrictionCode\" codeListValue=\"license\"&gt;license&lt;/gmd:MD_RestrictionCode&gt;&lt;/gmd:useConstraints&gt;&lt;/gmd:MD_LegalConstraints&gt;&lt;/gmd:resourceConstraints&gt;&lt;gmd:spatialRepresentationType&gt;&lt;gmd:MD_SpatialRepresentationTypeCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_SpatialRepresentationTypeCode\" codeListValue=\"vector\"&gt;vector&lt;/gmd:MD_SpatialRepresentationTypeCode&gt;&lt;/gmd:spatialRepresentationType&gt;&lt;gmd:language&gt;&lt;gco:CharacterString&gt;eng&lt;/gco:CharacterString&gt;&lt;/gmd:language&gt;&lt;gmd:characterSet&gt;&lt;gmd:MD_CharacterSetCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_CharacterSetCode\" codeListValue=\"utf8\"&gt;utf8&lt;/gmd:MD_CharacterSetCode&gt;&lt;/gmd:characterSet&gt;&lt;gmd:topicCategory&gt;&lt;gmd:MD_TopicCategoryCode&gt;boundaries&lt;/gmd:MD_TopicCategoryCode&gt;&lt;/gmd:topicCategory&gt;&lt;gmd:topicCategory&gt;&lt;gmd:MD_TopicCategoryCode&gt;planningCadastre&lt;/gmd:MD_TopicCategoryCode&gt;&lt;/gmd:topicCategory&gt;&lt;gmd:extent&gt;&lt;gmd:EX_Extent&gt;&lt;gmd:geographicElement&gt;&lt;gmd:EX_GeographicBoundingBox&gt;&lt;gmd:westBoundLongitude&gt;&lt;gco:Decimal&gt;173.730444583&lt;/gco:Decimal&gt;&lt;/gmd:westBoundLongitude&gt;&lt;gmd:eastBoundLongitude&gt;&lt;gco:Decimal&gt;176.986767667&lt;/gco:Decimal&gt;&lt;/gmd:eastBoundLongitude&gt;&lt;gmd:southBoundLatitude&gt;&lt;gco:Decimal&gt;-41.5517933833&lt;/gco:Decimal&gt;&lt;/gmd:southBoundLatitude&gt;&lt;gmd:northBoundLatitude&gt;&lt;gco:Decimal&gt;-35.689069&lt;/gco:Decimal&gt;&lt;/gmd:northBoundLatitude&gt;&lt;/gmd:EX_GeographicBoundingBox&gt;&lt;/gmd:geographicElement&gt;&lt;/gmd:EX_Extent&gt;&lt;/gmd:extent&gt;&lt;/gmd:MD_DataIdentification&gt;&lt;/gmd:identificationInfo&gt;&lt;gmd:distributionInfo&gt;&lt;gmd:MD_Distribution&gt;&lt;gmd:transferOptions&gt;&lt;gmd:MD_DigitalTransferOptions&gt;&lt;gmd:onLine&gt;&lt;gmd:CI_OnlineResource&gt;&lt;gmd:linkage&gt;&lt;gmd:URL&gt;https://data.linz.govt.nz/layer/50836-nz-waca-adjustments/&lt;/gmd:URL&gt;&lt;/gmd:linkage&gt;&lt;/gmd:CI_OnlineResource&gt;&lt;/gmd:onLine&gt;&lt;/gmd:MD_DigitalTransferOptions&gt;&lt;/gmd:transferOptions&gt;&lt;/gmd:MD_Distribution&gt;&lt;/gmd:distributionInfo&gt;&lt;gmd:dataQualityInfo&gt;&lt;gmd:DQ_DataQuality&gt;&lt;gmd:scope&gt;&lt;gmd:DQ_Scope&gt;&lt;gmd:level&gt;&lt;gmd:MD_ScopeCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_ScopeCode\" codeListValue=\"dataset\"&gt;dataset&lt;/gmd:MD_ScopeCode&gt;&lt;/gmd:level&gt;&lt;gmd:levelDescription&gt;&lt;gmd:MD_ScopeDescription&gt;&lt;gmd:other&gt;&lt;gco:CharacterString&gt;dataset&lt;/gco:CharacterString&gt;&lt;/gmd:other&gt;&lt;/gmd:MD_ScopeDescription&gt;&lt;/gmd:levelDescription&gt;&lt;/gmd:DQ_Scope&gt;&lt;/gmd:scope&gt;&lt;gmd:lineage&gt;&lt;gmd:LI_Lineage&gt;&lt;gmd:statement&gt;&lt;gco:CharacterString&gt;Adjustments areas are not available for data prior to the inception of Landonline (2001).&lt;/gco:CharacterString&gt;&lt;/gmd:statement&gt;&lt;/gmd:LI_Lineage&gt;&lt;/gmd:lineage&gt;&lt;/gmd:DQ_DataQuality&gt;&lt;/gmd:dataQualityInfo&gt;&lt;gmd:metadataConstraints&gt;&lt;gmd:MD_SecurityConstraints&gt;&lt;gmd:classification&gt;&lt;gmd:MD_ClassificationCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_ClassificationCode\" codeListValue=\"unclassified\"&gt;unclassified&lt;/gmd:MD_ClassificationCode&gt;&lt;/gmd:classification&gt;&lt;/gmd:MD_SecurityConstraints&gt;&lt;/gmd:metadataConstraints&gt;&lt;gmd:metadataConstraints&gt;&lt;gmd:MD_LegalConstraints&gt;&lt;gmd:useLimitation&gt;&lt;gco:CharacterString&gt;Crown copyright reserved&lt;/gco:CharacterString&gt;&lt;/gmd:useLimitation&gt;&lt;gmd:useConstraints&gt;&lt;gmd:MD_RestrictionCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_RestrictionCode\" codeListValue=\"copyright\"&gt;copyright&lt;/gmd:MD_RestrictionCode&gt;&lt;/gmd:useConstraints&gt;&lt;/gmd:MD_LegalConstraints&gt;&lt;/gmd:metadataConstraints&gt;&lt;gmd:metadataConstraints&gt;&lt;gmd:MD_LegalConstraints&gt;&lt;gmd:useLimitation&gt;&lt;gco:CharacterString&gt;Released under Creative Commons Attribution 4.0 International&lt;/gco:CharacterString&gt;&lt;/gmd:useLimitation&gt;&lt;gmd:useConstraints&gt;&lt;gmd:MD_RestrictionCode codeList=\"http://asdd.ga.gov.au/asdd/profileinfo/gmxCodelists.xml#MD_RestrictionCode\" codeListValue=\"license\"&gt;license&lt;/gmd:MD_RestrictionCode&gt;&lt;/gmd:useConstraints&gt;&lt;/gmd:MD_LegalConstraints&gt;&lt;/gmd:metadataConstraints&gt;&lt;/gmd:MD_Metadata&gt;</MDI>\n  </Metadata>\n</GDALMultiDomainMetadata>\n"
+            }
+          }
+        },
+        "schema.json": {
+          "+": [
+            {
+              "id": "79d3c4ca-3abd-0a30-2045-45169357113c",
+              "name": "id",
+              "dataType": "integer",
+              "primaryKeyIndex": 0,
+              "size": 64
+            },
+            {
+              "id": "c1d4dea1-c0ad-0255-7857-b5695e3ba2e9",
+              "name": "geom",
+              "dataType": "geometry",
+              "primaryKeyIndex": null,
+              "geometryType": "MULTIPOLYGON",
+              "geometryCRS": "EPSG:4167"
+            },
+            {
+              "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",
+              "name": "date_adjusted",
+              "dataType": "timestamp",
+              "primaryKeyIndex": null
+            },
+            {
+              "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",
+              "name": "survey_reference",
+              "dataType": "text",
+              "primaryKeyIndex": null,
+              "length": 50
+            },
+            {
+              "id": "13dc4918-974e-978f-05ce-3b4321077c50",
+              "name": "adjusted_nodes",
+              "dataType": "integer",
+              "primaryKeyIndex": null,
+              "size": 32
+            }
+          ]
+        },
+        "title": {
+          "+": "NZ WACA Adjustments"
+        }
+      },
+      "feature": [
+        {
+          "+": {
+            "id": 1424927,
+            "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
+            "date_adjusted": "2011-03-25T07:30:45Z",
+            "survey_reference": null,
+            "adjusted_nodes": 1122
+          }
+        },
+        {
+          "+": {
+            "id": 1443053,
+            "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
+            "date_adjusted": "2011-05-10T12:09:10Z",
+            "survey_reference": null,
+            "adjusted_nodes": 1238
+          }
+        },
+        {
+          "+": {
+            "id": 1452332,
+            "geom": "01060000000100000001030000000100000018000000C43FCCA465D7654049FCE5EE4E6642C031DD1F0460D765406D606177F06542C064343C0760D765408E68DDEBED6542C0774AC25F66D7654003E4041CD46542C00442E6DF6AD765405B0AD914C76542C00F9E1F7B6BD76540B7354771C56542C099152AB96BD76540ED1D93E0C46542C03E5700F86CD76540F85610F9C16542C01E90DF366ED76540FDC68D11BF6542C056546E3273D765402D735F73B36542C056C5C5E175D76540EFB2BA30AD6542C06AC54D4277D76540182AC9FAA96542C09C400C8977D7654048F61C62A96542C03590D37C7AD76540168A743FA76542C0F38A07DA7CD7654069796568AA6542C0FF12A7497FD76540FD8AFFFBAF6542C0D5F5B5BE91D765406A7190D0F26542C049E06AF891D76540BCC23B6FF56542C08B3858D991D76540B6662B2FF96542C07E0C0C0F90D76540E2CF4B20006642C03FF664C98ED7654020CAD027046642C020E67C7C74D765406A7528F9476642C052A1D0E771D76540D9BFA1A64C6642C0C43FCCA465D7654049FCE5EE4E6642C0",
+            "date_adjusted": "2011-06-07T15:22:58Z",
+            "survey_reference": null,
+            "adjusted_nodes": 558
+          }
+        },
+        {
+          "+": {
+            "id": 1456853,
+            "geom": "01060000000100000001030000000100000010000000A3AD4A22FBBD6540E4CBC42303BE44C02D1BA2F5F4BD6540B356EA9902BE44C042A49531F4BD6540ACCABE2B02BE44C0B1362108EBBD65402C1B8CC7FBBD44C086B6B279EABD65401A547655FBBD44C0A04AD22089BD65409EC4A0C2A3BB44C0FE56417C57BD65408FB8A279C9B844C01D8C38E353BE6540CB89D1CE44B844C0DB029DA454BE65403069E78F44B844C0ACA6D55B55BE6540C7C99F5444B844C007BE58CEB4BE65405B6427B269B844C04CB19E6FC7BE654031BAA80C76B844C0EAF5DD63DFBE6540965DC1D18DB844C09BB931CDDDBE654094CF3CCAD2BA44C01C4A0374CDBE6540CE8D58F0A3BC44C0A3AD4A22FBBD6540E4CBC42303BE44C0",
+            "date_adjusted": "2011-06-21T10:22:39Z",
+            "survey_reference": null,
+            "adjusted_nodes": 1386
+          }
+        },
+        {
+          "+": {
+            "id": 1456912,
+            "geom": "0106000000010000000103000000010000000C00000026968FB98EE96540F2E711E3D9E442C0B309302C7FE9654026E5EE73FCE342C07861B0418CE96540255AF278DAE342C0FD3087038EE96540DFB36444D8E342C03B7DF3D198E965408555D0BEDFE342C015BE0864A0E9654066666666E6E342C0B83E4C7CB6E96540CD2F945DFAE342C07873BD58BCE96540FA3F2C4000E442C0E78F696DBAE965408CFD2F97B0E442C08A8D63EFB7E96540DE447459BAE442C0F22449569DE96540F017443FD2E442C026968FB98EE96540F2E711E3D9E442C0",
+            "date_adjusted": "2011-06-20T12:56:13Z",
+            "survey_reference": null,
+            "adjusted_nodes": 873
+          }
+        },
+        {
+          "+": {
+            "id": 1457297,
+            "geom": "0106000000010000000103000000010000000D000000E17C2FE43EEB6540980DD70F56E442C0131A7739BBEA654096637C584BE242C0136A2699BDEA654016C0259B2AE242C075B570B4FEEA6540345FCA6548E142C0EB426271AEEB65409918816731DF42C0C0AE6BDAD2EB6540B08490D837DF42C002FF0512DDEB654074685B8D48DF42C0E83D24EC72EC6540FD7868CE0CE242C0E9B2F89370EC65403B246BC317E242C0A2A7B7F569EC6540AB3D7D9F29E242C0FD565CAC51EC6540684C636066E242C0C57E051FF9EB6540CE14DFF53EE342C0E17C2FE43EEB6540980DD70F56E442C0",
+            "date_adjusted": "2011-06-21T13:27:58Z",
+            "survey_reference": null,
+            "adjusted_nodes": 1033
+          }
+        },
+        {
+          "+": {
+            "id": 1457355,
+            "geom": "0106000000010000000103000000010000000B000000D0F93FBCFCFE6540533B681BA4B942C097A7188CB6FE654022F1CD1B70B942C06B5B99DBA1FE6540E7C7CE402DB942C0044BBF8EA9FE6540B7C818041FB942C09CDCAAC5DAFE6540FDDE1526D4B842C020B54408E2FE6540B75BA630DCB842C06D34E072F4FE6540F01F668A14B942C026DC15C5FDFE6540663692C46EB942C046D49F5802FF6540D6A57C489CB942C030474A5402FF6540C09CA34E9CB942C0D0F93FBCFCFE6540533B681BA4B942C0",
+            "date_adjusted": "2011-06-21T12:55:27Z",
+            "survey_reference": null,
+            "adjusted_nodes": 704
+          }
+        },
+        {
+          "+": {
+            "id": 1457612,
+            "geom": "0106000000010000000103000000010000000F0000005EDF828143FE6540EE1DDA6CD1B542C0030A3A802BFE6540C1351C3BCDB542C0279A0CB209FE6540171CA59C1DB542C0A5D40FB5FFFD6540C7A244A6D7B442C03785F5C5FDFD6540C82F7205CAB442C02BC373900AFE654029571DDE98B442C0DB3C24B112FE65401C6E622D87B442C0B191DA7A1CFE65409561DC0DA2B442C0B61B93FA20FE6540D0C2C3CFB6B442C046A010362AFE65409DCFB6DAE7B442C061D394AE2AFE6540882D3D9AEAB442C0B674BB4D2EFE65406DE10AC3FFB442C0184740E03CFE65401E6338E85CB542C05E41E43E43FE65405608E111B9B542C05EDF828143FE6540EE1DDA6CD1B542C0",
+            "date_adjusted": "2011-06-21T14:41:53Z",
+            "survey_reference": null,
+            "adjusted_nodes": 681
+          }
+        },
+        {
+          "+": {
+            "id": 1457636,
+            "geom": "01060000000100000001030000000100000008000000064E56C627BA6540B692F8C142BE44C034338EEC25BA654023555B3B3FBE44C0F09078AEFDB96540AED1A8003CBD44C0DC40CB040DBC65403FC3D195ACBA44C04600811812BC654098744AF6BEBA44C076C54765FDBB65407250C24C5BBD44C0B6700FF832BA654028DE482A41BE44C0064E56C627BA6540B692F8C142BE44C0",
+            "date_adjusted": "2011-06-27T09:21:38Z",
+            "survey_reference": null,
+            "adjusted_nodes": 854
+          }
+        },
+        {
+          "+": {
+            "id": 1458553,
+            "geom": "0106000000010000000103000000010000000D000000CE0A9B7131DC654014FDEB26C2E642C07493BD4A23DC654015B9601FAFE642C05F926F5B20DC65409DEA6B42A3E642C0B85B920316DC65402B36D2485EE642C022252CE014DC65400ADCA66E41E642C0F34E0ADE14DC6540147651F440E642C0B2D199FA18DC6540EE1D49532AE642C0C1C3F9FA27DC6540B4949B0DFAE542C0965FA6A730DC6540F155E185E3E542C03975CF8563DC6540095FBDA553E642C07D2375DC63DC654038F0A01968E642C029A084AE60DC654048C82C7177E642C0CE0A9B7131DC654014FDEB26C2E642C0",
+            "date_adjusted": "2011-06-23T12:51:20Z",
+            "survey_reference": null,
+            "adjusted_nodes": 890
+          }
+        }
+      ]
+    }
+  },
+  "sno.patch/v1": {
+    "authorName": "Robert Coup",
+    "authorEmail": "robert@coup.net.nz",
+    "authorTime": "2019-07-22T11:05:39Z",
+    "authorTimeOffset": "+01:00",
+    "message": "Import from nz-waca-adjustments.gpkg"
+  }
+}

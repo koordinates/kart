@@ -134,6 +134,9 @@ class RepositoryStructure:
 
     def iter_at(self, tree):
         """ Iterate over available datasets in this repository using a specified Tree """
+        if tree is None:
+            return
+
         to_examine = deque([("", tree)])
 
         dataset_version = self.version
@@ -194,18 +197,33 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
-    def create_tree_from_diff(self, diff):
+    def create_tree_from_diff(self, repo_diff):
         """
         Given a diff, returns a new tree created by applying the diff to self.tree -
         Doesn't create any commits or modify the working copy at all.
         """
         tree_builder = RichTreeBuilder(self.repo, self.tree)
+        dataset_class = DatasetStructure.for_version(self.version)
 
-        for ds in self.iter_at(self.tree):
-            ds_diff = diff.get(ds.path)
-            if ds_diff:
-                ds.apply_diff(ds_diff, tree_builder)
-                tree_builder.flush()
+        for ds_path, ds_diff in repo_diff.items():
+            schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
+            if schema_delta and self.version < 2:
+                # This should have been handled already, but just to be safe.
+                raise NotYetImplemented(
+                    "Meta changes are not supported until datasets V2"
+                )
+
+            if schema_delta and schema_delta.type == "delete":
+                tree_builder.remove(ds_path)
+                continue
+
+            if schema_delta and schema_delta.type == "insert":
+                dataset = dataset_class(tree=None, path=ds_path)
+            else:
+                dataset = self[ds_path]
+
+            dataset.apply_diff(ds_diff, tree_builder)
+            tree_builder.flush()
 
         tree = tree_builder.flush()
         L.info(f"Tree sha: {tree.oid}")
@@ -220,18 +238,24 @@ class RepositoryStructure:
         NOTE: Doesn't update working-copy meta or tracking tables, this is the
         responsibility of the caller.
         """
+        old_tree_oid = self.tree.oid if self.tree is not None else None
         new_tree_oid = self.create_tree_from_diff(wcdiff)
-        if (not allow_empty) and new_tree_oid == self.tree.oid:
+        if (not allow_empty) and new_tree_oid == old_tree_oid:
             raise NotFound("No changes to commit", exit_code=NO_CHANGES)
+
         L.info("Committing...")
+
+        parent_commit = git_util.get_head_commit(self.repo)
+        parents = [parent_commit.oid] if parent_commit is not None else []
+
         # this will also update the ref (branch) to point to the current commit
         new_commit = self.repo.create_commit(
             "HEAD",  # reference_name
             author or git_util.author_signature(self.repo),
             committer or git_util.committer_signature(self.repo),
-            message,  # message
-            new_tree_oid,  # tree
-            [self.repo.head.target],  # parents
+            message,
+            new_tree_oid,
+            parents,
         )
         L.info(f"Commit: {new_commit}")
 
@@ -369,14 +393,20 @@ class DatasetStructure:
 
     @property
     @functools.lru_cache(maxsize=1)
+    def schema(self):
+        """Convenience method for loading the schema.json into a Schema object"""
+        return Schema.from_column_dicts(self.get_meta_item("schema.json"))
+
+    @property
+    @functools.lru_cache(maxsize=1)
     def has_geometry(self):
         return self.geom_column_name is not None
 
     @property
     @functools.lru_cache(maxsize=1)
     def geom_column_name(self):
-        meta_geom = self.get_gpkg_meta_item("gpkg_geometry_columns")
-        return meta_geom["column_name"] if meta_geom else None
+        geom_columns = self.schema.geometry_columns
+        return geom_columns[0].name if geom_columns else None
 
     def get_crs_definition(self, crs_name):
         """Return the CRS definition stored with the given name."""
@@ -663,7 +693,12 @@ class DatasetStructure:
         if schema is not None:
             encode_kwargs = {"schema": schema}
 
-        geom_column_name = self.geom_column_name
+        geom_columns = (schema or self.schema).geometry_columns
+        geom_column_name = geom_columns[0].name if geom_columns else None
+
+        # Applying diffs works even if there is no tree yet created for the dataset,
+        # as is the case when the dataset is first being created right now.
+        tree = self.tree or ()
 
         conflicts = False
         for delta in feature_diff.values():
@@ -677,21 +712,21 @@ class DatasetStructure:
             )
 
             # Conflict detection
-            if delta.type == "delete" and old_path not in self.tree:
+            if delta.type == "delete" and old_path not in tree:
                 conflicts = True
                 click.echo(
                     f"{self.path}: Trying to delete nonexistent feature: {old_key}"
                 )
                 continue
 
-            if delta.type == "insert" and new_path in self.tree:
+            if delta.type == "insert" and new_path in tree:
                 conflicts = True
                 click.echo(
                     f"{self.path}: Trying to create feature that already exists: {new_key}"
                 )
                 continue
 
-            if delta.type == "update" and old_path not in self.tree:
+            if delta.type == "update" and old_path not in tree:
                 conflicts = True
                 click.echo(
                     f"{self.path}: Trying to update nonexistent feature: {old_key}"

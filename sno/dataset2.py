@@ -169,12 +169,6 @@ class Dataset2(DatasetStructure):
 
     @property
     @functools.lru_cache(maxsize=1)
-    def schema(self):
-        """Load the current schema from this dataset."""
-        return Schema.loads(self.get_data_at(self.SCHEMA_PATH))
-
-    @property
-    @functools.lru_cache(maxsize=1)
     def crs_identifier(self):
         for col in self.schema:
             if col.data_type == "geometry":
@@ -401,9 +395,11 @@ class Dataset2(DatasetStructure):
         if not meta_diff:
             return
 
-        conflicts = False
+        # Applying diffs works even if there is no tree yet created for the dataset,
+        # as is the case when the dataset is first being created right now.
+        meta_tree = self.meta_tree if self.tree is not None else ()
 
-        meta_tree = self.meta_tree
+        conflicts = False
         with tree_builder.cd(self.META_PATH):
             for delta in meta_diff.values():
                 name = delta.key

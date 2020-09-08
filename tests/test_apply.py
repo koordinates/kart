@@ -46,7 +46,7 @@ def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
         r = cli_runner.invoke(["apply", '-'], input=patch_data)
         assert r.exit_code == NO_TABLE, r
         assert (
-            "Patch contains dataset 'wrong-name' which is not in this repository"
+            "Patch contains changes for dataset 'wrong-name' which is not in this repository"
             in r.stderr
         )
 
@@ -141,6 +141,37 @@ def test_apply_meta_changes(data_archive, cli_runner):
         patch = json.loads(r.stdout)
         meta = patch['sno.diff/v1+hexwkb']['nz_pa_points_topo_150k']['meta']
         assert meta == {'title': {'+': 'new title:', '-': 'NZ Pa Points (Topo, 1:50k)'}}
+
+
+def test_apply_create_dataset(data_archive, cli_runner):
+    patch_path = patches / "polygons.snopatch"
+    with data_archive("points"):
+        # this won't work, v1 doesn't support this patch
+        r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == NOT_YET_IMPLEMENTED, r
+    with data_archive("points2"):
+        r = cli_runner.invoke(["data", "ls", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout)["sno.data.ls/v1"] == ["nz_pa_points_topo_150k"]
+
+        r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["data", "ls", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout)["sno.data.ls/v1"] == [
+            "nz_pa_points_topo_150k",
+            "nz_waca_adjustments",
+        ]
+
+        # Check that the `sno create-patch` output is the same as our original patch file had.
+        r = cli_runner.invoke(['create-patch', "HEAD"])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+
+        original_patch = json.load(patch_path.open('r', encoding='utf-8'))
+        a, b = 'sno.diff/v1+hexwkb', 'nz_waca_adjustments'
+        assert patch[a][b] == original_patch[a][b]
 
 
 def test_add_and_remove_xml_metadata(data_archive, cli_runner):

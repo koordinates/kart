@@ -2,6 +2,9 @@ import contextlib
 
 import pygit2
 
+from .repository_version import get_repo_version, extra_blobs_for_version
+
+# Hash for git's empty tree.
 EMPTY_TREE_ID = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 
 
@@ -13,17 +16,26 @@ class RichTreeBuilder:
     Conflicts are not detected.
     """
 
-    def __init__(self, repo, initial_root_tree):
+    def __init__(self, repo, initial_root_tree, auto_include_version_blobs=True):
         """
         The repo and an initial root tree which will be updated.
         All paths are specified relative to this tree - the root tree at a particular commit is a good choice.
         """
         self.repo = repo
-        self.root_tree = initial_root_tree
+        self.root_tree = (
+            initial_root_tree
+            if initial_root_tree is not None
+            else repo.get(EMPTY_TREE_ID)
+        )
 
         self.root_dict = {}
         self.cur_path = []
         self.path_stack = []
+
+        if auto_include_version_blobs and initial_root_tree is None:
+            extra_blobs = extra_blobs_for_version(get_repo_version(repo))
+            for path, blob in extra_blobs:
+                self.insert(path, blob)
 
     def _resolve_path(self, path):
         """
