@@ -58,27 +58,6 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
         wc.write_full(commit, dataset)
 
 
-@contextlib.contextmanager
-def temporary_branch(repo):
-    """
-    Contextmanager.
-    Creates a branch for HEAD to point at, then deletes it again so HEAD is detached again.
-    """
-    TEMP_BRANCH_NAME = '__temp-fast-import-branch'
-    if TEMP_BRANCH_NAME in repo.branches:
-        del repo.branches[TEMP_BRANCH_NAME]
-
-    temp_branch = repo.branches.local.create(
-        TEMP_BRANCH_NAME, repo.head.peel(pygit2.Commit)
-    )
-    repo.set_head(temp_branch.name)
-    try:
-        yield temp_branch
-    finally:
-        repo.set_head(repo.head.target)
-        repo.branches.delete(temp_branch.branch_name)
-
-
 @click.command("import")
 @click.pass_context
 @click.argument("source")
@@ -264,20 +243,16 @@ def import_table(
 
     ImportSource.check_valid(import_sources, param_hint="tables")
 
-    # Workaround the fact that fast import doesn't work when head is detached.
-    ctx = temporary_branch(repo) if repo.head_is_detached else contextlib.nullcontext()
-
-    with ctx:
-        fast_import_tables(
-            repo,
-            import_sources,
-            message=message,
-            max_delta_depth=max_delta_depth,
-            replace_existing=ReplaceExisting.GIVEN
-            if replace_existing
-            else ReplaceExisting.DONT_REPLACE,
-            allow_empty=allow_empty,
-        )
+    fast_import_tables(
+        repo,
+        import_sources,
+        message=message,
+        max_delta_depth=max_delta_depth,
+        replace_existing=ReplaceExisting.GIVEN
+        if replace_existing
+        else ReplaceExisting.DONT_REPLACE,
+        allow_empty=allow_empty,
+    )
 
     rs = RepositoryStructure(repo)
     _add_datasets_to_working_copy(

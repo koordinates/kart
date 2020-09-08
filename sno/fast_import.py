@@ -89,14 +89,18 @@ def fast_import_tables(
         f"--depth={max_delta_depth}",
     ] + list(extra_cmd_args)
 
-    orig_branch = get_head_branch(repo)
     if header is None:
         # import onto a temp branch. then reset the head branch afterwards.
         # this allows us to check the result before updating the orig branch.
         import_branch = f'refs/heads/{uuid.uuid4()}'
+
+        # may be None, if head is detached
+        orig_branch = get_head_branch(repo, allow_detached=True)
         header = generate_header(repo, sources, message, branch=import_branch)
     else:
+        orig_branch = get_head_branch(repo)
         import_branch = orig_branch
+    orig_commit = get_head_commit(repo)
 
     if not quiet:
         click.echo("Starting git-fast-import...")
@@ -108,7 +112,7 @@ def fast_import_tables(
     )
     try:
         if replace_existing != ReplaceExisting.ALL:
-            header += f"from {orig_branch}^0\n"
+            header += f"from {orig_commit.oid}\n"
         p.stdin.write(header.encode("utf8"))
 
         # Write any extra blobs supplied by the client or needed for this version.
@@ -200,14 +204,19 @@ def fast_import_tables(
             if head_tree and not allow_empty:
                 if repo.revparse_single(import_branch).peel(pygit2.Tree) == head_tree:
                     raise NotFound("No changes to commit", exit_code=NO_CHANGES)
-            # reset the original branch head to the import branch, so it gets the new commits
-            if head_tree:
-                # repo was non-empty before this, so orig_branch exists already.
-                # we have to delete and re-create it at the new commit.
-                repo.references.delete(orig_branch)
-            repo.references.create(
-                orig_branch, repo.references[import_branch].peel(pygit2.Commit).oid
-            )
+            latest_commit_oid = repo.references[import_branch].peel(pygit2.Commit).oid
+            if orig_branch:
+                # reset the original branch head to the import branch, so it gets the new commits
+                if head_tree:
+                    # repo was non-empty before this, and head was not detached.
+                    # so orig_branch exists already.
+                    # we have to delete and re-create it at the new commit.
+                    repo.references.delete(orig_branch)
+                repo.references.create(orig_branch, latest_commit_oid)
+            else:
+                # head was detached before this. just update head to the new commit,
+                # so it's still detached.
+                repo.set_head(latest_commit_oid)
         finally:
             # remove the import branch
             repo.references.delete(import_branch)
@@ -224,12 +233,30 @@ def get_head_tree(repo):
         return None
 
 
-def get_head_branch(repo):
-    """Returns the branch that HEAD is currently on."""
+def get_head_commit(repo):
+    """Returns the commit that HEAD is currently on."""
+    if repo.is_empty:
+        return None
+    try:
+        return repo.head.peel(pygit2.Commit)
+    except pygit2.GitError:
+        # This happens when the repo is not empty, but the current HEAD has no commits.
+        return None
+
+
+def get_head_branch(repo, allow_detached=False):
+    """
+    Returns the branch that HEAD is currently on.
+    If HEAD is detached, raises InvalidOperation, unless allow_detached=True,
+    in which case None is returned.
+    """
     if repo.head_is_detached:
-        raise InvalidOperation(
-            'Cannot fast-import when in "detached HEAD" state - ie, when not on a branch'
-        )
+        if allow_detached:
+            return None
+        else:
+            raise InvalidOperation(
+                'Cannot fast-import when in "detached HEAD" state - ie, when not on a branch'
+            )
     return repo.head.name if not repo.is_empty else "refs/heads/master"
 
 
