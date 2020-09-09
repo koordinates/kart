@@ -283,7 +283,10 @@ class OgrImportSource(ImportSource):
             t_choices = click.Choice(choices=table_list)
             t_default = table_list[0] if len(table_list) == 1 else None
             return click.prompt(
-                f"\n{prompt}", type=t_choices, show_choices=False, default=t_default,
+                f"\n{prompt}",
+                type=t_choices,
+                show_choices=False,
+                default=t_default,
             )
 
     def __str__(self):
@@ -295,7 +298,8 @@ class OgrImportSource(ImportSource):
     def check_table(self, table_name):
         if table_name not in self.get_tables():
             raise NotFound(
-                f"Table '{table_name}' not found", exit_code=NO_TABLE,
+                f"Table '{table_name}' not found",
+                exit_code=NO_TABLE,
             )
 
     def __enter__(self):
@@ -556,7 +560,7 @@ class OgrImportSource(ImportSource):
         if element.tagName in self._KNOWN_METADATA_URIS:
             uri = self._KNOWN_METADATA_URIS[element.tagName]
         else:
-            uri = element.namespaceURI or '(unknown)'
+            uri = element.getAttribute('xmlns') or element.namespaceURI or '(unknown)'
 
         return {uri: {"text/xml": xml_metadata}}
 
