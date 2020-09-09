@@ -31,7 +31,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
         return
 
     if not wc.is_created():
-        click.echo(f'Creating working copy at {wc.path} ...')
+        click.echo(f"Creating working copy at {wc.path} ...")
         wc.create()
         for dataset in list(RepositoryStructure(repo)):
             wc.write_full(target_tree_or_commit, dataset, safe=False)
@@ -40,7 +40,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     db_tree_matches = wc.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
 
     if discard_changes or not db_tree_matches:
-        click.echo(f'Updating {wc.path} ...')
+        click.echo(f"Updating {wc.path} ...")
         wc.reset(target_tree_or_commit, force=discard_changes)
 
 
@@ -232,7 +232,10 @@ def restore(ctx, source, pathspec):
         raise NotFound(f"{source} is not a commit or tree", exit_code=NO_COMMIT)
 
     working_copy.reset(
-        commit_or_tree, force=True, track_changes_as_dirty=True, paths=pathspec,
+        commit_or_tree,
+        force=True,
+        track_changes_as_dirty=True,
+        paths=pathspec,
     )
 
 

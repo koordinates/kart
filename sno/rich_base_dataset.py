@@ -223,7 +223,9 @@ class RichBaseDataset(BaseDataset):
 
                 if d.status in self._UPDATE_DELETE:
                     old_feature_promise = functools.partial(
-                        old.get_feature, old_pk, path=old_path,
+                        old.get_feature,
+                        old_pk,
+                        path=old_path,
                     )
                     old_half_delta = old_pk, old_feature_promise
                 else:
@@ -231,7 +233,9 @@ class RichBaseDataset(BaseDataset):
 
                 if d.status in self._INSERT_UPDATE:
                     new_feature_promise = functools.partial(
-                        new.get_feature, new_pk, path=new_path,
+                        new.get_feature,
+                        new_pk,
+                        path=new_path,
                     )
                     new_half_delta = new_pk, new_feature_promise
                 else:
@@ -352,7 +356,8 @@ class RichBaseDataset(BaseDataset):
 
         if conflicts:
             raise InvalidOperation(
-                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+                "Patch does not apply",
+                exit_code=PATCH_DOES_NOT_APPLY,
             )
 
     def _features_equal(self, lhs, rhs, geom_column_name):

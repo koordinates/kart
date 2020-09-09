@@ -93,9 +93,11 @@ def _import_check(repo_path, table, source_gpkg, geopackage, repo_version=None):
 
 def normalise_feature(row):
     row = dict(row)
-    if 'geom' in row:
+    if "geom" in row:
         # We import via OGR, which strips envelopes by default
-        row['geom'] = ogr_to_gpkg_geom(gpkg_geom_to_ogr(row['geom'], parse_crs=True),)
+        row["geom"] = ogr_to_gpkg_geom(
+            gpkg_geom_to_ogr(row["geom"], parse_crs=True),
+        )
     return row
 
 
@@ -147,7 +149,7 @@ def test_import(
             orig_import_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
-    monkeypatch.setattr(fast_import, 'fast_import_tables', _benchmark_import)
+    monkeypatch.setattr(fast_import, "fast_import_tables", _benchmark_import)
 
     with data_archive(archive) as data:
         # list tables
@@ -236,22 +238,22 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     There are all sorts of caveats to the meta item emulation, and this attempts
     to avoid them when comparing.
     """
-    ds_schema = without_ids(dataset.get_meta_item('schema.json'))
-    gpkg_schema = without_ids(gpkg_dataset.get_meta_item('schema.json'))
+    ds_schema = without_ids(dataset.get_meta_item("schema.json"))
+    gpkg_schema = without_ids(gpkg_dataset.get_meta_item("schema.json"))
 
     # SHP/TAB always call the primary key "FID"
     for col in gpkg_schema:
-        if col['name'] == gpkg_dataset.primary_key:
-            col['name'] = 'FID'
+        if col["name"] == gpkg_dataset.primary_key:
+            col["name"] = "FID"
 
     # Check the fields are in the right order. Ignore truncation and capitalisation
-    ds_names = [col['name'][:8] for col in ds_schema]
-    gpkg_names = [col['name'][:8] for col in gpkg_schema]
+    ds_names = [col["name"][:8] for col in ds_schema]
+    gpkg_names = [col["name"][:8] for col in gpkg_schema]
     assert ds_names == gpkg_names
 
     # now we've checked order, we can key by name
-    ds_schema = {col.pop('name'): col for col in ds_schema}
-    gpkg_schema = {col.pop('name'): col for col in gpkg_schema}
+    ds_schema = {col.pop("name"): col for col in ds_schema}
+    gpkg_schema = {col.pop("name"): col for col in gpkg_schema}
 
     # SHP/TAB field names must be <10 chars
     # When they're truncated, an underscore and integer suffix gets appended.
@@ -293,9 +295,9 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
 )
 @pytest.mark.parametrize(*V1_OR_V2)
 @pytest.mark.parametrize(
-    'source_format,source_ogr_driver',
+    "source_format,source_ogr_driver",
     [
-        ('SHP', 'ESRI Shapefile'),
+        ("SHP", "ESRI Shapefile"),
         # https://github.com/koordinates/sno/issues/86
         # This test starts by converting a GPKG into a TAB, and then imports then TAB.
         # But the TAB ended up with very broken SRS info, and then during import GDAL
@@ -304,7 +306,7 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
         # A future release might add handling via an option (--srs=epsg:4167 for example)
         # ('TAB', 'MapInfo File')
     ],
-    ids=['SHP'],
+    ids=["SHP"],
 )
 def test_import_from_non_gpkg(
     repo_version,
@@ -369,7 +371,13 @@ def test_import_from_non_gpkg(
             assert repo.is_empty
 
             # Import from SHP/TAB/something into sno
-            r = cli_runner.invoke(["import", str(source_filename), f"data:{table}",])
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    str(source_filename),
+                    f"data:{table}",
+                ]
+            )
             assert r.exit_code == 0, r
 
             assert not repo.is_empty
@@ -406,31 +414,34 @@ def test_import_from_non_gpkg(
                     f.GetFieldDefnRef(i).GetName(): f.GetField(i)
                     for i in range(f.GetFieldCount())
                 }
-                if 'date_adjus' in expected_feature:
-                    expected_feature['date_adjus'] = expected_feature[
-                        'date_adjus'
-                    ].replace('/', '-')
-                expected_feature['FID'] = f.GetFID()
+                if "date_adjus" in expected_feature:
+                    expected_feature["date_adjus"] = expected_feature[
+                        "date_adjus"
+                    ].replace("/", "-")
+                expected_feature["FID"] = f.GetFID()
                 if src_layer.GetGeomType() != ogr.wkbNone:
                     g = f.GetGeometryRef()
                     if g:
                         g.AssignSpatialReference(src_layer.GetSpatialRef())
-                    expected_feature['geom'] = ogr_to_gpkg_geom(g)
+                    expected_feature["geom"] = ogr_to_gpkg_geom(g)
 
                 assert normalise_feature(got_feature) == expected_feature
 
 
 def test_shp_import_meta(
-    data_archive, tmp_path, cli_runner, request,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
 ):
-    with data_archive('gpkg-polygons') as data:
+    with data_archive("gpkg-polygons") as data:
         # convert to SHP using OGR
         source_filename = tmp_path / "nz_waca_adjustments.shp"
         gdal.VectorTranslate(
             str(source_filename),
-            gdal.OpenEx(str(data / 'nz-waca-adjustments.gpkg')),
-            format='ESRI Shapefile',
-            layers=['nz_waca_adjustments'],
+            gdal.OpenEx(str(data / "nz-waca-adjustments.gpkg")),
+            format="ESRI Shapefile",
+            layers=["nz_waca_adjustments"],
         )
 
         # now import the SHP
@@ -445,28 +456,28 @@ def test_shp_import_meta(
 
         meta_items = dict(dataset.meta_items())
         assert set(meta_items) == {
-            'description',
-            'schema.json',
-            'title',
-            'crs/EPSG:4167.wkt',
+            "description",
+            "schema.json",
+            "title",
+            "crs/EPSG:4167.wkt",
         }
-        schema = without_ids(dataset.get_meta_item('schema.json'))
+        schema = without_ids(dataset.get_meta_item("schema.json"))
         assert schema == [
-            {'name': 'FID', 'dataType': 'integer', 'primaryKeyIndex': 0, 'size': 64},
+            {"name": "FID", "dataType": "integer", "primaryKeyIndex": 0, "size": 64},
             {
-                'name': 'geom',
-                'dataType': 'geometry',
-                'primaryKeyIndex': None,
-                'geometryType': 'POLYGON',
-                'geometryCRS': 'EPSG:4167',
+                "name": "geom",
+                "dataType": "geometry",
+                "primaryKeyIndex": None,
+                "geometryType": "POLYGON",
+                "geometryCRS": "EPSG:4167",
             },
-            {'name': 'date_adjus', 'dataType': 'date', 'primaryKeyIndex': None},
-            {'name': 'survey_ref', 'dataType': 'text', 'primaryKeyIndex': None},
+            {"name": "date_adjus", "dataType": "date", "primaryKeyIndex": None},
+            {"name": "survey_ref", "dataType": "text", "primaryKeyIndex": None},
             {
-                'name': 'adjusted_n',
-                'dataType': 'integer',
-                'primaryKeyIndex': None,
-                'size': 32,
+                "name": "adjusted_n",
+                "dataType": "integer",
+                "primaryKeyIndex": None,
+                "size": 32,
             },
         ]
 
@@ -487,25 +498,25 @@ def postgis_db():
         docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
         SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k test_pg_import --pdb -vvs
     """
-    if 'SNO_POSTGRES_URL' not in os.environ:
+    if "SNO_POSTGRES_URL" not in os.environ:
         raise pytest.skip(
-            'Requires postgres - read docstring at sno.test_structure.postgis_db'
+            "Requires postgres - read docstring at sno.test_structure.postgis_db"
         )
-    conn = psycopg2.connect(os.environ['SNO_POSTGRES_URL'])
+    conn = psycopg2.connect(os.environ["SNO_POSTGRES_URL"])
     conn.autocommit = True
     with conn.cursor() as cur:
         # test connection and postgis support
         try:
             cur.execute("""SELECT postgis_version()""")
         except psycopg2.errors.UndefinedFunction:
-            raise pytest.skip('Requires PostGIS')
+            raise pytest.skip("Requires PostGIS")
     yield conn
 
 
 @pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
     postgres_conn_str = PostgreSQLImportSource.postgres_url_to_ogr_conn_str(
-        os.environ['SNO_POSTGRES_URL']
+        os.environ["SNO_POSTGRES_URL"]
     )
 
     @contextlib.contextmanager
@@ -515,15 +526,15 @@ def postgis_layer(postgis_db, data_archive):
             dest_ds = gdal.OpenEx(
                 postgres_conn_str,
                 gdal.OF_VERBOSE_ERROR | gdal.OF_UPDATE,
-                ['PostgreSQL'],
+                ["PostgreSQL"],
             )
 
             gdal.VectorTranslate(
                 dest_ds,
                 src_ds,
-                format='PostgreSQL',
-                accessMode='overwrite',
-                layerCreationOptions=['LAUNDER=NO'],
+                format="PostgreSQL",
+                accessMode="overwrite",
+                layerCreationOptions=["LAUNDER=NO"],
                 layers=[table],
             )
         yield
@@ -541,11 +552,16 @@ def _test_pg_import(
     tmp_path, cli_runner, chdir, *, table_name, pk_name="id", pk_size=64, import_args=()
 ):
     repo_path = tmp_path / "repo"
-    r = cli_runner.invoke(['init', repo_path, "--repo-version=2"])
+    r = cli_runner.invoke(["init", repo_path, "--repo-version=2"])
     assert r.exit_code == 0, r
     with chdir(repo_path):
         r = cli_runner.invoke(
-            ['import', os.environ['SNO_POSTGRES_URL'], table_name, *import_args,]
+            [
+                "import",
+                os.environ["SNO_POSTGRES_URL"],
+                table_name,
+                *import_args,
+            ]
         )
         assert r.exit_code == 0, r
     # now check metadata
@@ -554,51 +570,62 @@ def _test_pg_import(
 
     meta_items = dict(dataset.meta_items())
     assert set(meta_items.keys()) == {
-        'description',
-        'schema.json',
-        'title',
-        'crs/EPSG:4167.wkt',
+        "description",
+        "schema.json",
+        "title",
+        "crs/EPSG:4167.wkt",
     }
-    schema = without_ids(dataset.get_meta_item('schema.json'))
+    schema = without_ids(dataset.get_meta_item("schema.json"))
     assert schema == [
         {
-            'name': pk_name,
-            'dataType': 'integer',
-            'primaryKeyIndex': 0,
-            'size': pk_size,
+            "name": pk_name,
+            "dataType": "integer",
+            "primaryKeyIndex": 0,
+            "size": pk_size,
         },
         {
-            'name': 'geom',
-            'dataType': 'geometry',
-            'primaryKeyIndex': None,
-            'geometryType': 'MULTIPOLYGON',
-            'geometryCRS': 'EPSG:4167',
+            "name": "geom",
+            "dataType": "geometry",
+            "primaryKeyIndex": None,
+            "geometryType": "MULTIPOLYGON",
+            "geometryCRS": "EPSG:4167",
         },
-        {'name': 'date_adjusted', 'dataType': 'timestamp', 'primaryKeyIndex': None},
-        {'name': 'survey_reference', 'dataType': 'text', 'primaryKeyIndex': None},
+        {"name": "date_adjusted", "dataType": "timestamp", "primaryKeyIndex": None},
+        {"name": "survey_reference", "dataType": "text", "primaryKeyIndex": None},
         {
-            'name': 'adjusted_nodes',
-            'dataType': 'integer',
-            'primaryKeyIndex': None,
-            'size': 32,
+            "name": "adjusted_nodes",
+            "dataType": "integer",
+            "primaryKeyIndex": None,
+            "size": 32,
         },
     ]
 
 
 def test_pg_import(
-    postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
+    postgis_layer,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
+    chdir,
 ):
     with postgis_layer(
-        'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
+        "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
         _test_pg_import(tmp_path, cli_runner, chdir, table_name="nz_waca_adjustments")
 
 
 def test_pg_import_from_view(
-    postgis_db, postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
+    postgis_db,
+    postgis_layer,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
+    chdir,
 ):
     with postgis_layer(
-        'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
+        "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
         c = postgis_db.cursor()
         c.execute(
@@ -620,10 +647,16 @@ def test_pg_import_from_view(
 
 
 def test_pg_import_from_view_with_ogc_fid(
-    postgis_db, postgis_layer, data_archive, tmp_path, cli_runner, request, chdir,
+    postgis_db,
+    postgis_layer,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
+    chdir,
 ):
     with postgis_layer(
-        'gpkg-polygons', 'nz-waca-adjustments.gpkg', 'nz_waca_adjustments'
+        "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
         c = postgis_db.cursor()
 
@@ -786,21 +819,21 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(['init', '--no-checkout', repo_path])
+    r = cli_runner.invoke(["init", "--no-checkout", repo_path])
     assert r.exit_code == 0
 
-    with data_archive('gpkg-points') as data:
+    with data_archive("gpkg-points") as data:
         with chdir(repo_path):
-            r = cli_runner.invoke(['import', data / 'nz-pa-points-topo-150k.gpkg'])
+            r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
             assert r.exit_code == 0, r
 
             # delete the master branch.
             # HEAD still points to it, but that's okay - this just means
             # the branch is empty.
             # We still need to be able to import from this state.
-            subprocess.check_call(['git', 'branch', '-D', 'master'])
+            subprocess.check_call(["git", "branch", "-D", "master"])
 
-            r = cli_runner.invoke(["import", data / 'nz-pa-points-topo-150k.gpkg'])
+            r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
             assert r.exit_code == 0, r
 
             repo = pygit2.Repository(str(repo_path))

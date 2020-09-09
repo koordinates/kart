@@ -68,7 +68,9 @@ def print_version(ctx):
     )
 
     proj_version = "{}.{}.{}".format(
-        osgeo.osr.GetPROJVersionMajor(), osgeo.osr.GetPROJVersionMinor(), osgeo.osr.GetPROJVersionMicro()
+        osgeo.osr.GetPROJVersionMajor(),
+        osgeo.osr.GetPROJVersionMinor(),
+        osgeo.osr.GetPROJVersionMicro(),
     )
 
     click.echo(
@@ -105,11 +107,11 @@ class SnoGroup(click.Group):
         fail_message = f"sno: '{cmd_name}' is not a sno command. See 'sno --help'.\n"
         if matches:
             if len(matches) == 1:
-                fail_message += '\nThe most similar command is\n'
+                fail_message += "\nThe most similar command is\n"
             else:
-                fail_message += '\nThe most similar commands are\n'
+                fail_message += "\nThe most similar commands are\n"
             for m in matches:
-                fail_message += f'\t{m}\n'
+                fail_message += f"\t{m}\n"
         ctx.fail(fail_message)
 
     def invoke(self, ctx):
@@ -119,7 +121,7 @@ class SnoGroup(click.Group):
             # ipdb is only installed in dev venvs, not releases
             import pdb
 
-        if ctx.params.get('post_mortem'):
+        if ctx.params.get("post_mortem"):
             try:
                 return super().invoke(ctx)
             except Exception:
@@ -140,7 +142,9 @@ class SnoGroup(click.Group):
     metavar="PATH",
 )
 @call_and_exit_flag(
-    "--version", callback=print_version, help="Show version information and exit.",
+    "--version",
+    callback=print_version,
+    help="Show version information and exit.",
 )
 @click.option("-v", "--verbose", count=True, help="Repeat for more verbosity")
 # NOTE: this option isn't used in `cli`, but it is used in `PdbGroup` above.

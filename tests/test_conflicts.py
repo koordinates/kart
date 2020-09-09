@@ -65,13 +65,13 @@ def test_summarise_conflicts(repo_version, create_conflicts, cli_runner):
         r = cli_runner.invoke(["conflicts", "-s"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            'nz_waca_adjustments:',
-            '    nz_waca_adjustments:feature:',
-            '        nz_waca_adjustments:feature:98001',
-            '        nz_waca_adjustments:feature:1452332',
-            '        nz_waca_adjustments:feature:1456853',
-            '        nz_waca_adjustments:feature:1456912',
-            '',
+            "nz_waca_adjustments:",
+            "    nz_waca_adjustments:feature:",
+            "        nz_waca_adjustments:feature:98001",
+            "        nz_waca_adjustments:feature:1452332",
+            "        nz_waca_adjustments:feature:1456853",
+            "        nz_waca_adjustments:feature:1456912",
+            "",
         ]
 
         r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
@@ -85,9 +85,9 @@ def test_summarise_conflicts(repo_version, create_conflicts, cli_runner):
         r = cli_runner.invoke(["conflicts", "-ss"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            'nz_waca_adjustments:',
-            '    nz_waca_adjustments:feature: 4 conflicts',
-            '',
+            "nz_waca_adjustments:",
+            "    nz_waca_adjustments:feature: 4 conflicts",
+            "",
         ]
 
         r = cli_runner.invoke(["conflicts", "-ss", "-o", "json"])
@@ -103,34 +103,34 @@ def test_list_conflicts(repo_version, create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         expected_text = [
-            'nz_pa_points_topo_150k:',
-            '    nz_pa_points_topo_150k:feature:',
-            '        nz_pa_points_topo_150k:feature:3:',
-            '            nz_pa_points_topo_150k:feature:3:ancestor:',
-            '                                     fid = 3',
-            '                                    geom = POINT(...)',
-            '                                 t50_fid = 2426273',
-            '                              name_ascii = Tauwhare Pa',
-            '                              macronated = N',
-            '                                    name = Tauwhare Pa',
-            '            nz_pa_points_topo_150k:feature:3:ours:',
-            '                                     fid = 3',
-            '                                    geom = POINT(...)',
-            '                                 t50_fid = 2426273',
-            '                              name_ascii = Tauwhare Pa',
-            '                              macronated = N',
-            '                                    name = ours_version',
-            '            nz_pa_points_topo_150k:feature:3:theirs:',
-            '                                     fid = 3',
-            '                                    geom = POINT(...)',
-            '                                 t50_fid = 2426273',
-            '                              name_ascii = Tauwhare Pa',
-            '                              macronated = N',
-            '                                    name = theirs_version',
+            "nz_pa_points_topo_150k:",
+            "    nz_pa_points_topo_150k:feature:",
+            "        nz_pa_points_topo_150k:feature:3:",
+            "            nz_pa_points_topo_150k:feature:3:ancestor:",
+            "                                     fid = 3",
+            "                                    geom = POINT(...)",
+            "                                 t50_fid = 2426273",
+            "                              name_ascii = Tauwhare Pa",
+            "                              macronated = N",
+            "                                    name = Tauwhare Pa",
+            "            nz_pa_points_topo_150k:feature:3:ours:",
+            "                                     fid = 3",
+            "                                    geom = POINT(...)",
+            "                                 t50_fid = 2426273",
+            "                              name_ascii = Tauwhare Pa",
+            "                              macronated = N",
+            "                                    name = ours_version",
+            "            nz_pa_points_topo_150k:feature:3:theirs:",
+            "                                     fid = 3",
+            "                                    geom = POINT(...)",
+            "                                 t50_fid = 2426273",
+            "                              name_ascii = Tauwhare Pa",
+            "                              macronated = N",
+            "                                    name = theirs_version",
         ]
         r = cli_runner.invoke(["conflicts", "nz_pa_points_topo_150k:feature:3"])
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == expected_text + ['']
+        assert r.stdout.splitlines() == expected_text + [""]
 
         r = cli_runner.invoke(["conflicts"])
         assert r.exit_code == 0, r
@@ -186,54 +186,54 @@ def test_list_conflicts(repo_version, create_conflicts, cli_runner):
         )
 
         expected_geojson = {
-            'features': [
+            "features": [
                 {
-                    'geometry': {
-                        'coordinates': [177.2757807736718, -38.08491506728025],
-                        'type': 'Point',
+                    "geometry": {
+                        "coordinates": [177.2757807736718, -38.08491506728025],
+                        "type": "Point",
                     },
-                    'id': 'nz_pa_points_topo_150k:feature:5:ancestor',
-                    'properties': {
-                        'fid': 5,
-                        'macronated': 'N',
-                        'name': None,
-                        'name_ascii': None,
-                        't50_fid': 2426275,
+                    "id": "nz_pa_points_topo_150k:feature:5:ancestor",
+                    "properties": {
+                        "fid": 5,
+                        "macronated": "N",
+                        "name": None,
+                        "name_ascii": None,
+                        "t50_fid": 2426275,
                     },
-                    'type': 'Feature',
+                    "type": "Feature",
                 },
                 {
-                    'geometry': {
-                        'coordinates': [177.2757807736718, -38.08491506728025],
-                        'type': 'Point',
+                    "geometry": {
+                        "coordinates": [177.2757807736718, -38.08491506728025],
+                        "type": "Point",
                     },
-                    'id': 'nz_pa_points_topo_150k:feature:5:ours',
-                    'properties': {
-                        'fid': 5,
-                        'macronated': 'N',
-                        'name': 'ours_version',
-                        'name_ascii': None,
-                        't50_fid': 2426275,
+                    "id": "nz_pa_points_topo_150k:feature:5:ours",
+                    "properties": {
+                        "fid": 5,
+                        "macronated": "N",
+                        "name": "ours_version",
+                        "name_ascii": None,
+                        "t50_fid": 2426275,
                     },
-                    'type': 'Feature',
+                    "type": "Feature",
                 },
                 {
-                    'geometry': {
-                        'coordinates': [177.2757807736718, -38.08491506728025],
-                        'type': 'Point',
+                    "geometry": {
+                        "coordinates": [177.2757807736718, -38.08491506728025],
+                        "type": "Point",
                     },
-                    'id': 'nz_pa_points_topo_150k:feature:5:theirs',
-                    'properties': {
-                        'fid': 5,
-                        'macronated': 'N',
-                        'name': 'theirs_version',
-                        'name_ascii': None,
-                        't50_fid': 2426275,
+                    "id": "nz_pa_points_topo_150k:feature:5:theirs",
+                    "properties": {
+                        "fid": 5,
+                        "macronated": "N",
+                        "name": "theirs_version",
+                        "name_ascii": None,
+                        "t50_fid": 2426275,
                     },
-                    'type': 'Feature',
+                    "type": "Feature",
                 },
             ],
-            'type': 'FeatureCollection',
+            "type": "FeatureCollection",
         }
         r = cli_runner.invoke(
             ["conflicts", "-o", "geojson", "nz_pa_points_topo_150k:feature:5"]

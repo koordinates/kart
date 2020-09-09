@@ -268,7 +268,8 @@ def _gpkg_to_column_schema(
     pk_index = 0 if sqlite_col_info["pk"] == 1 else None
     if gpkg_geometry_columns and name == gpkg_geometry_columns["column_name"]:
         data_type, extra_type_info = _gkpg_geometry_columns_to_v2_type(
-            gpkg_geometry_columns, gpkg_spatial_ref_sys,
+            gpkg_geometry_columns,
+            gpkg_spatial_ref_sys,
         )
     else:
         data_type, extra_type_info = gpkg_type_to_v2_type(sqlite_col_info["type"])
@@ -405,13 +406,13 @@ def json_to_gpkg_metadata(v2_metadata_json, table_name, reference=False):
         for mime_type, content in sorted(uri_metadata.items()):
             if reference:
                 row = {
-                    'reference_scope': 'table',
-                    'table_name': table_name,
-                    'column_name': None,
-                    'row_id_value': None,
-                    'timestamp': timestamp,
-                    'md_file_id': md_file_id,
-                    'md_parent_id': None,
+                    "reference_scope": "table",
+                    "table_name": table_name,
+                    "column_name": None,
+                    "row_id_value": None,
+                    "timestamp": timestamp,
+                    "md_file_id": md_file_id,
+                    "md_parent_id": None,
                 }
             else:
                 row = {

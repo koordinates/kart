@@ -47,12 +47,12 @@ def test_query_cli_get(indexed_dataset, cli_runner):
         assert r.exit_code == 0, r
 
         assert json.loads(r.stdout) == {
-            'fid': 1,
-            'geom': '010100000097F3EF201223664087D715268E0043C0',
-            't50_fid': 2426271,
-            'name_ascii': None,
-            'macronated': 'N',
-            'name': None,
+            "fid": 1,
+            "geom": "010100000097F3EF201223664087D715268E0043C0",
+            "t50_fid": 2426271,
+            "name_ascii": None,
+            "macronated": "N",
+            "name": None,
         }
 
 
@@ -65,12 +65,12 @@ def test_query_cli_geo_nearest(indexed_dataset, cli_runner):
         assert isinstance(data, list)
         assert len(data) == 1
         EXPECTED = {
-            'fid': 147,
-            'geom': '010100000015819EA73D2066403F4DF4B910FA42C0',
-            't50_fid': 2426254,
-            'name_ascii': None,
-            'macronated': 'N',
-            'name': None,
+            "fid": 147,
+            "geom": "010100000015819EA73D2066403F4DF4B910FA42C0",
+            "t50_fid": 2426254,
+            "name_ascii": None,
+            "macronated": "N",
+            "name": None,
         }
         assert data[0] == EXPECTED
 

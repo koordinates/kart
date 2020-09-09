@@ -86,7 +86,7 @@ def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
             "git",
             "-C",
             str(ctx.obj.repo_path),
-            'fetch',
+            "fetch",
             "--progress" if do_progress else "--quiet",
             repository,
         ]

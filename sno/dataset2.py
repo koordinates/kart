@@ -277,7 +277,7 @@ class Dataset2(RichBaseDataset):
         """
         Generates (full_path, blob_data) tuples for each legend in this dataset
         """
-        legend_tree = self.meta_tree / 'legend'
+        legend_tree = self.meta_tree / "legend"
         for blob in legend_tree:
             yield (
                 self.full_path(self.LEGEND_PATH + blob.name),
@@ -417,5 +417,6 @@ class Dataset2(RichBaseDataset):
 
         if conflicts:
             raise InvalidOperation(
-                "Patch does not apply", exit_code=PATCH_DOES_NOT_APPLY,
+                "Patch does not apply",
+                exit_code=PATCH_DOES_NOT_APPLY,
             )

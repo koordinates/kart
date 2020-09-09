@@ -106,7 +106,7 @@ def _wkb_endianness_and_geometry_type(buf, wkb_offset=0):
         * is_little_endian (bool)
         * WKB geometry type as an integer.
     """
-    (is_le,) = struct.unpack_from('b', buf, offset=wkb_offset)
+    (is_le,) = struct.unpack_from("b", buf, offset=wkb_offset)
     (typ,) = struct.unpack_from(f'{"<" if is_le else ">"}I', buf, offset=wkb_offset + 1)
     return is_le, typ
 
@@ -178,10 +178,10 @@ def normalise_gpkg_geom(gpkg_geom):
         if wkb_is_le and envelope_type == want_envelope_type:
             # everything is fine, no need to roundtrip via OGR
             # just need to set srs_id to zero if it's not already
-            if gpkg_geom[4:8] == b'\x00\x00\x00\x00':
+            if gpkg_geom[4:8] == b"\x00\x00\x00\x00":
                 return gpkg_geom
             else:
-                return Geometry.of(gpkg_geom[:4] + b'\x00\x00\x00\x00' + gpkg_geom[8:])
+                return Geometry.of(gpkg_geom[:4] + b"\x00\x00\x00\x00" + gpkg_geom[8:])
 
     # roundtrip it, the envelope and LE-ness are done by ogr_to_gpkg_geom
     return ogr_to_gpkg_geom(
@@ -336,10 +336,10 @@ def ogr_to_gpkg_geom(
     envelope = b""
     if _add_envelope_type:
         if _add_envelope_type == GPKG_ENVELOPE_XY:
-            fmt = 'dddd'
+            fmt = "dddd"
             envelope = ogr_geom.GetEnvelope()
         elif _add_envelope_type == GPKG_ENVELOPE_XYZ:
-            fmt = 'dddddd'
+            fmt = "dddddd"
             envelope = ogr_geom.GetEnvelope3D()
 
         envelope = struct.pack(f'{"<" if _little_endian else ">"}{fmt}', *envelope)

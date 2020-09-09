@@ -92,7 +92,7 @@ def get_gpkg_meta_items_obj(db, layer):
                 raise
 
         def __repr__(self):
-            return f'{self.__class__.__name__}({self.db_repr}, {self.layer_repr})'
+            return f"{self.__class__.__name__}({self.db_repr}, {self.layer_repr})"
 
         __str__ = __repr__
 

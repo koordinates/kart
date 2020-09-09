@@ -12,10 +12,17 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from .structure import RepositoryStructure
 
 
-@click.command(context_settings=dict(ignore_unknown_options=True,))
+@click.command(
+    context_settings=dict(
+        ignore_unknown_options=True,
+    )
+)
 @click.pass_context
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.option(
     "--json-style",
@@ -39,7 +46,13 @@ def log(ctx, output_format, json_style, do_dataset_changes, args):
     elif output_format == "json":
         repo = ctx.obj.repo
         try:
-            cmd = ["git", "-C", repo.path, "log", "--pretty=format:%H,%D",] + list(args)
+            cmd = [
+                "git",
+                "-C",
+                repo.path,
+                "log",
+                "--pretty=format:%H,%D",
+            ] + list(args)
             r = subprocess.run(cmd, encoding="utf8", check=True, capture_output=True)
         except subprocess.CalledProcessError as e:
             raise SubprocessError(

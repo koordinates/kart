@@ -45,7 +45,7 @@ def test_checkout_workingcopy(
         r = cli_runner.invoke(["checkout"])
         wc = Path(repo.config["sno.workingcopy.path"])
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == [f'Creating working copy at {wc} ...']
+        assert r.stdout.splitlines() == [f"Creating working copy at {wc} ..."]
 
         assert wc.exists()
         db = geopackage(wc)
@@ -453,9 +453,9 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
             UPDATE gpkg_contents SET identifier = 'new identifier', description='new description'
             """
         )
-        r = cli_runner.invoke(['commit', '-m', 'change identifier and description'])
+        r = cli_runner.invoke(["commit", "-m", "change identifier and description"])
         assert r.exit_code == 0, r.stderr
-        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
         cur.execute(
             """
@@ -463,10 +463,10 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
             """
         )
         identifier, description = cur.fetchall()[0]
-        assert identifier == 'nz_pa_points_topo_150k: NZ Pa Points (Topo, 1:50k)'
+        assert identifier == "nz_pa_points_topo_150k: NZ Pa Points (Topo, 1:50k)"
         assert description.startswith("Defensive earthworks")
 
-        r = cli_runner.invoke(['checkout', 'master'])
+        r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r.stderr
         cur.execute(
             """
@@ -474,7 +474,7 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
             """
         )
         identifier, description = cur.fetchall()[0]
-        assert identifier == 'nz_pa_points_topo_150k: new identifier'
+        assert identifier == "nz_pa_points_topo_150k: new identifier"
         assert description == "new description"
 
 
@@ -486,9 +486,9 @@ def test_switch_with_trivial_schema_change(data_working_copy, geopackage, cli_ru
         cur.execute(
             f"""ALTER TABLE {H.POINTS.LAYER} RENAME name_ascii TO name_latin1"""
         )
-        r = cli_runner.invoke(['commit', '-m', 'change schema'])
+        r = cli_runner.invoke(["commit", "-m", "change schema"])
         assert r.exit_code == 0, r.stderr
-        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
         cur.execute(
             f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
@@ -496,7 +496,7 @@ def test_switch_with_trivial_schema_change(data_working_copy, geopackage, cli_ru
         name = cur.fetchall()[0][0]
         assert name == "name_ascii"
 
-        r = cli_runner.invoke(['checkout', 'master'])
+        r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r.stderr
         cur.execute(
             f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
@@ -510,35 +510,35 @@ def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
         db = geopackage(wc)
         cur = db.cursor()
         cur.execute(f"""ALTER TABLE {H.POLYGONS.LAYER} ADD COLUMN colour TEXT""")
-        r = cli_runner.invoke(['commit', '-m', 'change schema'])
+        r = cli_runner.invoke(["commit", "-m", "change schema"])
         assert r.exit_code == 0, r.stderr
-        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
         cur.execute(
             f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
         )
         result = cur.fetchall()
         assert result == [
-            ('id', 'INTEGER'),
-            ('geom', 'MULTIPOLYGON'),
-            ('date_adjusted', 'DATETIME'),
-            ('survey_reference', 'TEXT(50)'),
-            ('adjusted_nodes', 'MEDIUMINT'),
+            ("id", "INTEGER"),
+            ("geom", "MULTIPOLYGON"),
+            ("date_adjusted", "DATETIME"),
+            ("survey_reference", "TEXT(50)"),
+            ("adjusted_nodes", "MEDIUMINT"),
         ]
 
-        r = cli_runner.invoke(['checkout', 'master'])
+        r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r.stderr
         cur.execute(
             f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
         )
         result = cur.fetchall()
         assert result == [
-            ('id', 'INTEGER'),
-            ('geom', 'MULTIPOLYGON'),
-            ('date_adjusted', 'DATETIME'),
-            ('survey_reference', 'TEXT(50)'),
-            ('adjusted_nodes', 'MEDIUMINT'),
-            ('colour', 'TEXT'),
+            ("id", "INTEGER"),
+            ("geom", "MULTIPOLYGON"),
+            ("date_adjusted", "DATETIME"),
+            ("survey_reference", "TEXT(50)"),
+            ("adjusted_nodes", "MEDIUMINT"),
+            ("colour", "TEXT"),
         ]
 
 
@@ -561,7 +561,7 @@ def test_switch_pre_import_post_import(
             db = geopackage(wc)
             cur = db.cursor()
 
-            r = cli_runner.invoke(['checkout', 'HEAD^'])
+            r = cli_runner.invoke(["checkout", "HEAD^"])
             assert r.exit_code == 0, r.stderr
             cur.execute(
                 f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
@@ -569,7 +569,7 @@ def test_switch_pre_import_post_import(
             count = cur.fetchall()[0][0]
             assert count == 0
 
-            r = cli_runner.invoke(['checkout', 'master'])
+            r = cli_runner.invoke(["checkout", "master"])
             assert r.exit_code == 0, r.stderr
             cur.execute(
                 f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
@@ -595,9 +595,9 @@ def test_switch_xml_metadata_added(data_working_copy, geopackage, cli_runner):
             """
         )
 
-        r = cli_runner.invoke(['commit', '-m', 'change xml metadata'])
+        r = cli_runner.invoke(["commit", "-m", "change xml metadata"])
         assert r.exit_code == 0, r.stderr
-        r = cli_runner.invoke(['checkout', 'HEAD^'])
+        r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
         xml_metadata = cur.execute(
@@ -610,7 +610,7 @@ def test_switch_xml_metadata_added(data_working_copy, geopackage, cli_runner):
         ).fetchone()
         assert not xml_metadata
 
-        r = cli_runner.invoke(['checkout', 'master'])
+        r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r.stderr
 
         xml_metadata = cur.execute(
@@ -692,10 +692,17 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
 
 @pytest.mark.parametrize(
     "source",
-    [pytest.param([], id="head"), pytest.param(["-s", H.POINTS.HEAD_SHA], id="prev"),],
+    [
+        pytest.param([], id="head"),
+        pytest.param(["-s", H.POINTS.HEAD_SHA], id="prev"),
+    ],
 )
 @pytest.mark.parametrize(
-    "pathspec", [pytest.param([], id="all"), pytest.param(["bob"], id="exclude"),],
+    "pathspec",
+    [
+        pytest.param([], id="all"),
+        pytest.param(["bob"], id="exclude"),
+    ],
 )
 def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
     with data_working_copy("points", force_new=True) as (repo_dir, wc):
@@ -826,7 +833,8 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         if cur.fetchone()[0] != 4:
             print("E: Deleted rows {pk_field}<{del_pk} still missing")
         cur.execute(
-            f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;", [upd_field_value],
+            f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = ?;",
+            [upd_field_value],
         )
         if cur.fetchone()[0] != 0:
             print("E: Updated rows not reset")
@@ -875,8 +883,8 @@ def test_reset(data_working_copy, cli_runner, geopackage, edit_polygons):
         assert r.exit_code == 0, r
         changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
         assert changes == {
-            'nz_waca_adjustments': {
-                'feature': {'inserts': 1, 'updates': 2, 'deletes': 5}
+            "nz_waca_adjustments": {
+                "feature": {"inserts": 1, "updates": 2, "deletes": 5}
             }
         }
         r = cli_runner.invoke(["diff", "--exit-code"])

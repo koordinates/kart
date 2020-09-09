@@ -19,7 +19,7 @@ REPO_VERSIONS_DEFAULT_CHOICE = str(DEFAULT_REPO_VERSION)
 
 
 def encode_repo_version(version):
-    return REPO_VERSION_BLOB_PATH, f"{version}\n".encode('utf8')
+    return REPO_VERSION_BLOB_PATH, f"{version}\n".encode("utf8")
 
 
 def extra_blobs_for_version(version):

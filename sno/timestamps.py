@@ -15,7 +15,7 @@ def timedelta_to_iso8601_tz(timedelta):
     Accepts a datetime.timedelta object.
     Returns a string like "+05:00" or "-05:00" (ie five hours ahead or behind).
     """
-    abs_delta = datetime.utcfromtimestamp(abs(timedelta).seconds).strftime('%H:%M')
+    abs_delta = datetime.utcfromtimestamp(abs(timedelta).seconds).strftime("%H:%M")
     return f"+{abs_delta}" if abs(timedelta) == timedelta else f"-{abs_delta}"
 
 
@@ -32,11 +32,11 @@ def iso8601_tz_to_timedelta(iso8601_tz):
     Accepts a string like "+05:00" or "-05:00" (ie five hours ahead or behind).
     Returns a datetime.timedelta object.
     """
-    hours, minutes = iso8601_tz[1:].split(':')
+    hours, minutes = iso8601_tz[1:].split(":")
     hours = int(hours)
     minutes = int(minutes)
     r = timedelta(hours=int(hours), minutes=int(minutes))
-    if iso8601_tz[0] == '-':
+    if iso8601_tz[0] == "-":
         r = -r
     return r
 
@@ -66,7 +66,7 @@ def tz_offset_to_minutes(tz_offset_string):
     Takes a timestamp offset string ('+HHMM') and converts it to
     an integer number of minutes (for pygit2.Signature.offset)
     """
-    as_int = int(tz_offset_string.replace(':', ''))
+    as_int = int(tz_offset_string.replace(":", ""))
     hours, minutes = divmod(abs(as_int), 100)
     total_minutes = 60 * hours + minutes
     if as_int < 0:

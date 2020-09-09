@@ -99,7 +99,7 @@ class BaseDataset(ImportSource):
         except KeyError:
             pass
 
-        if leaf is not None and leaf.type_str == 'blob':
+        if leaf is not None and leaf.type_str == "blob":
             if as_memoryview:
                 try:
                     return memoryview(leaf)

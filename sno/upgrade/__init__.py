@@ -116,7 +116,13 @@ def upgrade(ctx, source, dest):
 
 
 def _upgrade_commit(
-    i, source_repo, source_commit, source_version, dest_parents, dest_repo, commit_map,
+    i,
+    source_repo,
+    source_commit,
+    source_version,
+    dest_parents,
+    dest_repo,
+    commit_map,
 ):
 
     sources = _get_upgrade_sources(source_repo, source_commit, source_version)
@@ -124,8 +130,8 @@ def _upgrade_commit(
     feature_count = sum(s.feature_count for s in sources)
 
     s = source_commit
-    author_time = f'{s.author.time} {minutes_to_tz_offset(s.author.offset)}'
-    commit_time = f'{s.commit_time} {minutes_to_tz_offset(s.commit_time_offset)}'
+    author_time = f"{s.author.time} {minutes_to_tz_offset(s.author.offset)}"
+    commit_time = f"{s.commit_time} {minutes_to_tz_offset(s.commit_time_offset)}"
     header = (
         # We import every commit onto refs/heads/master and fix the branch heads later.
         "commit refs/heads/master\n"

@@ -221,7 +221,13 @@ class RepositoryStructure:
         return tree.oid
 
     def commit(
-        self, wcdiff, message, *, author=None, committer=None, allow_empty=False,
+        self,
+        wcdiff,
+        message,
+        *,
+        author=None,
+        committer=None,
+        allow_empty=False,
     ):
         """
         Update the repository structure and write the updated data to the tree

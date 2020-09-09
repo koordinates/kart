@@ -53,7 +53,7 @@ def _get_parent(ctx, refish):
     default="pretty",
     help="How to format the output. Only used with --output-format=json",
 )
-@click.argument("refish", default='HEAD', required=False)
+@click.argument("refish", default="HEAD", required=False)
 def show(ctx, *, refish, output_format, crs, json_style, **kwargs):
     """
     Show the given commit, or HEAD
@@ -71,7 +71,7 @@ def show(ctx, *, refish, output_format, crs, json_style, **kwargs):
     )
 
 
-@click.command(name='create-patch')
+@click.command(name="create-patch")
 @click.pass_context
 @click.option(
     "--json-style",
@@ -123,21 +123,21 @@ def show_output_text(*, target, output_path, **kwargs):
     """
     commit = target.head_commit
     fp = resolve_output_path(output_path)
-    pecho = {'file': fp, 'color': fp.isatty()}
+    pecho = {"file": fp, "color": fp.isatty()}
     with diff.diff_output_text(output_path=fp, **kwargs) as diff_writer:
         author = commit.author
         author_time_utc = datetime.fromtimestamp(author.time, timezone.utc)
         author_timezone = timezone(timedelta(minutes=author.offset))
         author_time_in_author_timezone = author_time_utc.astimezone(author_timezone)
 
-        click.secho(f'commit {commit.hex}', fg='yellow')
-        click.secho(f'Author: {author.name} <{author.email}>', **pecho)
+        click.secho(f"commit {commit.hex}", fg="yellow")
+        click.secho(f"Author: {author.name} <{author.email}>", **pecho)
         click.secho(
             f'Date:   {author_time_in_author_timezone.strftime("%c %z")}', **pecho
         )
         click.secho(**pecho)
         for line in commit.message.splitlines():
-            click.secho(f'    {line}', **pecho)
+            click.secho(f"    {line}", **pecho)
         click.secho(**pecho)
         yield diff_writer
 
@@ -173,9 +173,9 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
     author_time_offset = timedelta(minutes=author.offset)
 
     def dump_function(data, *args, **kwargs):
-        data['sno.show/v1'] = {
-            'authorName': author.name,
-            'authorEmail': author.email,
+        data["sno.show/v1"] = {
+            "authorName": author.name,
+            "authorEmail": author.email,
             "authorTime": datetime_to_iso8601_utc(author_time),
             "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
             "message": commit.message,
@@ -205,9 +205,9 @@ def patch_output(*, target, output_path, json_style, **kwargs):
     author_time_offset = timedelta(minutes=author.offset)
 
     def dump_function(data, *args, **kwargs):
-        data['sno.patch/v1'] = {
-            'authorName': author.name,
-            'authorEmail': author.email,
+        data["sno.patch/v1"] = {
+            "authorName": author.name,
+            "authorEmail": author.email,
             "authorTime": datetime_to_iso8601_utc(author_time),
             "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
             "message": commit.message,

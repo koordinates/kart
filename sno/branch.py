@@ -11,7 +11,10 @@ from .output_util import dump_json_output
 @click.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def branch(ctx, output_format, args):
@@ -19,7 +22,7 @@ def branch(ctx, output_format, args):
     repo = ctx.obj.repo
 
     sargs = set(args)
-    if output_format == 'json':
+    if output_format == "json":
         valid_args = {"--list"}  # "sno branch -o json" or "sno branch --list -o json"
         invalid_args = sargs - valid_args
         if invalid_args:

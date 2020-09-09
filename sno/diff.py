@@ -54,7 +54,9 @@ def get_dataset_diff(
         target_ds = target_rs.get(dataset_path)
         diff_wc = working_copy.diff_db_to_tree(target_ds, ds_filter=ds_filter)
         L.debug(
-            "commit<>working_copy diff (%s): %s", dataset_path, repr(diff_wc),
+            "commit<>working_copy diff (%s): %s",
+            dataset_path,
+            repr(diff_wc),
         )
         diff += diff_wc
 
@@ -98,7 +100,7 @@ def diff_with_writer(
     ctx,
     diff_writer,
     *,
-    output_path='-',
+    output_path="-",
     exit_code,
     json_style="pretty",
     commit_spec,
@@ -159,7 +161,7 @@ def diff_with_writer(
 
         base_str = base_rs.id
         target_str = "working-copy" if working_copy else target_rs.id
-        L.debug('base=%s target=%s', base_str, target_str)
+        L.debug("base=%s target=%s", base_str, target_str)
 
         all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
 

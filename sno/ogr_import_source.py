@@ -27,15 +27,15 @@ from .utils import ungenerator
 # This defines what formats are allowed, as well as mapping
 # sno prefixes onto an OGR format shortname.
 FORMAT_TO_OGR_MAP = {
-    'GPKG': 'GPKG',
-    'SHP': 'ESRI Shapefile',
+    "GPKG": "GPKG",
+    "SHP": "ESRI Shapefile",
     # https://github.com/koordinates/sno/issues/86
     # 'TAB': 'MapInfo File',
-    'PG': 'PostgreSQL',
+    "PG": "PostgreSQL",
 }
 # The set of format prefixes where a local path is expected
 # (as opposed to a URL / something else)
-LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {'PG'}
+LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {"PG"}
 
 
 class OgrImportSource(ImportSource):
@@ -48,33 +48,33 @@ class OgrImportSource(ImportSource):
         # If you write them to GPKG using OGR, you end up with TEXT.
         # We also don't handle  ogr's "Time" fields, because they end up as TEXT in GPKG,
         # which we can't roundtrip. Tackle when we get someone actually using those types...
-        'Integer': 'MEDIUMINT',
-        'Integer64': 'INTEGER',
-        'Real': 'REAL',
-        'String': 'TEXT',
-        'Binary': 'BLOB',
-        'Date': 'DATE',
-        'DateTime': 'DATETIME',
+        "Integer": "MEDIUMINT",
+        "Integer64": "INTEGER",
+        "Real": "REAL",
+        "String": "TEXT",
+        "Binary": "BLOB",
+        "Date": "DATE",
+        "DateTime": "DATETIME",
     }
     OGR_SUBTYPE_TO_SQLITE_TYPE = {
-        ogr.OFSTBoolean: 'BOOLEAN',
-        ogr.OFSTInt16: 'SMALLINT',
-        ogr.OFSTFloat32: 'FLOAT',
+        ogr.OFSTBoolean: "BOOLEAN",
+        ogr.OFSTInt16: "SMALLINT",
+        ogr.OFSTFloat32: "FLOAT",
     }
 
     OGR_TYPE_TO_V2_SCHEMA_TYPE = {
-        'Integer': ('integer', {"size": 32}),
-        'Integer64': ('integer', {"size": 64}),
-        'Real': ('float', {"size": 64}),
-        'String': ('text', {}),
-        'Binary': ('blob', {}),
-        'Date': ('date', {}),
-        'DateTime': ('timestamp', {}),
+        "Integer": ("integer", {"size": 32}),
+        "Integer64": ("integer", {"size": 64}),
+        "Real": ("float", {"size": 64}),
+        "String": ("text", {}),
+        "Binary": ("blob", {}),
+        "Date": ("date", {}),
+        "DateTime": ("timestamp", {}),
     }
     OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
-        ogr.OFSTBoolean: ('boolean', {}),
-        ogr.OFSTInt16: ('integer', {"size": 16}),
-        ogr.OFSTFloat32: ('float', {"size": 32}),
+        ogr.OFSTBoolean: ("boolean", {}),
+        ogr.OFSTInt16: ("integer", {"size": 16}),
+        ogr.OFSTFloat32: ("float", {"size": 32}),
     }
 
     @classmethod
@@ -96,7 +96,7 @@ class OgrImportSource(ImportSource):
         if m:
             prefix, ogr_source = m.groups()
             prefix = prefix.upper()
-            if prefix == 'OGR':
+            if prefix == "OGR":
                 # Don't specify a driver; let OGR just do whatever it can do.
                 # We don't 'support' this, but it will probably work fine for some datasources.
                 allowed_formats = None
@@ -108,9 +108,9 @@ class OgrImportSource(ImportSource):
                     # usually this is handled by the shell, but the GPKG: prefix prevents that
                     ogr_source = os.path.expanduser(ogr_source)
 
-                if prefix in ('CSV', 'PG'):
+                if prefix in ("CSV", "PG"):
                     # OGR actually handles these prefixes itself...
-                    ogr_source = f'{prefix}:{ogr_source}'
+                    ogr_source = f"{prefix}:{ogr_source}"
             if prefix in LOCAL_PATH_FORMATS:
                 if not os.path.exists(ogr_source):
                     raise NotFound(
@@ -119,7 +119,7 @@ class OgrImportSource(ImportSource):
         else:
             # see if any subclasses have a handler for this.
             for subclass in cls._all_subclasses():
-                if 'handle_source_string' in subclass.__dict__:
+                if "handle_source_string" in subclass.__dict__:
                     retval = subclass.handle_source_string(ogr_source)
                     if retval is not None:
                         ogr_source, allowed_formats = retval
@@ -143,7 +143,7 @@ class OgrImportSource(ImportSource):
             open_kwargs = {}
         else:
             open_kwargs = {
-                'allowed_drivers': [FORMAT_TO_OGR_MAP[x] for x in allowed_formats]
+                "allowed_drivers": [FORMAT_TO_OGR_MAP[x] for x in allowed_formats]
             }
         try:
             ds = cls._ogr_open(ogr_source, **open_kwargs)
@@ -155,7 +155,7 @@ class OgrImportSource(ImportSource):
             ) from e
 
         try:
-            klass = globals()[f'{ds.GetDriver().ShortName}ImportSource']
+            klass = globals()[f"{ds.GetDriver().ShortName}ImportSource"]
         except KeyError:
             klass = cls
         else:
@@ -185,7 +185,7 @@ class OgrImportSource(ImportSource):
         """
         if not parts:
             raise ValueError("at least one part required")
-        return '.'.join([cls.quote_ident_part(p) for p in parts])
+        return ".".join([cls.quote_ident_part(p) for p in parts])
 
     def __init__(
         self,
@@ -259,7 +259,7 @@ class OgrImportSource(ImportSource):
         names = {}
         for table_name, ogrlayer in self.get_tables().items():
             try:
-                pretty_name = ogrlayer.GetMetadata_Dict()['IDENTIFIER']
+                pretty_name = ogrlayer.GetMetadata_Dict()["IDENTIFIER"]
             except KeyError:
                 pretty_name = table_name
             names[table_name] = pretty_name
@@ -328,7 +328,7 @@ class OgrImportSource(ImportSource):
         # In that case, we would have no choice but to get the PK name outside of OGR.
         # For that reason we don't use ogrlayer.GetFIDColumn() here,
         # and instead we have to implement custom PK behaviour in driver-specific subclasses.
-        return self._primary_key or 'FID'
+        return self._primary_key or "FID"
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -344,7 +344,7 @@ class OgrImportSource(ImportSource):
             # the dataset either has a geometry or doesn't.
             # In situations where there _is_ a field, it doesn't necessarily have a name.
             # So here we pick 'geom' as the default name.
-            return [ld.GetGeomFieldDefn(0).GetName() or 'geom']
+            return [ld.GetGeomFieldDefn(0).GetName() or "geom"]
         for i in range(num_fields):
             # Where there are multiple geom fields, they have names
             cols.append(ld.GetGeomFieldDefn(i).GetName())
@@ -371,7 +371,7 @@ class OgrImportSource(ImportSource):
                     return primary_key_name
         raise InvalidOperation(
             f"'{primary_key_name}' was not found in the dataset",
-            param_hint='--primary-key',
+            param_hint="--primary-key",
         )
 
     def _get_primary_key_value(self, ogr_feature, name):
@@ -430,9 +430,9 @@ class OgrImportSource(ImportSource):
             return self._meta_overrides[name]
         ogr_metadata = self.ogrlayer.GetMetadata()
         if name == "title":
-            return ogr_metadata.get('IDENTIFIER') or ''
+            return ogr_metadata.get("IDENTIFIER") or ""
         elif name == "description":
-            return ogr_metadata.get('DESCRIPTION') or ''
+            return ogr_metadata.get("DESCRIPTION") or ""
         elif name == "schema.json":
             return self.schema.to_column_dicts()
         elif name == "metadata/dataset.json":
@@ -454,13 +454,13 @@ class OgrImportSource(ImportSource):
         # remove Z/M components
         ogr_geom_type = ogr.GT_Flatten(self.ogrlayer.GetGeomType())
         if ogr_geom_type == ogr.wkbUnknown:
-            return 'GEOMETRY'
+            return "GEOMETRY"
         return (
             # normalise the geometry type names the way the GPKG spec likes it:
             # http://www.geopackage.org/spec/#geometry_types
             ogr.GeometryTypeToName(ogr_geom_type)
             # 'Line String' --> 'LineString'
-            .replace(' ', '')
+            .replace(" ", "")
             # --> 'LINESTRING'
             .upper()
         )
@@ -496,7 +496,7 @@ class OgrImportSource(ImportSource):
 
         extra_type_info = extra_type_info.copy()
 
-        if data_type in ('TEXT', 'BLOB'):
+        if data_type in ("TEXT", "BLOB"):
             width = fd.GetWidth()
             if width:
                 extra_type_info["length"] = width
@@ -545,11 +545,11 @@ class OgrImportSource(ImportSource):
         self._schema = value
 
     _KNOWN_METADATA_URIS = {
-        'GDALMultiDomainMetadata': 'http://gdal.org',
+        "GDALMultiDomainMetadata": "http://gdal.org",
     }
 
     def get_v2_metadata_json(self):
-        xml_metadata = self._meta_overrides.get('xml_metadata')
+        xml_metadata = self._meta_overrides.get("xml_metadata")
         if not xml_metadata:
             return None
 
@@ -560,7 +560,7 @@ class OgrImportSource(ImportSource):
         if element.tagName in self._KNOWN_METADATA_URIS:
             uri = self._KNOWN_METADATA_URIS[element.tagName]
         else:
-            uri = element.getAttribute('xmlns') or element.namespaceURI or '(unknown)'
+            uri = element.getAttribute("xmlns") or element.namespaceURI or "(unknown)"
 
         return {uri: {"text/xml": xml_metadata}}
 
@@ -608,7 +608,7 @@ class GPKGImportSource(OgrImportSource):
 
     def get_v2_metadata_json(self):
         if (
-            'xml_metadata' in self._meta_overrides
+            "xml_metadata" in self._meta_overrides
             or "metadata/dataset.json" in self._meta_overrides
         ):
             return super().get_v2_metadata_json()
@@ -639,7 +639,7 @@ class PostgreSQLImportSource(OgrImportSource):
 
         url = urlsplit(url)
         scheme = url.scheme.lower()
-        if scheme not in ('postgres', 'postgresql'):
+        if scheme not in ("postgres", "postgresql"):
             raise ValueError("Bad scheme")
 
         # Start with everything from the querystring.
@@ -650,43 +650,43 @@ class PostgreSQLImportSource(OgrImportSource):
         # If both are specified, the querystring has precedence.
         # So in 'postgresql://host1/?host=host2', the resultant host is 'host2'
         if url.username:
-            params.setdefault('user', url.username)
+            params.setdefault("user", url.username)
         if url.password:
-            params.setdefault('password', url.password)
+            params.setdefault("password", url.password)
         if url.hostname:
-            params.setdefault('host', unquote(url.hostname))
+            params.setdefault("host", unquote(url.hostname))
         if url.port:
-            params.setdefault('port', url.port)
-        dbname = (url.path or '/')[1:]
+            params.setdefault("port", url.port)
+        dbname = (url.path or "/")[1:]
         if dbname:
-            params.setdefault('dbname', dbname)
+            params.setdefault("dbname", dbname)
 
-        conn_str = ' '.join(sorted(f'{k}={v}' for (k, v) in params.items()))
-        return f'PG:{conn_str}'
+        conn_str = " ".join(sorted(f"{k}={v}" for (k, v) in params.items()))
+        return f"PG:{conn_str}"
 
     @classmethod
     def handle_source_string(cls, source):
-        if '://' not in source:
+        if "://" not in source:
             return None
         try:
-            return cls.postgres_url_to_ogr_conn_str(source), ['PG']
+            return cls.postgres_url_to_ogr_conn_str(source), ["PG"]
         except ValueError:
             return None
 
     @classmethod
     def _ogr_open(cls, ogr_source, **open_kwargs):
-        open_options = open_kwargs.setdefault('open_options', [])
+        open_options = open_kwargs.setdefault("open_options", [])
         # don't only list tables listed in geometry_columns
-        open_options.append('LIST_ALL_TABLES=YES')
+        open_options.append("LIST_ALL_TABLES=YES")
         return super()._ogr_open(ogr_source, **open_kwargs)
 
     def psycopg2_conn(self):
         import psycopg2
 
         conn_str = self.source
-        if conn_str.startswith('OGR:'):
+        if conn_str.startswith("OGR:"):
             conn_str = conn_str[4:]
-        if conn_str.startswith('PG:'):
+        if conn_str.startswith("PG:"):
             conn_str = conn_str[3:]
         # this will either be a URL or a key=value conn str
         return psycopg2.connect(conn_str)

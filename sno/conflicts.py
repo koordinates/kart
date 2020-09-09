@@ -29,28 +29,28 @@ def list_conflicts(
     target_crs=None,
 ):
     """
-        Lists all the conflicts in merge_index, categorised into nested dicts.
-        Example:
-        {
-            "dataset_A": {
-                "feature":
-                    "5": {"ancestor": "...", "ours": ..., "theirs": ...},
-                    "11": {"ancestor": "...", "ours": ..., "theirs": ...},
-                },
-                "meta": {
-                    "gpkg_spatial_ref_sys": {"ancestor": ..., "ours": ..., "theirs": ...}}
-                }
+    Lists all the conflicts in merge_index, categorised into nested dicts.
+    Example:
+    {
+        "dataset_A": {
+            "feature":
+                "5": {"ancestor": "...", "ours": ..., "theirs": ...},
+                "11": {"ancestor": "...", "ours": ..., "theirs": ...},
             },
-            "dataset_B": {...}
-        }
+            "meta": {
+                "gpkg_spatial_ref_sys": {"ancestor": ..., "ours": ..., "theirs": ...}}
+            }
+        },
+        "dataset_B": {...}
+    }
 
-        merge_index - MergeIndex object containing the conflicts found.
-        merge_context - MergeContext object containing RepositoryStructures.
-        output_format - one of 'text', 'json', 'geojson'
-        summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
-        categorise - if True, adds another layer between feature and ID which is the type of conflict, eg "edit/edit"
-        flat - if True, put all features at the top level, with the entire path as the key eg:
-            {"dataset_A:feature:5:ancestor": ..., "dataset_A:feature:5:ours": ...}
+    merge_index - MergeIndex object containing the conflicts found.
+    merge_context - MergeContext object containing RepositoryStructures.
+    output_format - one of 'text', 'json', 'geojson'
+    summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
+    categorise - if True, adds another layer between feature and ID which is the type of conflict, eg "edit/edit"
+    flat - if True, put all features at the top level, with the entire path as the key eg:
+        {"dataset_A:feature:5:ancestor": ..., "dataset_A:feature:5:ours": ...}
     """
     output_dict = {}
     conflict_output = _CONFLICT_PLACEHOLDER
@@ -243,14 +243,14 @@ def conflicts_json_as_geojson(json_obj):
     help="Make the program exit with 1 if there are conflicts and 0 means no conflicts.",
 )
 @click.option(
-    '-s',
-    '--summarise',
-    '--summarize',
+    "-s",
+    "--summarise",
+    "--summarize",
     count=True,
     help="Summarise the conflicts rather than output each one in full. Use -ss for short summary.",
 )
 @click.option(
-    '--flat',
+    "--flat",
     is_flag=True,
     hidden=True,
     help="Output all conflicts in a flat list, instead of in a hierarchy.",
@@ -262,7 +262,14 @@ def conflicts_json_as_geojson(json_obj):
 )
 @click.argument("filters", nargs=-1)
 def conflicts(
-    ctx, output_format, exit_code, json_style, summarise, flat, crs, filters,
+    ctx,
+    output_format,
+    exit_code,
+    json_style,
+    summarise,
+    flat,
+    crs,
+    filters,
 ):
     """
     Lists merge conflicts that need to be resolved before the ongoing merge can be completed.

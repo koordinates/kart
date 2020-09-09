@@ -24,14 +24,14 @@ class MemoryTree:
         return "tree"
 
     def __contains__(self, path):
-        path = path.strip('/')
+        path = path.strip("/")
         if path in self.all_blobs:
             return True
         dir_path = path + "/"
         return any((p.startswith(dir_path) for p in self.all_blobs))
 
     def __truediv__(self, path):
-        path = path.strip('/')
+        path = path.strip("/")
         if path in self.all_blobs:
             return MemoryBlob(self.all_blobs[path])
 

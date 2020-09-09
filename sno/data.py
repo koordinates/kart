@@ -20,9 +20,12 @@ def data(ctx, **kwargs):
     """Information about the datasets in a repository."""
 
 
-@data.command(name='ls')
+@data.command(name="ls")
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.pass_context
 def data_ls(ctx, output_format):

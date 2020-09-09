@@ -57,10 +57,14 @@ from .structure import RepositoryStructure
     ),
 )
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.argument(
-    "filters", nargs=-1,
+    "filters",
+    nargs=-1,
 )
 def commit(ctx, message, allow_empty, output_format, filters):
     """

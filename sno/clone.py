@@ -15,9 +15,9 @@ from .working_copy import WorkingCopy
 
 
 def get_directory_from_url(url):
-    if '://' in str(url):
-        return urlsplit(str(url)).path.split('/')[-1]
-    match = re.match(r'\w+@[^:]+?:(?:.*/)?(.+?)/?$', str(url))
+    if "://" in str(url):
+        return urlsplit(str(url)).path.split("/")[-1]
+    match = re.match(r"\w+@[^:]+?:(?:.*/)?(.+?)/?$", str(url))
     if match:
         # 'sno@example.com:path/to/repo'
         return match.group(1)
@@ -79,7 +79,7 @@ def clone(ctx, bare, wc_path, wc_version, do_progress, depth, url, directory):
         str(repo_path.resolve()),
     ]
     if depth is not None:
-        args.append(f'--depth={depth}')
+        args.append(f"--depth={depth}")
 
     try:
         # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
@@ -94,7 +94,7 @@ def clone(ctx, bare, wc_path, wc_version, do_progress, depth, url, directory):
         # HEAD points to `refs/heads/master`, but that doesn't exist yet.
         # (but it gets created when you commit)
         # Calling `repo.head` raises a GitError here, so we just hardcode this one
-        head_ref = 'master'
+        head_ref = "master"
     else:
         head_ref = repo.head.shorthand  # master, probably
     repo.config[f"branch.{head_ref}.remote"] = "origin"

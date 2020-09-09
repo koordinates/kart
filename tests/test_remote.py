@@ -18,25 +18,28 @@ def test_clone_empty_repo(tmp_path, cli_runner, chdir):
 
 
 def test_get_directory_from_url():
-    assert get_directory_from_url('sno@example.com:def/abc') == 'abc'
-    assert get_directory_from_url('sno@example.com:abc') == 'abc'
-    assert get_directory_from_url('https://example.com/def/abc') == 'abc'
-    assert get_directory_from_url('https://example.com/abc') == 'abc'
-    assert get_directory_from_url('abc') == 'abc'
-    assert get_directory_from_url('abc/') == 'abc'
-    assert get_directory_from_url('def/abc') == 'abc'
-    assert get_directory_from_url('def/abc/') == 'abc'
-    assert get_directory_from_url('/def/abc') == 'abc'
-    assert get_directory_from_url('/def/abc/') == 'abc'
-    assert get_directory_from_url(PureWindowsPath('C:/def/abc')) == 'abc'
-    assert get_directory_from_url(PureWindowsPath('C:\\def\\abc')) == 'abc'
-    assert get_directory_from_url(PureWindowsPath('C:\\def\\abc\\')) == 'abc'
-    assert get_directory_from_url(PureWindowsPath('C:\\def\\abc/')) == 'abc'
+    assert get_directory_from_url("sno@example.com:def/abc") == "abc"
+    assert get_directory_from_url("sno@example.com:abc") == "abc"
+    assert get_directory_from_url("https://example.com/def/abc") == "abc"
+    assert get_directory_from_url("https://example.com/abc") == "abc"
+    assert get_directory_from_url("abc") == "abc"
+    assert get_directory_from_url("abc/") == "abc"
+    assert get_directory_from_url("def/abc") == "abc"
+    assert get_directory_from_url("def/abc/") == "abc"
+    assert get_directory_from_url("/def/abc") == "abc"
+    assert get_directory_from_url("/def/abc/") == "abc"
+    assert get_directory_from_url(PureWindowsPath("C:/def/abc")) == "abc"
+    assert get_directory_from_url(PureWindowsPath("C:\\def\\abc")) == "abc"
+    assert get_directory_from_url(PureWindowsPath("C:\\def\\abc\\")) == "abc"
+    assert get_directory_from_url(PureWindowsPath("C:\\def\\abc/")) == "abc"
 
 
 @pytest.mark.parametrize(
     "working_copy",
-    [pytest.param(True, id="with-wc"), pytest.param(False, id="without-wc"),],
+    [
+        pytest.param(True, id="with-wc"),
+        pytest.param(False, id="without-wc"),
+    ],
 )
 def test_clone(
     working_copy, data_archive_readonly, tmp_path, cli_runner, chdir, geopackage

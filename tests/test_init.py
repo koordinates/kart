@@ -51,7 +51,7 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
                 "init",
                 "--import",
                 data / "nz-pa-points-topo-150k.gpkg",
-                str(tmp_path / 'emptydir'),
+                str(tmp_path / "emptydir"),
             ]
         )
         # You don't have to specify a table if there's only one.
@@ -72,19 +72,19 @@ def test_init_import_custom_message(data_archive_readonly, tmp_path, cli_runner,
                 "Custom message",
                 "--import",
                 data / "nz-pa-points-topo-150k.gpkg",
-                str(tmp_path / 'emptydir'),
+                str(tmp_path / "emptydir"),
             ]
         )
         assert r.exit_code == 0, r
         with chdir(tmp_path / "emptydir"):
             r = cli_runner.invoke(["log", "-1"])
         assert r.exit_code == 0, r
-        assert 'Custom message' in r.stdout
+        assert "Custom message" in r.stdout
 
 
 def test_import_table_with_prompt(data_archive_readonly, tmp_path, cli_runner, chdir):
     with data_archive_readonly("gpkg-au-census") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
@@ -109,17 +109,17 @@ def test_import_table_meta_overrides(
     data_archive_readonly, tmp_path, cli_runner, chdir, geopackage
 ):
     with data_archive_readonly("gpkg-au-census") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
-            original_xml_metadata = "<gmd:MD_Metadata xmlns:gco=\"http://www.isotc211.org/2005/gco\" xmlns:gmd=\"http://www.isotc211.org/2005/gmd\" xmlns:gml=\"http://www.opengis.net/gml\" xmlns:gts=\"http://www.isotc211.org/2005/gts\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" xmlns=\"http://www.isotc211.org/2005/gmd\" />"
+            original_xml_metadata = '<gmd:MD_Metadata xmlns:gco="http://www.isotc211.org/2005/gco" xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gml="http://www.opengis.net/gml" xmlns:gts="http://www.isotc211.org/2005/gts" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns="http://www.isotc211.org/2005/gmd" />'
             table_info_json = json.dumps(
                 {
-                    'census2016_sdhca_ot_ced_short': {
-                        'title': 'test title',
-                        'description': 'test description',
-                        'xmlMetadata': original_xml_metadata,
+                    "census2016_sdhca_ot_ced_short": {
+                        "title": "test title",
+                        "description": "test description",
+                        "xmlMetadata": original_xml_metadata,
                     }
                 }
             )
@@ -147,8 +147,8 @@ def test_import_table_meta_overrides(
                 WHERE c.table_name = 'census2016_sdhca_ot_ced_short'
                 """
             ).fetchone()
-            assert title == 'census2016_sdhca_ot_ced_short: test title'
-            assert description == 'test description'
+            assert title == "census2016_sdhca_ot_ced_short: test title"
+            assert description == "test description"
 
             xml_metadata = cur.execute(
                 """
@@ -165,7 +165,7 @@ def test_import_table_with_prompt_with_no_input(
     data_archive_readonly, tmp_path, cli_runner, chdir
 ):
     with data_archive_readonly("gpkg-au-census") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
@@ -188,7 +188,7 @@ def test_import_replace_existing(
     geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
@@ -220,23 +220,23 @@ def test_import_replace_existing(
             r = cli_runner.invoke(["show", "-o", "json"])
             assert r.exit_code == 0, r.stderr
             output = json.loads(r.stdout)
-            assert output['sno.diff/v1+hexwkb'] == {
-                'mytable': {
-                    'feature': [
+            assert output["sno.diff/v1+hexwkb"] == {
+                "mytable": {
+                    "feature": [
                         {
-                            '-': {
-                                'id': 1424927,
-                                'geom': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
-                                'date_adjusted': '2011-03-25T07:30:45Z',
-                                'survey_reference': None,
-                                'adjusted_nodes': 1122,
+                            "-": {
+                                "id": 1424927,
+                                "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
+                                "date_adjusted": "2011-03-25T07:30:45Z",
+                                "survey_reference": None,
+                                "adjusted_nodes": 1122,
                             },
-                            '+': {
-                                'id': 1424927,
-                                'geom': '01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0',
-                                'date_adjusted': '2011-03-25T07:30:45Z',
-                                'survey_reference': 'edited',
-                                'adjusted_nodes': 1122,
+                            "+": {
+                                "id": 1424927,
+                                "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
+                                "date_adjusted": "2011-03-25T07:30:45Z",
+                                "survey_reference": "edited",
+                                "adjusted_nodes": 1122,
                             },
                         }
                     ]
@@ -252,7 +252,7 @@ def test_import_replace_existing_with_no_changes(
     geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
@@ -285,7 +285,7 @@ def test_import_replace_existing_with_compatible_schema_changes(
     geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
@@ -355,7 +355,7 @@ def test_import_replace_existing_with_column_renames(
     geopackage,
 ):
     with data_archive("gpkg-polygons") as data:
-        repo_path = tmp_path / 'emptydir'
+        repo_path = tmp_path / "emptydir"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
@@ -432,100 +432,100 @@ def test_init_import_table_ogr_types(
             ]
         assert table_info == [
             {
-                'cid': 0,
-                'name': 'fid',
-                'type': 'INTEGER',
-                'notnull': 1,
-                'dflt_value': None,
-                'pk': 1,
+                "cid": 0,
+                "name": "fid",
+                "type": "INTEGER",
+                "notnull": 1,
+                "dflt_value": None,
+                "pk": 1,
             },
             {
-                'cid': 1,
-                'name': 'int16',
-                'type': 'SMALLINT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 1,
+                "name": "int16",
+                "type": "SMALLINT",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 2,
-                'name': 'int32',
-                'type': 'MEDIUMINT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 2,
+                "name": "int32",
+                "type": "MEDIUMINT",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 3,
-                'name': 'int64',
-                'type': 'INTEGER',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 3,
+                "name": "int64",
+                "type": "INTEGER",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 4,
-                'name': 'boolean',
-                'type': 'BOOLEAN',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 4,
+                "name": "boolean",
+                "type": "BOOLEAN",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 5,
-                'name': 'double',
-                'type': 'REAL',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 5,
+                "name": "double",
+                "type": "REAL",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 6,
-                'name': 'float32',
-                'type': 'FLOAT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 6,
+                "name": "float32",
+                "type": "FLOAT",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 7,
-                'name': 'string',
-                'type': 'TEXT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 7,
+                "name": "string",
+                "type": "TEXT",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 8,
-                'name': 'blob',
-                'type': 'BLOB',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 8,
+                "name": "blob",
+                "type": "BLOB",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 9,
-                'name': 'date',
-                'type': 'DATE',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 9,
+                "name": "date",
+                "type": "DATE",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 10,
-                'name': 'datetime',
-                'type': 'DATETIME',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 10,
+                "name": "datetime",
+                "type": "DATETIME",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
             {
-                'cid': 11,
-                'name': 'time',
-                'type': 'TEXT',
-                'notnull': 0,
-                'dflt_value': None,
-                'pk': 0,
+                "cid": 11,
+                "name": "time",
+                "type": "TEXT",
+                "notnull": 0,
+                "dflt_value": None,
+                "pk": 0,
             },
         ]
 
@@ -545,7 +545,7 @@ def test_init_import(
     repo_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    state_table = 'gpkg_sno_state' if repo_version == '2' else '.sno-meta'
+    state_table = "gpkg_sno_state" if repo_version == "2" else ".sno-meta"
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.sno"
@@ -656,16 +656,16 @@ def test_init_import_commit_headers(
             [
                 "init",
                 "--import",
-                str(data / 'nz-pa-points-topo-150k.gpkg'),
+                str(data / "nz-pa-points-topo-150k.gpkg"),
                 str(repo_path),
             ],
             env={
-                'GIT_AUTHOR_DATE': '2000-1-1T00:00:00Z',
-                'GIT_AUTHOR_NAME': 'author',
-                'GIT_AUTHOR_EMAIL': 'author@example.com',
-                'GIT_COMMITTER_DATE': '2010-1-1T00:00:00Z',
-                'GIT_COMMITTER_NAME': 'committer',
-                'GIT_COMMITTER_EMAIL': 'committer@example.com',
+                "GIT_AUTHOR_DATE": "2000-1-1T00:00:00Z",
+                "GIT_AUTHOR_NAME": "author",
+                "GIT_AUTHOR_EMAIL": "author@example.com",
+                "GIT_COMMITTER_DATE": "2010-1-1T00:00:00Z",
+                "GIT_COMMITTER_NAME": "committer",
+                "GIT_COMMITTER_EMAIL": "committer@example.com",
             },
         )
         assert r.exit_code == 0, r.stderr
@@ -673,8 +673,8 @@ def test_init_import_commit_headers(
         r = cli_runner.invoke(["-C", str(repo_path), "log", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         log_entry = json.loads(r.stdout)[0]
-        log_entry.pop('commit')
-        log_entry.pop('abbrevCommit')
+        log_entry.pop("commit")
+        log_entry.pop("abbrevCommit")
         assert log_entry == {
             "message": "Import from nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k to nz_pa_points_topo_150k/",
             "refs": ["HEAD -> master"],
@@ -971,9 +971,9 @@ def test_import_existing_wc(
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines()[-3:] == [
-            '  nz_waca_adjustments:',
-            '    feature:',
-            '      10 deletes',
+            "  nz_waca_adjustments:",
+            "    feature:",
+            "      10 deletes",
         ]
 
 

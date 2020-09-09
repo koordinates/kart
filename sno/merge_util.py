@@ -125,7 +125,7 @@ class MergeIndex:
             default=lambda o: str(o),
             indent=2,
         )
-        return f'<MergeIndex {contents}>'
+        return f"<MergeIndex {contents}>"
 
     def add(self, index_entry):
         index_entry = self._ensure_entry(index_entry)
@@ -453,7 +453,7 @@ class MergeContext:
     def get_message(self):
         theirs = self.versions.theirs
         theirs_desc = f'branch "{theirs.branch}"' if theirs.branch else theirs.shorthand
-        return f'Merge {theirs_desc} into {self.versions.ours.shorthand}'
+        return f"Merge {theirs_desc} into {self.versions.ours.shorthand}"
 
     def as_json(self):
         json3 = self.versions.map(lambda v: v.as_json())

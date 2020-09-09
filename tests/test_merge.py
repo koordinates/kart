@@ -23,8 +23,14 @@ V1_OR_V2 = ("repo_version", ["1", "2"])
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(H.POINTS, id="points",),
-        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(
+            H.POINTS,
+            id="points",
+        ),
+        pytest.param(
+            H.POLYGONS,
+            id="polygons",
+        ),
         pytest.param(H.TABLE, id="table"),
     ],
 )
@@ -70,8 +76,14 @@ def test_merge_fastforward(
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(H.POINTS, id="points",),
-        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(
+            H.POINTS,
+            id="points",
+        ),
+        pytest.param(
+            H.POLYGONS,
+            id="polygons",
+        ),
         pytest.param(H.TABLE, id="table"),
     ],
 )
@@ -129,8 +141,14 @@ def test_merge_fastforward_noff(
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(H.POINTS, id="points",),
-        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(
+            H.POINTS,
+            id="points",
+        ),
+        pytest.param(
+            H.POLYGONS,
+            id="polygons",
+        ),
         pytest.param(H.TABLE, id="table"),
     ],
 )
@@ -203,20 +221,33 @@ def test_merge_true(
 @pytest.mark.parametrize(
     "data",
     [
-        pytest.param(H.POINTS, id="points",),
-        pytest.param(H.POLYGONS, id="polygons",),
+        pytest.param(
+            H.POINTS,
+            id="points",
+        ),
+        pytest.param(
+            H.POLYGONS,
+            id="polygons",
+        ),
         pytest.param(H.TABLE, id="table"),
     ],
 )
 @pytest.mark.parametrize(
-    "output_format", ["text", "json"],
+    "output_format",
+    ["text", "json"],
 )
 @pytest.mark.parametrize(
-    "dry_run", [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
+    "dry_run",
+    [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
 )
 @pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_conflicts(
-    repo_version, data, output_format, dry_run, create_conflicts, cli_runner,
+    repo_version,
+    data,
+    output_format,
+    dry_run,
+    create_conflicts,
+    cli_runner,
 ):
     with create_conflicts(data, repo_version) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
@@ -279,7 +310,7 @@ def test_merge_conflicts(
                         },
                     },
                     "dryRun": dry_run,
-                    "message": "Merge branch \"theirs_branch\" into ours_branch",
+                    "message": 'Merge branch "theirs_branch" into ours_branch',
                     "conflicts": {data.LAYER: {"feature": 4}},
                     "state": "merging",
                 },
@@ -290,7 +321,7 @@ def test_merge_conflicts(
             assert read_repo_file(repo, MERGE_BRANCH) == "theirs_branch\n"
             assert (
                 read_repo_file(repo, MERGE_MSG)
-                == "Merge branch \"theirs_branch\" into ours_branch\n"
+                == 'Merge branch "theirs_branch" into ours_branch\n'
             )
 
             merge_index = MergeIndex.read_from_repo(repo)

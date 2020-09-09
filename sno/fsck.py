@@ -120,12 +120,13 @@ def fsck(ctx, reset_datasets, fsck_args):
 
             if wc_diff:
                 click.secho(
-                    f"! Working copy appears dirty according to the index", fg="yellow",
+                    f"! Working copy appears dirty according to the index",
+                    fg="yellow",
                 )
 
             if "meta" in wc_diff:
                 meta_diff = wc_diff["meta"]
-                click.secho(f'{dataset.path}:meta: ({len(meta_diff)})', fg="yellow")
+                click.secho(f"{dataset.path}:meta: ({len(meta_diff)})", fg="yellow")
 
                 for path in meta_diff.keys():
                     click.echo(f"{dataset.path}:meta:{path}")
@@ -133,7 +134,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             if "feature" in wc_diff:
                 feature_diff = wc_diff["feature"]
                 click.secho(
-                    f'{dataset.path}:feature: ({len(feature_diff)})', fg="yellow"
+                    f"{dataset.path}:feature: ({len(feature_diff)})", fg="yellow"
                 )
                 nul = "␀"
 

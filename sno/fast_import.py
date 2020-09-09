@@ -97,7 +97,7 @@ def fast_import_tables(
     if header is None:
         # import onto a temp branch. then reset the head branch afterwards.
         # this allows us to check the result before updating the orig branch.
-        import_branch = f'refs/heads/{uuid.uuid4()}'
+        import_branch = f"refs/heads/{uuid.uuid4()}"
 
         # may be None, if head is detached
         orig_branch = git_util.get_head_branch(repo)
@@ -109,7 +109,11 @@ def fast_import_tables(
     if not quiet:
         click.echo("Starting git-fast-import...")
 
-    p = subprocess.Popen(cmd, cwd=repo.path, stdin=subprocess.PIPE,)
+    p = subprocess.Popen(
+        cmd,
+        cwd=repo.path,
+        stdin=subprocess.PIPE,
+    )
     try:
         if replace_existing != ReplaceExisting.ALL:
             header += f"from {orig_commit.oid}\n"
@@ -124,7 +128,7 @@ def fast_import_tables(
             replacing_dataset = None
             if replace_existing == ReplaceExisting.GIVEN:
                 # Delete the existing dataset, before we re-import it.
-                p.stdin.write(f"D {source.dest_path}\n".encode('utf8'))
+                p.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
 
                 try:
                     replacing_dataset = RepositoryStructure(repo)[source.dest_path]

@@ -104,7 +104,7 @@ def pk_index_ordering(column):
         return column.pk_index
     else:
         # Non primary-key columns after primary key columns.
-        return float('inf')
+        return float("inf")
 
 
 ALL_DATA_TYPES = {

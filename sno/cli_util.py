@@ -5,7 +5,7 @@ import jsonschema
 
 def add_help_subcommand(group):
     @group.command(add_help_option=False, hidden=True)
-    @click.argument('topic', default=None, required=False, nargs=1)
+    @click.argument("topic", default=None, required=False, nargs=1)
     @click.pass_context
     def help(ctx, topic, **kw):
         # https://www.burgundywall.com/post/having-click-help-subcommand
@@ -81,9 +81,9 @@ class StringFromFile(click.types.StringParamType):
 
     def convert(self, value, param, ctx):
         value = super().convert(value, param, ctx)
-        if value == '-' or value.startswith('@'):
+        if value == "-" or value.startswith("@"):
             filetype = click.File(**self.file_kwargs)
-            filename = value[1:] if value.startswith('@') else value
+            filename = value[1:] if value.startswith("@") else value
             fp = filetype.convert(filename, param, ctx)
             return fp.read()
 
@@ -91,7 +91,7 @@ class StringFromFile(click.types.StringParamType):
 
 
 class JsonFromFile(StringFromFile):
-    name = 'json'
+    name = "json"
 
     def __init__(self, schema=None, **file_kwargs):
         super().__init__(**file_kwargs)
@@ -103,7 +103,9 @@ class JsonFromFile(StringFromFile):
             value = json.loads(value)
         except json.JSONDecodeError as e:
             self.fail(
-                f"Invalid JSON: {e}", param, ctx,
+                f"Invalid JSON: {e}",
+                param,
+                ctx,
             )
         if self.schema:
             try:

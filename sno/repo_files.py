@@ -118,7 +118,7 @@ class RepoState:
         if bad_state == cls.MERGING:
             return (
                 f'`{cmd}` does not work while the sno repo is in "merging" state.\n'
-                'Use `sno merge --abort` to abandon the merge and get back to the previous state.'
+                "Use `sno merge --abort` to abandon the merge and get back to the previous state."
             )
         return f'`{cmd}` only works when the sno repo is in "merging" state, but it is in "normal" state.'
 
@@ -128,7 +128,7 @@ class RepoState:
             if not repo_file_exists(repo, MERGE_INDEX):
                 raise NotFound(
                     'sno repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
-                    'Try `sno merge --abort` to return to a good state.'
+                    "Try `sno merge --abort` to return to a good state."
                 )
             return RepoState.MERGING
         return RepoState.NORMAL

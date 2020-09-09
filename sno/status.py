@@ -14,7 +14,10 @@ from .working_copy import WorkingCopy
 @click.command()
 @click.pass_context
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 def status(ctx, output_format):
     """ Show the working copy status """
@@ -32,7 +35,7 @@ def status(ctx, output_format):
     else:
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
-    if output_format == 'json':
+    if output_format == "json":
         dump_json_output({"sno.status/v1": jdict}, sys.stdout)
     else:
         click.echo(status_to_text(jdict))

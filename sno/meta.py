@@ -36,7 +36,10 @@ def meta(ctx, **kwargs):
 
 @meta.command(name="get")
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.option(
     "--json-style",

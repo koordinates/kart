@@ -34,7 +34,7 @@ def list_import_formats(ctx, param, value):
         if d:
             m = d.GetMetadata()
             # only vector formats which can read things.
-            if m.get('DCAP_VECTOR') == 'YES' and m.get('DCAP_OPEN') == 'YES':
+            if m.get("DCAP_VECTOR") == "YES" and m.get("DCAP_OPEN") == "YES":
                 names.add(prefix)
     for n in sorted(names):
         click.echo(n)
@@ -47,10 +47,10 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
 
     commit = repo.head.peel(pygit2.Commit)
     if not wc.is_created():
-        click.echo(f'Creating working copy at {wc.path} ...')
+        click.echo(f"Creating working copy at {wc.path} ...")
         wc.create()
     else:
-        click.echo(f'Updating {wc.path} ...')
+        click.echo(f"Updating {wc.path} ...")
 
     for dataset in datasets:
         if replace_existing:
@@ -76,16 +76,16 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
 @click.option(
     "--message",
     "-m",
-    type=StringFromFile(encoding='utf-8'),
+    type=StringFromFile(encoding="utf-8"),
     help="Commit message. By default this is auto-generated.",
 )
 @click.option(
     "--table-info",
     type=JsonFromFile(
-        encoding='utf-8',
+        encoding="utf-8",
         schema={
             "type": "object",
-            "$schema": 'http://json-schema.org/draft-07/schema',
+            "$schema": "http://json-schema.org/draft-07/schema",
             "patternProperties": {
                 ".*": {
                     "type": "object",
@@ -98,12 +98,12 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
             },
         },
     ),
-    default='{}',
+    default="{}",
     help=(
         "Specifies overrides for imported tables, in a nested JSON object. \n"
         "Each key is a dataset name, and each value is an object. \n"
         "Valid overrides are 'title', 'description' and 'xmlMetadata'.\n"
-        '''e.g.:  --table-info='{"land_parcels": {"title": "Land Parcels 1:50k"}'\n'''
+        """e.g.:  --table-info='{"land_parcels": {"title": "Land Parcels 1:50k"}'\n"""
         "To import from a file, prefix with `@`, e.g. `--table-info=@filename.json`"
     ),
 )
@@ -183,7 +183,7 @@ def import_table(
     $ sno import --list GPKG:my.gpkg
     """
 
-    if output_format == 'json' and not do_list:
+    if output_format == "json" and not do_list:
         raise click.UsageError(
             "Illegal usage: '--output-format=json' only supports --list"
         )
@@ -195,7 +195,7 @@ def import_table(
 
     base_import_source = OgrImportSource.open(source, None)
     if do_list:
-        base_import_source.print_table_list(do_json=output_format == 'json')
+        base_import_source.print_table_list(do_json=output_format == "json")
         return
     elif all_tables:
         tables = base_import_source.get_tables().keys()
@@ -205,7 +205,7 @@ def import_table(
 
     import_sources = []
     for table in tables:
-        (src_table, *rest) = table.split(':', 1)
+        (src_table, *rest) = table.split(":", 1)
         dest_path = rest[0] if rest else src_table
         if not dest_path:
             raise click.BadParameter("Invalid table name", param_hint="tables")
@@ -216,9 +216,9 @@ def import_table(
         import_source = base_import_source.clone_for_table(
             src_table,
             primary_key=primary_key,
-            title=info.get('title'),
-            description=info.get('description'),
-            xml_metadata=info.get('xmlMetadata'),
+            title=info.get("title"),
+            description=info.get("description"),
+            xml_metadata=info.get("xmlMetadata"),
         )
         if replace_existing:
             rs = RepositoryStructure(repo)
@@ -275,7 +275,7 @@ def import_table(
 @click.option(
     "--message",
     "-m",
-    type=StringFromFile(encoding='utf-8'),
+    type=StringFromFile(encoding="utf-8"),
     help="Commit message (when used with --import). By default this is auto-generated.",
 )
 @click.option(

@@ -10,7 +10,7 @@ def adapt_ogr_date(value):
         return value
     # OGR uses this strange format: '2012/07/09'
     # We convert back to a normal ISO8601 format.
-    return value.replace('/', '-')
+    return value.replace("/", "-")
 
 
 def adapt_ogr_datetime(value):
@@ -18,7 +18,7 @@ def adapt_ogr_datetime(value):
         return value
     # OGR uses this strange format: '2012/07/09 09:01:52+00'
     # We convert back to a normal ISO8601 format.
-    return value.replace('/', '-').replace(' ', 'T').replace('+00', 'Z')
+    return value.replace("/", "-").replace(" ", "T").replace("+00", "Z")
 
 
 def get_type_value_adapter(ogr_type):

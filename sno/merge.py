@@ -115,7 +115,10 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         merge_jdict["state"] = "merging"
         if not dry_run:
             move_repo_to_merging_state(
-                repo, merge_index, merge_context, merge_message,
+                repo,
+                merge_index,
+                merge_context,
+                merge_message,
             )
         return merge_jdict
 
@@ -132,7 +135,12 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
             merge_context, merge_tree_id, repo, quiet=quiet
         )
     merge_commit_id = repo.create_commit(
-        repo.head.name, user, user, commit_message, merge_tree_id, [ours.id, theirs.id],
+        repo.head.name,
+        user,
+        user,
+        commit_message,
+        merge_tree_id,
+        [ours.id, theirs.id],
     )
 
     L.debug(f"Merge commit: {merge_commit_id}")
@@ -183,7 +191,8 @@ def complete_merging_state(ctx):
     HEAD now at the merge commit. Only works if all conflicts have been resolved.
     """
     repo = ctx.obj.get_repo(
-        allowed_states=[RepoState.MERGING], command_extra="--continue",
+        allowed_states=[RepoState.MERGING],
+        command_extra="--continue",
     )
     merge_index = MergeIndex.read_from_repo(repo)
     if merge_index.unresolved_conflicts:
@@ -345,23 +354,26 @@ def merge_status_to_text(jdict, fresh):
     help="Don't perform a merge - just show what would be done",
 )
 @click.option(
-    "--output-format", "-o", type=click.Choice(["text", "json"]), default="text",
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
 )
 @click.option(
     "--message",
     "-m",
-    type=StringFromFile(encoding='utf-8'),
+    type=StringFromFile(encoding="utf-8"),
     help="Use the given message as the commit message.",
     is_eager=True,  # -m is eager and --continue is non-eager so we can access -m from complete_merging_state callback.
 )
 @call_and_exit_flag(
-    '--continue',
+    "--continue",
     callback=complete_merging_state,
     help="Completes and commits a merge once all conflicts are resolved and leaves the merging state",
     is_eager=False,
 )
 @call_and_exit_flag(
-    '--abort',
+    "--abort",
     callback=abort_merging_state,
     help="Abandon an ongoing merge, revert repository to the state before the merge began",
 )
@@ -376,7 +388,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     )
     ctx.obj.check_not_dirty()
 
-    do_json = output_format == 'json'
+    do_json = output_format == "json"
 
     jdict = do_merge(repo, ff, ff_only, dry_run, commit, message, quiet=do_json)
     no_op = jdict.get("noOp", False) or jdict.get("dryRun", False)

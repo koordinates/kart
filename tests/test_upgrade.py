@@ -65,17 +65,17 @@ def test_upgrade_v1(archive, layer, data_archive, cli_runner, tmp_path, chdir):
 
         if layer == H.POINTS.LAYER:
             assert r.stdout.splitlines() == [
-                'commit 0c64d8211c072a08d5fc6e6fe898cbb59fc83d16',
-                'Author: Robert Coup <robert@coup.net.nz>',
-                'Date:   Thu Jun 20 15:28:33 2019 +0100',
-                '',
-                '    Improve naming on Coromandel East coast',
-                '',
-                'commit 7bc3b56f20d1559208bcf5bb56860dda6e190b70',
-                'Author: Robert Coup <robert@coup.net.nz>',
-                'Date:   Tue Jun 11 12:03:58 2019 +0100',
-                '',
-                '    Import from nz-pa-points-topo-150k.gpkg',
+                "commit 0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                "Date:   Thu Jun 20 15:28:33 2019 +0100",
+                "",
+                "    Improve naming on Coromandel East coast",
+                "",
+                "commit 7bc3b56f20d1559208bcf5bb56860dda6e190b70",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                "Date:   Tue Jun 11 12:03:58 2019 +0100",
+                "",
+                "    Import from nz-pa-points-topo-150k.gpkg",
             ]
 
         r = cli_runner.invoke(["status", "--output-format=json"])

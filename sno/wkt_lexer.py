@@ -20,7 +20,9 @@ class WKTLexer(RegexLexer):
     exp_part = r"[eE](\+|-)?\d+"
 
     tokens = {
-        "whitespace": [(r"\s+", Whitespace),],
+        "whitespace": [
+            (r"\s+", Whitespace),
+        ],
         # represents a simple terminal value
         "simplevalue": [
             (
@@ -42,9 +44,15 @@ class WKTLexer(RegexLexer):
             (r"(\]|\))", Punctuation, "#pop"),
         ],
         # a list is started by an opening bracket (square or round)
-        "liststart": [include("whitespace"), (r"(\[|\()", Punctuation, "list"),],
+        "liststart": [
+            include("whitespace"),
+            (r"(\[|\()", Punctuation, "list"),
+        ],
         # a keyword
-        "keyword": [include("whitespace"), (r"\w(\w|\d|_)*", Keyword),],
+        "keyword": [
+            include("whitespace"),
+            (r"\w(\w|\d|_)*", Keyword),
+        ],
         # values can be either simple values, keywords, or lists
         "value": [
             include("whitespace"),
@@ -53,5 +61,7 @@ class WKTLexer(RegexLexer):
             include("liststart"),
         ],
         # starting state, should start with a value
-        "root": [include("value"),],
+        "root": [
+            include("value"),
+        ],
     }

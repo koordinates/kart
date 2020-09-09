@@ -33,7 +33,10 @@ def _msg_unpack_ext_hook(code, data):
 def msg_pack(data):
     """data (any type) -> bytes"""
     return msgpack.packb(
-        data, use_bin_type=True, strict_types=True, default=_msg_pack_default,
+        data,
+        use_bin_type=True,
+        strict_types=True,
+        default=_msg_pack_default,
     )
 
 
@@ -83,12 +86,12 @@ def hexhash(*data):
 def ensure_bytes(data):
     """data (str or bytes) -> bytes. Utf-8."""
     if isinstance(data, str):
-        return data.encode('utf8')
+        return data.encode("utf8")
     return data
 
 
 def ensure_text(data):
     """data (str or bytes) -> str. Utf-8."""
     if isinstance(data, bytes):
-        return data.decode('utf8')
+        return data.decode("utf8")
     return data

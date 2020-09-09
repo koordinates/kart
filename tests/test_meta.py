@@ -31,7 +31,7 @@ class TestMetaGet:
         with data_archive_readonly("points"):
             r = cli_runner.invoke(["meta", "get", "nonexistent_dataset"])
             assert r.exit_code == 2, r
-            assert 'No such dataset: nonexistent_dataset' in r.stderr
+            assert "No such dataset: nonexistent_dataset" in r.stderr
 
             r = cli_runner.invoke(
                 ["meta", "get", "nz_pa_points_topo_150k", "nonexistent_meta"]
@@ -49,7 +49,7 @@ class TestMetaGet:
                 ["meta", "get", "nz_pa_points_topo_150k", "-o", output_format]
             )
             assert r.exit_code == 0, r
-            if output_format == 'text':
+            if output_format == "text":
                 assert "title" in r.stdout
                 assert EXPECTED_TITLE in r.stdout
                 assert "description" in r.stdout
@@ -57,7 +57,7 @@ class TestMetaGet:
                 assert "crs/EPSG:4326.wkt" in r.stdout
             else:
                 output = json.loads(r.stdout)
-                output = output['nz_pa_points_topo_150k']
+                output = output["nz_pa_points_topo_150k"]
                 assert output["title"] == EXPECTED_TITLE
                 assert output["description"]
                 assert output["schema.json"]
@@ -77,13 +77,13 @@ class TestMetaGet:
                 ]
             )
             assert r.exit_code == 0, r
-            if output_format == 'text':
+            if output_format == "text":
                 assert EXPECTED_GCG_TEXT in r.stdout
                 assert "gpkg_contents" not in r.stdout
                 assert "sqlite_table_info" not in r.stdout
             else:
                 output = json.loads(r.stdout)
-                output = output['nz_pa_points_topo_150k']
+                output = output["nz_pa_points_topo_150k"]
                 assert output["gpkg_geometry_columns"] == EXPECTED_GCG_JSON
                 assert "gpkg_contents" not in output
                 assert "sqlite_table_info" not in output
@@ -104,8 +104,8 @@ def test_meta_set(data_archive, cli_runner):
         r = cli_runner.invoke(["show", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         output = json.loads(r.stdout)
-        patch_info = output.pop('sno.show/v1')
-        assert patch_info['message'] == 'Update metadata for nz_pa_points_topo_150k'
-        meta = output['sno.diff/v1+hexwkb']['nz_pa_points_topo_150k']['meta']
-        assert meta['title'] == {'-': 'NZ Pa Points (Topo, 1:50k)', '+': 'newtitle'}
-        assert meta['description']['+'] == 'newdescription'
+        patch_info = output.pop("sno.show/v1")
+        assert patch_info["message"] == "Update metadata for nz_pa_points_topo_150k"
+        meta = output["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        assert meta["title"] == {"-": "NZ Pa Points (Topo, 1:50k)", "+": "newtitle"}
+        assert meta["description"]["+"] == "newdescription"

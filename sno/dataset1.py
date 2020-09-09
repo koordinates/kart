@@ -154,7 +154,9 @@ class Dataset1(RichBaseDataset):
             self.primary_key: self.decode_path_to_1pk(blob_path),
         }
         bin_feature = msgpack.unpackb(
-            blob_memoryview, ext_hook=self._msgpack_unpack_ext, raw=False,
+            blob_memoryview,
+            ext_hook=self._msgpack_unpack_ext,
+            raw=False,
         )
         for colid, value in sorted(bin_feature.items()):
             field_name = self.cid_field_map[colid]
@@ -211,7 +213,10 @@ class Dataset1(RichBaseDataset):
 
         def tupleizer(blob):
             bin_feature = msgpack.unpackb(
-                blob.data, ext_hook=self._msgpack_unpack_ext, raw=False, use_list=False,
+                blob.data,
+                ext_hook=self._msgpack_unpack_ext,
+                raw=False,
+                use_list=False,
             )
             return tuple(
                 [
@@ -265,7 +270,10 @@ class Dataset1(RichBaseDataset):
     def features(self, **kwargs):
         """ Feature iterator yielding (encoded_pk, feature-dict) pairs """
         return (
-            (blob.name, self.repo_feature_to_dict(blob.name, memoryview(blob)),)
+            (
+                blob.name,
+                self.repo_feature_to_dict(blob.name, memoryview(blob)),
+            )
             for blob in self._iter_feature_blobs(fast=False)
         )
 

@@ -34,7 +34,8 @@ V1_OR_V2 = ("repo_version", ["1", "2"])
 
 
 @pytest.mark.parametrize(
-    "partial", [pytest.param(False, id=""), pytest.param(True, id="partial")],
+    "partial",
+    [pytest.param(False, id=""), pytest.param(True, id="partial")],
 )
 @pytest.mark.parametrize(
     "archive,layer",
@@ -240,20 +241,20 @@ def test_commit_message(
             rf'{fallback_editor()} "?{re.escape(editmsg_path)}"?$', editor_cmd
         )
         assert editor_in.splitlines() == [
-            '',
-            '# Please enter the commit message for your changes. Lines starting',
+            "",
+            "# Please enter the commit message for your changes. Lines starting",
             "# with '#' will be ignored, and an empty message aborts the commit.",
-            '#',
-            '# On branch master',
-            '#',
-            '# Changes to be committed:',
-            '#',
-            '#   nz_pa_points_topo_150k:',
-            '#     feature:',
-            '#       1 inserts',
-            '#       2 updates',
-            '#       5 deletes',
-            '#',
+            "#",
+            "# On branch master",
+            "#",
+            "# Changes to be committed:",
+            "#",
+            "#   nz_pa_points_topo_150k:",
+            "#     feature:",
+            "#       1 inserts",
+            "#       2 updates",
+            "#       5 deletes",
+            "#",
         ]
 
         print(last_message())
@@ -311,15 +312,15 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
         r = cli_runner.invoke(
             ["commit", "--allow-empty", "-m", "test"],
             env={
-                'GIT_AUTHOR_DATE': '1000000000 +1230',
-                'GIT_AUTHOR_NAME': 'bob',
-                'GIT_AUTHOR_EMAIL': 'user@example.com',
+                "GIT_AUTHOR_DATE": "1000000000 +1230",
+                "GIT_AUTHOR_NAME": "bob",
+                "GIT_AUTHOR_EMAIL": "user@example.com",
             },
         )
         assert r.exit_code == 0, r
 
         author = repo.head.peel(pygit2.Commit).author
-        assert author.name == 'bob'
-        assert author.email == 'user@example.com'
+        assert author.name == "bob"
+        assert author.email == "user@example.com"
         assert author.time == 1000000000
         assert author.offset == 750

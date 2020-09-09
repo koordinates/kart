@@ -160,7 +160,9 @@ class WorkingCopyGPKG(WorkingCopy):
             L.debug(f"session(bulk={bulk}): existing/done")
         else:
             L.debug(f"session(bulk={bulk}): new...")
-            self._db = gpkg.db(self.full_path,)
+            self._db = gpkg.db(
+                self.full_path,
+            )
             dbcur = self._db.cursor()
 
             if bulk:
@@ -1332,7 +1334,10 @@ class WorkingCopyGPKG(WorkingCopy):
                 WHERE
                     table_name=?;
                 """,
-                (gpkg_change_time, table,),
+                (
+                    gpkg_change_time,
+                    table,
+                ),
             )
         else:
             dbcur.execute(
@@ -1379,7 +1384,8 @@ class WorkingCopyGPKG(WorkingCopy):
             )
 
             dbcur.execute(
-                f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;", (table,),
+                f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=?;",
+                (table,),
             )
 
 

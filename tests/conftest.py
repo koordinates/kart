@@ -29,7 +29,7 @@ L = logging.getLogger("sno.tests")
 
 
 def pytest_addoption(parser):
-    if 'CI' in os.environ:
+    if "CI" in os.environ:
         # pytest.ini sets --numprocesses=auto
         # for parallelism in local dev.
         # But in CI we disable xdist because it causes a crash in windows builds.
@@ -38,7 +38,10 @@ def pytest_addoption(parser):
         # However, there's no way to *remove* an option that's in pytest.ini's addopts.
         # So here we just define the option so it parses, and then ignore it.
         parser.addoption(
-            "--numprocesses", action="store", default=0, help="<ignored>",
+            "--numprocesses",
+            action="store",
+            default=0,
+            help="<ignored>",
         )
     parser.addoption(
         "--preserve-data",
@@ -321,7 +324,11 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 del repo
 
                 r = cli_runner.invoke(
-                    ["import", f"GPKG:{data / source_gpkg}", f"{table}:mytable",]
+                    [
+                        "import",
+                        f"GPKG:{data / source_gpkg}",
+                        f"{table}:mytable",
+                    ]
                 )
                 assert r.exit_code == 0, r
 
@@ -519,7 +526,8 @@ class TestHelpers:
         return (
             db.cursor()
             .execute(
-                f"SELECT last_change FROM gpkg_contents WHERE table_name=?;", [table],
+                f"SELECT last_change FROM gpkg_contents WHERE table_name=?;",
+                [table],
             )
             .fetchone()[0]
         )
@@ -778,7 +786,11 @@ def edit_table():
 
 @pytest.fixture
 def create_conflicts(
-    data_working_copy, geopackage, cli_runner, update, insert,
+    data_working_copy,
+    geopackage,
+    cli_runner,
+    update,
+    insert,
 ):
     @contextlib.contextmanager
     def ctx(data, repo_version=1):

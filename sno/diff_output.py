@@ -121,7 +121,9 @@ def diff_output_text(*, output_path, **kwargs):
 
             elif delta.type == "update":
                 click.secho(
-                    f"--- {prefix}{old_pk}\n+++ {prefix}{new_pk}", bold=True, **pecho,
+                    f"--- {prefix}{old_pk}\n+++ {prefix}{new_pk}",
+                    bold=True,
+                    **pecho,
                 )
 
                 # This preserves row order:
@@ -211,7 +213,8 @@ def diff_properties(old_column, new_column):
 def pair_properties(old_column, new_column):
     # This preserves row order
     all_keys = itertools.chain(
-        old_column.keys(), (k for k in new_column.keys() if k not in old_column.keys()),
+        old_column.keys(),
+        (k for k in new_column.keys() if k not in old_column.keys()),
     )
 
     for key in all_keys:

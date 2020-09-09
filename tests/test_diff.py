@@ -70,122 +70,122 @@ def test_diff_points(
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                '--- nz_pa_points_topo_150k:feature:1',
-                '+++ nz_pa_points_topo_150k:feature:9998',
-                '--- nz_pa_points_topo_150k:feature:2',
-                '+++ nz_pa_points_topo_150k:feature:2',
-                '-                                  t50_fid = 2426272',
-                '+                                  t50_fid = ␀',
-                '-                                     name = ␀',
-                '+                                     name = test',
-                '--- nz_pa_points_topo_150k:feature:3',
-                '-                                     geom = POINT(...)',
-                '-                                  t50_fid = 2426273',
-                '-                               name_ascii = Tauwhare Pa',
-                '-                               macronated = N',
-                '-                                     name = Tauwhare Pa',
-                '+++ nz_pa_points_topo_150k:feature:9999',
-                '+                                     geom = POINT(...)',
-                '+                                  t50_fid = 9999999',
-                '+                               name_ascii = Te Motu-a-kore',
-                '+                               macronated = 0',
-                '+                                     name = Te Motu-a-kore',
+                "--- nz_pa_points_topo_150k:feature:1",
+                "+++ nz_pa_points_topo_150k:feature:9998",
+                "--- nz_pa_points_topo_150k:feature:2",
+                "+++ nz_pa_points_topo_150k:feature:2",
+                "-                                  t50_fid = 2426272",
+                "+                                  t50_fid = ␀",
+                "-                                     name = ␀",
+                "+                                     name = test",
+                "--- nz_pa_points_topo_150k:feature:3",
+                "-                                     geom = POINT(...)",
+                "-                                  t50_fid = 2426273",
+                "-                               name_ascii = Tauwhare Pa",
+                "-                               macronated = N",
+                "-                                     name = Tauwhare Pa",
+                "+++ nz_pa_points_topo_150k:feature:9999",
+                "+                                     geom = POINT(...)",
+                "+                                  t50_fid = 9999999",
+                "+                               name_ascii = Te Motu-a-kore",
+                "+                               macronated = 0",
+                "+                                     name = Te Motu-a-kore",
             ]
         elif output_format == "geojson":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
-                'features': [
+                "features": [
                     {
-                        'geometry': {
-                            'coordinates': [177.0959629713586, -38.00433803621768],
-                            'type': 'Point',
+                        "geometry": {
+                            "coordinates": [177.0959629713586, -38.00433803621768],
+                            "type": "Point",
                         },
-                        'id': 'U-::1',
-                        'properties': {
-                            'fid': 1,
-                            'macronated': 'N',
-                            'name': None,
-                            'name_ascii': None,
-                            't50_fid': 2426271,
+                        "id": "U-::1",
+                        "properties": {
+                            "fid": 1,
+                            "macronated": "N",
+                            "name": None,
+                            "name_ascii": None,
+                            "t50_fid": 2426271,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [177.0959629713586, -38.00433803621768],
-                            'type': 'Point',
+                        "geometry": {
+                            "coordinates": [177.0959629713586, -38.00433803621768],
+                            "type": "Point",
                         },
-                        'id': 'U+::9998',
-                        'properties': {
-                            'fid': 9998,
-                            'macronated': 'N',
-                            'name': None,
-                            'name_ascii': None,
-                            't50_fid': 2426271,
+                        "id": "U+::9998",
+                        "properties": {
+                            "fid": 9998,
+                            "macronated": "N",
+                            "name": None,
+                            "name_ascii": None,
+                            "t50_fid": 2426271,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [177.0786628443959, -37.9881848576018],
-                            'type': 'Point',
+                        "geometry": {
+                            "coordinates": [177.0786628443959, -37.9881848576018],
+                            "type": "Point",
                         },
-                        'id': 'U-::2',
-                        'properties': {
-                            'fid': 2,
-                            'macronated': 'N',
-                            'name': None,
-                            'name_ascii': None,
-                            't50_fid': 2426272,
+                        "id": "U-::2",
+                        "properties": {
+                            "fid": 2,
+                            "macronated": "N",
+                            "name": None,
+                            "name_ascii": None,
+                            "t50_fid": 2426272,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [177.0786628443959, -37.9881848576018],
-                            'type': 'Point',
+                        "geometry": {
+                            "coordinates": [177.0786628443959, -37.9881848576018],
+                            "type": "Point",
                         },
-                        'id': 'U+::2',
-                        'properties': {
-                            'fid': 2,
-                            'macronated': 'N',
-                            'name': 'test',
-                            'name_ascii': None,
-                            't50_fid': None,
+                        "id": "U+::2",
+                        "properties": {
+                            "fid": 2,
+                            "macronated": "N",
+                            "name": "test",
+                            "name_ascii": None,
+                            "t50_fid": None,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [177.07125219628702, -37.97947548462757],
-                            'type': 'Point',
+                        "geometry": {
+                            "coordinates": [177.07125219628702, -37.97947548462757],
+                            "type": "Point",
                         },
-                        'id': 'D::3',
-                        'properties': {
-                            'fid': 3,
-                            'macronated': 'N',
-                            'name': 'Tauwhare Pa',
-                            'name_ascii': 'Tauwhare Pa',
-                            't50_fid': 2426273,
+                        "id": "D::3",
+                        "properties": {
+                            "fid": 3,
+                            "macronated": "N",
+                            "name": "Tauwhare Pa",
+                            "name_ascii": "Tauwhare Pa",
+                            "t50_fid": 2426273,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {'coordinates': [0.0, 0.0], 'type': 'Point'},
-                        'id': 'I::9999',
-                        'properties': {
-                            'fid': 9999,
-                            'macronated': '0',
-                            'name': 'Te Motu-a-kore',
-                            'name_ascii': 'Te Motu-a-kore',
-                            't50_fid': 9999999,
+                        "geometry": {"coordinates": [0.0, 0.0], "type": "Point"},
+                        "id": "I::9999",
+                        "properties": {
+                            "fid": 9999,
+                            "macronated": "0",
+                            "name": "Te Motu-a-kore",
+                            "name_ascii": "Te Motu-a-kore",
+                            "t50_fid": 9999999,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                 ],
-                'type': 'FeatureCollection',
+                "type": "FeatureCollection",
             }
 
         elif output_format == "json":
@@ -291,13 +291,13 @@ def test_diff_reprojection(
         )
 
         def _check_geojson(featurecollection):
-            features = featurecollection['features']
+            features = featurecollection["features"]
             assert len(features) == 2
-            assert features[0]['geometry']['coordinates'] == [
+            assert features[0]["geometry"]["coordinates"] == [
                 1958227.0621957763,
                 5787640.540304652,
             ]
-            assert features[1]['geometry']['coordinates'] == [
+            assert features[1]["geometry"]["coordinates"] == [
                 1958227.0621957763,
                 5787640.540304652,
             ]
@@ -326,7 +326,7 @@ def test_diff_reprojection(
 
         elif output_format == "html":
             odata = _check_html_output(r.stdout)
-            _check_geojson(odata['nz_pa_points_topo_150k'])
+            _check_geojson(odata["nz_pa_points_topo_150k"])
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
@@ -368,24 +368,24 @@ def test_diff_polygons(
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                '--- nz_waca_adjustments:feature:1424927',
-                '+++ nz_waca_adjustments:feature:9998',
-                '--- nz_waca_adjustments:feature:1443053',
-                '+++ nz_waca_adjustments:feature:1443053',
-                '-                            date_adjusted = 2011-05-10T12:09:10Z',
-                '+                            date_adjusted = 2019-01-01T00:00:00Z',
-                '-                         survey_reference = ␀',
-                '+                         survey_reference = test',
-                '--- nz_waca_adjustments:feature:1452332',
-                '-                                     geom = MULTIPOLYGON(...)',
-                '-                            date_adjusted = 2011-06-07T15:22:58Z',
-                '-                         survey_reference = ␀',
-                '-                           adjusted_nodes = 558',
-                '+++ nz_waca_adjustments:feature:9999999',
-                '+                                     geom = POLYGON(...)',
-                '+                            date_adjusted = 2019-07-05T13:04:00+01:00',
-                '+                         survey_reference = Null Island™ 🗺',
-                '+                           adjusted_nodes = 123',
+                "--- nz_waca_adjustments:feature:1424927",
+                "+++ nz_waca_adjustments:feature:9998",
+                "--- nz_waca_adjustments:feature:1443053",
+                "+++ nz_waca_adjustments:feature:1443053",
+                "-                            date_adjusted = 2011-05-10T12:09:10Z",
+                "+                            date_adjusted = 2019-01-01T00:00:00Z",
+                "-                         survey_reference = ␀",
+                "+                         survey_reference = test",
+                "--- nz_waca_adjustments:feature:1452332",
+                "-                                     geom = MULTIPOLYGON(...)",
+                "-                            date_adjusted = 2011-06-07T15:22:58Z",
+                "-                         survey_reference = ␀",
+                "-                           adjusted_nodes = 558",
+                "+++ nz_waca_adjustments:feature:9999999",
+                "+                                     geom = POLYGON(...)",
+                "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
+                "+                         survey_reference = Null Island™ 🗺",
+                "+                           adjusted_nodes = 123",
             ]
 
         elif output_format == "geojson":
@@ -393,10 +393,10 @@ def test_diff_polygons(
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
-                'features': [
+                "features": [
                     {
-                        'geometry': {
-                            'coordinates': [
+                        "geometry": {
+                            "coordinates": [
                                 [
                                     [
                                         [175.36501955, -37.8677371333],
@@ -420,20 +420,20 @@ def test_diff_polygons(
                                     ]
                                 ]
                             ],
-                            'type': 'MultiPolygon',
+                            "type": "MultiPolygon",
                         },
-                        'id': 'U-::1424927',
-                        'properties': {
-                            'adjusted_nodes': 1122,
-                            'date_adjusted': '2011-03-25T07:30:45Z',
-                            'id': 1424927,
-                            'survey_reference': None,
+                        "id": "U-::1424927",
+                        "properties": {
+                            "adjusted_nodes": 1122,
+                            "date_adjusted": "2011-03-25T07:30:45Z",
+                            "id": 1424927,
+                            "survey_reference": None,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [
+                        "geometry": {
+                            "coordinates": [
                                 [
                                     [
                                         [175.36501955, -37.8677371333],
@@ -457,20 +457,20 @@ def test_diff_polygons(
                                     ]
                                 ]
                             ],
-                            'type': 'MultiPolygon',
+                            "type": "MultiPolygon",
                         },
-                        'id': 'U+::9998',
-                        'properties': {
-                            'adjusted_nodes': 1122,
-                            'date_adjusted': '2011-03-25T07:30:45Z',
-                            'id': 9998,
-                            'survey_reference': None,
+                        "id": "U+::9998",
+                        "properties": {
+                            "adjusted_nodes": 1122,
+                            "date_adjusted": "2011-03-25T07:30:45Z",
+                            "id": 9998,
+                            "survey_reference": None,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [
+                        "geometry": {
+                            "coordinates": [
                                 [
                                     [
                                         [174.2166180833, -39.1160069167],
@@ -487,20 +487,20 @@ def test_diff_polygons(
                                     ]
                                 ]
                             ],
-                            'type': 'MultiPolygon',
+                            "type": "MultiPolygon",
                         },
-                        'id': 'U-::1443053',
-                        'properties': {
-                            'adjusted_nodes': 1238,
-                            'date_adjusted': '2011-05-10T12:09:10Z',
-                            'id': 1443053,
-                            'survey_reference': None,
+                        "id": "U-::1443053",
+                        "properties": {
+                            "adjusted_nodes": 1238,
+                            "date_adjusted": "2011-05-10T12:09:10Z",
+                            "id": 1443053,
+                            "survey_reference": None,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [
+                        "geometry": {
+                            "coordinates": [
                                 [
                                     [
                                         [174.2166180833, -39.1160069167],
@@ -517,20 +517,20 @@ def test_diff_polygons(
                                     ]
                                 ]
                             ],
-                            'type': 'MultiPolygon',
+                            "type": "MultiPolygon",
                         },
-                        'id': 'U+::1443053',
-                        'properties': {
-                            'adjusted_nodes': 1238,
-                            'date_adjusted': '2019-01-01T00:00:00Z',
-                            'id': 1443053,
-                            'survey_reference': 'test',
+                        "id": "U+::1443053",
+                        "properties": {
+                            "adjusted_nodes": 1238,
+                            "date_adjusted": "2019-01-01T00:00:00Z",
+                            "id": 1443053,
+                            "survey_reference": "test",
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [
+                        "geometry": {
+                            "coordinates": [
                                 [
                                     [
                                         [174.7311576833, -36.79928385],
@@ -560,20 +560,20 @@ def test_diff_polygons(
                                     ]
                                 ]
                             ],
-                            'type': 'MultiPolygon',
+                            "type": "MultiPolygon",
                         },
-                        'id': 'D::1452332',
-                        'properties': {
-                            'adjusted_nodes': 558,
-                            'date_adjusted': '2011-06-07T15:22:58Z',
-                            'id': 1452332,
-                            'survey_reference': None,
+                        "id": "D::1452332",
+                        "properties": {
+                            "adjusted_nodes": 558,
+                            "date_adjusted": "2011-06-07T15:22:58Z",
+                            "id": 1452332,
+                            "survey_reference": None,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': {
-                            'coordinates': [
+                        "geometry": {
+                            "coordinates": [
                                 [
                                     [0.0, 0.0],
                                     [0.0, 0.001],
@@ -582,19 +582,19 @@ def test_diff_polygons(
                                     [0.0, 0.0],
                                 ]
                             ],
-                            'type': 'Polygon',
+                            "type": "Polygon",
                         },
-                        'id': 'I::9999999',
-                        'properties': {
-                            'adjusted_nodes': 123,
-                            'date_adjusted': '2019-07-05T13:04:00+01:00',
-                            'id': 9999999,
-                            'survey_reference': 'Null Island™ 🗺',
+                        "id": "I::9999999",
+                        "properties": {
+                            "adjusted_nodes": 123,
+                            "date_adjusted": "2019-07-05T13:04:00+01:00",
+                            "id": 9999999,
+                            "survey_reference": "Null Island™ 🗺",
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                 ],
-                'type': 'FeatureCollection',
+                "type": "FeatureCollection",
             }
 
         elif output_format == "json":
@@ -705,38 +705,38 @@ def test_diff_table(
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                '--- countiestbl:feature:1',
-                '+++ countiestbl:feature:9998',
-                '--- countiestbl:feature:2',
-                '+++ countiestbl:feature:2',
-                '-                                     NAME = Ferry',
-                '+                                     NAME = test',
-                '-                                  POP2000 = 7199.0',
-                '+                                  POP2000 = 9867.0',
-                '--- countiestbl:feature:3',
-                '-                                     NAME = Stevens',
-                '-                               STATE_NAME = Washington',
-                '-                               STATE_FIPS = 53',
-                '-                                CNTY_FIPS = 065',
-                '-                                     FIPS = 53065',
-                '-                                     AREA = 2529.9794',
-                '-                                  POP1990 = 30948.0',
-                '-                                  POP2000 = 40652.0',
-                '-                               POP90_SQMI = 12',
-                '-                               Shape_Leng = 4.876296245235406',
-                '-                               Shape_Area = 0.7954858988987561',
-                '+++ countiestbl:feature:9999',
-                '+                                     NAME = Lake of the Gruffalo',
-                '+                               STATE_NAME = Minnesota',
-                '+                               STATE_FIPS = 27',
-                '+                                CNTY_FIPS = 077',
-                '+                                     FIPS = 27077',
-                '+                                     AREA = 1784.0634',
-                '+                                  POP1990 = 4076.0',
-                '+                                  POP2000 = 4651.0',
-                '+                               POP90_SQMI = 2',
-                '+                               Shape_Leng = 4.05545998243992',
-                '+                               Shape_Area = 0.565449933741451',
+                "--- countiestbl:feature:1",
+                "+++ countiestbl:feature:9998",
+                "--- countiestbl:feature:2",
+                "+++ countiestbl:feature:2",
+                "-                                     NAME = Ferry",
+                "+                                     NAME = test",
+                "-                                  POP2000 = 7199.0",
+                "+                                  POP2000 = 9867.0",
+                "--- countiestbl:feature:3",
+                "-                                     NAME = Stevens",
+                "-                               STATE_NAME = Washington",
+                "-                               STATE_FIPS = 53",
+                "-                                CNTY_FIPS = 065",
+                "-                                     FIPS = 53065",
+                "-                                     AREA = 2529.9794",
+                "-                                  POP1990 = 30948.0",
+                "-                                  POP2000 = 40652.0",
+                "-                               POP90_SQMI = 12",
+                "-                               Shape_Leng = 4.876296245235406",
+                "-                               Shape_Area = 0.7954858988987561",
+                "+++ countiestbl:feature:9999",
+                "+                                     NAME = Lake of the Gruffalo",
+                "+                               STATE_NAME = Minnesota",
+                "+                               STATE_FIPS = 27",
+                "+                                CNTY_FIPS = 077",
+                "+                                     FIPS = 27077",
+                "+                                     AREA = 1784.0634",
+                "+                                  POP1990 = 4076.0",
+                "+                                  POP2000 = 4651.0",
+                "+                               POP90_SQMI = 2",
+                "+                               Shape_Leng = 4.05545998243992",
+                "+                               Shape_Area = 0.565449933741451",
             ]
 
         elif output_format == "geojson":
@@ -744,123 +744,123 @@ def test_diff_table(
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
-                'features': [
+                "features": [
                     {
-                        'geometry': None,
-                        'id': 'U-::1',
-                        'properties': {
-                            'AREA': 1784.0634,
-                            'CNTY_FIPS': '077',
-                            'FIPS': '27077',
-                            'NAME': 'Lake of the Woods',
-                            'OBJECTID': 1,
-                            'POP1990': 4076.0,
-                            'POP2000': 4651.0,
-                            'POP90_SQMI': 2,
-                            'STATE_FIPS': '27',
-                            'STATE_NAME': 'Minnesota',
-                            'Shape_Area': 0.5654499337414509,
-                            'Shape_Leng': 4.055459982439919,
+                        "geometry": None,
+                        "id": "U-::1",
+                        "properties": {
+                            "AREA": 1784.0634,
+                            "CNTY_FIPS": "077",
+                            "FIPS": "27077",
+                            "NAME": "Lake of the Woods",
+                            "OBJECTID": 1,
+                            "POP1990": 4076.0,
+                            "POP2000": 4651.0,
+                            "POP90_SQMI": 2,
+                            "STATE_FIPS": "27",
+                            "STATE_NAME": "Minnesota",
+                            "Shape_Area": 0.5654499337414509,
+                            "Shape_Leng": 4.055459982439919,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': None,
-                        'id': 'U+::9998',
-                        'properties': {
-                            'AREA': 1784.0634,
-                            'CNTY_FIPS': '077',
-                            'FIPS': '27077',
-                            'NAME': 'Lake of the Woods',
-                            'OBJECTID': 9998,
-                            'POP1990': 4076.0,
-                            'POP2000': 4651.0,
-                            'POP90_SQMI': 2,
-                            'STATE_FIPS': '27',
-                            'STATE_NAME': 'Minnesota',
-                            'Shape_Area': 0.5654499337414509,
-                            'Shape_Leng': 4.055459982439919,
+                        "geometry": None,
+                        "id": "U+::9998",
+                        "properties": {
+                            "AREA": 1784.0634,
+                            "CNTY_FIPS": "077",
+                            "FIPS": "27077",
+                            "NAME": "Lake of the Woods",
+                            "OBJECTID": 9998,
+                            "POP1990": 4076.0,
+                            "POP2000": 4651.0,
+                            "POP90_SQMI": 2,
+                            "STATE_FIPS": "27",
+                            "STATE_NAME": "Minnesota",
+                            "Shape_Area": 0.5654499337414509,
+                            "Shape_Leng": 4.055459982439919,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': None,
-                        'id': 'U-::2',
-                        'properties': {
-                            'AREA': 2280.2319,
-                            'CNTY_FIPS': '019',
-                            'FIPS': '53019',
-                            'NAME': 'Ferry',
-                            'OBJECTID': 2,
-                            'POP1990': 6295.0,
-                            'POP2000': 7199.0,
-                            'POP90_SQMI': 3,
-                            'STATE_FIPS': '53',
-                            'STATE_NAME': 'Washington',
-                            'Shape_Area': 0.7180593026451161,
-                            'Shape_Leng': 3.786160993863997,
+                        "geometry": None,
+                        "id": "U-::2",
+                        "properties": {
+                            "AREA": 2280.2319,
+                            "CNTY_FIPS": "019",
+                            "FIPS": "53019",
+                            "NAME": "Ferry",
+                            "OBJECTID": 2,
+                            "POP1990": 6295.0,
+                            "POP2000": 7199.0,
+                            "POP90_SQMI": 3,
+                            "STATE_FIPS": "53",
+                            "STATE_NAME": "Washington",
+                            "Shape_Area": 0.7180593026451161,
+                            "Shape_Leng": 3.786160993863997,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': None,
-                        'id': 'U+::2',
-                        'properties': {
-                            'AREA': 2280.2319,
-                            'CNTY_FIPS': '019',
-                            'FIPS': '53019',
-                            'NAME': 'test',
-                            'OBJECTID': 2,
-                            'POP1990': 6295.0,
-                            'POP2000': 9867.0,
-                            'POP90_SQMI': 3,
-                            'STATE_FIPS': '53',
-                            'STATE_NAME': 'Washington',
-                            'Shape_Area': 0.7180593026451161,
-                            'Shape_Leng': 3.786160993863997,
+                        "geometry": None,
+                        "id": "U+::2",
+                        "properties": {
+                            "AREA": 2280.2319,
+                            "CNTY_FIPS": "019",
+                            "FIPS": "53019",
+                            "NAME": "test",
+                            "OBJECTID": 2,
+                            "POP1990": 6295.0,
+                            "POP2000": 9867.0,
+                            "POP90_SQMI": 3,
+                            "STATE_FIPS": "53",
+                            "STATE_NAME": "Washington",
+                            "Shape_Area": 0.7180593026451161,
+                            "Shape_Leng": 3.786160993863997,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': None,
-                        'id': 'D::3',
-                        'properties': {
-                            'AREA': 2529.9794,
-                            'CNTY_FIPS': '065',
-                            'FIPS': '53065',
-                            'NAME': 'Stevens',
-                            'OBJECTID': 3,
-                            'POP1990': 30948.0,
-                            'POP2000': 40652.0,
-                            'POP90_SQMI': 12,
-                            'STATE_FIPS': '53',
-                            'STATE_NAME': 'Washington',
-                            'Shape_Area': 0.7954858988987561,
-                            'Shape_Leng': 4.876296245235406,
+                        "geometry": None,
+                        "id": "D::3",
+                        "properties": {
+                            "AREA": 2529.9794,
+                            "CNTY_FIPS": "065",
+                            "FIPS": "53065",
+                            "NAME": "Stevens",
+                            "OBJECTID": 3,
+                            "POP1990": 30948.0,
+                            "POP2000": 40652.0,
+                            "POP90_SQMI": 12,
+                            "STATE_FIPS": "53",
+                            "STATE_NAME": "Washington",
+                            "Shape_Area": 0.7954858988987561,
+                            "Shape_Leng": 4.876296245235406,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                     {
-                        'geometry': None,
-                        'id': 'I::9999',
-                        'properties': {
-                            'AREA': 1784.0634,
-                            'CNTY_FIPS': '077',
-                            'FIPS': '27077',
-                            'NAME': 'Lake of the Gruffalo',
-                            'OBJECTID': 9999,
-                            'POP1990': 4076.0,
-                            'POP2000': 4651.0,
-                            'POP90_SQMI': 2,
-                            'STATE_FIPS': '27',
-                            'STATE_NAME': 'Minnesota',
-                            'Shape_Area': 0.565449933741451,
-                            'Shape_Leng': 4.05545998243992,
+                        "geometry": None,
+                        "id": "I::9999",
+                        "properties": {
+                            "AREA": 1784.0634,
+                            "CNTY_FIPS": "077",
+                            "FIPS": "27077",
+                            "NAME": "Lake of the Gruffalo",
+                            "OBJECTID": 9999,
+                            "POP1990": 4076.0,
+                            "POP2000": 4651.0,
+                            "POP90_SQMI": 2,
+                            "STATE_FIPS": "27",
+                            "STATE_NAME": "Minnesota",
+                            "Shape_Area": 0.565449933741451,
+                            "Shape_Leng": 4.05545998243992,
                         },
-                        'type': 'Feature',
+                        "type": "Feature",
                     },
                 ],
-                'type': 'FeatureCollection',
+                "type": "FeatureCollection",
             }
 
         elif output_format == "json":
@@ -1038,15 +1038,15 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
 
             change_ids = {
                 (
-                    f.get('-', {}).get(H.POINTS.LAYER_PK),
-                    f.get('+', {}).get(H.POINTS.LAYER_PK),
+                    f.get("-", {}).get(H.POINTS.LAYER_PK),
+                    f.get("+", {}).get(H.POINTS.LAYER_PK),
                 )
                 for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert change_ids == CHANGE_IDS
             # this commit _adds_ names
             change_names = {
-                (f['-']["name"], f['+']["name"])
+                (f["-"]["name"], f["+"]["name"])
                 for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert not any(n[0] for n in change_names)
@@ -1060,15 +1060,15 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             assert len(odata[H.POINTS.LAYER]["feature"]) == 5
             change_ids = {
                 (
-                    f.get('-', {}).get(H.POINTS.LAYER_PK),
-                    f.get('+', {}).get(H.POINTS.LAYER_PK),
+                    f.get("-", {}).get(H.POINTS.LAYER_PK),
+                    f.get("+", {}).get(H.POINTS.LAYER_PK),
                 )
                 for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert change_ids == CHANGE_IDS
             # so names are _removed_
             change_names = {
-                (f['-']["name"], f['+']["name"])
+                (f["-"]["name"], f["+"]["name"])
                 for f in odata[H.POINTS.LAYER]["feature"]
             }
             assert all(n[0] for n in change_names)
@@ -1129,8 +1129,8 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
         def _extract(diff_json):
             ds = {}
             for f in odata["editing"]["feature"]:
-                old = f.get('-')
-                new = f.get('+')
+                old = f.get("-")
+                new = f.get("+")
                 pk = old["id"] if old else new["id"]
                 v_old = old["value"] if old else None
                 v_new = new["value"] if new else None
@@ -1143,15 +1143,15 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
         odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
         ddata = _extract(odata)
         assert ddata == {
-            1: ('a1', 'a'),
-            3: ('c', 'c1'),
-            4: ('d1', 'd2'),
-            5: ('e1', None),
-            6: (None, 'f'),
-            8: ('h', 'h1'),
-            9: ('i', None),
-            11: (None, 'k'),
-            12: (None, 'l1'),
+            1: ("a1", "a"),
+            3: ("c", "c1"),
+            4: ("d1", "d2"),
+            5: ("e1", None),
+            6: (None, "f"),
+            8: ("h", "h1"),
+            9: ("i", None),
+            11: (None, "k"),
+            12: (None, "l1"),
         }
 
         # changes from HEAD^1 (R0 -> WC)
@@ -1355,66 +1355,66 @@ def test_show_points_HEAD(
         r = cli_runner.invoke(["show", f"--output-format={output_format}", "HEAD"])
         assert r.exit_code == 0, r.stderr
 
-        if output_format == 'text':
+        if output_format == "text":
             commit_hash = r.stdout[7:47]
             assert r.stdout.splitlines() == [
-                f'commit {commit_hash}',
-                'Author: Robert Coup <robert@coup.net.nz>',
-                'Date:   Thu Jun 20 15:28:33 2019 +0100',
-                '',
-                '    Improve naming on Coromandel East coast',
-                '',
-                '--- nz_pa_points_topo_150k:feature:1095',
-                '+++ nz_pa_points_topo_150k:feature:1095',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Harataunga (Rakairoa)',
-                '',
-                '-                               macronated = N',
-                '+                               macronated = Y',
-                '-                                     name = ␀',
-                '+                                     name = Harataunga (Rākairoa)',
-                '',
-                '--- nz_pa_points_topo_150k:feature:1166',
-                '+++ nz_pa_points_topo_150k:feature:1166',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Oturu',
-                '-                                     name = ␀',
-                '+                                     name = Oturu',
-                '--- nz_pa_points_topo_150k:feature:1168',
-                '+++ nz_pa_points_topo_150k:feature:1168',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Tairua',
-                '-                                     name = ␀',
-                '+                                     name = Tairua',
-                '--- nz_pa_points_topo_150k:feature:1181',
-                '+++ nz_pa_points_topo_150k:feature:1181',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
-                '-                               macronated = N',
-                '+                               macronated = Y',
-                '-                                     name = ␀',
-                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
-                '--- nz_pa_points_topo_150k:feature:1182',
-                '+++ nz_pa_points_topo_150k:feature:1182',
-                '-                               name_ascii = ␀',
-                '+                               name_ascii = Ko Te Ra Matiti (Wharekaho)',
-                '-                               macronated = N',
-                '+                               macronated = Y',
-                '-                                     name = ␀',
-                '+                                     name = Ko Te Rā Matiti (Wharekaho)',
+                f"commit {commit_hash}",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                "Date:   Thu Jun 20 15:28:33 2019 +0100",
+                "",
+                "    Improve naming on Coromandel East coast",
+                "",
+                "--- nz_pa_points_topo_150k:feature:1095",
+                "+++ nz_pa_points_topo_150k:feature:1095",
+                "-                               name_ascii = ␀",
+                "+                               name_ascii = Harataunga (Rakairoa)",
+                "",
+                "-                               macronated = N",
+                "+                               macronated = Y",
+                "-                                     name = ␀",
+                "+                                     name = Harataunga (Rākairoa)",
+                "",
+                "--- nz_pa_points_topo_150k:feature:1166",
+                "+++ nz_pa_points_topo_150k:feature:1166",
+                "-                               name_ascii = ␀",
+                "+                               name_ascii = Oturu",
+                "-                                     name = ␀",
+                "+                                     name = Oturu",
+                "--- nz_pa_points_topo_150k:feature:1168",
+                "+++ nz_pa_points_topo_150k:feature:1168",
+                "-                               name_ascii = ␀",
+                "+                               name_ascii = Tairua",
+                "-                                     name = ␀",
+                "+                                     name = Tairua",
+                "--- nz_pa_points_topo_150k:feature:1181",
+                "+++ nz_pa_points_topo_150k:feature:1181",
+                "-                               name_ascii = ␀",
+                "+                               name_ascii = Ko Te Ra Matiti (Wharekaho)",
+                "-                               macronated = N",
+                "+                               macronated = Y",
+                "-                                     name = ␀",
+                "+                                     name = Ko Te Rā Matiti (Wharekaho)",
+                "--- nz_pa_points_topo_150k:feature:1182",
+                "+++ nz_pa_points_topo_150k:feature:1182",
+                "-                               name_ascii = ␀",
+                "+                               name_ascii = Ko Te Ra Matiti (Wharekaho)",
+                "-                               macronated = N",
+                "+                               macronated = Y",
+                "-                                     name = ␀",
+                "+                                     name = Ko Te Rā Matiti (Wharekaho)",
             ]
 
-        elif output_format == 'json':
+        elif output_format == "json":
             j = json.loads(r.stdout)
             # check the diff's present, but this test doesn't need to have hundreds of lines
             # to know exactly what it is (we have diff tests above)
-            assert 'sno.diff/v1+hexwkb' in j
-            assert j['sno.show/v1'] == {
-                'authorEmail': 'robert@coup.net.nz',
-                'authorName': 'Robert Coup',
-                'authorTime': '2019-06-20T14:28:33Z',
-                'authorTimeOffset': '+01:00',
-                'message': 'Improve naming on Coromandel East coast',
+            assert "sno.diff/v1+hexwkb" in j
+            assert j["sno.show/v1"] == {
+                "authorEmail": "robert@coup.net.nz",
+                "authorName": "Robert Coup",
+                "authorTime": "2019-06-20T14:28:33Z",
+                "authorTimeOffset": "+01:00",
+                "message": "Improve naming on Coromandel East coast",
             }
 
 
@@ -1434,38 +1434,38 @@ def test_show_polygons_initial(
         )
         assert r.exit_code == 0, r.stderr
 
-        if output_format == 'text':
+        if output_format == "text":
             lines = r.stdout.splitlines()
 
             assert lines[0:6] == [
-                'commit 1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec',
-                'Author: Robert Coup <robert@coup.net.nz>',
-                'Date:   Mon Jul 22 12:05:39 2019 +0100',
-                '',
-                '    Import from nz-waca-adjustments.gpkg',
-                '',
+                "commit 1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                "Date:   Mon Jul 22 12:05:39 2019 +0100",
+                "",
+                "    Import from nz-waca-adjustments.gpkg",
+                "",
             ]
 
-            assert '+++ nz_waca_adjustments:meta:title' in lines
-            index = lines.index('+++ nz_waca_adjustments:meta:title')
+            assert "+++ nz_waca_adjustments:meta:title" in lines
+            index = lines.index("+++ nz_waca_adjustments:meta:title")
             assert lines[index : index + 2] == [
-                '+++ nz_waca_adjustments:meta:title',
+                "+++ nz_waca_adjustments:meta:title",
                 '+ "NZ WACA Adjustments"',
             ]
 
-            assert '+++ nz_waca_adjustments:feature:1424927' in lines
-            index = lines.index('+++ nz_waca_adjustments:feature:1424927')
+            assert "+++ nz_waca_adjustments:feature:1424927" in lines
+            index = lines.index("+++ nz_waca_adjustments:feature:1424927")
             assert lines[index : index + 5] == [
-                '+++ nz_waca_adjustments:feature:1424927',
-                '+                                     geom = MULTIPOLYGON(...)',
-                '+                            date_adjusted = 2011-03-25T07:30:45Z',
-                '+                         survey_reference = ␀',
-                '+                           adjusted_nodes = 1122',
+                "+++ nz_waca_adjustments:feature:1424927",
+                "+                                     geom = MULTIPOLYGON(...)",
+                "+                            date_adjusted = 2011-03-25T07:30:45Z",
+                "+                         survey_reference = ␀",
+                "+                           adjusted_nodes = 1122",
             ]
 
-        elif output_format == 'json':
+        elif output_format == "json":
             j = json.loads(r.stdout)
-            assert 'sno.diff/v1+hexwkb' in j
+            assert "sno.diff/v1+hexwkb" in j
             assert j["sno.show/v1"] == {
                 "authorEmail": "robert@coup.net.nz",
                 "authorName": "Robert Coup",
@@ -1499,13 +1499,13 @@ def test_create_patch(repo_version, data_archive_readonly, cli_runner):
         j = json.loads(r.stdout)
         # check the diff's present, but this test doesn't need to have hundreds of lines
         # to know exactly what it is (we have diff tests above)
-        assert 'sno.diff/v1+hexwkb' in j
-        assert j['sno.patch/v1'] == {
-            'authorEmail': 'robert@coup.net.nz',
-            'authorName': 'Robert Coup',
-            'authorTime': '2019-06-20T14:28:33Z',
-            'authorTimeOffset': '+01:00',
-            'message': 'Improve naming on Coromandel East coast',
+        assert "sno.diff/v1+hexwkb" in j
+        assert j["sno.patch/v1"] == {
+            "authorEmail": "robert@coup.net.nz",
+            "authorName": "Robert Coup",
+            "authorTime": "2019-06-20T14:28:33Z",
+            "authorTimeOffset": "+01:00",
+            "message": "Improve naming on Coromandel East coast",
         }
 
 

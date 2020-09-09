@@ -14,9 +14,9 @@ from .repo_files import RepoState
 
 def ungeojson_feature(feature, dataset):
     """Given a geojson feature belonging to dataset, returns the feature as a dict containing a gpkg geometry."""
-    result = copy.deepcopy(feature['properties'])
+    result = copy.deepcopy(feature["properties"])
     if dataset.geom_column_name:
-        result[dataset.geom_column_name] = geojson_to_gpkg_geom(feature['geometry'])
+        result[dataset.geom_column_name] = geojson_to_gpkg_geom(feature["geometry"])
     return result
 
 

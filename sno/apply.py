@@ -93,7 +93,7 @@ def unjson_feature(geom_column_name, f):
 def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
     try:
         patch = json.load(patch_file)
-        json_diff = patch['sno.diff/v1+hexwkb']
+        json_diff = patch["sno.diff/v1+hexwkb"]
     except (KeyError, json.JSONDecodeError) as e:
         raise click.FileError("Failed to parse JSON patch file") from e
 
@@ -112,13 +112,13 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         meta_change_type = _meta_change_type(ds_diff_dict)
         check_change_supported(rs.version, dataset, ds_path, meta_change_type, commit)
 
-        meta_changes = ds_diff_dict.get('meta', {})
+        meta_changes = ds_diff_dict.get("meta", {})
 
         if meta_changes:
             meta_diff = DeltaDiff(
                 Delta(
-                    (k, v['-']) if '-' in v else None,
-                    (k, v.get('+')) if '+' in v else None,
+                    (k, v["-"]) if "-" in v else None,
+                    (k, v.get("+")) if "+" in v else None,
                 )
                 for (k, v) in meta_changes.items()
             )
@@ -133,7 +133,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             geom_columns = schema.geometry_columns
             geom_column_name = geom_columns[0].name if geom_columns else None
 
-        feature_changes = ds_diff_dict.get('feature', [])
+        feature_changes = ds_diff_dict.get("feature", [])
 
         def extract_key(feature):
             if feature is None:
@@ -142,8 +142,8 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
 
         def parse_delta(change):
             return Delta(
-                extract_key(unjson_feature(geom_column_name, change.get('-'))),
-                extract_key(unjson_feature(geom_column_name, change.get('+'))),
+                extract_key(unjson_feature(geom_column_name, change.get("-"))),
+                extract_key(unjson_feature(geom_column_name, change.get("+"))),
             )
 
         if feature_changes:
@@ -154,7 +154,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
 
     if commit:
         try:
-            metadata = patch['sno.patch/v1']
+            metadata = patch["sno.patch/v1"]
         except KeyError:
             # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
             raise click.UsageError(
@@ -163,27 +163,30 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
 
         author_kwargs = {}
         for k, patch_kwarg in (
-            ('time', 'authorTime'),
-            ('email', 'authorEmail'),
-            ('offset', 'authorTimeOffset'),
-            ('name', 'authorName'),
+            ("time", "authorTime"),
+            ("email", "authorEmail"),
+            ("offset", "authorTimeOffset"),
+            ("name", "authorName"),
         ):
             if patch_kwarg in metadata:
                 author_kwargs[k] = metadata[patch_kwarg]
 
-        if 'time' in author_kwargs:
-            author_kwargs['time'] = int(
-                datetime.timestamp(iso8601_utc_to_datetime(author_kwargs['time']))
+        if "time" in author_kwargs:
+            author_kwargs["time"] = int(
+                datetime.timestamp(iso8601_utc_to_datetime(author_kwargs["time"]))
             )
-        if 'offset' in author_kwargs:
-            author_kwargs['offset'] = int(
-                iso8601_tz_to_timedelta(author_kwargs['offset']).total_seconds()
+        if "offset" in author_kwargs:
+            author_kwargs["offset"] = int(
+                iso8601_tz_to_timedelta(author_kwargs["offset"]).total_seconds()
                 / 60  # minutes
             )
 
         author = author_signature(repo, **author_kwargs)
         oid = rs.commit(
-            repo_diff, metadata['message'], author=author, allow_empty=allow_empty,
+            repo_diff,
+            metadata["message"],
+            author=author,
+            allow_empty=allow_empty,
         )
         click.echo(f"Commit {oid.hex}")
 
@@ -200,7 +203,10 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
 @click.command()
 @click.pass_context
 @click.option(
-    "--commit/--no-commit", "commit", default=True, help="Commit changes",
+    "--commit/--no-commit",
+    "commit",
+    default=True,
+    help="Commit changes",
 )
 @click.option(
     "--allow-empty",
@@ -212,7 +218,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         "such a commit. This option bypasses the safety"
     ),
 )
-@click.argument("patch_file", type=click.File('r', encoding="utf-8"))
+@click.argument("patch_file", type=click.File("r", encoding="utf-8"))
 def apply(ctx, **kwargs):
     """
     Applies and commits the given JSON patch (as created by `sno show -o json`)

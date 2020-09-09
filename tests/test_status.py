@@ -102,7 +102,11 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {"branch": "myremote/master", "ahead": 0, "behind": 0,},
+                "upstream": {
+                    "branch": "myremote/master",
+                    "ahead": 0,
+                    "behind": 0,
+                },
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -133,7 +137,11 @@ def test_status(
                 "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
                 "abbrevCommit": "2a1b7be",
                 "branch": "master",
-                "upstream": {"branch": "myremote/master", "ahead": 0, "behind": 1,},
+                "upstream": {
+                    "branch": "myremote/master",
+                    "ahead": 0,
+                    "behind": 1,
+                },
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -158,7 +166,11 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {"branch": "myremote/master", "ahead": 1, "behind": 1,},
+                "upstream": {
+                    "branch": "myremote/master",
+                    "ahead": 1,
+                    "behind": 1,
+                },
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -182,7 +194,11 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
+                "upstream": {
+                    "branch": "myremote/master",
+                    "ahead": 2,
+                    "behind": 0,
+                },
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -218,12 +234,20 @@ def test_status(
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "master",
-                "upstream": {"branch": "myremote/master", "ahead": 2, "behind": 0,},
+                "upstream": {
+                    "branch": "myremote/master",
+                    "ahead": 2,
+                    "behind": 0,
+                },
                 "workingCopy": {
                     "path": str(wc),
                     "changes": {
                         "nz_pa_points_topo_150k": {
-                            "feature": {"inserts": 1, "updates": 3, "deletes": 2,},
+                            "feature": {
+                                "inserts": 1,
+                                "updates": 3,
+                                "deletes": 2,
+                            },
                         }
                     },
                 },
@@ -296,7 +320,7 @@ def test_status_merging(create_conflicts, cli_runner):
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
         assert json_status(cli_runner) == {
-            'sno.status/v1': {
+            "sno.status/v1": {
                 "abbrevCommit": ours.short_id,
                 "commit": ours.id.hex,
                 "branch": "ours_branch",

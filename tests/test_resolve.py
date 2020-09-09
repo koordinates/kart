@@ -144,8 +144,8 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
         theirs_geojson["properties"]["id"] = 98002
 
         resolution = {
-            'features': [ours_geojson, theirs_geojson],
-            'type': 'FeatureCollection',
+            "features": [ours_geojson, theirs_geojson],
+            "type": "FeatureCollection",
         }
         write_repo_file(repo, "resolution.geojson", json.dumps(resolution))
         r = cli_runner.invoke(
