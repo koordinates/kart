@@ -52,14 +52,8 @@ def query(ctx, path, command, params):
         if len(params) != 1:
             raise click.BadParameter(USAGE)
 
-        # need to get the type correct here, otherwise it won't be found after msgpack encoding
-        if dataset.primary_key_type == "INTEGER":
-            lookup = int(params[0])
-        else:
-            lookup = params[0]
-
         t0 = time.monotonic()
-        results = dataset.get_feature(lookup)
+        results = dataset.get_feature(params[0])
         t1 = time.monotonic()
 
     elif command == "geo-nearest":

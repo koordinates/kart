@@ -5,9 +5,9 @@ import click
 import pygit2
 
 from . import gpkg_adapter
+from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
 from .meta_items import META_ITEM_NAMES
-from .structure import DatasetStructure
 from .schema import Legend, Schema
 from .serialise_util import (
     msg_pack,
@@ -38,7 +38,7 @@ def find_blobs_in_tree(tree, max_depth=4):
 _blob_to_memoryview = memoryview
 
 
-class Dataset2(DatasetStructure):
+class Dataset2(RichBaseDataset):
     """
     - Uses messagePack to serialise features.
     - Stores each feature in a blob with path dependent on primary key values.
@@ -86,46 +86,6 @@ class Dataset2(DatasetStructure):
     def version(self):
         return 2
 
-    @property
-    @functools.lru_cache(maxsize=1)
-    def feature_tree(self):
-        return self.tree / self.FEATURE_PATH
-
-    def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False):
-        """
-        Return the data at the given relative path from within this dataset.
-
-        Data is usually returned as a bytestring.
-        If as_memoryview=True is given, data is returned as a memoryview instead
-        (this avoids a copy, so can make loops more efficient for many rows)
-        """
-        leaf = None
-        try:
-            leaf = self.tree / str(rel_path)
-        except KeyError:
-            pass
-        else:
-            if leaf.type_str == 'blob':
-                if as_memoryview:
-                    try:
-                        return _blob_to_memoryview(leaf)
-                    except TypeError:
-                        pass
-                else:
-                    try:
-                        return leaf.data
-                    except AttributeError:
-                        pass
-        # if we got here, that means leaf wasn't a blob, or one of the above
-        # exceptions happened...
-        if missing_ok:
-            return None
-        raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
-
-    def meta_items(self, include_hidden=False):
-        exclude = () if include_hidden else ("legend", "version")
-        return self._meta_items(exclude=exclude)
-
     @functools.lru_cache()
     def get_meta_item(self, name):
         if name == "version":
@@ -148,7 +108,9 @@ class Dataset2(DatasetStructure):
         return gpkg_adapter.generate_gpkg_meta_item(self, name, self.table_name)
 
     def crs_definitions(self):
-        """Return all stored crs definitions in a dict."""
+        """Yields (identifier, definition) for all CRS definitions in this dataset."""
+        if not self.tree or self.CRS_PATH not in self.tree:
+            return
         for blob in find_blobs_in_tree(self.tree / self.CRS_PATH):
             # -4 -> Remove ".wkt"
             yield blob.name[:-4], ensure_text(blob.data)
@@ -166,14 +128,6 @@ class Dataset2(DatasetStructure):
         Dataset2 doesn't write the data.
         """
         return self.full_path(self.LEGEND_PATH + legend.hexhash()), legend.dumps()
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def crs_identifier(self):
-        for col in self.schema:
-            if col.data_type == "geometry":
-                return col.extra_type_info["geometryCRS"]
-        return None
 
     def encode_schema(self, schema):
         """

@@ -1,5 +1,3 @@
-import pytest
-
 from sno.dataset2 import Dataset2
 from sno.schema import Legend, ColumnSchema, Schema
 
@@ -8,41 +6,57 @@ DATASET_PATH = "path/to/dataset"
 EMPTY_DATASET = Dataset2(None, DATASET_PATH)
 
 
-def _blob_to_memoryview(blob):
-    return memoryview(blob.data)
-
-
-@pytest.fixture(autouse=True)
-def blob_memoryview(monkeypatch):
-    from sno import dataset2
-
-    monkeypatch.setattr(dataset2, '_blob_to_memoryview', _blob_to_memoryview)
-
-
-class DictTree:
+class MemoryTree:
     """
     A fake directory tree structure.
-    Contains a dict of all file data, {path: data}, and the current path.
+    Contains a dict - all_blobs - of all file data contained anywhere in this tree and its descendants.
     Supports only two operators:
-    self / "some/path" returns a fake subdirectory / descendant file.
-    self.data returns data of the current file, if there is a file at the current path.
+    ("some/path" in self) return True if a descendant tree or blob exists at the given path.
+    self / "some/path" returns either a descendant MemoryTree, or a descendant MemoryBlob.
     More complex directory navigation is not supported.
     """
 
-    def __init__(self, all_data, cur_path=""):
-        self.all_data = all_data
-        self.cur_path = cur_path
+    def __init__(self, all_blobs):
+        self.all_blobs = all_blobs
 
-        if all_data.get(cur_path) is not None:
-            self.data = all_data[cur_path]
-            self.type_str = 'blob'
-        else:
-            self.type_str = 'tree'
+    @property
+    def type_str(self):
+        return "tree"
+
+    def __contains__(self, path):
+        path = path.strip('/')
+        if path in self.all_blobs:
+            return True
+        dir_path = path + "/"
+        return any((p.startswith(dir_path) for p in self.all_blobs))
 
     def __truediv__(self, path):
-        if self.cur_path:
-            path = f"{self.cur_path.rstrip('/')}/{path}"
-        return DictTree(self.all_data, path)
+        path = path.strip('/')
+        if path in self.all_blobs:
+            return MemoryBlob(self.all_blobs[path])
+
+        dir_path = path + "/"
+        dir_path_len = len(dir_path)
+        subtree = {
+            p[dir_path_len:]: data
+            for p, data in self.all_blobs.items()
+            if p.startswith(dir_path)
+        }
+        if not subtree:
+            raise KeyError(f"Path not found: {path}")
+        return MemoryTree(subtree)
+
+
+class MemoryBlob(bytes):
+    """Test-only implementation of pygit2.Blob. Supports self.data and memoryview(self)."""
+
+    @property
+    def data(self):
+        return self
+
+    @property
+    def type_str(self):
+        return "blob"
 
 
 def test_legend_roundtrip():
@@ -54,7 +68,7 @@ def test_legend_roundtrip():
     assert roundtripped == orig
 
     path, data = EMPTY_DATASET.encode_legend(orig)
-    tree = DictTree({path: data})
+    tree = MemoryTree({path: data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     roundtripped = dataset2.get_legend(orig.hexhash())
@@ -96,7 +110,7 @@ def test_raw_feature_roundtrip():
     feature_path, feature_data = EMPTY_DATASET.encode_raw_feature_dict(
         raw_feature_dict, legend
     )
-    tree = DictTree({legend_path: legend_data, feature_path: feature_data})
+    tree = MemoryTree({legend_path: legend_data, feature_path: feature_data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
@@ -114,7 +128,7 @@ def test_raw_feature_roundtrip():
     _, empty_feature_data = EMPTY_DATASET.encode_raw_feature_dict(
         empty_feature_dict, legend
     )
-    tree = DictTree({legend_path: legend_data, feature_path: empty_feature_data})
+    tree = MemoryTree({legend_path: legend_data, feature_path: empty_feature_data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     roundtripped = dataset2.get_raw_feature_dict(path=feature_path)
@@ -149,7 +163,7 @@ def test_schema_roundtrip(gen_uuid):
     assert roundtripped == orig
 
     path, data = EMPTY_DATASET.encode_schema(orig)
-    tree = DictTree({path: data})
+    tree = MemoryTree({path: data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     roundtripped = dataset2.schema
@@ -185,7 +199,7 @@ def test_feature_roundtrip(gen_uuid):
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
-    tree = DictTree(
+    tree = MemoryTree(
         {schema_path: schema_data, legend_path: legend_data, feature_path: feature_data}
     )
 
@@ -240,7 +254,7 @@ def test_schema_change_roundtrip(gen_uuid):
     schema_path, schema_data = EMPTY_DATASET.encode_schema(new_schema)
     new_legend_path, new_legend_data = EMPTY_DATASET.encode_legend(new_schema.legend)
     old_legend_path, old_legend_data = EMPTY_DATASET.encode_legend(old_schema.legend)
-    tree = DictTree(
+    tree = MemoryTree(
         {
             schema_path: schema_data,
             new_legend_path: new_legend_data,

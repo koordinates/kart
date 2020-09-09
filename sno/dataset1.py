@@ -10,10 +10,12 @@ import pygit2
 
 from . import gpkg_adapter
 from .geometry import Geometry
-from .structure import DatasetStructure, IntegrityError
+from .base_dataset import IntegrityError
+from .rich_base_dataset import RichBaseDataset
+from .serialise_util import json_unpack
 
 
-class Dataset1(DatasetStructure):
+class Dataset1(RichBaseDataset):
     """
     - messagePack
     - primary key values
@@ -52,18 +54,17 @@ class Dataset1(DatasetStructure):
     def version(self):
         return 1
 
-    def gpkg_meta_items(self):
-        yield from self._meta_items()
-
     @functools.lru_cache()
     def get_gpkg_meta_item(self, name):
-        # Dataset V1 items are always JSON.
-        try:
-            return json.loads(super().get_meta_item(name))
-        except KeyError:
-            if gpkg_adapter.is_gpkg_meta_item(name):
-                return None  # We happen not to have this meta-item, but it is real.
-            raise  # This meta-item doesn't exist at all.
+        rel_path = self.META_PATH + name
+        data = self.get_data_at(
+            rel_path, missing_ok=gpkg_adapter.is_gpkg_meta_item(name)
+        )
+        if data is None:
+            return data
+
+        # Dataset 1 meta items are always JSON.
+        return json_unpack(data)
 
     def meta_items(self):
         return gpkg_adapter.all_v2_meta_items(self)
@@ -71,6 +72,9 @@ class Dataset1(DatasetStructure):
     @functools.lru_cache()
     def get_meta_item(self, name):
         return gpkg_adapter.generate_v2_meta_item(self, name)
+
+    def crs_definitions(self):
+        return gpkg_adapter.all_v2_crs_definitions(self)
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -103,14 +107,6 @@ class Dataset1(DatasetStructure):
     @property
     def primary_key(self):
         return self.get_gpkg_meta_item("primary_key")
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def crs_identifier(self):
-        for col_dict in self.get_meta_item("schema.json"):
-            if col_dict["dataType"] == "geometry":
-                return col_dict["geometryCRS"]
-        return None
 
     @property
     @functools.lru_cache(maxsize=1)

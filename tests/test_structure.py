@@ -10,8 +10,9 @@ import psycopg2
 import pygit2
 import pytest
 
-from sno import gpkg, structure, fast_import
+from sno import fast_import, gpkg, structure
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
+from sno.base_dataset import BaseDataset
 from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
@@ -51,11 +52,11 @@ V1_OR_V2 = ("repo_version", ["1", "2"])
 
 
 def test_dataset_versions():
-    assert structure.DatasetStructure.for_version(1) == Dataset1
-    assert structure.DatasetStructure.for_version(2) == Dataset2
+    assert BaseDataset.for_version(1) == Dataset1
+    assert BaseDataset.for_version(2) == Dataset2
 
     for choice in REPO_VERSIONS_CHOICE.choices:
-        assert structure.DatasetStructure.for_version(choice) is not None
+        assert BaseDataset.for_version(choice) is not None
 
 
 def _import_check(repo_path, table, source_gpkg, geopackage, repo_version=None):
@@ -839,9 +840,7 @@ def test_write_feature_performance(
 
             source = OgrImportSource.open(data / source_gpkg, table=table)
             with source:
-                dataset = structure.DatasetStructure.for_version(repo_version)(
-                    None, table
-                )
+                dataset = BaseDataset.for_version(repo_version)(None, table)
                 feature_iter = itertools.cycle(source.features())
 
                 index = pygit2.Index()

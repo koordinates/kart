@@ -10,7 +10,8 @@ import pygit2
 from . import git_util
 from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
-from .structure import DatasetStructure, RepositoryStructure
+from .base_dataset import BaseDataset
+from .structure import RepositoryStructure
 from .repository_version import get_repo_version, extra_blobs_for_version
 from .timestamps import minutes_to_tz_offset
 
@@ -137,8 +138,8 @@ def fast_import_tables(
                     ):
                         pass
 
-            dataset = DatasetStructure.for_version(repo_version)(
-                tree=None, path=source.dest_path
+            dataset = BaseDataset.instantiate(
+                tree=None, path=source.dest_path, version=repo_version
             )
 
             with source:

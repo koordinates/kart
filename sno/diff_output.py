@@ -47,7 +47,7 @@ def diff_output_text(*, output_path, **kwargs):
 
     Yields a callable which can be called with dataset diffs.
     The callable takes two arguments:
-        dataset: A sno.structure.DatasetStructure instance representing
+        dataset: A sno.base_dataset.BaseDataset instance representing
                  either the old or new version of the dataset.
         diff:    The sno.diff.Diff instance to serialize
 
