@@ -2,8 +2,6 @@ import contextlib
 
 import pygit2
 
-from .repository_version import get_repo_version, extra_blobs_for_version
-
 
 class RichTreeBuilder:
     """
@@ -13,7 +11,7 @@ class RichTreeBuilder:
     Conflicts are not detected.
     """
 
-    def __init__(self, repo, initial_root_tree, auto_include_version_blobs=True):
+    def __init__(self, repo, initial_root_tree):
         """
         The repo and an initial root tree which will be updated.
         All paths are specified relative to this tree - the root tree at a particular commit is a good choice.
@@ -26,11 +24,6 @@ class RichTreeBuilder:
         self.root_dict = {}
         self.cur_path = []
         self.path_stack = []
-
-        if auto_include_version_blobs and not self.root_tree:
-            extra_blobs = extra_blobs_for_version(get_repo_version(repo))
-            for path, blob in extra_blobs:
-                self.insert(path, blob)
 
     def _resolve_path(self, path):
         """

@@ -353,7 +353,7 @@ class Dataset2(RichBaseDataset):
         # as is the case when the dataset is first being created right now.
         meta_tree = self.meta_tree if self.tree is not None else ()
 
-        conflicts = False
+        has_conflicts = False
         with tree_builder.chdir(self.META_PATH):
             for delta in meta_diff.values():
                 name = delta.key
@@ -382,26 +382,26 @@ class Dataset2(RichBaseDataset):
 
                 # Conflict detection
                 if delta.type == "delete" and name not in meta_tree:
-                    conflicts = True
+                    has_conflicts = True
                     click.echo(
                         f"{self.path}: Trying to delete nonexistent meta item: {name}"
                     )
                     continue
                 if delta.type == "insert" and name in meta_tree:
-                    conflicts = True
+                    has_conflicts = True
                     click.echo(
                         f"{self.path}: Trying to create meta item that already exists: {name}"
                     )
                     continue
 
                 if delta.type == "update" and name not in meta_tree:
-                    conflicts = True
+                    has_conflicts = True
                     click.echo(
                         f"{self.path}: Trying to update nonexistent meta item: {name}"
                     )
                     continue
                 if delta.type == "update" and self.get_meta_item(name) != old_value:
-                    conflicts = True
+                    has_conflicts = True
                     click.echo(
                         f"{self.path}: Trying to update out-of-date meta item: {name}"
                     )
@@ -415,7 +415,7 @@ class Dataset2(RichBaseDataset):
                 else:
                     tree_builder.remove(name)
 
-        if conflicts:
+        if has_conflicts:
             raise InvalidOperation(
                 "Patch does not apply",
                 exit_code=PATCH_DOES_NOT_APPLY,

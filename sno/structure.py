@@ -12,7 +12,7 @@ from .exceptions import (
     NO_COMMIT,
 )
 from .rich_tree_builder import RichTreeBuilder
-from .repository_version import get_repo_version
+from .repository_version import get_repo_version, extra_blobs_for_version
 
 
 L = logging.getLogger("sno.structure")
@@ -195,6 +195,13 @@ class RepositoryStructure:
         """
         tree_builder = RichTreeBuilder(self.repo, self.tree)
         dataset_class = BaseDataset.for_version(self.version)
+
+        if not self.tree:
+            # This is the first commit to this branch - we may need to add extra blobs
+            # to the tree to mark this data as being of a particular version.
+            extra_blobs = extra_blobs_for_version(self.version)
+            for path, blob in extra_blobs:
+                tree_builder.insert(path, blob)
 
         for ds_path, ds_diff in repo_diff.items():
             schema_delta = ds_diff.recursive_get(["meta", "schema.json"])

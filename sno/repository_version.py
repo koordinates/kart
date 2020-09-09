@@ -1,10 +1,10 @@
 import itertools
 
 import click
-import pygit2
 import json
 
-from sno.core import walk_tree
+from . import git_util
+from .core import walk_tree
 
 REPO_VERSION_BLOB_PATH = ".sno.repository.version"
 REPO_VERSION_CONFIG_PATH = "sno.repository.version"
@@ -39,12 +39,9 @@ def get_repo_version(repo, tree=None, maybe_v0=True):
     (note that this is not user-visible in the file-system since we keep it hidden via sparse / bare checkouts).
     """
     if tree is None:
-        if repo.is_empty:
+        tree = git_util.get_head_tree(repo)
+        if tree is None:  # Empty repo / empty branch.
             return _get_repo_version_from_config(repo)
-        try:
-            tree = repo.head.peel(pygit2.Tree)
-        except pygit2.GitError:
-            return _get_repo_version_from_config(repo)  # Empty branch.
 
     if REPO_VERSION_BLOB_PATH not in tree:
         # Versions less than 2 don't have ".sno-version" files.

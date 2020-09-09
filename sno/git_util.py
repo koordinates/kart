@@ -7,35 +7,39 @@ from .timestamps import tz_offset_to_minutes
 
 
 def get_head_tree(repo):
-    """Returns the tree at the current repo HEAD."""
-    if repo.is_empty:
-        return None
-    try:
-        return repo.head.peel(pygit2.Tree)
-    except pygit2.GitError:
-        # This happens when the repo is not empty, but the current HEAD has no commits.
-        return None
+    """
+    Returns the tree at the current repo HEAD.
+    If there is no commit at HEAD - ie, head_is_unborn - returns None.
+    """
+    return None if repo.head_is_unborn else repo.head.peel(pygit2.Tree)
 
 
 def get_head_commit(repo):
-    """Returns the commit at the current repo HEAD."""
-    if repo.is_empty:
-        return None
-    try:
-        return repo.head.peel(pygit2.Commit)
-    except pygit2.GitError:
-        # This happens when the repo is not empty, but the current HEAD has no commits.
-        return None
+    """
+    Returns the commit at the current repo HEAD.
+    If there is no commit at HEAD - ie, head_is_unborn - returns None.
+    """
+    return None if repo.head_is_unborn else repo.head.peel(pygit2.Commit)
 
 
 def get_head_branch(repo):
     """
     Returns the branch that HEAD is currently on.
-    If HEAD is detached, returns None
+    If HEAD is detached - meaning not on any branch - returns None
     """
-    if repo.head_is_detached:
-        return None
-    return repo.references["HEAD"].target
+    return None if repo.head_is_detached else repo.references["HEAD"].target
+
+
+def get_head_branch_shorthand(repo):
+    """
+    Returns the shorthand for the branch that HEAD is currently on.
+    If HEAD is detached - meaning not on any branch - returns None
+    """
+    return (
+        None
+        if repo.head_is_detached
+        else repo.references["HEAD"].target.rsplit("/", 1)[-1]
+    )
 
 
 _GIT_VAR_OUTPUT_RE = re.compile(

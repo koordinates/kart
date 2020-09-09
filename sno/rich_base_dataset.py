@@ -303,7 +303,7 @@ class RichBaseDataset(BaseDataset):
         # as is the case when the dataset is first being created right now.
         tree = self.tree or ()
 
-        conflicts = False
+        has_conflicts = False
         for delta in feature_diff.values():
             old_key = delta.old_key
             new_key = delta.new_key
@@ -316,21 +316,21 @@ class RichBaseDataset(BaseDataset):
 
             # Conflict detection
             if delta.type == "delete" and old_path not in tree:
-                conflicts = True
+                has_conflicts = True
                 click.echo(
                     f"{self.path}: Trying to delete nonexistent feature: {old_key}"
                 )
                 continue
 
             if delta.type == "insert" and new_path in tree:
-                conflicts = True
+                has_conflicts = True
                 click.echo(
                     f"{self.path}: Trying to create feature that already exists: {new_key}"
                 )
                 continue
 
             if delta.type == "update" and old_path not in tree:
-                conflicts = True
+                has_conflicts = True
                 click.echo(
                     f"{self.path}: Trying to update nonexistent feature: {old_key}"
                 )
@@ -339,7 +339,7 @@ class RichBaseDataset(BaseDataset):
             if delta.type == "update" and not self._features_equal(
                 self.get_feature(old_key), delta.old_value, geom_column_name
             ):
-                conflicts = True
+                has_conflicts = True
                 click.echo(
                     f"{self.path}: Trying to update already-changed feature: {old_key}"
                 )
@@ -354,7 +354,7 @@ class RichBaseDataset(BaseDataset):
                 )
                 tree_builder.insert(path, data)
 
-        if conflicts:
+        if has_conflicts:
             raise InvalidOperation(
                 "Patch does not apply",
                 exit_code=PATCH_DOES_NOT_APPLY,

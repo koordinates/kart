@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 import click
 import pygit2
 
-from . import checkout
+from . import checkout, git_util
 from .exceptions import translate_subprocess_exit_code
 from .repository_version import get_repo_version
 from .working_copy import WorkingCopy
@@ -89,16 +89,12 @@ def clone(ctx, bare, wc_path, wc_version, do_progress, depth, url, directory):
         sys.exit(translate_subprocess_exit_code(e.returncode))
 
     repo = pygit2.Repository(str(repo_path.resolve()))
-    if repo.head_is_unborn:
-        # this happens when you clone an empty repo.
-        # HEAD points to `refs/heads/master`, but that doesn't exist yet.
-        # (but it gets created when you commit)
-        # Calling `repo.head` raises a GitError here, so we just hardcode this one
-        head_ref = "master"
-    else:
-        head_ref = repo.head.shorthand  # master, probably
-    repo.config[f"branch.{head_ref}.remote"] = "origin"
-    repo.config[f"branch.{head_ref}.merge"] = f"refs/heads/{head_ref}"
+
+    head_ref = git_util.get_head_branch_shorthand(repo)  # master, probably
+    if head_ref:
+        repo.config[f"branch.{head_ref}.remote"] = "origin"
+        repo.config[f"branch.{head_ref}.merge"] = f"refs/heads/{head_ref}"
+
     repo.config["sno.repository.version"] = get_repo_version(repo)
 
     WorkingCopy.write_config(repo, wc_path, bare)

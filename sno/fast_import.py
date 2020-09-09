@@ -61,11 +61,10 @@ def fast_import_tables(
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    head_tree = (
-        None
-        if replace_existing == ReplaceExisting.ALL
-        else git_util.get_head_tree(repo)
-    )
+    if replace_existing == ReplaceExisting.ALL:
+        head_tree = None
+    else:
+        head_tree = git_util.get_head_tree(repo)
 
     if not head_tree:
         # Starting from an effectively empty repo. Write the blobs needed for this repo version.
