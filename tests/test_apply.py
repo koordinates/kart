@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import tarfile
 
 import pygit2
 import pytest
@@ -353,35 +354,11 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
 
 @pytest.mark.slow
 def test_apply_benchmark(
-    data_working_copy, geopackage, benchmark, cli_runner, monkeypatch
+    data_working_copy, geopackage, benchmark, cli_runner, monkeypatch, tmp_path
 ):
     from sno import apply
 
     with data_working_copy("points") as (repo_dir, wc_path):
-        # Create a branch we can use later; don't switch to it
-        r = cli_runner.invoke(["branch", "-c", "savepoint"])
-        assert r.exit_code == 0, r.stderr
-
-        # Generate a large change and commit it
-        db = geopackage(wc_path)
-        cursor = db.cursor()
-        cursor.execute(
-            "UPDATE nz_pa_points_topo_150k SET name = 'bulk_' || Coalesce(name, 'null')"
-        )
-        r = cli_runner.invoke(["commit", "-m", "rename everything"])
-        assert r.exit_code == 0, r.stderr
-
-        # Make it into a patch
-        r = cli_runner.invoke(["create-patch", "HEAD"])
-        assert r.exit_code == 0, r.stderr
-        patch_text = r.stdout
-        patch_json = json.loads(patch_text)
-        assert patch_json["sno.patch/v1"]["message"] == "rename everything"
-
-        # Now switch to our savepoint branch and apply the patch
-        r = cli_runner.invoke(["checkout", "savepoint"])
-        assert r.exit_code == 0, r.stderr
-
         # wrap the apply command with benchmarking
         orig_apply_patch = apply.apply_patch
 
@@ -393,4 +370,7 @@ def test_apply_benchmark(
 
         monkeypatch.setattr(apply, "apply_patch", _benchmark_apply)
 
-        cli_runner.invoke(["apply", "-"], input=patch_text)
+        with tarfile.open(patches / "points-large.snopatch.tgz") as tar:
+            tar.extractall(path=tmp_path)
+            r = cli_runner.invoke(["apply", tmp_path / "points-large.snopatch"])
+            assert r.exit_code == 0, r.stderr
