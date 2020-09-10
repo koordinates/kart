@@ -43,7 +43,7 @@ class RepositoryStructure:
             f"{key} is a {obj.type_str}, not a commit or tree", exit_code=NO_COMMIT
         )
 
-    def __init__(self, repo, commit=None, tree=None):
+    def __init__(self, repo, commit=None, tree=None, version=None, dataset_class=None):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
@@ -58,6 +58,16 @@ class RepositoryStructure:
             self._tree = None
         else:
             self._commit = self.repo.head.peel(pygit2.Commit)
+
+        if version is not None:
+            self._version = version
+        else:
+            self._version = get_repo_version(self.repo, self.tree, maybe_v0=False)
+
+        if dataset_class is not None:
+            self._dataset_class = dataset_class
+        else:
+            self._dataset_class = BaseDataset.for_version(self._version)
 
     def __getitem__(self, path):
         """ Get a specific dataset by path """
@@ -80,11 +90,12 @@ class RepositoryStructure:
     @property
     def version(self):
         """Returns the dataset version to use for this entire repo."""
-        return get_repo_version(self.repo, self.tree, maybe_v0=False)
+        return self._version
 
     @property
-    def dataset_dirname(self):
-        return BaseDataset.dataset_dirname(self.version)
+    def dataset_class(self):
+        """Returns the dataset implementation to use for this entire repo."""
+        return self._dataset_class
 
     def decode_path(self, full_path):
         """
@@ -93,7 +104,7 @@ class RepositoryStructure:
         1. (dataset_path, "feature", primary_key)
         2. (dataset_path, "meta", meta_item_path)
         """
-        dataset_dirname = self.dataset_dirname
+        dataset_dirname = self.dataset_class.DATASET_DIRNAME
         dataset_path, rel_path = full_path.split(f"/{dataset_dirname}/", 1)
         rel_path = f"{dataset_dirname}/{rel_path}"
         return (dataset_path,) + self.get(dataset_path).decode_path(rel_path)
@@ -109,13 +120,11 @@ class RepositoryStructure:
     def get_at(self, path, tree):
         """ Get a specific dataset by path using a specified Tree """
         try:
-            o = tree[path]
+            tree = tree / path
+            if self.dataset_class.is_dataset_tree(tree):
+                return self.dataset_class(tree, path)
         except KeyError:
-            raise
-
-        if isinstance(o, pygit2.Tree):
-            ds = BaseDataset.instantiate(o, path, self.version)
-            return ds
+            pass
 
         raise KeyError(f"No valid dataset found at '{path}'")
 
@@ -128,29 +137,27 @@ class RepositoryStructure:
         if tree is None:
             return
 
-        to_examine = deque([("", tree)])
-
-        dataset_version = self.version
-        dataset_dirname = self.dataset_dirname
+        to_examine = deque([(tree, "")])
 
         while to_examine:
-            path, tree = to_examine.popleft()
+            tree, path = to_examine.popleft()
 
-            for o in tree:
-                # ignore everything other than directories
-                if isinstance(o, pygit2.Tree):
+            for child in tree:
+                # Ignore everything other than directories
+                if child.type_str != "tree":
+                    continue
 
-                    if path:
-                        te_path = "/".join([path, o.name])
-                    else:
-                        te_path = o.name
+                if path:
+                    child_path = "/".join([path, child.name])
+                else:
+                    child_path = child.name
 
-                    if dataset_dirname in o:
-                        ds = BaseDataset.instantiate(o, te_path, dataset_version)
-                        yield ds
-                    else:
-                        # examine inside this directory
-                        to_examine.append((te_path, o))
+                if self.dataset_class.is_dataset_tree(child):
+                    ds = self.dataset_class(child, child_path)
+                    yield ds
+                else:
+                    # Examine inside this directory
+                    to_examine.append((child, child_path))
 
     @property
     def id(self):

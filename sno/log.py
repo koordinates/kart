@@ -122,7 +122,8 @@ def commit_obj_to_json(commit, refs, dataset_changes=None):
 def get_dataset_changes_log(repo, args):
     # TODO - git log isn't really designed to efficiently tell us which datasets changed.
     # So this code is a bit more complex that would be ideal, and a bit less efficient.
-    dataset_dirname = f"/{RepositoryStructure(repo).dataset_dirname}/"
+    dataset_dirname = RepositoryStructure(repo).dataset_class.DATASET_DIRNAME
+    dataset_dirname = f"/{dataset_dirname}/"
     for percentage in (90, 10, 1):
         directory_changes_log = _get_directory_changes_log(repo, percentage, args)
         if all(_enough_detail(d, dataset_dirname) for d in directory_changes_log):

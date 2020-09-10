@@ -35,6 +35,8 @@ class Dataset1(RichBaseDataset):
             [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
     """
 
+    VERSION = 1
+
     DATASET_DIRNAME = ".sno-table"
     DATASET_PATH = ".sno-table/"
     VERSION_PATH = ".sno-table/meta/version"
@@ -49,10 +51,6 @@ class Dataset1(RichBaseDataset):
         else:
             self.L.warn("Unexpected msgpack extension: %d", code)
             return msgpack.ExtType(code, data)
-
-    @property
-    def version(self):
-        return 1
 
     @functools.lru_cache()
     def get_gpkg_meta_item(self, name):
@@ -269,21 +267,17 @@ class Dataset1(RichBaseDataset):
 
     def features(self, **kwargs):
         """ Feature iterator yielding (encoded_pk, feature-dict) pairs """
-        return (
-            (
-                blob.name,
-                self.repo_feature_to_dict(blob.name, memoryview(blob)),
-            )
-            for blob in self._iter_feature_blobs(fast=False)
-        )
+        for blob in self._iter_feature_blobs(fast=False):
+            yield self.repo_feature_to_dict(blob.name, memoryview(blob))
 
     def feature_tuples(self, col_names, **kwargs):
         """ Optimised feature iterator yielding tuples, ordered by the columns from col_names """
         tupleizer = self.build_feature_tupleizer(col_names)
         return (tupleizer(blob) for blob in self._iter_feature_blobs(fast=True))
 
-    def feature_count(self, fast=True):
-        return sum(1 for blob in self._iter_feature_blobs(fast=fast))
+    @property
+    def feature_count(self):
+        return sum(1 for blob in self._iter_feature_blobs())
 
     def encode_feature(
         self,

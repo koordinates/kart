@@ -76,6 +76,8 @@ def fast_import_tables(
         repo_version = get_repo_version(repo, head_tree)
         extra_blobs = ()
 
+    dataset_class = BaseDataset.for_version(repo_version)
+
     ImportSource.check_valid(sources)
     if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:
@@ -141,9 +143,7 @@ def fast_import_tables(
                     ):
                         pass
 
-            dataset = BaseDataset.instantiate(
-                tree=None, path=source.dest_path, version=repo_version
-            )
+            dataset = dataset_class(tree=None, path=source.dest_path)
 
             with source:
                 if limit:

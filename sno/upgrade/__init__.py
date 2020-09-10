@@ -10,8 +10,24 @@ from . import upgrade_v0, upgrade_v1
 from sno import checkout, context
 from sno.exceptions import InvalidOperation
 from sno.fast_import import fast_import_tables, ReplaceExisting
+from sno.structure import RepositoryStructure
 from sno.repository_version import get_repo_version, write_repo_version_config
 from sno.timestamps import minutes_to_tz_offset
+
+
+def dataset_class_for_version(version):
+    from .upgrade_v0 import UpgradeDataset0
+    from .upgrade_v1 import UpgradeDataset1
+
+    version = int(version)
+    if version == 0:
+        return UpgradeDataset0
+    elif version == 1:
+        return UpgradeDataset1
+
+    raise ValueError(
+        f"No upgradeable Dataset implementation found for version={version}"
+    )
 
 
 @click.command()
@@ -46,6 +62,8 @@ def upgrade(ctx, source, dest):
             "Unrecognised source repository version: {source_version}"
         )
 
+    source_dataset_class = dataset_class_for_version(source_version)
+
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
@@ -77,6 +95,7 @@ def upgrade(ctx, source, dest):
             source_repo,
             source_commit,
             source_version,
+            source_dataset_class,
             dest_parents,
             dest_repo,
             commit_map,
@@ -120,12 +139,21 @@ def _upgrade_commit(
     source_repo,
     source_commit,
     source_version,
+    source_dataset_class,
     dest_parents,
     dest_repo,
     commit_map,
 ):
 
-    sources = _get_upgrade_sources(source_repo, source_commit, source_version)
+    sources = [
+        ds
+        for ds in RepositoryStructure(
+            source_repo,
+            commit=source_commit,
+            version=source_version,
+            dataset_class=source_dataset_class,
+        )
+    ]
     dataset_count = len(sources)
     feature_count = sum(s.feature_count for s in sources)
 
@@ -160,13 +188,3 @@ def _upgrade_commit(
         f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]}"
         f" ({commit_time}; {source_commit.committer.name}; {dataset_count} datasets; {feature_count} rows)"
     )
-
-
-def _get_upgrade_sources(source_repo, source_commit, source_version):
-    # TODO: Use polymorphism.
-    if source_version == 0:
-        return upgrade_v0.get_upgrade_sources(source_repo, source_commit)
-    elif source_version == 1:
-        return upgrade_v1.get_upgrade_sources(source_repo, source_commit)
-    else:
-        raise RuntimeError(f"Bad source_version: {source_version}")

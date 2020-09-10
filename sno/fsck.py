@@ -100,7 +100,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             dbcur.execute(f"SELECT COUNT(*) FROM {gpkg.ident(table)};")
             wc_count = dbcur.fetchall()[0][0]
             click.echo(f"{wc_count} features in {table}")
-            ds_count = dataset.feature_count(fast=False)
+            ds_count = dataset.feature_count
             if wc_count != ds_count:
                 has_err = True
                 click.secho(
@@ -165,15 +165,18 @@ def fsck(ctx, reset_datasets, fsck_args):
             if not has_err:
                 click.echo("Checking features...")
                 feature_err_count = 0
-                for pk_hash, feature in dataset.features(fast=False):
-                    h_verify = os.path.basename(dataset.encode_1pk_to_path(feature[pk]))
+                for feature in dataset.features():
 
+                    # TODO - reintroduce this check by writing Feature objects, instead of using dicts everywhere.
+                    """
+                    h_verify = os.path.basename(dataset.encode_1pk_to_path(feature[pk]))
                     if pk_hash != h_verify:
                         has_err = True
                         click.secho(
                             f"✘ Hash mismatch for feature '{feature[pk]}': repo says {pk_hash} but should be {h_verify}",
                             fg="red",
                         )
+                    """
 
                     dbcur.execute(
                         f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;",

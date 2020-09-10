@@ -64,6 +64,8 @@ class Dataset2(RichBaseDataset):
     which *should be written*. The caller must write these to a commit.
     """
 
+    VERSION = 2
+
     DATASET_DIRNAME = ".sno-dataset"
     DATASET_PATH = ".sno-dataset/"
 
@@ -81,10 +83,6 @@ class Dataset2(RichBaseDataset):
 
     METADATA_PATH = META_PATH + "metadata/"
     DATASET_METADATA_PATH = METADATA_PATH + "dataset.json"
-
-    @property
-    def version(self):
-        return 2
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -186,16 +184,13 @@ class Dataset2(RichBaseDataset):
         """
 
         # TODO: optimise.
-        # TODO: don't return the path of each feature by default - most callers don't care.
-        # (but this is the interface shared by dataset1 at the moment.)
         if self.FEATURE_PATH not in self.tree:
             return
         for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH):
-            yield blob.name, self.get_feature(
-                path=blob.name, data=blob.data, keys=keys
-            ),
+            yield self.get_feature(path=blob.name, data=blob.data, keys=keys)
 
-    def feature_count(self, fast=None):
+    @property
+    def feature_count(self):
         if self.FEATURE_PATH not in self.tree:
             return 0
         return sum(1 for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH))
@@ -318,14 +313,6 @@ class Dataset2(RichBaseDataset):
                 return
         for feature in resultset:
             yield self.encode_feature(feature, schema)
-
-    @property
-    def primary_key(self):
-        # TODO - datasets v2 model supports more than one primary key.
-        # This function needs to be changed when we have a working copy v2 that does too.
-        if len(self.schema.pk_columns) == 1:
-            return self.schema.pk_columns[0].name
-        raise ValueError(f"No single primary key: {self.schema.pk_columns}")
 
     def encode_feature_blob(self, feature):
         # TODO - the dataset interface still needs some work:

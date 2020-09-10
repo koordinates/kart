@@ -1,58 +1,26 @@
 import functools
 import json
 import re
-from collections import deque
-
-import pygit2
 
 from sno import gpkg_adapter
 from sno.geometry import normalise_gpkg_geom
 from sno.base_dataset import BaseDataset
 
 
-def get_upgrade_sources(source_repo, source_commit):
-    """Return upgrade sources for all V0 datasets at the given commit."""
-    source_tree = source_commit.peel(pygit2.Tree)
-    return list(_iter_datasets(source_tree))
+class UpgradeDataset0(BaseDataset):
+    """A V0 dataset / import source, only used for upgrading to V2 and beyond."""
 
-
-def _iter_datasets(tree):
-    """ Iterate over available datasets in this repository using a specified commit"""
-    to_examine = deque([("", tree)])
-
-    while to_examine:
-        path, tree = to_examine.popleft()
-
-        for o in tree:
-            # ignore everything other than directories
-            if isinstance(o, pygit2.Tree):
-
-                if path:
-                    te_path = "/".join([path, o.name])
-                else:
-                    te_path = o.name
-
-                if "meta" in o and "version" in o / "meta":
-                    yield Dataset0(o, te_path)
-                else:
-                    # examine inside this directory
-                    to_examine.append((te_path, o))
-
-
-class Dataset0(BaseDataset):
-    """
-    A V0 dataset / import source.
-    """
-
-    # TODO - merge the dataset interface with the import source interface.
+    VERSION = 0
 
     META_PATH = "meta/"
-    FEATURE_PATH = "feature/"
+    FEATURE_PATH = "features/"
 
-    def __init__(self, tree, path):
-        super().__init__(tree, path)
-        # TODO - remove self.table from import-source interface
-        self.table = self.path
+    @classmethod
+    def is_dataset_tree(cls, tree):
+        if "meta" in tree and (tree / "meta").type_str == "tree":
+            meta_tree = tree / "meta"
+            return "version" in meta_tree and (meta_tree / "version").type_str == "blob"
+        return False
 
     def _iter_feature_dirs(self):
         """
@@ -60,15 +28,13 @@ class Dataset0(BaseDataset):
         pattern for a feature, and yields the following for each:
         >>> feature_builder(path_name, path_data)
         """
-        if "features" not in self.tree:
+        if self.FEATURE_PATH not in self.tree:
             return
-
-        feature_tree = self.tree / "features"
 
         RE_DIR1 = re.compile(r"([0-9a-f]{4})?$")
         RE_DIR2 = re.compile(r"([0-9a-f-]{36})?$")
 
-        for dir1 in feature_tree:
+        for dir1 in self.feature_tree:
             if hasattr(dir1, "data") or not RE_DIR1.match(dir1.name):
                 continue
 
@@ -113,7 +79,7 @@ class Dataset0(BaseDataset):
             yield source_feature_dict
 
     @property
-    def row_count(self):
+    def feature_count(self):
         count = 0
         for feature_dirs in self._iter_feature_dirs():
             count += 1

@@ -677,7 +677,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 t0p = t0
 
                 CHUNK_SIZE = 10000
-                total_features = dataset.feature_count()
+                total_features = dataset.feature_count
                 for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
                     dbcur.executemany(sql_insert_features, rows)
                     feat_progress += len(rows)
@@ -837,7 +837,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 if db_obj is not None and geom_col is not None:
                     # Clean geometries so they have the same properties as the dataset's ones
                     g = db_obj[geom_col]
-                    if dataset.version >= 2:
+                    if dataset.VERSION >= 2:
                         g = normalise_gpkg_geom(g)
                     db_obj[geom_col] = Geometry.of(g)
 
@@ -1187,7 +1187,7 @@ class WorkingCopyGPKG(WorkingCopy):
 
         for table in table_updates:
             base_ds = base_datasets[table]
-            ds_version = base_ds.version
+            ds_version = base_ds.VERSION
 
             # Do we support changing the WC metadata to back to base_ds metadata?
             rev_wc_meta_diff = self.diff_db_to_tree_meta(base_ds)

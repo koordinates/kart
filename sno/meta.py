@@ -148,15 +148,15 @@ def meta_set(ctx, message, dataset, items):
     """
     rs = RepositoryStructure(ctx.obj.repo)
 
+    if rs.version < 2:
+        raise InvalidOperation(
+            "This repo doesn't support meta changes, use `sno upgrade`"
+        )
+
     try:
         ds = rs[dataset]
     except KeyError:
         raise click.UsageError(f"No such dataset: {dataset}")
-
-    if ds.version < 2:
-        raise InvalidOperation(
-            "This repo doesn't support meta changes, use `sno upgrade`"
-        )
 
     if message is None:
         message = f"Update metadata for {dataset}"

@@ -10,6 +10,15 @@ class BaseDataset(ImportSource):
     and even Dataset0 (but this is only supported for `sno upgrade`)
     """
 
+    # Constants that subclasses should generally define.
+
+    VERSION = None  # Version eg 1
+    DATASET_DIRNAME = None  # Eg ".sno-dataset"
+    DATASET_PATH = None  # Eg ".sno-dataset/"
+
+    META_PATH = None  # Eg ".sno-dataset/meta/"
+    FEATURE_PATH = None  # Eg ".sno-dataset/feature/"
+
     def __init__(self, tree, path):
         """
         Create a dataset at the given tree, which has the given path.
@@ -17,7 +26,9 @@ class BaseDataset(ImportSource):
         The tree can be None if this dataset hasn't yet been written to the repo.
         """
         if self.__class__ is BaseDataset:
-            raise TypeError("Cannot construct a BaseDataset - use a subclass")
+            raise TypeError(
+                "Cannot construct a BaseDataset - use a subclass (see BaseDataset.for_version)"
+            )
 
         self.tree = tree
         self.path = path.strip("/")
@@ -40,35 +51,20 @@ class BaseDataset(ImportSource):
 
         raise ValueError(f"No Dataset implementation found for version={version}")
 
-    @classmethod
-    def dataset_dirname(cls, version):
-        return cls.for_version(version).DATASET_DIRNAME
-
-    @classmethod
-    def instantiate(cls, tree, path, version):
-        """
-        Load a dataset of the given version from the given tree, at the given path.
-        Tree can be None if the dataset is yet to be written to the repo.
-        """
-        if tree is not None and tree.type_str != "tree":
-            raise TypeError(f"Expected Tree object, got {type(tree)}")
-
-        dataset_dirname = cls.dataset_dirname(version)
-        if tree is not None and dataset_dirname not in tree:
-            raise KeyError(f"No dataset at {path} - missing {dataset_dirname} tree")
-
-        version_klass = cls.for_version(version)
-        return version_klass(tree, path)
-
     def default_dest_path(self):
         # ImportSource method - by default, a dataset should import with the same path it already has.
         return self.path
 
-    @property
     @classmethod
-    def version(self):
-        """Returns a dataset version number eg 1."""
-        raise NotImplementedError()
+    def is_dataset_tree(cls, tree):
+        """
+        Returns True if the given tree seems to contain a dataset of this type.
+        Used for finding all the datasets in a given repo, etc.
+        """
+        return (
+            cls.DATASET_DIRNAME in tree
+            and (tree / cls.DATASET_DIRNAME).type_str == "tree"
+        )
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -159,6 +155,14 @@ class BaseDataset(ImportSource):
         raise NotImplementedError()
 
     @property
+    def primary_key(self):
+        """Returns the name of the primary key column."""
+        # TODO - adapt this interface when we support more than one primary key.
+        if len(self.schema.pk_columns) == 1:
+            return self.schema.pk_columns[0].name
+        raise ValueError(f"No single primary key: {self.schema.pk_columns}")
+
+    @property
     @functools.lru_cache(maxsize=1)
     def has_geometry(self):
         return self.geom_column_name is not None
@@ -168,6 +172,19 @@ class BaseDataset(ImportSource):
     def geom_column_name(self):
         geom_columns = self.schema.geometry_columns
         return geom_columns[0].name if geom_columns else None
+
+    def features(self):
+        """
+        Yields a dict for every feature. Dicts contain key-value pairs for each feature property,
+        and geometries use sno.geometry.Geometry objects, as in the following example:
+        {
+            "fid": 123,
+            "geom": Geometry(b"..."),
+            "name": "..."
+            "last-modified": "..."
+        }
+        """
+        raise NotImplementedError()
 
     def get_feature(self, pk_values):
         """
@@ -179,7 +196,7 @@ class BaseDataset(ImportSource):
     def feature_tuples(self, col_names, **kwargs):
         """ Feature iterator yielding tuples, ordered by the columns from col_names """
         # Subclasses can override to make more efficient.
-        for k, f in self.features():
+        for f in self.features():
             yield tuple(f[c] for c in col_names)
 
 
