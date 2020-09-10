@@ -109,7 +109,15 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
     USER_EMAIL = "sno-tester@example.com"
 
     with open(home / ".gitconfig", "w") as f:
-        f.write(f"[user]\n\tname = {USER_NAME}\n\temail = {USER_EMAIL}\n")
+        f.write(
+            f"[user]\n"
+            f"\tname = {USER_NAME}\n"
+            f"\temail = {USER_EMAIL}\n"
+            # make `gc` syncronous in testing.
+            # otherwise it has race conditions with test teardown.
+            f"[gc]\n"
+            f"\tautoDetach = false"
+        )
 
     L.debug("Temporary HOME for git config: %s", home)
 
@@ -393,14 +401,35 @@ class SnoCliRunner(CliRunner):
             if input or env or color:
                 L.warning("PDB un-isolation doesn't work if input/env/color are passed")
             else:
-                return self.isolation_pdb()
+                return self.isolation_pdb(env=env)
 
         return super().isolation(input=input, env=env, color=color)
 
     @contextlib.contextmanager
-    def isolation_pdb(self):
+    def isolation_pdb(self, env=None):
         s = io.BytesIO(b"{stdout not captured because --pdb-trace}")
-        yield (s, not self.mix_stderr and s)
+        old_env = {}
+        env = self.make_env(env)
+        try:
+            for key, value in env.items():
+                old_env[key] = os.environ.get(key)
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except Exception:
+                        pass
+                else:
+                    os.environ[key] = value
+            yield (s, not self.mix_stderr and s)
+        finally:
+            for key, value in old_env.items():
+                if value is None:
+                    try:
+                        del os.environ[key]
+                    except Exception:
+                        pass
+                else:
+                    os.environ[key] = value
 
 
 @pytest.fixture
