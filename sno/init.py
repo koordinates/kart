@@ -343,6 +343,9 @@ def init(
     write_repo_version_config(repo, repo_version)
     WorkingCopy.write_config(repo, wc_path, bare)
 
+    # Enable writing to reflogs
+    repo.config["core.logAllRefUpdates"] = "always"
+
     if import_from:
         fast_import_tables(
             repo,
