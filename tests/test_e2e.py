@@ -128,10 +128,9 @@ def test_e2e(
             # check reflog
             r = cli_runner.invoke(["reflog"])
             assert r.exit_code == 0
-            assert [x.split(" ", 1)[1] for x in r.stdout.splitlines()] == [
+            assert [x.split(" ", 1)[1] for x in r.stdout.splitlines()][0:4] == [
                 "HEAD@{0}: commit (merge): merge-1",
                 "HEAD@{1}: checkout: moving from edit-1 to master",
                 "HEAD@{2}: commit: commit-1",
                 "HEAD@{3}: checkout: moving from master to edit-1",
-                "HEAD@{4}: fast-import",
             ]
