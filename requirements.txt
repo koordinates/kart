@@ -15,7 +15,7 @@ msgpack==0.6.2            # via -r requirements/requirements.in
 #psycopg2==2.8.5           # via -r requirements/requirements.in
 pycparser==2.20           # via cffi
 #pygit2==1.1.0             # via -r requirements/requirements.in
-pygments==2.6.1           # via -r requirements/requirements.in
+pygments==2.7.0           # via -r requirements/requirements.in
 pyrsistent==0.16.0        # via jsonschema
 rtree==0.9.4              # via -r requirements/requirements.in
 six==1.15.0               # via jsonschema, pyrsistent
