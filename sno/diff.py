@@ -4,7 +4,6 @@ import sys
 from pathlib import Path
 
 import click
-from osgeo import osr
 
 from .crs_util import CoordinateReferenceString
 from .diff_output import (  # noqa - used from globals()
@@ -22,7 +21,6 @@ from .exceptions import (
     UNCATEGORIZED_ERROR,
 )
 from .filter_util import build_feature_filter, UNFILTERED
-from .geometry import make_crs
 from .repo_files import RepoState
 from .structure import RepositoryStructure
 

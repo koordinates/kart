@@ -205,7 +205,10 @@ class RichBaseDataset(BaseDataset):
                 else:
                     new_pk = None
 
-                if old_pk not in feature_filter and new_pk not in feature_filter:
+                if (
+                    str(old_pk) not in feature_filter
+                    and str(new_pk) not in feature_filter
+                ):
                     continue
 
                 if d.status == pygit2.GIT_DELTA_ADDED:

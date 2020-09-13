@@ -1418,6 +1418,24 @@ def test_show_points_HEAD(
             }
 
 
+@pytest.mark.parametrize(*V1_OR_V2)
+def test_diff_filtered(repo_version, data_archive_readonly, cli_runner):
+    data_archive = "points2" if repo_version == "2" else "points"
+    with data_archive_readonly(data_archive):
+        r = cli_runner.invoke(["diff", "HEAD^...", "nz_pa_points_topo_150k:1182"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "--- nz_pa_points_topo_150k:feature:1182",
+            "+++ nz_pa_points_topo_150k:feature:1182",
+            "-                               name_ascii = ␀",
+            "+                               name_ascii = Ko Te Ra Matiti (Wharekaho)",
+            "-                               macronated = N",
+            "+                               macronated = Y",
+            "-                                     name = ␀",
+            "+                                     name = Ko Te Rā Matiti (Wharekaho)",
+        ]
+
+
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
 @pytest.mark.parametrize(*V1_OR_V2)
 def test_show_polygons_initial(
