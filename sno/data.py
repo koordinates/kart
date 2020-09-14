@@ -27,14 +27,15 @@ def data(ctx, **kwargs):
     type=click.Choice(["text", "json"]),
     default="text",
 )
+@click.argument("refish", required=False, default="HEAD")
 @click.pass_context
-def data_ls(ctx, output_format):
+def data_ls(ctx, output_format, refish):
     """List all of the datasets in the sno repository"""
     repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
     if repo.is_empty:
         ds_paths = []
     else:
-        rs = RepositoryStructure.lookup(repo, "HEAD")
+        rs = RepositoryStructure.lookup(repo, refish)
         ds_paths = [ds.path for ds in rs]
 
     if output_format == "text":
