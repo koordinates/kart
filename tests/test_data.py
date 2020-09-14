@@ -44,3 +44,12 @@ def test_data_ls_empty(repo_version, output_format, tmp_path, cli_runner, chdir)
         else:
             output = json.loads(r.stdout)
             assert output == {"sno.data.ls/v1": []}
+
+
+def test_data_ls_with_ref(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points2"):
+        r = cli_runner.invoke(["data", "ls", "-o", "json", "HEAD^"])
+        assert r.exit_code == 0, r
+
+        output = json.loads(r.stdout)
+        assert output == {"sno.data.ls/v1": ["nz_pa_points_topo_150k"]}
