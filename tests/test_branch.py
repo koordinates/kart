@@ -51,7 +51,7 @@ def test_branches(
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
 
-        assert text_branches(cli_runner) == ["* (no branch)", "  master"]
+        assert text_branches(cli_runner) == ["* (HEAD detached at 63a9492)", "  master"]
         assert json_branches(cli_runner) == {
             "sno.branch/v1": {
                 "current": None,

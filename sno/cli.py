@@ -274,6 +274,14 @@ def tag(ctx, args):
 @cli.command(context_settings=dict(ignore_unknown_options=True))
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def reflog(ctx, args):
+    """ Manage reflog information """
+    execvp("git", ["git", "-C", ctx.obj.repo.path, "reflog"] + list(args))
+
+
+@cli.command(context_settings=dict(ignore_unknown_options=True))
+@click.pass_context
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """ Get and set repository or global options """
     params = ["git", "config"]
