@@ -7,7 +7,7 @@
 attrs==20.2.0             # via jsonschema
 cached-property==1.5.1    # via pygit2
 certifi==2020.6.20        # via -r requirements/requirements.in
-cffi==1.14.3              # via pygit2
+cffi==1.14.2              # via pygit2
 click==7.1.2              # via -r requirements/requirements.in
 importlib-metadata==1.7.0  # via jsonschema
 jsonschema==3.2.0         # via -r requirements/requirements.in
