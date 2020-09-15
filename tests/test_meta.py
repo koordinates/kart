@@ -109,3 +109,31 @@ def test_meta_set(data_archive, cli_runner):
         meta = output["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
         assert meta["title"] == {"-": "NZ Pa Points (Topo, 1:50k)", "+": "newtitle"}
         assert meta["description"]["+"] == "newdescription"
+
+
+def test_meta_get_ref(data_archive, cli_runner):
+    with data_archive("points2"):
+        r = cli_runner.invoke(
+            [
+                "meta",
+                "set",
+                "nz_pa_points_topo_150k",
+                "title=newtitle",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(
+            [
+                "meta",
+                "get",
+                "--ref=HEAD^",
+                "nz_pa_points_topo_150k",
+                "title",
+                "-o",
+                "json",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "nz_pa_points_topo_150k": {"title": "NZ Pa Points (Topo, 1:50k)"}
+        }
