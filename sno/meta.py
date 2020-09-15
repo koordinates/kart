@@ -47,16 +47,17 @@ def meta(ctx, **kwargs):
     default="pretty",
     help="How to format the JSON output. Only used with -o json",
 )
+@click.option("--ref", default="HEAD")
 @click.argument("dataset", required=False)
 @click.argument("keys", required=False, nargs=-1)
 @click.pass_context
-def meta_get(ctx, output_format, json_style, dataset, keys):
+def meta_get(ctx, output_format, json_style, ref, dataset, keys):
     """
     Prints the value of meta keys.
 
     Optionally, output can be filtered to a dataset and a particular key.
     """
-    rs = RepositoryStructure(ctx.obj.repo)
+    rs = RepositoryStructure.lookup(ctx.obj.repo, ref)
 
     if dataset:
         try:
