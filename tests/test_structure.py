@@ -17,6 +17,7 @@ from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
+from sno.sno_repo import SnoRepo
 from sno.repository_version import REPO_VERSIONS_CHOICE
 
 
@@ -60,7 +61,7 @@ def test_dataset_versions():
 
 
 def _import_check(repo_path, table, source_gpkg, geopackage, repo_version=None):
-    repo = pygit2.Repository(str(repo_path))
+    repo = SnoRepo(repo_path)
     dataset = structure.RepositoryStructure(repo)[table]
 
     if repo_version is not None:
@@ -173,8 +174,7 @@ def test_import(
             r = cli_runner.invoke(["init", "--repo-version", repo_version])
             assert r.exit_code == 0, r
 
-            repo = pygit2.Repository(str(repo_path))
-            assert repo.is_bare
+            repo = SnoRepo(repo_path)
             assert repo.is_empty
 
             r = cli_runner.invoke(["import", str(data / source_gpkg), table])
@@ -349,7 +349,7 @@ def test_import_from_non_gpkg(
             r = cli_runner.invoke(["import", data / source_gpkg, table])
             assert r.exit_code == 0, r
 
-        gpkg_repo = pygit2.Repository(str(gpkg_repo_path))
+        gpkg_repo = SnoRepo(gpkg_repo_path)
         gpkg_dataset = structure.RepositoryStructure(gpkg_repo)[table]
 
         # convert to a new format using OGR
@@ -366,8 +366,7 @@ def test_import_from_non_gpkg(
             r = cli_runner.invoke(["init", "--repo-version", repo_version])
             assert r.exit_code == 0, r
 
-            repo = pygit2.Repository(str(repo_path))
-            assert repo.is_bare
+            repo = SnoRepo(repo_path)
             assert repo.is_empty
 
             # Import from SHP/TAB/something into sno
@@ -395,7 +394,7 @@ def test_import_from_non_gpkg(
             assert int(float(dataset.VERSION)) == int(repo_version)
 
             # Compare the meta items to the GPKG-imported ones
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             dataset = structure.RepositoryStructure(repo)[table]
 
             _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
@@ -451,7 +450,7 @@ def test_shp_import_meta(
 
         # now check metadata
         path = "nz_waca_adjustments"
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         dataset = structure.RepositoryStructure(repo)[path]
 
         meta_items = dict(dataset.meta_items())
@@ -565,7 +564,7 @@ def _test_pg_import(
         )
         assert r.exit_code == 0, r
     # now check metadata
-    repo = pygit2.Repository(str(repo_path))
+    repo = SnoRepo(repo_path)
     dataset = structure.RepositoryStructure(repo)[table_name]
 
     meta_items = dict(dataset.meta_items())
@@ -723,7 +722,7 @@ def test_feature_find_decode_performance(
     )
 
     repo_path = data_imported(archive, source_gpkg, table, repo_version)
-    repo = pygit2.Repository(str(repo_path))
+    repo = SnoRepo(repo_path)
     tree = repo.head.peel(pygit2.Tree) / "mytable"
     dataset = structure.RepositoryStructure(repo)["mytable"]
 
@@ -768,8 +767,7 @@ def test_import_multiple(
         r = cli_runner.invoke(["init", "--repo-version", repo_version])
         assert r.exit_code == 0, r
 
-    repo = pygit2.Repository(str(repo_path))
-    assert repo.is_bare
+    repo = SnoRepo(repo_path)
     assert repo.is_empty
 
     LAYERS = (
@@ -831,12 +829,14 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
             # HEAD still points to it, but that's okay - this just means
             # the branch is empty.
             # We still need to be able to import from this state.
-            subprocess.check_call(["git", "branch", "-D", "master"])
+            repo = SnoRepo(repo_path)
+            repo.references.delete("refs/heads/master")
+            assert repo.head_is_unborn
 
             r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
             assert r.exit_code == 0, r
 
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             assert repo.head.peel(pygit2.Commit)
 
 
@@ -869,7 +869,7 @@ def test_write_feature_performance(
             r = cli_runner.invoke(["init", "--repo-version", repo_version])
             assert r.exit_code == 0, r
 
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
 
             source = OgrImportSource.open(data / source_gpkg, table=table)
             with source:
@@ -913,7 +913,7 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
             r = cli_runner.invoke(["init", "--repo-version", repo_version])
             assert r.exit_code == 0, r
 
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
 
             source = OgrImportSource.open(
                 data / "nz-pa-points-topo-150k.gpkg", table=table

@@ -2,18 +2,18 @@ import json
 import os
 import re
 import shlex
-import subprocess
 import time
 
 import pytest
 
 import pygit2
 
+from sno import repo_files
+from sno.exceptions import INVALID_ARGUMENT, NO_CHANGES, NO_DATA, NO_REPOSITORY
 from sno.repo_files import fallback_editor
+from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
-
-from sno.exceptions import INVALID_ARGUMENT, NO_CHANGES, NO_DATA, NO_REPOSITORY
 
 
 H = pytest.helpers.helpers()
@@ -84,7 +84,7 @@ def test_commit(
 
         print(f"deleted fid={pk_del}")
 
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
         rs = RepositoryStructure(repo)
         wc = rs.working_copy
         original_change_count = _count_tracking_table_changes(db, wc, layer)
@@ -139,7 +139,7 @@ def test_tag(data_working_copy, cli_runner):
         r = cli_runner.invoke(["tag", "version1"])
         assert r.exit_code == 0, r
 
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
         assert "refs/tags/version1" in repo.references
         ref = repo.lookup_reference_dwim("version1")
         assert ref.target.hex == H.POINTS.HEAD_SHA
@@ -153,7 +153,7 @@ def test_commit_message(
     editor_out = None
     editor_cmd = None
 
-    def monkey_editor(cmdline, **kwargs):
+    def monkey_editor(cmdline):
         nonlocal editor_cmd, editor_in
         editor_cmd = cmdline
         print("EDITOR", cmdline)
@@ -168,13 +168,13 @@ def test_commit_message(
             else:
                 assert False, "Didn't expect editor to launch"
 
-    monkeypatch.setattr(subprocess, "check_call", monkey_editor)
+    monkeypatch.setattr(repo_files, "run_editor_cmd", monkey_editor)
     monkeypatch.delenv("EDITOR", raising=False)
     monkeypatch.delenv("VISUAL", raising=False)
     monkeypatch.delenv("GIT_EDITOR", raising=False)
 
     with data_working_copy("points") as (repo_dir, wc_path):
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
 
         def last_message():
             return repo.head.peel(pygit2.Commit).message
@@ -301,12 +301,12 @@ def test_empty(tmp_path, cli_runner, chdir):
     with chdir(empty_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == NO_REPOSITORY, r
-        assert "not an existing repository" in r.stderr
+        assert "not an existing sno repository" in r.stderr
 
 
 def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
 
         # normal
         r = cli_runner.invoke(

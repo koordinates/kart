@@ -17,6 +17,7 @@ import pytest
 import click
 from click.testing import CliRunner
 from sno.repository_version import DEFAULT_REPO_VERSION
+from sno.sno_repo import SnoRepo
 
 import apsw
 import pygit2
@@ -264,7 +265,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
             if name.endswith(".sno"):
                 name = name[:-5]
 
-            repo = pygit2.Repository(str(repo_dir))
+            repo = SnoRepo(repo_dir)
             rs = RepositoryStructure(repo)
             if rs.working_copy:
                 wc_path = rs.working_copy.full_path
@@ -325,8 +326,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 r = cli_runner.invoke(["init", "--repo-version", repo_version])
                 assert r.exit_code == 0, r
 
-                repo = pygit2.Repository(str(import_path))
-                assert repo.is_bare
+                repo = SnoRepo(import_path)
                 assert repo.is_empty
                 repo.free()
                 del repo
@@ -568,7 +568,7 @@ class TestHelpers:
     @classmethod
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
-        repo = pygit2.Repository(repo_path)
+        repo = SnoRepo(repo_path)
         if "sno.workingcopy.path" in repo.config:
             print(
                 f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}"
@@ -825,7 +825,7 @@ def create_conflicts(
     def ctx(data, repo_version=1):
         archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
         with data_working_copy(archive) as (repo_path, wc):
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             sample_pks = data.SAMPLE_PKS
 
             cli_runner.invoke(["checkout", "-b", "ancestor_branch"])

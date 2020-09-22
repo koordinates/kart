@@ -33,7 +33,7 @@ def extra_blobs_for_version(version):
     return [encode_repo_version(version)]
 
 
-def get_repo_version(repo, tree=None, maybe_v0=True):
+def get_repo_version(repo, tree=None, maybe_v0=True, default=DEFAULT_REPO_VERSION):
     """
     Returns the repo version from the blob at <repo-root>/REPO_VERSION_BLOB_PATH -
     (note that this is not user-visible in the file-system since we keep it hidden via sparse / bare checkouts).
@@ -41,30 +41,21 @@ def get_repo_version(repo, tree=None, maybe_v0=True):
     if tree is None:
         tree = git_util.get_head_tree(repo)
         if tree is None:  # Empty repo / empty branch.
-            return _get_repo_version_from_config(repo)
+            return _get_repo_version_from_config(repo, default)
 
-    if REPO_VERSION_BLOB_PATH not in tree:
-        # Versions less than 2 don't have ".sno-version" files.
-        if maybe_v0:
-            return _distinguish_v0_v1(tree)
-        else:
-            # We don't actually support v0 except for upgrade.
-            return 1
+    if REPO_VERSION_BLOB_PATH in tree:
+        return json.loads((tree / REPO_VERSION_BLOB_PATH).data)
 
-    return json.loads((tree / REPO_VERSION_BLOB_PATH).data)
+    # Versions less than 2 don't have ".sno-version" files, so must be 0 or 1.
+    # We don't support v0 except when performing a `sno upgrade`.
+    return _distinguish_v0_v1(tree) if maybe_v0 else 1
 
 
-def write_repo_version_config(repo, version):
-    version = int(version)
-    assert version in REPO_VERSIONS
-    repo.config["sno.repository.version"] = str(version)
-
-
-def _get_repo_version_from_config(repo):
+def _get_repo_version_from_config(repo, default=DEFAULT_REPO_VERSION):
     repo_cfg = repo.config
     if REPO_VERSION_CONFIG_PATH in repo_cfg:
         return repo_cfg.get_int(REPO_VERSION_CONFIG_PATH)
-    return 1
+    return default
 
 
 def _distinguish_v0_v1(tree):

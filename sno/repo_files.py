@@ -8,17 +8,24 @@ import click
 
 from . import is_windows
 from .exceptions import SubprocessError, InvalidOperation, NotFound
+from .sno_repo import SnoRepoFiles
 
-# Standard git files:
-HEAD = "HEAD"
-COMMIT_EDITMSG = "COMMIT_EDITMSG"
-ORIG_HEAD = "ORIG_HEAD"
-MERGE_HEAD = "MERGE_HEAD"
-MERGE_MSG = "MERGE_MSG"
+
+# TODO - fold this file into SnoRepo -
+# - repo_file_path, repo_file_exists, write_repo_file don't do enough to be useful
+#   the pathlib API is more generally useful.
+
+# TODO - get rid of these duplicate constants.
+HEAD = SnoRepoFiles.HEAD
+INDEX = SnoRepoFiles.INDEX
+COMMIT_EDITMSG = SnoRepoFiles.COMMIT_EDITMSG
+ORIG_HEAD = SnoRepoFiles.ORIG_HEAD
+MERGE_HEAD = SnoRepoFiles.MERGE_HEAD
+MERGE_MSG = SnoRepoFiles.MERGE_MSG
 
 # Sno-specific files:
-MERGE_INDEX = "MERGE_INDEX"
-MERGE_BRANCH = "MERGE_BRANCH"
+MERGE_INDEX = SnoRepoFiles.MERGE_INDEX
+MERGE_BRANCH = SnoRepoFiles.MERGE_BRANCH
 
 
 def repo_file_path(repo, filename):
@@ -30,13 +37,16 @@ def repo_file_exists(repo, filename):
 
 
 def write_repo_file(repo, filename, contents):
-    if not isinstance(contents, str):
-        raise TypeError("File contents must be a string", type(contents))
-    if not contents.endswith("\n"):
-        contents += "\n"
-
+    if not isinstance(contents, (str, bytes)):
+        raise TypeError("File contents must be string or bytes", type(contents))
     path = repo_file_path(repo, filename)
-    path.write_text(contents, encoding="utf-8")
+
+    if isinstance(contents, bytes):
+        path.write_bytes(contents)
+    else:
+        if not contents.endswith("\n"):
+            contents += "\n"
+        path.write_text(contents, encoding="utf-8")
 
 
 def fallback_editor():
@@ -63,12 +73,16 @@ def user_edit_repo_file(repo, filename):
     else:
         editor_cmd = f"{editor} {shlex.quote(path)}"
     try:
-        subprocess.check_call(editor_cmd, shell=True)
+        run_editor_cmd(editor_cmd)
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
             f"There was a problem with the editor '{editor}': {e}",
             called_process_error=e,
         ) from e
+
+
+def run_editor_cmd(editor_cmd):
+    subprocess.check_call(editor_cmd, shell=True)
 
 
 def read_repo_file(repo, filename, missing_ok=False, strip=False):

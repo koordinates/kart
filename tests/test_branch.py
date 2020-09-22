@@ -151,12 +151,12 @@ def test_branches_none(tmp_path, cli_runner, chdir):
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Current directory is not an existing repository"
+            == "Error: Current directory is not an existing sno repository"
         )
 
         r = cli_runner.invoke(["branch", "-o", "json"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Current directory is not an existing repository"
+            == "Error: Current directory is not an existing sno repository"
         )

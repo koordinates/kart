@@ -4,6 +4,7 @@ from pathlib import Path
 import pygit2
 import pytest
 from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, NOT_YET_IMPLEMENTED
+from sno.sno_repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -87,7 +88,7 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == 0, r.stderr
 
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
         commit = repo.head.peel(pygit2.Commit)
 
         # the author details all come from the patch, including timestamp
@@ -254,7 +255,7 @@ def test_apply_with_working_copy(
         r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == 0, r.stderr
 
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
         commit = repo.head.peel(pygit2.Commit)
 
         # the author details all come from the patch, including timestamp
@@ -310,7 +311,7 @@ def test_apply_with_working_copy_with_no_commit(
         r = cli_runner.invoke(["apply", "--no-commit", patch_path])
         assert r.exit_code == 0, r.stderr
 
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
 
         # no commit was made
         commit = repo.head.peel(pygit2.Commit)

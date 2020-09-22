@@ -1,5 +1,4 @@
 import json
-import re
 import subprocess
 from pathlib import Path
 
@@ -8,10 +7,10 @@ import pytest
 import apsw
 import pygit2
 
-import sno.checkout
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
+from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
-from sno.working_copy import WorkingCopy
+from sno.working_copy import WorkingCopy, WorkingCopy_GPKG_1
 
 
 H = pytest.helpers.helpers()
@@ -41,7 +40,7 @@ def test_checkout_workingcopy(
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
 
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         r = cli_runner.invoke(["checkout"])
         wc = Path(repo.config["sno.workingcopy.path"])
         assert r.exit_code == 0, r
@@ -51,7 +50,6 @@ def test_checkout_workingcopy(
         db = geopackage(wc)
         assert H.row_count(db, table) > 0
 
-        assert repo.is_bare
         assert repo.head.name == "refs/heads/master"
         assert repo.head.shorthand == "master"
 
@@ -86,7 +84,7 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
         assert r.exit_code == 0, r
         assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
         assert repo.head.target.hex == H.POINTS.HEAD1_SHA
         assert repo.head_is_detached
         assert repo.head.name == "HEAD"
@@ -95,7 +93,7 @@ def test_checkout_detached(data_working_copy, cli_runner, geopackage):
 def test_checkout_references(data_working_copy, cli_runner, geopackage, tmp_path):
     with data_working_copy("points") as (repo_dir, wc):
         db = geopackage(wc)
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
 
         # create a tag
         repo.create_reference("refs/tags/version1", repo.head.target)
@@ -183,7 +181,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["checkout", "-b", "foo"])
         assert r.exit_code == 0, r
 
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
         assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
@@ -239,7 +237,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "-c", "foo"])
         assert r.exit_code == 0, r
 
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
         assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
@@ -631,7 +629,7 @@ def test_geopackage_locking_edit(
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = sno.working_copy.WorkingCopy_GPKG_1.write_features
+        orig_func = WorkingCopy_GPKG_1.write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -644,9 +642,7 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(
-            sno.working_copy.WorkingCopy_GPKG_1, "write_features", _wrap
-        )
+        monkeypatch.setattr(WorkingCopy_GPKG_1, "write_features", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r
@@ -657,7 +653,7 @@ def test_geopackage_locking_edit(
 
 def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
 
         r = cli_runner.invoke(["create-workingcopy", "."])
         assert r.exit_code == INVALID_ARGUMENT, r
@@ -717,7 +713,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         id_chg_pk = 20
 
         db = geopackage(wc)
-        repo = pygit2.Repository(str(repo_dir))
+        repo = SnoRepo(repo_dir)
 
         # make some changes
         with db:

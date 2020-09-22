@@ -55,6 +55,8 @@ else:
     os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
         prefix, "share", "git-core", "templates"
     )
+# See LockedGitIndex in sno_repo.py:
+os.environ["GIT_INDEX_FILE"] = os.path.join(".sno", "unlocked_index")
 
 # GDAL Data
 if not is_windows:

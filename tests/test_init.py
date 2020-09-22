@@ -1,9 +1,11 @@
 import json
 import shutil
+import subprocess
 
 import pytest
 import pygit2
 
+from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
@@ -136,7 +138,7 @@ def test_import_table_meta_overrides(
 
             cli_runner.invoke(["checkout"])
 
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             wc = WorkingCopy.get(repo)
             db = geopackage(wc.path)
             cur = db.cursor()
@@ -338,7 +340,7 @@ def test_import_replace_existing_with_compatible_schema_changes(
             assert diff["meta"]["schema.json"]
             assert not diff.get("feature")
 
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             head_rs = RepositoryStructure.lookup(repo, "HEAD")
             old_rs = RepositoryStructure.lookup(repo, "HEAD^")
             assert head_rs.tree != old_rs.tree
@@ -397,7 +399,7 @@ def test_import_replace_existing_with_column_renames(
             assert diff["meta"]["schema.json"]
             assert not diff.get("feature")
 
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             head_rs = RepositoryStructure.lookup(repo, "HEAD")
             old_rs = RepositoryStructure.lookup(repo, "HEAD^")
             assert head_rs.tree != old_rs.tree
@@ -424,7 +426,7 @@ def test_init_import_table_ogr_types(
         assert r.exit_code == 0, r.stderr
 
         # There's a bunch of wacky types in here, let's check them
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         wc = WorkingCopy.get(repo)
         with wc.session() as db:
             table_info = [
@@ -561,10 +563,10 @@ def test_init_import(
             ]
         )
         assert r.exit_code == 0, r
-        assert (repo_path / "HEAD").exists()
+        assert (repo_path / ".sno" / "HEAD").exists()
 
-        repo = pygit2.Repository(str(repo_path))
-        assert repo.is_bare
+        repo = SnoRepo(repo_path)
+        assert not repo.is_bare
         assert not repo.is_empty
 
         assert repo.head.name == "refs/heads/master"
@@ -669,7 +671,7 @@ def test_init_import_commit_headers(
             },
         )
         assert r.exit_code == 0, r.stderr
-        assert (repo_path / "HEAD").exists()
+        assert (repo_path / ".sno" / "HEAD").exists()
         r = cli_runner.invoke(["-C", str(repo_path), "log", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         log_entry = json.loads(r.stdout)[0]
@@ -698,10 +700,10 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
         repo_path = data / "editing"
 
         assert r.exit_code == 0, r
-        assert (repo_path / "HEAD").exists()
+        assert (repo_path / ".sno" / "HEAD").exists()
 
-        repo = pygit2.Repository(str(repo_path))
-        assert repo.is_bare
+        repo = SnoRepo(repo_path)
+        assert not repo.is_bare
         assert not repo.is_empty
 
         # working copy exists
@@ -764,13 +766,13 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     # empty dir
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
-    assert (repo_path / "HEAD").exists()
+    assert (repo_path / ".sno" / "HEAD").exists()
 
     # makes dir tree
     repo_path = tmp_path / "foo" / "bar" / "wiz.sno"
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
-    assert (repo_path / "HEAD").exists()
+    assert (repo_path / ".sno" / "HEAD").exists()
 
     # current dir
     repo_path = tmp_path / "planet.sno"
@@ -778,7 +780,7 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     with chdir(repo_path):
         r = cli_runner.invoke(["init"])
         assert r.exit_code == 0, r
-        assert (repo_path / "HEAD").exists()
+        assert (repo_path / ".sno" / "HEAD").exists()
 
     # dir isn't empty
     repo_path = tmp_path / "tree"
@@ -786,13 +788,13 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     (repo_path / "a.file").touch()
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == INVALID_OPERATION, r
-    assert not (repo_path / "HEAD").exists()
+    assert not (repo_path / ".sno" / "HEAD").exists()
 
     # current dir isn't empty
     with chdir(repo_path):
         r = cli_runner.invoke(["init"])
         assert r.exit_code == INVALID_OPERATION, r
-        assert not (repo_path / "HEAD").exists()
+        assert not (repo_path / ".sno" / "HEAD").exists()
 
 
 @pytest.mark.slow
@@ -918,7 +920,7 @@ def test_import_existing_wc(
             )
             assert r.exit_code == 0, r
 
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         wc = WorkingCopy.get(repo)
         db = geopackage(wcdb)
 
@@ -981,7 +983,7 @@ def test_init_import_detached_head(data_working_copy, data_archive, chdir, cli_r
     with data_working_copy("points") as (repo_path, wcdb):
         with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
             r = cli_runner.invoke(["checkout", "HEAD^"])
-            repo = pygit2.Repository(str(repo_path))
+            repo = SnoRepo(repo_path)
             assert repo.head_is_detached
             initial_head = repo.head.target.hex
 

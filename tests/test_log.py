@@ -73,10 +73,11 @@ def test_log_shallow_clone(
     with data_archive_readonly("points") as path:
 
         clone_path = tmp_path / "shallow.clone"
-        clone_path.mkdir()
-        cli_runner.invoke(
+        r = cli_runner.invoke(
             ["clone", "--bare", "--depth=1", f"file://{path}", str(clone_path)]
         )
+        assert r.exit_code == 0, r.stderr
+
         with chdir(clone_path):
             r = cli_runner.invoke(["log", f"--output-format={output_format}"])
             assert r.exit_code == 0, r.stderr
@@ -95,7 +96,12 @@ def test_log_shallow_clone(
                     "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
                     "abbrevCommit": "2a1b7be",
                     "message": "Improve naming on Coromandel East coast",
-                    "refs": ["grafted", "HEAD -> master", "origin/master"],
+                    "refs": [
+                        "grafted",
+                        "HEAD -> master",
+                        "origin/master",
+                        "origin/HEAD",
+                    ],
                     "authorEmail": "robert@coup.net.nz",
                     "authorName": "Robert Coup",
                     "authorTime": "2019-06-20T14:28:33Z",
