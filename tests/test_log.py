@@ -95,7 +95,7 @@ def test_log_shallow_clone(
                     "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
                     "abbrevCommit": "2a1b7be",
                     "message": "Improve naming on Coromandel East coast",
-                    "refs": ["grafted", " HEAD -> master", " origin/master"],
+                    "refs": ["grafted", "HEAD -> master", "origin/master"],
                     "authorEmail": "robert@coup.net.nz",
                     "authorName": "Robert Coup",
                     "authorTime": "2019-06-20T14:28:33Z",

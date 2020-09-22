@@ -79,7 +79,7 @@ def _parse_git_log_output(lines):
         commit_id, *refs = line.split(",")
         if not any(refs):
             refs = []
-        yield commit_id, refs
+        yield commit_id, [r.strip() for r in refs]
 
 
 def commit_obj_to_json(commit, refs, dataset_changes=None):
