@@ -25,8 +25,9 @@ pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.in
 pytest-cov==2.10.1        # via -r requirements/test.in
 pytest-helpers-namespace==2019.1.8  # via -r requirements/test.in
 pytest-profiling==1.7.0   # via -r requirements/test.in
+pytest-shard==0.1.1       # via -r requirements/test.in
 pytest-sugar==0.9.4       # via -r requirements/test.in
-pytest==6.0.2             # via -r requirements/test.in, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-helpers-namespace, pytest-profiling, pytest-sugar
+pytest==6.0.2             # via -r requirements/test.in, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-helpers-namespace, pytest-profiling, pytest-shard, pytest-sugar
 six==1.15.0               # via -c requirements/../requirements.txt, html5lib, packaging, pytest-profiling
 termcolor==1.1.0          # via pytest-sugar
 toml==0.10.1              # via pytest

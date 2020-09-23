@@ -62,14 +62,15 @@ test: $(app) venv\.test.installed
 
 ci-test:
 	set CI=true
-	pytest \
-		--verbose \
-		-p no:sugar \
-		--cov-report term \
-		--cov-report html:test-results\coverage/ \
-		--junit-xml=test-results\junit.xml \
-		--benchmark-enable \
-		-p no:xdist
+	FOR /L %%I IN (0, 1, 9) DO \
+		pytest \
+			--num-shards 10 \
+			--shard-id %I \
+			--verbose \
+			--benchmark-enable \
+			--no-cov \
+			-p no:sugar \
+			-p no:xdist
 
 # Packaging
 
