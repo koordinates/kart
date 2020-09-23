@@ -12,7 +12,7 @@ coverage==5.3             # via pytest-cov
 fields==5.0.0             # via aspectlib
 gprof2dot==2019.11.30     # via pytest-profiling
 html5lib==1.1             # via -r requirements/test.in
-importlib-metadata==1.7.0  # via -c requirements/../requirements.txt, pluggy, pytest
+importlib-metadata==2.0.0  # via -c requirements/../requirements.txt, pluggy, pytest
 iniconfig==1.0.1          # via pytest
 lovely-pytest-docker==0.1.0  # via -r requirements/test.in
 more-itertools==8.5.0     # via pytest
@@ -31,4 +31,4 @@ six==1.15.0               # via -c requirements/../requirements.txt, html5lib, p
 termcolor==1.1.0          # via pytest-sugar
 toml==0.10.1              # via pytest
 webencodings==0.5.1       # via html5lib
-zipp==3.1.0               # via -c requirements/../requirements.txt, importlib-metadata
+zipp==3.2.0               # via -c requirements/../requirements.txt, importlib-metadata
