@@ -212,13 +212,6 @@ jobs:
         run: |
           make py-license-check
 
-      - name: "app: check for un-compiled dependencies"
-        run: |
-          make py-requirements
-          git diff requirements.txt requirements/*.txt
-          # error for runtime dependencies out of sync
-          git diff --exit-code requirements.txt
-
       - name: "app: unit tests"
         run: |
           make ci-test
