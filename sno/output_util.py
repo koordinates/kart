@@ -1,7 +1,5 @@
 import datetime
-import itertools
 import json
-import more_itertools
 import shutil
 import sys
 import textwrap
@@ -100,31 +98,18 @@ def wkt_whitespace_format(token_iter):
     Strips any existing whitespace and adds new whitespace to make it readable.
     Each keyword will be on a new line, with indentation according to the level of nesting.
     """
-
-    # Strip existing whitespace
-    token_iter = (
-        (token_type, value)
-        for token_type, value in token_iter
-        if token_type is not pygments.token.Whitespace
-    )
-    # Pad iterator at each end so that more_itertools.windowed works:
-    empty_token = (pygments.token.Whitespace, "")
-    token_iter = itertools.chain([empty_token], token_iter, [empty_token])
-
     indent = 0
-    for prev_tok, cur_tok, next_tok in more_itertools.windowed(token_iter, 3):
-        if prev_tok[1] == ",":
-            if cur_tok[0] == pygments.token.Keyword and next_tok[1] in ("[", "("):
-                indent += 1
-                yield pygments.token.Whitespace, "\n" + "    " * indent
-            else:
-                yield pygments.token.Whitespace, " "
-
-        if cur_tok[1] in ("]", ")"):
-            indent = max(indent - 1, 0)
-
-        yield cur_tok
-
+    for token_type, value in token_iter:
+        if token_type is pygments.token.Whitespace:
+            continue
+        if token_type is pygments.token.Punctuation:
+            if value in ("[", "("):
+                indent = indent + 1
+            elif value in ("]", ")"):
+                indent = max(indent - 1, 0)
+        if token_type is pygments.token.Keyword and indent > 0:
+            yield pygments.token.Whitespace, "\n" + "    " * indent
+        yield token_type, value
     yield pygments.token.Whitespace, "\n"
 
 
