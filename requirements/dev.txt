@@ -5,9 +5,10 @@
 #    make py-requirements
 #
 apipkg==1.5               # via execnet
-appnope==0.1.0            # via ipython
+appnope==0.1.0            # via -r requirements/dev.in, ipython
 attrs==20.2.0             # via -c requirements/../requirements.txt, -c requirements/test.txt, pytest
 backcall==0.2.0           # via ipython
+colorama==0.4.3           # via -c requirements/test.txt, -r requirements/dev.in
 decorator==4.4.2          # via ipython
 execnet==1.7.1            # via pytest-xdist
 importlib-metadata==2.0.0  # via -c requirements/../requirements.txt, -c requirements/test.txt, pluggy, pytest
@@ -16,10 +17,9 @@ ipdb==0.13.3              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
 ipython==7.18.1           # via -r requirements/dev.in, ipdb
 jedi==0.17.2              # via ipython
-more-itertools==8.5.0     # via -c requirements/test.txt, pytest
 packaging==20.4           # via -c requirements/test.txt, pytest
 parso==0.7.1              # via jedi
-pexpect==4.8.0            # via ipython
+pexpect==4.8.0            # via -r requirements/dev.in, ipython
 pickleshare==0.7.5        # via ipython
 pluggy==0.13.1            # via -c requirements/test.txt, pytest
 prompt-toolkit==3.0.7     # via ipython
@@ -29,7 +29,7 @@ pygments==2.7.1           # via -c requirements/../requirements.txt, ipython
 pyparsing==2.4.7          # via -c requirements/test.txt, packaging
 pytest-forked==1.3.0      # via pytest-xdist
 pytest-xdist==2.1.0       # via -r requirements/dev.in
-pytest==6.0.2             # via -c requirements/test.txt, pytest-forked, pytest-xdist
+pytest==6.1.0             # via -c requirements/test.txt, pytest-forked, pytest-xdist
 six==1.15.0               # via -c requirements/../requirements.txt, -c requirements/test.txt, packaging
 toml==0.10.1              # via -c requirements/test.txt, pytest
 traitlets==5.0.4          # via ipython

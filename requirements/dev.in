@@ -3,4 +3,9 @@
 
 ipdb
 ipython
+    # dependencies of ipython on various platforms...
+    # https://github.com/ipython/ipython/blob/d0a0447a4baf31d8a558b72f1840895f1376f8c0/setup.py#L202-L208
+    pexpect>4.3
+    appnope
+    colorama
 pytest-xdist
