@@ -10,96 +10,33 @@ from enum import Enum
 import pygit2
 from osgeo import gdal
 
-from . import gpkg, gpkg_adapter
-from .diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
-from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_WORKING_COPY
-from .filter_util import UNFILTERED
-from .geometry import Geometry, normalise_gpkg_geom
-from .schema import Schema
-from .structure import RepositoryStructure
-from .repository_version import get_repo_version
+from .base import WorkingCopy, WorkingCopyDirty
+from sno import gpkg, gpkg_adapter
+from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
+from sno.exceptions import (
+    InvalidOperation,
+    NotYetImplemented,
+    NotFound,
+    NO_WORKING_COPY,
+)
+from sno.filter_util import UNFILTERED
+from sno.geometry import Geometry, normalise_gpkg_geom
+from sno.schema import Schema
+from sno.structure import RepositoryStructure
 
-L = logging.getLogger("sno.working_copy")
-
-
-SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
-
-
-class WorkingCopyDirty(Exception):
-    pass
-
-
-class WorkingCopy:
-    VALID_VERSIONS = (1, 2)
-
-    @classmethod
-    def get(cls, repo, create_if_missing=False):
-        if create_if_missing:
-            cls.ensure_config_exists(repo)
-
-        repo_cfg = repo.config
-        path_key = SNO_WORKINGCOPY_PATH
-        if path_key not in repo_cfg:
-            return None
-
-        path = repo_cfg[path_key]
-        full_path = repo.workdir_path / path
-        if not full_path.is_file() and not create_if_missing:
-            return None
-
-        version = get_repo_version(repo)
-        if version not in cls.VALID_VERSIONS:
-            raise NotImplementedError(f"Working copy version: {version}")
-        if version < 2:
-            return WorkingCopy_GPKG_1(repo, path)
-        else:
-            return WorkingCopy_GPKG_2(repo, path)
-
-    @classmethod
-    def ensure_config_exists(cls, repo):
-        repo_cfg = repo.config
-        bare_key = repo.BARE_CONFIG_KEY
-        is_bare = bare_key in repo_cfg and repo_cfg.get_bool(bare_key)
-        if is_bare:
-            return
-
-        path_key = SNO_WORKINGCOPY_PATH
-        path = repo_cfg[path_key] if path_key in repo_cfg else None
-        if path is None:
-            cls.write_config(repo, None, False)
-
-    @classmethod
-    def write_config(cls, repo, path=None, bare=False):
-        repo_cfg = repo.config
-        bare_key = repo.BARE_CONFIG_KEY
-        path_key = SNO_WORKINGCOPY_PATH
-
-        if bare:
-            repo_cfg[bare_key] = True
-            repo.del_config(path_key)
-        else:
-            path = path or cls.default_path(repo)
-            repo_cfg[bare_key] = False
-            repo_cfg[path_key] = str(path)
-
-    @classmethod
-    def default_path(cls, repo):
-        """Returns `example.gpkg` for a sno repo in a directory named `example`."""
-        stem = repo.workdir_path.stem
-        return f"{stem}.gpkg"
-
-    class Mismatch(ValueError):
-        def __init__(self, working_copy_tree_id, match_tree_id):
-            self.working_copy_tree_id = working_copy_tree_id
-            self.match_tree_id = match_tree_id
-
-        def __str__(self):
-            return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.match_tree_id}"
+L = logging.getLogger("sno.working_copy.gpkg")
 
 
 class SQLCommand(Enum):
     INSERT = "INSERT"
     INSERT_OR_REPLACE = "INSERT OR REPLACE"
+
+
+def placeholders(vals):
+    """Returns '?,?,?,?...' - where the nunber of ? returned is len(vals)"""
+    count = len(vals)
+    assert count > 0
+    return "?" + (",?" * (count - 1))
 
 
 def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
@@ -112,7 +49,7 @@ def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
         {sql_command.value} INTO {table_name}
             ({','.join([gpkg.ident(k) for k in keys])})
         VALUES
-            ({','.join(['?'] * len(keys))});
+            ({placeholders(keys)});
     """
     return dbcur.execute(sql, values)
 
@@ -526,7 +463,7 @@ class WorkingCopyGPKG(WorkingCopy):
                         table_name=?;
                 """
             else:
-                sql = f"""
+                sql = """
                     UPDATE gpkg_contents
                     SET
                         min_x=NULL,
@@ -676,7 +613,7 @@ class WorkingCopyGPKG(WorkingCopy):
                     INSERT INTO {gpkg.ident(table)}
                         ({','.join([gpkg.ident(k) for k in col_names])})
                     VALUES
-                        ({','.join(['?'] * len(col_names))});
+                        ({placeholders(col_names)});
                 """
                 feat_progress = 0
                 t0 = time.monotonic()
@@ -733,7 +670,7 @@ class WorkingCopyGPKG(WorkingCopy):
             INSERT OR REPLACE INTO {gpkg.ident(dataset.table_name)}
                 ({','.join([gpkg.ident(k) for k in col_names])})
             VALUES
-                ({','.join(['?'] * len(col_names))});
+                ({placeholders(col_names)});
         """
 
         feat_count = 0
@@ -824,7 +761,9 @@ class WorkingCopyGPKG(WorkingCopy):
             """
             params = [table]
             if pk_filter is not UNFILTERED:
-                diff_sql += f"\nAND {self.TRACKING_TABLE}.pk IN ({','.join(['?']*len(pk_filter))})"
+                diff_sql += (
+                    f"\nAND {self.TRACKING_TABLE}.pk IN ({placeholders(pk_filter)})"
+                )
                 params += [str(pk) for pk in pk_filter]
             dbcur.execute(diff_sql, params)
 
@@ -971,7 +910,7 @@ class WorkingCopyGPKG(WorkingCopy):
                 pks = dataset_filter.get("feature", ())
                 for pk_chunk in self._chunk(pks, CHUNK_SIZE):
                     dbcur.execute(
-                        f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=? AND pk IN ({','.join('?' * len(pk_chunk))});",
+                        f"DELETE FROM {self.TRACKING_TABLE} WHERE table_name=? AND pk IN ({placeholders(pk_chunk)});",
                         (dataset, *pk_chunk),
                     )
 
@@ -1002,7 +941,7 @@ class WorkingCopyGPKG(WorkingCopy):
             # Dataset1 doesn't support meta changes at all - except by rewriting the entire table.
             return False
 
-        if not "schema.json" in meta_diff:
+        if "schema.json" not in meta_diff:
             return True
 
         schema_delta = meta_diff["schema.json"]
@@ -1012,7 +951,8 @@ class WorkingCopyGPKG(WorkingCopy):
         old_schema = Schema.from_column_dicts(schema_delta.old_value)
         new_schema = Schema.from_column_dicts(schema_delta.new_value)
         dt = old_schema.diff_type_counts(new_schema)
-        # We do support name_updates, but we don't support any other type of schema update - except by rewriting the entire table.
+        # We do support name_updates, but we don't support any other type of schema update
+        # - except by rewriting the entire table.
         dt.pop("name_updates")
         return sum(dt.values()) == 0
 
@@ -1045,7 +985,10 @@ class WorkingCopyGPKG(WorkingCopy):
             src_name = src_schema[col_id].name
             dest_name = dest_schema[col_id].name
             dbcur.execute(
-                f"""ALTER TABLE {gpkg.ident(table_name)} RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}"""
+                f"""
+                    ALTER TABLE {gpkg.ident(table_name)}
+                    RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}
+                """
             )
 
     def _apply_meta_metadata_dataset_json(

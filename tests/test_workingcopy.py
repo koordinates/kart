@@ -10,7 +10,8 @@ import pygit2
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
-from sno.working_copy import WorkingCopy, WorkingCopy_GPKG_1
+from sno.working_copy import WorkingCopy
+from sno.working_copy.gpkg import WorkingCopy_GPKG_1
 
 
 H = pytest.helpers.helpers()
