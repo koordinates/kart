@@ -1,4 +1,6 @@
+from collections import deque
 import datetime
+import itertools
 import json
 import shutil
 import sys
@@ -98,19 +100,43 @@ def wkt_whitespace_format(token_iter):
     Strips any existing whitespace and adds new whitespace to make it readable.
     Each keyword will be on a new line, with indentation according to the level of nesting.
     """
+
+    # Filter out existing whitespace
+    token_iter = (
+        (token_type, token_text)
+        for token_type, token_text in token_iter
+        if token_type != pygments.token.Whitespace
+    )
+    # Pad iterator at each end so that _windowed() works:
+    empty_token = (pygments.token.Whitespace, "")
+    token_iter = itertools.chain([empty_token], token_iter, [empty_token])
+
     indent = 0
-    for token_type, value in token_iter:
-        if token_type is pygments.token.Whitespace:
-            continue
-        if token_type is pygments.token.Punctuation:
-            if value in ("[", "("):
-                indent = indent + 1
-            elif value in ("]", ")"):
-                indent = max(indent - 1, 0)
-        if token_type is pygments.token.Keyword and indent > 0:
-            yield pygments.token.Whitespace, "\n" + "    " * indent
-        yield token_type, value
+    for prev_tok, cur_tok, next_tok in _windowed(token_iter, 3):
+        if prev_tok[1] == ",":
+            if cur_tok[0] == pygments.token.Keyword and next_tok[1] in ("[", "("):
+                indent += 1
+                yield pygments.token.Whitespace, "\n" + "    " * indent
+            else:
+                yield pygments.token.Whitespace, " "
+
+        if cur_tok[1] in ("]", ")"):
+            indent = max(indent - 1, 0)
+
+        yield cur_tok
+
     yield pygments.token.Whitespace, "\n"
+
+
+def _windowed(iterable, size):
+    """Yields a sliding window of length size across iterable."""
+    iterable = iter(iterable)
+    window = deque(itertools.islice(iterable, size), size)
+    if len(window) == size:
+        yield window
+        for elem in iterable:
+            window.append(elem)
+            yield window
 
 
 def write_with_indent(fp, text, indent=""):
