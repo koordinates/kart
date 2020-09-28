@@ -1,7 +1,6 @@
 from pathlib import Path
 
-import pygit2
-
+from .sno_repo import SnoRepo
 from .exceptions import NotFound, NO_REPOSITORY
 from .repo_files import RepoState
 from .working_copy import WorkingCopy
@@ -58,23 +57,18 @@ class Context(object):
         """
         if not hasattr(self, "_repo"):
             try:
-                self._repo = pygit2.Repository(str(self.repo_path))
-            except pygit2.GitError:
-                self._repo = None
+                self._repo = SnoRepo(self.repo_path)
+            except NotFound:
+                if self.user_repo_path:
+                    message = "Not an existing sno repository"
+                    param_hint = "--repo"
+                else:
+                    message = "Current directory is not an existing sno repository"
+                    param_hint = None
 
-        if not self._repo or not self._repo.is_bare:
-            if self.user_repo_path:
-                message = "Not an existing repository"
-                param_hint = "--repo"
-            else:
-                message = "Current directory is not an existing repository"
-                param_hint = None
+                raise NotFound(message, exit_code=NO_REPOSITORY, param_hint=param_hint)
 
-            raise NotFound(message, exit_code=NO_REPOSITORY, param_hint=param_hint)
-
-        RepoState.ensure_state(
-            self._repo, allowed_states, bad_state_message, command_extra
-        )
+        self._repo.ensure_state(allowed_states, bad_state_message, command_extra)
         return self._repo
 
     def check_not_dirty(self, help_message=None):

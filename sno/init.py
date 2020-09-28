@@ -1,4 +1,3 @@
-import contextlib
 import os
 from pathlib import Path
 
@@ -16,8 +15,8 @@ from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .fast_import import fast_import_tables, ReplaceExisting
 from .structure import RepositoryStructure
+from .sno_repo import SnoRepo
 from .repository_version import (
-    write_repo_version_config,
     REPO_VERSIONS_CHOICE,
     REPO_VERSIONS_DEFAULT_CHOICE,
 )
@@ -321,12 +320,12 @@ def init(
 
     if directory is None:
         directory = os.curdir
-    elif not Path(directory).exists():
-        Path(directory).mkdir(parents=True)
-
     repo_path = Path(directory).resolve()
-    if any(repo_path.iterdir()):
+
+    if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
+    elif not repo_path.exists():
+        repo_path.mkdir(parents=True)
 
     if import_from:
         check_git_user(repo=None)
@@ -339,12 +338,7 @@ def init(
         sources = [base_source.clone_for_table(t) for t in tables]
 
     # Create the repository
-    repo = pygit2.init_repository(str(repo_path), bare=True)
-    write_repo_version_config(repo, repo_version)
-    WorkingCopy.write_config(repo, wc_path, bare)
-
-    # Enable writing to reflogs
-    repo.config["core.logAllRefUpdates"] = "always"
+    repo = SnoRepo.init_repository(repo_path, repo_version, wc_path, bare)
 
     if import_from:
         fast_import_tables(

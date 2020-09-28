@@ -1,6 +1,4 @@
 import re
-import subprocess
-import sys
 
 from pathlib import Path, PurePath
 from urllib.parse import urlsplit
@@ -9,9 +7,8 @@ import click
 import pygit2
 
 from . import checkout, git_util
-from .exceptions import translate_subprocess_exit_code
-from .repository_version import get_repo_version
-from .working_copy import WorkingCopy
+from .exceptions import InvalidOperation
+from .sno_repo import SnoRepo
 
 
 def get_directory_from_url(url):
@@ -45,7 +42,6 @@ def get_directory_from_url(url):
     type=click.Path(dir_okay=False),
     help="Path where the working copy should be created",
 )
-@click.option("--workingcopy-version", "wc_version", type=int)
 @click.option(
     "--progress/--quiet",
     "do_progress",
@@ -64,41 +60,23 @@ def get_directory_from_url(url):
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, bare, wc_path, wc_version, do_progress, depth, url, directory):
+def clone(ctx, bare, wc_path, do_progress, depth, url, directory):
     """ Clone a repository into a new directory """
 
-    repo_path = Path(directory or get_directory_from_url(url))
-    args = [
-        "git",
-        "clone",
-        "--progress" if do_progress else "--quiet",
-        "--bare",
-        "--config",
-        "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*",
-        url,
-        str(repo_path.resolve()),
-    ]
+    repo_path = Path(directory or get_directory_from_url(url)).resolve()
+
+    if repo_path.exists() and any(repo_path.iterdir()):
+        raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
+    elif not repo_path.exists():
+        repo_path.mkdir(parents=True)
+
+    args = ["--progress" if do_progress else "--quiet"]
     if depth is not None:
         args.append(f"--depth={depth}")
 
-    try:
-        # we use subprocess because it deals with credentials much better & consistently than we can do at the moment.
-        # pygit2.clone_repository() works fine except for that
-        subprocess.check_call(args)
-    except subprocess.CalledProcessError as e:
-        sys.exit(translate_subprocess_exit_code(e.returncode))
+    repo = SnoRepo.clone_repository(url, repo_path, args, wc_path, bare)
 
-    repo = pygit2.Repository(str(repo_path.resolve()))
-
-    head_ref = git_util.get_head_branch_shorthand(repo)  # master, probably
-    if head_ref:
-        repo.config[f"branch.{head_ref}.remote"] = "origin"
-        repo.config[f"branch.{head_ref}.merge"] = f"refs/heads/{head_ref}"
-
-    repo.config["sno.repository.version"] = get_repo_version(repo)
-
-    WorkingCopy.write_config(repo, wc_path, bare)
-
-    if not repo.is_empty:
-        head_commit = repo.head.peel(pygit2.Commit)
+    # Create working copy, if needed.
+    head_commit = git_util.get_head_commit(repo)
+    if head_commit is not None:
         checkout.reset_wc_if_needed(repo, head_commit)

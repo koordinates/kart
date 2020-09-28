@@ -190,6 +190,7 @@ cli.add_command(show.show)
 cli.add_command(status.status)
 cli.add_command(query.query)
 cli.add_command(upgrade.upgrade)
+cli.add_command(upgrade.upgrade_to_tidy)
 
 
 # aliases/shortcuts

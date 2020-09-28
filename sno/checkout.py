@@ -105,7 +105,6 @@ def checkout(ctx, branch, force, discard_changes, refish):
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
-    repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
 
 @click.command()
@@ -198,7 +197,6 @@ def switch(ctx, create, force_create, discard_changes, refish):
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
-    repo.reset(commit.oid, pygit2.GIT_RESET_SOFT)
 
 
 @click.command()

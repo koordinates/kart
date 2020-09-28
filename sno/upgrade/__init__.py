@@ -1,18 +1,20 @@
 import click
 import pygit2
 
-import subprocess
 from datetime import datetime
 from pathlib import Path
 
 
-from . import upgrade_v0, upgrade_v1
 from sno import checkout, context
-from sno.exceptions import InvalidOperation
+from sno.exceptions import InvalidOperation, NotFound
 from sno.fast_import import fast_import_tables, ReplaceExisting
+from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
-from sno.repository_version import get_repo_version, write_repo_version_config
+from sno.repository_version import get_repo_version
 from sno.timestamps import minutes_to_tz_offset
+
+
+UPGRADED_REPO_VERSION = 2
 
 
 def dataset_class_for_version(version):
@@ -38,6 +40,9 @@ def upgrade(ctx, source, dest):
     """
     Upgrade a repository for an earlier version of Sno to be compatible with the latest version.
     The current repository structure of Sno is known as Datasets V2, which is used from Sno 0.5 onwards.
+
+    Usage:
+    sno upgrade SOURCE DEST
     """
     source = Path(source)
     dest = Path(dest)
@@ -45,10 +50,11 @@ def upgrade(ctx, source, dest):
     if dest.exists():
         raise click.BadParameter(f"'{dest}': already exists", param_hint="DEST")
 
-    source_repo = pygit2.Repository(str(source))
-    if not source_repo or not source_repo.is_bare:
+    try:
+        source_repo = SnoRepo(source)
+    except NotFound:
         raise click.BadParameter(
-            f"'{source}': not an existing repository", param_hint="SOURCE"
+            f"'{source}': not an existing sno repository", param_hint="SOURCE"
         )
 
     source_version = get_repo_version(source_repo)
@@ -67,8 +73,9 @@ def upgrade(ctx, source, dest):
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
-    dest_repo = pygit2.init_repository(str(dest), bare=True)
-    write_repo_version_config(dest_repo, 2)
+    dest_repo = SnoRepo.init_repository(
+        dest, UPGRADED_REPO_VERSION, wc_path=None, bare=True
+    )
 
     # walk _all_ references
     source_walker = source_repo.walk(
@@ -122,7 +129,7 @@ def upgrade(ctx, source, dest):
         dest_repo.set_head(source_repo.head.name)
 
     click.secho("\nCompacting repository ...", bold=True)
-    subprocess.check_call(["git", "-C", str(dest), "gc"])
+    dest_repo.gc()
 
     if "sno.workingcopy.path" in source_repo.config:
         click.secho("\nCreating working copy ...", bold=True)
@@ -188,3 +195,57 @@ def _upgrade_commit(
         f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]}"
         f" ({commit_time}; {source_commit.committer.name}; {dataset_count} datasets; {feature_count} rows)"
     )
+
+
+@click.command()
+@click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
+def upgrade_to_tidy(source):
+    """
+    Upgrade in-place a sno repository that is "old+bare" to be "new+tidy".
+    Doesn't upgrade the repository version, or change the contents at all.
+
+    Usage:
+    sno upgrade-to-tidy SOURCE
+    """
+    source = Path(source).resolve()
+
+    try:
+        source_repo = SnoRepo(source)
+    except NotFound:
+        raise click.BadParameter(
+            f"'{source}': not an existing sno repository", param_hint="SOURCE"
+        )
+
+    if source_repo.is_new_tidy_repo():
+        raise click.InvalidOperation(
+            "Cannot upgrade in-place - source repo is already new+tidy"
+        )
+
+    repo_version = source_repo.version
+    wc_path = source_repo.workingcopy_path
+    is_bare = source_repo.is_bare
+
+    source_repo.free()
+    del source_repo
+
+    dot_sno_path = source / ".sno"
+    if dot_sno_path.exists() and any(dot_sno_path.iterdir()):
+        raise click.InvalidOperation(".sno already exists and is not empty")
+    elif not dot_sno_path.exists():
+        dot_sno_path.mkdir()
+
+    for child in source.iterdir():
+        if child == dot_sno_path:
+            continue
+        if ".gpkg" in child.name:
+            continue
+        child.rename(dot_sno_path / child.name)
+
+    tidy_repo = SnoRepo(dot_sno_path)
+    tidy_repo.lock_git_index()
+    tidy_repo.config["core.bare"] = False
+    tidy_repo.config["sno.workingcopy.bare"] = False
+    tidy_repo.write_config(repo_version, wc_path, is_bare)
+    tidy_repo.activate()
+
+    click.secho("In-place upgrade complete: repo is now tidy", fg="green", bold=True)

@@ -3,7 +3,6 @@ import subprocess
 
 import pygit2
 
-from .exec import execvp
 from .timestamps import tz_offset_to_minutes
 
 
@@ -69,14 +68,3 @@ def author_signature(repo, **overrides):
 
 def committer_signature(repo, **overrides):
     return _signature(repo, "GIT_COMMITTER_IDENT", **overrides)
-
-
-def gc(repo, *args, use_subprocess=True):
-    """
-    Runs git-gc on the repository
-    """
-    args = ["git", "-C", repo.path, "gc", *args]
-    if use_subprocess:
-        subprocess.run(args)
-    else:
-        execvp("git", args)

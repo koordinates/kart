@@ -14,6 +14,8 @@ from sno.repo_files import (
     read_repo_file,
     RepoState,
 )
+from sno.sno_repo import SnoRepo
+
 
 H = pytest.helpers.helpers()
 
@@ -40,7 +42,7 @@ def test_merge_fastforward(
 ):
     archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
     with data_working_copy(archive) as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r
@@ -100,7 +102,7 @@ def test_merge_fastforward_noff(
 ):
     archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
     with data_working_copy(archive) as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r
@@ -165,7 +167,7 @@ def test_merge_true(
 ):
     archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
     with data_working_copy(archive) as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r

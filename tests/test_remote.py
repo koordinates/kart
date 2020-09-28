@@ -5,6 +5,7 @@ import pytest
 import pygit2
 
 from sno.clone import get_directory_from_url
+from sno.sno_repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -63,8 +64,7 @@ def test_clone(
         )
         print("git config file:", r.decode("utf-8").splitlines())
 
-        repo = pygit2.Repository(str(repo_path))
-        assert repo.is_bare
+        repo = SnoRepo(repo_path)
         assert not repo.is_empty
         assert repo.head.name == "refs/heads/master"
         assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
@@ -121,7 +121,7 @@ def test_fetch(
         assert r.exit_code == 0, r
 
     with data_working_copy("points") as (path2, wc):
-        repo = pygit2.Repository(str(path2))
+        repo = SnoRepo(path2)
         h = repo.head.target.hex
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
@@ -192,7 +192,7 @@ def test_pull(
             assert r.exit_code == 0, r
 
         with chdir(path2):
-            repo = pygit2.Repository(str(path2))
+            repo = SnoRepo(path2)
             h = repo.head.target.hex
 
             r = cli_runner.invoke(["pull"])

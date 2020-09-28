@@ -5,9 +5,9 @@ import re
 import html5lib
 import pytest
 
-import pygit2
 from sno.diff_structs import Delta, DeltaDiff
 from sno.geometry import hex_wkb_to_ogr
+from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
 
 
@@ -1292,7 +1292,7 @@ def test_diff_object_eq_reverse():
 
 def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
     with data_working_copy("points") as (repo_path, wc):
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r.stderr
@@ -1545,7 +1545,7 @@ def test_diff_streaming(repo_version, data_archive_readonly):
     # and that the features in that diff can be read one by one.
     data_archive = "points2" if repo_version == "2" else "points"
     with data_archive_readonly(data_archive) as repo_path:
-        repo = pygit2.Repository(str(repo_path))
+        repo = SnoRepo(repo_path)
         old = RepositoryStructure.lookup(repo, "HEAD^")[H.POINTS.LAYER]
         new = RepositoryStructure.lookup(repo, "HEAD")[H.POINTS.LAYER]
 

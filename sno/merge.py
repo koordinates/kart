@@ -11,7 +11,6 @@ from .conflicts import (
 )
 from .diff import get_repo_diff
 from .exceptions import InvalidOperation
-from .git_util import gc
 from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext
 from .output_util import dump_json_output
 from .repo_files import (
@@ -154,7 +153,7 @@ def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     """
     Move the sno repository into a "merging" state in which conflicts
     can be resolved one by one.
-    repo - the pygit2.Repository.
+    repo - the SnoRepo
     merge_index - the MergeIndex containing the conflicts found.
     merge_context - the MergeContext object for the merge.
     merge_message - the commit message for when the merge is completed.
@@ -246,7 +245,7 @@ def complete_merging_state(ctx):
 
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
-    gc(repo, "--auto", use_subprocess=False)
+    repo.gc("--auto")
 
 
 def merge_context_to_text(jdict):
@@ -410,4 +409,4 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     else:
         click.echo(merge_status_to_text(jdict, fresh=True))
     if not no_op and not conflicts:
-        gc(repo, "--auto", use_subprocess=False)
+        repo.gc("--auto")
