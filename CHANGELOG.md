@@ -12,6 +12,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `apply`, `commit` and `merge` commands now optimise repositories after committing, to avoid poor repo performance. [#250](https://github.com/koordinates/sno/issues/250)
  * `data ls` now accepts an optional ref argument
  * `meta get` now accepts a `--ref=REF` option
+ * `clone` now accepts a `--branch` option to clone a specific branch.
 
 ## 0.5.0
 
