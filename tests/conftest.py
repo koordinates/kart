@@ -868,7 +868,7 @@ def disable_editor():
 @pytest.fixture()
 def postgis_db():
     """
-    Using docker, you can run a PostGres test - such as test_pg_import - as follows:
+    Using docker, you can run a PostGres test - such as test_postgis_import - as follows:
         docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
         SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k postgis --pdb -vvs
     """

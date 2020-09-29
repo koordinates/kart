@@ -1,5 +1,4 @@
 import contextlib
-import itertools
 import logging
 import os
 import time
@@ -12,7 +11,6 @@ from osgeo import gdal
 
 from .base import WorkingCopy, WorkingCopyDirty
 from sno import gpkg, gpkg_adapter
-from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from sno.exceptions import (
     InvalidOperation,
     NotYetImplemented,
@@ -551,17 +549,6 @@ class WorkingCopyGPKG(WorkingCopy):
         """
         )
 
-    def _chunk(self, iterable, size):
-        """
-        Generator. Yield successive chunks from iterable of length <size>.
-        """
-        it = iter(iterable)
-        while True:
-            chunk = tuple(itertools.islice(it, size))
-            if not chunk:
-                return
-            yield chunk
-
     def write_full(self, target_tree_or_commit, *datasets, safe=True):
         """
         Writes a full layer into a working-copy table
@@ -707,173 +694,26 @@ class WorkingCopyGPKG(WorkingCopy):
                     (table,),
                 )
 
-    def diff_db_to_tree_meta(self, dataset):
+    def _execute_diff_query(self, dbcur, dataset, feature_filter=None):
+        feature_filter = feature_filter or UNFILTERED
+        table = dataset.table_name
+        pk_field = dataset.schema.pk_columns[0].name
+
+        diff_sql = f"""
+            SELECT
+                {self.TRACKING_TABLE}.pk AS ".__track_pk",
+                {gpkg.ident(table)}.*
+            FROM {self.TRACKING_TABLE} LEFT OUTER JOIN {gpkg.ident(table)}
+            ON ({self.TRACKING_TABLE}.pk = {gpkg.ident(table)}.{gpkg.ident(pk_field)})
+            WHERE ({self.TRACKING_TABLE}.table_name = ?)
         """
-        Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
-        How the metadata is formatted depends on the version of the dataset.
-        """
-        meta_old = dict(dataset.meta_items())
-        meta_new = dict(self.meta_items(dataset))
-        if "schema.json" in meta_old and "schema.json" in meta_new:
-            Schema.align_schema_cols(meta_old["schema.json"], meta_new["schema.json"])
-        return DeltaDiff.diff_dicts(meta_old, meta_new)
-
-    def diff_db_to_tree(self, dataset, ds_filter=UNFILTERED, raise_if_dirty=False):
-        """
-        Generates a diff between a working copy DB and the underlying repository tree,
-        for a single dataset only.
-
-        Pass a list of PK values to filter results to them
-        """
-        ds_filter = ds_filter or UNFILTERED
-        pk_filter = ds_filter.get("feature", ())
-        with self.session() as db:
-            dbcur = db.cursor()
-
-            table = dataset.table_name
-            pk_field = dataset.primary_key
-
-            ds_diff = DatasetDiff()
-
-            ds_diff["meta"] = self.diff_db_to_tree_meta(dataset)
-
-            if raise_if_dirty and ds_diff["meta"]:
-                raise WorkingCopyDirty()
-
-            diff_sql = f"""
-                SELECT
-                    {self.TRACKING_TABLE}.pk AS ".__track_pk",
-                    {gpkg.ident(table)}.*
-                FROM {self.TRACKING_TABLE} LEFT OUTER JOIN {gpkg.ident(table)}
-                ON ({self.TRACKING_TABLE}.pk = {gpkg.ident(table)}.{gpkg.ident(pk_field)})
-                WHERE ({self.TRACKING_TABLE}.table_name = ?)
-            """
-            params = [table]
-            if pk_filter is not UNFILTERED:
-                diff_sql += (
-                    f"\nAND {self.TRACKING_TABLE}.pk IN ({placeholders(pk_filter)})"
-                )
-                params += [str(pk) for pk in pk_filter]
-            dbcur.execute(diff_sql, params)
-
-            feature_diff = DeltaDiff()
-            insert_count = delete_count = 0
-
-            geom_col = dataset.geom_column_name
-
-            for row in dbcur:
-                track_pk = row[0]  # This is always a str
-                db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
-
-                if db_obj[pk_field] is None:
-                    db_obj = None
-
-                if db_obj is not None and geom_col is not None:
-                    # Clean geometries so they have the same properties as the dataset's ones
-                    g = db_obj[geom_col]
-                    if dataset.VERSION >= 2:
-                        g = normalise_gpkg_geom(g)
-                    db_obj[geom_col] = Geometry.of(g)
-
-                try:
-                    repo_obj = dataset.get_feature(track_pk)
-                except KeyError:
-                    repo_obj = None
-
-                if repo_obj == db_obj:
-                    # DB was changed and then changed back - eg INSERT then DELETE.
-                    # TODO - maybe delete track_pk from tracking table?
-                    continue
-
-                if raise_if_dirty:
-                    raise WorkingCopyDirty()
-
-                if db_obj and not repo_obj:  # INSERT
-                    insert_count += 1
-                    feature_diff.add_delta(Delta.insert((db_obj[pk_field], db_obj)))
-
-                elif repo_obj and not db_obj:  # DELETE
-                    delete_count += 1
-                    feature_diff.add_delta(Delta.delete((repo_obj[pk_field], repo_obj)))
-
-                else:  # UPDATE
-                    pk = db_obj[pk_field]
-                    feature_diff.add_delta(Delta.update((pk, repo_obj), (pk, db_obj)))
-
-        if (
-            self.can_find_renames(ds_diff["meta"])
-            and (insert_count + delete_count) <= 400
-        ):
-            self.find_renames(feature_diff, dataset)
-
-        ds_diff["feature"] = feature_diff
-        return ds_diff
-
-    def can_find_renames(self, meta_diff):
-        """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
-        if "schema.json" not in meta_diff:
-            return True
-
-        schema_delta = meta_diff["schema.json"]
-        if not schema_delta.old_value or not schema_delta.new_value:
-            return False
-
-        old_schema = Schema.from_column_dicts(schema_delta.old_value)
-        new_schema = Schema.from_column_dicts(schema_delta.new_value)
-        dt = old_schema.diff_type_counts(new_schema)
-        # We could still recognise a renamed feature in the case of type updates (eg int32 -> int64),
-        # but basically any other type of schema modification means there's no point looking for renames.
-        dt.pop("type_updates")
-        return sum(dt.values()) == 0
-
-    def find_renames(self, feature_diff, dataset):
-        """
-        Matches inserts + deletes into renames on a best effort basis.
-        changes at most one matching insert and delete into an update per blob-hash.
-        Modifies feature_diff in place.
-        """
-
-        def hash_feature(feature):
-            return pygit2.hash(dataset.encode_feature_blob(feature)).hex
-
-        inserts = {}
-        deletes = {}
-
-        for delta in feature_diff.values():
-            if delta.type == "insert":
-                inserts[hash_feature(delta.new_value)] = delta
-            elif delta.type == "delete":
-                deletes[hash_feature(delta.old_value)] = delta
-
-        for h in deletes:
-            if h in inserts:
-                delete_delta = deletes[h]
-                insert_delta = inserts[h]
-
-                del feature_diff[delete_delta.key]
-                del feature_diff[insert_delta.key]
-                update_delta = delete_delta + insert_delta
-                feature_diff.add_delta(update_delta)
-
-    def diff_to_tree(self, repo_filter=UNFILTERED, raise_if_dirty=False):
-        """
-        Generates a diff between a working copy DB and the underlying repository tree,
-        for every dataset in the given repository structure.
-        """
-        repo_filter = repo_filter or UNFILTERED
-
-        repo_diff = RepoDiff()
-        for dataset in RepositoryStructure.lookup(self.repo, self.get_db_tree()):
-            if dataset.path not in repo_filter:
-                continue
-            ds_diff = self.diff_db_to_tree(
-                dataset,
-                ds_filter=repo_filter[dataset.path],
-                raise_if_dirty=raise_if_dirty,
+        params = [table]
+        if feature_filter is not UNFILTERED:
+            diff_sql += (
+                f"\nAND {self.TRACKING_TABLE}.pk IN ({placeholders(feature_filter)})"
             )
-            repo_diff[dataset.path] = ds_diff
-        repo_diff.prune()
-        return repo_diff
+            params += [str(pk) for pk in feature_filter]
+        dbcur.execute(diff_sql, params)
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):
         reset_filter = reset_filter or UNFILTERED
@@ -1337,6 +1177,10 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
     # The state table was called "meta" in GPKG_1 but we have too many things called meta.
     STATE_NAME = "meta"
 
+    def _db_geom_to_gpkg_geom(self, g):
+        # In V1 we don't normalise the geometries - we just roundtrip them as-is.
+        return Geometry.of(g)
+
 
 class WorkingCopy_GPKG_2(WorkingCopyGPKG):
     """
@@ -1345,3 +1189,8 @@ class WorkingCopy_GPKG_2(WorkingCopyGPKG):
 
     # Using this prefix means OGR/QGIS doesn't list these tables as datasets
     SNO_TABLE_PREFIX = "gpkg_sno_"
+
+    def _db_geom_to_gpkg_geom(self, g):
+        # In V2 we normalise geometries to avoid spurious diffs - diffs where nothing
+        # of any consequence has changed (eg, only endianness has changed).
+        return normalise_gpkg_geom(g)
