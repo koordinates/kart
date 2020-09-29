@@ -6,7 +6,6 @@ import subprocess
 
 from osgeo import gdal, ogr
 
-import psycopg2
 import pygit2
 import pytest
 
@@ -491,28 +490,6 @@ def quote_ident(part):
 
 
 @pytest.fixture()
-def postgis_db():
-    """
-    Using docker, you can run a PostGres test - such as test_pg_import - as follows:
-        docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
-        SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k test_pg_import --pdb -vvs
-    """
-    if "SNO_POSTGRES_URL" not in os.environ:
-        raise pytest.skip(
-            "Requires postgres - read docstring at sno.test_structure.postgis_db"
-        )
-    conn = psycopg2.connect(os.environ["SNO_POSTGRES_URL"])
-    conn.autocommit = True
-    with conn.cursor() as cur:
-        # test connection and postgis support
-        try:
-            cur.execute("""SELECT postgis_version()""")
-        except psycopg2.errors.UndefinedFunction:
-            raise pytest.skip("Requires PostGIS")
-    yield conn
-
-
-@pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
     postgres_conn_str = PostgreSQLImportSource.postgres_url_to_ogr_conn_str(
         os.environ["SNO_POSTGRES_URL"]
@@ -547,7 +524,7 @@ def postgis_layer(postgis_db, data_archive):
     return _postgis_layer
 
 
-def _test_pg_import(
+def _test_postgis_import(
     tmp_path, cli_runner, chdir, *, table_name, pk_name="id", pk_size=64, import_args=()
 ):
     repo_path = tmp_path / "repo"
@@ -600,7 +577,7 @@ def _test_pg_import(
     ]
 
 
-def test_pg_import(
+def test_postgis_import(
     postgis_layer,
     data_archive,
     tmp_path,
@@ -611,10 +588,12 @@ def test_pg_import(
     with postgis_layer(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
-        _test_pg_import(tmp_path, cli_runner, chdir, table_name="nz_waca_adjustments")
+        _test_postgis_import(
+            tmp_path, cli_runner, chdir, table_name="nz_waca_adjustments"
+        )
 
 
-def test_pg_import_from_view(
+def test_postgis_import_from_view(
     postgis_db,
     postgis_layer,
     data_archive,
@@ -634,7 +613,7 @@ def test_pg_import_from_view(
             )
         """
         )
-        _test_pg_import(
+        _test_postgis_import(
             tmp_path,
             cli_runner,
             chdir,
@@ -645,7 +624,7 @@ def test_pg_import_from_view(
         )
 
 
-def test_pg_import_from_view_with_ogc_fid(
+def test_postgis_import_from_view_with_ogc_fid(
     postgis_db,
     postgis_layer,
     data_archive,
@@ -667,7 +646,7 @@ def test_pg_import_from_view_with_ogc_fid(
             )
         """
         )
-        _test_pg_import(
+        _test_postgis_import(
             tmp_path,
             cli_runner,
             chdir,
