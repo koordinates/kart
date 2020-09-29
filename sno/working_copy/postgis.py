@@ -79,6 +79,9 @@ class WorkingCopy_Postgis(WorkingCopy):
             p._replace(netloc=nl)
         return p.geturl()
 
+    def _sno_table(self, sno_table):
+        return Identifier(self.sno_schema, sno_table)
+
     def _table_identifier(self, table):
         if self.schema:
             return Identifier(self.schema, table)
@@ -175,7 +178,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         """ Delete the working copy tables and sno schema """
         with self.session() as db:
             dbcur = db.cursor()
-            dbcur.execute(SQL("DROP TABLE {} CASCADE").format(self.META_TABLE))
+            dbcur.execute(SQL("DROP TABLE {} CASCADE").format(self.STATE_TABLE))
             dbcur.execute(SQL("DROP TABLE {} CASCADE").format(self.TRACKING_TABLE))
 
             # TODO drop dataset tables
@@ -186,7 +189,6 @@ class WorkingCopy_Postgis(WorkingCopy):
     def create(self):
         with self.session() as db:
             dbcur = db.cursor()
-            # Remove placeholder stuff GDAL creates
             dbcur.execute(
                 SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
                     Identifier(self.sno_schema)
@@ -202,7 +204,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                     PRIMARY KEY (table_name, key)
                 );
                 """
-                ).format(self.META_TABLE)
+                ).format(self.STATE_TABLE)
             )
             dbcur.execute(
                 SQL(
@@ -324,7 +326,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 FROM {}
                 WHERE table_name=%s AND key=%s
             """
-                ).format(self.META_TABLE),
+                ).format(self.STATE_TABLE),
                 (table_name, "tree"),
             )
             row = dbcur.fetchone()
@@ -432,7 +434,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                     ON CONFLICT (table_name, key) DO UPDATE
                     SET value=EXCLUDED.value;
                 """
-                ).format(self.META_TABLE),
+                ).format(self.STATE_TABLE),
                 ("*", "tree", commit.peel(pygit2.Tree).hex),
             )
 
@@ -607,12 +609,12 @@ class WorkingCopy_Postgis(WorkingCopy):
                 dbcur.execute(
                     SQL(
                         "UPDATE {} SET value=%s WHERE table_name='*' AND key='tree';"
-                    ).format(self.META_TABLE),
+                    ).format(self.STATE_TABLE),
                     (str(new_tree),),
                 )
                 assert (
                     dbcur.rowcount == 1
-                ), f"{self.META_TABLE} update: expected 1Δ, got {dbcur.rowcount}"
+                ), f"{self.STATE_TABLE} update: expected 1Δ, got {dbcur.rowcount}"
 
             else:
                 raise NotImplementedError(f"Unexpected action: {action}")
@@ -782,7 +784,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 dbcur.execute(
                     SQL(
                         "UPDATE {} SET value=%s WHERE table_name='*' AND key='tree';"
-                    ).format(self.META_TABLE),
+                    ).format(self.STATE_TABLE),
                     (tree.hex,),
                 )
 
