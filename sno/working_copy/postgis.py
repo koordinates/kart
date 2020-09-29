@@ -1,21 +1,21 @@
-import collections
 import contextlib
-import itertools
 import logging
-import os
 import re
 import time
-from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
-import click
 import pygit2
 import psycopg2
 from psycopg2.extensions import register_adapter, Binary
 from psycopg2.extras import DictCursor
 from psycopg2.sql import Identifier, SQL
 
-from .. import diff, geometry
+
 from .base import WorkingCopy
+from sno import geometry, crs_util
+from sno.diff_structs import DeltaDiff
+from sno.filter_util import UNFILTERED
+from sno.geometry import gpkg_geom_to_ewkb
 
 """
 * database needs to exist
@@ -27,11 +27,11 @@ from .base import WorkingCopy
 """
 
 
-def gpkg_ewkb_adapter(gpkg_geom):
-    return Binary(geometry.geom_to_ewkb(gpkg_geom))
+def geometry_ewkb_adapter(g):
+    return Binary(gpkg_geom_to_ewkb(g))
 
 
-register_adapter(geometry.Geometry, gpkg_ewkb_adapter)
+register_adapter(geometry.Geometry, geometry_ewkb_adapter)
 
 
 class WorkingCopy_Postgis(WorkingCopy):
@@ -43,13 +43,14 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         self.repo = repo
         self.uri = uri
+        self.path = uri
 
         url = urlsplit(uri)
 
         if url.scheme != "postgresql":
             raise ValueError("Expecting postgresql://")
 
-        u_path = url.path
+        url_path = url.path
         self.schema = None
         if url.path:
             path_parts = url.path[1:].split("/")
@@ -57,15 +58,12 @@ class WorkingCopy_Postgis(WorkingCopy):
                 raise ValueError("Expecting postgresql://[host]/dbname/schema")
             elif len(path_parts) == 2:
                 self.schema = path_parts[1]
-                u_path = f"/{path_parts[0]}"
-
-        u_q = parse_qs(url.query)
-        self.sno_schema = u_q.pop("sno.schema", ["sno"])[0]
+                url_path = f"/{path_parts[0]}"
+            else:
+                self.schema = self._default_schema(repo)
 
         # rebuild DB URL suitable for libpq
-        self.dburl = urlunsplit(
-            [url.scheme, url.netloc, u_path, urlencode(u_q, doseq=True), ""]
-        )
+        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url.query, ""])
 
     def __str__(self):
         p = urlsplit(self.uri)
@@ -80,13 +78,17 @@ class WorkingCopy_Postgis(WorkingCopy):
         return p.geturl()
 
     def _sno_table(self, sno_table):
-        return Identifier(self.sno_schema, sno_table)
+        return self._table_identifier(f"_sno_{sno_table}")
 
     def _table_identifier(self, table):
-        if self.schema:
-            return Identifier(self.schema, table)
-        else:
-            return Identifier(table)
+        return Identifier(self.schema, table)
+
+    def _default_schema(self, repo):
+        stem = repo.workdir_path.stem
+        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
+        if schema[0].isdigit():
+            schema = "_" + schema
+        return schema
 
     @contextlib.contextmanager
     def session(self, bulk=0):
@@ -99,11 +101,11 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         if hasattr(self, "_db"):
             # inner - reuse
-            L.debug(f"session: existing...")
+            L.debug("session: existing...")
             yield self._db
-            L.debug(f"session: existing/done")
+            L.debug("session: existing/done")
         else:
-            L.debug(f"session: new...")
+            L.debug("session: new...")
             self._db = psycopg2.connect(self.dburl, cursor_factory=DictCursor)
 
             try:
@@ -116,83 +118,115 @@ class WorkingCopy_Postgis(WorkingCopy):
             finally:
                 self._db.close()
                 del self._db
-                L.debug(f"session: new/done")
+                L.debug("session: new/done")
+
+    _V2_TYPE_TO_PG_TYPE = {
+        "boolean": "boolean",
+        "blob": "bytea",
+        "date": "date",
+        "float": {0: "real", 32: "real", 64: "double precision"},
+        "geometry": "geometry",
+        "integer": {
+            0: "integer",
+            16: "smallint",
+            32: "integer",
+            64: "bigint",
+        },
+        "interval": "interval",
+        "numeric": "numeric",
+        "text": "text",
+        "time": "time",
+        "timestamp": "timestamp",
+        # TODO - time and timestamp come in two flavours, with and without timezones.
+        # Code for preserving these flavours in datasets and working copies needs more work.
+    }
+
+    def _v2_type_to_pg_type(self, dataset, column_schema):
+        """Convert a v2 schema type to a postgis type."""
+
+        v2_type = column_schema.data_type
+        extra_type_info = column_schema.extra_type_info
+
+        pg_type_info = self._V2_TYPE_TO_PG_TYPE.get(v2_type)
+        if pg_type_info is None:
+            raise ValueError(f"Unrecognised data type: {v2_type}")
+
+        if isinstance(pg_type_info, dict):
+            return pg_type_info.get(extra_type_info.get("size", 0))
+
+        pg_type = pg_type_info
+        if pg_type == "geometry":
+            geometry_type = extra_type_info.get("geometryType", None)
+            if geometry_type is not None:
+                geometry_type = geometry_type.replace(" ", "")
+
+            crs_name = extra_type_info.get("geometryCRS", None)
+            crs_id = None
+            if crs_name is not None:
+                crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+
+            if geometry_type is not None and crs_id is not None:
+                return f"geometry({geometry_type},{crs_id})"
+            elif geometry_type is not None:
+                return f"geometry({geometry_type})"
+            else:
+                return "geometry"
+
+        if pg_type == "text":
+            length = extra_type_info.get("length", None)
+            return f"varchar({length})" if length is not None else "text"
+
+        if pg_type == "numeric":
+            precision = extra_type_info.get("precision", None)
+            scale = extra_type_info.get("scale", None)
+            if precision is not None and scale is not None:
+                return f"numeric({precision},{scale})"
+            elif precision is not None:
+                return f"numeric({precision})"
+            else:
+                return "numeric"
+
+        return pg_type
 
     def _get_columns(self, dataset):
         pk_field = None
-        cols = {}
-        sqlite_cols = dataset.get_meta_item("sqlite_table_info")
-        for col in sqlite_cols:
-            gpkg_type = col["type"]
-            if gpkg_type in (
-                "POINT",
-                "LINESTRING",
-                "POLYGON",
-                "MULTIPOINT",
-                "MULTILINESTRING",
-                "MULTIPOLYGON",
-                "GEOMETRYCOLLECTION",
-            ):
-                srid = dataset.get_meta_item("gpkg_geometry_columns")["srs_id"]
-                pg_type = f"GEOMETRY({gpkg_type}, {srid})"
-            elif gpkg_type in ("GEOMETRY"):
-                srid = dataset.get_meta_item("gpkg_geometry_columns")["srs_id"]
-                pg_type = f"GEOMETRY(GEOMETRY, {srid})"
-            elif gpkg_type in ("MEDIUMINT", "INT8"):
-                pg_type = "integer"
-            elif gpkg_type in ("TINYINT", "INT2"):
-                pg_type = "smallint"
-            elif gpkg_type in ("UNSIGNED BIG INT"):
-                pg_type = "bigint"
-            elif gpkg_type in ("FLOAT"):
-                pg_type = "real"
-            elif gpkg_type in ("DOUBLE"):
-                pg_type = "double precision"
-            elif gpkg_type in ("DATETIME"):
-                pg_type = "timestamptz"
-            elif re.match(
-                r"((N?((ATIVE )|(VAR(YING )?))?CHAR(ACTER)?)|TEXT|CLOB)(\(\d+\))?$",
-                gpkg_type,
-            ):
-                m = re.split(r"[\(\)]", gpkg_type)
-                pg_type = f"VARCHAR({m[1]})" if len(m) == 3 else "TEXT"
-            else:
-                # FIXME
-                pg_type = gpkg_type
-
+        pg_cols = {}
+        for col in dataset.schema:
+            pg_type = self._v2_type_to_pg_type(dataset, col)
             col_spec = [
-                Identifier(col["name"]),
+                Identifier(col.name),
                 SQL(pg_type),
             ]
-            if col["pk"]:
-                col_spec.append(SQL("PRIMARY KEY"))
-                pk_field = col["name"]
-            if col["notnull"]:
-                col_spec.append(SQL("NOT NULL"))
-            cols[col["name"]] = SQL(" ").join(col_spec)
+            if col.pk_index is not None:
+                col_spec.append(SQL("PRIMARY KEY NOT NULL"))
+                pk_field = col.name
+            pg_cols[col.name] = SQL(" ").join(col_spec)
 
-        self.L.debug("Sqlite>Postgres column mapping: %s -> %s", sqlite_cols, cols)
-        return cols, pk_field
+        self.L.debug(
+            "Schema -> Postgis column mapping: %s -> %s", dataset.schema, pg_cols
+        )
+        return pg_cols, pk_field
 
-    def delete(self):
-        """ Delete the working copy tables and sno schema """
+    def is_created(self):
+        """
+        Returns true if the schema is created. The contents of the schema is the working copy,
+        so the working copy is created if the schema is created.
+        """
         with self.session() as db:
             dbcur = db.cursor()
-            dbcur.execute(SQL("DROP TABLE {} CASCADE").format(self.STATE_TABLE))
-            dbcur.execute(SQL("DROP TABLE {} CASCADE").format(self.TRACKING_TABLE))
-
-            # TODO drop dataset tables
-
-        # clear the config in the repo
-        del self.repo.config["sno.workingcopy"]
+            dbcur.execute(
+                SQL(
+                    "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name=%s)"
+                ),
+                (self.schema,),
+            )
+            return bool(dbcur.fetchone()[0])
 
     def create(self):
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(
-                SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
-                    Identifier(self.sno_schema)
-                )
+                SQL("CREATE SCHEMA IF NOT EXISTS {}").format(Identifier(self.schema))
             )
             dbcur.execute(
                 SQL(
@@ -251,10 +285,19 @@ class WorkingCopy_Postgis(WorkingCopy):
                 SECURITY DEFINER
             """
                 ).format(
-                    func=Identifier(self.sno_schema, "track_trigger"),
+                    func=Identifier(self.schema, "_sno_track_trigger"),
                     tracking_table=self.TRACKING_TABLE,
                 )
             )
+
+    def delete(self):
+        """ Delete all tables in the schema"""
+
+        # TODO - don't use DROP SCHEMA CASCADE, since this could even delete user-created tables outside the schema
+        # if they have been connected to the schema with a foreign key relation.
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(SQL("DROP SCHEMA {} CASCADE").format(Identifier(self.schema)))
 
     def write_meta(self, dataset):
         pass
@@ -273,11 +316,13 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         # Create the PostGIS Spatial Index
         sql = SQL("CREATE INDEX {} ON {} USING GIST ({})").format(
-            Identifier(f"{dataset.name}_idx_{geom_col}"),
-            self._table_identifier(dataset.name),
+            Identifier(f"{dataset.table_name}_idx_{geom_col}"),
+            self._table_identifier(dataset.table_name),
             Identifier(geom_col),
         )
-        L.debug("Creating spatial index for %s.%s: %s", dataset.name, geom_col, sql)
+        L.debug(
+            "Creating spatial index for %s.%s: %s", dataset.table_name, geom_col, sql
+        )
         t0 = time.monotonic()
         with self.session() as db:
             db.cursor().execute(sql)
@@ -292,9 +337,9 @@ class WorkingCopy_Postgis(WorkingCopy):
             FOR EACH ROW EXECUTE PROCEDURE {}(%s)
             """
             ).format(
-                Identifier(f"sno_track"),
+                Identifier("sno_track"),
                 self._table_identifier(table),
-                Identifier(self.sno_schema, "track_trigger"),
+                Identifier(self.schema, "_sno_track_trigger"),
             ),
             (pk_field,),
         )
@@ -344,16 +389,6 @@ class WorkingCopy_Postgis(WorkingCopy):
             raise self.Mismatch(wc_tree_id, tree_sha)
         return wc_tree_id
 
-    def _chunk(self, iterable, size):
-        it = iter(iterable)
-        while True:
-            chunk_it = itertools.islice(it, size)
-            try:
-                first_el = next(chunk_it)
-            except StopIteration:
-                return
-            yield itertools.chain((first_el,), chunk_it)
-
     def write_full(self, commit, *datasets, **kwargs):
         """
         Writes a full layer into a working-copy table
@@ -365,7 +400,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         with self.session(bulk=2) as db:
             dbcur = db.cursor()
             for dataset in datasets:
-                table = dataset.name
+                table = dataset.table_name
 
                 self.write_meta(dataset)
 
@@ -388,21 +423,39 @@ class WorkingCopy_Postgis(WorkingCopy):
                 )
 
                 L.info("Creating features...")
+
+                # We have to call SetSRID on all geometries so that they will fit in their columns:
+                # Unlike GPKG, the geometries in a column with a CRS of X can't all just have a CRS of 0.
+                value_placeholders = [SQL("%s")] * len(col_names)
+                for i, col in enumerate(dataset.schema):
+                    if col.data_type != "geometry":
+                        continue
+                    crs_name = col.extra_type_info.get("geometryCRS", None)
+                    if crs_name is None:
+                        continue
+                    crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+                    value_placeholders[i] = SQL(f"SetSRID(%s, {crs_id})")
+
                 sql_insert_features = SQL(
                     """
-                    INSERT INTO {} ({}) VALUES %s;
+                    INSERT INTO {} ({}) VALUES ({});
                 """
                 ).format(
                     self._table_identifier(table),
                     SQL(",").join([Identifier(k) for k in col_names]),
+                    SQL(",").join(value_placeholders),
                 )
+
+                crs_id = crs_util.get_identifier_int_from_dataset(dataset)
+
                 feat_count = 0
                 t0 = time.monotonic()
                 t0p = t0
 
                 CHUNK_SIZE = 10000
                 for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
-                    dbcur.executemany(sql_insert_features, ([tuple(r)] for r in rows))
+
+                    dbcur.executemany(sql_insert_features, rows)
                     feat_count += dbcur.rowcount
 
                     nc = feat_count / CHUNK_SIZE
@@ -449,7 +502,7 @@ class WorkingCopy_Postgis(WorkingCopy):
             SET
         """
         ).format(
-            table=self._table_identifier(dataset.name),
+            table=self._table_identifier(dataset.table_name),
             cols=SQL(",").join([Identifier(k) for k in col_names]),
             pk=Identifier(pk_field),
         )
@@ -475,7 +528,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         cols, pk_field = self._get_columns(dataset)
 
         sql_del_feature = SQL("DELETE FROM {} WHERE {}=%s;").format(
-            self._table_identifier(dataset.name), Identifier(pk_field)
+            self._table_identifier(dataset.table_name), Identifier(pk_field)
         )
 
         feat_count = 0
@@ -486,308 +539,36 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         return feat_count
 
-    def _db_to_repo_obj(self, dataset, db_obj):
-        geom_col = dataset.geom_column_name
-        if geom_col:
-            db_obj[geom_col] = gpkg.hexewkb_to_geom(db_obj[geom_col])
-        return db_obj
+    def diff_db_to_tree_meta(self, dataset, raise_if_dirty=False):
+        # TODO: Implement meta diffs
+        return DeltaDiff()
 
-    def diff_db_to_tree(self, dataset, pk_filter=None):
-        """
-        Generates a diff between a working copy DB and the underlying repository tree
+    def _db_geom_to_gpkg_geom(self, hex_ewkb_geom):
+        return geometry.hexewkb_to_gpkg_geom(hex_ewkb_geom)
 
-        Pass a list of PK values to filter results to them
-        """
-        with self.session() as db:
-            dbcur = db.cursor()
+    def _execute_diff_query(self, dbcur, dataset, feature_filter=None):
+        feature_filter = feature_filter or UNFILTERED
+        table = dataset.table_name
+        pk_field = dataset.schema.pk_columns[0].name
 
-            table = dataset.name
-
-            meta_diff = {}
-            meta_old = dict(dataset.iter_meta_items(exclude={"fields", "primary_key"}))
-            meta_new = dict(self.read_meta(dataset))
-            for name in set(meta_new.keys()) ^ set(meta_old.keys()):
-                v_old = meta_old.get(name)
-                v_new = meta_new.get(name)
-                if v_old or v_new:
-                    meta_diff[name] = (v_old, v_new)
-
-            pk_field = dataset.primary_key
-
-            diff_sql = SQL(
-                """
-                SELECT
-                    {tracking_table}.pk AS ".__track_pk",
-                    {table}.*
-                FROM {tracking_table} LEFT OUTER JOIN {table}
-                ON ({tracking_table}.pk = {table}.{pk_field}::text)
-                WHERE ({tracking_table}.table_name = %s)
+        diff_sql = SQL(
             """
-            ).format(
-                tracking_table=self.TRACKING_TABLE,
-                table=self._table_identifier(table),
-                pk_field=Identifier(pk_field),
-            )
-            params = [table]
-            if pk_filter:
-                diff_sql += SQL("\nAND {}.pk IN %s").format(self.TRACKING_TABLE)
-                params.append(tuple([str(pk) for pk in pk_filter]))
-            dbcur.execute(diff_sql, params)
+            SELECT
+                {tracking_table}.pk AS ".__track_pk",
+                {table}.*
+            FROM {tracking_table} LEFT OUTER JOIN {table}
+            ON ({tracking_table}.pk = {table}.{pk_field}::text)
+            WHERE ({tracking_table}.table_name = %s)
+            """
+        ).format(
+            tracking_table=self.TRACKING_TABLE,
+            table=self._table_identifier(table),
+            pk_field=Identifier(pk_field),
+        )
+        params = [table]
 
-            candidates_ins = collections.defaultdict(list)
-            candidates_upd = {}
-            candidates_del = collections.defaultdict(list)
-            for row in dbcur:
-                track_pk = row[0]
-                db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
+        if feature_filter is not UNFILTERED:
+            diff_sql += SQL("\nAND {}.pk IN %s").format(self.TRACKING_TABLE)
+            params.append(tuple([str(pk) for pk in feature_filter]))
 
-                self._db_to_repo_obj(dataset, db_obj)
-
-                try:
-                    _, repo_obj = dataset.get_feature(track_pk, ogr_geoms=False)
-                except KeyError:
-                    repo_obj = None
-
-                if db_obj[pk_field] is None:
-                    if repo_obj:  # ignore INSERT+DELETE
-                        blob_hash = pygit2.hash(dataset.encode_feature(repo_obj)).hex
-                        candidates_del[blob_hash].append((track_pk, repo_obj))
-                    continue
-
-                elif not repo_obj:
-                    # INSERT
-                    blob_hash = pygit2.hash(dataset.encode_feature(db_obj)).hex
-                    candidates_ins[blob_hash].append(db_obj)
-
-                else:
-                    # UPDATE
-                    s_old = set(repo_obj.items())
-                    s_new = set(db_obj.items())
-                    if s_old ^ s_new:
-                        candidates_upd[track_pk] = (repo_obj, db_obj)
-
-            # detect renames
-            for h in list(candidates_del.keys()):
-                if h in candidates_ins:
-                    track_pk, repo_obj = candidates_del[h].pop(0)
-                    db_obj = candidates_ins[h].pop(0)
-
-                    candidates_upd[track_pk] = (repo_obj, db_obj)
-
-                    if not candidates_del[h]:
-                        del candidates_del[h]
-                    if not candidates_ins[h]:
-                        del candidates_ins[h]
-
-            return diff.Diff(
-                dataset,
-                meta=meta_diff,
-                inserts=list(itertools.chain(*candidates_ins.values())),
-                deletes=dict(itertools.chain(*candidates_del.values())),
-                updates=candidates_upd,
-            )
-
-    def commit_callback(self, dataset, action, **kwargs):
-        with self.session() as db:
-            dbcur = db.cursor()
-
-            if action in ("I", "U", "D", "META"):
-                pass
-
-            elif action == "INDEX":
-                dbcur.execute(
-                    SQL("DELETE FROM {} WHERE table_name=%s;").format(
-                        self.TRACKING_TABLE
-                    ),
-                    (dataset.name,),
-                )
-
-            elif action == "TREE":
-                new_tree = kwargs["tree"]
-                print(f"Tree sha: {new_tree}")
-
-                dbcur.execute(
-                    SQL(
-                        "UPDATE {} SET value=%s WHERE table_name='*' AND key='tree';"
-                    ).format(self.STATE_TABLE),
-                    (str(new_tree),),
-                )
-                assert (
-                    dbcur.rowcount == 1
-                ), f"{self.STATE_TABLE} update: expected 1Δ, got {dbcur.rowcount}"
-
-            else:
-                raise NotImplementedError(f"Unexpected action: {action}")
-
-    def reset(
-        self, commit, repo_structure, *, force=False, paths=None, update_meta=True
-    ):
-        L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        L.debug("c=%s update-meta=%s", str(commit.id), update_meta)
-
-        with self.session(bulk=1) as db:
-            dbcur = db.cursor()
-
-            base_tree_id = self.get_db_tree()
-            base_tree = repo_structure.repo[base_tree_id]
-            L.debug("base_tree_id: %s", base_tree_id)
-            repo_tree_id = repo_structure.repo.head.peel(pygit2.Tree).hex
-
-            if base_tree_id != repo_tree_id:
-                L.debug(
-                    "Working Copy DB is tree:%s, Repo HEAD has tree:%s",
-                    base_tree_id,
-                    repo_tree_id,
-                )
-
-            # check for dirty working copy
-            dbcur.execute(SQL("SELECT COUNT(*) FROM {};").format(self.TRACKING_TABLE))
-            is_dirty = dbcur.fetchone()[0]
-            if is_dirty and not force:
-                raise click.ClickException(
-                    "You have uncommitted changes in your working copy. Commit or use --force to discard."
-                )
-
-            src_datasets = {ds.name: ds for ds in repo_structure.iter_at(base_tree)}
-            dest_datasets = {ds.name: ds for ds in repo_structure.iter_at(commit.tree)}
-
-            if paths:
-                for path in paths:
-                    src_datasets = {
-                        ds.name: ds
-                        for ds in src_datasets.values()
-                        if os.path.commonpath([ds.path, path]) == path
-                    }
-                    dest_datasets = {
-                        ds.name: ds
-                        for ds in dest_datasets.values()
-                        if os.path.commonpath([ds.path, path]) == path
-                    }
-
-            ds_names = set(src_datasets.keys()) | set(dest_datasets.keys())
-            L.debug("Datasets: %s", ds_names)
-
-            for table in ds_names:
-                src_ds = src_datasets.get(table, None)
-                dest_ds = dest_datasets.get(table, None)
-
-                geom_col = dest_ds.geom_column_name
-
-                if not dest_ds:
-                    # drop table
-                    raise NotImplementedError("Drop table via reset")
-                elif not src_ds:
-                    # new table
-                    raise NotImplementedError("Create table via reset")
-                elif src_ds.tree.id == dest_ds.tree.id and not is_dirty:
-                    # unchanged table
-                    pass
-                else:
-                    # existing table with update
-
-                    # check for schema differences
-                    base_meta_tree = src_ds.meta_tree
-                    meta_tree = dest_ds.meta_tree
-                    if base_meta_tree.diff_to_tree(meta_tree):
-                        raise NotImplementedError(
-                            "Sorry, no way to do changeset/meta/schema updates yet"
-                        )
-
-                    # todo: suspend/remove spatial index
-                    if is_dirty:
-                        with self._suspend_triggers(dbcur, table):
-                            L.debug("Cleaning up dirty rows...")
-                            sql_changed = SQL(
-                                "SELECT pk FROM {} WHERE table_name=%s;"
-                            ).format(self.TRACKING_TABLE)
-                            dbcur.execute(sql_changed, (table,))
-                            pk_list = [r[0] for r in dbcur]
-                            track_count = dbcur.rowcount
-                            count = self.delete_features(dbcur, src_ds, pk_list)
-                            L.debug(
-                                "reset(): dirty: removed %s features, tracking Δ count=%s",
-                                count,
-                                track_count,
-                            )
-                            count = self.write_features(
-                                dbcur, src_ds, pk_list, ignore_missing=True
-                            )
-                            L.debug(
-                                "reset(): dirty: wrote %s features, tracking Δ count=%s",
-                                count,
-                                track_count,
-                            )
-
-                            dbcur.execute(
-                                SQL("DELETE FROM {} WHERE table_name=%s;").format(
-                                    self.TRACKING_TABLE
-                                ),
-                                (table,),
-                            )
-
-                    if update_meta:
-                        ctx = self._suspend_triggers(dbcur, table)
-                    else:
-                        # if we're not updating meta information, we want to track these changes
-                        # as working copy edits so they can be committed.
-                        ctx = contextlib.nullcontext()
-
-                    with ctx:
-                        # feature diff
-                        diff_index = src_ds.tree.diff_to_tree(dest_ds.tree)
-                        L.debug("Index diff: %s changes", len(diff_index))
-                        for d in diff_index.deltas:
-                            # TODO: improve this by grouping by status then calling
-                            # write_features/delete_features passing multiple PKs?
-                            if d.status == pygit2.GIT_DELTA_DELETED:
-                                old_pk = src_ds.decode_pk(
-                                    os.path.basename(d.old_file.path)
-                                )
-                                L.debug("reset(): D %s (%s)", d.old_file.path, old_pk)
-                                self.delete_features(dbcur, src_ds, [old_pk])
-                            elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                                old_pk = src_ds.decode_pk(
-                                    os.path.basename(d.old_file.path)
-                                )
-                                new_pk = dest_ds.decode_pk(
-                                    os.path.basename(d.new_file.path)
-                                )
-                                L.debug(
-                                    "reset(): M %s (%s) -> %s (%s)",
-                                    d.old_file.path,
-                                    old_pk,
-                                    d.new_file.path,
-                                    new_pk,
-                                )
-                                self.write_features(dbcur, dest_ds, [new_pk])
-                            elif d.status == pygit2.GIT_DELTA_ADDED:
-                                new_pk = dest_ds.decode_pk(
-                                    os.path.basename(d.new_file.path)
-                                )
-                                L.debug("reset(): A %s (%s)", d.new_file.path, new_pk)
-                                self.write_features(dbcur, dest_ds, [new_pk])
-                            else:
-                                # GIT_DELTA_RENAMED
-                                # GIT_DELTA_COPIED
-                                # GIT_DELTA_IGNORED
-                                # GIT_DELTA_TYPECHANGE
-                                # GIT_DELTA_UNMODIFIED
-                                # GIT_DELTA_UNREADABLE
-                                # GIT_DELTA_UNTRACKED
-                                raise NotImplementedError(
-                                    f"Delta status: {d.status_char()}"
-                                )
-
-            if update_meta:
-                # update the tree id
-                tree = commit.peel(pygit2.Tree)
-                dbcur.execute(
-                    SQL(
-                        "UPDATE {} SET value=%s WHERE table_name='*' AND key='tree';"
-                    ).format(self.STATE_TABLE),
-                    (tree.hex,),
-                )
-
-    def status(self, dataset):
-        diff = self.diff_db_to_tree(dataset)
-        return diff.counts(dataset)
+        dbcur.execute(diff_sql, params)

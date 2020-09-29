@@ -25,6 +25,8 @@ class Geometry(bytes):
 
     @classmethod
     def of(cls, bytes_):
+        if isinstance(bytes_, Geometry):
+            return bytes_
         return Geometry(bytes_) if bytes_ else None
 
     def __str__(self):
@@ -179,7 +181,7 @@ def normalise_gpkg_geom(gpkg_geom):
             # everything is fine, no need to roundtrip via OGR
             # just need to set srs_id to zero if it's not already
             if gpkg_geom[4:8] == b"\x00\x00\x00\x00":
-                return gpkg_geom
+                return Geometry.of(gpkg_geom)
             else:
                 return Geometry.of(gpkg_geom[:4] + b"\x00\x00\x00\x00" + gpkg_geom[8:])
 
@@ -374,7 +376,7 @@ def _bo(is_le):
     return "<" if is_le else ">"
 
 
-def geom_to_ewkb(gpkg_geom):
+def gpkg_geom_to_ewkb(gpkg_geom):
     """
     Parse GeoPackage geometry values to a PostGIS EWKB value
     http://www.geopackage.org/spec/#gpb_format
@@ -382,8 +384,7 @@ def geom_to_ewkb(gpkg_geom):
     if gpkg_geom is None:
         return None
 
-    wkb_offset, is_le, srid = parse_gpkg_geom(gpkg_geom)
-
+    wkb_offset, is_le, crs_id = parse_gpkg_geom(gpkg_geom)
     wkb_is_le = struct.unpack_from("B", gpkg_geom, wkb_offset)[0]
     bo = _bo(wkb_is_le)
 
@@ -396,19 +397,19 @@ def geom_to_ewkb(gpkg_geom):
     ewkb_geom_type = wkb_geom_type
     ewkb_geom_type |= 0x80000000 * has_z
     ewkb_geom_type |= 0x40000000 * has_m
-    ewkb_geom_type |= 0x20000000 * (srid > 0)
+    ewkb_geom_type |= 0x20000000 * (crs_id > 0)
 
     ewkb = struct.pack(f"{bo}BI", int(wkb_is_le), ewkb_geom_type)
 
-    if srid > 0:
-        ewkb += struct.pack(f"{bo}I", srid)
+    if crs_id > 0:
+        ewkb += struct.pack(f"{bo}I", crs_id)
 
     ewkb += gpkg_geom[(wkb_offset + 5) :]
 
     return ewkb
 
 
-def hexewkb_to_geom(hexewkb):
+def hexewkb_to_gpkg_geom(hexewkb):
     """
     Parse PostGIS Hex EWKB to GeoPackage geometry
     https://github.com/postgis/postgis/blob/master/doc/ZMSgeoms.txt
@@ -465,7 +466,8 @@ def hexewkb_to_geom(hexewkb):
         + ewkb[data_offset:]
     )
 
-    return gpkg_geom
+    # TODO: Construct normalised GPKG geometry in one go.
+    return normalise_gpkg_geom(gpkg_geom)
 
 
 def geom_envelope(gpkg_geom):
