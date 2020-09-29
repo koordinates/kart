@@ -1,8 +1,8 @@
 from osgeo.osr import SpatialReference
 
-
 from .cli_util import StringFromFile
 from .geometry import make_crs
+from .serialise_util import uint32hash
 
 
 class CoordinateReferenceString(StringFromFile):
@@ -49,4 +49,29 @@ def get_identifier_int(crs):
     if auth_code and auth_code.isdigit() and int(auth_code) > 0:
         return int(auth_code)
     # Stable code that fits easily in an int32 and won't collide with EPSG codes.
-    return (hash(crs.ExportToWkt()) & 0xFFFFFFF) + 1000000
+    return (uint32hash(crs.ExportToWkt()) & 0xFFFFFFF) + 1000000
+
+
+def get_identifier_int_from_dataset(dataset, crs_name=None):
+    """
+    Get the CRS attached to this dataset with a particular name eg "EPSG:2193",
+    and return an integer to uniquely identify it, eg 2193.
+    (This still works even if the CRS is custom and doesn't have an obvious number embedded in it).
+    crs_name can be ommitted if there is no more than one geometry column.
+    """
+
+    if crs_name is None:
+        geom_columns = dataset.schema.geometry_columns
+        num_geom_columns = len(geom_columns)
+        if num_geom_columns == 0:
+            return None
+        elif num_geom_columns == 1:
+            crs_name = geom_columns[0].extra_type_info.get("geometryCRS", None)
+        else:
+            raise ValueError("Dataset has more than one geometry column")
+
+    if crs_name is None:
+        return None
+
+    definition = dataset.get_crs_definition(crs_name)
+    return get_identifier_int(definition)
