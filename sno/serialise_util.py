@@ -2,6 +2,7 @@ import base64
 import hashlib
 import json
 import logging
+import struct
 
 import msgpack
 
@@ -81,6 +82,11 @@ def hexhash(*data):
     """*data (str or bytes) -> hex str. Irreversible."""
     # We only return 160 bits of the hash, same as git hashes - more is overkill.
     return sha256(*data).hexdigest()[:40]
+
+
+def uint32hash(*data):
+    b = sha256(*data).digest()[:4]
+    return struct.unpack(">I", b)[0]
 
 
 def ensure_bytes(data):
