@@ -42,19 +42,37 @@ def test_get_directory_from_url():
         pytest.param(False, id="without-wc"),
     ],
 )
+@pytest.mark.parametrize(
+    "branch_name,branch_ref",
+    [
+        ("mytag", "HEAD^"),
+        ("master", None),
+    ],
+)
 def test_clone(
-    working_copy, data_archive_readonly, tmp_path, cli_runner, chdir, geopackage
+    working_copy,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    geopackage,
+    branch_name,
+    branch_ref,
 ):
-    with data_archive_readonly("points") as remote_path:
+    with data_archive("points") as remote_path:
+        if branch_ref:
+            # add a tag
+            with chdir(remote_path):
+                subprocess.check_output(["git", "branch", branch_name, branch_ref])
         with chdir(tmp_path):
-
-            r = cli_runner.invoke(
-                [
-                    "clone",
-                    remote_path,
-                    ("--checkout" if working_copy else "--no-checkout"),
-                ]
-            )
+            args = [
+                "clone",
+                remote_path,
+                ("--checkout" if working_copy else "--no-checkout"),
+            ]
+            if branch_ref:
+                args.append(f"--branch={branch_name}")
+            r = cli_runner.invoke(args)
 
             repo_path = tmp_path / "points"
             assert repo_path.is_dir()
@@ -66,12 +84,16 @@ def test_clone(
 
         repo = SnoRepo(repo_path)
         assert not repo.is_empty
-        assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head.name == f"refs/heads/{branch_name}"
+
+        if branch_ref == "HEAD^":
+            assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD1_SHA
+        else:
+            assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
 
         branch = repo.branches.local[repo.head.shorthand]
         assert branch.is_head()
-        assert branch.upstream_name == "refs/remotes/origin/master"
+        assert branch.upstream_name == f"refs/remotes/origin/{branch_name}"
 
         assert len(repo.remotes) == 1
         remote = repo.remotes["origin"]

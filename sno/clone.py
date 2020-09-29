@@ -54,13 +54,24 @@ def get_directory_from_url(url):
     type=click.INT,
     help="Create a shallow clone with a history truncated to the specified number of commits.",
 )
+@click.option(
+    "-b",
+    "--branch",
+    metavar="NAME",
+    help=(
+        "Instead of pointing the newly created HEAD to the branch pointed to by the cloned repository's "
+        "HEAD, point to NAME branch instead. In a non-bare repository, this is the branch that will be "
+        "checked out.  --branch can also take tags and detaches the HEAD at that commit in the resulting "
+        "repository. "
+    ),
+)
 @click.argument("url", nargs=1)
 @click.argument(
     "directory",
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, bare, wc_path, do_progress, depth, url, directory):
+def clone(ctx, bare, wc_path, do_progress, depth, branch, url, directory):
     """ Clone a repository into a new directory """
 
     repo_path = Path(directory or get_directory_from_url(url)).resolve()
@@ -73,6 +84,8 @@ def clone(ctx, bare, wc_path, do_progress, depth, url, directory):
     args = ["--progress" if do_progress else "--quiet"]
     if depth is not None:
         args.append(f"--depth={depth}")
+    if branch is not None:
+        args.append(f"--branch={branch}")
 
     repo = SnoRepo.clone_repository(url, repo_path, args, wc_path, bare)
 
