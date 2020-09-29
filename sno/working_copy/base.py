@@ -10,9 +10,21 @@ class WorkingCopyDirty(Exception):
 class WorkingCopy:
     VALID_VERSIONS = (1, 2)
 
+    TRACKING_NAME = "track"
+    STATE_NAME = "state"
+
+    @property
+    def TRACKING_TABLE(self):
+        return self._sno_table(self.TRACKING_NAME)
+
+    @property
+    def STATE_TABLE(self):
+        return self._sno_table(self.STATE_NAME)
+
     @classmethod
     def get(cls, repo, create_if_missing=False):
         from .gpkg import WorkingCopy_GPKG_1, WorkingCopy_GPKG_2
+        from .postgis import WorkingCopy_Postgis
 
         if create_if_missing:
             cls.ensure_config_exists(repo)
@@ -23,6 +35,9 @@ class WorkingCopy:
             return None
 
         path = repo_cfg[path_key]
+        if path.startswith("postgresql://"):
+            return WorkingCopy_Postgis(repo, path)
+
         full_path = repo.workdir_path / path
         if not full_path.is_file() and not create_if_missing:
             return None
