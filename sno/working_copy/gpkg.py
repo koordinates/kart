@@ -64,17 +64,6 @@ class WorkingCopyGPKG(WorkingCopy):
         """ Return a full absolute path to the working copy """
         return (self.repo.workdir_path / self.path).resolve()
 
-    TRACKING_NAME = "track"
-    STATE_NAME = "state"
-
-    @property
-    def TRACKING_TABLE(self):
-        return self._sno_table(self.TRACKING_NAME)
-
-    @property
-    def STATE_TABLE(self):
-        return self._sno_table(self.STATE_NAME)
-
     def _sno_table(self, name, suffix=""):
         n = f"{self.SNO_TABLE_PREFIX}{name}"
         if suffix:

@@ -13,6 +13,8 @@ import time
 import uuid
 from pathlib import Path
 
+
+import psycopg2
 import pytest
 import click
 from click.testing import CliRunner
@@ -861,3 +863,25 @@ def disable_editor():
     yield
     os.environ.clear()
     os.environ.update(old_environ)
+
+
+@pytest.fixture()
+def postgis_db():
+    """
+    Using docker, you can run a PostGres test - such as test_pg_import - as follows:
+        docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
+        SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k postgis --pdb -vvs
+    """
+    if "SNO_POSTGRES_URL" not in os.environ:
+        raise pytest.skip(
+            "Requires postgres - read docstring at sno.test_structure.postgis_db"
+        )
+    conn = psycopg2.connect(os.environ["SNO_POSTGRES_URL"])
+    conn.autocommit = True
+    with conn.cursor() as cur:
+        # test connection and postgis support
+        try:
+            cur.execute("""SELECT postgis_version()""")
+        except psycopg2.errors.UndefinedFunction:
+            raise pytest.skip("Requires PostGIS")
+    yield conn
