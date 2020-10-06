@@ -14,7 +14,7 @@ gprof2dot==2019.11.30     # via pytest-profiling
 html5lib==1.1             # via -r requirements/test.in
 importlib-metadata==2.0.0  # via -c requirements/../requirements.txt, pluggy, pytest
 iniconfig==1.0.1          # via pytest
-lovely-pytest-docker==0.1.0  # via -r requirements/test.in
+lovely-pytest-docker==0.2.0  # via -r requirements/test.in
 packaging==20.4           # via pytest, pytest-sugar
 pluggy==0.13.1            # via pytest
 py-cpuinfo==7.0.0         # via pytest-benchmark
