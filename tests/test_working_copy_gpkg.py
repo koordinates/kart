@@ -323,7 +323,7 @@ def test_working_copy_reset(
     """
     Check that we reset any working-copy changes correctly before doing any new checkout
 
-    We can do this via `sno reset` or `sno checkout --force HEAD`
+    We can do this via `sno reset` or `sno checkout --discard-changes HEAD`
     """
     raise pytest.skip()  # apsw.SQLError: SQLError: Safety level may not be changed inside a transaction
     if layer == H.POINTS.LAYER:

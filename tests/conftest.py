@@ -11,18 +11,21 @@ import subprocess
 import tarfile
 import time
 import uuid
+from urllib.parse import urlsplit, urlunsplit
 from pathlib import Path
-
-
-import psycopg2
 import pytest
+
+
 import click
 from click.testing import CliRunner
+from sno.db_util import execute_insert_dict, changes_rowcount
 from sno.repository_version import DEFAULT_REPO_VERSION
 from sno.sno_repo import SnoRepo
 
 import apsw
 import pygit2
+import psycopg2
+from psycopg2.sql import Identifier, SQL
 
 
 pytest_plugins = ["helpers_namespace"]
@@ -468,7 +471,7 @@ class TestHelpers:
             "geom": "POINT(0 0)",
             "t50_fid": 9_999_999,
             "name_ascii": "Te Motu-a-kore",
-            "macronated": False,
+            "macronated": "N",
             "name": "Te Motu-a-kore",
         }
         HEAD_SHA = "2a1b7be8bdef32aea1510668e3edccbc6d454852"
@@ -754,16 +757,23 @@ def update(request, cli_runner):
     return func
 
 
-def _edit_points(dbcur):
+def _edit_points(dbcur, table_prefix=""):
     H = pytest.helpers.helpers()
-    dbcur.execute(H.POINTS.INSERT, H.POINTS.RECORD)
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POINTS.LAYER} SET name='test' WHERE fid=2;")
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid IN (3,30,31,32,33);")
-    assert dbcur.getconnection().changes() == 5
+    layer = table_prefix + H.POINTS.LAYER
+    rc = execute_insert_dict(
+        dbcur,
+        layer,
+        H.POINTS.RECORD,
+        gpkg_funcs={1: "GeomFromEWKT(?)"},
+        pg_funcs={1: "SetSRID(%s, 4326)"},
+    )
+    assert rc == 1
+    dbcur.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
+    assert changes_rowcount(dbcur) == 5
     pk_del = 3
     return pk_del
 
@@ -773,20 +783,25 @@ def edit_points():
     return _edit_points
 
 
-def _edit_polygons(dbcur):
+def _edit_polygons(dbcur, table_prefix=""):
     H = pytest.helpers.helpers()
-    dbcur.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(
-        f"UPDATE {H.POLYGONS.LAYER} SET survey_reference='test' WHERE id=1443053;"
+    layer = table_prefix + H.POLYGONS.LAYER
+    rc = execute_insert_dict(
+        dbcur,
+        layer,
+        H.POLYGONS.RECORD,
+        gpkg_funcs={1: "GeomFromEWKT(?)"},
+        pg_funcs={1: "ST_Multi(SetSRID(%s, 4167))"},
     )
-    assert dbcur.getconnection().changes() == 1
+    assert rc == 1
+    dbcur.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
+    assert changes_rowcount(dbcur) == 1
     dbcur.execute(
-        f"DELETE FROM {H.POLYGONS.LAYER} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
+        f"DELETE FROM {layer} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
     )
-    assert dbcur.getconnection().changes() == 5
+    assert changes_rowcount(dbcur) == 5
     pk_del = 1452332
     return pk_del
 
@@ -796,16 +811,19 @@ def edit_polygons():
     return _edit_polygons
 
 
-def _edit_table(dbcur):
+def _edit_table(dbcur, table_prefix=""):
     H = pytest.helpers.helpers()
-    dbcur.execute(H.TABLE.INSERT, H.TABLE.RECORD)
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.TABLE.LAYER} SET OBJECTID=9998 WHERE OBJECTID=1;")
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"UPDATE {H.TABLE.LAYER} SET name='test' WHERE OBJECTID=2;")
-    assert dbcur.getconnection().changes() == 1
-    dbcur.execute(f"DELETE FROM {H.TABLE.LAYER} WHERE OBJECTID IN (3,30,31,32,33);")
-    assert dbcur.getconnection().changes() == 5
+    layer = table_prefix + H.TABLE.LAYER
+    H = pytest.helpers.helpers()
+    rc = execute_insert_dict(dbcur, layer, H.TABLE.RECORD)
+    assert rc == 1
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
+    assert changes_rowcount(dbcur) == 5
     pk_del = 3
     return pk_del
 
@@ -885,3 +903,29 @@ def postgis_db():
         except psycopg2.errors.UndefinedFunction:
             raise pytest.skip("Requires PostGIS")
     yield conn
+
+
+@pytest.fixture()
+def new_postgis_db_schema(request, postgis_db):
+    @contextlib.contextmanager
+    def ctx():
+        sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
+        schema = f"sno_test_{sha}"
+        with postgis_db.cursor() as c:
+            c.execute(
+                SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
+            )
+        try:
+            url = urlsplit(os.environ["SNO_POSTGRES_URL"])
+            url_path = url.path.rstrip("/") + "/" + schema
+            new_schema_url = urlunsplit(
+                [url.scheme, url.netloc, url_path, url.query, ""]
+            )
+            yield new_schema_url, schema
+        finally:
+            with postgis_db.cursor() as c:
+                c.execute(
+                    SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
+                )
+
+    return ctx
