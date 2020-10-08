@@ -6,16 +6,16 @@ from urllib.parse import urlsplit, urlunsplit
 
 import pygit2
 import psycopg2
-from psycopg2.extensions import register_adapter, Binary
+from psycopg2.extensions import new_type, register_adapter, register_type, Binary
 from psycopg2.extras import DictCursor
 from psycopg2.sql import Identifier, SQL
 
 
 from .base import WorkingCopy
 from sno import geometry, crs_util
+from sno.db_util import changes_rowcount
 from sno.diff_structs import DeltaDiff
 from sno.filter_util import UNFILTERED
-from sno.geometry import gpkg_geom_to_ewkb
 
 """
 * database needs to exist
@@ -26,18 +26,38 @@ from sno.geometry import gpkg_geom_to_ewkb
     3. create triggers
 """
 
-
-def geometry_ewkb_adapter(g):
-    return Binary(gpkg_geom_to_ewkb(g))
+L = logging.getLogger("sno.working_copy.postgis")
 
 
-register_adapter(geometry.Geometry, geometry_ewkb_adapter)
+def _adapt_geometry_to_db(g):
+    return Binary(geometry.gpkg_geom_to_ewkb(g))
+
+
+register_adapter(geometry.Geometry, _adapt_geometry_to_db)
+
+
+def adapt_geometry_from_db(g, dbcur):
+    return geometry.hexewkb_to_gpkg_geom(g)
+
+
+def adapt_timestamp_from_db(t, dbcur):
+    # TODO - revisit timezones.
+    if isinstance(t, str):
+        # This makes postgis timestamps behave more like GPKG ones.
+        return t.replace(" ", "T") + "Z"
+    return t
+
+
+# See https://github.com/psycopg/psycopg2/blob/master/psycopg/typecast_builtins.c
+TIMESTAMP_OID = 1114
+TIMESTAMP = new_type((TIMESTAMP_OID,), "TIMESTAMP", adapt_timestamp_from_db)
+psycopg2.extensions.register_type(TIMESTAMP)
 
 
 class WorkingCopy_Postgis(WorkingCopy):
     def __init__(self, repo, uri):
         """
-        uri: connection string of the form postgresql://[user[:password]@][netloc][:port][/dbname[/schema]][?param1=value1&...]
+        uri: connection string of the form postgresql://[user[:password]@][netloc][:port][/dbname/schema][?param1=value1&...]
         """
         self.L = logging.getLogger(self.__class__.__qualname__)
 
@@ -51,19 +71,20 @@ class WorkingCopy_Postgis(WorkingCopy):
             raise ValueError("Expecting postgresql://")
 
         url_path = url.path
-        self.schema = None
-        if url.path:
-            path_parts = url.path[1:].split("/")
-            if len(path_parts) > 2:
-                raise ValueError("Expecting postgresql://[host]/dbname/schema")
-            elif len(path_parts) == 2:
-                self.schema = path_parts[1]
-                url_path = f"/{path_parts[0]}"
-            else:
-                self.schema = self._default_schema(repo)
+        path_parts = url_path[1:].split("/", 3) if url_path else []
+        if len(path_parts) != 2:
+            raise ValueError("Expecting postgresql://[host]/dbname/schema")
+        url_path = f"/{path_parts[0]}"
+        self.schema = path_parts[1]
+
+        url_query = url.query
+        if "fallback_application_name" not in url_query:
+            url_query = "&".join(
+                filter(None, [url_query, "fallback_application_name=sno"])
+            )
 
         # rebuild DB URL suitable for libpq
-        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url.query, ""])
+        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url_query, ""])
 
     def __str__(self):
         p = urlsplit(self.uri)
@@ -83,7 +104,8 @@ class WorkingCopy_Postgis(WorkingCopy):
     def _table_identifier(self, table):
         return Identifier(self.schema, table)
 
-    def _default_schema(self, repo):
+    @classmethod
+    def default_schema(cls, repo):
         stem = repo.workdir_path.stem
         schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
         if schema[0].isdigit():
@@ -107,6 +129,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         else:
             L.debug("session: new...")
             self._db = psycopg2.connect(self.dburl, cursor_factory=DictCursor)
+            self._register_geometry_type(self._db)
 
             try:
                 yield self._db
@@ -119,6 +142,19 @@ class WorkingCopy_Postgis(WorkingCopy):
                 self._db.close()
                 del self._db
                 L.debug("session: new/done")
+
+    def _register_geometry_type(self, db):
+        """
+        Register adapt_geometry_from_db for the type with OID: 'geometry'::regtype::oid
+        - which could be different in different postgis databases, and might not even exist.
+        """
+        dbcur = db.cursor()
+        dbcur.execute("SELECT oid FROM pg_type WHERE typname='geometry';")
+        r = dbcur.fetchone()
+        if r:
+            geometry_oid = r[0]
+            geometry = new_type((geometry_oid,), "GEOMETRY", adapt_geometry_from_db)
+            register_type(geometry, db)
 
     _V2_TYPE_TO_PG_TYPE = {
         "boolean": "boolean",
@@ -328,8 +364,8 @@ class WorkingCopy_Postgis(WorkingCopy):
             db.cursor().execute(sql)
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
-    def _create_triggers(self, dbcur, table, pk_field):
-        # sqlite doesn't let you do param substitutions in CREATE TRIGGER
+    def _create_triggers(self, dbcur, dataset):
+        pk_field = dataset.primary_key
         dbcur.execute(
             SQL(
                 """
@@ -338,14 +374,15 @@ class WorkingCopy_Postgis(WorkingCopy):
             """
             ).format(
                 Identifier("sno_track"),
-                self._table_identifier(table),
+                self._table_identifier(dataset.table_name),
                 Identifier(self.schema, "_sno_track_trigger"),
             ),
             (pk_field,),
         )
 
     @contextlib.contextmanager
-    def _suspend_triggers(self, dbcur, table):
+    def _suspend_triggers(self, dbcur, dataset):
+        table = dataset.table_name
         dbcur.execute(
             SQL("ALTER TABLE {} DISABLE TRIGGER sno_track").format(
                 self._table_identifier(table),
@@ -365,13 +402,9 @@ class WorkingCopy_Postgis(WorkingCopy):
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(
-                SQL(
-                    """
-                SELECT value
-                FROM {}
-                WHERE table_name=%s AND key=%s
-            """
-                ).format(self.STATE_TABLE),
+                SQL("SELECT value FROM {} WHERE table_name=%s AND key=%s").format(
+                    self.STATE_TABLE
+                ),
                 (table_name, "tree"),
             )
             row = dbcur.fetchone()
@@ -381,13 +414,19 @@ class WorkingCopy_Postgis(WorkingCopy):
             wc_tree_id = row[0]
             return wc_tree_id
 
-    def assert_db_tree_match(self, tree, *, table_name="*"):
-        wc_tree_id = self.get_db_tree(table_name)
-        tree_sha = tree.hex
-
-        if wc_tree_id != tree_sha:
-            raise self.Mismatch(wc_tree_id, tree_sha)
-        return wc_tree_id
+    def _placeholders_with_setsrid(self, dataset):
+        # We have to call SetSRID on all geometries so that they will fit in their columns:
+        # Unlike GPKG, the geometries in a column with a CRS of X can't all just have a CRS of 0.
+        result = [SQL("%s")] * len(dataset.schema.columns)
+        for i, col in enumerate(dataset.schema):
+            if col.data_type != "geometry":
+                continue
+            crs_name = col.extra_type_info.get("geometryCRS", None)
+            if crs_name is None:
+                continue
+            crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+            result[i] = SQL(f"SetSRID(%s, {crs_id})")
+        return result
 
     def write_full(self, commit, *datasets, **kwargs):
         """
@@ -424,18 +463,6 @@ class WorkingCopy_Postgis(WorkingCopy):
 
                 L.info("Creating features...")
 
-                # We have to call SetSRID on all geometries so that they will fit in their columns:
-                # Unlike GPKG, the geometries in a column with a CRS of X can't all just have a CRS of 0.
-                value_placeholders = [SQL("%s")] * len(col_names)
-                for i, col in enumerate(dataset.schema):
-                    if col.data_type != "geometry":
-                        continue
-                    crs_name = col.extra_type_info.get("geometryCRS", None)
-                    if crs_name is None:
-                        continue
-                    crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
-                    value_placeholders[i] = SQL(f"SetSRID(%s, {crs_id})")
-
                 sql_insert_features = SQL(
                     """
                     INSERT INTO {} ({}) VALUES ({});
@@ -443,10 +470,8 @@ class WorkingCopy_Postgis(WorkingCopy):
                 ).format(
                     self._table_identifier(table),
                     SQL(",").join([Identifier(k) for k in col_names]),
-                    SQL(",").join(value_placeholders),
+                    SQL(",").join(self._placeholders_with_setsrid(dataset)),
                 )
-
-                crs_id = crs_util.get_identifier_int_from_dataset(dataset)
 
                 feat_count = 0
                 t0 = time.monotonic()
@@ -456,7 +481,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
 
                     dbcur.executemany(sql_insert_features, rows)
-                    feat_count += dbcur.rowcount
+                    feat_count += changes_rowcount(dbcur)
 
                     nc = feat_count / CHUNK_SIZE
                     if nc % 5 == 0 or not nc.is_integer():
@@ -478,7 +503,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                     self._create_spatial_index(dataset)
 
                 # Create triggers
-                self._create_triggers(dbcur, table, pk_field)
+                self._create_triggers(dbcur, dataset)
 
             dbcur.execute(
                 SQL(
@@ -497,7 +522,7 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         sql_write_feature = SQL(
             """
-            INSERT INTO {table} ({cols}) VALUES %s
+            INSERT INTO {table} ({cols}) VALUES ({placeholders})
             ON CONFLICT ({pk}) DO UPDATE
             SET
         """
@@ -505,6 +530,7 @@ class WorkingCopy_Postgis(WorkingCopy):
             table=self._table_identifier(dataset.table_name),
             cols=SQL(",").join([Identifier(k) for k in col_names]),
             pk=Identifier(pk_field),
+            placeholders=SQL(",").join(self._placeholders_with_setsrid(dataset)),
         )
         upd_clause = []
         for k in col_names:
@@ -519,8 +545,8 @@ class WorkingCopy_Postgis(WorkingCopy):
             ),
             CHUNK_SIZE,
         ):
-            dbcur.executemany(sql_write_feature, ([tuple(r)] for r in rows))
-            feat_count += dbcur.rowcount
+            dbcur.executemany(sql_write_feature, (tuple(r) for r in rows))
+            feat_count += changes_rowcount(dbcur)
 
         return feat_count
 
@@ -535,7 +561,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         CHUNK_SIZE = 10000
         for rows in self._chunk(zip(pk_iter), CHUNK_SIZE):
             dbcur.executemany(sql_del_feature, rows)
-            feat_count += dbcur.rowcount
+            feat_count += changes_rowcount(dbcur)
 
         return feat_count
 
@@ -543,8 +569,9 @@ class WorkingCopy_Postgis(WorkingCopy):
         # TODO: Implement meta diffs
         return DeltaDiff()
 
-    def _db_geom_to_gpkg_geom(self, hex_ewkb_geom):
-        return geometry.hexewkb_to_gpkg_geom(hex_ewkb_geom)
+    def _db_geom_to_gpkg_geom(self, g):
+        # This is already handled by register_type
+        return g
 
     def _execute_diff_query(self, dbcur, dataset, feature_filter=None):
         feature_filter = feature_filter or UNFILTERED
@@ -572,3 +599,58 @@ class WorkingCopy_Postgis(WorkingCopy):
             params.append(tuple([str(pk) for pk in feature_filter]))
 
         dbcur.execute(diff_sql, params)
+
+    def _execute_dirty_rows_query(self, dbcur, dataset):
+        sql_changed = SQL("SELECT pk FROM {} WHERE table_name=%s;").format(
+            self.TRACKING_TABLE
+        )
+        dbcur.execute(sql_changed, (dataset.table_name,))
+
+    def reset_tracking_table(self, reset_filter=UNFILTERED):
+        reset_filter = reset_filter or UNFILTERED
+
+        with self.session() as db:
+            dbcur = db.cursor()
+            if reset_filter == UNFILTERED:
+                dbcur.execute(SQL("DELETE FROM {};").format(self.TRACKING_TABLE))
+                return
+
+            for dataset_path, dataset_filter in reset_filter.items():
+                table = dataset_path.strip("/").replace("/", "__")
+                if (
+                    dataset_filter == UNFILTERED
+                    or dataset_filter.get("feature") == UNFILTERED
+                ):
+                    dbcur.execute(
+                        SQL("DELETE FROM {} WHERE table_name=%s;").format(
+                            self.TRACKING_TABLE
+                        ),
+                        (table,),
+                    )
+                    continue
+
+                CHUNK_SIZE = 100
+                pks = dataset_filter.get("feature", ())
+                for pk_chunk in self._chunk(pks, CHUNK_SIZE):
+                    dbcur.execute(
+                        SQL("DELETE FROM {} WHERE table_name=%s AND pk IN %s;").format(
+                            self.TRACKING_TABLE
+                        ),
+                        (table, pk_chunk),
+                    )
+
+    def _reset_tracking_table_for_dataset(self, dbcur, dataset):
+        dbcur.execute(
+            SQL("DELETE FROM {} WHERE table_name=%s;").format(self.TRACKING_TABLE),
+            (dataset.table_name,),
+        )
+        return changes_rowcount(dbcur)
+
+    def _update_state_table_tree_impl(self, dbcur, tree_id):
+        dbcur.execute(
+            SQL("UPDATE {} SET value=%s WHERE table_name='*' AND key='tree';").format(
+                self.STATE_TABLE
+            ),
+            (tree_id,),
+        )
+        return changes_rowcount(dbcur)
