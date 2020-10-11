@@ -93,7 +93,8 @@ class SnoRepo(pygit2.Repository):
             raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
 
         self.gitdir_path = Path(self.path).resolve()
-        assert self.is_old_bare_repo() or self.is_new_tidy_repo()
+        if not self.is_old_bare_repo() and not self.is_new_tidy_repo():
+            raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
 
         if self.is_new_tidy_repo():
             self.workdir_path = self.gitdir_path.parent.resolve()
