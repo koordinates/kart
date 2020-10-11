@@ -191,14 +191,25 @@ class WorkingCopy:
         """
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         """
-        meta_old = dict(dataset.meta_items())
-        meta_new = dict(self.meta_items(dataset))
+        meta_old = dict(self._ds_meta_items(dataset))
+        meta_new = dict(self._wc_meta_items(dataset))
         if "schema.json" in meta_old and "schema.json" in meta_new:
             Schema.align_schema_cols(meta_old["schema.json"], meta_new["schema.json"])
         result = DeltaDiff.diff_dicts(meta_old, meta_new)
         if raise_if_dirty and result:
             raise WorkingCopyDirty()
         return result
+
+    def _ds_meta_items(self, dataset):
+        """
+        Returns all the meta items from the given dataset (ie, at HEAD).
+        Subclasses can discard certain meta items if the working copy doesn't support them.
+        """
+        yield from dataset.meta_items()
+
+    def _wc_meta_items(self, dataset):
+        """Returns all the meta items for the given dataset from the working copy DB."""
+        raise NotImplementedError()
 
     def diff_db_to_tree_feature(
         self, dataset, feature_filter, find_renames, raise_if_dirty=False

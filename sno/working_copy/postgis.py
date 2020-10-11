@@ -12,9 +12,9 @@ from psycopg2.sql import Identifier, SQL
 
 
 from .base import WorkingCopy
+from . import postgis_adapter
 from sno import geometry, crs_util
 from sno.db_util import changes_rowcount
-from sno.diff_structs import DeltaDiff
 from sno.filter_util import UNFILTERED
 
 """
@@ -156,93 +156,6 @@ class WorkingCopy_Postgis(WorkingCopy):
             geometry = new_type((geometry_oid,), "GEOMETRY", adapt_geometry_from_db)
             register_type(geometry, db)
 
-    _V2_TYPE_TO_PG_TYPE = {
-        "boolean": "boolean",
-        "blob": "bytea",
-        "date": "date",
-        "float": {0: "real", 32: "real", 64: "double precision"},
-        "geometry": "geometry",
-        "integer": {
-            0: "integer",
-            16: "smallint",
-            32: "integer",
-            64: "bigint",
-        },
-        "interval": "interval",
-        "numeric": "numeric",
-        "text": "text",
-        "time": "time",
-        "timestamp": "timestamp",
-        # TODO - time and timestamp come in two flavours, with and without timezones.
-        # Code for preserving these flavours in datasets and working copies needs more work.
-    }
-
-    def _v2_type_to_pg_type(self, dataset, column_schema):
-        """Convert a v2 schema type to a postgis type."""
-
-        v2_type = column_schema.data_type
-        extra_type_info = column_schema.extra_type_info
-
-        pg_type_info = self._V2_TYPE_TO_PG_TYPE.get(v2_type)
-        if pg_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
-
-        if isinstance(pg_type_info, dict):
-            return pg_type_info.get(extra_type_info.get("size", 0))
-
-        pg_type = pg_type_info
-        if pg_type == "geometry":
-            geometry_type = extra_type_info.get("geometryType", None)
-            if geometry_type is not None:
-                geometry_type = geometry_type.replace(" ", "")
-
-            crs_name = extra_type_info.get("geometryCRS", None)
-            crs_id = None
-            if crs_name is not None:
-                crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
-
-            if geometry_type is not None and crs_id is not None:
-                return f"geometry({geometry_type},{crs_id})"
-            elif geometry_type is not None:
-                return f"geometry({geometry_type})"
-            else:
-                return "geometry"
-
-        if pg_type == "text":
-            length = extra_type_info.get("length", None)
-            return f"varchar({length})" if length is not None else "text"
-
-        if pg_type == "numeric":
-            precision = extra_type_info.get("precision", None)
-            scale = extra_type_info.get("scale", None)
-            if precision is not None and scale is not None:
-                return f"numeric({precision},{scale})"
-            elif precision is not None:
-                return f"numeric({precision})"
-            else:
-                return "numeric"
-
-        return pg_type
-
-    def _get_columns(self, dataset):
-        pk_field = None
-        pg_cols = {}
-        for col in dataset.schema:
-            pg_type = self._v2_type_to_pg_type(dataset, col)
-            col_spec = [
-                Identifier(col.name),
-                SQL(pg_type),
-            ]
-            if col.pk_index is not None:
-                col_spec.append(SQL("PRIMARY KEY NOT NULL"))
-                pk_field = col.name
-            pg_cols[col.name] = SQL(" ").join(col_spec)
-
-        self.L.debug(
-            "Schema -> Postgis column mapping: %s -> %s", dataset.schema, pg_cols
-        )
-        return pg_cols, pk_field
-
     def is_created(self):
         """
         Returns true if the schema is created. The contents of the schema is the working copy,
@@ -336,14 +249,52 @@ class WorkingCopy_Postgis(WorkingCopy):
             dbcur.execute(SQL("DROP SCHEMA {} CASCADE").format(Identifier(self.schema)))
 
     def write_meta(self, dataset):
-        pass
+        """
+        Populate the following postgis tables with data from this dataset:
+        geometry_columns, spatial_ref_sys
+        """
+        table = dataset.table_name
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(
+                SQL(
+                    "DELETE FROM {} WHERE f_table_schema=%s AND f_table_name=%s;"
+                ).format(self._table_identifier("geometry_columns")),
+                (self.schema, table),
+            )
 
-    def read_meta(self, dataset):
-        return {}
+            geom_columns = postgis_adapter.generate_postgis_geometry_columns(
+                dataset, self.schema
+            )
+            for row in geom_columns:
+                dbcur.execute(
+                    SQL("INSERT INTO {} ({}) VALUES ({});").format(
+                        self._table_identifier("geometry_columns"),
+                        SQL(",").join([Identifier(k) for k in row]),
+                        SQL(",").join([SQL("%s")] * len(row)),
+                    ),
+                    tuple(row.values()),
+                )
 
-    def save_config(self, **kwargs):
-        self.repo.config["sno.workingcopy.version"] = 1
-        self.repo.config["sno.workingcopy.path"] = self.uri
+            spatial_refs = postgis_adapter.generate_postgis_spatial_ref_sys(dataset)
+            for row in spatial_refs:
+                dbcur.execute(
+                    SQL(
+                        """
+                        INSERT INTO {} ({}) VALUES ({})
+                        ON CONFLICT (srid) DO UPDATE
+                        SET auth_name=EXCLUDED.auth_name,
+                            auth_srid=EXCLUDED.auth_srid,
+                            srtext=EXCLUDED.srtext,
+                            proj4text=EXCLUDED.proj4text;
+                    """
+                    ).format(
+                        self._table_identifier("spatial_ref_sys"),
+                        SQL(",").join([Identifier(k) for k in row]),
+                        SQL(",").join([SQL("%s")] * len(row)),
+                    ),
+                    tuple(row.values()),
+                )
 
     def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
@@ -438,38 +389,59 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         with self.session(bulk=2) as db:
             dbcur = db.cursor()
+
+            dbcur.execute(
+                SQL("CREATE SCHEMA IF NOT EXISTS {};").format(Identifier(self.schema))
+            )
+            dbcur.execute(
+                SQL(
+                    """CREATE TABLE IF NOT EXISTS {} (
+                          f_table_catalog    VARCHAR(256) NOT NULL,
+                          f_table_schema     VARCHAR(256) NOT NULL,
+                          f_table_name       VARCHAR(256) NOT NULL,
+                          f_geometry_column  VARCHAR(256) NOT NULL,
+                          coord_dimension    INTEGER NOT NULL,
+                          srid               INTEGER NOT NULL,
+                          type               VARCHAR(30) NOT NULL
+                    );"""
+                ).format(self._table_identifier("geometry_columns"))
+            )
+            dbcur.execute(
+                SQL(
+                    """CREATE TABLE IF NOT EXISTS {} (
+                        srid       INTEGER NOT NULL PRIMARY KEY,
+                        auth_name  VARCHAR(256),
+                        auth_srid  INTEGER,
+                        srtext     VARCHAR(2048),
+                        proj4text  VARCHAR(2048)
+                    );"""
+                ).format(self._table_identifier("spatial_ref_sys"))
+            )
+
             for dataset in datasets:
                 table = dataset.table_name
 
-                self.write_meta(dataset)
-
                 # Create the table
-                cols, pk_field = self._get_columns(dataset)
-                col_names = cols.keys()
-                col_specs = cols.values()
-
-                if self.schema:
-                    dbcur.execute(
-                        SQL("CREATE SCHEMA IF NOT EXISTS {}").format(
-                            Identifier(self.schema)
-                        )
-                    )
+                table_spec = postgis_adapter.v2_schema_to_postgis_spec(
+                    dataset.schema, dataset
+                )
+                col_names = [col.name for col in dataset.schema]
 
                 dbcur.execute(
                     SQL("CREATE TABLE IF NOT EXISTS {} ({});").format(
-                        self._table_identifier(table), SQL(", ").join(col_specs)
+                        self._table_identifier(table), table_spec
                     )
                 )
+                self.write_meta(dataset)
 
                 L.info("Creating features...")
-
                 sql_insert_features = SQL(
                     """
                     INSERT INTO {} ({}) VALUES ({});
                 """
                 ).format(
                     self._table_identifier(table),
-                    SQL(",").join([Identifier(k) for k in col_names]),
+                    SQL(",").join([Identifier(c) for c in col_names]),
                     SQL(",").join(self._placeholders_with_setsrid(dataset)),
                 )
 
@@ -517,8 +489,8 @@ class WorkingCopy_Postgis(WorkingCopy):
             )
 
     def write_features(self, dbcur, dataset, pk_iter, *, ignore_missing=False):
-        cols, pk_field = self._get_columns(dataset)
-        col_names = cols.keys()
+        pk_field = dataset.primary_key
+        col_names = [col.name for col in dataset.schema]
 
         sql_write_feature = SQL(
             """
@@ -551,7 +523,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         return feat_count
 
     def delete_features(self, dbcur, dataset, pk_iter):
-        cols, pk_field = self._get_columns(dataset)
+        pk_field = dataset.primary_key
 
         sql_del_feature = SQL("DELETE FROM {} WHERE {}=%s;").format(
             self._table_identifier(dataset.table_name), Identifier(pk_field)
@@ -565,9 +537,64 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         return feat_count
 
-    def diff_db_to_tree_meta(self, dataset, raise_if_dirty=False):
-        # TODO: Implement meta diffs
-        return DeltaDiff()
+    def _ds_meta_items(self, dataset):
+        for key, value in dataset.meta_items():
+            if key == "schema.json" or key.startswith("crs/"):
+                yield key, value
+
+    def _wc_meta_items(self, dataset):
+        with self.session() as db:
+            dbcur = db.cursor()
+            table_info_sql = SQL(
+                """
+                SELECT
+                    C.column_name, C.ordinal_position, C.data_type, C.udt_name,
+                    C.character_maximum_length, C.numeric_precision, C.numeric_scale,
+                    KCU.ordinal_position AS pk_ordinal_position
+                FROM information_schema.columns C
+                LEFT OUTER JOIN information_schema.key_column_usage KCU
+                ON (KCU.table_schema = C.table_schema)
+                AND (KCU.table_name = C.table_name)
+                AND (KCU.column_name = C.column_name)
+                WHERE C.table_schema=%s AND C.table_name=%s
+                ORDER BY C.ordinal_position;
+            """
+            )
+            dbcur.execute(table_info_sql, (self.schema, dataset.table_name))
+            pg_table_info = list(dbcur)
+
+            geom_columns_sql = SQL(
+                """
+                SELECT * FROM {}
+                WHERE f_table_schema=%s AND f_table_name=%s;
+            """
+            ).format(self._table_identifier("geometry_columns"))
+            dbcur.execute(geom_columns_sql, (self.schema, dataset.table_name))
+            pg_geometry_columns = list(dbcur)
+
+            spatial_ref_sys_sql = SQL(
+                """
+                SELECT SRS.* FROM {} SRS
+                LEFT OUTER JOIN {} GC ON (GC.srid = SRS.srid)
+                WHERE GC.f_table_schema=%s AND GC.f_table_name=%s;
+            """
+            ).format(
+                self._table_identifier("spatial_ref_sys"),
+                self._table_identifier("geometry_columns"),
+            )
+            dbcur.execute(spatial_ref_sys_sql, (self.schema, dataset.table_name))
+            pg_spatial_ref_sys = list(dbcur)
+
+            id_salt = f"{self.schema} {dataset.table_name} {self.get_db_tree()}"
+
+            schema = postgis_adapter.postgis_to_v2_schema(
+                pg_table_info, pg_geometry_columns, pg_spatial_ref_sys, id_salt
+            )
+
+            yield "schema.json", schema.to_column_dicts()
+            for crs_info in pg_spatial_ref_sys:
+                wkt = crs_info["srtext"]
+                yield f"crs/{crs_util.get_identifier_str(wkt)}.wkt", wkt
 
     def _db_geom_to_gpkg_geom(self, g):
         # This is already handled by register_type
