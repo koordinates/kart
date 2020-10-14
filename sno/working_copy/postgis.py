@@ -249,52 +249,10 @@ class WorkingCopy_Postgis(WorkingCopy):
             dbcur.execute(SQL("DROP SCHEMA {} CASCADE").format(Identifier(self.schema)))
 
     def write_meta(self, dataset):
-        """
-        Populate the following postgis tables with data from this dataset:
-        geometry_columns, spatial_ref_sys
-        """
-        table = dataset.table_name
-        with self.session() as db:
-            dbcur = db.cursor()
-            dbcur.execute(
-                SQL(
-                    "DELETE FROM {} WHERE f_table_schema=%s AND f_table_name=%s;"
-                ).format(self._table_identifier("geometry_columns")),
-                (self.schema, table),
-            )
-
-            geom_columns = postgis_adapter.generate_postgis_geometry_columns(
-                dataset, self.schema
-            )
-            for row in geom_columns:
-                dbcur.execute(
-                    SQL("INSERT INTO {} ({}) VALUES ({});").format(
-                        self._table_identifier("geometry_columns"),
-                        SQL(",").join([Identifier(k) for k in row]),
-                        SQL(",").join([SQL("%s")] * len(row)),
-                    ),
-                    tuple(row.values()),
-                )
-
-            spatial_refs = postgis_adapter.generate_postgis_spatial_ref_sys(dataset)
-            for row in spatial_refs:
-                dbcur.execute(
-                    SQL(
-                        """
-                        INSERT INTO {} ({}) VALUES ({})
-                        ON CONFLICT (srid) DO UPDATE
-                        SET auth_name=EXCLUDED.auth_name,
-                            auth_srid=EXCLUDED.auth_srid,
-                            srtext=EXCLUDED.srtext,
-                            proj4text=EXCLUDED.proj4text;
-                    """
-                    ).format(
-                        self._table_identifier("spatial_ref_sys"),
-                        SQL(",").join([Identifier(k) for k in row]),
-                        SQL(",").join([SQL("%s")] * len(row)),
-                    ),
-                    tuple(row.values()),
-                )
+        # TODO - we should be writing any custom CRSs to public.spatial_ref_sys
+        # Not entirely straight-forward - what if the supplied CRS is a slightly modified EPSG definition?
+        # Should we overwrite the data in the table?
+        pass
 
     def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
@@ -392,30 +350,6 @@ class WorkingCopy_Postgis(WorkingCopy):
 
             dbcur.execute(
                 SQL("CREATE SCHEMA IF NOT EXISTS {};").format(Identifier(self.schema))
-            )
-            dbcur.execute(
-                SQL(
-                    """CREATE TABLE IF NOT EXISTS {} (
-                          f_table_catalog    VARCHAR(256) NOT NULL,
-                          f_table_schema     VARCHAR(256) NOT NULL,
-                          f_table_name       VARCHAR(256) NOT NULL,
-                          f_geometry_column  VARCHAR(256) NOT NULL,
-                          coord_dimension    INTEGER NOT NULL,
-                          srid               INTEGER NOT NULL,
-                          type               VARCHAR(30) NOT NULL
-                    );"""
-                ).format(self._table_identifier("geometry_columns"))
-            )
-            dbcur.execute(
-                SQL(
-                    """CREATE TABLE IF NOT EXISTS {} (
-                        srid       INTEGER NOT NULL PRIMARY KEY,
-                        auth_name  VARCHAR(256),
-                        auth_srid  INTEGER,
-                        srtext     VARCHAR(2048),
-                        proj4text  VARCHAR(2048)
-                    );"""
-                ).format(self._table_identifier("spatial_ref_sys"))
             )
 
             for dataset in datasets:
@@ -550,12 +484,18 @@ class WorkingCopy_Postgis(WorkingCopy):
                 SELECT
                     C.column_name, C.ordinal_position, C.data_type, C.udt_name,
                     C.character_maximum_length, C.numeric_precision, C.numeric_scale,
-                    KCU.ordinal_position AS pk_ordinal_position
+                    KCU.ordinal_position AS pk_ordinal_position,
+                    GC.type AS geometry_type,
+                    GC.srid AS geometry_srid
                 FROM information_schema.columns C
                 LEFT OUTER JOIN information_schema.key_column_usage KCU
                 ON (KCU.table_schema = C.table_schema)
                 AND (KCU.table_name = C.table_name)
                 AND (KCU.column_name = C.column_name)
+                LEFT OUTER JOIN public.geometry_columns GC
+                ON (GC.f_table_schema = C.table_schema)
+                AND (GC.f_table_name = C.table_name)
+                AND (GC.f_geometry_column = C.column_name)
                 WHERE C.table_schema=%s AND C.table_name=%s
                 ORDER BY C.ordinal_position;
             """
@@ -563,24 +503,12 @@ class WorkingCopy_Postgis(WorkingCopy):
             dbcur.execute(table_info_sql, (self.schema, dataset.table_name))
             pg_table_info = list(dbcur)
 
-            geom_columns_sql = SQL(
-                """
-                SELECT * FROM {}
-                WHERE f_table_schema=%s AND f_table_name=%s;
-            """
-            ).format(self._table_identifier("geometry_columns"))
-            dbcur.execute(geom_columns_sql, (self.schema, dataset.table_name))
-            pg_geometry_columns = list(dbcur)
-
             spatial_ref_sys_sql = SQL(
                 """
-                SELECT SRS.* FROM {} SRS
-                LEFT OUTER JOIN {} GC ON (GC.srid = SRS.srid)
+                SELECT SRS.* FROM public.spatial_ref_sys SRS
+                LEFT OUTER JOIN public.geometry_columns GC ON (GC.srid = SRS.srid)
                 WHERE GC.f_table_schema=%s AND GC.f_table_name=%s;
             """
-            ).format(
-                self._table_identifier("spatial_ref_sys"),
-                self._table_identifier("geometry_columns"),
             )
             dbcur.execute(spatial_ref_sys_sql, (self.schema, dataset.table_name))
             pg_spatial_ref_sys = list(dbcur)
@@ -588,7 +516,7 @@ class WorkingCopy_Postgis(WorkingCopy):
             id_salt = f"{self.schema} {dataset.table_name} {self.get_db_tree()}"
 
             schema = postgis_adapter.postgis_to_v2_schema(
-                pg_table_info, pg_geometry_columns, pg_spatial_ref_sys, id_salt
+                pg_table_info, pg_spatial_ref_sys, id_salt
             )
 
             yield "schema.json", schema.to_column_dicts()

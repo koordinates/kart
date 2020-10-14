@@ -171,10 +171,21 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
                         Identifier(postgres_schema, H.POLYGONS.LAYER)
                     )
                 )
+                dbcur.execute(
+                    SQL(
+                        """
+                        ALTER TABLE {} ALTER COLUMN geom TYPE geometry(MULTIPOLYGON, 3857)
+                        USING ST_SetSRID(geom, 3857);
+                    """
+                    ).format(Identifier(postgres_schema, H.POLYGONS.LAYER))
+                )
 
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines() == [
+            diff = r.stdout.splitlines()
+            assert "--- nz_waca_adjustments:meta:crs/EPSG:4167.wkt" in diff
+            assert "+++ nz_waca_adjustments:meta:crs/EPSG:3857.wkt" in diff
+            assert diff[-47:] == [
                 "--- nz_waca_adjustments:meta:schema.json",
                 "+++ nz_waca_adjustments:meta:schema.json",
                 "  [",
@@ -191,7 +202,8 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
                 '      "dataType": "geometry",',
                 '      "primaryKeyIndex": null,',
                 '      "geometryType": "MULTIPOLYGON",',
-                '      "geometryCRS": "EPSG:4167"',
+                '-     "geometryCRS": "EPSG:4167",',
+                '+     "geometryCRS": "EPSG:3857",',
                 "    },",
                 "    {",
                 '      "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",',
