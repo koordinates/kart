@@ -115,31 +115,24 @@ def _v2_geometry_type_to_pg_type(geometry_type, crs_id):
         return "geometry"
 
 
-def postgis_to_v2_schema(
-    pg_table_info, pg_geometry_columns, pg_spatial_ref_sys, id_salt
-):
+def postgis_to_v2_schema(pg_table_info, pg_spatial_ref_sys, id_salt):
     """Generate a V2 schema from the given postgis metadata tables."""
     return Schema(
         [
-            _postgis_to_column_schema(
-                col, pg_geometry_columns, pg_spatial_ref_sys, id_salt
-            )
+            _postgis_to_column_schema(col, pg_spatial_ref_sys, id_salt)
             for col in pg_table_info
         ]
     )
 
 
-def _postgis_to_column_schema(
-    pg_col_info, pg_geometry_columns, pg_spatial_ref_sys, id_salt
-):
+def _postgis_to_column_schema(pg_col_info, pg_spatial_ref_sys, id_salt):
     """
     Given the postgis column info for a particular column, and some extra context in
     case it is a geometry column, converts it to a ColumnSchema. The extra context will
     only be used if the given pg_col_info is the geometry column.
     Parameters:
-    pg_col_info - a single column from pg_table_info.
-    pg_geometry_columns - contents of the "geometry_columns" table.
-    pg_spatial_ref_sys - contents of the "spatial_ref_sys" table.
+    pg_col_info - info about a single column from pg_table_info.
+    pg_spatial_ref_sys - rows of the "spatial_ref_sys" table that are referenced by this dataset.
     id_salt - the UUIDs of the generated ColumnSchema are deterministic and depend on
     the name and type of the column, and on this salt.
     """
@@ -147,18 +140,13 @@ def _postgis_to_column_schema(
     pk_index = pg_col_info["pk_ordinal_position"]
     if pk_index is not None:
         pk_index -= 1
-    data_type, extra_type_info = _pg_type_to_v2_type(pg_col_info)
-
-    if data_type == "geometry":
-        data_type, extra_type_info = _pg_type_to_v2_geometry_type(
-            name, pg_geometry_columns, pg_spatial_ref_sys
-        )
+    data_type, extra_type_info = _pg_type_to_v2_type(pg_col_info, pg_spatial_ref_sys)
 
     col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
     return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
 
-def _pg_type_to_v2_type(pg_col_info):
+def _pg_type_to_v2_type(pg_col_info, pg_spatial_ref_sys):
     v2_type_info = _PG_TYPE_TO_V2_TYPE.get(pg_col_info["data_type"])
     if v2_type_info is None:
         v2_type_info = _PG_TYPE_TO_V2_TYPE.get(pg_col_info["udt_name"])
@@ -169,6 +157,9 @@ def _pg_type_to_v2_type(pg_col_info):
     else:
         v2_type = v2_type_info
         extra_type_info = {}
+
+    if v2_type == "geometry":
+        return _pg_type_to_v2_geometry_type(pg_col_info, pg_spatial_ref_sys)
 
     # TODO: standardise on null vs not-present for extra_type_info.
     # TODO: Fix legacy problems caused by any inconsistency.
@@ -184,24 +175,21 @@ def _pg_type_to_v2_type(pg_col_info):
     return v2_type, extra_type_info
 
 
-def _pg_type_to_v2_geometry_type(col_name, pggc, pgsrs):
+def _pg_type_to_v2_geometry_type(pg_col_info, pg_spatial_ref_sys):
     """
     col_name - the name of the column.
-    pggc - the contents of the 'geometry_columns' table.
-    pgsrs - the contents of the 'spatial_ref_sys' table.
+    pg_spatial_ref_sys - rows of the "spatial_ref_sys" table that are referenced by this dataset.
     """
-    geom_col_info = next((r for r in pggc if r["f_geometry_column"] == col_name))
-
-    geometry_type = geom_col_info["type"].upper()
+    geometry_type = pg_col_info["geometry_type"].upper()
     # Look for Z, M, or ZM suffix
     geometry_type, m = _pop_suffix(geometry_type, "M")
     geometry_type, z = _pop_suffix(geometry_type, "Z")
     geometry_type = f"{geometry_type} {z}{m}".strip()
 
     geometry_crs = None
-    crs_id = geom_col_info["srid"]
+    crs_id = pg_col_info["geometry_srid"]
     if crs_id:
-        crs_info = next((r for r in pgsrs if r["srid"] == crs_id), None)
+        crs_info = next((r for r in pg_spatial_ref_sys if r["srid"] == crs_id), None)
         if crs_info:
             geometry_crs = crs_util.get_identifier_str(crs_info["srtext"])
 
@@ -219,43 +207,13 @@ def _pop_suffix(geometry_type, suffix):
         return geometry_type, ""
 
 
-def generate_postgis_geometry_columns(v2_obj, postgis_schema):
-    """
-    Generates contents for the geometry_columns table from the v2 object.
-    The result is a list containing a dict per table row.
-    Each dict has the format {column-name: value}.
-    """
-    result = []
-    for col in v2_obj.schema.geometry_columns:
-        extra_type_info = col.extra_type_info
-        geometry_type = extra_type_info.get("geometryType")
-        if geometry_type is not None:
-            geometry_type = geometry_type.replace(" ", "")
-        crs_name = extra_type_info.get("geometryCRS")
-        crs_id = None
-        if crs_name is not None:
-            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
-
-        result.append(
-            {
-                "f_table_catalog": "",
-                "f_table_schema": postgis_schema,
-                "f_table_name": v2_obj.table_name,
-                "f_geometry_column": col.name,
-                "coord_dimension": _dimension_count(geometry_type),
-                "srid": crs_id,
-                "type": geometry_type,
-            }
-        )
-    return result
-
-
 def generate_postgis_spatial_ref_sys(v2_obj):
     """
     Generates the contents of the spatial_ref_sys table from the v2 object.
     The result is a list containing a dict per table row.
     Each dict has the format {column-name: value}.
     """
+    # TODO - this is not yet written anywhere.
     result = []
     for crs_name, definition in v2_obj.crs_definitions():
         spatial_ref = SpatialReference(definition)
