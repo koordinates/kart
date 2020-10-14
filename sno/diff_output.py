@@ -14,7 +14,7 @@ import click
 
 from .exceptions import InvalidOperation
 from .geometry import Geometry, gpkg_geom_to_ogr, ogr_to_hex_wkb
-from .output_util import dump_json_output, resolve_output_path
+from .output_util import dump_json_output, resolve_output_path, format_wkt_for_output
 from .schema import Schema
 from .utils import ungenerator
 
@@ -80,9 +80,17 @@ def diff_output_text(*, output_path, **kwargs):
                 schema_delta = delta
                 continue
             if delta.old:
-                click.secho(prefix_json(delta.old_value, "- "), fg="red", **pecho)
+                click.secho(
+                    prefix_meta_item(delta.old_value, delta.old_key, "- "),
+                    fg="red",
+                    **pecho,
+                )
             if delta.new:
-                click.secho(prefix_json(delta.new_value, "+ "), fg="green", **pecho)
+                click.secho(
+                    prefix_meta_item(delta.new_value, delta.new_key, "+ "),
+                    fg="green",
+                    **pecho,
+                )
 
         if schema_delta:
             # Make a more readable schema diff.
@@ -288,6 +296,20 @@ def pair_items(old_list, new_list):
             # So matching item must be treated as inserted when its position is found in new_list
             inserted_set.add(old_item)
             old_index += 1
+
+
+def prefix_meta_item(meta_item, meta_item_name, prefix):
+    if meta_item_name.endswith(".wkt"):
+        return prefix_wkt(meta_item, prefix)
+    elif meta_item_name.endswith(".json"):
+        return prefix_json(meta_item, prefix)
+    else:
+        return re.sub("^", prefix, str(meta_item), flags=re.MULTILINE)
+
+
+def prefix_wkt(wkt, prefix):
+    wkt = format_wkt_for_output(wkt)
+    return re.sub("^", prefix, wkt, flags=re.MULTILINE)
 
 
 def prefix_json(jdict, prefix):

@@ -1468,7 +1468,7 @@ def test_show_polygons_initial(
             index = lines.index("+++ nz_waca_adjustments:meta:title")
             assert lines[index : index + 2] == [
                 "+++ nz_waca_adjustments:meta:title",
-                '+ "NZ WACA Adjustments"',
+                "+ NZ WACA Adjustments",
             ]
 
             assert "+++ nz_waca_adjustments:feature:1424927" in lines

@@ -81,13 +81,13 @@ def format_json_for_output(output, fp, json_style="pretty"):
         return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
 
 
-def format_wkt_for_output(output, fp):
+def format_wkt_for_output(output, fp=None, syntax_highlight=True):
     """
     If the given filelike object is a terminal, adds whitespace and syntax highlighting to the output.
     Doesn't actually write the output, just returns it.
     """
     tokens_with_whitespace = wkt_whitespace_format(WKTLexer().get_tokens(output))
-    if fp == sys.stdout and fp.isatty():
+    if syntax_highlight and fp == sys.stdout and fp.isatty():
         return pygments.format(tokens_with_whitespace, get_terminal_formatter())
     else:
         token_value = (value for token_type, value in tokens_with_whitespace)
