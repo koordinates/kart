@@ -1,5 +1,4 @@
 from datetime import datetime, timezone, timedelta
-import itertools
 import subprocess
 import sys
 
@@ -60,16 +59,13 @@ def log(ctx, output_format, json_style, do_dataset_changes, args):
             )
 
         commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
-        if do_dataset_changes:
-            dataset_changes_log = get_dataset_changes_log(repo, args)
-        else:
-            dataset_changes_log = itertools.cycle([None])
+        dataset_change_cache = {}
 
         commit_log = [
-            commit_obj_to_json(repo[commit_id], refs, dataset_changes)
-            for (commit_id, refs), dataset_changes in zip(
-                commit_ids_and_refs_log, dataset_changes_log
+            commit_obj_to_json(
+                repo, repo[commit_id], refs, do_dataset_changes, dataset_change_cache
             )
+            for (commit_id, refs) in commit_ids_and_refs_log
         ]
         dump_json_output(commit_log, sys.stdout, json_style)
 
@@ -82,7 +78,9 @@ def _parse_git_log_output(lines):
         yield commit_id, [r.strip() for r in refs]
 
 
-def commit_obj_to_json(commit, refs, dataset_changes=None):
+def commit_obj_to_json(
+    repo, commit, refs, do_dataset_changes=False, dataset_change_cache={}
+):
     """Given a commit object, returns a dict ready for dumping as JSON."""
     author = commit.author
     committer = commit.committer
@@ -114,76 +112,44 @@ def commit_obj_to_json(commit, refs, dataset_changes=None):
         "parents": [oid.hex for oid in commit.parent_ids],
         "abbrevParents": abbrev_parents,
     }
-    if dataset_changes is not None:
-        result["datasetChanges"] = dataset_changes
+    if do_dataset_changes:
+        result["datasetChanges"] = get_dataset_changes(
+            repo, commit, dataset_change_cache
+        )
     return result
 
 
-def get_dataset_changes_log(repo, args):
-    # TODO - git log isn't really designed to efficiently tell us which datasets changed.
-    # So this code is a bit more complex that would be ideal, and a bit less efficient.
-    dataset_dirname = RepositoryStructure(repo).dataset_class.DATASET_DIRNAME
-    dataset_dirname = f"/{dataset_dirname}/"
-    for percentage in (90, 10, 1):
-        directory_changes_log = _get_directory_changes_log(repo, percentage, args)
-        if all(_enough_detail(d, dataset_dirname) for d in directory_changes_log):
-            break
-
-    return [_get_datasets(d, dataset_dirname) for d in directory_changes_log]
-
-
-def _enough_detail(directories, dataset_dirname):
-
-    return all(dataset_dirname in d for d in directories)
-
-
-def _get_datasets(directories, dataset_dirname):
-    datasets = set()
-    for d in directories:
-        parts = d.split(dataset_dirname, 1)
-        if len(parts) == 2:
-            datasets.add(parts[0])
-    return list(datasets)
-
-
-_SEPARATOR = "=" * 20
-
-
-def _get_directory_changes_log(repo, percentage, args):
+def get_dataset_changes(repo, commit, dataset_change_cache):
+    """Given a commit, returns a list of datasets changed by that commit."""
+    cur_datasets = _get_dataset_tree_ids(repo, commit, dataset_change_cache)
+    prev_datasets = None
     try:
-        cmd = [
-            "git",
-            "-C",
-            repo.path,
-            "log",
-            f"--pretty=format:{_SEPARATOR}",
-            "--shortstat",
-            f"--dirstat=files,cumulative,{percentage}",
-        ] + list(args)
-        r = subprocess.run(cmd, encoding="utf8", check=True, capture_output=True)
-    except subprocess.CalledProcessError as e:
-        raise SubprocessError(
-            f"There was a problem with git log: {e}", called_process_error=e
-        )
-    raw_log = r.stdout.split(f"{_SEPARATOR}\n")[1:]
-    return [_get_directories(r) for r in raw_log]
+        if not commit.parents:
+            return sorted(list(cur_datasets.keys()))
+
+        parent = commit.parents[0]
+        prev_datasets = _get_dataset_tree_ids(repo, parent, dataset_change_cache)
+        changes = prev_datasets.items() ^ cur_datasets.items()
+        return sorted(list(set(ds for ds, tree in changes)))
+
+    except KeyError:
+        return []
 
 
-def _get_directories(raw_output):
-    raw_output = raw_output.strip()
-    if not raw_output:
-        return []  # Empty change.
+def _get_dataset_tree_ids(repo, commit, dataset_change_cache):
+    """
+    Given a commit, returns a dict of dataset SHAs at that commit eg:
+    {
+        "nz_building_outlines": "8f7dbff287b9d40a772a1315c47e208124028645",
+        ...
+    }
+    """
+    commit_id = commit.id.hex
+    if commit_id not in dataset_change_cache:
+        result = {}
+        rs = RepositoryStructure(repo, commit)
+        for dataset in rs:
+            result[dataset.path] = dataset.tree.id.hex
+        dataset_change_cache[commit_id] = result
 
-    directories = set()
-    for line in raw_output.splitlines()[1:]:
-        line = line.strip()
-        if not line:
-            continue
-        directory = line.split("% ", 1)[1]
-        directories.add(directory)
-
-    if not directories:
-        # Non-empty change, but dirstat didn't return any particular directory.
-        directories.add("/")
-
-    return directories
+    return dataset_change_cache[commit_id]
