@@ -518,7 +518,7 @@ class WorkingCopy:
         self._reset_dirty_rows(base_ds, dbcur)
 
         if target_ds != base_ds:
-            self._apply_meta_diff(base_ds, base_ds.diff_meta(target_ds), dbcur)
+            self._apply_meta_diff(target_ds, base_ds.diff_meta(target_ds), dbcur)
             # WC now has target_ds structure and so we can write target_ds features to WC.
             self._apply_feature_diff(base_ds, target_ds, dbcur, track_changes_as_dirty)
 
@@ -580,21 +580,23 @@ class WorkingCopy:
         # Subclasses can override to support various types of meta updates.
         return not meta_diff
 
-    def _apply_meta_diff(self, dataset, meta_diff, dbcur):
+    def _apply_meta_diff(self, target_ds, meta_diff, dbcur):
         """
         Change the metadata of this working copy according to the given meta diff.
         Not all changes are possible or supported - see _is_meta_update_supported.
-        dataset - which table to update.
+        target_ds - controls which table to update. May also be used to look up target CRS.
         meta_diff - a DeltaDiff object containing meta-item deltas for this dataset.
         dbcur - database cursor.
         """
         L.debug("Meta diff: %s changes", len(meta_diff))
-        table_name = dataset.table_name
         for key in meta_diff:
+            if key.startswith("crs/"):
+                # CRS changes are handled by _apply_meta_schema_json
+                continue
             func_key = key.replace("/", "_").replace(".", "_")
             func = getattr(self, f"_apply_meta_{func_key}")
             delta = meta_diff[key]
-            func(table_name, delta.old_value, delta.new_value, dbcur)
+            func(target_ds, delta.old_value, delta.new_value, dbcur)
 
     def _reset_dirty_rows(self, base_ds, dbcur):
         """
