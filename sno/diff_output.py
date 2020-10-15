@@ -69,16 +69,23 @@ def diff_output_text(*, output_path, **kwargs):
         path = dataset.path
 
         prefix = f"{path}:meta:"
-        schema_delta = None
         for key, delta in sorted(diff.get("meta", {}).items()):
             if delta.old:
                 click.secho(f"--- {prefix}{delta.old_key}", bold=True, **pecho)
             if delta.new:
                 click.secho(f"+++ {prefix}{delta.new_key}", bold=True, **pecho)
+
             if key == "schema.json" and delta.old and delta.new:
-                # Schema is handled below
-                schema_delta = delta
+                # Make a more readable schema diff.
+                click.echo(
+                    schema_diff_as_text(
+                        Schema.from_column_dicts(delta.old_value),
+                        Schema.from_column_dicts(delta.new_value),
+                    ),
+                    **pecho,
+                )
                 continue
+
             if delta.old:
                 click.secho(
                     prefix_meta_item(delta.old_value, delta.old_key, "- "),
@@ -91,16 +98,6 @@ def diff_output_text(*, output_path, **kwargs):
                     fg="green",
                     **pecho,
                 )
-
-        if schema_delta:
-            # Make a more readable schema diff.
-            click.echo(
-                schema_diff_as_text(
-                    Schema.from_column_dicts(schema_delta.old.value),
-                    Schema.from_column_dicts(schema_delta.new.value),
-                ),
-                **pecho,
-            )
 
         pk_field = dataset.primary_key
         repr_excl = [pk_field]
