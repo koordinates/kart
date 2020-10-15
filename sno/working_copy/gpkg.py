@@ -764,21 +764,22 @@ class WorkingCopyGPKG(WorkingCopy):
         dt.pop("name_updates")
         return sum(dt.values()) == 0
 
-    def _apply_meta_title(self, table_name, src_value, dest_value, dbcur):
+    def _apply_meta_title(self, dataset, src_value, dest_value, dbcur):
         # TODO - find a better way to roundtrip titles while keeping them unique
-        identifier = f"{table_name}: {dest_value}"
+        table = dataset.table_name
+        identifier = f"{table}: {dest_value}"
         dbcur.execute(
             """UPDATE gpkg_contents SET identifier = ? WHERE table_name = ?""",
-            (identifier, table_name),
+            (identifier, table),
         )
 
-    def _apply_meta_description(self, table_name, src_value, dest_value, dbcur):
+    def _apply_meta_description(self, dataset, src_value, dest_value, dbcur):
         dbcur.execute(
             """UPDATE gpkg_contents SET description = ? WHERE table_name = ?""",
-            (dest_value, table_name),
+            (dest_value, dataset.table_name),
         )
 
-    def _apply_meta_schema_json(self, table_name, src_value, dest_value, dbcur):
+    def _apply_meta_schema_json(self, dataset, src_value, dest_value, dbcur):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 
@@ -794,22 +795,21 @@ class WorkingCopyGPKG(WorkingCopy):
             dest_name = dest_schema[col_id].name
             dbcur.execute(
                 f"""
-                    ALTER TABLE {gpkg.ident(table_name)}
+                    ALTER TABLE {gpkg.ident(dataset.table_name)}
                     RENAME COLUMN {gpkg.ident(src_name)} TO {gpkg.ident(dest_name)}
                 """
             )
 
-    def _apply_meta_metadata_dataset_json(
-        self, table_name, src_value, dest_value, dbcur
-    ):
-        self._delete_meta_metadata(table_name, dbcur)
+    def _apply_meta_metadata_dataset_json(self, dataset, src_value, dest_value, dbcur):
+        table = dataset.table_name
+        self._delete_meta_metadata(table, dbcur)
         if dest_value:
-            gpkg_metadata = gpkg_adapter.json_to_gpkg_metadata(dest_value, table_name)
+            gpkg_metadata = gpkg_adapter.json_to_gpkg_metadata(dest_value, table)
             gpkg_metadata_reference = gpkg_adapter.json_to_gpkg_metadata(
-                dest_value, table_name, reference=True
+                dest_value, table, reference=True
             )
             self._write_meta_metadata(
-                table_name, gpkg_metadata, gpkg_metadata_reference, dbcur
+                table, gpkg_metadata, gpkg_metadata_reference, dbcur
             )
 
     def _update_table(

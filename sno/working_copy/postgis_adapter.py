@@ -53,7 +53,7 @@ def v2_schema_to_postgis_spec(schema, v2_obj):
     'fid INTEGER, geom GEOMETRY(POINT,2136), desc VARCHAR(128), PRIMARY KEY(fid)'
     """
     result = [
-        SQL("{} {}").format(Identifier(col.name), SQL(_v2_type_to_pg_type(col, v2_obj)))
+        SQL("{} {}").format(Identifier(col.name), SQL(v2_type_to_pg_type(col, v2_obj)))
         for col in schema
     ]
 
@@ -64,7 +64,7 @@ def v2_schema_to_postgis_spec(schema, v2_obj):
     return SQL(", ").join(result)
 
 
-def _v2_type_to_pg_type(column_schema, v2_obj):
+def v2_type_to_pg_type(column_schema, v2_obj):
     """Convert a v2 schema type to a postgis type."""
 
     v2_type = column_schema.data_type

@@ -162,6 +162,11 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
             with wc.session() as db:
                 dbcur = db.cursor()
                 dbcur.execute(
+                    SQL("COMMENT ON TABLE {} IS 'New title';").format(
+                        Identifier(postgres_schema, H.POLYGONS.LAYER)
+                    )
+                )
+                dbcur.execute(
                     SQL("ALTER TABLE {} ADD COLUMN colour VARCHAR(32);").format(
                         Identifier(postgres_schema, H.POLYGONS.LAYER)
                     )
@@ -185,7 +190,7 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
             diff = r.stdout.splitlines()
             assert "--- nz_waca_adjustments:meta:crs/EPSG:4167.wkt" in diff
             assert "+++ nz_waca_adjustments:meta:crs/EPSG:3857.wkt" in diff
-            assert diff[-47:] == [
+            assert diff[-51:] == [
                 "--- nz_waca_adjustments:meta:schema.json",
                 "+++ nz_waca_adjustments:meta:schema.json",
                 "  [",
@@ -233,4 +238,28 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
                 '+     "length": 32',
                 "+   },",
                 "  ]",
+                "--- nz_waca_adjustments:meta:title",
+                "+++ nz_waca_adjustments:meta:title",
+                "- NZ WACA Adjustments",
+                "+ New title",
             ]
+
+            orig_head = repo.head.peel(pygit2.Commit).hex
+
+            r = cli_runner.invoke(["commit", "-m", "test_commit"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["status"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == [
+                "On branch master",
+                "",
+                "Nothing to commit, working copy clean",
+            ]
+
+            new_head = repo.head.peel(pygit2.Commit).hex
+            assert new_head != orig_head
+
+            r = cli_runner.invoke(["checkout", "HEAD^"])
+
+            assert repo.head.peel(pygit2.Commit).hex == orig_head

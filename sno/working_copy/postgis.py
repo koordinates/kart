@@ -16,6 +16,8 @@ from . import postgis_adapter
 from sno import geometry, crs_util
 from sno.db_util import changes_rowcount
 from sno.filter_util import UNFILTERED
+from sno.schema import Schema
+
 
 """
 * database needs to exist
@@ -249,10 +251,46 @@ class WorkingCopy_Postgis(WorkingCopy):
             dbcur.execute(SQL("DROP SCHEMA {} CASCADE").format(Identifier(self.schema)))
 
     def write_meta(self, dataset):
-        # TODO - we should be writing any custom CRSs to public.spatial_ref_sys
-        # Not entirely straight-forward - what if the supplied CRS is a slightly modified EPSG definition?
-        # Should we overwrite the data in the table?
-        pass
+        self.write_meta_title(dataset)
+        self.write_meta_crs(dataset)
+
+    def write_meta_title(self, dataset):
+        """Write the dataset title as a comment on the table."""
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(
+                SQL("COMMENT ON TABLE {} IS %s").format(
+                    self._table_identifier(dataset.table_name)
+                ),
+                (dataset.get_meta_item("title"),),
+            )
+
+    def write_meta_crs(self, dataset):
+        """Populate the public.spatial_ref_sys table with data from this dataset."""
+        spatial_refs = postgis_adapter.generate_postgis_spatial_ref_sys(dataset)
+        if not spatial_refs:
+            return
+
+        with self.session() as db:
+            dbcur = db.cursor()
+            for row in spatial_refs:
+                # We only write a CRS if none is there for the given ID - the CRS of a given ID shouldn't change.
+                dbcur.execute(
+                    SQL(
+                        """
+                        INSERT INTO public.spatial_ref_sys ({}) VALUES ({})
+                        ON CONFLICT (srid) DO NOTHING;
+                        """
+                    ).format(
+                        SQL(",").join([Identifier(k) for k in row]),
+                        SQL(",").join([SQL("%s")] * len(row)),
+                    ),
+                    tuple(row.values()),
+                )
+
+    def delete_meta(self, dataset):
+        """Delete any metadata that is only needed by this dataset."""
+        pass  # There is no metadata except for the spatial_ref_sys table.
 
     def _create_spatial_index(self, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
@@ -471,14 +509,41 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         return feat_count
 
+    def drop_table(self, target_tree_or_commit, *datasets):
+        with self.session() as db:
+            dbcur = db.cursor()
+            for dataset in datasets:
+                table = dataset.table_name
+
+                dbcur.execute(
+                    SQL("DROP TABLE IF EXISTS {};").format(
+                        self._table_identifier(table)
+                    )
+                )
+                self.delete_meta(dataset)
+
+                dbcur.execute(
+                    SQL("DELETE FROM {} WHERE table_name=%s;").format(
+                        self.TRACKING_TABLE
+                    ),
+                    (table,),
+                )
+
     def _ds_meta_items(self, dataset):
         for key, value in dataset.meta_items():
-            if key == "schema.json" or key.startswith("crs/"):
+            if key in ("title", "schema.json") or key.startswith("crs/"):
                 yield key, value
 
     def _wc_meta_items(self, dataset):
         with self.session() as db:
             dbcur = db.cursor()
+            dbcur.execute(
+                SQL("SELECT obj_description(%s::regclass, 'pg_class');"),
+                (f"{self.schema}.{dataset.table_name}",),
+            )
+            title = dbcur.fetchone()[0]
+            yield "title", title
+
             table_info_sql = SQL(
                 """
                 SELECT
@@ -609,3 +674,101 @@ class WorkingCopy_Postgis(WorkingCopy):
             (tree_id,),
         )
         return changes_rowcount(dbcur)
+
+    def _is_meta_update_supported(self, dataset_version, meta_diff):
+        """
+        Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
+        (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).
+        meta_diff - DeltaDiff object containing the meta changes.
+        """
+        if not meta_diff:
+            return True
+
+        if "schema.json" not in meta_diff:
+            return True
+
+        schema_delta = meta_diff["schema.json"]
+        if not schema_delta.old_value or not schema_delta.new_value:
+            return False
+
+        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        dt = old_schema.diff_type_counts(new_schema)
+
+        # We support deletes, name_updates, and type_updates -
+        # but we don't support any other type of schema update except by rewriting the entire table.
+        dt.pop("deletes")
+        dt.pop("name_updates")
+        dt.pop("type_updates")
+        return sum(dt.values()) == 0
+
+    def _apply_meta_title(self, dataset, src_value, dest_value, dbcur):
+        dbcur.execute(
+            SQL("COMMENT ON TABLE {} IS %s").format(
+                self._table_identifier(dataset.table_name)
+            ),
+            (dest_value,),
+        )
+
+    def _apply_meta_description(self, dataset, src_value, dest_value, dbcur):
+        pass  # This is a no-op for postgis
+
+    def _apply_meta_metadata_dataset_json(self, dataset, src_value, dest_value, dbcur):
+        pass  # This is a no-op for postgis
+
+    def _apply_meta_schema_json(self, dataset, src_value, dest_value, dbcur):
+        src_schema = Schema.from_column_dicts(src_value)
+        dest_schema = Schema.from_column_dicts(dest_value)
+
+        diff_types = src_schema.diff_types(dest_schema)
+
+        deletes = diff_types.pop("deletes")
+        name_updates = diff_types.pop("name_updates")
+        type_updates = diff_types.pop("type_updates")
+
+        if any(dt for dt in diff_types.values()):
+            raise RuntimeError(
+                f"This schema change not supported by update - should be drop + rewrite_full: {diff_types}"
+            )
+
+        table = dataset.table_name
+        for col_id in deletes:
+            src_name = src_schema[col_id].name
+            dbcur.execute(
+                SQL("ALTER TABLE {} DROP COLUMN IF EXISTS {};").format(
+                    self._table_identifier(table), Identifier(src_name)
+                )
+            )
+
+        for col_id in name_updates:
+            src_name = src_schema[col_id].name
+            dest_name = dest_schema[col_id].name
+            dbcur.execute(
+                SQL("ALTER TABLE {} RENAME COLUMN {} TO {};").format(
+                    self._table_identifier(table),
+                    Identifier(src_name),
+                    Identifier(dest_name),
+                ),
+            )
+
+        do_write_crs = False
+        for col_id in type_updates:
+            col = dest_schema[col_id]
+            dest_type = postgis_adapter.v2_type_to_pg_type(col, dataset)
+
+            if col.data_type == "geometry":
+                crs_name = col.extra_type_info.get("geometryCRS")
+                if crs_name is not None:
+                    crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+                    if crs_id is not None:
+                        dest_type += f" USING SetSRID({col.name}, {crs_id})"
+                        do_write_crs = True
+
+            dbcur.execute(
+                SQL("ALTER TABLE {} ALTER COLUMN {} TYPE {};").format(
+                    self._table_identifier(table), Identifier(col.name), SQL(dest_type)
+                )
+            )
+
+        if do_write_crs:
+            self.write_meta_crs(dataset)
