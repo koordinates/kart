@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.6.0 (UNRELEASED)
 
  * Newly created sno repositories no longer have git internals visible in the main folder - they are hidden away in a '.sno' folder. [#147](https://github.com/koordinates/sno/issues/147)
+ * The working copy can now be a PostgreSQL / PostGIS database (previously only GPKG working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `postgresql://[HOST]/DBNAME/SCHEMA` [#267](https://github.com/koordinates/sno/issues/267)
  * `apply` and `import` no longer create empty commits unless you specify `--allow-empty` [#243](https://github.com/koordinates/sno/issues/243), [#245](https://github.com/koordinates/sno/issues/245)
  * Patches that create or delete datasets are now supported in Datasets V2 [#239](https://github.com/koordinates/sno/issues/239)
  * `apply`, `commit` and `merge` commands now optimise repositories after committing, to avoid poor repo performance. [#250](https://github.com/koordinates/sno/issues/250)
