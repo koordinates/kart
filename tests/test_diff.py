@@ -88,7 +88,7 @@ def test_diff_points(
                 "+                                     geom = POINT(...)",
                 "+                                  t50_fid = 9999999",
                 "+                               name_ascii = Te Motu-a-kore",
-                "+                               macronated = 0",
+                "+                               macronated = N",
                 "+                                     name = Te Motu-a-kore",
             ]
         elif output_format == "geojson":
@@ -177,7 +177,7 @@ def test_diff_points(
                         "id": "I::9999",
                         "properties": {
                             "fid": 9999,
-                            "macronated": "0",
+                            "macronated": "N",
                             "name": "Te Motu-a-kore",
                             "name_ascii": "Te Motu-a-kore",
                             "t50_fid": 9999999,
@@ -249,7 +249,7 @@ def test_diff_points(
                                 "+": {
                                     "fid": 9999,
                                     "geom": "010100000000000000000000000000000000000000",
-                                    "macronated": "0",
+                                    "macronated": "N",
                                     "name": "Te Motu-a-kore",
                                     "name_ascii": "Te Motu-a-kore",
                                     "t50_fid": 9999999,

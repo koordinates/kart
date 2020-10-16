@@ -222,7 +222,6 @@ def restore(ctx, source, pathspec):
     if not working_copy:
         raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 
-    head_commit = repo.head.peel(pygit2.Commit)
     try:
         commit_or_tree, ref = repo.resolve_refish(source)
         commit_or_tree.peel(pygit2.Tree)
@@ -246,25 +245,24 @@ def restore(ctx, source, pathspec):
     is_flag=True,
     help="Discard local changes in working copy if necessary",
 )
-@click.argument("path", nargs=1, type=click.Path(dir_okay=False), required=False)
-@click.argument("version", nargs=1, type=int, required=False)
-def create_workingcopy(ctx, discard_changes, path, version):
-    """ Create a new working copy - if one already exists it will be deleted """
+@click.argument("wc_path", nargs=1, required=False)
+def create_workingcopy(ctx, discard_changes, wc_path):
+    """
+    Create a new working copy - if one already exists it will be deleted.
+    Usage: sno create-workingcopy [PATH]
+    PATH should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA
+    If no path is supplied, a GPKG file with a default name will be created inside the sno repository.
+    """
+    repo = ctx.obj.repo
     if not discard_changes:
         ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
-    if path is not None:
-        path = Path(path)
-        if not path.is_absolute():
-            # Note: This is basically path = normpath(path)
-            repo_path = ctx.obj.repo_path
-            path = os.path.relpath(os.path.join(repo_path, path), repo_path)
+    WorkingCopy.check_valid_path(wc_path, repo.workdir_path)
 
-    repo = ctx.obj.repo
     wc = WorkingCopy.get(repo)
     if wc:
         wc.delete()
 
-    WorkingCopy.write_config(repo, path, version)
+    WorkingCopy.write_config(repo, wc_path)
     head_commit = repo.head.peel(pygit2.Commit)
     reset_wc_if_needed(repo, head_commit)
