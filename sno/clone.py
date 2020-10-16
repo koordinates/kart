@@ -4,11 +4,11 @@ from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 
 import click
-import pygit2
 
 from . import checkout, git_util
 from .exceptions import InvalidOperation
 from .sno_repo import SnoRepo
+from .working_copy.base import WorkingCopy
 
 
 def get_directory_from_url(url):
@@ -40,7 +40,8 @@ def get_directory_from_url(url):
     "--workingcopy-path",
     "wc_path",
     type=click.Path(dir_okay=False),
-    help="Path where the working copy should be created",
+    help="Path where the working copy should be created. "
+    "This should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA",
 )
 @click.option(
     "--progress/--quiet",
@@ -78,7 +79,9 @@ def clone(ctx, bare, wc_path, do_progress, depth, branch, url, directory):
 
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
-    elif not repo_path.exists():
+    WorkingCopy.check_valid_path(wc_path, repo_path)
+
+    if not repo_path.exists():
         repo_path.mkdir(parents=True)
 
     args = ["--progress" if do_progress else "--quiet"]

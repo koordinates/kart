@@ -1,8 +1,11 @@
 import contextlib
 import itertools
 import logging
+from pathlib import Path
+
 
 import pygit2
+
 
 from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from sno.exceptions import InvalidOperation, NotYetImplemented
@@ -51,9 +54,6 @@ class WorkingCopy:
 
     @classmethod
     def get(cls, repo, create_if_missing=False):
-        from .gpkg import WorkingCopy_GPKG_1, WorkingCopy_GPKG_2
-        from .postgis import WorkingCopy_Postgis
-
         if create_if_missing:
             cls.ensure_config_exists(repo)
 
@@ -63,7 +63,9 @@ class WorkingCopy:
             return None
 
         path = repo_cfg[path_key]
-        if path.startswith("postgresql://"):
+        if cls.is_postgres_uri(path):
+            from .postgis import WorkingCopy_Postgis
+
             return WorkingCopy_Postgis(repo, path)
 
         full_path = repo.workdir_path / path
@@ -73,10 +75,17 @@ class WorkingCopy:
         version = get_repo_version(repo)
         if version not in cls.VALID_VERSIONS:
             raise NotImplementedError(f"Working copy version: {version}")
+
+        from .gpkg import WorkingCopy_GPKG_1, WorkingCopy_GPKG_2
+
         if version < 2:
             return WorkingCopy_GPKG_1(repo, path)
         else:
             return WorkingCopy_GPKG_2(repo, path)
+
+    @classmethod
+    def is_postgres_uri(cls, path):
+        return path.startswith("postgresql:")
 
     @classmethod
     def ensure_config_exists(cls, repo):
@@ -101,15 +110,50 @@ class WorkingCopy:
             repo_cfg[bare_key] = True
             repo.del_config(path_key)
         else:
-            path = path or cls.default_path(repo)
+            if path is None:
+                path = cls.default_path(repo)
+            elif cls.is_postgres_uri(path):
+                pass
+            else:
+                path = cls.normalise_path(repo, path)
+
             repo_cfg[bare_key] = False
             repo_cfg[path_key] = str(path)
+
+    @classmethod
+    def check_valid_path(cls, path, workdir_path=None):
+        """
+        Given a user-supplied string describing where to put the working copy, ensures it is a valid location.
+        Doesn't check if we have permissions to create a working copy there.
+        """
+        if path is None:
+            return
+
+        if cls.is_postgres_uri(path):
+            from .postgis import WorkingCopy_Postgis
+
+            WorkingCopy_Postgis.check_valid_uri(path, workdir_path)
+        else:
+            from .gpkg import WorkingCopy_GPKG
+
+            WorkingCopy_GPKG.check_valid_path(path)
 
     @classmethod
     def default_path(cls, repo):
         """Returns `example.gpkg` for a sno repo in a directory named `example`."""
         stem = repo.workdir_path.stem
         return f"{stem}.gpkg"
+
+    @classmethod
+    def normalise_path(cls, repo, path):
+        """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
+        path = Path(path)
+        if not path.is_absolute():
+            try:
+                return str(path.resolve().relative_to(repo.workdir_path.resolve()))
+            except ValueError:
+                pass
+        return str(path)
 
     def get_db_tree(self, table_name="*"):
         """Returns the hex tree ID from the state table."""

@@ -4,6 +4,7 @@ import re
 import time
 from urllib.parse import urlsplit, urlunsplit
 
+import click
 import pygit2
 import psycopg2
 from psycopg2.extensions import new_type, register_adapter, register_type, Binary
@@ -75,7 +76,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         url_path = url.path
         path_parts = url_path[1:].split("/", 3) if url_path else []
         if len(path_parts) != 2:
-            raise ValueError("Expecting postgresql://[host]/dbname/schema")
+            raise ValueError("Expecting postgresql://[HOST]/DBNAME/SCHEMA")
         url_path = f"/{path_parts[0]}"
         self.schema = path_parts[1]
 
@@ -87,6 +88,41 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         # rebuild DB URL suitable for libpq
         self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url_query, ""])
+
+    @classmethod
+    def check_valid_uri(cls, uri, workdir_path):
+        url = urlsplit(uri)
+
+        if url.scheme != "postgresql":
+            raise click.UsageError(
+                "Invalid postgres URI - Expecting URI in form: postgresql://[HOST]/DBNAME/SCHEMA"
+            )
+
+        url_path = url.path
+        path_parts = url_path[1:].split("/", 3) if url_path else []
+
+        suggestion_message = ""
+        if len(path_parts) == 1 and workdir_path is not None:
+            suggested_path = f"/{path_parts[0]}/{cls.default_schema(workdir_path)}"
+            suggested_uri = urlunsplit(
+                [url.scheme, url.netloc, suggested_path, url.query, ""]
+            )
+            suggestion_message = f"\nFor example: {suggested_uri}"
+
+        if len(path_parts) != 2:
+            raise click.UsageError(
+                "Invalid postgres URI - postgis working copy requires both dbname and schema:\n"
+                "Expecting URI in form: postgresql://[HOST]/DBNAME/SCHEMA"
+                + suggestion_message
+            )
+
+    @classmethod
+    def default_schema(cls, workdir_path):
+        stem = workdir_path.stem
+        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
+        if schema[0].isdigit():
+            schema = "_" + schema
+        return schema
 
     def __str__(self):
         p = urlsplit(self.uri)
@@ -105,14 +141,6 @@ class WorkingCopy_Postgis(WorkingCopy):
 
     def _table_identifier(self, table):
         return Identifier(self.schema, table)
-
-    @classmethod
-    def default_schema(cls, repo):
-        stem = repo.workdir_path.stem
-        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
-        if schema[0].isdigit():
-            schema = "_" + schema
-        return schema
 
     @contextlib.contextmanager
     def session(self, bulk=0):

@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from enum import Enum
 
+import click
 import pygit2
 from osgeo import gdal
 
@@ -51,10 +52,24 @@ def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
     return dbcur.execute(sql, values)
 
 
-class WorkingCopyGPKG(WorkingCopy):
+class WorkingCopy_GPKG(WorkingCopy):
     def __init__(self, repo, path):
         self.repo = repo
         self.path = path
+
+    @classmethod
+    def check_valid_path(cls, path):
+        if not str(path).endswith(".gpkg"):
+            suggested_path = f"{os.path.splitext(str(path))[0]}.gpkg"
+            raise click.UsageError(
+                f"Invalid GPKG path - expected .gpkg suffix, eg {suggested_path}"
+            )
+
+        path = Path(path)
+        if path.is_dir():
+            raise click.UsageError(
+                f"Invalid GPKG path - {path} is a directory, expected a file"
+            )
 
     @property
     def full_path(self):
@@ -868,7 +883,7 @@ class WorkingCopyGPKG(WorkingCopy):
         assert rc == 1, f"gpkg_contents update: expected 1Δ, got {rc}"
 
 
-class WorkingCopy_GPKG_1(WorkingCopyGPKG):
+class WorkingCopy_GPKG_1(WorkingCopy_GPKG):
     """
     GeoPackage Working Copy for v0.1-v0.4 repositories
     """
@@ -883,7 +898,7 @@ class WorkingCopy_GPKG_1(WorkingCopyGPKG):
         return Geometry.of(g)
 
 
-class WorkingCopy_GPKG_2(WorkingCopyGPKG):
+class WorkingCopy_GPKG_2(WorkingCopy_GPKG):
     """
     GeoPackage Working Copy for v0.5+ repositories
     """
