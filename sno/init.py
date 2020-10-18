@@ -40,7 +40,7 @@ def list_import_formats(ctx, param, value):
 
 
 def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
-    wc = WorkingCopy.get(repo, create_if_missing=True)
+    wc = WorkingCopy.get(repo, init_if_missing=True)
     if not wc:
         return
 
@@ -51,10 +51,9 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     else:
         click.echo(f"Updating {wc.path} ...")
 
-    for dataset in datasets:
-        if replace_existing:
-            wc.drop_table(commit, dataset)
-        wc.write_full(commit, dataset)
+    if replace_existing:
+        wc.drop_table(commit, *datasets)
+    wc.write_full(commit, *datasets)
 
 
 @click.command("import")

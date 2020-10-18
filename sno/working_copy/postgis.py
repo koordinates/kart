@@ -271,12 +271,36 @@ class WorkingCopy_Postgis(WorkingCopy):
 
     def delete(self):
         """ Delete all tables in the schema"""
-
-        # TODO - don't use DROP SCHEMA CASCADE, since this could even delete user-created tables outside the schema
-        # if they have been connected to the schema with a foreign key relation.
+        # We don't use drop ... cascade since that could also delete things outside the schema.
+        # Better to fail to delete the schema, than to delete things the user didn't want to delete.
         with self.session() as db:
             dbcur = db.cursor()
-            dbcur.execute(SQL("DROP SCHEMA {} CASCADE").format(Identifier(self.schema)))
+            # Drop tables
+            dbcur.execute(
+                SQL("SELECT tablename FROM pg_tables where schemaname=%s;"),
+                (self.schema,),
+            )
+            tables = [t[0] for t in dbcur]
+            dbcur.execute(
+                SQL("DROP TABLE IF EXISTS {};").format(
+                    SQL(", ").join(self._table_identifier(t) for t in tables)
+                )
+            )
+            # Drop functions
+            dbcur.execute(
+                SQL(
+                    "SELECT proname from pg_proc WHERE pronamespace = %s::regnamespace;"
+                ),
+                (self.schema,),
+            )
+            functions = [f[0] for f in dbcur]
+            dbcur.execute(
+                SQL("DROP FUNCTION IF EXISTS {};").format(
+                    SQL(", ").join(self._table_identifier(f) for f in functions)
+                )
+            )
+            # Drop schema
+            dbcur.execute(SQL("DROP SCHEMA {};").format(Identifier(self.schema)))
 
     def write_meta(self, dataset):
         self.write_meta_title(dataset)

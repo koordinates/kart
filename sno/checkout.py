@@ -1,6 +1,3 @@
-import os
-from pathlib import Path
-
 import click
 import pygit2
 
@@ -23,7 +20,7 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
 
 def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     """Resets the working copy to the target if it does not already match, or if discard_changes is True."""
-    wc = WorkingCopy.get(repo, create_if_missing=True)
+    wc = WorkingCopy.get(repo, init_if_missing=True)
     if not wc:
         click.echo(
             "(Bare sno repository - to create a working copy, use `sno create-workingcopy`)"
@@ -33,9 +30,8 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if not wc.is_created():
         click.echo(f"Creating working copy at {wc.path} ...")
         wc.create()
-        for dataset in list(RepositoryStructure(repo)):
-            wc.write_full(target_tree_or_commit, dataset, safe=False)
-        return
+        datasets = list(RepositoryStructure(repo))
+        wc.write_full(target_tree_or_commit, *datasets, safe=False)
 
     db_tree_matches = wc.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
 
@@ -261,6 +257,7 @@ def create_workingcopy(ctx, discard_changes, wc_path):
 
     wc = WorkingCopy.get(repo)
     if wc:
+        click.echo(f"Deleting working copy at {wc.path} ...")
         wc.delete()
 
     WorkingCopy.write_config(repo, wc_path)

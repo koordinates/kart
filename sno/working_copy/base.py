@@ -53,8 +53,17 @@ class WorkingCopy:
         return self._sno_table(self.STATE_NAME)
 
     @classmethod
-    def get(cls, repo, create_if_missing=False):
-        if create_if_missing:
+    def get(cls, repo, init_if_missing=False):
+        """
+        Get the working copy associaated with this sno repo.
+        If no working copy is present, returns None -
+        unless init_if_missing is returned, in which case it returns a WorkingCopy object that is not "created".
+        The type of this WorkingCopy object depends on the repo config - it represents a particular type of WorkingCopy
+        at a particular location, which nevertheless doesn't exist yet. It is up to the caller to create it by calling
+        `create()` and to populate it by calling eg `write_full()`.
+
+        """
+        if init_if_missing:
             cls.ensure_config_exists(repo)
 
         repo_cfg = repo.config
@@ -66,22 +75,23 @@ class WorkingCopy:
         if cls.is_postgres_uri(path):
             from .postgis import WorkingCopy_Postgis
 
-            return WorkingCopy_Postgis(repo, path)
-
-        full_path = repo.workdir_path / path
-        if not full_path.is_file() and not create_if_missing:
-            return None
-
-        version = get_repo_version(repo)
-        if version not in cls.VALID_VERSIONS:
-            raise NotImplementedError(f"Working copy version: {version}")
-
-        from .gpkg import WorkingCopy_GPKG_1, WorkingCopy_GPKG_2
-
-        if version < 2:
-            return WorkingCopy_GPKG_1(repo, path)
+            result = WorkingCopy_Postgis(repo, path)
         else:
-            return WorkingCopy_GPKG_2(repo, path)
+            version = get_repo_version(repo)
+            if version not in cls.VALID_VERSIONS:
+                raise NotImplementedError(f"Working copy version: {version}")
+
+            from .gpkg import WorkingCopy_GPKG_1, WorkingCopy_GPKG_2
+
+            if version < 2:
+                result = WorkingCopy_GPKG_1(repo, path)
+            else:
+                result = WorkingCopy_GPKG_2(repo, path)
+
+        if not result.is_created() and not init_if_missing:
+            result = None
+
+        return result
 
     @classmethod
     def is_postgres_uri(cls, path):

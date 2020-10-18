@@ -3,7 +3,6 @@ import subprocess
 
 import click
 import pygit2
-from osgeo import gdal
 
 from . import gpkg
 from .exceptions import NotFound, NO_WORKING_COPY
@@ -14,11 +13,8 @@ def _fsck_reset(repo_structure, working_copy, dataset_paths):
     commit = repo_structure.repo.head.peel(pygit2.Commit)
     datasets = [repo_structure[p] for p in dataset_paths]
 
-    for ds in datasets:
-        working_copy.drop_table(commit, ds)
-
-    for ds in datasets:
-        working_copy.write_full(commit, ds)
+    working_copy.drop_table(commit, *datasets)
+    working_copy.write_full(commit, *datasets)
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
