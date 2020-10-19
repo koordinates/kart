@@ -174,7 +174,7 @@ jobs:
         run: |
           if [[ '${{ github.repository }}' != 'koordinates/sno' ]]; then
             IS_FORK=1  # some other repo
-          else if [[ -n '${{ github.event.pull_request.id }}' ]] && [[ '${{ github.event.pull_request.head.repo.full_name }}' != '${{ github.repository }}' ]]; then
+          elif [[ -n '${{ github.event.pull_request.id }}' ]] && [[ '${{ github.event.pull_request.head.repo.full_name }}' != '${{ github.repository }}' ]]; then
             IS_FORK=1  # pr not on main repo
           else
             IS_FORK=0
