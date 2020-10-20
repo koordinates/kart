@@ -11,7 +11,7 @@ import pygit2
 from osgeo import gdal
 
 from .base import WorkingCopy
-from sno import gpkg, gpkg_adapter
+from sno import crs_util, gpkg, gpkg_adapter
 from sno.db_util import changes_rowcount
 from sno.exceptions import (
     NotFound,
@@ -537,6 +537,27 @@ class WorkingCopy_GPKG(WorkingCopy):
         """
         )
 
+    def _placeholders_with_setsrid(self, dataset):
+        # We make sure every geometry has the SRID of the column that it belongs to.
+        # This is different to in dataset storage, where we normalise each geometry and store it with an SRID of 0.
+        result = ["?"] * len(dataset.schema.columns)
+        for i, col in enumerate(dataset.schema):
+            if col.data_type != "geometry":
+                continue
+            crs_name = col.extra_type_info.get("geometryCRS", None)
+            if crs_name is None:
+                continue
+            crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
+            result[i] = f"SetSRID(?, {crs_id})"
+        return ",".join(result)
+
+    def _db_geom_to_gpkg_geom(self, g):
+        # We normalise geometries to avoid spurious diffs - diffs where nothing
+        # of any consequence has changed (eg, only endianness has changed).
+        # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
+        # but only one per column at most.
+        return normalise_gpkg_geom(g)
+
     def write_full(self, target_tree_or_commit, *datasets, safe=True):
         """
         Writes a full layer into a working-copy table
@@ -577,7 +598,7 @@ class WorkingCopy_GPKG(WorkingCopy):
                     INSERT INTO {gpkg.ident(table)}
                         ({','.join([gpkg.ident(k) for k in col_names])})
                     VALUES
-                        ({placeholders(col_names)});
+                        ({self._placeholders_with_setsrid(dataset)});
                 """
                 feat_progress = 0
                 t0 = time.monotonic()
@@ -634,7 +655,7 @@ class WorkingCopy_GPKG(WorkingCopy):
             INSERT OR REPLACE INTO {gpkg.ident(dataset.table_name)}
                 ({','.join([gpkg.ident(k) for k in col_names])})
             VALUES
-                ({placeholders(col_names)});
+                ({self._placeholders_with_setsrid(dataset)});
         """
 
         feat_count = 0
@@ -897,6 +918,11 @@ class WorkingCopy_GPKG_1(WorkingCopy_GPKG):
         # In V1 we don't normalise the geometries - we just roundtrip them as-is.
         return Geometry.of(g)
 
+    def _placeholders_with_setsrid(self, dataset):
+        # In V1 we just roundtrip geometries as-is, and we don't zero out the SRIDs to normalise them -
+        # so we don't need to set the SRID to the true value when we write them to GPKG.
+        return ",".join(["?"] * len(dataset.schema.columns))
+
 
 class WorkingCopy_GPKG_2(WorkingCopy_GPKG):
     """
@@ -905,8 +931,3 @@ class WorkingCopy_GPKG_2(WorkingCopy_GPKG):
 
     # Using this prefix means OGR/QGIS doesn't list these tables as datasets
     SNO_TABLE_PREFIX = "gpkg_sno_"
-
-    def _db_geom_to_gpkg_geom(self, g):
-        # In V2 we normalise geometries to avoid spurious diffs - diffs where nothing
-        # of any consequence has changed (eg, only endianness has changed).
-        return normalise_gpkg_geom(g)

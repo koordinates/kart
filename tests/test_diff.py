@@ -63,7 +63,6 @@ def test_diff_points(
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
         )
-        print("STDOUT", repr(r.stdout))
         if output_format == "quiet":
             assert r.exit_code == 1, r
             assert r.stdout == ""
