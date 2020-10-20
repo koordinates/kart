@@ -47,3 +47,25 @@ def data_ls(ctx, output_format, refish):
 
     elif output_format == "json":
         dump_json_output({"sno.data.ls/v1": ds_paths}, sys.stdout)
+
+
+@data.command(name="version")
+@click.option(
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
+)
+@click.pass_context
+def data_version(ctx, output_format):
+    """Show the repository structure version"""
+    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    version = repo.version
+    if output_format == "text":
+        click.echo(f"Sno repository uses Datasets v{version}")
+        if version >= 1:
+            click.echo(
+                f"(See https://github.com/koordinates/sno/blob/master/docs/DATASETS_v{version}.md)"
+            )
+    elif output_format == "json":
+        dump_json_output({"sno.data.version": version}, sys.stdout)

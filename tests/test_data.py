@@ -53,3 +53,26 @@ def test_data_ls_with_ref(data_archive_readonly, cli_runner):
 
         output = json.loads(r.stdout)
         assert output == {"sno.data.ls/v1": ["nz_pa_points_topo_150k"]}
+
+
+@pytest.mark.parametrize("output_format", ("text", "json"))
+@pytest.mark.parametrize(
+    "archive_name",
+    [
+        pytest.param(
+            "points",
+            id="1",
+        ),
+        pytest.param("points2", id="2"),
+    ],
+)
+def test_data_version(archive_name, output_format, data_archive_readonly, cli_runner):
+    version = 2 if archive_name.endswith("2") else 1
+    with data_archive_readonly(archive_name):
+        r = cli_runner.invoke(["data", "version", "-o", output_format])
+        assert r.exit_code == 0, r
+        if output_format == "text":
+            assert r.stdout.splitlines()[0].endswith(str(version))
+        else:
+            output = json.loads(r.stdout)
+            assert output == {"sno.data.version": version}
