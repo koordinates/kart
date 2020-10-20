@@ -203,14 +203,13 @@ def _gpkg_srs_id(v2_obj):
 
 def wkt_to_gpkg_spatial_ref_sys(wkt):
     """Given a WKT crs definition, generate a gpkg_spatial_ref_sys meta item."""
-    spatial_ref = SpatialReference(wkt)
-    organization = spatial_ref.GetAuthorityName(None) or "NONE"
-    srs_id = crs_util.get_identifier_int(spatial_ref)
+    auth_name, auth_code = crs_util.parse_authority(wkt)
+    srs_id = crs_util.get_identifier_int(wkt, (auth_name, auth_code))
     return [
         {
-            "srs_name": spatial_ref.GetName(),
+            "srs_name": crs_util.parse_name(wkt),
             "definition": wkt,
-            "organization": organization,
+            "organization": auth_name or "NONE",
             "srs_id": srs_id,
             "organization_coordsys_id": srs_id,
             "description": None,
