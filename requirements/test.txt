@@ -7,13 +7,13 @@
 aspectlib==1.5.1          # via pytest-benchmark
 atomicwrites==1.4.0       # via -r requirements/test.in
 attrs==20.2.0             # via -c requirements/../requirements.txt, pytest
-colorama==0.4.3           # via -r requirements/test.in
+colorama==0.4.4           # via -r requirements/test.in
 coverage==5.3             # via pytest-cov
 fields==5.0.0             # via aspectlib
 gprof2dot==2019.11.30     # via pytest-profiling
 html5lib==1.1             # via -r requirements/test.in
 importlib-metadata==2.0.0  # via -c requirements/../requirements.txt, pluggy, pytest
-iniconfig==1.0.1          # via pytest
+iniconfig==1.1.1          # via pytest
 lovely-pytest-docker==0.2.0  # via -r requirements/test.in
 packaging==20.4           # via pytest, pytest-sugar
 pluggy==0.13.1            # via pytest
@@ -31,4 +31,4 @@ six==1.15.0               # via -c requirements/../requirements.txt, html5lib, p
 termcolor==1.1.0          # via pytest-sugar
 toml==0.10.1              # via pytest
 webencodings==0.5.1       # via html5lib
-zipp==3.2.0               # via -c requirements/../requirements.txt, importlib-metadata
+zipp==3.3.1               # via -c requirements/../requirements.txt, importlib-metadata
