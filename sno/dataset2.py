@@ -395,10 +395,12 @@ class Dataset2(RichBaseDataset):
                     continue
 
                 # General case
-                if new_value and name.endswith(".json"):
-                    tree_builder.insert(name, json_pack(new_value))
-                elif new_value:
-                    tree_builder.insert(name, ensure_bytes(new_value))
+                if new_value is not None:
+                    if name.endswith(".json"):
+                        new_value = json_pack(new_value)
+                    else:
+                        new_value = ensure_bytes(new_value)
+                    tree_builder.insert(name, new_value)
                 else:
                     tree_builder.remove(name)
 
