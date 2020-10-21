@@ -112,7 +112,7 @@ def checkout(ctx, branch, force, discard_changes, refish):
     help="Similar to --create except that if <new-branch> already exists, it will be reset to <start-point>",
 )
 @click.option("--discard-changes", is_flag=True, help="Discard local changes")
-@click.argument("refish", default=None, required=False)
+@click.argument("refish", default=None, required=True)
 def switch(ctx, create, force_create, discard_changes, refish):
     """
     Switch branches
