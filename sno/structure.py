@@ -195,10 +195,16 @@ class RepositoryStructure:
             wc.delete()
         del self._working_copy
 
-    def create_tree_from_diff(self, repo_diff):
+    def create_tree_from_diff(self, repo_diff, *, allow_missing_old_values=False):
         """
         Given a diff, returns a new tree created by applying the diff to self.tree -
         Doesn't create any commits or modify the working copy at all.
+
+        If allow_missing_old_values=True, deltas are not checked for conflicts
+        if they have no old_value. This allows for patches to be generated without
+        reference to the old values, which can be (significantly) more efficient.
+        However, it can also be more prone to data loss if the patch isn't generated
+        from the same base revision.
         """
         tree_builder = RichTreeBuilder(self.repo, self.tree)
         dataset_class = BaseDataset.for_version(self.version)
@@ -227,7 +233,9 @@ class RepositoryStructure:
             else:
                 dataset = self[ds_path]
 
-            dataset.apply_diff(ds_diff, tree_builder)
+            dataset.apply_diff(
+                ds_diff, tree_builder, allow_missing_old_values=allow_missing_old_values
+            )
             tree_builder.flush()
 
         tree = tree_builder.flush()
@@ -242,6 +250,7 @@ class RepositoryStructure:
         author=None,
         committer=None,
         allow_empty=False,
+        allow_missing_old_values=False,
     ):
         """
         Update the repository structure and write the updated data to the tree
@@ -250,7 +259,10 @@ class RepositoryStructure:
         responsibility of the caller.
         """
         old_tree_oid = self.tree.oid if self.tree is not None else None
-        new_tree_oid = self.create_tree_from_diff(wcdiff)
+        new_tree_oid = self.create_tree_from_diff(
+            wcdiff,
+            allow_missing_old_values=allow_missing_old_values,
+        )
         if (not allow_empty) and new_tree_oid == old_tree_oid:
             raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 

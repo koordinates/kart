@@ -258,7 +258,7 @@ class RichBaseDataset(BaseDataset):
 
         return result
 
-    def apply_diff(self, dataset_diff, tree_builder):
+    def apply_diff(self, dataset_diff, tree_builder, *, allow_missing_old_values=False):
         """
         Given a diff that only affects this dataset, write it to the given treebuilder.
         Blobs will be created in the repo, and referenced in the resulting tree, but
@@ -269,7 +269,11 @@ class RichBaseDataset(BaseDataset):
             meta_diff = dataset_diff.get("meta")
             schema = None
             if meta_diff:
-                self.apply_meta_diff(meta_diff, tree_builder)
+                self.apply_meta_diff(
+                    meta_diff,
+                    tree_builder,
+                    allow_missing_old_values=allow_missing_old_values,
+                )
 
                 if "schema.json" in meta_diff and meta_diff["schema.json"].new_value:
                     schema = Schema.from_column_dicts(
@@ -278,9 +282,16 @@ class RichBaseDataset(BaseDataset):
 
             feature_diff = dataset_diff.get("feature")
             if feature_diff:
-                self.apply_feature_diff(feature_diff, tree_builder, schema=schema)
+                self.apply_feature_diff(
+                    feature_diff,
+                    tree_builder,
+                    schema=schema,
+                    allow_missing_old_values=allow_missing_old_values,
+                )
 
-    def apply_meta_diff(self, meta_diff, tree_builder):
+    def apply_meta_diff(
+        self, meta_diff, tree_builder, *, allow_missing_old_values=False
+    ):
         """Applies a meta diff. Not supported until Datasets V2"""
         if not meta_diff:
             return
@@ -289,7 +300,9 @@ class RichBaseDataset(BaseDataset):
             f"Meta changes are not supported for version {self.version}"
         )
 
-    def apply_feature_diff(self, feature_diff, tree_builder, *, schema=None):
+    def apply_feature_diff(
+        self, feature_diff, tree_builder, *, schema=None, allow_missing_old_values=False
+    ):
         """Applies a feature diff."""
 
         if not feature_diff:
@@ -325,7 +338,11 @@ class RichBaseDataset(BaseDataset):
                 )
                 continue
 
-            if delta.type == "insert" and new_path in tree:
+            if (
+                delta.type == "insert"
+                and (not allow_missing_old_values)
+                and new_path in tree
+            ):
                 has_conflicts = True
                 click.echo(
                     f"{self.path}: Trying to create feature that already exists: {new_key}"

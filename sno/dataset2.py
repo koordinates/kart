@@ -331,7 +331,9 @@ class Dataset2(RichBaseDataset):
                 else:
                     raise
 
-    def apply_meta_diff(self, meta_diff, tree_builder):
+    def apply_meta_diff(
+        self, meta_diff, tree_builder, *, allow_missing_old_values=False
+    ):
         """Apply a meta diff to this dataset. Checks for conflicts."""
         if not meta_diff:
             return
@@ -374,7 +376,11 @@ class Dataset2(RichBaseDataset):
                         f"{self.path}: Trying to delete nonexistent meta item: {name}"
                     )
                     continue
-                if delta.type == "insert" and name in meta_tree:
+                if (
+                    delta.type == "insert"
+                    and (not allow_missing_old_values)
+                    and name in meta_tree
+                ):
                     has_conflicts = True
                     click.echo(
                         f"{self.path}: Trying to create meta item that already exists: {name}"
