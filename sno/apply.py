@@ -90,7 +90,9 @@ def unjson_feature(geom_column_name, f):
     return f
 
 
-def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
+def apply_patch(
+    *, repo, commit, patch_file, allow_empty, allow_missing_old_values=False, **kwargs
+):
     try:
         patch = json.load(patch_file)
         json_diff = patch["sno.diff/v1+hexwkb"]
@@ -118,7 +120,7 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             meta_diff = DeltaDiff(
                 Delta(
                     (k, v["-"]) if "-" in v else None,
-                    (k, v.get("+")) if "+" in v else None,
+                    (k, v["+"]) if "+" in v else None,
                 )
                 for (k, v) in meta_changes.items()
             )
@@ -187,11 +189,15 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
             metadata["message"],
             author=author,
             allow_empty=allow_empty,
+            allow_missing_old_values=allow_missing_old_values,
         )
         click.echo(f"Commit {oid.hex}")
 
     else:
-        oid = rs.create_tree_from_diff(repo_diff)
+        oid = rs.create_tree_from_diff(
+            repo_diff,
+            allow_missing_old_values=allow_missing_old_values,
+        )
 
     if wc:
         # oid refers to either a commit or tree
@@ -216,6 +222,19 @@ def apply_patch(*, repo, commit, patch_file, allow_empty, **kwargs):
         "Usually recording a commit that has the exact same tree as its sole "
         "parent commit is a mistake, and the command prevents you from making "
         "such a commit. This option bypasses the safety"
+    ),
+)
+@click.option(
+    "--allow-missing-old-values",
+    is_flag=True,
+    default=False,
+    hidden=True,
+    help=(
+        "Treats deltas with no '-' value loosely, as either an "
+        "insert or an update. Doesn't check for conflicts with the old "
+        "version of the feature. For use in external patch generators that "
+        "don't have access to the old features, or which have extra "
+        "certainty about the applicability of the patch. Use with caution."
     ),
 )
 @click.argument("patch_file", type=click.File("r", encoding="utf-8"))

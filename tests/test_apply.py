@@ -156,6 +156,51 @@ def test_apply_meta_changes(data_archive, cli_runner):
         assert meta == {"title": {"+": "new title:", "-": "NZ Pa Points (Topo, 1:50k)"}}
 
 
+def test_apply_allow_missing_old_values(data_archive, cli_runner):
+    patch_file = json.dumps(
+        {
+            "sno.diff/v1+hexwkb": {
+                "nz_pa_points_topo_150k": {
+                    "meta": {
+                        "title": {
+                            "+": "new title:",
+                        }
+                    }
+                },
+            },
+            "sno.patch/v1": {
+                "authorEmail": "robert@example.com",
+                "authorName": "Robert Coup",
+                "authorTime": "2019-06-20T14:28:33Z",
+                "authorTimeOffset": "+01:00",
+                "message": "Change the title",
+            },
+        }
+    )
+    with data_archive("points2"):
+        # We ordinarily can't apply this patch,
+        # because the "-" object for the title is missing.
+        r = cli_runner.invoke(
+            ["apply", "-"],
+            input=patch_file,
+        )
+        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
+
+        # But --allow-missing-old-values lets us do it.
+        r = cli_runner.invoke(
+            ["apply", "--allow-missing-old-values", "-"],
+            input=patch_file,
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the change was actually applied
+        r = cli_runner.invoke(["create-patch", "HEAD"])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+        meta = patch["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        assert meta == {"title": {"+": "new title:", "-": "NZ Pa Points (Topo, 1:50k)"}}
+
+
 def test_apply_create_dataset(data_archive, cli_runner):
     patch_path = patches / "polygons.snopatch"
     with data_archive("points"):

@@ -154,29 +154,12 @@ def meta_set(ctx, message, dataset, items):
             "This repo doesn't support meta changes, use `sno upgrade`"
         )
 
-    try:
-        ds = rs[dataset]
-    except KeyError:
-        raise click.UsageError(f"No such dataset: {dataset}")
-
     if message is None:
         message = f"Update metadata for {dataset}"
 
-    existing_meta_items = dict(ds.meta_items())
-
-    def _meta_change_dict(key, value):
-        change = {
-            "+": value,
-        }
-        if key in existing_meta_items:
-            change["-"] = existing_meta_items[key]
-        return change
-
     patch = {
         "sno.diff/v1+hexwkb": {
-            dataset: {
-                "meta": {key: _meta_change_dict(key, value) for (key, value) in items}
-            }
+            dataset: {"meta": {key: {"+": value} for (key, value) in items}}
         },
         "sno.patch/v1": {"message": message},
     }
@@ -184,5 +167,9 @@ def meta_set(ctx, message, dataset, items):
     json.dump(patch, patch_file)
     patch_file.seek(0)
     apply_patch(
-        repo=ctx.obj.repo, commit=True, patch_file=patch_file, allow_empty=False
+        repo=ctx.obj.repo,
+        commit=True,
+        patch_file=patch_file,
+        allow_empty=False,
+        allow_missing_old_values=True,
     )
