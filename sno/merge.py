@@ -94,7 +94,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         return merge_jdict
 
     tree3 = commit_with_ref3.map(lambda c: c.tree)
-    index = repo.merge_trees(**tree3.as_dict())
+    index = repo.merge_trees(**tree3.as_dict(), flags={"find_renames": False})
 
     if index.conflicts:
         merge_index = MergeIndex.from_pygit2_index(index)
