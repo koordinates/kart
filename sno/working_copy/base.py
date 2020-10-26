@@ -95,7 +95,7 @@ class WorkingCopy:
 
     @classmethod
     def is_postgres_uri(cls, path):
-        return path.startswith("postgresql:")
+        return str(path).startswith("postgresql:")
 
     @classmethod
     def ensure_config_exists(cls, repo):
