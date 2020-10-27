@@ -15,7 +15,7 @@ H = pytest.helpers.helpers()
 
 DIFF_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet", "html"]
 SHOW_OUTPUT_FORMATS = ["text", "json"]
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 def _check_html_output(s):
@@ -36,7 +36,7 @@ def test_diff_points(
     repo_version, output_format, data_working_copy, geopackage, cli_runner
 ):
     """ diff the working copy against HEAD """
-    data_archive = "points2" if repo_version == "2" else "points"
+    data_archive = "points2" if repo_version == 2 else "points"
     with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -269,7 +269,7 @@ def test_diff_reprojection(
     repo_version, output_format, data_working_copy, geopackage, cli_runner
 ):
     """ diff the working copy against HEAD """
-    data_archive = "points2" if repo_version == "2" else "points"
+    data_archive = "points2" if repo_version == 2 else "points"
     with data_working_copy(data_archive) as (repo, wc):
         # make some changes
         db = geopackage(wc)
@@ -334,7 +334,7 @@ def test_diff_polygons(
     repo_version, output_format, data_working_copy, geopackage, cli_runner
 ):
     """ diff the working copy against HEAD """
-    data_archive = "polygons2" if repo_version == "2" else "polygons"
+    data_archive = "polygons2" if repo_version == 2 else "polygons"
     with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -671,7 +671,7 @@ def test_diff_table(
     repo_version, output_format, data_working_copy, geopackage, cli_runner
 ):
     """ diff the working copy against HEAD """
-    data_archive = "table2" if repo_version == "2" else "table"
+    data_archive = "table2" if repo_version == 2 else "table"
     with data_working_copy(data_archive) as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -1349,7 +1349,7 @@ def test_show_points_HEAD(
     """
     Show a patch; ref defaults to HEAD
     """
-    data_archive = "points2" if repo_version == "2" else "points"
+    data_archive = "points2" if repo_version == 2 else "points"
     with data_archive_readonly(data_archive):
         r = cli_runner.invoke(["show", f"--output-format={output_format}", "HEAD"])
         assert r.exit_code == 0, r.stderr
@@ -1419,7 +1419,7 @@ def test_show_points_HEAD(
 
 @pytest.mark.parametrize(*V1_OR_V2)
 def test_diff_filtered(repo_version, data_archive_readonly, cli_runner):
-    data_archive = "points2" if repo_version == "2" else "points"
+    data_archive = "points2" if repo_version == 2 else "points"
     with data_archive_readonly(data_archive):
         r = cli_runner.invoke(["diff", "HEAD^...", "nz_pa_points_topo_150k:1182"])
         assert r.exit_code == 0, r.stderr
@@ -1506,7 +1506,7 @@ def test_create_patch(repo_version, data_archive_readonly, cli_runner):
     """
     Show a patch; ref defaults to HEAD
     """
-    data_archive = "points2" if repo_version == "2" else "points"
+    data_archive = "points2" if repo_version == 2 else "points"
     with data_archive_readonly(data_archive):
         r = cli_runner.invoke(["create-patch"])
         assert r.exit_code == 2, r.stderr
@@ -1542,7 +1542,7 @@ def test_show_shallow_clone(data_archive_readonly, cli_runner, tmp_path, chdir):
 def test_diff_streaming(repo_version, data_archive_readonly):
     # Test that a diff can be created without reading every feature,
     # and that the features in that diff can be read one by one.
-    data_archive = "points2" if repo_version == "2" else "points"
+    data_archive = "points2" if repo_version == 2 else "points"
     with data_archive_readonly(data_archive) as repo_path:
         repo = SnoRepo(repo_path)
         old = RepositoryStructure.lookup(repo, "HEAD^")[H.POINTS.LAYER]

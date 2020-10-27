@@ -20,7 +20,7 @@ H = pytest.helpers.helpers()
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
-@pytest.mark.parametrize("version", ["1", "2"])
+@pytest.mark.parametrize("version", [1, 2])
 def test_checkout_workingcopy(
     version, archive, table, commit_sha, data_archive, cli_runner, new_postgis_db_schema
 ):

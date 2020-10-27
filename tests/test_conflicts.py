@@ -7,7 +7,7 @@ from sno.structs import CommitWithReference
 H = pytest.helpers.helpers()
 
 
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
@@ -21,12 +21,13 @@ def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
         ancestor_id = repo.merge_base(ours.id, theirs.id)
         assert ancestor_id.hex == ancestor.id.hex
 
-        index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
+        with repo.no_locked_index_file():
+            index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
         assert index.conflicts
 
         # Create a MergeIndex object, and roundtrip it into a tree and back.
         orig = MergeIndex.from_pygit2_index(index)
-        assert len(orig.entries) == 242
+        assert len(orig.entries) == 236 if repo_version == 2 else 242
         assert len(orig.conflicts) == 4
         assert len(orig.resolves) == 0
         assert len(orig.unresolved_conflicts) == 4
@@ -45,7 +46,7 @@ def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
         key, conflict = items[1]
         r1.add_resolve(key, [])
         assert r1 != orig
-        assert len(r1.entries) == 242
+        assert len(r1.entries) == 236 if repo_version == 2 else 242
         assert len(r1.conflicts) == 4
         assert len(r1.resolves) == 2
         assert len(r1.unresolved_conflicts) == 2

@@ -6,18 +6,18 @@ import pygit2
 from sno.diff_output import json_row
 from sno.exceptions import INVALID_OPERATION
 from sno.merge_util import MergeIndex
-from sno.repo_files import RepoState, write_repo_file
+from sno.repo_files import RepoState
 from sno.structure import RepositoryStructure
 
 
 H = pytest.helpers.helpers()
 
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 def get_conflict_ids(cli_runner):
     r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
-    assert r.exit_code == 0, r
+    assert r.exit_code == 0, r.stderr
     return json.loads(r.stdout)["sno.conflicts/v1"]
 
 
@@ -26,7 +26,7 @@ def delete_remaining_conflicts(cli_runner):
     conflict_ids = get_conflict_ids(cli_runner)
     while conflict_ids:
         r = cli_runner.invoke(["resolve", conflict_ids[0], "--with=delete"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         conflict_ids = get_conflict_ids(cli_runner)
 
 
@@ -42,7 +42,7 @@ def get_json_feature(rs, layer, pk):
 def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
     with create_conflicts(H.POLYGONS, repo_version) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
         assert RepoState.get_state(repo) == RepoState.MERGING
 
@@ -71,7 +71,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
             r = cli_runner.invoke(
                 ["resolve", conflict_id, f"--with={next(resolutions)}"]
             )
-            assert r.exit_code == 0, r
+            assert r.exit_code == 0, r.stderr
             conflict_ids = get_conflict_ids(cli_runner)
             assert len(conflict_ids) == num_conflicts - 1
 
@@ -81,7 +81,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         assert len(conflict_ids) == 0
 
         merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 242
+        assert len(merge_index.entries) == 236 if repo_version == 2 else 242
         assert len(merge_index.conflicts) == 4
         assert len(merge_index.resolves) == 4
 
@@ -94,7 +94,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         assert merge_index.resolves[ck3] == []
 
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         assert repo.head.peel(pygit2.Commit).message == "merge commit"
         assert RepoState.get_state(repo) != RepoState.MERGING
 
@@ -115,23 +115,23 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
 def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
     with create_conflicts(H.POLYGONS, repo_version) as repo:
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         ours_geojson = json.loads(r.stdout)["features"][0]
         assert ours_geojson["id"] == "I::98001"
 
         r = cli_runner.invoke(
             ["diff", "ancestor_branch..theirs_branch", "-o", "geojson"]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         theirs_geojson = json.loads(r.stdout)["features"][0]
         assert theirs_geojson["id"] == "I::98001"
 
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
 
         r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         conflicts = json.loads(r.stdout)["sno.conflicts/v1"]
         add_add_conflict_pk = conflicts[H.POLYGONS.LAYER]["feature"][0]
@@ -147,7 +147,7 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
             "features": [ours_geojson, theirs_geojson],
             "type": "FeatureCollection",
         }
-        write_repo_file(repo, "resolution.geojson", json.dumps(resolution))
+        (repo.workdir_path / "resolution.geojson").write_text(json.dumps(resolution))
         r = cli_runner.invoke(
             [
                 "resolve",
@@ -155,10 +155,10 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
                 "--with-file=resolution.geojson",
             ]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 242
+        assert len(merge_index.entries) == 236 if repo_version == 2 else 242
         assert len(merge_index.conflicts) == 4
         assert len(merge_index.resolves) == 1
 
@@ -168,7 +168,7 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
         delete_remaining_conflicts(cli_runner)
 
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         assert repo.head.peel(pygit2.Commit).message == "merge commit"
         assert RepoState.get_state(repo) != RepoState.MERGING
 

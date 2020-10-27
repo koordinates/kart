@@ -314,7 +314,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
     def _data_imported(archive, source_gpkg, table, repo_version=DEFAULT_REPO_VERSION):
         nonlocal incr
 
-        params = [archive, source_gpkg, table, repo_version]
+        params = [archive, source_gpkg, table, str(repo_version)]
         cache_key = f"data_imported~{'~'.join(params)}"
 
         repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
@@ -843,7 +843,7 @@ def create_conflicts(
 ):
     @contextlib.contextmanager
     def ctx(data, repo_version=1):
-        archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
+        archive = f"{data.ARCHIVE}2" if int(repo_version) == 2 else data.ARCHIVE
         with data_working_copy(archive) as (repo_path, wc):
             repo = SnoRepo(repo_path)
             sample_pks = data.SAMPLE_PKS

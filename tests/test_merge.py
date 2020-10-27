@@ -19,7 +19,7 @@ from sno.sno_repo import SnoRepo
 
 H = pytest.helpers.helpers()
 
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 @pytest.mark.parametrize(

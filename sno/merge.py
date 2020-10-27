@@ -104,7 +104,12 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         return merge_jdict
 
     tree3 = commit_with_ref3.map(lambda c: c.tree)
-    index = repo.merge_trees(**tree3.as_dict())
+
+    with repo.no_locked_index_file():
+        # For no real reason, repo.merge_trees requires access to the index,
+        # and unfortunately, it doesn't respect GIT_INDEX_FILE env variable.
+        # TODO - find a solution that doesn't requrite modifying the file system.
+        index = repo.merge_trees(**tree3.as_dict())
 
     if index.conflicts:
         merge_index = MergeIndex.from_pygit2_index(index)

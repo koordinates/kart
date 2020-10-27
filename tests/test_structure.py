@@ -48,7 +48,7 @@ GPKG_IMPORTS = (
     ],
 )
 
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 def test_dataset_versions():
@@ -726,9 +726,9 @@ def test_feature_find_decode_performance(
 
         # TODO: try to avoid two sets of code for two dataset versions -
         # either by making their interfaces more similar, or by deleting v1
-        if repo_version == "1":
+        if repo_version == 1:
             benchmark(dataset.repo_feature_to_dict, feature_path, feature_data)
-        elif repo_version == "2":
+        elif repo_version == 2:
             benchmark(dataset.get_feature, path=feature_path, data=feature_data)
     else:
         raise NotImplementedError(f"Unknown profile: {profile}")
@@ -857,14 +857,14 @@ def test_write_feature_performance(
 
                 index = pygit2.Index()
 
-                if repo_version == "1":
+                if repo_version == 1:
                     kwargs = {
                         "geom_cols": source.geom_cols,
                         "field_cid_map": dataset.get_field_cid_map(source),
                         "primary_key": source.primary_key,
                         "cast_primary_key": False,
                     }
-                elif repo_version == "2":
+                elif repo_version == 2:
                     kwargs = {"schema": source.schema}
 
                 def _write_feature():
