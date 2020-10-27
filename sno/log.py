@@ -133,7 +133,7 @@ def get_dataset_changes(repo, commit, dataset_change_cache):
         return sorted(list(set(ds for ds, tree in changes)))
 
     except KeyError:
-        return []
+        return sorted(list(cur_datasets.keys()))
 
 
 def _get_dataset_tree_ids(repo, commit, dataset_change_cache):
