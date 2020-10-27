@@ -30,7 +30,7 @@ def _count_tracking_table_changes(db, working_copy, layer):
     return change_count
 
 
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 @pytest.mark.parametrize(
@@ -60,7 +60,7 @@ def test_commit(
     edit_table,
 ):
     """ commit outstanding changes from the working copy """
-    versioned_archive = archive + "2" if repo_version == "2" else archive
+    versioned_archive = archive + "2" if repo_version == 2 else archive
 
     with data_working_copy(versioned_archive) as (repo_dir, wc_path):
         # empty

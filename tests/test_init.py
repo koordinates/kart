@@ -42,7 +42,7 @@ GPKG_IMPORTS = (
         pytest.param("gpkg-stringpk", "stringpk.gpkg", "stringpk", id="stringpk"),
     ],
 )
-V1_OR_V2 = ("repo_version", ["1", "2"])
+V1_OR_V2 = ("repo_version", [1, 2])
 
 
 @pytest.mark.slow
@@ -547,7 +547,7 @@ def test_init_import(
     repo_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    state_table = "gpkg_sno_state" if repo_version == "2" else ".sno-meta"
+    state_table = "gpkg_sno_state" if repo_version == 2 else ".sno-meta"
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.sno"

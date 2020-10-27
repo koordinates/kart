@@ -28,7 +28,7 @@ def test_data_ls(archive_name, output_format, data_archive_readonly, cli_runner)
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
-@pytest.mark.parametrize("repo_version", ["1", "2"])
+@pytest.mark.parametrize("repo_version", [1, 2])
 def test_data_ls_empty(repo_version, output_format, tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "emptydir"
     r = cli_runner.invoke(["init", repo_path, "--repo-version", repo_version])
