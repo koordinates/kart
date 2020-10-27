@@ -111,10 +111,10 @@ def all_v2_meta_items(gpkg_obj, id_salt=None):
 def all_v2_crs_definitions(gpkg_obj):
     gpkg_spatial_ref_sys = gpkg_obj.get_gpkg_meta_item("gpkg_spatial_ref_sys")
     for gsrs in gpkg_spatial_ref_sys:
-        definition = gsrs["definition"]
-        if not definition or definition == "undefined":
+        d = gsrs["definition"]
+        if not d or d == "undefined":
             continue
-        yield crs_util.get_identifier_str(definition), definition
+        yield crs_util.get_identifier_str(d), crs_util.normalise_wkt(d)
 
 
 def get_table_name(gpkg_obj):

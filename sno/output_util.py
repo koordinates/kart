@@ -1,6 +1,4 @@
-from collections import deque
 import datetime
-import itertools
 import json
 import shutil
 import sys
@@ -83,60 +81,16 @@ def format_json_for_output(output, fp, json_style="pretty"):
 
 def format_wkt_for_output(output, fp=None, syntax_highlight=True):
     """
-    If the given filelike object is a terminal, adds whitespace and syntax highlighting to the output.
-    Doesn't actually write the output, just returns it.
+    Formats WKT whitespace for readability.
+    Adds syntax highlighting if fp is a terminal and syntax_highlight=True.
+    Doesn't print the formatted WKT to fp, just returns it.
     """
-    tokens_with_whitespace = wkt_whitespace_format(WKTLexer().get_tokens(output))
+    token_iter = WKTLexer().get_tokens(output, pretty_print=True)
     if syntax_highlight and fp == sys.stdout and fp.isatty():
-        return pygments.format(tokens_with_whitespace, get_terminal_formatter())
+        return pygments.format(token_iter, get_terminal_formatter())
     else:
-        token_value = (value for token_type, value in tokens_with_whitespace)
+        token_value = (value for token_type, value in token_iter)
         return "".join(token_value)
-
-
-def wkt_whitespace_format(token_iter):
-    """
-    Takes an iterator of tokens (from WKTLexer.get_tokens).
-    Strips any existing whitespace and adds new whitespace to make it readable.
-    Each keyword will be on a new line, with indentation according to the level of nesting.
-    """
-
-    # Filter out existing whitespace
-    token_iter = (
-        (token_type, token_text)
-        for token_type, token_text in token_iter
-        if token_type != pygments.token.Whitespace
-    )
-    # Pad iterator at each end so that _windowed() works:
-    empty_token = (pygments.token.Whitespace, "")
-    token_iter = itertools.chain([empty_token], token_iter, [empty_token])
-
-    indent = 0
-    for prev_tok, cur_tok, next_tok in _windowed(token_iter, 3):
-        if prev_tok[1] == ",":
-            if cur_tok[0] == pygments.token.Keyword and next_tok[1] in ("[", "("):
-                indent += 1
-                yield pygments.token.Whitespace, "\n" + "    " * indent
-            else:
-                yield pygments.token.Whitespace, " "
-
-        if cur_tok[1] in ("]", ")"):
-            indent = max(indent - 1, 0)
-
-        yield cur_tok
-
-    yield pygments.token.Whitespace, "\n"
-
-
-def _windowed(iterable, size):
-    """Yields a sliding window of length size across iterable."""
-    iterable = iter(iterable)
-    window = deque(itertools.islice(iterable, size), size)
-    if len(window) == size:
-        yield window
-        for elem in iterable:
-            window.append(elem)
-            yield window
 
 
 def write_with_indent(fp, text, indent=""):

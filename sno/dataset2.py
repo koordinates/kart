@@ -4,7 +4,7 @@ import os
 import click
 import pygit2
 
-from . import gpkg_adapter
+from . import crs_util, gpkg_adapter
 from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
 from .meta_items import META_ITEM_NAMES
@@ -94,10 +94,13 @@ class Dataset2(RichBaseDataset):
         if data is None:
             return data
 
+        if rel_path.startswith(self.LEGEND_PATH):
+            return data
+
         if rel_path.endswith(".json"):
             return json_unpack(data)
-        elif rel_path.startswith(self.LEGEND_PATH):
-            return data
+        elif rel_path.endswith(".wkt"):
+            return crs_util.normalise_wkt(ensure_text(data))
         else:
             return ensure_text(data)
 
@@ -111,7 +114,7 @@ class Dataset2(RichBaseDataset):
             return
         for blob in find_blobs_in_tree(self.tree / self.CRS_PATH):
             # -4 -> Remove ".wkt"
-            yield blob.name[:-4], ensure_text(blob.data)
+            yield blob.name[:-4], crs_util.normalise_wkt(ensure_text(blob.data))
 
     @functools.lru_cache()
     def get_legend(self, legend_hash):

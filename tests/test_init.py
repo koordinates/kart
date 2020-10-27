@@ -631,10 +631,12 @@ def test_init_import(
             .fetchone()
         )
         if table == "nz_pa_points_topo_150k":
-            assert srs_definition[0].startswith('GEOGCS["WGS 84",DATUM["WGS_1984"')
+            assert srs_definition[0].startswith(
+                'GEOGCS["WGS 84",\n    DATUM["WGS_1984"'
+            )
         elif table == "nz_waca_adjustments":
             assert srs_definition[0].startswith(
-                'GEOGCS["NZGD2000",DATUM["New_Zealand_Geodetic_Datum_2000"'
+                'GEOGCS["NZGD2000",\n    DATUM["New_Zealand_Geodetic_Datum_2000"'
             )
 
         H.verify_gpkg_extent(db, table)

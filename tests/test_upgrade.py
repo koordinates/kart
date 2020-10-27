@@ -28,13 +28,13 @@ def test_upgrade_v0(archive, data_archive, cli_runner, tmp_path, chdir):
 
         if archive == "points0.snow":
             assert r.stdout.splitlines() == [
-                "commit 0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                "commit 98ad108336442d2447bec5997bb13192ca589a2c",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
-                "commit 7bc3b56f20d1559208bcf5bb56860dda6e190b70",
+                "commit f5ed4a3c537c9828ab392ddd08e3d4c56b460ed5",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Tue Jun 11 12:03:58 2019 +0100",
                 "",
@@ -67,13 +67,13 @@ def test_upgrade_v1(archive, layer, data_archive, cli_runner, tmp_path, chdir):
 
         if layer == H.POINTS.LAYER:
             assert r.stdout.splitlines() == [
-                "commit 0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                "commit 98ad108336442d2447bec5997bb13192ca589a2c",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
-                "commit 7bc3b56f20d1559208bcf5bb56860dda6e190b70",
+                "commit f5ed4a3c537c9828ab392ddd08e3d4c56b460ed5",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Tue Jun 11 12:03:58 2019 +0100",
                 "",

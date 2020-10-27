@@ -447,7 +447,7 @@ class OgrImportSource(ImportSource):
             if spatial_ref is not None:
                 yield (
                     crs_util.get_identifier_str(spatial_ref),
-                    spatial_ref.ExportToWkt(),
+                    crs_util.normalise_wkt(spatial_ref.ExportToWkt()),
                 )
 
     def _get_meta_geometry_type(self):

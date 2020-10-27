@@ -639,7 +639,8 @@ class WorkingCopy_Postgis(WorkingCopy):
             yield "schema.json", schema.to_column_dicts()
             for crs_info in pg_spatial_ref_sys:
                 wkt = crs_info["srtext"]
-                yield f"crs/{crs_util.get_identifier_str(wkt)}.wkt", wkt
+                id_str = crs_util.get_identifier_str(wkt)
+                yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
     def _db_geom_to_gpkg_geom(self, g):
         # This is already handled by register_type

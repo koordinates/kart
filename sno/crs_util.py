@@ -5,6 +5,7 @@ from osgeo.osr import SpatialReference
 from .cli_util import StringFromFile
 from .geometry import make_crs
 from .serialise_util import uint32hash
+from .wkt_lexer import WKTLexer
 
 
 class CoordinateReferenceString(StringFromFile):
@@ -145,3 +146,9 @@ def get_identifier_int_from_dataset(dataset, crs_name=None):
 
     definition = dataset.get_crs_definition(crs_name)
     return get_identifier_int(definition)
+
+
+def normalise_wkt(wkt):
+    token_iter = WKTLexer().get_tokens(wkt, pretty_print=True)
+    token_value = (value for token_type, value in token_iter)
+    return "".join(token_value)

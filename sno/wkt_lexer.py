@@ -1,5 +1,8 @@
+from collections import deque
+import itertools
+
 from pygments.lexer import RegexLexer, include
-from pygments.token import *
+from pygments.token import Keyword, Number, String, Punctuation, Whitespace
 
 
 class WKTLexer(RegexLexer):
@@ -65,3 +68,46 @@ class WKTLexer(RegexLexer):
             include("value"),
         ],
     }
+
+    def get_tokens(self, text, pretty_print=False, **kwargs):
+        """
+        Return an iterable of (tokentype, value) pairs generated from `text`.
+        pretty_print - if True, strips any existing whitespace and adds new whitespace to make it readable.
+            Each keyword will be on a new line, with indentation according to the level of nesting.
+        """
+        token_iter = super().get_tokens(text, **kwargs)
+        if not pretty_print:
+            yield from token_iter
+
+        # Filter out existing whitespace
+        token_iter = filter(lambda tok: tok[0] != Whitespace, token_iter)
+        # Pad iterator at each end so that _windowed() works:
+        empty_token = (Whitespace, "")
+        token_iter = itertools.chain([empty_token], token_iter, [empty_token])
+
+        indent = 0
+        for prev_tok, cur_tok, next_tok in _windowed(token_iter, 3):
+            if prev_tok[1] == ",":
+                if cur_tok[0] == Keyword and next_tok[1] in ("[", "("):
+                    indent += 1
+                    yield Whitespace, "\n" + "    " * indent
+                else:
+                    yield Whitespace, " "
+
+            if cur_tok[1] in ("]", ")"):
+                indent = max(indent - 1, 0)
+
+            yield cur_tok
+
+        yield Whitespace, "\n"
+
+
+def _windowed(iterable, size):
+    """Yields a sliding window of length size across iterable."""
+    iterable = iter(iterable)
+    window = deque(itertools.islice(iterable, size), size)
+    if len(window) == size:
+        yield window
+        for elem in iterable:
+            window.append(elem)
+            yield window
