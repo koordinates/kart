@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `data ls` now accepts an optional ref argument
  * `meta get` now accepts a `--ref=REF` option
  * `clone` now accepts a `--branch` option to clone a specific branch.
+ * `switch BRANCH` now switches to a newly created local branch that tracks `BRANCH`, if `BRANCH` is a remote branch and not a local branch [#259](https://github.com/koordinates/sno/issues/259)
  * Bugfix - don't drop the user-supplied authority from the supplied CRS and generate a new unrelated one. [#278](https://github.com/koordinates/sno/issues/278)
 
 ## 0.5.0
