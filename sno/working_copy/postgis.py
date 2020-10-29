@@ -631,12 +631,11 @@ class WorkingCopy_Postgis(WorkingCopy):
             pg_spatial_ref_sys = list(dbcur)
 
             id_salt = f"{self.schema} {dataset.table_name} {self.get_db_tree()}"
-
             schema = postgis_adapter.postgis_to_v2_schema(
                 pg_table_info, pg_spatial_ref_sys, id_salt
             )
-
             yield "schema.json", schema.to_column_dicts()
+
             for crs_info in pg_spatial_ref_sys:
                 wkt = crs_info["srtext"]
                 id_str = crs_util.get_identifier_str(wkt)
@@ -807,14 +806,16 @@ class WorkingCopy_Postgis(WorkingCopy):
         do_write_crs = False
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_type = postgis_adapter.v2_type_to_pg_type(col, dataset)
+            dest_type = SQL(postgis_adapter.v2_type_to_pg_type(col, dataset))
 
             if col.data_type == "geometry":
                 crs_name = col.extra_type_info.get("geometryCRS")
                 if crs_name is not None:
                     crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
                     if crs_id is not None:
-                        dest_type += f" USING SetSRID({col.name}, {crs_id})"
+                        dest_type = SQL("{} USING SetSRID({}, {})").format(
+                            dest_type, Identifier(col.name), SQL(crs_id)
+                        )
                         do_write_crs = True
 
             dbcur.execute(
