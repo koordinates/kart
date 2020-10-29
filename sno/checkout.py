@@ -42,7 +42,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
 
 @click.command()
 @click.pass_context
-@click.option("branch", "-b", help="Name for new branch")
+@click.option("new_branch", "-b", help="Name for new branch")
 @click.option(
     "--force",
     "-f",
@@ -52,8 +52,16 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
 @click.option(
     "--discard-changes", is_flag=True, help="Discard local changes in working copy"
 )
+@click.option(
+    "--guess/--no-guess",
+    "do_guess",
+    is_flag=True,
+    default=True,
+    help="If a local branch of given name doesn't exist, but a remote does, "
+    "this option guesses that the user wants to create a local to track the remote",
+)
 @click.argument("refish", default=None, required=False)
-def checkout(ctx, branch, force, discard_changes, refish):
+def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
     """ Switch branches or restore working tree files """
     repo = ctx.obj.repo
 
@@ -66,10 +74,22 @@ def checkout(ctx, branch, force, discard_changes, refish):
     # - 'c0ffee' commit ref
     # - 'refs/tags/1.2.3' some other refspec
 
-    if refish:
-        resolved = CommitWithReference.resolve(repo, refish)
-    else:
-        resolved = CommitWithReference.resolve(repo, "HEAD")
+    try:
+        if refish:
+            resolved = CommitWithReference.resolve(repo, refish)
+        else:
+            resolved = CommitWithReference.resolve(repo, "HEAD")
+    except NotFound:
+        # Guess: that the user wants create a new local branch to track a remote
+        remote_branch = (
+            _find_remote_branch_by_name(repo, refish) if do_guess and refish else None
+        )
+        if remote_branch:
+            new_branch = refish
+            refish = remote_branch.shorthand
+            resolved = CommitWithReference.resolve(repo, refish)
+        else:
+            raise
 
     commit = resolved.commit
     head_ref = resolved.reference.name if resolved.reference else commit.id
@@ -79,22 +99,22 @@ def checkout(ctx, branch, force, discard_changes, refish):
     if not same_commit and not force:
         ctx.obj.check_not_dirty(help_message=_DISCARD_CHANGES_HELP_MESSAGE)
 
-    if branch:
-        if branch in repo.branches:
+    if new_branch:
+        if new_branch in repo.branches:
             raise click.BadParameter(
-                f"A branch named '{branch}' already exists.", param_hint="branch"
+                f"A branch named '{new_branch}' already exists.", param_hint="branch"
             )
 
         if refish and refish in repo.branches.remote:
-            click.echo(f"Creating new branch '{branch}' to track '{refish}'...")
-            new_branch = repo.create_branch(branch, commit, force)
+            click.echo(f"Creating new branch '{new_branch}' to track '{refish}'...")
+            new_branch = repo.create_branch(new_branch, commit, force)
             new_branch.upstream = repo.branches.remote[refish]
         elif refish:
-            click.echo(f"Creating new branch '{branch}' from '{refish}'...")
-            new_branch = repo.create_branch(branch, commit, force)
+            click.echo(f"Creating new branch '{new_branch}' from '{refish}'...")
+            new_branch = repo.create_branch(new_branch, commit, force)
         else:
-            click.echo(f"Creating new branch '{branch}'...")
-            new_branch = repo.create_branch(branch, commit, force)
+            click.echo(f"Creating new branch '{new_branch}'...")
+            new_branch = repo.create_branch(new_branch, commit, force)
 
         head_ref = new_branch.name
 
@@ -112,8 +132,16 @@ def checkout(ctx, branch, force, discard_changes, refish):
     help="Similar to --create except that if <new-branch> already exists, it will be reset to <start-point>",
 )
 @click.option("--discard-changes", is_flag=True, help="Discard local changes")
+@click.option(
+    "--guess/--no-guess",
+    "do_guess",
+    is_flag=True,
+    default=True,
+    help="If a local branch of given name doesn't exist, but a remote does, "
+    "this option guesses that the user wants to create a local to track the remote",
+)
 @click.argument("refish", default=None, required=False)
-def switch(ctx, create, force_create, discard_changes, refish):
+def switch(ctx, create, force_create, discard_changes, do_guess, refish):
     """
     Switch branches
 
@@ -138,9 +166,9 @@ def switch(ctx, create, force_create, discard_changes, refish):
 
         # refish could be:
         # - '' -> HEAD
-        # - branch name
+        # - branch name eg 'master'
         # - tag name
-        # - remote branch
+        # - remote branch eg 'origin/master'
         # - HEAD
         # - HEAD~1/etc
         # - 'c0ffee' commit ref
@@ -162,14 +190,16 @@ def switch(ctx, create, force_create, discard_changes, refish):
             )
 
         if start_point and start_point in repo.branches.remote:
-            print(f"Creating new branch '{new_branch}' to track '{start_point}'...")
+            click.echo(
+                f"Creating new branch '{new_branch}' to track '{start_point}'..."
+            )
             b_new = repo.create_branch(new_branch, commit, is_force)
             b_new.upstream = repo.branches.remote[start_point]
         elif start_point and start_point in repo.branches:
-            print(f"Creating new branch '{new_branch}' from '{start_point}'...")
+            click.echo(f"Creating new branch '{new_branch}' from '{start_point}'...")
             b_new = repo.create_branch(new_branch, commit, is_force)
         else:
-            print(f"Creating new branch '{new_branch}'...")
+            click.echo(f"Creating new branch '{new_branch}'...")
             b_new = repo.create_branch(new_branch, commit, is_force)
 
         head_ref = b_new.name
@@ -178,25 +208,63 @@ def switch(ctx, create, force_create, discard_changes, refish):
         # Switch to existing branch
         #
         # refish could be:
-        # - branch name
+        # - local branch name (eg 'master')
+        # - local branch name (eg 'master') that as yet only exists on remote (if do_guess is True)
+        #   (But not a remote branch eg 'origin/master')
         if not refish:
             raise click.UsageError("Missing argument: REFISH")
 
-        try:
-            branch = repo.branches[refish]
-        except KeyError:
-            raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
-        commit = branch.peel(pygit2.Commit)
+        if refish in repo.branches.remote:
+            # User specified something like "origin/master"
+            raise click.BadParameter(
+                f"A branch is expected, got remote branch {refish}",
+                param_hint="refish",
+            )
 
+        existing_branch = None
+        if refish in repo.branches.local:
+            existing_branch = repo.branches[refish]
+        elif do_guess:
+            # Guess: that the user wants create a new local branch to track a remote
+            existing_branch = _find_remote_branch_by_name(repo, refish)
+
+        if not existing_branch:
+            raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
+
+        commit = existing_branch.peel(pygit2.Commit)
         same_commit = repo.head.peel(pygit2.Commit) == commit
         if not discard_changes and not same_commit:
             ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
+
+        if existing_branch.shorthand in repo.branches.local:
+            branch = existing_branch
+        else:
+            # Create new local branch to track remote
+            click.echo(
+                f"Creating new branch '{refish}' to track '{existing_branch.shorthand}'..."
+            )
+            branch = repo.create_branch(refish, commit)
+            branch.upstream = existing_branch
 
         head_ref = branch.name
 
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
+
+
+def _find_remote_branch_by_name(repo, name):
+    """
+    Returns the only remote branch with the given name eg "master".
+    Returns None if there is no remote branch with that unique name.
+    """
+    results = []
+    remotes = repo.branches.remote
+    for b in remotes:
+        parts = b.split("/", 1)
+        if len(parts) == 2 and parts[1] == name:
+            results.append(remotes[b])
+    return results[0] if len(results) == 1 else None
 
 
 @click.command()
