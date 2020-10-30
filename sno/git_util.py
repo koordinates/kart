@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 
@@ -47,12 +48,25 @@ _GIT_VAR_OUTPUT_RE = re.compile(
 )
 
 
-def _signature(repo, var_name, **overrides):
+def _signature(repo, person_type, **overrides):
     # 'git var' lets us use the environment variables to
     # control the user info, e.g. GIT_AUTHOR_DATE.
     # libgit2/pygit2 doesn't handle those env vars at all :(
+    env = os.environ.copy()
+
+    name = overrides.pop("name", None)
+    if name is not None:
+        env[f"GIT_{person_type}_NAME"] = name
+
+    email = overrides.pop("email", None)
+    if email is not None:
+        env[f"GIT_{person_type}_EMAIL"] = email
+
     output = subprocess.check_output(
-        ["git", "var", var_name], cwd=repo.path, encoding="utf8"
+        ["git", "var", f"GIT_{person_type}_IDENT"],
+        cwd=repo.path,
+        encoding="utf8",
+        env=env,
     )
     m = _GIT_VAR_OUTPUT_RE.match(output)
     kwargs = m.groupdict()
@@ -63,8 +77,8 @@ def _signature(repo, var_name, **overrides):
 
 
 def author_signature(repo, **overrides):
-    return _signature(repo, "GIT_AUTHOR_IDENT", **overrides)
+    return _signature(repo, "AUTHOR", **overrides)
 
 
 def committer_signature(repo, **overrides):
-    return _signature(repo, "GIT_COMMITTER_IDENT", **overrides)
+    return _signature(repo, "COMMITTER", **overrides)
