@@ -251,12 +251,16 @@ class RepositoryStructure:
         committer=None,
         allow_empty=False,
         allow_missing_old_values=False,
+        ref="HEAD",
     ):
         """
         Update the repository structure and write the updated data to the tree
         as a new commit, setting HEAD to the new commit.
         NOTE: Doesn't update working-copy meta or tracking tables, this is the
         responsibility of the caller.
+
+        `ref` should be a key that works with repo.references, i.e.
+        either "HEAD" or "refs/heads/{branchname}"
         """
         old_tree_oid = self.tree.oid if self.tree is not None else None
         new_tree_oid = self.create_tree_from_diff(
@@ -268,12 +272,15 @@ class RepositoryStructure:
 
         L.info("Committing...")
 
-        parent_commit = git_util.get_head_commit(self.repo)
+        if ref == "HEAD":
+            parent_commit = git_util.get_head_commit(self.repo)
+        else:
+            parent_commit = self.repo.references[ref].peel(pygit2.Commit)
         parents = [parent_commit.oid] if parent_commit is not None else []
 
-        # this will also update the ref (branch) to point to the current commit
+        # this will also update the ref (branch) to point to the new commit
         new_commit = self.repo.create_commit(
-            "HEAD",  # reference_name
+            ref,
             author or git_util.author_signature(self.repo),
             committer or git_util.committer_signature(self.repo),
             message,

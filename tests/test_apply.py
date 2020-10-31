@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-import subprocess
 
 import pygit2
 import pytest
@@ -192,6 +191,54 @@ def test_apply_user_info(data_archive, cli_runner):
         header = patch["sno.patch/v1"]
         assert header["authorEmail"] == "craig@example.com"
         assert header["authorName"] == "Craig de Stigter"
+
+
+def test_apply_onto_other_ref(data_archive, cli_runner):
+    patch_file = json.dumps(
+        {
+            "sno.diff/v1+hexwkb": {
+                "nz_pa_points_topo_150k": {
+                    "meta": {
+                        "title": {
+                            "+": "new title:",
+                        }
+                    }
+                },
+            },
+            "sno.patch/v1": {
+                "authorEmail": "craig@example.com",
+                "authorName": "Craig de Stigter",
+                "authorTime": "2019-06-20T14:28:33Z",
+                "authorTimeOffset": "+12:00",
+                "message": "Change the title",
+            },
+        }
+    )
+    with data_archive("points2"):
+        # First create another branch.
+        r = cli_runner.invoke(["branch", "otherbranch"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(
+            ["apply", "--allow-missing-old-values", "--ref=otherbranch", "-"],
+            input=patch_file,
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the change was applied to otherbranch
+        r = cli_runner.invoke(["create-patch", "otherbranch"])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+        assert patch["sno.patch/v1"]["message"] == "Change the title"
+
+        # But not to HEAD
+        r = cli_runner.invoke(["create-patch", "HEAD"])
+        assert r.exit_code == 0
+        patch = json.loads(r.stdout)
+        assert (
+            patch["sno.patch/v1"]["message"]
+            == "Improve naming on Coromandel East coast"
+        )
 
 
 def test_apply_allow_missing_old_values(data_archive, cli_runner):
