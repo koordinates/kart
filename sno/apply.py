@@ -91,13 +91,30 @@ def unjson_feature(geom_column_name, f):
 
 
 def apply_patch(
-    *, repo, commit, patch_file, allow_empty, allow_missing_old_values=False, **kwargs
+    *,
+    repo,
+    commit,
+    patch_file,
+    allow_empty,
+    allow_missing_old_values=False,
+    ref="HEAD",
+    **kwargs,
 ):
     try:
         patch = json.load(patch_file)
         json_diff = patch["sno.diff/v1+hexwkb"]
     except (KeyError, json.JSONDecodeError) as e:
         raise click.FileError("Failed to parse JSON patch file") from e
+
+    if ref != "HEAD":
+        if not commit:
+            raise click.UsageError("--no-commit and --ref are incompatible")
+        if not ref.startswith("refs/heads/"):
+            ref = f"refs/heads/{ref}"
+        try:
+            repo.references[ref]
+        except KeyError:
+            raise NotFound(f"No such ref {ref}")
 
     rs = RepositoryStructure(repo)
     wc = WorkingCopy.get(repo)
@@ -190,6 +207,7 @@ def apply_patch(
             author=author,
             allow_empty=allow_empty,
             allow_missing_old_values=allow_missing_old_values,
+            ref=ref,
         )
         click.echo(f"Commit {oid.hex}")
 
@@ -237,6 +255,7 @@ def apply_patch(
         "certainty about the applicability of the patch. Use with caution."
     ),
 )
+@click.option("--ref", default="HEAD", help="Which ref to apply the patch onto.")
 @click.argument("patch_file", type=click.File("r", encoding="utf-8"))
 def apply(ctx, **kwargs):
     """
