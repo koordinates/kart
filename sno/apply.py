@@ -3,6 +3,7 @@ from datetime import datetime
 from enum import Enum, auto
 
 import click
+import pygit2
 
 from .git_util import author_signature
 from .exceptions import (
@@ -116,7 +117,7 @@ def apply_patch(
         except KeyError:
             raise NotFound(f"No such ref {ref}")
 
-    rs = RepositoryStructure(repo)
+    rs = RepositoryStructure.lookup(repo, ref)
     wc = WorkingCopy.get(repo)
     if not commit and not wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
@@ -211,13 +212,16 @@ def apply_patch(
         )
         click.echo(f"Commit {oid.hex}")
 
+        # Only touch the working copy if we applied the patch to the head branch
+        reset_wc = oid == repo.head.peel(pygit2.Commit).oid
     else:
         oid = rs.create_tree_from_diff(
             repo_diff,
             allow_missing_old_values=allow_missing_old_values,
         )
+        reset_wc = True
 
-    if wc:
+    if wc and reset_wc:
         # oid refers to either a commit or tree
         wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")

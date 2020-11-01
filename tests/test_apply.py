@@ -193,7 +193,7 @@ def test_apply_user_info(data_archive, cli_runner):
         assert header["authorName"] == "Craig de Stigter"
 
 
-def test_apply_onto_other_ref(data_archive, cli_runner):
+def test_apply_onto_other_ref(data_working_copy, cli_runner):
     patch_file = json.dumps(
         {
             "sno.diff/v1+hexwkb": {
@@ -214,7 +214,7 @@ def test_apply_onto_other_ref(data_archive, cli_runner):
             },
         }
     )
-    with data_archive("points2"):
+    with data_working_copy("points2"):
         # First create another branch.
         r = cli_runner.invoke(["branch", "otherbranch"])
         assert r.exit_code == 0, r.stderr
@@ -224,6 +224,8 @@ def test_apply_onto_other_ref(data_archive, cli_runner):
             input=patch_file,
         )
         assert r.exit_code == 0, r.stderr
+        # "Commit <hash>". Doesn't contain a workingcopy update!
+        assert len(r.stdout.strip().splitlines()) == 1
 
         # Check that the change was applied to otherbranch
         r = cli_runner.invoke(["create-patch", "otherbranch"])
