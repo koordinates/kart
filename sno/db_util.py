@@ -50,7 +50,7 @@ def _postgis_placeholders(record, pg_funcs=None):
     """
     Returns ['%s', '%s', '%s', ...] where the number of '%s' returned is len(record).
     pg_funcs - a dict keyed by index to override some of the placeholders, eg:
-        {1: "SetSRID(%s, 4326)"}
+        {1: "ST_SetSRID(%s, 4326)"}
     """
 
     result = [SQL("%s")] * len(record)

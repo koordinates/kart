@@ -414,7 +414,7 @@ class WorkingCopy_Postgis(WorkingCopy):
             return wc_tree_id
 
     def _placeholders_with_setsrid(self, dataset):
-        # We have to call SetSRID on all geometries so that they will fit in their columns:
+        # We have to call ST_SetSRID on all geometries so that they will fit in their columns:
         # Unlike GPKG, the geometries in a column with a CRS of X can't all just have a CRS of 0.
         result = [SQL("%s")] * len(dataset.schema.columns)
         for i, col in enumerate(dataset.schema):
@@ -424,7 +424,7 @@ class WorkingCopy_Postgis(WorkingCopy):
             if crs_name is None:
                 continue
             crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
-            result[i] = SQL(f"SetSRID(%s, {crs_id})")
+            result[i] = SQL(f"ST_SetSRID(%s::GEOMETRY, {crs_id})")
         return result
 
     def write_full(self, commit, *datasets, **kwargs):
@@ -813,7 +813,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 if crs_name is not None:
                     crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
                     if crs_id is not None:
-                        dest_type = SQL("{} USING SetSRID({}, {})").format(
+                        dest_type = SQL("{} USING ST_SetSRID({}::GEOMETRY, {})").format(
                             dest_type, Identifier(col.name), SQL(crs_id)
                         )
                         do_write_crs = True

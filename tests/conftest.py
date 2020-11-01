@@ -765,7 +765,7 @@ def _edit_points(dbcur, table_prefix=""):
         layer,
         H.POINTS.RECORD,
         gpkg_funcs={1: "GeomFromEWKT(?)"},
-        pg_funcs={1: "SetSRID(%s, 4326)"},
+        pg_funcs={1: "ST_SetSRID(%s::GEOMETRY, 4326)"},
     )
     assert rc == 1
     dbcur.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
@@ -791,7 +791,7 @@ def _edit_polygons(dbcur, table_prefix=""):
         layer,
         H.POLYGONS.RECORD,
         gpkg_funcs={1: "GeomFromEWKT(?)"},
-        pg_funcs={1: "ST_Multi(SetSRID(%s, 4167))"},
+        pg_funcs={1: "ST_Multi(ST_SetSRID(%s::GEOMETRY, 4167))"},
     )
     assert rc == 1
     dbcur.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
