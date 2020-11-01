@@ -15,7 +15,7 @@ importlib-metadata==2.0.0  # via -c requirements/../requirements.txt, -c require
 iniconfig==1.1.1          # via -c requirements/test.txt, pytest
 ipdb==0.13.4              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
-ipython==7.18.1           # via -r requirements/dev.in, ipdb
+ipython==7.19.0           # via -r requirements/dev.in, ipdb
 jedi==0.17.2              # via ipython
 packaging==20.4           # via -c requirements/test.txt, pytest
 parso==0.7.1              # via jedi
