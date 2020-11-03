@@ -84,12 +84,17 @@ class SnoRepo(pygit2.Repository):
     Helps set up sno specific config, and adds support for pathlib Paths.
     """
 
-    def __init__(self, root_path):
-        if isinstance(root_path, Path):
-            root_path = str(root_path.resolve())
+    def __init__(self, path):
+        path = Path(path).resolve()
+        if (path / ".sno").exists():
+            path = path / ".sno"
 
         try:
-            super().__init__(root_path)
+            super().__init__(
+                str(path),
+                # Instructs pygit2 not to look at the working copy or the index.
+                pygit2.GIT_REPOSITORY_OPEN_BARE | pygit2.GIT_REPOSITORY_OPEN_FROM_ENV,
+            )
         except pygit2.GitError:
             raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
 
