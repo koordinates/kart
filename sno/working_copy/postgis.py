@@ -16,6 +16,7 @@ from .base import WorkingCopy
 from . import postgis_adapter
 from sno import geometry, crs_util
 from sno.db_util import changes_rowcount
+from sno.exceptions import NotFound, NO_WORKING_COPY
 from sno.filter_util import UNFILTERED
 from sno.schema import Schema
 
@@ -193,13 +194,21 @@ class WorkingCopy_Postgis(WorkingCopy):
         """
         with self.session() as db:
             dbcur = db.cursor()
-            dbcur.execute(
-                SQL(
-                    "SELECT EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name=%s)"
-                ),
-                (self.schema,),
+            return all(
+                (self._table_exists(t, dbcur) for t in ("_sno_state", "_sno_track"))
             )
-            return bool(dbcur.fetchone()[0])
+
+    def _table_exists(self, table_name, dbcur):
+        dbcur.execute(
+            SQL(
+                """SELECT EXISTS(
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_schema=%s AND table_name=%s
+                )"""
+            ),
+            (self.schema, table_name),
+        )
+        return bool(dbcur.fetchone()[0])
 
     def create(self):
         with self.session() as db:
@@ -400,16 +409,22 @@ class WorkingCopy_Postgis(WorkingCopy):
     def get_db_tree(self, table_name="*"):
         with self.session() as db:
             dbcur = db.cursor()
-            dbcur.execute(
-                SQL("SELECT value FROM {} WHERE table_name=%s AND key=%s").format(
-                    self.STATE_TABLE
-                ),
-                (table_name, "tree"),
-            )
-            row = dbcur.fetchone()
+            try:
+                dbcur.execute(
+                    SQL("SELECT value FROM {} WHERE table_name=%s AND key=%s").format(
+                        self.STATE_TABLE
+                    ),
+                    (table_name, "tree"),
+                )
+                row = dbcur.fetchone()
+            except psycopg2.errors.UndefinedTable:
+                row = None
             if not row:
-                raise ValueError(f"No meta entry for {table_name}")
-
+                # This happens if you start trying to use the working copy when it is half written.
+                raise NotFound(
+                    f"Working copy at {self.path} is not fully initialised",
+                    NO_WORKING_COPY,
+                )
             wc_tree_id = row[0]
             return wc_tree_id
 

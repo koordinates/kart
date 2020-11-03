@@ -323,7 +323,11 @@ def create_workingcopy(ctx, discard_changes, wc_path):
     """
     repo = ctx.obj.repo
     if not discard_changes:
-        ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
+        try:
+            ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
+        except NotFound:
+            # Current working copy doesn't exist or is incomplete. Abandon it.
+            pass
 
     WorkingCopy.check_valid_path(wc_path, repo.workdir_path)
 
