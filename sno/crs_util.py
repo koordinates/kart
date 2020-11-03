@@ -100,6 +100,11 @@ def get_identifier_str(crs, authority=None):
     return f"CUSTOM:{get_identifier_int(crs, (auth_name, auth_code))}"
 
 
+MIN_CUSTOM_ID = 200000
+MAX_CUSTOM_ID = 209199
+CUSTOM_RANGE = MAX_CUSTOM_ID - MIN_CUSTOM_ID + 1
+
+
 def get_identifier_int(crs, authority=None):
     """
     Given a CRS, generate a stable, unique identifer for it of type 'int'. Eg: 2193
@@ -119,8 +124,8 @@ def get_identifier_int(crs, authority=None):
     else:
         raise RuntimeError(f"Unrecognised CRS: {crs}")
 
-    # Stable code that fits easily in an int32 and won't collide with EPSG codes.
-    return (uint32hash(wkt) & 0xFFFFFFF) + 1000000
+    # Stable code within the allowed range - MIN_CUSTOM_ID...MAX_CUSTOM_ID
+    return (uint32hash(wkt) % CUSTOM_RANGE) + MIN_CUSTOM_ID
 
 
 def get_identifier_int_from_dataset(dataset, crs_name=None):

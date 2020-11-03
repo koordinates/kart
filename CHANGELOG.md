@@ -17,6 +17,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `clone` now accepts a `--branch` option to clone a specific branch.
  * `switch BRANCH` now switches to a newly created local branch that tracks `BRANCH`, if `BRANCH` is a remote branch and not a local branch [#259](https://github.com/koordinates/sno/issues/259)
  * Bugfix - don't drop the user-supplied authority from the supplied CRS and generate a new unrelated one. [#278](https://github.com/koordinates/sno/issues/278)
+ * Bugfix - generated CRS numbers are now within the user range: 200000 to 209199 [#296](https://github.com/koordinates/sno/issues/296)
 
 ## 0.5.0
 
