@@ -1,18 +1,23 @@
 import logging
 from collections import deque
 
+import click
 import pygit2
 
 from . import git_util
 from .base_dataset import BaseDataset
 from .exceptions import (
+    InvalidOperation,
     NotFound,
     NotYetImplemented,
     NO_CHANGES,
     NO_COMMIT,
+    PATCH_DOES_NOT_APPLY,
+    SCHEMA_VIOLATION,
 )
 from .rich_tree_builder import RichTreeBuilder
 from .repository_version import get_repo_version, extra_blobs_for_version
+from .schema import Schema
 
 
 L = logging.getLogger("sno.structure")
@@ -242,6 +247,51 @@ class RepositoryStructure:
         L.info(f"Tree sha: {tree.oid}")
         return tree.oid
 
+    def check_values_match_schema(self, repo_diff):
+        all_features_valid = True
+        violations = {}
+
+        for ds_path, ds_diff in repo_diff.items():
+            ds_violations = {}
+            violations[ds_path] = ds_violations
+
+            schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
+            if schema_delta:
+                if self.version < 2:
+                    # This should have been handled already, but just to be safe.
+                    raise NotYetImplemented(
+                        "Meta changes are not supported until datasets V2"
+                    )
+                elif schema_delta.type == "delete":
+                    new_schema = None
+                else:
+                    new_schema = Schema.from_column_dicts(schema_delta.new_value)
+            else:
+                new_schema = self.get(ds_path).schema
+
+            feature_diff = ds_diff.get("feature") or {}
+            for feature_delta in feature_diff.values():
+                new_value = feature_delta.new_value
+                if new_value is None:
+                    continue
+                if new_schema is None:
+                    raise InvalidOperation(
+                        f"Can't {feature_delta.type} feature {feature_delta.new_key} in deleted dataset {ds_path}",
+                        exit_code=PATCH_DOES_NOT_APPLY,
+                    )
+                all_features_valid &= new_schema.validate_feature(
+                    new_value, ds_violations
+                )
+
+        if not all_features_valid:
+            for ds_path, ds_violations in violations.items():
+                for message in ds_violations.values():
+                    click.echo(f"{ds_path}: {message}", err=True)
+            raise InvalidOperation(
+                "Schema violation - values do not match schema",
+                exit_code=SCHEMA_VIOLATION,
+            )
+
     def commit(
         self,
         wcdiff,
@@ -262,6 +312,8 @@ class RepositoryStructure:
         `ref` should be a key that works with repo.references, i.e.
         either "HEAD" or "refs/heads/{branchname}"
         """
+        self.check_values_match_schema(wcdiff)
+
         old_tree_oid = self.tree.oid if self.tree is not None else None
         new_tree_oid = self.create_tree_from_diff(
             wcdiff,
