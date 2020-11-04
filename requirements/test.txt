@@ -29,6 +29,6 @@ pytest-sugar==0.9.4       # via -r requirements/test.in
 pytest==6.1.2             # via -r requirements/test.in, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-helpers-namespace, pytest-profiling, pytest-shard, pytest-sugar
 six==1.15.0               # via -c requirements/../requirements.txt, html5lib, packaging, pytest-profiling
 termcolor==1.1.0          # via pytest-sugar
-toml==0.10.1              # via pytest
+toml==0.10.2              # via pytest
 webencodings==0.5.1       # via html5lib
-zipp==3.3.1               # via -c requirements/../requirements.txt, importlib-metadata
+zipp==3.4.0               # via -c requirements/../requirements.txt, importlib-metadata
