@@ -45,7 +45,8 @@ os.environ["PATH"] = (
 
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
-os.environ["PREFIX"] = prefix
+os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
+os.environ["XDG_CONFIG_HOME"] = prefix
 if is_windows:
     os.environ["PATH"] = (
         os.path.join(prefix, "git", "cmd") + os.pathsep + os.environ["PATH"]
