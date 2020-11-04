@@ -71,6 +71,8 @@ if command -v hub >/dev/null; then
     else
         echo -e "\n⚠️ "'`hub` failed. Run `hub api user` to setup authentication. https://hub.github.com/hub.1.html#github-oauth-authentication'
     fi
+else
+    echo "⚠️ 'hub' isn't installed, you should install it for best results"
 fi
 if [ "$DOWNLOADED" = false ] ; then
     # build a list of direct-download browser links
