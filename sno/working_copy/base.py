@@ -245,23 +245,27 @@ class WorkingCopy:
         """
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         """
-        meta_old = dict(self._ds_meta_items(dataset))
-        meta_new = dict(self._wc_meta_items(dataset))
-        if "schema.json" in meta_old and "schema.json" in meta_new:
-            Schema.align_schema_cols(meta_old["schema.json"], meta_new["schema.json"])
-        result = DeltaDiff.diff_dicts(meta_old, meta_new)
+        ds_meta_items = dict(dataset.meta_items())
+        wc_meta_items = dict(self.meta_items(dataset))
+        self._remove_hidden_meta_diffs(ds_meta_items, wc_meta_items)
+        result = DeltaDiff.diff_dicts(ds_meta_items, wc_meta_items)
         if raise_if_dirty and result:
             raise WorkingCopyDirty()
         return result
 
-    def _ds_meta_items(self, dataset):
+    def _remove_hidden_meta_diffs(self, ds_meta_items, wc_meta_items):
         """
-        Returns all the meta items from the given dataset (ie, at HEAD).
-        Subclasses can discard certain meta items if the working copy doesn't support them.
+        Remove any meta diffs that can't or shouldn't be committed, and so shouldn't be shown to the user.
+        For all WC's, this means re-adding the column-IDs to schema.json since no WC can store column IDs.
+        Subclasses can override and make more changes, depending on the WC's limitations - for instance, if the WC
+        can't store the dataset description, then that should be removed from the diff.
         """
-        yield from dataset.meta_items()
+        if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
+            Schema.align_schema_cols(
+                ds_meta_items["schema.json"], wc_meta_items["schema.json"]
+            )
 
-    def _wc_meta_items(self, dataset):
+    def meta_items(self, dataset):
         """Returns all the meta items for the given dataset from the working copy DB."""
         raise NotImplementedError()
 

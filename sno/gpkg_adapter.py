@@ -1,8 +1,6 @@
 from datetime import datetime
 import re
 
-from osgeo.osr import SpatialReference
-
 from . import crs_util
 from .exceptions import NotYetImplemented
 from .meta_items import META_ITEM_NAMES as V2_META_ITEM_NAMES
@@ -204,7 +202,10 @@ def _gpkg_srs_id(v2_obj):
 def wkt_to_gpkg_spatial_ref_sys(wkt):
     """Given a WKT crs definition, generate a gpkg_spatial_ref_sys meta item."""
     auth_name, auth_code = crs_util.parse_authority(wkt)
-    srs_id = crs_util.get_identifier_int(wkt, (auth_name, auth_code))
+    if auth_code and auth_code.isdigit() and int(auth_code) > 0:
+        srs_id = int(auth_code)
+    else:
+        srs_id = crs_util.get_identifier_int(wkt)
     return [
         {
             "srs_name": crs_util.parse_name(wkt),

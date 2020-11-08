@@ -83,21 +83,53 @@ def parse_authority(crs):
     return spatial_ref.GetAuthorityName(None), spatial_ref.GetAuthorityCode(None)
 
 
-def get_identifier_str(crs, authority=None):
+def get_identifier_str(crs):
     """
-    Given a CRS, generate a stable, unique identifier for it of type 'str'. Eg: "EPSG:2193"
+    Given a CRS, find or generate a stable, unique identifier for it of type 'str'.
+    Eg: "EPSG:2193" or "CUSTOM:201234"
     """
-    if authority is not None:
-        auth_name, auth_code = authority
-    else:
-        auth_name, auth_code = parse_authority(crs)
+    result = _find_identifier_str(crs)
+    if not result:
+        result = f"CUSTOM:{_generate_identifier_int(crs)}"
+    return result.replace("/", "_")
 
+
+def _find_identifier_str(crs):
+    """Given a CRS, find a sensible identifier string for it from within the WKT."""
+    auth_name, auth_code = parse_authority(crs)
+    # Use AUTH_NAME:AUTH_CODE if both are set:
     if auth_name and auth_code:
         return f"{auth_name}:{auth_code}"
+    # Use AUTH_NAME or AUTH_CODE if one of them is set and probably a real identifier:
     code = auth_name or auth_code
-    if code and code.strip() not in ("0", "EPSG"):
+    if code and code.strip() not in ("", "0", "EPSG", "ESRI"):
         return code
-    return f"CUSTOM:{get_identifier_int(crs, (auth_name, auth_code))}"
+    # Otherwise, use the CRS name, if set.
+    name = parse_name(crs)
+    if name is not None:
+        name = name.strip()
+    return name if name else None
+
+
+def get_identifier_int(crs):
+    """
+    Given a CRS, find or generate a stable, unique identifer for it of type 'int'.
+    Eg: 2193 or 201234
+    """
+    # Find the auth code from the WKT if one is set and is an integer:
+    result = _find_identifier_int(crs)
+    # Otherwise, generate a stable ID based on the WKT authority / name / contents.
+    if not result:
+        result = _generate_identifier_int(crs)
+    return result
+
+
+def _find_identifier_int(crs):
+    """Given a CRS, find a sensible identifier int for it from its authority in the WKT."""
+    auth_name, auth_code = parse_authority(crs)
+    if auth_code and auth_code.isdigit() and int(auth_code) > 0:
+        return int(auth_code)
+    return None
 
 
 MIN_CUSTOM_ID = 200000
@@ -105,27 +137,27 @@ MAX_CUSTOM_ID = 209199
 CUSTOM_RANGE = MAX_CUSTOM_ID - MIN_CUSTOM_ID + 1
 
 
-def get_identifier_int(crs, authority=None):
-    """
-    Given a CRS, generate a stable, unique identifer for it of type 'int'. Eg: 2193
-    """
-    if authority is not None:
-        auth_name, auth_code = authority
-    else:
-        auth_name, auth_code = parse_authority(crs)
+def _generate_identifier_int(crs):
+    """Given a CRS, generate a unique stable int for it - based on its authority or name, if these are present."""
 
-    if auth_code and auth_code.isdigit() and int(auth_code) > 0:
-        return int(auth_code)
-
-    if isinstance(crs, str):
-        wkt = crs.strip()
-    elif isinstance(crs, SpatialReference):
-        wkt = crs.ExportToPrettyWkt()
-    else:
-        raise RuntimeError(f"Unrecognised CRS: {crs}")
+    # Generate an identifier int based on the WKT authority or name if one is set:
+    identifier_str = _find_identifier_str(crs)
+    normalised_wkt = None
+    # Otherwise, use the entire CRS to generate a unique, stable int.
+    if not identifier_str:
+        # This CRS has no authority or name - we fall back to generating an ID based on its contents.
+        # This is undesirable since it means any change to the CRS renames it, which is confusing -
+        # it will get a new auto-generated ID - but the user can name it to avoid this behaviour.
+        if isinstance(crs, str):
+            normalised_wkt = normalise_wkt(crs)
+        elif isinstance(crs, SpatialReference):
+            normalised_wkt = normalise_wkt(crs.ExportToWkt())
+        else:
+            raise RuntimeError(f"Unrecognised CRS: {crs}")
 
     # Stable code within the allowed range - MIN_CUSTOM_ID...MAX_CUSTOM_ID
-    return (uint32hash(wkt) % CUSTOM_RANGE) + MIN_CUSTOM_ID
+    raw_hash = uint32hash(identifier_str or normalised_wkt)
+    return (raw_hash % CUSTOM_RANGE) + MIN_CUSTOM_ID
 
 
 def get_identifier_int_from_dataset(dataset, crs_name=None):
@@ -157,3 +189,12 @@ def normalise_wkt(wkt):
     token_iter = WKTLexer().get_tokens(wkt, pretty_print=True)
     token_value = (value for token_type, value in token_iter)
     return "".join(token_value)
+
+
+def has_standard_authority(crs):
+    """
+    Returns True if this CRS appears to be defined by some standard authority - EPSG, ESRI, or Google.
+    Doesn't check if the CRS actually matches (or roughly matches) the definition specified by that authority.
+    """
+    auth_name, auth_code = parse_authority(crs)
+    return auth_name in ("EPSG", "ESRI") or auth_code == 900913  # GOOGLE

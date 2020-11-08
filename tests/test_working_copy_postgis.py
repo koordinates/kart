@@ -5,6 +5,7 @@ import pygit2
 
 from sno.sno_repo import SnoRepo
 from sno.working_copy import WorkingCopy
+from sno.structure import RepositoryStructure
 
 
 H = pytest.helpers.helpers()
@@ -263,3 +264,84 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
             r = cli_runner.invoke(["checkout", "HEAD^"])
 
             assert repo.head.peel(pygit2.Commit).hex == orig_head
+
+
+class SucceedAndRollback(Exception):
+    """
+    This test passed, but raising an exception will cause the DB transaction to rollback.
+    Which is what we want to do, to undo any changes to public.spatial_ref_sys
+    """
+
+    pass
+
+
+def test_edit_crs(data_archive, geopackage, cli_runner, new_postgis_db_schema):
+    with data_archive("points2") as repo_path:
+        repo = SnoRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            repo.config["sno.workingcopy.path"] = postgres_url
+            r = cli_runner.invoke(["checkout"])
+            wc = WorkingCopy.get(repo)
+            assert wc.is_created()
+            assert not wc.is_dirty()
+
+            # The test is run inside a single transaction which we always roll back -
+            # this is because we are editing the public.spatial_ref_sys table, which is shared by
+            # everything in the postgis DB - we don't want these temporary changes to make other
+            # tests fail, and we want to roll them immediately whether the test passes or fails.
+            with pytest.raises(SucceedAndRollback):
+                with wc.session() as db:
+
+                    dbcur = db.cursor()
+                    dbcur.execute(
+                        SQL("SELECT srtext FROM public.spatial_ref_sys WHERE srid=4326")
+                    )
+                    crs = dbcur.fetchone()[0]
+                    assert crs.startswith('GEOGCS["WGS 84",')
+                    assert crs.endswith('AUTHORITY["EPSG","4326"]]')
+
+                    # Make an unimportant, cosmetic change, while keeping the CRS basically EPSG:4326
+                    crs = crs.replace('GEOGCS["WGS 84",', 'GEOGCS["WGS 1984",')
+                    dbcur.execute(
+                        SQL(
+                            "UPDATE public.spatial_ref_sys SET srtext=%s WHERE srid=4326;"
+                        ),
+                        (crs,),
+                    )
+
+                    # sno diff hides differences between dataset CRS and WC CRS if they are both supposed to be EPSG:4326
+                    # (or any other standard CRS). See POSTGIS_WC.md
+                    assert not wc.is_dirty()
+
+                    # Change the CRS authority to CUSTOM
+                    crs = crs.replace(
+                        'AUTHORITY["EPSG","4326"]]', 'AUTHORITY["CUSTOM","4326"]]'
+                    )
+
+                    dbcur.execute(
+                        SQL(
+                            "UPDATE public.spatial_ref_sys SET srtext=%s WHERE srid=4326;"
+                        ),
+                        (crs,),
+                    )
+
+                    # Now sno diff should show the change, and it is possible to commit the change.
+                    assert wc.is_dirty()
+
+                    commit_id = RepositoryStructure(repo).commit(
+                        wc.diff_to_tree(), "Modify CRS"
+                    )
+                    wc.update_state_table_tree(commit_id.hex)
+
+                    assert not wc.is_dirty()
+
+                    r = cli_runner.invoke(["show"])
+                    lines = r.stdout.splitlines()
+                    assert "--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt" in lines
+                    assert (
+                        "+++ nz_pa_points_topo_150k:meta:crs/CUSTOM:4326.wkt" in lines
+                    )
+
+                    raise SucceedAndRollback()
