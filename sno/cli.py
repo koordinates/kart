@@ -291,5 +291,16 @@ def config(ctx, args):
     execvp("git", params + list(args))
 
 
+@cli.command(context_settings=dict(ignore_unknown_options=True))
+@click.pass_context
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def gc(ctx, args):
+    """ Get and set repository or global options """
+    params = ["git", "gc"]
+    if ctx.obj.user_repo_path:
+        params[1:1] = ["-C", ctx.obj.user_repo_path]
+    execvp("git", params + list(args))
+
+
 if __name__ == "__main__":
     cli()
