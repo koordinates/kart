@@ -100,12 +100,17 @@ class SnoRepo(pygit2.Repository):
     Note: this is not enforced, especially since all legacy "bare-style" sno repos violate this assumption.
     """
 
-    def __init__(self, root_path, *, validate=True):
-        if isinstance(root_path, Path):
-            root_path = str(root_path.resolve())
+    def __init__(self, path, *, validate=True):
+        path = Path(path).resolve()
+        if (path / ".sno").exists():
+            path = path / ".sno"
 
         try:
-            super().__init__(root_path)
+            super().__init__(
+                str(path),
+                # Instructs pygit2 not to look at the working copy or the index.
+                pygit2.GIT_REPOSITORY_OPEN_BARE | pygit2.GIT_REPOSITORY_OPEN_FROM_ENV,
+            )
         except pygit2.GitError:
             raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
 
