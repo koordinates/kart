@@ -552,6 +552,10 @@ class WorkingCopy_GPKG(WorkingCopy):
         return ",".join(result)
 
     def _db_geom_to_gpkg_geom(self, g):
+        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+        # We don't try to convert them here - we let the commit validation step report this as an error.
+        if not isinstance(g, bytes):
+            return g
         # We normalise geometries to avoid spurious diffs - diffs where nothing
         # of any consequence has changed (eg, only endianness has changed).
         # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
@@ -915,6 +919,10 @@ class WorkingCopy_GPKG_1(WorkingCopy_GPKG):
     STATE_NAME = "meta"
 
     def _db_geom_to_gpkg_geom(self, g):
+        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+        # We don't try to convert them here - we let the commit validation step report this as an error.
+        if not isinstance(g, bytes):
+            return g
         # In V1 we don't normalise the geometries - we just roundtrip them as-is.
         return Geometry.of(g)
 

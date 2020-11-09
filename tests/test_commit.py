@@ -9,7 +9,13 @@ import pytest
 import pygit2
 
 from sno import repo_files
-from sno.exceptions import INVALID_ARGUMENT, NO_CHANGES, NO_DATA, NO_REPOSITORY
+from sno.exceptions import (
+    INVALID_ARGUMENT,
+    NO_CHANGES,
+    NO_DATA,
+    NO_REPOSITORY,
+    SCHEMA_VIOLATION,
+)
 from sno.repo_files import fallback_editor
 from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
@@ -324,3 +330,26 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
         assert author.email == "user@example.com"
         assert author.time == 1000000000
         assert author.offset == 750
+
+
+def test_commit_schema_violation(cli_runner, data_working_copy, geopackage):
+    with data_working_copy("points2") as (repo_dir, wc_path):
+        db = geopackage(wc_path)
+        with db:
+            dbcur = db.cursor()
+            dbcur.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
+            dbcur.execute(
+                f"UPDATE {H.POINTS.LAYER} SET t50_fid=123456789012 WHERE fid=2;"
+            )
+            dbcur.execute(
+                f"""UPDATE {H.POINTS.LAYER} SET macronated="kinda" WHERE fid=3;"""
+            )
+
+        r = cli_runner.invoke(["commit", "-m", "test"])
+        assert r.exit_code == SCHEMA_VIOLATION, r.stderr
+        assert r.stderr.splitlines() == [
+            "nz_pa_points_topo_150k: In column 'geom' value 'text' doesn't match schema type geometry",
+            "nz_pa_points_topo_150k: In column 't50_fid' value 123456789012 does not fit into an int32: -2147483648 to 2147483647",
+            "nz_pa_points_topo_150k: In column 'macronated' value 'kinda' exceeds limit of 1 characters",
+            "Error: Schema violation - values do not match schema",
+        ]

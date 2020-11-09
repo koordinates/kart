@@ -168,7 +168,7 @@ def meta_set(ctx, message, dataset, items):
     patch_file.seek(0)
     apply_patch(
         repo=ctx.obj.repo,
-        commit=True,
+        do_commit=True,
         patch_file=patch_file,
         allow_empty=False,
         allow_missing_old_values=True,

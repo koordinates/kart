@@ -94,7 +94,7 @@ def unjson_feature(geom_column_name, f):
 def apply_patch(
     *,
     repo,
-    commit,
+    do_commit,
     patch_file,
     allow_empty,
     allow_missing_old_values=False,
@@ -108,7 +108,7 @@ def apply_patch(
         raise click.FileError("Failed to parse JSON patch file") from e
 
     if ref != "HEAD":
-        if not commit:
+        if not do_commit:
             raise click.UsageError("--no-commit and --ref are incompatible")
         if not ref.startswith("refs/heads/"):
             ref = f"refs/heads/{ref}"
@@ -119,7 +119,7 @@ def apply_patch(
 
     rs = RepositoryStructure.lookup(repo, ref)
     wc = WorkingCopy.get(repo)
-    if not commit and not wc:
+    if not do_commit and not wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
         raise NotFound("--no-commit requires a working copy", exit_code=NO_WORKING_COPY)
 
@@ -130,7 +130,9 @@ def apply_patch(
     for ds_path, ds_diff_dict in json_diff.items():
         dataset = rs.get(ds_path)
         meta_change_type = _meta_change_type(ds_diff_dict)
-        check_change_supported(rs.version, dataset, ds_path, meta_change_type, commit)
+        check_change_supported(
+            rs.version, dataset, ds_path, meta_change_type, do_commit
+        )
 
         meta_changes = ds_diff_dict.get("meta", {})
 
@@ -172,7 +174,7 @@ def apply_patch(
             )
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
-    if commit:
+    if do_commit:
         try:
             metadata = patch["sno.patch/v1"]
         except KeyError:
@@ -225,14 +227,14 @@ def apply_patch(
         # oid refers to either a commit or tree
         wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")
-        wc.reset(wc_target, track_changes_as_dirty=not commit)
+        wc.reset(wc_target, track_changes_as_dirty=not do_commit)
 
 
 @click.command()
 @click.pass_context
 @click.option(
     "--commit/--no-commit",
-    "commit",
+    "do_commit",
     default=True,
     help="Commit changes",
 )

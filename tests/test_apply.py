@@ -66,15 +66,15 @@ def test_apply_twice(data_archive, cli_runner):
 
         assert (
             "nz_pa_points_topo_150k: Trying to delete nonexistent feature: 1241"
-            in r.stdout
+            in r.stderr
         )
         assert (
             "nz_pa_points_topo_150k: Trying to create feature that already exists: 9999"
-            in r.stdout
+            in r.stderr
         )
         assert (
             "nz_pa_points_topo_150k: Trying to update already-changed feature: 1795"
-            in r.stdout
+            in r.stderr
         )
         assert "Patch does not apply" in r.stderr
 

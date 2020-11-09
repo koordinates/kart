@@ -2,6 +2,7 @@ from collections import namedtuple
 import functools
 import uuid
 
+from .geometry import Geometry
 from .serialise_util import (
     msg_pack,
     msg_unpack,
@@ -451,3 +452,79 @@ class Schema:
 
     def diff_type_counts(self, new_schema):
         return {k: len(v) for k, v in self.diff_types(new_schema).items()}
+
+    EQUIVALENT_PYTHON_TYPES = {
+        "boolean": (bool,),
+        "blob": (bytes,),
+        "date": (str,),
+        "float": (float, int),
+        "geometry": (Geometry,),
+        "integer": (int,),
+        "interval": (str,),
+        "numeric": (str,),
+        "text": (str,),
+        "time": (str,),
+        "timestamp": (str,),
+    }
+
+    def validate_feature(self, feature, col_violations=None):
+        """
+        Returns True if the feature is valid, False if it has a schema violation.
+        Populates col_violations dict with an example of a violation from each column, if one can be found.
+        """
+        if col_violations is None:
+            return not any(
+                self._find_column_violation(col, feature) is not None
+                for col in self.columns
+            )
+
+        has_violation = bool(col_violations)
+        for col in self.columns:
+            if col.name in col_violations:
+                # We have already output an error message for a different violation in this column,
+                # and has_violation is already set to True. No need to investigate this column further.
+                continue
+
+            col_violation = self._find_column_violation(col, feature)
+            if col_violation is not None:
+                col_violations[col.name] = col_violation
+                has_violation = True
+
+        return not has_violation
+
+    def _find_column_violation(self, col, feature):
+        """
+        Returns the error message for how a feature violates the schema in a given column.
+        Returns None if the feature is compliant.
+        """
+        if col.name not in feature:
+            return None
+        value = feature[col.name]
+        if value is None:
+            return None
+
+        col_type = col.data_type
+        if type(value) not in self.EQUIVALENT_PYTHON_TYPES[col_type]:
+            return f"In column '{col.name}' value {repr(value)} doesn't match schema type {col_type}"
+        elif col_type == "integer" and "size" in col.extra_type_info:
+            size = col.extra_type_info["size"]
+            if self._signed_bit_length(value) > size:
+                bounds = 2 ** (size - 1)
+                return f"In column '{col.name}' value {repr(value)} does not fit into an int{size}: {-bounds} to {bounds-1}"
+        elif col_type == "text" and "length" in col.extra_type_info:
+            length = col.extra_type_info["length"]
+            len_value = len(value)
+            if len_value > length:
+                if len_value > 100:
+                    value = value[:40] + "....." + value[-40:]
+                return f"In column '{col.name}' value {repr(value)} exceeds limit of {length} characters"
+
+        # TODO - more type validation
+
+        return None
+
+    def _signed_bit_length(self, integer):
+        if integer < 0:
+            return (integer + 1).bit_length() + 1
+        else:
+            return integer.bit_length() + 1

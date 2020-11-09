@@ -334,7 +334,8 @@ class RichBaseDataset(BaseDataset):
             if delta.type == "delete" and old_path not in tree:
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to delete nonexistent feature: {old_key}"
+                    f"{self.path}: Trying to delete nonexistent feature: {old_key}",
+                    err=True,
                 )
                 continue
 
@@ -345,14 +346,16 @@ class RichBaseDataset(BaseDataset):
             ):
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to create feature that already exists: {new_key}"
+                    f"{self.path}: Trying to create feature that already exists: {new_key}",
+                    err=True,
                 )
                 continue
 
             if delta.type == "update" and old_path not in tree:
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to update nonexistent feature: {old_key}"
+                    f"{self.path}: Trying to update nonexistent feature: {old_key}",
+                    err=True,
                 )
                 continue
 
@@ -361,7 +364,8 @@ class RichBaseDataset(BaseDataset):
             ):
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to update already-changed feature: {old_key}"
+                    f"{self.path}: Trying to update already-changed feature: {old_key}",
+                    err=True,
                 )
                 continue
 
