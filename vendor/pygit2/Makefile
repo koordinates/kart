@@ -1,5 +1,5 @@
-# v1.3.0+
-PYGIT2_REF ?= da410961f0a426cdecbd36548c2b36dc13c674c2
+# v1.1.0+
+PYGIT2_REF ?= ccf4df153c68d4af7d3d0f4f4f9104afc6f38d43
 PYGIT2_REPO ?= libgit2/pygit2
 PYGIT2_ARCHIVE := pygit2-$(PYGIT2_REF).tar.gz
 

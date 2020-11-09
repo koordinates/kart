@@ -1,6 +1,6 @@
-LIBGIT2_REF ?= v1.1.0
+LIBGIT2_REF ?= v0.99.0
 LIBGIT2_REPO ?= libgit2/libgit2
-LIBGIT2_ARCHIVE := libgit2-1.1.0.tar.gz
+LIBGIT2_ARCHIVE := libgit2-0.99.0.tar.gz
 
 CFLAGS += -g
 CXXFLAGS += -g
