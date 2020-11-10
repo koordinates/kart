@@ -16,7 +16,6 @@ from .base import WorkingCopy
 from . import postgis_adapter
 from sno import geometry, crs_util
 from sno.db_util import changes_rowcount
-from sno.exceptions import NotFound, NO_WORKING_COPY
 from sno.filter_util import UNFILTERED
 from sno.schema import Schema
 
@@ -210,28 +209,61 @@ class WorkingCopy_Postgis(WorkingCopy):
 
     def is_created(self):
         """
-        Returns true if the schema is created. The contents of the schema is the working copy,
-        so the working copy is created if the schema is created.
+        Returns true if the postgres schema referred to by this working copy exists and
+        contains at least one table. If it exists but is empty, it is treated as uncreated.
+        This is so the postgres schema can be created ahead of time before a repo is created
+        or configured, without it triggering code that checks for corrupted working copies.
+        Note that it might not be initialised as a working copy - see self.is_initialised.
         """
         with self.session() as db:
             dbcur = db.cursor()
-            return all(
-                (self._table_exists(t, dbcur) for t in ("_sno_state", "_sno_track"))
+            dbcur.execute(
+                SQL(
+                    """
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema=%s;
+                    """
+                ),
+                (self.schema,),
             )
+            return dbcur.fetchone()[0] > 0
 
-    def _table_exists(self, table_name, dbcur):
-        dbcur.execute(
-            SQL(
-                """SELECT EXISTS(
-                    SELECT 1 FROM information_schema.tables
-                    WHERE table_schema=%s AND table_name=%s
-                )"""
-            ),
-            (self.schema, table_name),
-        )
-        return bool(dbcur.fetchone()[0])
+    def is_initialised(self):
+        """
+        Returns true if the postgis working copy is initialised -
+        the schema exists and has the necessary sno tables, _sno_state and _sno_track.
+        """
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(
+                SQL(
+                    """
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema=%s AND table_name IN ('_sno_state', '_sno_track');
+                    """
+                ),
+                (self.schema,),
+            )
+            return dbcur.fetchone()[0] == 2
 
-    def create(self):
+    def has_data(self):
+        """
+        Returns true if the postgis working copy seems to have user-created content already.
+        """
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(
+                SQL(
+                    """
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema=%s AND table_name NOT IN ('_sno_state', '_sno_track');
+                    """
+                ),
+                (self.schema,),
+            )
+            return dbcur.fetchone()[0] > 0
+
+    def create_and_initialise(self):
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(
@@ -299,23 +331,26 @@ class WorkingCopy_Postgis(WorkingCopy):
                 )
             )
 
-    def delete(self):
+    def delete(self, keep_container_if_possible=False):
         """ Delete all tables in the schema"""
         # We don't use drop ... cascade since that could also delete things outside the schema.
         # Better to fail to delete the schema, than to delete things the user didn't want to delete.
         with self.session() as db:
             dbcur = db.cursor()
+            # Don't worry about constraints when dropping everything.
+            dbcur.execute("SET CONSTRAINTS ALL DEFERRED;")
             # Drop tables
             dbcur.execute(
                 SQL("SELECT tablename FROM pg_tables where schemaname=%s;"),
                 (self.schema,),
             )
             tables = [t[0] for t in dbcur]
-            dbcur.execute(
-                SQL("DROP TABLE IF EXISTS {};").format(
-                    SQL(", ").join(self._table_identifier(t) for t in tables)
+            if tables:
+                dbcur.execute(
+                    SQL("DROP TABLE IF EXISTS {};").format(
+                        SQL(", ").join(self._table_identifier(t) for t in tables)
+                    )
                 )
-            )
             # Drop functions
             dbcur.execute(
                 SQL(
@@ -324,13 +359,17 @@ class WorkingCopy_Postgis(WorkingCopy):
                 (self.schema,),
             )
             functions = [f[0] for f in dbcur]
-            dbcur.execute(
-                SQL("DROP FUNCTION IF EXISTS {};").format(
-                    SQL(", ").join(self._table_identifier(f) for f in functions)
+            if functions:
+                dbcur.execute(
+                    SQL("DROP FUNCTION IF EXISTS {};").format(
+                        SQL(", ").join(self._table_identifier(f) for f in functions)
+                    )
                 )
-            )
-            # Drop schema
-            dbcur.execute(SQL("DROP SCHEMA {};").format(Identifier(self.schema)))
+            # Drop schema, unless keep_container_if_possible=True
+            if not keep_container_if_possible:
+                dbcur.execute(
+                    SQL("DROP SCHEMA IF EXISTS {};").format(Identifier(self.schema))
+                )
 
     def write_meta(self, dataset):
         self.write_meta_title(dataset)
@@ -448,11 +487,9 @@ class WorkingCopy_Postgis(WorkingCopy):
             except psycopg2.errors.UndefinedTable:
                 row = None
             if not row:
-                # This happens if you start trying to use the working copy when it is half written.
-                raise NotFound(
-                    f"Working copy at {self.path} is not fully initialised",
-                    NO_WORKING_COPY,
-                )
+                # It's okay to not have anything in the tree table - it might just mean there are no commits yet.
+                # It might also mean that the working copy is not yet initialised - see WorkingCopy.get
+                return None
             wc_tree_id = row[0]
             return wc_tree_id
 

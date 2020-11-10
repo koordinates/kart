@@ -40,14 +40,14 @@ def list_import_formats(ctx, param, value):
 
 
 def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
-    wc = WorkingCopy.get(repo, init_if_missing=True)
+    wc = WorkingCopy.get(repo, allow_uncreated=True)
     if not wc:
         return
 
     commit = repo.head.peel(pygit2.Commit)
     if not wc.is_created():
         click.echo(f"Creating working copy at {wc.path} ...")
-        wc.create()
+        wc.create_and_initialise()
     else:
         click.echo(f"Updating {wc.path} ...")
 
@@ -150,6 +150,13 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     type=click.INT,
     help="--depth option to git-fast-import (advanced users only)",
 )
+@click.option(
+    "--checkout/--no-checkout",
+    "do_checkout",
+    is_flag=True,
+    default=True,
+    help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
+)
 def import_table(
     ctx,
     all_tables,
@@ -163,6 +170,7 @@ def import_table(
     replace_existing,
     allow_empty,
     max_delta_depth,
+    do_checkout,
 ):
     """
     Import data into a repository.
@@ -185,21 +193,33 @@ def import_table(
         raise click.UsageError(
             "Illegal usage: '--output-format=json' only supports --list"
         )
+    if do_list:
+        OgrImportSource.open(source, None).print_table_list(
+            do_json=output_format == "json"
+        )
+        return
 
-    use_repo_ctx = not do_list
-    if use_repo_ctx:
-        repo = ctx.obj.repo
-        check_git_user(repo)
+    repo = ctx.obj.repo
+    check_git_user(repo)
+
+    if (
+        not do_checkout
+        and WorkingCopy.get(
+            repo,
+        )
+        is not None
+    ):
+        click.echo(
+            "Warning: '--no-checkout' has no effect as a working copy already exists",
+            err=True,
+        )
+        do_checkout = True
 
     base_import_source = OgrImportSource.open(source, None)
-    if do_list:
-        base_import_source.print_table_list(do_json=output_format == "json")
-        return
-    elif all_tables:
+    if all_tables:
         tables = base_import_source.get_tables().keys()
-    else:
-        if not tables:
-            tables = [base_import_source.prompt_for_table("Select a table to import")]
+    elif not tables:
+        tables = [base_import_source.prompt_for_table("Select a table to import")]
 
     import_sources = []
     for table in tables:
@@ -253,11 +273,12 @@ def import_table(
     )
 
     rs = RepositoryStructure(repo)
-    _add_datasets_to_working_copy(
-        repo,
-        *[rs[s.dest_path] for s in import_sources],
-        replace_existing=replace_existing,
-    )
+    if do_checkout:
+        _add_datasets_to_working_copy(
+            repo,
+            *[rs[s.dest_path] for s in import_sources],
+            replace_existing=replace_existing,
+        )
 
 
 @click.command()
@@ -269,6 +290,13 @@ def import_table(
     "--import",
     "import_from",
     help='Import a database (all tables): "FORMAT:PATH" eg. "GPKG:my.gpkg"',
+)
+@click.option(
+    "--checkout/--no-checkout",
+    "do_checkout",
+    is_flag=True,
+    default=True,
+    help="Whether to immediately create a working copy with the initial import. Has no effect if --import is not set.",
 )
 @click.option(
     "--message",
@@ -284,7 +312,6 @@ def import_table(
 )
 @click.option(
     "--bare",
-    "--no-checkout/--checkout",
     is_flag=True,
     default=False,
     help='Whether the new repository should be "bare" and have no working copy',
@@ -292,7 +319,6 @@ def import_table(
 @click.option(
     "--workingcopy-path",
     "wc_path",
-    type=click.Path(dir_okay=False),
     help="Path where the working copy should be created. "
     "This should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA",
 )
@@ -309,6 +335,7 @@ def init(
     directory,
     repo_version,
     import_from,
+    do_checkout,
     bare,
     wc_path,
     max_delta_depth,
@@ -324,7 +351,8 @@ def init(
 
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
-    WorkingCopy.check_valid_path(wc_path, repo_path)
+    WorkingCopy.check_valid_creation_path(wc_path, repo_path)
+
     if not repo_path.exists():
         repo_path.mkdir(parents=True)
 
@@ -349,7 +377,8 @@ def init(
             max_delta_depth=max_delta_depth,
         )
         head_commit = repo.head.peel(pygit2.Commit)
-        checkout.reset_wc_if_needed(repo, head_commit)
+        if do_checkout and not bare:
+            checkout.reset_wc_if_needed(repo, head_commit)
 
     else:
         click.echo(

@@ -792,7 +792,7 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
-    r = cli_runner.invoke(["init", "--no-checkout", repo_path])
+    r = cli_runner.invoke(["init", "--bare", repo_path])
     assert r.exit_code == 0
 
     with data_archive("gpkg-points") as data:

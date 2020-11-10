@@ -21,6 +21,7 @@ from click.testing import CliRunner
 from sno.db_util import execute_insert_dict, changes_rowcount
 from sno.repository_version import DEFAULT_REPO_VERSION
 from sno.sno_repo import SnoRepo
+from sno.working_copy import WorkingCopy
 
 import apsw
 import pygit2
@@ -574,14 +575,16 @@ class TestHelpers:
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
         repo = SnoRepo(repo_path)
-        if "sno.workingcopy.path" in repo.config:
+        wc = WorkingCopy.get(repo, allow_invalid_state=True)
+        if wc:
             print(
                 f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}"
             )
-            working_copy = Path(repo.config["sno.workingcopy.path"])
-            if working_copy.exists():
-                working_copy.unlink()
+            wc.delete()
+
+        if "sno.workingcopy.path" in repo.config:
             del repo.config["sno.workingcopy.path"]
+        if "sno.workingcopy.version" in repo.config:
             del repo.config["sno.workingcopy.version"]
 
     @classmethod
@@ -908,13 +911,17 @@ def postgis_db():
 @pytest.fixture()
 def new_postgis_db_schema(request, postgis_db):
     @contextlib.contextmanager
-    def ctx():
+    def ctx(create=False):
         sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
         schema = f"sno_test_{sha}"
         with postgis_db.cursor() as c:
+            # Start by deleting in case it is left over from last test-run...
             c.execute(
                 SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
             )
+            # Actually create only if create=True, otherwise the test will create it
+            if create:
+                c.execute(SQL("CREATE SCHEMA {}").format(Identifier(schema)))
         try:
             url = urlsplit(os.environ["SNO_POSTGRES_URL"])
             url_path = url.path.rstrip("/") + "/" + schema
@@ -923,6 +930,7 @@ def new_postgis_db_schema(request, postgis_db):
             )
             yield new_schema_url, schema
         finally:
+            # Clean up - delete it again if it exists.
             with postgis_db.cursor() as c:
                 c.execute(
                     SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))

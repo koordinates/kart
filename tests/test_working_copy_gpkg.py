@@ -655,38 +655,41 @@ def test_geopackage_locking_edit(
 
 
 def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
-    with data_working_copy("points") as (repo_path, wc):
+    with data_working_copy("points") as (repo_path, _):
         repo = SnoRepo(repo_path)
 
         r = cli_runner.invoke(["create-workingcopy", "."])
-        assert r.exit_code == INVALID_ARGUMENT, r
+        assert r.exit_code == INVALID_ARGUMENT, r.stderr
 
         # relative path 1
-        new_path = Path("new-thingz.gpkg")
-        wc.rename(new_path)
-        assert new_path.exists()
-        r = cli_runner.invoke(["create-workingcopy", new_path])
-        assert r.exit_code == 0, r
-        wc = new_path
+        new_thingz = Path("new-thingz.gpkg")
+        assert not new_thingz.exists()
+        r = cli_runner.invoke(["create-workingcopy", new_thingz])
+        assert r.exit_code == 0, r.stderr
+        assert new_thingz.exists()
+        assert repo.config["sno.workingcopy.path"] == str(new_thingz)
 
-        assert repo.config["sno.workingcopy.path"] == str(new_path)
+        r = cli_runner.invoke(["create-workingcopy", new_thingz])
+        assert r.exit_code == 0, r.stderr
 
         # relative path 2
-        new_path = Path("other-thingz.gpkg")
-        assert not new_path.exists()
-        r = cli_runner.invoke(["create-workingcopy", Path("../points") / new_path])
-        assert r.exit_code == 0, r
-        wc = new_path
-
-        assert repo.config["sno.workingcopy.path"] == str(new_path)
+        other_thingz = Path("other-thingz.gpkg")
+        assert not other_thingz.exists()
+        r = cli_runner.invoke(["create-workingcopy", Path("../points") / other_thingz])
+        assert r.exit_code == 0, r.stderr
+        assert not new_thingz.exists()
+        assert other_thingz.exists()
+        assert repo.config["sno.workingcopy.path"] == str(other_thingz)
 
         # abs path
-        new_path = tmp_path / "thingz.gpkg"
-        assert not new_path.exists()
-        r = cli_runner.invoke(["create-workingcopy", new_path])
-        assert r.exit_code == 0, r
+        abs_thingz = tmp_path / "abs_thingz.gpkg"
+        assert not abs_thingz.exists()
+        r = cli_runner.invoke(["create-workingcopy", abs_thingz])
+        assert r.exit_code == 0, r.stderr
+        assert not other_thingz.exists()
+        assert abs_thingz.exists()
 
-        assert repo.config["sno.workingcopy.path"] == str(new_path)
+        assert repo.config["sno.workingcopy.path"] == str(abs_thingz)
 
 
 @pytest.mark.parametrize(

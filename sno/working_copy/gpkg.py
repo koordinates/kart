@@ -13,10 +13,6 @@ from osgeo import gdal
 from .base import WorkingCopy
 from sno import crs_util, gpkg, gpkg_adapter
 from sno.db_util import changes_rowcount
-from sno.exceptions import (
-    NotFound,
-    NO_WORKING_COPY,
-)
 from sno.filter_util import UNFILTERED
 from sno.geometry import Geometry, normalise_gpkg_geom
 from sno.schema import Schema
@@ -63,12 +59,6 @@ class WorkingCopy_GPKG(WorkingCopy):
             suggested_path = f"{os.path.splitext(str(path))[0]}.gpkg"
             raise click.UsageError(
                 f"Invalid GPKG path - expected .gpkg suffix, eg {suggested_path}"
-            )
-
-        path = Path(path)
-        if path.is_dir():
-            raise click.UsageError(
-                f"Invalid GPKG path - {path} is a directory, expected a file"
             )
 
     @property
@@ -167,7 +157,7 @@ class WorkingCopy_GPKG(WorkingCopy):
 
         return cols, pk_field
 
-    def delete(self):
+    def delete(self, keep_container_if_possible=False):
         """ Delete the working copy files """
         self.full_path.unlink()
 
@@ -178,9 +168,48 @@ class WorkingCopy_GPKG(WorkingCopy):
             f.unlink()
 
     def is_created(self):
+        """
+        Returns true if the GPKG file referred to by this working copy exists.
+        Note that it might not be initialised as a working copy - see self.is_initialised.
+        """
         return self.full_path.is_file()
 
-    def create(self):
+    def is_initialised(self):
+        """
+        Returns true if the GPKG working copy is initialised -
+        the GPKG file exists and has the necessary gpkg_sno tables - state and tracking.
+        """
+        if not self.is_created():
+            return False
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(
+                f"""
+                SELECT count(*) FROM sqlite_master
+                WHERE type='table' AND name IN ({self.STATE_TABLE}, {self.TRACKING_TABLE});
+                """
+            )
+            return dbcur.fetchone()[0] == 2
+
+    def has_data(self):
+        """
+        Returns true if the GPKG working copy seems to have user-created content already.
+        """
+        if not self.is_created():
+            return False
+        with self.session() as db:
+            dbcur = db.cursor()
+            dbcur.execute(
+                f"""
+                SELECT count(*) FROM sqlite_master
+                WHERE type='table'
+                    AND name NOT IN ({self.STATE_TABLE}, {self.TRACKING_TABLE})
+                    AND NAME NOT LIKE 'gpkg%';
+                """
+            )
+            return dbcur.fetchone()[0] > 0
+
+    def create_and_initialise(self):
         # GDAL: Create GeoPackage
         # GDAL: Add metadata/etc
         gdal_driver = gdal.GetDriverByName("GPKG")
@@ -484,12 +513,9 @@ class WorkingCopy_GPKG(WorkingCopy):
             )
             row = dbcur.fetchone()
             if not row:
-                L.debug(f"No tree entry in state_table for {table_name}")
-                # This happens if you start trying to use the working copy when it is half written.
-                raise NotFound(
-                    f"Working copy at {self.path} is not fully initialised",
-                    NO_WORKING_COPY,
-                )
+                # It's okay to not have anything in the tree table - it might just mean there are no commits yet.
+                # It might also mean that the working copy is not yet initialised - see WorkingCopy.get
+                return None
 
             wc_tree_id = row[0]
             return wc_tree_id

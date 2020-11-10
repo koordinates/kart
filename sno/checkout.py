@@ -2,6 +2,7 @@ import click
 import pygit2
 
 from .exceptions import (
+    InvalidOperation,
     NotFound,
     NO_BRANCH,
     NO_COMMIT,
@@ -20,24 +21,26 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
 
 def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     """Resets the working copy to the target if it does not already match, or if discard_changes is True."""
-    wc = WorkingCopy.get(repo, init_if_missing=True)
-    if not wc:
+    working_copy = WorkingCopy.get(repo, allow_uncreated=True)
+    if working_copy is None:
         click.echo(
             "(Bare sno repository - to create a working copy, use `sno create-workingcopy`)"
         )
         return
 
-    if not wc.is_created():
-        click.echo(f"Creating working copy at {wc.path} ...")
-        wc.create()
+    if not working_copy.is_initialised():
+        click.echo(f"Creating working copy at {working_copy.path} ...")
+        working_copy.create_and_initialise()
         datasets = list(RepositoryStructure(repo))
-        wc.write_full(target_tree_or_commit, *datasets, safe=False)
+        working_copy.write_full(target_tree_or_commit, *datasets, safe=False)
 
-    db_tree_matches = wc.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
+    db_tree_matches = (
+        working_copy.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
+    )
 
     if discard_changes or not db_tree_matches:
-        click.echo(f"Updating {wc.path} ...")
-        wc.reset(target_tree_or_commit, force=discard_changes)
+        click.echo(f"Updating {working_copy.path} ...")
+        working_copy.reset(target_tree_or_commit, force=discard_changes)
 
 
 @click.command()
@@ -118,6 +121,7 @@ def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
 
         head_ref = new_branch.name
 
+    WorkingCopy.ensure_config_exists(repo)
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
@@ -319,23 +323,44 @@ def create_workingcopy(ctx, discard_changes, wc_path):
     Create a new working copy - if one already exists it will be deleted.
     Usage: sno create-workingcopy [PATH]
     PATH should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA
-    If no path is supplied, a GPKG file with a default name will be created inside the sno repository.
+    If no path is supplied, the path from the repo config at "sno.workingcopy.path" will be used.
+    If no path is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
     repo = ctx.obj.repo
-    if not discard_changes:
-        try:
-            ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
-        except NotFound:
-            # Current working copy doesn't exist or is incomplete. Abandon it.
-            pass
+    if repo.head_is_unborn:
+        raise InvalidOperation(
+            "Can't create a working copy for an empty repository — first import some data with `sno import`"
+        )
 
-    WorkingCopy.check_valid_path(wc_path, repo.workdir_path)
+    old_wc = WorkingCopy.get(repo, allow_invalid_state=True)
+    old_wc_path = old_wc.path if old_wc else None
 
-    wc = WorkingCopy.get(repo)
-    if wc:
-        click.echo(f"Deleting working copy at {wc.path} ...")
-        wc.delete()
+    if not discard_changes and old_wc and old_wc.is_initialised():
+        old_wc.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
+
+    if not wc_path and WorkingCopy.SNO_WORKINGCOPY_PATH in repo.config:
+        wc_path = repo.config[WorkingCopy.SNO_WORKINGCOPY_PATH]
+    if not wc_path:
+        wc_path = WorkingCopy.default_path(repo)
+
+    if wc_path != old_wc_path:
+        WorkingCopy.check_valid_creation_path(wc_path, repo.workdir_path)
+
+    # Finished sanity checks - start work:
+    if old_wc and wc_path != old_wc_path:
+        click.echo(f"Deleting working copy at {old_wc.path} ...")
+        old_wc.delete()
 
     WorkingCopy.write_config(repo, wc_path)
+
+    new_wc = WorkingCopy.get(repo, allow_uncreated=True, allow_invalid_state=True)
+
+    # Delete anything the already exists in the new target location also, and start fresh.
+    if new_wc.is_created():
+        click.echo(f"Deleting working copy at {new_wc.path} ...")
+        # There's a possibility we lack permission to recreate the working copy container (eg a postgis schema),
+        # so if it already exists, we keep that part.
+        new_wc.delete(keep_container_if_possible=True)
+
     head_commit = repo.head.peel(pygit2.Commit)
     reset_wc_if_needed(repo, head_commit)
