@@ -318,7 +318,7 @@ class WorkingCopy_GPKG(WorkingCopy):
 
             sql_insert_dict(dbcur, SQLCommand.INSERT, "gpkg_metadata_reference", params)
 
-    def _wc_meta_items(self, dataset):
+    def meta_items(self, dataset):
         """
         Extract all the metadata of this GPKG and convert to dataset V2 format.
         Note that the extracted schema will not be aligned to any existing schema

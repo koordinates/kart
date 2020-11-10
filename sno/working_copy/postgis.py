@@ -335,12 +335,19 @@ class WorkingCopy_Postgis(WorkingCopy):
         with self.session() as db:
             dbcur = db.cursor()
             for row in spatial_refs:
-                # We only write a CRS if none is there for the given ID - the CRS of a given ID shouldn't change.
+                # We do not automatically overwrite a CRS if it seems likely to be one
+                # of the Postgis builtin definitions - Postgis has lots of EPSG and ESRI
+                # definitions built-in, plus the 900913 (GOOGLE) definition.
+                # See POSTGIS_WC.md for help on working with CRS definitions in a Postgis WC.
+                # FIXME: write POSTGIS_WC.md
                 dbcur.execute(
                     SQL(
                         """
-                        INSERT INTO public.spatial_ref_sys ({}) VALUES ({})
-                        ON CONFLICT (srid) DO NOTHING;
+                        INSERT INTO public.spatial_ref_sys AS SRS ({}) VALUES ({})
+                        ON CONFLICT (srid) DO UPDATE
+                            SET (auth_name, auth_srid, srtext, proj4text)
+                            = (EXCLUDED.auth_name, EXCLUDED.auth_srid, EXCLUDED.srtext, EXCLUDED.proj4text)
+                            WHERE SRS.auth_name NOT IN ('EPSG', 'ESRI') AND SRS.srid <> 900913;
                         """
                     ).format(
                         SQL(",").join([Identifier(k) for k in row]),
@@ -596,12 +603,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                     (table,),
                 )
 
-    def _ds_meta_items(self, dataset):
-        for key, value in dataset.meta_items():
-            if key in ("title", "schema.json") or key.startswith("crs/"):
-                yield key, value
-
-    def _wc_meta_items(self, dataset):
+    def meta_items(self, dataset):
         with self.session() as db:
             dbcur = db.cursor()
             dbcur.execute(
@@ -655,6 +657,30 @@ class WorkingCopy_Postgis(WorkingCopy):
                 wkt = crs_info["srtext"]
                 id_str = crs_util.get_identifier_str(wkt)
                 yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
+
+    _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json")
+
+    def _remove_hidden_meta_diffs(self, ds_meta_items, wc_meta_items):
+        super()._remove_hidden_meta_diffs(ds_meta_items, wc_meta_items)
+
+        # Nowhere to put these in postgis WC
+        for key in self._UNSUPPORTED_META_ITEMS:
+            if key in ds_meta_items:
+                del ds_meta_items[key]
+
+        for key in ds_meta_items.keys() & wc_meta_items.keys():
+            if not key.startswith("crs/"):
+                continue
+            old_is_standard = crs_util.has_standard_authority(ds_meta_items[key])
+            new_is_standard = crs_util.has_standard_authority(wc_meta_items[key])
+            if old_is_standard and new_is_standard:
+                # The WC and the dataset have different definitions of a standard eg EPSG:2193.
+                # We hide this diff because - hopefully - they are both EPSG:2193 (which never changes)
+                # but have unimportant minor differences, and we don't want to update the Postgis builtin version
+                # with the dataset version, or update the dataset version from the Postgis builtin.
+                del ds_meta_items[key]
+                del wc_meta_items[key]
+            # If either definition is custom, we keep the diff, since it could be important.
 
     def _db_geom_to_gpkg_geom(self, g):
         # This is already handled by register_type
