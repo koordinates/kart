@@ -253,6 +253,9 @@ class WorkingCopy:
             raise WorkingCopyDirty()
         return result
 
+    # Subclasses should override if there are certain types they cannot represent perfectly.
+    _APPROXIMATED_TYPES = None
+
     def _remove_hidden_meta_diffs(self, ds_meta_items, wc_meta_items):
         """
         Remove any meta diffs that can't or shouldn't be committed, and so shouldn't be shown to the user.
@@ -261,9 +264,9 @@ class WorkingCopy:
         can't store the dataset description, then that should be removed from the diff.
         """
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
-            Schema.align_schema_cols(
-                ds_meta_items["schema.json"], wc_meta_items["schema.json"]
-            )
+            ds_schema = ds_meta_items["schema.json"]
+            wc_schema = wc_meta_items["schema.json"]
+            Schema.align_schema_cols(ds_schema, wc_schema, self._APPROXIMATED_TYPES)
 
     def meta_items(self, dataset):
         """Returns all the meta items for the given dataset from the working copy DB."""

@@ -1,6 +1,5 @@
 import json
 import shutil
-import subprocess
 
 import pytest
 import pygit2
@@ -412,7 +411,7 @@ def test_import_replace_existing_with_column_renames(
 def test_init_import_table_ogr_types(
     data_archive_readonly, tmp_path, cli_runner, repo_version
 ):
-    with data_archive_readonly("types") as data:
+    with data_archive_readonly("gpkg-types") as data:
         repo_path = tmp_path / "repo"
         r = cli_runner.invoke(
             [

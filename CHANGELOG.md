@@ -13,6 +13,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Patches that create or delete datasets are now supported in Datasets V2 [#239](https://github.com/koordinates/sno/issues/239)
  * `apply`, `commit` and `merge` commands now optimise repositories after committing, to avoid poor repo performance. [#250](https://github.com/koordinates/sno/issues/250)
  * `commit` now checks that the diff to be committed matches the schema, and rejects diffs that do not - this is possible in working copy formats that have relatively lax type enforcement, ie GPKG [#300](https://github.com/koordinates/sno/pull/300)
+ *  Added GPKG support for sno types that GPKG doesn't support - they are approximated as strings. [#304](https://github.com/koordinates/sno/pull/304)
+ *  `schema.json` no longer stores attributes that are null - a missing attribute has the same meaning as that attribute being present and null. [#304](https://github.com/koordinates/sno/pull/304)
  * `data ls` now accepts an optional ref argument
  * `meta get` now accepts a `--ref=REF` option
  * `clone` now accepts a `--branch` option to clone a specific branch.

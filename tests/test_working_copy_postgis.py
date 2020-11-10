@@ -4,8 +4,9 @@ from psycopg2.sql import Identifier, SQL
 import pygit2
 
 from sno.sno_repo import SnoRepo
-from sno.working_copy import WorkingCopy
+from sno.working_copy import WorkingCopy, postgis_adapter
 from sno.structure import RepositoryStructure
+from test_working_copy import compute_approximated_types
 
 
 H = pytest.helpers.helpers()
@@ -146,7 +147,7 @@ def test_commit_edits(
             assert repo.head.peel(pygit2.Commit).hex == orig_head
 
 
-def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema):
+def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
     with data_archive("polygons2") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
@@ -191,7 +192,7 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
             diff = r.stdout.splitlines()
             assert "--- nz_waca_adjustments:meta:crs/EPSG:4167.wkt" in diff
             assert "+++ nz_waca_adjustments:meta:crs/EPSG:3857.wkt" in diff
-            assert diff[-51:] == [
+            assert diff[-46:] == [
                 "--- nz_waca_adjustments:meta:schema.json",
                 "+++ nz_waca_adjustments:meta:schema.json",
                 "  [",
@@ -206,7 +207,6 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
                 '      "id": "c1d4dea1-c0ad-0255-7857-b5695e3ba2e9",',
                 '      "name": "geom",',
                 '      "dataType": "geometry",',
-                '      "primaryKeyIndex": null,',
                 '      "geometryType": "MULTIPOLYGON",',
                 '-     "geometryCRS": "EPSG:4167",',
                 '+     "geometryCRS": "EPSG:3857",',
@@ -214,28 +214,24 @@ def test_edit_schema(data_archive, geopackage, cli_runner, new_postgis_db_schema
                 "    {",
                 '      "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",',
                 '      "name": "date_adjusted",',
-                '      "dataType": "timestamp",',
-                '      "primaryKeyIndex": null',
+                '      "dataType": "timestamp"',
                 "    },",
                 "-   {",
                 '-     "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",',
                 '-     "name": "survey_reference",',
                 '-     "dataType": "text",',
-                '-     "primaryKeyIndex": null,',
                 '-     "length": 50',
                 "-   },",
                 "    {",
                 '      "id": "13dc4918-974e-978f-05ce-3b4321077c50",',
                 '      "name": "adjusted_nodes",',
                 '      "dataType": "integer",',
-                '      "primaryKeyIndex": null,',
                 '      "size": 32',
                 "    },",
                 "+   {",
                 '+     "id": "f14e9f9b-e47a-d309-6eff-fe498e0ee443",',
                 '+     "name": "colour",',
                 '+     "dataType": "text",',
-                '+     "primaryKeyIndex": null,',
                 '+     "length": 32',
                 "+   },",
                 "  ]",
@@ -275,7 +271,7 @@ class SucceedAndRollback(Exception):
     pass
 
 
-def test_edit_crs(data_archive, geopackage, cli_runner, new_postgis_db_schema):
+def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
     with data_archive("points2") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
@@ -345,3 +341,24 @@ def test_edit_crs(data_archive, geopackage, cli_runner, new_postgis_db_schema):
                     )
 
                     raise SucceedAndRollback()
+
+
+def test_approximated_types():
+    assert postgis_adapter.APPROXIMATED_TYPES == compute_approximated_types(
+        postgis_adapter.V2_TYPE_TO_PG_TYPE, postgis_adapter.PG_TYPE_TO_V2_TYPE
+    )
+
+
+def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
+    with data_archive("types2") as repo_path:
+        repo = SnoRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            repo.config["sno.workingcopy.path"] = postgres_url
+            r = cli_runner.invoke(["checkout"])
+
+            # If type-approximation roundtrip code isn't working,
+            # we would get spurious diffs on types that GPKG doesn't support.
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stdout

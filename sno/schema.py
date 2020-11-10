@@ -152,22 +152,21 @@ class ColumnSchema(
     @classmethod
     def from_dict(cls, d):
         d = d.copy()
-        return cls(
-            d.pop("id"),
-            d.pop("name"),
-            d.pop("dataType"),
-            d.pop("primaryKeyIndex"),
-            **d,
-        )
+        id_ = d.pop("id")
+        name = d.pop("name")
+        data_type = d.pop("dataType")
+        pk_index = d.pop("primaryKeyIndex", None)
+        extra_type_info = dict((k, v) for k, v in d.items() if v is not None)
+        return cls(id_, name, data_type, pk_index, **extra_type_info)
 
     def to_dict(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "dataType": self.data_type,
-            "primaryKeyIndex": self.pk_index,
-            **self.extra_type_info,
-        }
+        result = {"id": self.id, "name": self.name, "dataType": self.data_type}
+        if self.pk_index is not None:
+            result["primaryKeyIndex"] = self.pk_index
+        for key, value in self.extra_type_info.items():
+            if value is not None:
+                result[key] = value
+        return result
 
     def __eq__(self, other):
         if not isinstance(other, ColumnSchema):
@@ -239,6 +238,10 @@ class Schema:
     def from_column_dicts(cls, column_dicts):
         columns = [ColumnSchema.from_dict(d) for d in column_dicts]
         return cls(columns)
+
+    @classmethod
+    def normalise_column_dicts(cls, column_dicts):
+        return Schema.from_column_dicts(column_dicts).to_column_dicts()
 
     @classmethod
     def loads(cls, data):
@@ -346,12 +349,22 @@ class Schema:
                 pk_values[i] = int(pk_values[i])
         return tuple(pk_values)
 
-    def align_to_self(self, new_schema):
+    def align_to_self(self, new_schema, approximated_types=None):
         """
         Returns a new schema the same as the one given, except that some column IDs might be changed to match those in
         self. Column IDs are copied from self onto the resulting schema if the columns in the resulting schema
         are the "same" as columns in the previous schema. Uses a heuristic - columns are the same if they have the
         same name + type (handles reordering), or, if they have the same position and type (handles renames).
+
+        approximated_types - if the new_schema has been roundtripped through a database that doesn't support all sno
+            types, then some of them will have had to be approximated. Aligning the schema also restores them to their
+            original type if they had been approximated as close as possible. approximated_types should be a dict
+            mapping type to approximated type, sometimes with an extra sub-dict for size subtypes eg:
+            {
+                "timestamp": "string",                                  # timestamp is approximated as text
+                "integer": {8: ("integer", 32), 16: ("integer", 32)}    # int8, int16 are approximated as int32
+            }
+
         """
         # TODO - could prompt the user to help with more complex schema changes.
         old_cols = self.to_column_dicts()
@@ -360,8 +373,8 @@ class Schema:
         return Schema.from_column_dicts(new_cols)
 
     @classmethod
-    def align_schema_cols(cls, old_cols, new_cols):
-        """Same as align_to_self, but works on lists of column dicts, instead of Schema objects."""
+    def align_schema_cols(cls, old_cols, new_cols, approximated_types=None):
+        """Same as align_to_self, but mutates new_cols list, instead of returning a new Schema object."""
         for old_col in old_cols:
             old_col["done"] = False
         for new_col in new_cols:
@@ -370,11 +383,13 @@ class Schema:
         # Align columns by name + type - handles reordering.
         old_cols_by_name = {c["name"]: c for c in old_cols}
         for new_col in new_cols:
-            cls._try_align(old_cols_by_name.get(new_col["name"]), new_col)
+            cls._try_align(
+                old_cols_by_name.get(new_col["name"]), new_col, approximated_types
+            )
 
         # Align columns by position + type - handles renames.
         for old_col, new_col in zip(old_cols, new_cols):
-            cls._try_align(old_col, new_col)
+            cls._try_align(old_col, new_col, approximated_types)
 
         for old_col in old_cols:
             del old_col["done"]
@@ -383,25 +398,37 @@ class Schema:
         return new_cols
 
     @classmethod
-    def _try_align(cls, old_col, new_col):
+    def _try_align(cls, old_col, new_col, approximated_types=None):
         if old_col is None or new_col is None:
             return False
         if old_col["done"] or new_col["done"]:
             return False
-        if old_col["dataType"] != new_col["dataType"]:
+        if old_col.get("primaryKeyIndex") != new_col.get("primaryKeyIndex"):
             return False
-        if old_col["primaryKeyIndex"] != new_col["primaryKeyIndex"]:
-            return False
+
+        old_type, new_type = old_col["dataType"], new_col["dataType"]
+        if old_type != new_type:
+            if approximated_types and approximated_types[old_type] == new_type:
+                # new_col's type was the best approximation we could manage of old_col's type.
+                new_col["dataType"] = old_col["dataType"]
+            else:
+                return False
+
+        # The two columns are similar enough that we can align their IDs.
+
         new_col["id"] = old_col["id"]
 
-        # We can't roundtrip size properly for GPKG primary keys since they have to be of type INTEGER.
-        if (
-            old_col["primaryKeyIndex"] is not None
-            and "size" in old_col
-            and "size" in new_col
-            and old_col["size"] != new_col["size"]
-        ):
-            new_col["size"] = old_col["size"]
+        old_size, new_size = old_col.get("size"), new_col.get("size")
+        if old_size != new_size:
+            data_type = old_type
+            approx_info = approximated_types and approximated_types.get(data_type)
+
+            if old_col.get("primaryKeyIndex") is not None and new_size == 64:
+                # We can't roundtrip size properly for GPKG primary keys since they have to be of type INTEGER.
+                new_col["size"] = old_col.get("size")
+            elif approx_info and approx_info.get(old_size) == (data_type, new_size):
+                # new_col's size was the best approximation we could manage of old_col's size.
+                new_col["size"] = old_col.get("size")
 
         old_col["done"] = True
         new_col["done"] = True
@@ -453,18 +480,20 @@ class Schema:
     def diff_type_counts(self, new_schema):
         return {k: len(v) for k, v in self.diff_types(new_schema).items()}
 
-    EQUIVALENT_PYTHON_TYPES = {
+    # These are the types that are stored in datasets.
+    # Different types might be returned from the working copy DB driver, in which case, they must be adapted.
+    EQUIVALENT_MSGPACK_TYPES = {
         "boolean": (bool,),
         "blob": (bytes,),
-        "date": (str,),
+        "date": (str,),  # might be datetime.date from DB
         "float": (float, int),
         "geometry": (Geometry,),
         "integer": (int,),
-        "interval": (str,),
-        "numeric": (str,),
+        "interval": (str,),  # might be datetime.timedelta from DB
+        "numeric": (str,),  # might be decimal.Decimal from DB
         "text": (str,),
-        "time": (str,),
-        "timestamp": (str,),
+        "time": (str,),  # might be datetime.time from DB
+        "timestamp": (str,),  # might be datetime.datetime from DB
     }
 
     def validate_feature(self, feature, col_violations=None):
@@ -504,7 +533,7 @@ class Schema:
             return None
 
         col_type = col.data_type
-        if type(value) not in self.EQUIVALENT_PYTHON_TYPES[col_type]:
+        if type(value) not in self.EQUIVALENT_MSGPACK_TYPES[col_type]:
             return f"In column '{col.name}' value {repr(value)} doesn't match schema type {col_type}"
         elif col_type == "integer" and "size" in col.extra_type_info:
             size = col.extra_type_info["size"]

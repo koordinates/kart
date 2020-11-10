@@ -6,7 +6,7 @@ from sno import crs_util
 from sno.schema import Schema, ColumnSchema
 
 
-_V2_TYPE_TO_PG_TYPE = {
+V2_TYPE_TO_PG_TYPE = {
     "boolean": "boolean",
     "blob": "bytea",
     "date": "date",
@@ -14,6 +14,7 @@ _V2_TYPE_TO_PG_TYPE = {
     "geometry": "geometry",
     "integer": {
         0: "integer",
+        8: "smallint",  # Approximated as smallint (int16)
         16: "smallint",
         32: "integer",
         64: "bigint",
@@ -27,7 +28,7 @@ _V2_TYPE_TO_PG_TYPE = {
     # Code for preserving these flavours in datasets and working copies needs more work.
 }
 
-_PG_TYPE_TO_V2_TYPE = {
+PG_TYPE_TO_V2_TYPE = {
     "boolean": "boolean",
     "smallint": ("integer", 16),
     "integer": ("integer", 32),
@@ -45,6 +46,9 @@ _PG_TYPE_TO_V2_TYPE = {
     "timestamp": "timestamp",
     "varchar": "text",
 }
+
+# Types that can't be roundtrip perfectly in Postgis, and what they end up as.
+APPROXIMATED_TYPES = {"integer": {8: ("integer", 16)}}
 
 
 def v2_schema_to_postgis_spec(schema, v2_obj):
@@ -70,7 +74,7 @@ def v2_type_to_pg_type(column_schema, v2_obj):
     v2_type = column_schema.data_type
     extra_type_info = column_schema.extra_type_info
 
-    pg_type_info = _V2_TYPE_TO_PG_TYPE.get(v2_type)
+    pg_type_info = V2_TYPE_TO_PG_TYPE.get(v2_type)
     if pg_type_info is None:
         raise ValueError(f"Unrecognised data type: {v2_type}")
 
@@ -147,9 +151,9 @@ def _postgis_to_column_schema(pg_col_info, pg_spatial_ref_sys, id_salt):
 
 
 def _pg_type_to_v2_type(pg_col_info, pg_spatial_ref_sys):
-    v2_type_info = _PG_TYPE_TO_V2_TYPE.get(pg_col_info["data_type"])
+    v2_type_info = PG_TYPE_TO_V2_TYPE.get(pg_col_info["data_type"])
     if v2_type_info is None:
-        v2_type_info = _PG_TYPE_TO_V2_TYPE.get(pg_col_info["udt_name"])
+        v2_type_info = PG_TYPE_TO_V2_TYPE.get(pg_col_info["udt_name"])
 
     if isinstance(v2_type_info, tuple):
         v2_type = v2_type_info[0]

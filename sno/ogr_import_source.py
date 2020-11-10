@@ -13,6 +13,7 @@ from . import crs_util, gpkg, gpkg_adapter
 from .exceptions import (
     InvalidOperation,
     NotFound,
+    NotYetImplemented,
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
@@ -43,38 +44,21 @@ class OgrImportSource(ImportSource):
     Imports from an OGR source, currently from a whitelist of formats.
     """
 
-    OGR_TYPE_TO_SQLITE_TYPE = {
-        # NOTE: we don't handle OGR's *List (array) fields at all.
-        # If you write them to GPKG using OGR, you end up with TEXT.
-        # We also don't handle  ogr's "Time" fields, because they end up as TEXT in GPKG,
-        # which we can't roundtrip. Tackle when we get someone actually using those types...
-        "Integer": "MEDIUMINT",
-        "Integer64": "INTEGER",
-        "Real": "REAL",
-        "String": "TEXT",
-        "Binary": "BLOB",
-        "Date": "DATE",
-        "DateTime": "DATETIME",
-    }
-    OGR_SUBTYPE_TO_SQLITE_TYPE = {
-        ogr.OFSTBoolean: "BOOLEAN",
-        ogr.OFSTInt16: "SMALLINT",
-        ogr.OFSTFloat32: "FLOAT",
-    }
-
+    # NOTE: We don't support *List fields (eg IntegerList).
     OGR_TYPE_TO_V2_SCHEMA_TYPE = {
-        "Integer": ("integer", {"size": 32}),
-        "Integer64": ("integer", {"size": 64}),
-        "Real": ("float", {"size": 64}),
-        "String": ("text", {}),
-        "Binary": ("blob", {}),
-        "Date": ("date", {}),
-        "DateTime": ("timestamp", {}),
+        "Integer": ("integer", 32),
+        "Integer64": ("integer", 64),
+        "Real": ("float", 64),
+        "String": "text",
+        "Binary": "blob",
+        "Date": "date",
+        "DateTime": "timestamp",
+        "Time": "time",
     }
     OGR_SUBTYPE_TO_V2_SCHEMA_TYPE = {
-        ogr.OFSTBoolean: ("boolean", {}),
-        ogr.OFSTInt16: ("integer", {"size": 16}),
-        ogr.OFSTFloat32: ("float", {"size": 32}),
+        ogr.OFSTBoolean: "boolean",
+        ogr.OFSTInt16: ("integer", 16),
+        ogr.OFSTFloat32: ("float", 32),
     }
 
     @classmethod
@@ -490,11 +474,24 @@ class OgrImportSource(ImportSource):
         ogr_type = fd.GetTypeName()
         ogr_subtype = fd.GetSubType()
         if ogr_subtype == ogr.OFSTNone:
-            data_type, extra_type_info = self.OGR_TYPE_TO_V2_SCHEMA_TYPE[ogr_type]
+            data_type_info = self.OGR_TYPE_TO_V2_SCHEMA_TYPE.get(ogr_type)
+            if data_type_info is None:
+                raise NotYetImplemented(
+                    f"Unsupported column type for import: OGR type={ogr_type}"
+                )
         else:
-            data_type, extra_type_info = self.OGR_SUBTYPE_TO_V2_SCHEMA_TYPE[ogr_subtype]
+            data_type_info = self.OGR_SUBTYPE_TO_V2_SCHEMA_TYPE.get(ogr_subtype)
+            if data_type_info is None:
+                raise NotYetImplemented(
+                    f"Unsupported column type for import: OGR subtype={ogr_subtype}"
+                )
 
-        extra_type_info = extra_type_info.copy()
+        if isinstance(data_type_info, tuple):
+            data_type, size = data_type_info
+            extra_type_info = {"size": size}
+        elif isinstance(data_type_info, str):
+            data_type = data_type_info
+            extra_type_info = {}
 
         if data_type in ("TEXT", "BLOB"):
             width = fd.GetWidth()

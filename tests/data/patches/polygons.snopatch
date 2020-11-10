@@ -28,28 +28,24 @@
               "id": "c1d4dea1-c0ad-0255-7857-b5695e3ba2e9",
               "name": "geom",
               "dataType": "geometry",
-              "primaryKeyIndex": null,
               "geometryType": "MULTIPOLYGON",
               "geometryCRS": "EPSG:4167"
             },
             {
               "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",
               "name": "date_adjusted",
-              "dataType": "timestamp",
-              "primaryKeyIndex": null
+              "dataType": "timestamp"
             },
             {
               "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",
               "name": "survey_reference",
               "dataType": "text",
-              "primaryKeyIndex": null,
               "length": 50
             },
             {
               "id": "13dc4918-974e-978f-05ce-3b4321077c50",
               "name": "adjusted_nodes",
               "dataType": "integer",
-              "primaryKeyIndex": null,
               "size": 32
             }
           ]
