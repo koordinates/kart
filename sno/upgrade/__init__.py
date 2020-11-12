@@ -201,7 +201,9 @@ def _upgrade_commit(
 @click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
 def upgrade_to_tidy(source):
     """
-    Upgrade in-place a sno repository that is "old+bare" to be "new+tidy".
+    Upgrade in-place a sno repository that is bare-style to be tidy-style. See sno_repo.py
+    To be used on sno-repo's that are not actually intended to be bare, but are "bare-style"
+    because they were created using Sno 0.5 or less, and that was all Sno supported.
     Doesn't upgrade the repository version, or change the contents at all.
 
     Usage:
@@ -216,9 +218,9 @@ def upgrade_to_tidy(source):
             f"'{source}': not an existing sno repository", param_hint="SOURCE"
         )
 
-    if source_repo.is_new_tidy_repo():
+    if source_repo.is_tidy_style_sno_repo():
         raise click.InvalidOperation(
-            "Cannot upgrade in-place - source repo is already new+tidy"
+            "Cannot upgrade in-place - source repo is already tidy-style"
         )
 
     repo_version = source_repo.version

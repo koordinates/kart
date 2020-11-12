@@ -103,7 +103,7 @@ def test_upgrade_to_tidy(archive, layer, data_archive, cli_runner, chdir):
         )
 
         repo = SnoRepo(source_path)
-        assert repo.is_new_tidy_repo()
+        assert repo.is_tidy_style_sno_repo()
 
         with chdir(source_path):
             r = cli_runner.invoke(["log"])

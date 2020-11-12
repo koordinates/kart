@@ -79,12 +79,28 @@ class LockedGitIndex:
 class SnoRepo(pygit2.Repository):
     """
     A valid pygit2.Repository, since all sno repos are also git repos - but with some added functionality.
-    Ensures the git directory structure is one of the two supported by sno - "old + bare" or "new + tidy".
-    Prevents worktree-related git commands from working by using a "locked git index".
+    Ensures the git directory structure is one of the two styles supported by sno - "bare-style" or "tidy-style".
+    For tidy-style, prevents worktree-related git commands from working by using a "locked git index".
     Helps set up sno specific config, and adds support for pathlib Paths.
+
+    The two styles of Sno repos:
+    Originally, all Sno repos were implemented as bare git repositorys. Some had GPKG working copies, some did not.
+    Since they were bare git repositories, all the git internals were immediately visible inside the root directory -
+    right alongside the GPKG. For this reason, they were kind of "untidy".
+
+    Eventually, this style of repo was named a "bare-style" Sno repo. "Bare-style" Sno repo's are always implemented
+    as bare git repositories, but they may or may not have a working copy, so they may or may not be actually "bare".
+
+    A new style of sno repo was added - a "tidy-style" Sno repo. This type of Sno repo is implemented as a non-bare
+    git repository, so the git internals are hidden in a ".sno" subfolder, leaving the root folder mostly empty as
+    a place to put a GPKG file or similar. If a "tidy-style" Sno repo were to be reconfigured, it *could* have its
+    working copy emoved and so be made bare. But going forward, "bare-style" Sno repos are supposed to be used for
+    actual bare Sno repos, and "tidy-style" are supposed to be used for Sno repos with a working copy.
+
+    Note: this is not enforced, especially since all legacy "bare-style" sno repos violate this assumption.
     """
 
-    def __init__(self, root_path):
+    def __init__(self, root_path, *, validate=True):
         if isinstance(root_path, Path):
             root_path = str(root_path.resolve())
 
@@ -94,13 +110,14 @@ class SnoRepo(pygit2.Repository):
             raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
 
         self.gitdir_path = Path(self.path).resolve()
-        if not self.is_old_bare_repo() and not self.is_new_tidy_repo():
-            raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
 
-        if self.is_new_tidy_repo():
+        if self.is_tidy_style_sno_repo():
             self.workdir_path = self.gitdir_path.parent.resolve()
         else:
             self.workdir_path = self.gitdir_path
+
+        if validate:
+            self.validate_sno_repo_style()
 
     @classmethod
     def init_repository(cls, repo_root_path, repo_version, wc_path=None, bare=False):
@@ -121,15 +138,29 @@ class SnoRepo(pygit2.Repository):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
 
-        dot_sno_path = repo_root_path / ".sno"
-        dot_init_path = repo_root_path / ".init"
+        if bare:
+            # Create bare-style repo:
+            sno_repo = cls._create_with_git_command(
+                ["git", "init", "--bare", str(repo_root_path)],
+                gitdir_path=repo_root_path,
+            )
+        else:
+            # Create tidy-style repo:
+            dot_sno_path = repo_root_path / ".sno"
+            dot_init_path = repo_root_path / ".init"
 
-        sno_repo = cls._create_with_git_command(
-            ["git", "init", f"--separate-git-dir={dot_sno_path}", str(dot_init_path)],
-            gitdir_path=dot_sno_path,
-            temp_workdir_path=dot_init_path,
-        )
-        sno_repo.lock_git_index()
+            sno_repo = cls._create_with_git_command(
+                [
+                    "git",
+                    "init",
+                    f"--separate-git-dir={dot_sno_path}",
+                    str(dot_init_path),
+                ],
+                gitdir_path=dot_sno_path,
+                temp_workdir_path=dot_init_path,
+            )
+            sno_repo.lock_git_index()
+
         sno_repo.write_config(repo_version, wc_path, bare)
         sno_repo.activate()
         return sno_repo
@@ -141,23 +172,38 @@ class SnoRepo(pygit2.Repository):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
 
-        dot_sno_path = repo_root_path / ".sno"
-        dot_clone_path = repo_root_path / ".clone"
+        if bare:
+            sno_repo = cls._create_with_git_command(
+                [
+                    "git",
+                    "clone",
+                    "--no-checkout",
+                    *clone_args,
+                    clone_url,
+                    str(repo_root_path),
+                ],
+                gitdir_path=repo_root_path,
+            )
 
-        sno_repo = cls._create_with_git_command(
-            [
-                "git",
-                "clone",
-                "--no-checkout",
-                *clone_args,
-                f"--separate-git-dir={dot_sno_path}",
-                clone_url,
-                str(dot_clone_path),
-            ],
-            gitdir_path=dot_sno_path,
-            temp_workdir_path=dot_clone_path,
-        )
-        sno_repo.lock_git_index()
+        else:
+            dot_sno_path = repo_root_path if bare else repo_root_path / ".sno"
+            dot_clone_path = repo_root_path / ".clone"
+
+            sno_repo = cls._create_with_git_command(
+                [
+                    "git",
+                    "clone",
+                    "--no-checkout",
+                    f"--separate-git-dir={dot_sno_path}",
+                    *clone_args,
+                    clone_url,
+                    str(dot_clone_path),
+                ],
+                gitdir_path=dot_sno_path,
+                temp_workdir_path=dot_clone_path,
+            )
+            sno_repo.lock_git_index()
+
         sno_repo.write_config(get_repo_version(sno_repo), wc_path, bare)
         sno_repo.activate()
         return sno_repo
@@ -169,8 +215,7 @@ class SnoRepo(pygit2.Repository):
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
-        result = SnoRepo(gitdir_path)
-        assert result.is_new_tidy_repo()
+        result = SnoRepo(gitdir_path, validate=False)
 
         # Tidy up temp workdir - this is created as a side effect of the git command.
         if temp_workdir_path is not None and temp_workdir_path.exists():
@@ -189,6 +234,9 @@ class SnoRepo(pygit2.Repository):
         repo_version = int(repo_version)
         if repo_version not in REPO_VERSIONS:
             raise click.UsageError(f"Unknown sno repo version {repo_version}")
+        # Bare-style sno repos are always implemented as bare git repos:
+        if self.is_bare_style_sno_repo():
+            self.config["core.bare"] = True
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
         # Write sno repo version to config:
@@ -203,8 +251,8 @@ class SnoRepo(pygit2.Repository):
         So, if creation fails, the result will be something that doesn't work at all, not something that half
         works but is also half corrupted.
         """
-        if not self.is_new_tidy_repo():
-            # Old+bare repos are always activated - since all the files are right there in the root directory,
+        if self.is_bare_style_sno_repo():
+            # Bare-style repos are always activated - since all the files are right there in the root directory,
             # we can't reveal them by writing the .git file. So, no action is required here.
             return
 
@@ -220,19 +268,30 @@ class SnoRepo(pygit2.Repository):
             subprocess.call(["attrib", "+h", str(dot_git_path)])
             subprocess.call(["attrib", "+h", str(dot_sno_path)])
 
-    def is_old_bare_repo(self):
-        """Old style sno repos were bare git repos. They were not "tidy": all of the git internals were visible."""
-        return super().is_bare and self.gitdir_path.stem != ".sno"
+    def is_bare_style_sno_repo(self):
+        """Bare-style sno repos are bare git repos. They are not "tidy": all of the git internals are visible."""
+        return self.gitdir_path.stem != ".sno"
 
-    def is_new_tidy_repo(self):
-        """New style sno repos are "tidy": they hide the git internals in a ".sno" directory."""
+    def is_tidy_style_sno_repo(self):
+        """Tidy-style sno repos are "tidy": they hide the git internals in a ".sno" directory."""
         return self.gitdir_path.stem == ".sno"
+
+    def validate_sno_repo_style(self):
+        if self.is_bare_style_sno_repo() and not super().is_bare:
+            raise NotFound(
+                "Selected repo isn't a bare-style or tidy-style sno repo. Perhaps a git repo?",
+                exit_code=NO_REPOSITORY,
+            )
 
     @property
     def BARE_CONFIG_KEY(self):
+        """
+        Return the config key we can check to see if the repo is actually bare,
+        given that all bare-style Sno repos have core.bare = True regardless of whether they have a working copy.
+        """
         return (
             SnoConfigKeys.SNO_WORKINGCOPY_BARE
-            if self.is_old_bare_repo()
+            if self.is_bare_style_sno_repo()
             else SnoConfigKeys.CORE_BARE
         )
 
@@ -251,9 +310,9 @@ class SnoRepo(pygit2.Repository):
     @property
     def is_bare(self):
         """
-        True if this sno repo is bare - it has no sno working copy.
+        True if this sno repo is genuinely bare - it has no sno working copy.
         The repo may or may not also be a bare git repository - this is an implementation detail.
-        That information is at super().is_bare
+        That information can be found super().is_bare
         """
         repo_cfg = self.config
         bare_key = self.BARE_CONFIG_KEY

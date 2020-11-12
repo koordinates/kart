@@ -31,10 +31,16 @@ def get_directory_from_url(url):
 @click.pass_context
 @click.option(
     "--bare",
-    "--no-checkout/--checkout",
     is_flag=True,
     default=False,
     help='Whether the new repository should be "bare" and have no working copy',
+)
+@click.option(
+    "--checkout/--no-checkout",
+    "do_checkout",
+    is_flag=True,
+    default=True,
+    help="Whether the new repository should immediately check out a working copy (only effects non-bare repos)",
 )
 @click.option(
     "--workingcopy-path",
@@ -72,7 +78,7 @@ def get_directory_from_url(url):
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, bare, wc_path, do_progress, depth, branch, url, directory):
+def clone(ctx, bare, do_checkout, wc_path, do_progress, depth, branch, url, directory):
     """ Clone a repository into a new directory """
 
     repo_path = Path(directory or get_directory_from_url(url)).resolve()
@@ -94,5 +100,5 @@ def clone(ctx, bare, wc_path, do_progress, depth, branch, url, directory):
 
     # Create working copy, if needed.
     head_commit = git_util.get_head_commit(repo)
-    if head_commit is not None:
+    if head_commit is not None and do_checkout and not bare:
         checkout.reset_wc_if_needed(repo, head_commit)
