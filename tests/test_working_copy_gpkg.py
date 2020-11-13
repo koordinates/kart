@@ -7,11 +7,13 @@ import pytest
 import apsw
 import pygit2
 
+from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 from sno.working_copy.gpkg import WorkingCopy_GPKG_1
+from test_working_copy import compute_approximated_types
 
 
 H = pytest.helpers.helpers()
@@ -895,3 +897,17 @@ def test_reset(data_working_copy, cli_runner, geopackage, edit_polygons):
         assert changes is None
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r
+
+
+def test_approximated_types():
+    assert gpkg_adapter.APPROXIMATED_TYPES == compute_approximated_types(
+        gpkg_adapter.V2_TYPE_TO_GPKG_TYPE, gpkg_adapter.GPKG_TYPE_TO_V2_TYPE
+    )
+
+
+def test_types_roundtrip(data_working_copy, cli_runner):
+    # If type-approximation roundtrip code isn't working,
+    # we would get spurious diffs on types that GPKG doesn't support.
+    with data_working_copy("types2") as (repo_path, wc):
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0, r.stdout

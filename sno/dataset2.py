@@ -97,6 +97,10 @@ class Dataset2(RichBaseDataset):
         if rel_path.startswith(self.LEGEND_PATH):
             return data
 
+        if rel_path.endswith("schema.json"):
+            # Unfortunately, some schemas might be stored slightly differently to others -
+            # - eg with or without null attributes. This normalises them.
+            return Schema.normalise_column_dicts(json_unpack(data))
         if rel_path.endswith(".json"):
             return json_unpack(data)
         elif rel_path.endswith(".wkt"):

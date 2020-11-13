@@ -15,27 +15,23 @@ V2_SCHEMA_DATA = [
         "dataType": "geometry",
         "geometryType": "GEOMETRY",
         "geometryCRS": "EPSG:2193",
-        "primaryKeyIndex": None,
     },
     {
         "id": "aa33d0d8-589d-4389-b2d7-b117358b4320",
         "name": "Ward",
         "dataType": "text",
-        "primaryKeyIndex": None,
     },
     {
         "id": "9abe0a9f-6668-412a-83af-c3d6e44be647",
         "name": "Shape_Leng",
         "dataType": "float",
         "size": 64,
-        "primaryKeyIndex": None,
     },
     {
         "id": "07f1f8b0-42f5-4805-b884-cb25d015a06f",
         "name": "Shape_Area",
         "dataType": "float",
         "size": 64,
-        "primaryKeyIndex": None,
     },
 ]
 

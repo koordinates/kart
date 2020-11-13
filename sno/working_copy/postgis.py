@@ -46,16 +46,37 @@ def adapt_geometry_from_db(g, dbcur):
 
 def adapt_timestamp_from_db(t, dbcur):
     # TODO - revisit timezones.
-    if isinstance(t, str):
-        # This makes postgis timestamps behave more like GPKG ones.
-        return t.replace(" ", "T") + "Z"
-    return t
+    if t is None:
+        return t
+    # This makes postgis timestamps behave more like GPKG ones.
+    return str(t).replace(" ", "T") + "Z"
+
+
+def adapt_to_string(v, dbcur):
+    return str(v) if v is not None else None
 
 
 # See https://github.com/psycopg/psycopg2/blob/master/psycopg/typecast_builtins.c
 TIMESTAMP_OID = 1114
 TIMESTAMP = new_type((TIMESTAMP_OID,), "TIMESTAMP", adapt_timestamp_from_db)
 psycopg2.extensions.register_type(TIMESTAMP)
+
+# We mostly want data out of the DB as strings, just as happens in GPKG.
+# Then we can serialise it using MessagePack.
+# TODO - maybe move adapt-to-string logic to MessagePack?
+ADAPT_TO_STR_TYPES = {
+    1082: "DATE",
+    1083: "TIME",
+    1266: "TIME",
+    1184: "TIMESTAMPTZ",
+    704: "INTERVAL",
+    1186: "INTERVAL",
+    1700: "DECIMAL",
+}
+
+for oid in ADAPT_TO_STR_TYPES:
+    t = new_type((oid,), ADAPT_TO_STR_TYPES[oid], adapt_to_string)
+    psycopg2.extensions.register_type(t)
 
 
 class WorkingCopy_Postgis(WorkingCopy):
@@ -658,7 +679,11 @@ class WorkingCopy_Postgis(WorkingCopy):
                 id_str = crs_util.get_identifier_str(wkt)
                 yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
+    # Postgis has nowhere obvious to put this metadata.
     _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json")
+
+    # Postgis approximates an int8 as an int16 - see super()._remove_hidden_meta_diffs
+    _APPROXIMATED_TYPES = postgis_adapter.APPROXIMATED_TYPES
 
     def _remove_hidden_meta_diffs(self, ds_meta_items, wc_meta_items):
         super()._remove_hidden_meta_diffs(ds_meta_items, wc_meta_items)

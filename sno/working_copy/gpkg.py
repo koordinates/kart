@@ -338,6 +338,9 @@ class WorkingCopy_GPKG(WorkingCopy):
 
         yield from gpkg_adapter.all_v2_meta_items(gpkg_meta_items_obj, id_salt=id_salt)
 
+    # Some types are approximated as text in GPKG - see super()._remove_hidden_meta_diffs
+    _APPROXIMATED_TYPES = gpkg_adapter.APPROXIMATED_TYPES
+
     def delete_meta(self, dataset):
         table_name = dataset.table_name
         with self.session() as db:

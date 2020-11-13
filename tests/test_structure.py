@@ -465,16 +465,14 @@ def test_shp_import_meta(
             {
                 "name": "geom",
                 "dataType": "geometry",
-                "primaryKeyIndex": None,
                 "geometryType": "POLYGON",
                 "geometryCRS": "EPSG:4167",
             },
-            {"name": "date_adjus", "dataType": "date", "primaryKeyIndex": None},
-            {"name": "survey_ref", "dataType": "text", "primaryKeyIndex": None},
+            {"name": "date_adjus", "dataType": "date"},
+            {"name": "survey_ref", "dataType": "text"},
             {
                 "name": "adjusted_n",
                 "dataType": "integer",
-                "primaryKeyIndex": None,
                 "size": 32,
             },
         ]
@@ -562,16 +560,14 @@ def _test_postgis_import(
         {
             "name": "geom",
             "dataType": "geometry",
-            "primaryKeyIndex": None,
             "geometryType": "MULTIPOLYGON",
             "geometryCRS": "EPSG:4167",
         },
-        {"name": "date_adjusted", "dataType": "timestamp", "primaryKeyIndex": None},
-        {"name": "survey_reference", "dataType": "text", "primaryKeyIndex": None},
+        {"name": "date_adjusted", "dataType": "timestamp"},
+        {"name": "survey_reference", "dataType": "text"},
         {
             "name": "adjusted_nodes",
             "dataType": "integer",
-            "primaryKeyIndex": None,
             "size": 32,
         },
     ]
