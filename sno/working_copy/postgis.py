@@ -402,7 +402,6 @@ class WorkingCopy_Postgis(WorkingCopy):
                 # of the Postgis builtin definitions - Postgis has lots of EPSG and ESRI
                 # definitions built-in, plus the 900913 (GOOGLE) definition.
                 # See POSTGIS_WC.md for help on working with CRS definitions in a Postgis WC.
-                # FIXME: write POSTGIS_WC.md
                 dbcur.execute(
                     SQL(
                         """
