@@ -920,13 +920,13 @@ class WorkingCopy_Postgis(WorkingCopy):
                     crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
                     if crs_id is not None:
                         dest_type = SQL("{} USING ST_SetSRID({}::GEOMETRY, {})").format(
-                            dest_type, Identifier(col.name), SQL(crs_id)
+                            dest_type, Identifier(col.name), SQL(str(crs_id))
                         )
                         do_write_crs = True
 
             dbcur.execute(
                 SQL("ALTER TABLE {} ALTER COLUMN {} TYPE {};").format(
-                    self._table_identifier(table), Identifier(col.name), SQL(dest_type)
+                    self._table_identifier(table), Identifier(col.name), dest_type
                 )
             )
 
