@@ -44,6 +44,7 @@ def get_directory_from_url(url):
 )
 @click.option(
     "--workingcopy-path",
+    "--workingcopy",
     "wc_path",
     type=click.Path(dir_okay=False),
     help="Path where the working copy should be created. "
