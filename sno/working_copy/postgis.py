@@ -180,7 +180,10 @@ class WorkingCopy_Postgis(WorkingCopy):
             L.debug("session: existing/done")
         else:
             L.debug("session: new...")
-            self._db = psycopg2.connect(self.dburl, cursor_factory=DictCursor)
+            try:
+                self._db = psycopg2.connect(self.dburl, cursor_factory=DictCursor)
+            except Exception as e:
+                raise NotFound(str(e), exit_code=NO_WORKING_COPY)
             self._register_geometry_type(self._db)
 
             try:
