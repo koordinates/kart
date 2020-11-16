@@ -8,14 +8,16 @@ import pygit2
 
 
 from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
-from sno.exceptions import InvalidOperation, NotYetImplemented
+from sno.exceptions import (
+    InvalidOperation,
+    NotYetImplemented,
+    NotFound,
+    NO_WORKING_COPY,
+)
 from sno.filter_util import UNFILTERED
 from sno.repository_version import get_repo_version
 from sno.schema import Schema
 from sno.structure import RepositoryStructure
-
-
-SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
 
 L = logging.getLogger("sno.working_copy.base")
@@ -39,6 +41,8 @@ class Mismatch(ValueError):
 
 
 class WorkingCopy:
+    SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
+
     VALID_VERSIONS = (1, 2)
 
     TRACKING_NAME = "track"
@@ -53,25 +57,34 @@ class WorkingCopy:
         return self._sno_table(self.STATE_NAME)
 
     @classmethod
-    def get(cls, repo, init_if_missing=False):
+    def get(cls, repo, *, allow_uncreated=False, allow_invalid_state=False):
         """
-        Get the working copy associaated with this sno repo.
-        If no working copy is present, returns None -
-        unless init_if_missing is returned, in which case it returns a WorkingCopy object that is not "created".
-        The type of this WorkingCopy object depends on the repo config - it represents a particular type of WorkingCopy
-        at a particular location, which nevertheless doesn't exist yet. It is up to the caller to create it by calling
-        `create()` and to populate it by calling eg `write_full()`.
-
+        Get the working copy associated with this sno repo, as specified in the repo config.
+        Note that the working copy specified in the repo config may or may not exist or be in a valid state.
+        An instance of this class can represent a working copy that doesn't exist or is in an invalid state,
+        (similar to how pathlib.Path can point to files that may or may not exist).
+        If allow_uncreated is True, a non-existant working copy may be returned - otherwise, only an existing
+        working copy will be returned, and None will be returned if no working copy is found.
+        If allow_invalid_state is True, an invalid-state working copy may be returned - otherwise, only a valid
+        working copy will be returned, and a NotFound(NO_WORKING_COPY) will be raised if it is in an invalid state.
         """
-        if init_if_missing:
-            cls.ensure_config_exists(repo)
-
         repo_cfg = repo.config
-        path_key = SNO_WORKINGCOPY_PATH
+        path_key = cls.SNO_WORKINGCOPY_PATH
         if path_key not in repo_cfg:
             return None
 
         path = repo_cfg[path_key]
+        return cls.get_at_path(
+            repo,
+            path,
+            allow_uncreated=allow_uncreated,
+            allow_invalid_state=allow_invalid_state,
+        )
+
+    @classmethod
+    def get_at_path(
+        cls, repo, path, *, allow_uncreated=False, allow_invalid_state=False
+    ):
         if cls.is_postgres_uri(path):
             from .postgis import WorkingCopy_Postgis
 
@@ -88,7 +101,10 @@ class WorkingCopy:
             else:
                 result = WorkingCopy_GPKG_2(repo, path)
 
-        if not result.is_created() and not init_if_missing:
+        if not allow_invalid_state:
+            result.check_valid_state()
+
+        if not result.is_created() and not allow_uncreated:
             result = None
 
         return result
@@ -105,7 +121,7 @@ class WorkingCopy:
         if is_bare:
             return
 
-        path_key = SNO_WORKINGCOPY_PATH
+        path_key = cls.SNO_WORKINGCOPY_PATH
         path = repo_cfg[path_key] if path_key in repo_cfg else None
         if path is None:
             cls.write_config(repo, None, False)
@@ -114,7 +130,7 @@ class WorkingCopy:
     def write_config(cls, repo, path=None, bare=False):
         repo_cfg = repo.config
         bare_key = repo.BARE_CONFIG_KEY
-        path_key = SNO_WORKINGCOPY_PATH
+        path_key = cls.SNO_WORKINGCOPY_PATH
 
         if bare:
             repo_cfg[bare_key] = True
@@ -131,9 +147,10 @@ class WorkingCopy:
             repo_cfg[path_key] = str(path)
 
     @classmethod
-    def check_valid_path(cls, path, workdir_path=None):
+    def check_valid_creation_path(cls, path, workdir_path):
         """
-        Given a user-supplied string describing where to put the working copy, ensures it is a valid location.
+        Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
+        and nothing already exists there that prevents us from creating it.
         Doesn't check if we have permissions to create a working copy there.
         """
         if path is None:
@@ -143,10 +160,38 @@ class WorkingCopy:
             from .postgis import WorkingCopy_Postgis
 
             WorkingCopy_Postgis.check_valid_uri(path, workdir_path)
+            postgis_wc = WorkingCopy_Postgis(None, path)
+
+            # Less strict on Postgis - we are okay with the schema being already created, so long as its empty.
+            if postgis_wc.has_data():
+                raise InvalidOperation(
+                    f"Error creating Postgis working copy at {path} - non-empty schema already exists"
+                )
         else:
             from .gpkg import WorkingCopy_GPKG
 
             WorkingCopy_GPKG.check_valid_path(path)
+
+            # More strict on GPKG - we don't allow the GPKG file to exist at all.
+            gpkg_path = (Path(workdir_path) / path).resolve()
+            if gpkg_path.exists():
+                desc = "path" if gpkg_path.is_dir() else "GPKG file"
+                raise InvalidOperation(
+                    f"Error creating GPKG working copy at {path} - {desc} already exists"
+                )
+
+    def check_valid_state(self):
+        if self.is_created():
+            if not self.is_initialised():
+                message = [
+                    f"Working copy at {self.path} is not yet fully initialised",
+                    "Try `sno create-workingcopy` to delete and recreate working copy if problem persists",
+                ]
+                if self.has_data():
+                    message.append(
+                        f"But beware: {self.path} already seems to contain data, make sure it is backed up"
+                    )
+                raise NotFound("\n".join(message), NO_WORKING_COPY)
 
     @classmethod
     def default_path(cls, repo):

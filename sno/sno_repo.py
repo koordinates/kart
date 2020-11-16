@@ -137,6 +137,8 @@ class SnoRepo(pygit2.Repository):
 
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
+        if not bare:
+            WorkingCopy.check_valid_creation_path(wc_path, wc_path)
 
         if bare:
             # Create bare-style repo:
@@ -171,6 +173,8 @@ class SnoRepo(pygit2.Repository):
     ):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
+        if not bare:
+            WorkingCopy.check_valid_creation_path(wc_path, wc_path)
 
         if bare:
             sno_repo = cls._create_with_git_command(

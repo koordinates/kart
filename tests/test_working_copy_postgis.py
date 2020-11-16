@@ -13,18 +13,30 @@ H = pytest.helpers.helpers()
 
 
 @pytest.mark.parametrize(
+    "existing_schema",
+    [
+        pytest.param(True, id="existing-schema"),
+        pytest.param(False, id="brand-new-schema"),
+    ],
+)
+@pytest.mark.parametrize(
     "archive,table,commit_sha",
     [
         pytest.param("points", H.POINTS.LAYER, H.POINTS.HEAD_SHA, id="points"),
-        pytest.param(
-            "polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons-pk"
-        ),
+        pytest.param("polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons"),
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
 @pytest.mark.parametrize("version", [1, 2])
 def test_checkout_workingcopy(
-    version, archive, table, commit_sha, data_archive, cli_runner, new_postgis_db_schema
+    version,
+    archive,
+    table,
+    commit_sha,
+    existing_schema,
+    data_archive,
+    cli_runner,
+    new_postgis_db_schema,
 ):
     """ Checkout a working copy """
     if version == "2":
@@ -33,13 +45,16 @@ def test_checkout_workingcopy(
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
-        with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            repo.config["sno.workingcopy.path"] = postgres_url
-            r = cli_runner.invoke(["checkout"])
+        with new_postgis_db_schema(create=existing_schema) as (
+            postgres_url,
+            postgres_schema,
+        ):
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
             assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines() == [
-                f"Creating working copy at {postgres_url} ..."
-            ]
+            assert (
+                r.stdout.splitlines()[-1]
+                == f"Creating working copy at {postgres_url} ..."
+            )
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
@@ -54,6 +69,51 @@ def test_checkout_workingcopy(
 
             head_tree_id = repo.head.peel(pygit2.Tree).id.hex
             assert wc.assert_db_tree_match(head_tree_id)
+
+
+@pytest.mark.parametrize(
+    "existing_schema",
+    [
+        pytest.param(True, id="existing-schema"),
+        pytest.param(False, id="brand-new-schema"),
+    ],
+)
+def test_init_import(
+    existing_schema,
+    new_postgis_db_schema,
+    data_archive,
+    tmp_path,
+    cli_runner,
+):
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    repo_path = tmp_path / "data.sno"
+    repo_path.mkdir()
+
+    with data_archive("gpkg-points") as data:
+        with new_postgis_db_schema(create=existing_schema) as (
+            postgres_url,
+            postgres_schema,
+        ):
+            r = cli_runner.invoke(
+                [
+                    "init",
+                    "--import",
+                    f"gpkg:{data / 'nz-pa-points-topo-150k.gpkg'}",
+                    str(repo_path),
+                    f"--workingcopy-path={postgres_url}",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert (repo_path / ".sno" / "HEAD").exists()
+
+            repo = SnoRepo(repo_path)
+            wc = WorkingCopy.get(repo)
+
+            assert wc.is_created()
+            assert wc.is_initialised()
+            assert wc.has_data()
+
+            assert wc.path == postgres_url
 
 
 @pytest.mark.parametrize(
@@ -83,12 +143,8 @@ def test_commit_edits(
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            repo.config["sno.workingcopy.path"] = postgres_url
-            r = cli_runner.invoke(["checkout"])
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
             assert r.exit_code == 0, r.stderr
-            assert r.stdout.splitlines() == [
-                f"Creating working copy at {postgres_url} ..."
-            ]
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
@@ -153,8 +209,9 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            repo.config["sno.workingcopy.path"] = postgres_url
-            r = cli_runner.invoke(["checkout"])
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            assert r.exit_code == 0, r.stderr
+
             wc = WorkingCopy.get(repo)
             assert wc.is_created()
 
@@ -277,8 +334,9 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            repo.config["sno.workingcopy.path"] = postgres_url
-            r = cli_runner.invoke(["checkout"])
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            assert r.exit_code == 0, r.stderr
+
             wc = WorkingCopy.get(repo)
             assert wc.is_created()
             assert not wc.is_dirty()
