@@ -248,9 +248,27 @@ Finally, the current schema is consulted to find out the current position and na
 
 Features are stored at a filename that contains a Base64 encoding of their primary key, so that an update to the feature that doesn't change its primary key will cause it to be overwritten in place.
 
+### Messagepack encoding
+
+[MessagePack](https://msgpack.org/) can serialise everything that JSON can serialise, plus byte strings. For MessagePack to be able to serialise features containing any of the sno-supported data types, sometimes the values to be serialised are converted to a more generic type first. The following serialisation logic is used:
+
+* `boolean` - serialised as a boolean.
+* `blob` - serialised as a byte string.
+* `date` - serialised as a string, with the format `YYYY-MM-DD`
+* `float` - serialised as a float.
+* `geometry` - See Geometry encoding section below.
+* `integer` - serialised as an integer.
+* `interval` - serialised as a string, in [ISO8601 Duration](https://en.wikipedia.org/wiki/ISO_8601#Durations) format, ie `PnYnMnDTnHnMnS`.
+* `numeric` - serialised as a string, in decimal format eg `123` for a whole number or `123.456` if there is a fractional part.
+* `text` - serialised as a string.
+* `time` - serialised as a string, with the format `hh:mm:ss.ssss`, optionally with the suffix `Z` indicating that the time is in UTC. The fractions of a second may be omitted.
+* `timestamp` - serialised as a string, in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) format with `T` as the separator, ie `YYYY-MM-DDThh:mm:ss.ssss`, optionally with the suffix `Z` indicating that the time is in UTC. The fractions of a second may be omitted.
+
+In those cases where a certain part of the representation may be omitted - in practise, that part will be omitted if it is zero. If it is non-zero it will always be included.
+
 #### Geometry encoding
 
-[MessagePack](https://msgpack.org/) can serialise everything that JSON can serialise, plus byte strings. This means it can be used to serialise most database types, but not geometries unless they are first converted to one of these types. For this reason, geometry fields are serialised to bytestrings before serialising the entire feature using MessagePack. The geometry bytestring is marked as being a MessagePack extension with the extension code `"G"` (71). The encoding used to serialise the geometry is as follows.
+Geometries are converted to byte strings before they are serialised using MessagePack. The geometry bytestring is marked as being a MessagePack extension with the extension code `"G"` (71). The encoding used to serialise the geometry is as follows.
 
 Geometries are encoded using the Standard GeoPackageBinary format specified in [GeoPackage v1.3.0 §2.1.3 Geometry Encoding](http://www.geopackage.org/spec/#gpb_data_blob_format), with additional restrictions:
 
