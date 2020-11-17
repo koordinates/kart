@@ -23,7 +23,7 @@ cleanest: cleaner
 	(cd vendor\ && $(MAKE) /NoLogo /F makefile.vc cleaner)
 
 venv:
-	$(PY3) -m venv $@
+	${env:PY3} -m venv $@
 
 # Dependencies
 
