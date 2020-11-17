@@ -16,6 +16,7 @@ from .base import WorkingCopy
 from . import postgis_adapter
 from sno import geometry, crs_util
 from sno.db_util import changes_rowcount
+from sno.exceptions import NotFound, NO_WORKING_COPY
 from sno.filter_util import UNFILTERED
 from sno.schema import Schema
 
@@ -47,8 +48,8 @@ def adapt_timestamp_from_db(t, dbcur):
     # TODO - revisit timezones.
     if t is None:
         return t
-    # This makes postgis timestamps behave more like GPKG ones.
-    return str(t).replace(" ", "T") + "Z"
+    # Output timestamps in the same variant of ISO 8601 required by GPKG.
+    return str(t).replace(" ", "T").replace("+00", "Z")
 
 
 def adapt_to_string(v, dbcur):
@@ -60,6 +61,11 @@ TIMESTAMP_OID = 1114
 TIMESTAMP = new_type((TIMESTAMP_OID,), "TIMESTAMP", adapt_timestamp_from_db)
 psycopg2.extensions.register_type(TIMESTAMP)
 
+TIMESTAMPTZ_OID = 1184
+TIMESTAMPTZ = new_type((TIMESTAMPTZ_OID,), "TIMESTAMPTZ", adapt_timestamp_from_db)
+psycopg2.extensions.register_type(TIMESTAMPTZ)
+
+
 # We mostly want data out of the DB as strings, just as happens in GPKG.
 # Then we can serialise it using MessagePack.
 # TODO - maybe move adapt-to-string logic to MessagePack?
@@ -67,7 +73,6 @@ ADAPT_TO_STR_TYPES = {
     1082: "DATE",
     1083: "TIME",
     1266: "TIME",
-    1184: "TIMESTAMPTZ",
     704: "INTERVAL",
     1186: "INTERVAL",
     1700: "DECIMAL",
@@ -183,6 +188,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 self._db = psycopg2.connect(self.dburl, cursor_factory=DictCursor)
             except Exception as e:
                 raise NotFound(str(e), exit_code=NO_WORKING_COPY)
+            self._configure_output(self._db)
             self._register_geometry_type(self._db)
 
             try:
@@ -196,6 +202,12 @@ class WorkingCopy_Postgis(WorkingCopy):
                 self._db.close()
                 del self._db
                 L.debug("session: new/done")
+
+    def _configure_output(self, db):
+        """Output timestamptz in UTC, and output interval as ISO 8601 duration."""
+        dbcur = db.cursor()
+        dbcur.execute("SET timezone='UTC';")
+        dbcur.execute("SET intervalstyle='iso_8601';")
 
     def _register_geometry_type(self, db):
         """

@@ -23,7 +23,7 @@ V2_TYPE_TO_PG_TYPE = {
     "numeric": "numeric",
     "text": "text",
     "time": "time",
-    "timestamp": "timestamp",
+    "timestamp": "timestamptz",
     # TODO - time and timestamp come in two flavours, with and without timezones.
     # Code for preserving these flavours in datasets and working copies needs more work.
 }
@@ -43,7 +43,9 @@ PG_TYPE_TO_V2_TYPE = {
     "numeric": "numeric",
     "text": "text",
     "time": "time",
+    "timetz": "time",
     "timestamp": "timestamp",
+    "timestamptz": "timestamp",
     "varchar": "text",
 }
 
