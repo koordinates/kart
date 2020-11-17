@@ -371,7 +371,7 @@ jobs:
       - name: "python"
         run: |
           $PY3=(Get-Command python).Definition
-          echo "::set-env name=PY3::$PY3"
+          echo "PY3=$PY3" >> $GITHUB_ENV
 
       - name: "python: pip cache"
         uses: actions/cache@v1
