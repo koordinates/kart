@@ -4,16 +4,22 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.6.0 (UNRELEASED)
+## 0.6.0
 
- * Newly created sno repositories no longer have git internals visible in the main folder - they are hidden away in a '.sno' folder. [#147](https://github.com/koordinates/sno/issues/147)
+### Major changes in this release
+
+ * Newly created Sno repositories no longer have git internals visible in the main folder - they are hidden away in a '.sno' folder. [#147](https://github.com/koordinates/sno/issues/147)
  * The working copy can now be a PostgreSQL / PostGIS database (previously only GPKG working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `postgresql://[HOST]/DBNAME/SCHEMA` [#267](https://github.com/koordinates/sno/issues/267)
+     - Read the documentation at `docs/POSTGIS_WC.md`
+ * Patches that create or delete datasets are now supported in Datasets V2 [#239](https://github.com/koordinates/sno/issues/239)
+
+### Minor features / fixes:
+
  * `apply` and `import` no longer create empty commits unless you specify `--allow-empty` [#243](https://github.com/koordinates/sno/issues/243), [#245](https://github.com/koordinates/sno/issues/245)
  * `apply` can now apply patches to branches other than `HEAD` [#294](https://github.com/koordinates/sno/issues/294)
- * Patches that create or delete datasets are now supported in Datasets V2 [#239](https://github.com/koordinates/sno/issues/239)
  * `apply`, `commit` and `merge` commands now optimise repositories after committing, to avoid poor repo performance. [#250](https://github.com/koordinates/sno/issues/250)
  * `commit` now checks that the diff to be committed matches the schema, and rejects diffs that do not - this is possible in working copy formats that have relatively lax type enforcement, ie GPKG [#300](https://github.com/koordinates/sno/pull/300)
- *  Added GPKG support for sno types that GPKG doesn't support - they are approximated as strings. [#304](https://github.com/koordinates/sno/pull/304)
+ *  Added GPKG support for Sno types that GPKG doesn't support - they are approximated as strings. [#304](https://github.com/koordinates/sno/pull/304)
  *  `schema.json` no longer stores attributes that are null - a missing attribute has the same meaning as that attribute being present and null. [#304](https://github.com/koordinates/sno/pull/304)
  * `data ls` now accepts an optional ref argument
  * `meta get` now accepts a `--ref=REF` option
@@ -25,7 +31,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.5.0
 
-sno v0.5 introduces a new repo layout, which is the default, dubbed 'Datasets V2'
+Sno v0.5 introduces a new repo layout, which is the default, dubbed 'Datasets V2'
 
 Existing commands are backward compatible with V1 datasets, however some new functionality is only supported in repositories upgraded to the new layout.
 
