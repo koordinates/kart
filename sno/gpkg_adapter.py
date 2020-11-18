@@ -165,7 +165,7 @@ def generate_gpkg_geometry_columns(v2_obj, table_name):
     if not geom_columns:
         return None
 
-    geometry_type = geom_columns[0].extra_type_info["geometryType"]
+    geometry_type = geom_columns[0].extra_type_info.get("geometryType", "GEOMETRY")
     type_name, *zm = geometry_type.split(" ", 1)
     zm = zm[0] if zm else ""
     z = 1 if "Z" in zm else 0
@@ -187,7 +187,7 @@ def generate_gpkg_spatial_ref_sys(v2_obj):
     if not geom_columns:
         return []
 
-    crs_pathname = geom_columns[0].extra_type_info["geometryCRS"]
+    crs_pathname = geom_columns[0].extra_type_info.get("geometryCRS")
     if not crs_pathname:
         return []
     definition = v2_obj.get_crs_definition(crs_pathname)
@@ -386,7 +386,7 @@ def v2_type_to_gpkg_type(column_schema, is_spatial):
     v2_type = column_schema.data_type
     extra_type_info = column_schema.extra_type_info
     if column_schema.data_type == "geometry":
-        return extra_type_info["geometryType"].split(" ", 1)[0]
+        return extra_type_info.get("geometryType", "GEOMETRY").split(" ", 1)[0]
 
     gpkg_type_info = V2_TYPE_TO_GPKG_TYPE.get(v2_type)
     if gpkg_type_info is None:
