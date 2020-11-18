@@ -164,6 +164,7 @@ class SnoRepo(pygit2.Repository):
             sno_repo.lock_git_index()
 
         sno_repo.write_config(repo_version, wc_path, bare)
+        sno_repo.write_readme()
         sno_repo.activate()
         return sno_repo
 
@@ -209,6 +210,7 @@ class SnoRepo(pygit2.Repository):
             sno_repo.lock_git_index()
 
         sno_repo.write_config(get_repo_version(sno_repo), wc_path, bare)
+        sno_repo.write_readme()
         sno_repo.activate()
         return sno_repo
 
@@ -247,6 +249,18 @@ class SnoRepo(pygit2.Repository):
         self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(repo_version)
         # Write working copy config:
         WorkingCopy.write_config(self, wc_path, bare)
+
+    def write_readme(self):
+        try:
+            text = "\n".join(
+                self.SNO_BARE_STYLE_README
+                if self.is_bare_style_sno_repo()
+                else self.SNO_TIDY_STYLE_README
+            )
+            readme_path = self.workdir_path / "SNO_README.txt"
+            readme_path.write_text(text)
+        except Exception as e:
+            L.warn(e)
 
     def activate(self):
         """
@@ -362,3 +376,43 @@ class SnoRepo(pygit2.Repository):
             yield
         finally:
             self.lock_git_index()
+
+    SNO_COMMON_README = [
+        "",
+        "sno status",
+        "",
+        'It may simply output "Empty repository. Use sno import to add some data".',
+        "Follow the tutorial at http://sno.earth/ for help getting started with Sno.",
+        "",
+        "Some more helpful commands for getting a broad view of what a Sno repository",
+        "contains are:",
+        "",
+        "sno log      - show the history of what has been committed to this repository.",
+        "sno data ls  - show the names of every dataset in this repository.",
+        "",
+        "This directory is the default location where Sno puts the repository's working",
+        "copy, which is created as soon as there is some data to put in it. However",
+        "the working copy can also be configured to be somewhere else, and may not be",
+        "a file at all. To see the working copy's location, run this command:",
+        "",
+        "sno config sno.workingcopy.path",
+        "",
+        "",
+    ]
+
+    SNO_TIDY_STYLE_README = [
+        "This directory is a Sno repository.",
+        "",
+        "It may look empty, but every version of every datasets that this repository",
+        'contains is stored in Sno\'s internal format in the ".sno" hidden subdirectory.',
+        "To check if a directory is a Sno repository and see what is stored, run:",
+    ] + SNO_COMMON_README
+
+    SNO_BARE_STYLE_README = [
+        "This directory is a Sno repository.",
+        "",
+        "In this repository, the internals are visible - in files and in subdirectories",
+        'like "HEAD", "objects" and "refs". These are best left untouched. Instead, use',
+        "Sno commands to interact with the repository. To check if a directory is a Sno",
+        "repository and see what is stored, run:",
+    ] + SNO_COMMON_README
