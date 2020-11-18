@@ -181,7 +181,7 @@ class SnoRepo(pygit2.Repository):
                 [
                     "git",
                     "clone",
-                    "--no-checkout",
+                    "--bare",
                     *clone_args,
                     clone_url,
                     str(repo_root_path),
