@@ -362,8 +362,9 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
     m = "M" if ggc["m"] else ""
 
     crs_identifier = None
-    if gsrs and gsrs[0]["definition"]:
-        crs_identifier = crs_util.get_identifier_str(gsrs[0]["definition"])
+    definition = gsrs and gsrs[0]["definition"]
+    if definition and definition != "undefined":
+        crs_identifier = crs_util.get_identifier_str(definition)
 
     extra_type_info = {
         "geometryType": f"{geometry_type} {z}{m}".strip(),
