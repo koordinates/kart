@@ -60,7 +60,6 @@ For example, here is the schema for a dataset containing building outlines:
     "id": "b8ae8ff3-1691-7f6f-bbe0-c03c648b6d67",
     "name": "geom",
     "dataType": "geometry",
-    "primaryKeyIndex": null,
     "geometryType": "MULTIPOLYGON",
     "geometryCRS": "EPSG:4326"
   },
@@ -68,27 +67,24 @@ For example, here is the schema for a dataset containing building outlines:
     "id": "4324e825-ffed-8aff-ceac-53a7dde7e2f7",
     "name": "building_id",
     "dataType": "integer",
-    "primaryKeyIndex": null,
     "size": 32
   },
   {
     "id": "878f8e4e-433a-b7bb-74d5-b360ccfb3607",
     "name": "name",
     "dataType": "text",
-    "primaryKeyIndex": null,
     "length": 250
   },
   {
     "id": "c8e75111-0506-a898-4d0e-ed1aa8c81280",
     "name": "last_modified",
     "dataType": "date",
-    "primaryKeyIndex": null
   }
 ]
 ```
 
 ##### Syntax
-Every JSON object in the array represents a column of the database table, and these objects are listed in the same order as the columns in the table. Each of these objects has at least following fields:
+Every JSON object in the array represents a column of the database table, and these objects are listed in the same order as the columns in the table. Each of these objects has at least the three required attributes - `id`, `name` and `dataType` - and some have a fourth optional attribute, `primaryKeyIndex`.
 
 ###### `id`
 This is a unique ID used internally, the contents of the ID have no specific meaning. However, the ID of a column remains constant over its lifetime, even as its name or position in the array changes, so they can are used to recognise a column even if it has been renamed and moved.
@@ -100,9 +96,9 @@ This is the name of the column in the database table, as would be used in a SELE
 This is the type of data which is stored in this column. A complete list of allowed types is found in the "Data types" section below.
 
 ###### `primaryKeyIndex`
-This controls whether or not this column is a primary key. If this value is `null`, then the column is not a primary key. If it is any non-negative integer, then the column is a primary key. The first primary key column should have a `primaryKeyIndex` of `0`, the next primary key column should have `1`, and so on.
+This controls whether or not this column is a primary key. If this value is `null` or not present, then the column is not a primary key. If it is any non-negative integer, then the column is a primary key. The first primary key column should have a `primaryKeyIndex` of `0`, the next primary key column should have `1`, and so on.
 
-Those are all of the required fields. Certain dataTypes can have extra fields that help specify the type of data that the column should hold - see the "Extra type info" section below.
+Those are all of the fields that apply to any column. Certain dataTypes can have extra fields that help specify the type of data that the column should hold - see the "Extra type info" section below.
 
 ##### Data types
 
@@ -133,9 +129,11 @@ The following data types are supported by sno. When a versioned sno dataset is c
 
 ##### Extra type info
 
-Certain types have extra fields that help specify how the type should be stored in a database. They don't necessarily affect how sno stores the data - and they don't necessarily affect all database types - for instance, setting a maximum length of 10 characters in a column with `"dataType": "text"` won't be enforced in a SQLite since it doesn't enforce maximum lengths, and if a user then modifies a field in this column to contain an overlength string, this can still be committed to sno.
+Certain types have extra attributes that help specify how the type should be stored in a database. They don't affect how sno stores the data - and they don't necessarily affect all database types - for instance, setting a maximum length of 10 characters in a column with `"dataType": "text"` won't be enforced in a SQLite since it doesn't enforce maximum lengths.
 
-The extra fields that are supported are as follows:
+If any of these attributes are not present, that has the same effect as if that attribute was present but was set to `null`.
+
+The extra attributes that are supported are as follows:
 
 ###### Extra type info for `"dataType": "geometry"`
 - `geometryType`
@@ -149,7 +147,7 @@ The extra fields that are supported are as follows:
 ###### Extra type info for `"dataType": "integer"`
 - `size`
   * Eg `"size": 16`
-  * The size of the integer in bits. Should be 16, 32, or 64.
+  * The size of the integer in bits. Should be 8, 16, 32, or 64.
 
 ###### Extra type info for `"dataType": "float"`
 - `size`
