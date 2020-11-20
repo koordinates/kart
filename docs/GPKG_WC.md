@@ -11,11 +11,22 @@ Most geospatial data can be converted to GPKG format without losing any fidelity
 
 #### Primary keys
 
-GPKG requires integer primary keys. If your data has alphanumeric primary keys, no primary keys at all, a composite key made up of more than one column, or any other type of primary key than an integer, it will not be possible to check out your data into a GPKG.
+GPKG requires integer primary keys, for tables that have a geometry column - other tables do not have this constraint [[GPKG spec]](http://www.geopackage.org/spec120/#feature_user_tables). Depending on what kind of primary keys your dataset has, you may or may not be able to check it out using a GPKG working copy.
 
-Work in this area is ongoing, expect to see a workaround for alphanumeric primary keys and for data without primary keys as Sno development continues.
+ * **Integer primary keys** \
+     There are no issues checking out datasets with integer primary keys in a GPKG working copy.
 
-Tracking bug for data with alphanumeric primary keys: [#307](https://github.com/koordinates/sno/issues/307)
+ * **String primary keys** (or any other non-integer type) \
+     If the dataset **does not** have a geometry column, then these primary keys are checked out without modification. \
+     If the dataset **does** have a geometry column, then the non-integer primary key column is demoted to a regular column (but constrained to be unique and non-null), and another column is added to the table that is an integer primary key column, for the sole purpose of making the table conform to the GPKG specification. The additional integer column is called `.sno-auto-pk`. It is not part of the dataset, its contents are arbitary (except that they conform to GPKG specification), and it is not tracked by sno - any edits specifically to this column will not be committed.
+
+ * **No primary key column** \
+   This is not yet supported.
+
+ * **Composite primary keys** (multiple primary key columns) \
+   This is not yet supported.
+
+Work in this area is ongoing, expect to see a workaround for data without primary keys as Sno development continues.
 
 Tracking bug for data without primary keys: [#212](https://github.com/koordinates/sno/issues/212)
 

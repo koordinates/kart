@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.7.0 (UNRELEASED)
+
+ * Support for checking out a dataset with a string primary key (or other non-integer primary key) as a GPKG working copy [#307](https://github.com/koordinates/sno/issues/307)
+
 ## 0.6.0
 
 ### Major changes in this release
