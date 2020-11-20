@@ -639,9 +639,10 @@ class WorkingCopy_GPKG(WorkingCopy):
 
                 CHUNK_SIZE = 10000
                 total_features = dataset.feature_count
-                for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
-                    dbcur.executemany(sql_insert_features, rows)
-                    feat_progress += len(rows)
+                for row_dicts in self._chunk(dataset.features(), CHUNK_SIZE):
+                    row_tuples = (row_dict.values() for row_dict in row_dicts)
+                    dbcur.executemany(sql_insert_features, row_tuples)
+                    feat_progress += len(row_dicts)
 
                     t0a = time.monotonic()
                     L.info(
@@ -693,13 +694,12 @@ class WorkingCopy_GPKG(WorkingCopy):
 
         feat_count = 0
         CHUNK_SIZE = 10000
-        for rows in self._chunk(
-            dataset.get_feature_tuples(
-                pk_iter, col_names, ignore_missing=ignore_missing
-            ),
+        for row_dicts in self._chunk(
+            dataset.get_features(pk_iter, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
-            dbcur.executemany(sql_write_feature, rows)
+            row_tuples = (row_dict.values() for row_dict in row_dicts)
+            dbcur.executemany(sql_write_feature, row_tuples)
             feat_count += changes_rowcount(dbcur)
 
         return feat_count

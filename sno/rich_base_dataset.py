@@ -32,6 +32,10 @@ class RichBaseDataset(BaseDataset):
 
     RTREE_INDEX_EXTENSIONS = ("sno-idxd", "sno-idxi")
 
+    def features_plus_blobs(self):
+        for blob in self.feature_blobs():
+            yield self.get_feature(path=blob.name, data=blob.data), blob
+
     def build_spatial_index(self, path):
         """
         Internal proof-of-concept method for building a spatial index across the repository.
@@ -47,10 +51,11 @@ class RichBaseDataset(BaseDataset):
             t0 = time.monotonic()
 
             c = 0
-            for (pk, geom) in self.feature_tuples(
-                [self.primary_key, self.geom_column_name]
-            ):
+            for feature in self.features():
                 c += 1
+                pk = feature[self.primary_key]
+                geom = feature[self.geom_column_name]
+
                 if geom is None:
                     continue
 
