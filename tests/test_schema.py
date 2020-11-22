@@ -86,6 +86,54 @@ def test_align_schema(gen_uuid):
     }
 
 
+def test_align_schema_type_changed(gen_uuid):
+    # Make sure we don't align columns if they are different types:
+    old_schema = Schema(
+        [
+            ColumnSchema(gen_uuid(), "ID", "integer", 0),
+            ColumnSchema(gen_uuid(), "col1", "numeric", None),
+        ]
+    )
+    new_schema = Schema(
+        [
+            ColumnSchema(gen_uuid(), "ID", "integer", 0),
+            ColumnSchema(gen_uuid(), "col1", "timestamp", None),
+        ]
+    )
+    aligned_schema = old_schema.align_to_self(
+        new_schema, approximated_types={"numeric": "text"}
+    )
+
+    aligned = {}
+    for old_col in old_schema:
+        for aligned_col in aligned_schema:
+            if aligned_col.id == old_col.id:
+                aligned[old_col.name] = aligned_col.name
+
+    assert aligned == {
+        "ID": "ID",
+    }
+
+    # But we do align them if they are approximated:
+    new_schema = Schema(
+        [
+            ColumnSchema(gen_uuid(), "ID", "integer", 0),
+            ColumnSchema(gen_uuid(), "col1", "text", None),
+        ]
+    )
+    aligned_schema = old_schema.align_to_self(
+        new_schema, approximated_types={"numeric": "text"}
+    )
+
+    aligned = {}
+    for old_col in old_schema:
+        for aligned_col in aligned_schema:
+            if aligned_col.id == old_col.id:
+                aligned[old_col.name] = aligned_col.name
+
+    assert aligned == {"ID": "ID", "col1": "col1"}
+
+
 def edit_points_schema(dbcur):
     dbcur.execute(f"ALTER TABLE {H.POINTS.LAYER} ADD COLUMN colour TEXT(32);")
     INSERT = f"""

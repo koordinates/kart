@@ -369,7 +369,9 @@ class Schema:
         # TODO - could prompt the user to help with more complex schema changes.
         old_cols = self.to_column_dicts()
         new_cols = new_schema.to_column_dicts()
-        Schema.align_schema_cols(old_cols, new_cols)
+        Schema.align_schema_cols(
+            old_cols, new_cols, approximated_types=approximated_types
+        )
         return Schema.from_column_dicts(new_cols)
 
     @classmethod
@@ -408,7 +410,7 @@ class Schema:
 
         old_type, new_type = old_col["dataType"], new_col["dataType"]
         if old_type != new_type:
-            if approximated_types and approximated_types[old_type] == new_type:
+            if approximated_types and approximated_types.get(old_type) == new_type:
                 # new_col's type was the best approximation we could manage of old_col's type.
                 new_col["dataType"] = old_col["dataType"]
             else:
