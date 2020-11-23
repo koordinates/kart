@@ -221,6 +221,10 @@ class Schema:
     def geometry_columns(self):
         return [c for c in self.columns if c.data_type == "geometry"]
 
+    @property
+    def has_geometry(self):
+        return bool(self.geometry_columns)
+
     def __getitem__(self, i):
         """Return the _i_th ColumnSchema, or, the ColumnSchema with the given ID."""
         if isinstance(i, str):

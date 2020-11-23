@@ -137,15 +137,13 @@ def _get_identifier_prefix(table_name):
 
 def generate_gpkg_contents(v2_obj, table_name):
     """Generate a gpkg_contents meta item from a v2 dataset."""
-    is_spatial = bool(v2_obj.schema.geometry_columns)
-
     result = {
         "identifier": generate_unique_identifier(v2_obj, table_name),
         "description": v2_obj.get_meta_item("description"),
         "table_name": table_name,
-        "data_type": "features" if is_spatial else "attributes",
+        "data_type": "features" if v2_obj.has_geometry else "attributes",
     }
-    if is_spatial:
+    if v2_obj.has_geometry:
         result["srs_id"] = _gpkg_srs_id(v2_obj)
     return result
 
@@ -225,9 +223,8 @@ def wkt_to_v2_name(wkt):
 
 def generate_sqlite_table_info(v2_obj):
     """Generate a sqlite_table_info meta item from a dataset."""
-    is_spatial = bool(v2_obj.schema.geometry_columns)
     return [
-        _column_schema_to_gpkg(i, col, is_spatial)
+        _column_schema_to_gpkg(i, col, v2_obj.has_geometry)
         for i, col in enumerate(v2_obj.schema)
     ]
 
@@ -278,13 +275,13 @@ def _gpkg_to_column_schema(
     return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
 
-def _column_schema_to_gpkg(cid, column_schema, is_spatial):
+def _column_schema_to_gpkg(cid, column_schema, has_geometry):
     is_pk = 1 if column_schema.pk_index is not None else 0
     return {
         "cid": cid,
         "name": column_schema.name,
         "pk": is_pk,
-        "type": v2_type_to_gpkg_type(column_schema, is_spatial),
+        "type": v2_type_to_gpkg_type(column_schema, has_geometry),
         "notnull": 1 if is_pk else 0,
         "dflt_value": None,
     }
@@ -373,9 +370,9 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
     return "geometry", extra_type_info
 
 
-def v2_type_to_gpkg_type(column_schema, is_spatial):
+def v2_type_to_gpkg_type(column_schema, has_geometry):
     """Convert a v2 schema type to a gpkg type."""
-    if is_spatial and column_schema.pk_index is not None:
+    if has_geometry and column_schema.pk_index is not None:
         if column_schema.data_type == "integer":
             return "INTEGER"  # Must be INTEGER, not MEDIUMINT etc.
         else:

@@ -106,6 +106,10 @@ class ImportSource:
         """Convenience method for loading the schema.json into a Schema object"""
         return Schema.from_column_dicts(self.get_meta_item("schema.json"))
 
+    @property
+    def has_geometry(self):
+        return self.schema.has_geometry
+
     def features(self):
         """
         Yields a dict for every feature. Dicts contain key-value pairs for each feature property,

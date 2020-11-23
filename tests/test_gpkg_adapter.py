@@ -44,6 +44,7 @@ def test_adapt_schema():
     schema = Schema.from_column_dicts(V2_SCHEMA_DATA)
     dataset = FakeDataset()
     dataset.schema = schema
+    dataset.has_geometry = schema.has_geometry
     dataset.tree = dataset
     dataset.name = "test_dataset"
 

@@ -335,7 +335,7 @@ class OgrImportSource(ImportSource):
         return cols
 
     @property
-    def is_spatial(self):
+    def has_geometry(self):
         return bool(self.geom_cols)
 
     def _check_primary_key_option(self, primary_key_name):
@@ -426,7 +426,7 @@ class OgrImportSource(ImportSource):
         raise KeyError(f"No meta item found with name: {name}")
 
     def crs_definitions(self):
-        if self.is_spatial:
+        if self.has_geometry:
             spatial_ref = self.ogrlayer.GetSpatialRef()
             if spatial_ref is not None:
                 yield (
@@ -450,7 +450,7 @@ class OgrImportSource(ImportSource):
         )
 
     def get_geometry_v2_column_schema(self):
-        if not self.is_spatial:
+        if not self.has_geometry:
             return None
 
         name = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
