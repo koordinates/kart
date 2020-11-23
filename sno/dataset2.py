@@ -175,32 +175,22 @@ class Dataset2(RichBaseDataset):
         legend = self.get_legend(legend_hash)
         return legend.value_tuples_to_raw_dict(pk_values, non_pk_values)
 
-    def get_feature(self, pk_values=None, *, path=None, data=None, keys=True):
+    def get_feature(self, pk_values=None, *, path=None, data=None):
         """
         Gets the feature with the given primary key(s) / at the given "full" path.
-        The result is either a dict of values keyed by column name (if keys=True)
-        or a tuple of values in schema order (if keys=False).
+        The result is a dict of values keyed by column name.
         """
         raw_dict = self.get_raw_feature_dict(pk_values=pk_values, path=path, data=data)
-        return self.schema.feature_from_raw_dict(raw_dict, keys=keys)
+        return self.schema.feature_from_raw_dict(raw_dict)
 
-    def features(self, keys=True, fast=None):
+    def feature_blobs(self):
         """
         Returns a generator that calls get_feature once per feature.
         Each entry in the generator is the path of the feature and then the feature itself.
         """
-
-        # TODO: optimise.
         if self.FEATURE_PATH not in self.tree:
             return
-        for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH):
-            yield self.get_feature(path=blob.name, data=blob.data, keys=keys)
-
-    @property
-    def feature_count(self):
-        if self.FEATURE_PATH not in self.tree:
-            return 0
-        return sum(1 for blob in find_blobs_in_tree(self.tree / self.FEATURE_PATH))
+        yield from find_blobs_in_tree(self.tree / self.FEATURE_PATH)
 
     @classmethod
     def decode_path_to_pks(cls, path):
@@ -325,18 +315,6 @@ class Dataset2(RichBaseDataset):
         # TODO - the dataset interface still needs some work:
         # - having a _blob version of encode_feature is too many similar methods.
         return self.encode_feature(feature, self.schema)[1]
-
-    def get_feature_tuples(self, row_pks, col_names=None, *, ignore_missing=False):
-        # TODO - make the signature more like the features method, which supports results as tuples or dicts.
-        # TODO - support col_names (and maybe support it for features method too).
-        for pk in row_pks:
-            try:
-                yield self.get_feature(pk, keys=False)
-            except KeyError:
-                if ignore_missing:
-                    continue
-                else:
-                    raise
 
     def apply_meta_diff(
         self, meta_diff, tree_builder, *, allow_missing_old_values=False

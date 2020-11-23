@@ -263,16 +263,12 @@ class Schema:
         cols = ",\n".join(repr(c) for c in self.columns)
         return f"Schema([{cols}])"
 
-    def feature_from_raw_dict(self, raw_dict, keys=True):
+    def feature_from_raw_dict(self, raw_dict):
         """
         Takes a "raw" feature dict - values keyed by column ID.
-        Returns a dict of values keyed by column name (if keys=True)
-        or a tuple of value in schema order (if keys=False).
+        Returns a dict of values keyed by column name.
         """
-        if keys:
-            return {c.name: raw_dict.get(c.id, None) for c in self.columns}
-        else:
-            return tuple([raw_dict.get(c.id, None) for c in self.columns])
+        return {c.name: raw_dict.get(c.id, None) for c in self.columns}
 
     def feature_to_raw_dict(self, feature):
         """

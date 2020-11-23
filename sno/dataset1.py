@@ -39,6 +39,7 @@ class Dataset1(RichBaseDataset):
 
     DATASET_DIRNAME = ".sno-table"
     DATASET_PATH = ".sno-table/"
+    FEATURE_PATH = DATASET_PATH
     VERSION_PATH = ".sno-table/meta/version"
     VERSION_CONTENTS = {"version": "1.0"}
 
@@ -162,76 +163,37 @@ class Dataset1(RichBaseDataset):
 
         return feature
 
-    def _get_feature(self, pk_value, *, path=None):
+    def get_feature(self, pk_values=None, *, path=None, data=None):
+        # In dataset1, pk_values is always a single value, not a list.
+        # TODO: Fix up pk_values to be either a string or a list everywhere.
+
         # The caller must supply at least one of (pk_values, path) so we know which
         # feature is meant. We can infer whichever one is missing from the one supplied.
-        if pk_value is None and path is None:
+        if pk_values is None and path is None:
             raise ValueError("Either <pk_values> or <path> must be supplied")
 
-        if path is not None:
-            rel_path = self.ensure_rel_path(path)
+        if pk_values is not None:
+            pk_values = self.cast_primary_key(pk_values)
         else:
-            pk_value = self.cast_primary_key(pk_value)
-            rel_path = self.encode_1pk_to_path(pk_value, relative=True)
+            pk_values = self.decode_path_to_1pk(path)
 
-        leaf = self.tree / rel_path
-        if not isinstance(leaf, pygit2.Blob):
-            raise IntegrityError(
-                f"Unexpected TreeEntry type={leaf.type_str} at {rel_path}"
-            )
-        return leaf
-
-    def get_feature(self, pk_value, *, path=None):
-        blob = self._get_feature(pk_value=pk_value, path=path)
-        return self.repo_feature_to_dict(blob.name, memoryview(blob))
-
-    def get_feature_tuples(self, pk_values, col_names, *, ignore_missing=False):
-        tupleizer = self.build_feature_tupleizer(col_names)
-        for pk in pk_values:
-            try:
-                blob = self._get_feature(pk)
-            except KeyError:
-                if ignore_missing:
-                    continue
-                else:
-                    raise
-
-            yield tupleizer(blob)
-
-    def build_feature_tupleizer(self, tuple_cols):
-        field_cid_map = self.field_cid_map
-
-        ftuple_order = []
-        for field_name in tuple_cols:
-            if field_name == self.primary_key:
-                ftuple_order.append(-1)
+        if data is None:
+            if path is not None:
+                rel_path = self.ensure_rel_path(path)
             else:
-                ftuple_order.append(field_cid_map[field_name])
-        ftuple_order = tuple(ftuple_order)
+                rel_path = self.encode_1pk_to_path(pk_values, relative=True)
+            data = self.get_data_at(rel_path, as_memoryview=True)
 
-        def tupleizer(blob):
-            bin_feature = msgpack.unpackb(
-                blob.data,
-                ext_hook=self._msgpack_unpack_ext,
-                raw=False,
-                use_list=False,
-            )
-            return tuple(
-                [
-                    self.decode_path_to_1pk(blob.name) if c == -1 else bin_feature[c]
-                    for c in ftuple_order
-                ]
-            )
+        return self.repo_feature_to_dict(path or rel_path, data)
 
-        return tupleizer
-
-    def _iter_feature_blobs(self, fast=False):
+    def feature_blobs(self):
         """
-        Iterates over all the features in self.tree that match the expected
-        pattern for a feature, and yields the following for each:
-        >>> feature_builder(path_name, path_data)
+        Yields all the blobs in self.tree that match the expected pattern for a feature.
         """
-        sno_table_tree = self.tree / self.DATASET_DIRNAME
+        if self.FEATURE_PATH not in self.tree:
+            return
+
+        feature_tree = self.tree / self.FEATURE_PATH
 
         # .sno-table/
         #   [hex(pk-hash):2]/
@@ -244,7 +206,7 @@ class Dataset1(RichBaseDataset):
             fr"(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$"
         )
 
-        for dir1 in sno_table_tree:
+        for dir1 in feature_tree:
             if hasattr(dir1, "data") or not RE_DIR.match(dir1.name):
                 continue
 
@@ -253,31 +215,16 @@ class Dataset1(RichBaseDataset):
                     continue
 
                 for leaf in dir2:
-                    if not fast:
-                        if not RE_LEAF.match(leaf.name):
-                            continue
-                        elif not hasattr(leaf, "data"):
-                            path = f".sno-table/{dir1.name}/{dir2.name}/{leaf.name}"
-                            self.L.warn(
-                                f"features: No data found at path {path}, type={type(leaf)}"
-                            )
-                            continue
+                    if not RE_LEAF.match(leaf.name):
+                        continue
+                    elif not hasattr(leaf, "data"):
+                        path = f".sno-table/{dir1.name}/{dir2.name}/{leaf.name}"
+                        self.L.warn(
+                            f"features: No data found at path {path}, type={type(leaf)}"
+                        )
+                        continue
 
                     yield leaf
-
-    def features(self, **kwargs):
-        """ Feature iterator yielding (encoded_pk, feature-dict) pairs """
-        for blob in self._iter_feature_blobs(fast=False):
-            yield self.repo_feature_to_dict(blob.name, memoryview(blob))
-
-    def feature_tuples(self, col_names, **kwargs):
-        """ Optimised feature iterator yielding tuples, ordered by the columns from col_names """
-        tupleizer = self.build_feature_tupleizer(col_names)
-        return (tupleizer(blob) for blob in self._iter_feature_blobs(fast=True))
-
-    @property
-    def feature_count(self):
-        return sum(1 for blob in self._iter_feature_blobs())
 
     def encode_feature(
         self,

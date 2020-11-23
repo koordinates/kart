@@ -568,9 +568,9 @@ class WorkingCopy_Postgis(WorkingCopy):
                 t0p = t0
 
                 CHUNK_SIZE = 10000
-                for rows in self._chunk(dataset.feature_tuples(col_names), CHUNK_SIZE):
-
-                    dbcur.executemany(sql_insert_features, rows)
+                for row_dicts in self._chunk(dataset.features(), CHUNK_SIZE):
+                    row_tuples = (tuple(row_dict.values()) for row_dict in row_dicts)
+                    dbcur.executemany(sql_insert_features, row_tuples)
                     feat_count += changes_rowcount(dbcur)
 
                     nc = feat_count / CHUNK_SIZE
@@ -629,13 +629,12 @@ class WorkingCopy_Postgis(WorkingCopy):
 
         feat_count = 0
         CHUNK_SIZE = 10000
-        for rows in self._chunk(
-            dataset.get_feature_tuples(
-                pk_iter, col_names, ignore_missing=ignore_missing
-            ),
+        for row_dicts in self._chunk(
+            dataset.get_features(pk_iter, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
-            dbcur.executemany(sql_write_feature, (tuple(r) for r in rows))
+            row_tuples = (tuple(row_dict.values()) for row_dict in row_dicts)
+            dbcur.executemany(sql_write_feature, row_tuples)
             feat_count += changes_rowcount(dbcur)
 
         return feat_count

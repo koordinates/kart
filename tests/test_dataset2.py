@@ -184,9 +184,9 @@ def test_feature_roundtrip(gen_uuid):
     schema_path, schema_data = EMPTY_DATASET.encode_schema(schema)
     legend_path, legend_data = EMPTY_DATASET.encode_legend(schema.legend)
 
-    # Feature tuples must be in schema order:
+    # encode_feature also accepts a feature tuple, but mostly we use dicts everywhere.
     feature_tuple = ("010100000087BF756489EF5C4C", 7, "GIS Choir", b"MP3")
-    # But for feature dicts, the initialisation order is not important.
+    # When encoding dicts, we use the keys - so the correct initialisation order is not necessary.
     feature_dict = {
         "artist": "GIS Choir",
         "recording": b"MP3",
@@ -204,13 +204,11 @@ def test_feature_roundtrip(gen_uuid):
     )
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped_tuple = dataset2.get_feature(path=feature_path, keys=False)
-    assert roundtripped_tuple is not feature_tuple
-    assert roundtripped_tuple == feature_tuple
-
-    roundtripped_dict = dataset2.get_feature(path=feature_path, keys=True)
-    assert roundtripped_dict is not feature_dict
-    assert roundtripped_dict == feature_dict
+    roundtripped_feature = dataset2.get_feature(path=feature_path)
+    assert roundtripped_feature is not feature_dict
+    assert roundtripped_feature == feature_dict
+    # We guarantee that the dict iterates in row-order.
+    assert tuple(roundtripped_feature.values()) == feature_tuple
 
 
 def test_schema_change_roundtrip(gen_uuid):
@@ -266,9 +264,7 @@ def test_schema_change_roundtrip(gen_uuid):
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
     # Old columns that are not present in the new schema are gone.
     # New columns that are not present in the old schema have 'None's.
-    roundtripped = dataset2.get_feature(path=feature_path, keys=False)
-    assert roundtripped == (7, None, "Bloggs", "Joe", None)
-    roundtripped = dataset2.get_feature(path=feature_path, keys=True)
+    roundtripped = dataset2.get_feature(path=feature_path)
     assert roundtripped == {
         "personnel_id": 7,
         "tax_file_number": None,
@@ -276,3 +272,5 @@ def test_schema_change_roundtrip(gen_uuid):
         "first_name": "Joe",
         "middle_names": None,
     }
+    # We guarantee that the dict iterates in row-order.
+    assert tuple(roundtripped.values()) == (7, None, "Bloggs", "Joe", None)

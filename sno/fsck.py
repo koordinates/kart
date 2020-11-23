@@ -161,18 +161,14 @@ def fsck(ctx, reset_datasets, fsck_args):
             if not has_err:
                 click.echo("Checking features...")
                 feature_err_count = 0
-                for feature in dataset.features():
-
-                    # TODO - reintroduce this check by writing Feature objects, instead of using dicts everywhere.
-                    """
+                for feature, blob in dataset.features_plus_blobs():
                     h_verify = os.path.basename(dataset.encode_1pk_to_path(feature[pk]))
-                    if pk_hash != h_verify:
+                    if blob.name != h_verify:
                         has_err = True
                         click.secho(
-                            f"✘ Hash mismatch for feature '{feature[pk]}': repo says {pk_hash} but should be {h_verify}",
+                            f"✘ Hash mismatch for feature '{feature[pk]}': repo says {blob.name} but should be {h_verify}",
                             fg="red",
                         )
-                    """
 
                     dbcur.execute(
                         f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;",

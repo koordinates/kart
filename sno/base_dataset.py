@@ -155,6 +155,7 @@ class BaseDataset(ImportSource):
         raise NotImplementedError()
 
     @property
+    @functools.lru_cache(maxsize=1)
     def primary_key(self):
         """Returns the name of the primary key column."""
         # TODO - adapt this interface when we support more than one primary key.
@@ -184,20 +185,38 @@ class BaseDataset(ImportSource):
             "last-modified": "..."
         }
         """
-        raise NotImplementedError()
+        for blob in self.feature_blobs():
+            yield self.get_feature(path=blob.name, data=blob.data)
 
-    def get_feature(self, pk_values):
+    @property
+    def feature_count(self):
+        """The total number of features in this dataset."""
+        return sum(1 for blob in self.feature_blobs())
+
+    def get_features(self, row_pks, *, ignore_missing=False):
+        """
+        Yields a dict for each of the specified features.
+        If ignore_missing is True, then failing to find a specified feature does not raise a KeyError.
+        """
+        for pk_values in row_pks:
+            try:
+                yield self.get_feature(pk_values)
+            except KeyError:
+                if ignore_missing:
+                    continue
+                else:
+                    raise
+
+    def get_feature(self, pk_values=None, *, path=None, data=None):
         """
         Return the feature with the given primary-key value(s).
         A single feature will be returned - multiple pk_values should only be supplied if there are multiple pk columns.
+
+        The caller must supply at least one of (pk_values, path) so we know which feature is meant. We can infer
+        whichever one is missing from the one supplied. If the caller knows both already, they can supply both, to avoid
+        redundant work. Similarly, if the caller knows data, they can supply that too to avoid redundant work.
         """
         raise NotImplementedError()
-
-    def feature_tuples(self, col_names, **kwargs):
-        """ Feature iterator yielding tuples, ordered by the columns from col_names """
-        # Subclasses can override to make more efficient.
-        for f in self.features():
-            yield tuple(f[c] for c in col_names)
 
 
 class IntegrityError(ValueError):
