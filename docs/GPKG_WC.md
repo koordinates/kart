@@ -11,14 +11,14 @@ Most geospatial data can be converted to GPKG format without losing any fidelity
 
 #### Primary keys
 
-GPKG requires integer primary keys, for tables that have a geometry column - other tables do not have this constraint [[GPKG spec]](http://www.geopackage.org/spec120/#feature_user_tables). Depending on what kind of primary keys your dataset has, you may or may not be able to check it out using a GPKG working copy.
+GPKG requires integer primary keys for tables that have a geometry column. Other tables do not have this constraint [[GPKG spec]](http://www.geopackage.org/spec120/#feature_user_tables). Sno follows these requirements as described below:
 
  * **Integer primary keys** \
-     There are no issues checking out datasets with integer primary keys in a GPKG working copy.
+     Integer primary keys are preserved fully and function normally in a GPKG working copy.
 
  * **String primary keys** (or any other non-integer type) \
      If the dataset **does not** have a geometry column, then these primary keys are checked out without modification. \
-     If the dataset **does** have a geometry column, then the non-integer primary key column is demoted to a regular column (but constrained to be unique and non-null), and another column is added to the table that is an integer primary key column, for the sole purpose of making the table conform to the GPKG specification. The additional integer column is called `.sno-auto-pk`. It is not part of the dataset, its contents are arbitary (except that they conform to GPKG specification), and it is not tracked by sno - any edits specifically to this column will not be committed.
+     If the dataset **does** have a geometry column, then the primary key column is demoted to a regular column (but constrained to be unique and not-null), and another column is added to the table that is an integer primary key column, for the sole purpose of making the table conform to the GPKG specification. The additional integer column is called `.sno-auto-pk`. It is not part of the dataset, its contents are arbitrary (except that they conform to the GPKG requirements), and it is not tracked by Sno - any edits specifically to this column will not be committed.
 
  * **No primary key column** \
    This is not yet supported.
@@ -26,7 +26,7 @@ GPKG requires integer primary keys, for tables that have a geometry column - oth
  * **Composite primary keys** (multiple primary key columns) \
    This is not yet supported.
 
-Work in this area is ongoing, expect to see a workaround for data without primary keys as Sno development continues.
+Work in this area is ongoing, expect to see support for data without primary keys as Sno development continues.
 
 Tracking bug for data without primary keys: [#212](https://github.com/koordinates/sno/issues/212)
 
@@ -36,7 +36,7 @@ A GPKG file is implemented as a [SQLite](https://www.sqlite.org/index.html) data
 
 #### Approximated types
 
-According to the (GPKG spec)[http://www.geopackage.org/spec/], a valid GPKG must contain only the following types:
+According to the [GPKG specification](http://www.geopackage.org/spec/), a valid GPKG must contain only the following types:
 
 * `BOOLEAN`
 * `BLOB`

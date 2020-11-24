@@ -247,7 +247,7 @@ def v2_column_schema_to_gpkg_spec(column_schema, has_geometry):
             result += " PRIMARY KEY AUTOINCREMENT NOT NULL"
         elif has_geometry:
             # GPKG feature-tables only allow integer PKs, so we demote this PK to a regular UNIQUE field.
-            result += f" UNIQUE NOT NULL CHECK({col_name}<> '')"
+            result += f" UNIQUE NOT NULL CHECK({col_name}<>'')"
         else:
             # Non-geometry tables are allowed non-integer primary keys
             result += " PRIMARY KEY NOT NULL"
