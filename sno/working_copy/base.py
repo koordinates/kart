@@ -278,12 +278,14 @@ class WorkingCopy:
         """
         ds_filter = ds_filter or UNFILTERED
         with self.session():
-            ds_diff = DatasetDiff()
-            ds_diff["meta"] = self.diff_db_to_tree_meta(dataset, raise_if_dirty)
-            find_renames = self.can_find_renames(ds_diff["meta"])
-            ds_diff["feature"] = self.diff_db_to_tree_feature(
-                dataset, ds_filter.get("feature", ()), find_renames, raise_if_dirty
+            meta_diff = self.diff_db_to_tree_meta(dataset, raise_if_dirty)
+            feature_diff = self.diff_db_to_tree_feature(
+                dataset, ds_filter.get("feature", ()), meta_diff, raise_if_dirty
             )
+
+        ds_diff = DatasetDiff()
+        ds_diff["meta"] = meta_diff
+        ds_diff["feature"] = feature_diff
         return ds_diff
 
     def diff_db_to_tree_meta(self, dataset, raise_if_dirty=False):
@@ -292,7 +294,7 @@ class WorkingCopy:
         """
         ds_meta_items = dict(dataset.meta_items())
         wc_meta_items = dict(self.meta_items(dataset))
-        self._remove_hidden_meta_diffs(ds_meta_items, wc_meta_items)
+        self._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
         result = DeltaDiff.diff_dicts(ds_meta_items, wc_meta_items)
         if raise_if_dirty and result:
             raise WorkingCopyDirty()
@@ -301,7 +303,7 @@ class WorkingCopy:
     # Subclasses should override if there are certain types they cannot represent perfectly.
     _APPROXIMATED_TYPES = None
 
-    def _remove_hidden_meta_diffs(self, ds_meta_items, wc_meta_items):
+    def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         """
         Remove any meta diffs that can't or shouldn't be committed, and so shouldn't be shown to the user.
         For all WC's, this means re-adding the column-IDs to schema.json since no WC can store column IDs.
@@ -318,13 +320,14 @@ class WorkingCopy:
         raise NotImplementedError()
 
     def diff_db_to_tree_feature(
-        self, dataset, feature_filter, find_renames, raise_if_dirty=False
+        self, dataset, feature_filter, meta_diff, raise_if_dirty=False
     ):
         pk_field = dataset.schema.pk_columns[0].name
+        find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as db:
             dbcur = db.cursor()
-            self._execute_diff_query(dbcur, dataset, feature_filter)
+            self._execute_diff_query(dbcur, dataset, feature_filter, meta_diff)
 
             feature_diff = DeltaDiff()
             insert_count = delete_count = 0

@@ -735,8 +735,8 @@ class WorkingCopy_Postgis(WorkingCopy):
     # Postgis approximates an int8 as an int16 - see super()._remove_hidden_meta_diffs
     _APPROXIMATED_TYPES = postgis_adapter.APPROXIMATED_TYPES
 
-    def _remove_hidden_meta_diffs(self, ds_meta_items, wc_meta_items):
-        super()._remove_hidden_meta_diffs(ds_meta_items, wc_meta_items)
+    def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
+        super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
 
         # Nowhere to put these in postgis WC
         for key in self._UNSUPPORTED_META_ITEMS:
@@ -761,7 +761,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         # This is already handled by register_type
         return g
 
-    def _execute_diff_query(self, dbcur, dataset, feature_filter=None):
+    def _execute_diff_query(self, dbcur, dataset, feature_filter=None, meta_diff=None):
         feature_filter = feature_filter or UNFILTERED
         table = dataset.table_name
         pk_field = dataset.schema.pk_columns[0].name

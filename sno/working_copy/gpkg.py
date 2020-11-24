@@ -139,24 +139,6 @@ class WorkingCopy_GPKG(WorkingCopy):
                 del self._db
                 L.debug(f"session(bulk={bulk}): new/done")
 
-    def _get_columns(self, dataset):
-        pk_field = None
-        cols = {}
-        for col in dataset.get_gpkg_meta_item("sqlite_table_info"):
-            col_spec = f"{gpkg.ident(col['name'])} {col['type']}"
-            if col["pk"]:
-                col_spec += " PRIMARY KEY"
-                pk_field = col["name"]
-                # TODO: Should INTEGER PRIMARY KEYs ever be non-AUTOINCREMENT?
-                # See https://github.com/koordinates/sno/issues/188
-                if col["type"] == "INTEGER":
-                    col_spec += " AUTOINCREMENT"
-            if col["notnull"]:
-                col_spec += " NOT NULL"
-            cols[col["name"]] = col_spec
-
-        return cols, pk_field
-
     def delete(self, keep_container_if_possible=False):
         """ Delete the working copy files """
         self.full_path.unlink()
@@ -370,6 +352,57 @@ class WorkingCopy_GPKG(WorkingCopy):
     # Some types are approximated as text in GPKG - see super()._remove_hidden_meta_diffs
     _APPROXIMATED_TYPES = gpkg_adapter.APPROXIMATED_TYPES
 
+    def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
+        # Fix up anything we may have done to the primary key before calling super()
+        if (
+            dataset.has_geometry
+            and "schema.json" in ds_meta_items
+            and "schema.json" in wc_meta_items
+        ):
+            self._restore_approximated_primary_key(
+                ds_meta_items["schema.json"], wc_meta_items["schema.json"]
+            )
+
+        super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
+
+    def _restore_approximated_primary_key(self, ds_schema, wc_schema):
+        """
+        GPKG requires that there is a primary key of type INTEGER (int64) in geospatial tables.
+        If the dataset had a primary key of another type, then this will have been approximated.
+        If the PK remains this same type when roundtripped, we remove this diff and treat it as the same.
+        """
+        ds_pk = self._find_pk(ds_schema)
+        wc_pk = self._find_pk(wc_schema)
+        if not ds_pk or not wc_pk:
+            return
+
+        if wc_pk["dataType"] != "integer":
+            # This isn't a compliant GPKG that we would create, maybe the user edited it.
+            # Keep the diff as it is.
+            return
+
+        if ds_pk["dataType"] == "integer":
+            # Dataset PK type of int8, int16, int32 was approximated as int64.
+            # Restore it to its original size
+            if wc_pk.get("size") != ds_pk.get("size"):
+                wc_pk["size"] = ds_pk.get("size")
+        else:
+            # Dataset PK has non-integer PK type, which would be approximated by demoting it to a non-PK
+            # and adding another column of type INTEGER PK that is not found in the dataset.
+            # If the working copy still has this structure, restore the original PK as a PK.
+            demoted_pk = self._find_by_name(wc_schema, ds_pk["name"])
+            if demoted_pk and demoted_pk["dataType"] == ds_pk["dataType"]:
+                # Remove auto-generated PK column
+                wc_schema.remove(wc_pk)
+                # Restore demoted-PK as PK again
+                demoted_pk["primaryKeyIndex"] = 0
+
+    def _find_pk(self, schema_cols):
+        return next((c for c in schema_cols if c.get("primaryKeyIndex") == 0), None)
+
+    def _find_by_name(self, schema_cols, name):
+        return next((c for c in schema_cols if c["name"] == name), None)
+
     def delete_meta(self, dataset):
         table_name = dataset.table_name
         with self.session() as db:
@@ -522,7 +555,7 @@ class WorkingCopy_GPKG(WorkingCopy):
 
     def _create_triggers(self, dbcur, dataset):
         table = dataset.table_name
-        pkf = gpkg.ident(gpkg.pk(dbcur.getconnection(), table))
+        pkf = gpkg.ident(dataset.primary_key)
         ts = gpkg.param_str(table)
 
         # sqlite doesn't let you do param substitutions in CREATE TRIGGER
@@ -616,20 +649,21 @@ class WorkingCopy_GPKG(WorkingCopy):
                 self.write_meta(dataset)
 
                 # Create the table
-                cols, pk_field = self._get_columns(dataset)
-                col_names = cols.keys()
-                col_specs = cols.values()
-                dbcur.execute(
-                    f"""
-                    CREATE TABLE {gpkg.ident(table)}
-                    ({', '.join(col_specs)});
-                """
-                )
+                table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
+
+                # GPKG requires an integer primary key for spatial tables, so we add it in if needed:
+                if dataset.has_geometry and "PRIMARY KEY" not in table_spec:
+                    table_spec = (
+                        '".sno-auto-pk" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,'
+                        + table_spec
+                    )
+
+                dbcur.execute(f"""CREATE TABLE {gpkg.ident(table)} ({table_spec});""")
 
                 L.info("Creating features...")
                 sql_insert_features = f"""
                     INSERT INTO {gpkg.ident(table)}
-                        ({','.join([gpkg.ident(k) for k in col_names])})
+                        ({','.join([gpkg.ident(col.name) for col in dataset.schema])})
                     VALUES
                         ({self._placeholders_with_setsrid(dataset)});
                 """
@@ -682,12 +716,9 @@ class WorkingCopy_GPKG(WorkingCopy):
             )
 
     def write_features(self, dbcur, dataset, pk_iter, *, ignore_missing=False):
-        cols, pk_field = self._get_columns(dataset)
-        col_names = cols.keys()
-
         sql_write_feature = f"""
             INSERT OR REPLACE INTO {gpkg.ident(dataset.table_name)}
-                ({','.join([gpkg.ident(k) for k in col_names])})
+                ({','.join([gpkg.ident(col.name) for col in dataset.schema])})
             VALUES
                 ({self._placeholders_with_setsrid(dataset)});
         """
@@ -705,11 +736,9 @@ class WorkingCopy_GPKG(WorkingCopy):
         return feat_count
 
     def delete_features(self, dbcur, dataset, pk_iter):
-        cols, pk_field = self._get_columns(dataset)
-
         sql_del_feature = f"""
             DELETE FROM {gpkg.ident(dataset.table_name)}
-            WHERE {gpkg.ident(pk_field)}=?;
+            WHERE {gpkg.ident(dataset.primary_key)}=?;
         """
 
         feat_count = 0
@@ -736,24 +765,33 @@ class WorkingCopy_GPKG(WorkingCopy):
                     (table,),
                 )
 
-    def _execute_diff_query(self, dbcur, dataset, feature_filter=None):
+    def _execute_diff_query(self, dbcur, dataset, feature_filter=None, meta_diff=None):
         feature_filter = feature_filter or UNFILTERED
         table = dataset.table_name
-        pk_field = dataset.schema.pk_columns[0].name
+        if (
+            meta_diff
+            and "schema.json" in meta_diff
+            and meta_diff["schema.json"].new_value
+        ):
+            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+        else:
+            schema = dataset.schema
+
+        pk_field = schema.pk_columns[0].name
+        col_names = ",".join([f"TAB.{gpkg.ident(col.name)}" for col in schema])
 
         diff_sql = f"""
             SELECT
-                {self.TRACKING_TABLE}.pk AS ".__track_pk",
-                {gpkg.ident(table)}.*
-            FROM {self.TRACKING_TABLE} LEFT OUTER JOIN {gpkg.ident(table)}
-            ON ({self.TRACKING_TABLE}.pk = {gpkg.ident(table)}.{gpkg.ident(pk_field)})
-            WHERE ({self.TRACKING_TABLE}.table_name = ?)
+                TRA.pk AS ".__track_pk",
+                {col_names}
+            FROM {self.TRACKING_TABLE} TRA LEFT OUTER JOIN {gpkg.ident(table)} TAB
+            ON (TRA.pk = TAB.{gpkg.ident(pk_field)})
+            WHERE (TRA.table_name = ?)
         """
         params = [table]
+
         if feature_filter is not UNFILTERED:
-            diff_sql += (
-                f"\nAND {self.TRACKING_TABLE}.pk IN ({placeholders(feature_filter)})"
-            )
+            diff_sql += f"\nAND TRA.pk IN ({placeholders(feature_filter)})"
             params += [str(pk) for pk in feature_filter]
         dbcur.execute(diff_sql, params)
 

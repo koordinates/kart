@@ -1,8 +1,7 @@
 from datetime import datetime
 import re
 
-from . import crs_util
-from .exceptions import NotYetImplemented
+from . import crs_util, gpkg
 from .meta_items import META_ITEM_NAMES as V2_META_ITEM_NAMES
 from .schema import Schema, ColumnSchema
 from .timestamps import datetime_to_iso8601_utc
@@ -229,6 +228,33 @@ def generate_sqlite_table_info(v2_obj):
     ]
 
 
+def v2_schema_to_sqlite_spec(v2_obj):
+    """Generate a sqlite schema string from a dataset eg 'fid INTEGER, shape GEOMETRY'."""
+    result = [
+        v2_column_schema_to_gpkg_spec(col, v2_obj.has_geometry) for col in v2_obj.schema
+    ]
+    return ",".join(result)
+
+
+def v2_column_schema_to_gpkg_spec(column_schema, has_geometry):
+    gpkg_type = v2_type_to_gpkg_type(column_schema, has_geometry)
+    col_name = gpkg.ident(column_schema.name)
+    result = f"{col_name} {gpkg_type}"
+
+    is_pk = column_schema.pk_index is not None
+    if is_pk:
+        if gpkg_type == "INTEGER":
+            result += " PRIMARY KEY AUTOINCREMENT NOT NULL"
+        elif has_geometry:
+            # GPKG feature-tables only allow integer PKs, so we demote this PK to a regular UNIQUE field.
+            result += f" UNIQUE NOT NULL CHECK({col_name}<>'')"
+        else:
+            # Non-geometry tables are allowed non-integer primary keys
+            result += " PRIMARY KEY NOT NULL"
+
+    return result
+
+
 def gpkg_to_v2_schema(
     sqlite_table_info, gpkg_geometry_columns, gpkg_spatial_ref_sys, id_salt
 ):
@@ -277,12 +303,16 @@ def _gpkg_to_column_schema(
 
 def _column_schema_to_gpkg(cid, column_schema, has_geometry):
     is_pk = 1 if column_schema.pk_index is not None else 0
+    not_null = is_pk
+    gpkg_type = v2_type_to_gpkg_type(column_schema, has_geometry)
+    if gpkg_type != "INTEGER" and has_geometry:
+        is_pk = 0  # GPKG features only allow integer PKs, so we demote this PK to a regular field.
     return {
         "cid": cid,
         "name": column_schema.name,
         "pk": is_pk,
-        "type": v2_type_to_gpkg_type(column_schema, has_geometry),
-        "notnull": 1 if is_pk else 0,
+        "type": gpkg_type,
+        "notnull": not_null,
         "dflt_value": None,
     }
 
@@ -372,14 +402,12 @@ def _gkpg_geometry_columns_to_v2_type(ggc, gsrs):
 
 def v2_type_to_gpkg_type(column_schema, has_geometry):
     """Convert a v2 schema type to a gpkg type."""
-    if has_geometry and column_schema.pk_index is not None:
-        if column_schema.data_type == "integer":
-            return "INTEGER"  # Must be INTEGER, not MEDIUMINT etc.
-        else:
-            raise NotYetImplemented(
-                "GPKG features only support integer primary keys"
-                f" - converting from {column_schema.data_type} not yet supported"
-            )
+    if (
+        has_geometry
+        and column_schema.pk_index is not None
+        and column_schema.data_type == "integer"
+    ):
+        return "INTEGER"  # Must be INTEGER, not MEDIUMINT etc.
 
     v2_type = column_schema.data_type
     extra_type_info = column_schema.extra_type_info

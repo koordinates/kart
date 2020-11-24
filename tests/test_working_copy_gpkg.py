@@ -13,6 +13,7 @@ from sno.sno_repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 from sno.working_copy.gpkg import WorkingCopy_GPKG_1
+from sno.db_util import changes_rowcount, execute_insert_dict
 from test_working_copy import compute_approximated_types
 
 
@@ -70,10 +71,12 @@ def test_checkout_workingcopy(
         wc = WorkingCopy.get(repo)
         assert wc.assert_db_tree_match(head_tree)
 
-        rs = RepositoryStructure(repo)
-        cols, pk_col = wc._get_columns(rs[table])
-        expected_col_spec = f'"{pk_col}" INTEGER PRIMARY KEY AUTOINCREMENT'
-        assert cols[pk_col] in (expected_col_spec, f"{expected_col_spec} NOT NULL")
+        dataset = RepositoryStructure(repo)[table]
+        table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
+        expected_col_spec = (
+            f'"{dataset.primary_key}" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL'
+        )
+        assert expected_col_spec in table_spec
 
 
 def test_checkout_detached(data_working_copy, cli_runner, geopackage):
@@ -914,3 +917,61 @@ def test_types_roundtrip(data_working_copy, cli_runner):
     with data_working_copy("types2") as (repo_path, wc):
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stdout
+
+
+def _edit_string_pk_polygons(dbcur):
+    H = pytest.helpers.helpers()
+    layer = H.POLYGONS.LAYER
+    insert_record = H.POLYGONS.RECORD.copy()
+    insert_record["id"] = "test1234"
+    rc = execute_insert_dict(
+        dbcur,
+        layer,
+        insert_record,
+        gpkg_funcs={1: "GeomFromEWKT(?)"},
+    )
+    assert rc == 1
+    dbcur.execute(f"UPDATE {layer} SET id='POLY9998' WHERE id='POLY1424927';")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id='POLY1443053';")
+    assert changes_rowcount(dbcur) == 1
+    dbcur.execute(
+        f"DELETE FROM {layer} WHERE id IN ('POLY1452332', 'POLY1456853', 'POLY1456912', 'POLY1457297', 'POLY1457355');"
+    )
+    assert changes_rowcount(dbcur) == 5
+    pk_del = 1452332
+    return pk_del
+
+
+def test_edit_string_pks(data_working_copy, cli_runner, geopackage, edit_polygons):
+    with data_working_copy("string-pks2") as (repo_path, wc):
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+            _edit_string_pk_polygons(cur)
+
+        r = cli_runner.invoke(["status", "--output-format=json"])
+        assert r.exit_code == 0, r
+        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
+        assert changes == {
+            "nz_waca_adjustments": {
+                "feature": {"inserts": 1, "updates": 2, "deletes": 5}
+            }
+        }
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 1, r.stderr
+
+        r = cli_runner.invoke(["commit", "-m", "test"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[11:15] == [
+            "--- nz_waca_adjustments:feature:POLY1443053",
+            "+++ nz_waca_adjustments:feature:POLY1443053",
+            "-                         survey_reference = ␀",
+            "+                         survey_reference = test",
+        ]
