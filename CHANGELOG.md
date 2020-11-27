@@ -7,6 +7,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.7.0 (UNRELEASED)
 
  * Support for checking out a dataset with a string primary key (or other non-integer primary key) as a GPKG working copy [#307](https://github.com/koordinates/sno/issues/307)
+ * Bugfix - `sno meta set` didn't allow updates to `schema.json`
+ * Bugfix - Fixed a potential `KeyError` in `Schema._try_align`
+ * Bugfix - Fixed a potential `unexpected NoneType` in `WorkingCopy.is_dirty`
 
 ## 0.6.0
 
