@@ -855,7 +855,6 @@ def test_write_feature_performance(
 
                 if repo_version == 1:
                     kwargs = {
-                        "geom_cols": source.geom_cols,
                         "field_cid_map": dataset.get_field_cid_map(source),
                         "primary_key": source.primary_key,
                         "cast_primary_key": False,

@@ -61,6 +61,8 @@ class OgrImportSource(ImportSource):
         ogr.OFSTFloat32: ("float", 32),
     }
 
+    DEFAULT_GEOMETRY_COLUMN_NAME = "geom"
+
     @classmethod
     def _all_subclasses(cls):
         for sub in cls.__subclasses__():
@@ -317,34 +319,19 @@ class OgrImportSource(ImportSource):
         return self._primary_key or "FID"
 
     @property
-    @functools.lru_cache(maxsize=1)
-    def geom_cols(self):
-        ld = self.ogrlayer.GetLayerDefn()
-        cols = []
-        num_fields = ld.GetGeomFieldCount()
-        if num_fields == 0:
-            # aspatial dataset
-            return []
-        elif num_fields == 1:
-            # Some OGR drivers don't support named geometry fields;
-            # the dataset either has a geometry or doesn't.
-            # In situations where there _is_ a field, it doesn't necessarily have a name.
-            # So here we pick 'geom' as the default name.
-            return [ld.GetGeomFieldDefn(0).GetName() or "geom"]
-        for i in range(num_fields):
-            # Where there are multiple geom fields, they have names
-            cols.append(ld.GetGeomFieldDefn(i).GetName())
-        return cols
+    def layer_defn(self):
+        return self.ogrlayer.GetLayerDefn()
 
     @property
+    @functools.lru_cache(maxsize=1)
     def has_geometry(self):
-        return bool(self.geom_cols)
+        return bool(self.layer_defn.GetGeomFieldCount())
 
     def _check_primary_key_option(self, primary_key_name):
         if primary_key_name is None:
             return None
         if primary_key_name:
-            ld = self.ogrlayer.GetLayerDefn()
+            ld = self.layer_defn
 
             if primary_key_name == self.ogrlayer.GetFIDColumn():
                 # OGR automatically turns 'ogc_fid' column in postgres into an FID,
@@ -369,13 +356,11 @@ class OgrImportSource(ImportSource):
     def field_adapter_map(self):
         ld = self.ogrlayer.GetLayerDefn()
 
-        yield self.primary_key, adapt_value_noop
+        if self.primary_key:
+            yield self.primary_key, adapt_value_noop
 
-        gc = self.ogrlayer.GetGeometryColumn()
-        if self.geom_cols and not gc:
-            gc = self.geom_cols[0]
-        if gc:
-            yield gc, adapt_value_noop
+        for name in self.geometry_column_names:
+            yield name, adapt_value_noop
 
         for i in range(ld.GetFieldCount()):
             field = ld.GetFieldDefn(i)
@@ -385,7 +370,7 @@ class OgrImportSource(ImportSource):
     @ungenerator(dict)
     def _ogr_feature_to_sno_feature(self, ogr_feature):
         for name, adapter in self.field_adapter_map.items():
-            if name in self.geom_cols:
+            if name in self.geometry_column_names:
                 yield (
                     name,
                     Geometry.of(ogr_to_gpkg_geom(ogr_feature.GetGeometryRef())),
@@ -428,49 +413,60 @@ class OgrImportSource(ImportSource):
         raise KeyError(f"No meta item found with name: {name}")
 
     def crs_definitions(self):
-        if self.has_geometry:
-            spatial_ref = self.ogrlayer.GetSpatialRef()
-            if spatial_ref is not None:
+        ld = self.layer_defn
+        for i in range(ld.GetGeomFieldCount()):
+            spatial_ref = ld.GetGeomFieldDefn(i).GetSpatialRef()
+            if spatial_ref:
                 yield (
                     crs_util.get_identifier_str(spatial_ref),
                     crs_util.normalise_wkt(spatial_ref.ExportToWkt()),
                 )
 
-    def _get_meta_geometry_type(self):
-        # remove Z/M components
-        ogr_geom_type = ogr.GT_Flatten(self.ogrlayer.GetGeomType())
-        if ogr_geom_type == ogr.wkbUnknown:
-            return "GEOMETRY"
-        return (
-            # normalise the geometry type names the way the GPKG spec likes it:
-            # http://www.geopackage.org/spec/#geometry_types
-            ogr.GeometryTypeToName(ogr_geom_type)
-            # 'Line String' --> 'LineString'
-            .replace(" ", "")
-            # --> 'LINESTRING'
-            .upper()
-        )
-
-    def get_geometry_v2_column_schema(self):
-        if not self.has_geometry:
+    @property
+    def pk_column_schema(self):
+        if not self.primary_key:
             return None
 
-        name = self.ogrlayer.GetGeometryColumn() or self.geom_cols[0]
-        geometry_type = self._get_meta_geometry_type()
-        ogr_geom_type = self.ogrlayer.GetGeomType()
-        z = "Z" if ogr.GT_HasZ(ogr_geom_type) else ""
-        m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
-        extra_type_info = {
-            "geometryType": f"{geometry_type} {z}{m}".strip(),
-        }
+        ld = self.ogrlayer.GetLayerDefn()
 
-        crs_definitions = list(self.crs_definitions())
-        if crs_definitions:
-            extra_type_info["geometryCRS"] = crs_definitions[0][0]
+        ogr_pk_index = ld.GetFieldIndex(self.primary_key)
+        if ogr_pk_index != -1:
+            return self._field_to_v2_column_schema(ld.GetFieldDefn(ogr_pk_index))
+        else:
+            # FID field, isn't an OGR field
+            return ColumnSchema(
+                ColumnSchema.new_id(), self.primary_key, "integer", 0, size=64
+            )
 
-        return ColumnSchema(
-            ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
-        )
+    @property
+    @functools.lru_cache(maxsize=1)
+    def geometry_column_names(self):
+        ld = self.layer_defn
+        # Some OGR drivers don't support named geometry fields; the dataset either has a geometry or doesn't.
+        # In situations where there _is_ a field, it doesn't necessarily have a name.
+        # So here we pick `DEFAULT_GEOMETRY_COLUMN_NAME` ("geom") as the default name.
+        # Where there are multiple geom fields, they have names.
+        return [
+            ld.GetGeomFieldDefn(i).GetName() or self.DEFAULT_GEOMETRY_COLUMN_NAME
+            for i in range(ld.GetGeomFieldCount())
+        ]
+
+    @property
+    def geometry_columns_schema(self):
+        ld = self.layer_defn
+        return [
+            self._geom_field_to_v2_column_schema(ld.GetGeomFieldDefn(i))
+            for i in range(ld.GetGeomFieldCount())
+        ]
+
+    @property
+    def regular_columns_schema(self):
+        ld = self.layer_defn
+        return [
+            self._field_to_v2_column_schema(ld.GetFieldDefn(i))
+            for i in range(ld.GetFieldCount())
+            if ld.GetFieldDefn(i).GetName() != self.primary_key
+        ]
 
     def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
         if ogr_type not in ("Real", "Integer", "Integer64"):
@@ -535,37 +531,45 @@ class OgrImportSource(ImportSource):
             ColumnSchema.new_id(), name, data_type, pk_index, **extra_type_info
         )
 
+    def _geom_field_to_v2_column_schema(self, geom_fd):
+        name = geom_fd.GetName() or self.DEFAULT_GEOMETRY_COLUMN_NAME
+        v2_geom_type = self._get_v2_geometry_type(geom_fd)
+        extra_type_info = {"geometryType": v2_geom_type}
+
+        # TODO: Support tables with different CRSs in different columns.
+        crs_definitions = list(self.crs_definitions())
+        if crs_definitions:
+            extra_type_info["geometryCRS"] = crs_definitions[0][0]
+
+        return ColumnSchema(
+            ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
+        )
+
+    def _get_v2_geometry_type(self, geom_fd):
+        ogr_geom_type = geom_fd.GetType()
+        z = "Z" if ogr.GT_HasZ(ogr_geom_type) else ""
+        m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
+
+        ogr_geom_type = ogr.GT_Flatten(ogr_geom_type)
+        if ogr_geom_type == ogr.wkbUnknown:
+            v2_type = "GEOMETRY"
+        else:
+            # 'Line String' --> 'LineString' --> 'LINESTRING'
+            v2_type = ogr.GeometryTypeToName(ogr_geom_type).replace(" ", "").upper()
+
+        return f"{v2_type} {z}{m}".strip()
+
     @property
     def schema(self):
         try:
             return self._schema
         except AttributeError:
-            ld = self.ogrlayer.GetLayerDefn()
-
-            ogr_pk_index = ld.GetFieldIndex(self.primary_key)
-            if ogr_pk_index != -1:
-                pk_column = self._field_to_v2_column_schema(
-                    ld.GetFieldDefn(ogr_pk_index)
-                )
-            else:
-                # FID field, isn't an OGR field
-                pk_column = ColumnSchema(
-                    ColumnSchema.new_id(), self.primary_key, "integer", 0, size=64
-                )
-
-            geometry_column = self.get_geometry_v2_column_schema()
-            special_columns = (
-                [pk_column, geometry_column] if geometry_column else [pk_column]
+            pk_col = self.pk_column_schema
+            pk_cols = [pk_col] if pk_col else []
+            columns = (
+                pk_cols + self.geometry_columns_schema + self.regular_columns_schema
             )
-
-            fds = [ld.GetFieldDefn(i) for i in range(ld.GetFieldCount())]
-            other_columns = [
-                self._field_to_v2_column_schema(fd)
-                for fd in fds
-                if fd.GetName() != self.primary_key
-            ]
-
-            self._schema = Schema(special_columns + other_columns)
+            self._schema = Schema(columns)
             return self._schema
 
     @schema.setter
@@ -636,7 +640,7 @@ class GPKGImportSource(OgrImportSource):
     @ungenerator(dict)
     def _gpkg_feature_to_sno_feature(self, gpkg_feature):
         for key, value in gpkg_feature.items():
-            if key in self.geom_cols:
+            if key in self.geometry_column_names:
                 yield (key, Geometry.of(value))
             else:
                 yield key, value
@@ -770,6 +774,9 @@ class PostgreSQLImportSource(OgrImportSource):
                 [self.table],
             )
             rows = cur.fetchall()
+            num_pks = len(rows)
+            if num_pks == 0:
+                return None
             # TODO: handle multi-column PKs. Ignoring for now.
-            assert len(rows) == 1
+            assert num_pks == 1
             return rows[0][0]

@@ -10,7 +10,6 @@ import pygit2
 
 from . import gpkg_adapter
 from .geometry import Geometry
-from .base_dataset import IntegrityError
 from .rich_base_dataset import RichBaseDataset
 from .serialise_util import json_unpack
 
@@ -230,7 +229,6 @@ class Dataset1(RichBaseDataset):
         self,
         feature,
         field_cid_map=None,
-        geom_cols=None,
         primary_key=None,
         cast_primary_key=True,
         relative=False,
@@ -245,20 +243,16 @@ class Dataset1(RichBaseDataset):
             self.encode_1pk_to_path(
                 feature[primary_key], cast_primary_key, relative=relative
             ),
-            self.encode_feature_blob(feature, field_cid_map, geom_cols, primary_key),
+            self.encode_feature_blob(feature, field_cid_map, primary_key),
         )
 
-    def encode_feature_blob(
-        self, feature, field_cid_map=None, geom_cols=None, primary_key=None
-    ):
+    def encode_feature_blob(self, feature, field_cid_map=None, primary_key=None):
         """
         Given a feature, returns the data that *should be written* to write this feature
         (but not the path it should be written to).
         """
         if field_cid_map is None:
             field_cid_map = self.field_cid_map
-        if geom_cols is None:
-            geom_cols = [self.geom_column_name]
         if primary_key is None:
             primary_key = self.primary_key
 
@@ -269,9 +263,8 @@ class Dataset1(RichBaseDataset):
 
             field_id = field_cid_map[field]
             value = feature[field]
-            if field in geom_cols:
-                if value is not None:
-                    value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
+            if isinstance(value, Geometry):
+                value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
 
             bin_feature[field_id] = value
 
@@ -324,9 +317,8 @@ class Dataset1(RichBaseDataset):
 
                 field_id = field_cid_map[field]
                 value = row[field]
-                if field in source.geom_cols:
-                    if value is not None:
-                        value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
+                if isinstance(value, Geometry):
+                    value = msgpack.ExtType(self.MSGPACK_EXT_GEOM, value)
 
                 bin_feature[field_id] = value
 
