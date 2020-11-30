@@ -13,6 +13,7 @@ from .base_dataset import BaseDataset
 from .structure import RepositoryStructure
 from .repo_version import extra_blobs_for_version
 from .timestamps import minutes_to_tz_offset
+from .pk_generation import PkGeneratingImportSource
 
 
 L = logging.getLogger("sno.fast_import")
@@ -73,12 +74,16 @@ def fast_import_tables(
     extra_blobs = extra_blobs_for_version(repo_version) if not head_tree else []
 
     ImportSource.check_valid(sources)
+
     if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:
             if source.dest_path in head_tree:
                 raise InvalidOperation(
                     f"Cannot import to {source.dest_path}/ - already exists in repository"
                 )
+
+    # Add primary keys if needed.
+    sources = PkGeneratingImportSource.wrap_if_needed(sources, repo)
 
     cmd = [
         "git",
@@ -152,12 +157,7 @@ def fast_import_tables(
                         f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
                     )
 
-                for x in write_blobs_to_stream(
-                    p.stdin, dataset.import_iter_meta_blobs(repo, source)
-                ):
-                    pass
-
-                # features
+                # Features
                 t1 = time.monotonic()
                 src_iterator = source.features()
 
@@ -179,6 +179,12 @@ def fast_import_tables(
                     click.echo(
                         f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)"
                     )
+
+                # Meta items - written second as certain importers generate extra metadata as they import features.
+                for x in write_blobs_to_stream(
+                    p.stdin, dataset.import_iter_meta_blobs(repo, source)
+                ):
+                    pass
 
         p.stdin.write(b"\ndone\n")
     except BrokenPipeError:

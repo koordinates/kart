@@ -2,6 +2,8 @@ from collections import namedtuple
 import functools
 import uuid
 
+import pygit2
+
 from .geometry import Geometry
 from .serialise_util import (
     msg_pack,
@@ -293,15 +295,28 @@ class Schema:
                 raw_dict[column.id] = value
         return raw_dict
 
-    def encode_feature_blob(self, feature):
+    def encode_feature(self, feature, without_pk=False):
         """
-        Given a feature, encodes it using this schema.
-        Doesn't encode a path, so primary key values are not encoded.
+        Given a feature, encode it in binary using this schema.
+        If without_pk is True, the resulting bytes don't depend on the feature's pk values.
         """
         raw_dict = self.feature_to_raw_dict(feature)
         pk_values, non_pk_values = self.legend.raw_dict_to_value_tuples(raw_dict)
-        data = msg_pack([self.legend.hexhash(), non_pk_values])
-        return data
+        legend_hash = self.legend.hexhash()
+        data = (
+            [legend_hash, non_pk_values]
+            if without_pk
+            else [legend_hash, pk_values, non_pk_values]
+        )
+        return msg_pack(data)
+
+    def hash_feature(self, feature, without_pk=False):
+        """
+        Given a feature, git-hash it using this schema.
+        If without_pk is True, the resulting hash doesn't depend on the feature's pk values.
+        """
+        data = self.encode_feature(feature, without_pk=without_pk)
+        return pygit2.hash(data).hex
 
     def _to_legend(self):
         pk_column_ids = []

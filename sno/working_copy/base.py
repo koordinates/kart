@@ -426,17 +426,15 @@ class WorkingCopy:
         Modifies feature_diff in place.
         """
 
-        def hash_feature(feature):
-            return pygit2.hash(dataset.encode_feature_blob(feature)).hex
-
+        schema = dataset.schema
         inserts = {}
         deletes = {}
 
         for delta in feature_diff.values():
             if delta.type == "insert":
-                inserts[hash_feature(delta.new_value)] = delta
+                inserts[schema.hash_feature(delta.new_value, without_pk=True)] = delta
             elif delta.type == "delete":
-                deletes[hash_feature(delta.old_value)] = delta
+                deletes[schema.hash_feature(delta.old_value, without_pk=True)] = delta
 
         for h in deletes:
             if h in inserts:

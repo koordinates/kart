@@ -523,10 +523,16 @@ def postgis_layer(postgis_db, data_archive):
 
 
 def _test_postgis_import(
-    tmp_path, cli_runner, chdir, *, table_name, pk_name="id", pk_size=64, import_args=()
+    repo_path,
+    cli_runner,
+    chdir,
+    *,
+    table_name,
+    pk_name="id",
+    pk_size=64,
+    import_args=(),
 ):
-    repo_path = tmp_path / "repo"
-    r = cli_runner.invoke(["init", repo_path, "--repo-version=2"])
+    r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0, r
     with chdir(repo_path):
         r = cli_runner.invoke(
@@ -585,7 +591,7 @@ def test_postgis_import(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
         _test_postgis_import(
-            tmp_path, cli_runner, chdir, table_name="nz_waca_adjustments"
+            tmp_path / "repo", cli_runner, chdir, table_name="nz_waca_adjustments"
         )
 
 
@@ -610,7 +616,7 @@ def test_postgis_import_from_view(
         """
         )
         _test_postgis_import(
-            tmp_path,
+            tmp_path / "repo",
             cli_runner,
             chdir,
             table_name="nz_waca_adjustments_view",
@@ -643,13 +649,86 @@ def test_postgis_import_from_view_with_ogc_fid(
         """
         )
         _test_postgis_import(
-            tmp_path,
+            tmp_path / "repo",
             cli_runner,
             chdir,
             table_name="nz_waca_adjustments_view",
             pk_name="ogc_fid",
             import_args=["--primary-key=ogc_fid"],
         )
+
+
+def test_postgis_import_from_view_no_pk(
+    postgis_db,
+    postgis_layer,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
+    chdir,
+):
+    repo_path = tmp_path / "repo"
+    with postgis_layer(
+        "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
+    ):
+        c = postgis_db.cursor()
+
+        c.execute(
+            """
+            CREATE VIEW nz_waca_adjustments_view AS (
+                SELECT date_adjusted, survey_reference, adjusted_nodes, geom
+                FROM nz_waca_adjustments
+                WHERE id % 3 != 0
+            )
+        """
+        )
+        _test_postgis_import(
+            repo_path,
+            cli_runner,
+            chdir,
+            table_name="nz_waca_adjustments_view",
+            pk_name="generated-pk",
+        )
+
+        repo = SnoRepo(repo_path)
+        dataset = structure.RepositoryStructure(repo)["nz_waca_adjustments_view"]
+        initial_pks = [f["generated-pk"] for f in dataset.features()]
+        assert len(initial_pks) == 161
+        assert max(initial_pks) == 161
+        assert sorted(initial_pks) == list(range(1, 161 + 1))
+
+        c.execute("DROP VIEW nz_waca_adjustments_view;")
+        c.execute(
+            """
+            CREATE VIEW nz_waca_adjustments_view AS (
+                SELECT date_adjusted, survey_reference, adjusted_nodes, geom
+                FROM nz_waca_adjustments
+                WHERE id % 3 != 1
+            )
+        """
+        )
+
+        r = cli_runner.invoke(
+            [
+                "--repo",
+                str(repo_path.resolve()),
+                "import",
+                os.environ["SNO_POSTGRES_URL"],
+                "nz_waca_adjustments_view",
+                "--replace-existing",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        repo = SnoRepo(repo_path)
+        dataset = structure.RepositoryStructure(repo)["nz_waca_adjustments_view"]
+        new_pks = [f["generated-pk"] for f in dataset.features()]
+
+        assert len(new_pks) == 159
+        assert max(new_pks) == 228
+        assert len(set(initial_pks) & set(new_pks)) == 92
+        # 228 features total - but 161 are in the first group and 159 are in the second group
+        # Means 92 features are in both, and should be imported with the same PK both times
+        # 159 + 161 is 320, which is 92 more features than the actual total of 228
 
 
 def test_pk_encoding():

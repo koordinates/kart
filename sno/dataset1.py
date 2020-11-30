@@ -243,10 +243,10 @@ class Dataset1(RichBaseDataset):
             self.encode_1pk_to_path(
                 feature[primary_key], cast_primary_key, relative=relative
             ),
-            self.encode_feature_blob(feature, field_cid_map, primary_key),
+            self._encode_feature_blob(feature, field_cid_map, primary_key),
         )
 
-    def encode_feature_blob(self, feature, field_cid_map=None, primary_key=None):
+    def _encode_feature_blob(self, feature, field_cid_map=None, primary_key=None):
         """
         Given a feature, returns the data that *should be written* to write this feature
         (but not the path it should be written to).
