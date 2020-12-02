@@ -1,5 +1,7 @@
 import contextlib
 import logging
+import os
+import re
 import struct
 import subprocess
 import sys
@@ -16,6 +18,7 @@ from .exceptions import (
     NO_REPOSITORY,
 )
 from .repository_version import REPO_VERSIONS, get_repo_version
+from .timestamps import tz_offset_to_minutes
 from .working_copy import WorkingCopy
 
 L = logging.getLogger("sno.sno_repo")
@@ -376,6 +379,74 @@ class SnoRepo(pygit2.Repository):
             yield
         finally:
             self.lock_git_index()
+
+    @property
+    def head_commit(self):
+        """
+        Returns the commit at the current repo HEAD. Returns None if there is no commit at HEAD - ie, head_is_unborn.
+        """
+        return None if self.head_is_unborn else self.head.peel(pygit2.Commit)
+
+    @property
+    def head_tree(self):
+        """
+        Returns the tree at the current repo HEAD. Returns None if there is no tree at HEAD - ie, head_is_unborn.
+        """
+        return None if self.head_is_unborn else self.head.peel(pygit2.Tree)
+
+    @property
+    def head_branch(repo):
+        """
+        Returns the branch that HEAD is currently on. Returns None if head is not on a branch - ie, head_is_detached.
+        """
+        return None if repo.head_is_detached else repo.references["HEAD"].target
+
+    @property
+    def head_branch_shorthand(repo):
+        """
+        Returns the shorthand for the branch that HEAD is currently on.
+        Returns None if head is not on a branch - ie, head_is_detached.
+        """
+        if repo.head_is_detached:
+            return None
+        return repo.references["HEAD"].target.rsplit("/", 1)[-1]
+
+    _GIT_VAR_OUTPUT_RE = re.compile(
+        r"^(?P<name>.*) <(?P<email>[^>]*)> (?P<time>\d+) (?P<offset>[+-]?\d+)$"
+    )
+
+    def _signature(self, person_type, **overrides):
+        # 'git var' lets us use the environment variables to
+        # control the user info, e.g. GIT_AUTHOR_DATE.
+        # libgit2/pygit2 doesn't handle those env vars at all :(
+        env = os.environ.copy()
+
+        name = overrides.pop("name", None)
+        if name is not None:
+            env[f"GIT_{person_type}_NAME"] = name
+
+        email = overrides.pop("email", None)
+        if email is not None:
+            env[f"GIT_{person_type}_EMAIL"] = email
+
+        output = subprocess.check_output(
+            ["git", "var", f"GIT_{person_type}_IDENT"],
+            cwd=self.path,
+            encoding="utf8",
+            env=env,
+        )
+        m = self._GIT_VAR_OUTPUT_RE.match(output)
+        kwargs = m.groupdict()
+        kwargs["time"] = int(kwargs["time"])
+        kwargs["offset"] = tz_offset_to_minutes(kwargs["offset"])
+        kwargs.update(overrides)
+        return pygit2.Signature(**kwargs)
+
+    def author_signature(self, **overrides):
+        return self._signature("AUTHOR", **overrides)
+
+    def committer_signature(self, **overrides):
+        return self._signature("COMMITTER", **overrides)
 
     SNO_COMMON_README = [
         "",

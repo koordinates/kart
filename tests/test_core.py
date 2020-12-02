@@ -15,7 +15,7 @@ from sno.sno_repo import SnoRepo
 def test_walk_tree_1(data_archive):
     with data_archive("points"):
         r = SnoRepo(".")
-        root_tree = r.head.peel(pygit2.Tree)
+        root_tree = r.head_tree
 
         for i, (tree, path, dirs, blobs) in enumerate(walk_tree(root_tree, "root")):
             # print(tree, path, dirs, blobs)
@@ -56,7 +56,7 @@ def test_walk_tree_1(data_archive):
 def test_walk_tree_2(data_archive):
     with data_archive("points"):
         r = SnoRepo(".")
-        root_tree = r.head.peel(pygit2.Tree)
+        root_tree = r.head_tree
 
         path_list = []
         for i, (tree, path, dirs, blobs) in enumerate(walk_tree(root_tree, "")):
@@ -120,7 +120,7 @@ def test_walk_tree_2(data_archive):
 def test_walk_tree_3(data_archive):
     with data_archive("points"):
         r = SnoRepo(".")
-        root_tree = r.head.peel(pygit2.Tree)
+        root_tree = r.head_tree
 
         for i, (tree, path, dirs, blobs) in enumerate(
             walk_tree(root_tree, "root", topdown=False)

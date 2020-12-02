@@ -7,12 +7,11 @@ from enum import Enum, auto
 import click
 import pygit2
 
-from . import git_util
 from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .base_dataset import BaseDataset
 from .structure import RepositoryStructure
-from .repository_version import get_repo_version, extra_blobs_for_version
+from .repository_version import extra_blobs_for_version
 from .timestamps import minutes_to_tz_offset
 
 
@@ -64,19 +63,14 @@ def fast_import_tables(
     if replace_existing == ReplaceExisting.ALL:
         head_tree = None
     else:
-        head_tree = git_util.get_head_tree(repo)
+        head_tree = repo.head_tree
 
     if not head_tree:
-        # Starting from an effectively empty repo. Write the blobs needed for this repo version.
-        repo_version = get_repo_version(repo)
         replace_existing = ReplaceExisting.ALL
-        extra_blobs = extra_blobs_for_version(repo_version)
-    else:
-        # Starting from a repo with commits. Make sure we have a matching version.
-        repo_version = get_repo_version(repo, head_tree)
-        extra_blobs = ()
 
+    repo_version = repo.version
     dataset_class = BaseDataset.for_version(repo_version)
+    extra_blobs = extra_blobs_for_version(repo_version) if not head_tree else []
 
     ImportSource.check_valid(sources)
     if replace_existing == ReplaceExisting.DONT_REPLACE:
@@ -101,11 +95,11 @@ def fast_import_tables(
         import_branch = f"refs/heads/{uuid.uuid4()}"
 
         # may be None, if head is detached
-        orig_branch = git_util.get_head_branch(repo)
+        orig_branch = repo.head_branch
         header = generate_header(repo, sources, message, import_branch)
     else:
         import_branch = None
-    orig_commit = git_util.get_head_commit(repo)
+    orig_commit = repo.head_commit
 
     if not quiet:
         click.echo("Starting git-fast-import...")
@@ -120,7 +114,7 @@ def fast_import_tables(
             header += f"from {orig_commit.oid}\n"
         p.stdin.write(header.encode("utf8"))
 
-        # Write any extra blobs supplied by the client or needed for this version.
+        # Write the extra blob that records the repo's version:
         for i, blob_path in write_blobs_to_stream(p.stdin, extra_blobs):
             if replace_existing != ReplaceExisting.ALL and blob_path in head_tree:
                 raise ValueError(f"{blob_path} already exists")
@@ -240,8 +234,8 @@ def generate_header(repo, sources, message, branch):
     if message is None:
         message = generate_message(sources)
 
-    author = git_util.author_signature(repo)
-    committer = git_util.committer_signature(repo)
+    author = repo.author_signature()
+    committer = repo.committer_signature()
     return (
         f"commit {branch}\n"
         f"author {author.name} <{author.email}> {author.time} {minutes_to_tz_offset(author.offset)}\n"

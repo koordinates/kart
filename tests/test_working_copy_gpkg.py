@@ -57,7 +57,7 @@ def test_checkout_workingcopy(
         assert repo.head.name == "refs/heads/master"
         assert repo.head.shorthand == "master"
 
-        head_tree = repo.head.peel(pygit2.Tree)
+        head_tree = repo.head_tree
 
         wc_tree_id = (
             db.cursor()
@@ -190,7 +190,7 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         repo = SnoRepo(repo_path)
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
         db = geopackage(wc)
@@ -202,20 +202,20 @@ def test_checkout_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
-        assert repo.head.peel(pygit2.Commit).hex != H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex != H.POINTS.HEAD_SHA
 
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r
 
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # new branch from remote
         r = cli_runner.invoke(["checkout", "-b", "test99", "myremote/master"])
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex == H.POINTS.HEAD_SHA
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/master"
 
@@ -246,7 +246,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         repo = SnoRepo(repo_path)
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
         db = geopackage(wc)
@@ -262,7 +262,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
-        new_commit = repo.head.peel(pygit2.Commit).hex
+        new_commit = repo.head_commit.hex
         assert new_commit != H.POINTS.HEAD_SHA
 
         r = cli_runner.invoke(["switch", "master"])
@@ -271,7 +271,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
         assert repo.head.name == "refs/heads/master"
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
         with db:
@@ -293,14 +293,14 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
         assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT + 1
 
         assert repo.head.name == "refs/heads/foo"
-        assert repo.head.peel(pygit2.Commit).hex == new_commit
+        assert repo.head_commit.hex == new_commit
 
         # new branch from remote
         r = cli_runner.invoke(["switch", "-c", "test99", "myremote/master"])
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
-        assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+        assert repo.head_commit.hex == H.POINTS.HEAD_SHA
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/master"
 
@@ -733,7 +733,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         r = cli_runner.invoke(["commit", "-m", "test1"])
         assert r.exit_code == 0, r
 
-        new_commit = repo.head.peel(pygit2.Commit).hex
+        new_commit = repo.head_commit.hex
         assert new_commit != H.POINTS.HEAD_SHA
         print(f"Original commit={H.POINTS.HEAD_SHA} New commit={new_commit}")
 

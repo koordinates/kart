@@ -46,7 +46,7 @@ def get_branch_status_json(repo):
     if repo.is_empty:
         return output
 
-    commit = repo.head.peel(pygit2.Commit)
+    commit = repo.head_commit
     output["commit"] = commit.id.hex
     output["abbrevCommit"] = commit.short_id
 

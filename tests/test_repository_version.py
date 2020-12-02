@@ -1,7 +1,6 @@
-import pygit2
-
 import pytest
 
+from sno.sno_repo import SnoRepo
 from sno.repository_version import get_repo_version
 
 
@@ -17,6 +16,6 @@ def test_get_repo_version(
     elif repo_version == 2:
         archive = f"{archive}2"
     with data_archive_readonly(archive):
-        repo = pygit2.Repository(".")
-        detected_version = get_repo_version(repo)
+        repo = SnoRepo(".")
+        detected_version = get_repo_version(repo, allow_legacy_versions=True)
         assert detected_version == repo_version

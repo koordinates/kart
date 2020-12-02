@@ -67,7 +67,7 @@ def test_checkout_workingcopy(
             wc = WorkingCopy.get(repo)
             assert wc.is_created()
 
-            head_tree_id = repo.head.peel(pygit2.Tree).id.hex
+            head_tree_id = repo.head_tree.hex
             assert wc.assert_db_tree_match(head_tree_id)
 
 

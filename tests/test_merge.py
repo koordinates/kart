@@ -70,7 +70,7 @@ def test_merge_fastforward(
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == commit_id
-        c = repo.head.peel(pygit2.Commit)
+        c = repo.head_commit
         assert len(c.parents) == 1
         assert c.parents[0].parents[0].parents[0].hex == h
 
@@ -133,7 +133,7 @@ def test_merge_fastforward_noff(
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == merge_commit_id
-        c = repo.head.peel(pygit2.Commit)
+        c = repo.head_commit
         assert len(c.parents) == 2
         assert c.parents[0].hex == h
         assert c.parents[1].hex == commit_id
@@ -204,7 +204,7 @@ def test_merge_true(
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == merge_commit_id
-        c = repo.head.peel(pygit2.Commit)
+        c = repo.head_commit
         assert len(c.parents) == 2
         assert c.parents[0].hex == m_commit_id
         assert c.parents[1].hex == b_commit_id

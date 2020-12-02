@@ -96,7 +96,7 @@ def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
 
     commit = resolved.commit
     head_ref = resolved.reference.name if resolved.reference else commit.id
-    same_commit = repo.head.peel(pygit2.Commit) == commit
+    same_commit = repo.head_commit == commit
 
     force = force or discard_changes
     if not same_commit and not force:
@@ -184,7 +184,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             resolved = CommitWithReference.resolve(repo, "HEAD")
         commit = resolved.commit
 
-        same_commit = repo.head.peel(pygit2.Commit) == commit
+        same_commit = repo.head_commit == commit
         if not discard_changes and not same_commit:
             ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
@@ -236,7 +236,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
 
         commit = existing_branch.peel(pygit2.Commit)
-        same_commit = repo.head.peel(pygit2.Commit) == commit
+        same_commit = repo.head_commit == commit
         if not discard_changes and not same_commit:
             ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
@@ -362,5 +362,4 @@ def create_workingcopy(ctx, discard_changes, wc_path):
         # so if it already exists, we keep that part.
         new_wc.delete(keep_container_if_possible=True)
 
-    head_commit = repo.head.peel(pygit2.Commit)
-    reset_wc_if_needed(repo, head_commit)
+    reset_wc_if_needed(repo, repo.head_commit)

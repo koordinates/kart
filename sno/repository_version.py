@@ -3,7 +3,6 @@ import itertools
 import click
 import json
 
-from . import git_util
 from .core import walk_tree
 
 REPO_VERSION_BLOB_PATH = ".sno.repository.version"
@@ -33,22 +32,24 @@ def extra_blobs_for_version(version):
     return [encode_repo_version(version)]
 
 
-def get_repo_version(repo, tree=None, maybe_v0=True, default=DEFAULT_REPO_VERSION):
+def get_repo_version(
+    repo, tree=None, allow_legacy_versions=False, default=DEFAULT_REPO_VERSION
+):
     """
     Returns the repo version from the blob at <repo-root>/REPO_VERSION_BLOB_PATH -
     (note that this is not user-visible in the file-system since we keep it hidden via sparse / bare checkouts).
     """
     if tree is None:
-        tree = git_util.get_head_tree(repo)
+        tree = repo.head_tree
         if tree is None:  # Empty repo / empty branch.
             return _get_repo_version_from_config(repo, default)
 
     if REPO_VERSION_BLOB_PATH in tree:
         return json.loads((tree / REPO_VERSION_BLOB_PATH).data)
 
-    # Versions less than 2 don't have ".sno-version" files, so must be 0 or 1.
+    # Versions less than 2 don't have ".sno.repository.version" files, so must be 0 or 1.
     # We don't support v0 except when performing a `sno upgrade`.
-    return _distinguish_v0_v1(tree) if maybe_v0 else 1
+    return _distinguish_v0_v1(tree) if allow_legacy_versions else 1
 
 
 def _get_repo_version_from_config(repo, default=DEFAULT_REPO_VERSION):

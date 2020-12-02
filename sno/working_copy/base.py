@@ -499,7 +499,7 @@ class WorkingCopy:
         # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.
         base_tree_id = self.get_db_tree()
         base_tree = self.repo[base_tree_id]
-        repo_tree_id = self.repo.head.peel(pygit2.Tree).hex
+        repo_tree_id = self.repo.head_tree.hex
 
         L.debug(
             "reset(): WorkingCopy base_tree:%s, Repo HEAD has tree:%s. Resetting working copy to tree: %s",

@@ -4,7 +4,6 @@ from collections import deque
 import click
 import pygit2
 
-from . import git_util
 from .base_dataset import BaseDataset
 from .exceptions import (
     InvalidOperation,
@@ -62,12 +61,12 @@ class RepositoryStructure:
             self._commit = None
             self._tree = None
         else:
-            self._commit = self.repo.head.peel(pygit2.Commit)
+            self._commit = self.repo.head_commit
 
         if version is not None:
             self._version = version
         else:
-            self._version = get_repo_version(self.repo, self.tree, maybe_v0=False)
+            self._version = self.repo.version
 
         if dataset_class is not None:
             self._dataset_class = dataset_class
@@ -325,7 +324,7 @@ class RepositoryStructure:
         L.info("Committing...")
 
         if ref == "HEAD":
-            parent_commit = git_util.get_head_commit(self.repo)
+            parent_commit = self.repo.head_commit
         else:
             parent_commit = self.repo.references[ref].peel(pygit2.Commit)
         parents = [parent_commit.oid] if parent_commit is not None else []
@@ -333,13 +332,12 @@ class RepositoryStructure:
         # this will also update the ref (branch) to point to the new commit
         new_commit = self.repo.create_commit(
             ref,
-            author or git_util.author_signature(self.repo),
-            committer or git_util.committer_signature(self.repo),
+            author or self.repo.author_signature(),
+            committer or self.repo.committer_signature(),
             message,
             new_tree_oid,
             parents,
         )
         L.info(f"Commit: {new_commit}")
 
-        # TODO: update reflog
         return new_commit

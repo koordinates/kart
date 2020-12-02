@@ -5,7 +5,6 @@ from enum import Enum, auto
 import click
 import pygit2
 
-from .git_util import author_signature
 from .exceptions import (
     NO_TABLE,
     NO_WORKING_COPY,
@@ -203,7 +202,7 @@ def apply_patch(
                 / 60  # minutes
             )
 
-        author = author_signature(repo, **author_kwargs)
+        author = repo.author_signature(**author_kwargs)
         oid = rs.commit(
             repo_diff,
             metadata["message"],
@@ -215,7 +214,7 @@ def apply_patch(
         click.echo(f"Commit {oid.hex}")
 
         # Only touch the working copy if we applied the patch to the head branch
-        reset_wc = oid == repo.head.peel(pygit2.Commit).oid
+        reset_wc = oid == repo.head_commit.oid
     else:
         oid = rs.create_tree_from_diff(
             repo_diff,

@@ -592,7 +592,7 @@ def test_init_import(
             )
             .fetchone()[0]
         )
-        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+        assert wc_tree_id == repo.head_tree.hex
 
         xml_metadata = (
             db.cursor()
@@ -723,7 +723,7 @@ def test_init_import_name_clash(data_archive, cli_runner, geopackage):
         wc_tree_id = dbcur.execute(
             """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
         ).fetchone()[0]
-        assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+        assert wc_tree_id == repo.head_tree.hex
 
         # make sure we haven't stuffed up the original file
         dbo = geopackage("editing.gpkg")
@@ -927,7 +927,7 @@ def test_import_existing_wc(
 
         assert H.row_count(db, "nz_waca_adjustments") > 0
 
-        head_tree = repo.head.peel(pygit2.Tree)
+        head_tree = repo.head_tree
         with db:
             dbcur = db.cursor()
             dbcur.execute(
@@ -961,7 +961,7 @@ def test_import_existing_wc(
 
         assert H.row_count(db, "waca2") > 0
 
-        head_tree = repo.head.peel(pygit2.Tree)
+        head_tree = repo.head_tree
         with db:
             dbcur = db.cursor()
             dbcur.execute(

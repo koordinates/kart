@@ -89,7 +89,7 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         repo = SnoRepo(repo_dir)
-        commit = repo.head.peel(pygit2.Commit)
+        commit = repo.head_commit
 
         # the author details all come from the patch, including timestamp
         assert commit.message == message
@@ -388,7 +388,7 @@ def test_apply_with_working_copy(
         assert r.exit_code == 0, r.stderr
 
         repo = SnoRepo(repo_dir)
-        commit = repo.head.peel(pygit2.Commit)
+        commit = repo.head_commit
 
         # the author details all come from the patch, including timestamp
         assert commit.message == message
@@ -446,7 +446,7 @@ def test_apply_with_working_copy_with_no_commit(
         repo = SnoRepo(repo_dir)
 
         # no commit was made
-        commit = repo.head.peel(pygit2.Commit)
+        commit = repo.head_commit
         assert commit.message != message
 
         bits = r.stdout.split()

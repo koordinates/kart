@@ -44,7 +44,7 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     if not wc:
         return
 
-    commit = repo.head.peel(pygit2.Commit)
+    commit = repo.head_commit
     if not wc.is_created():
         click.echo(f"Creating working copy at {wc.path} ...")
         wc.create_and_initialise()
@@ -377,7 +377,7 @@ def init(
             message=message,
             max_delta_depth=max_delta_depth,
         )
-        head_commit = repo.head.peel(pygit2.Commit)
+        head_commit = repo.head_commit
         if do_checkout and not bare:
             checkout.reset_wc_if_needed(repo, head_commit)
 

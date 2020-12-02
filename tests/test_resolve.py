@@ -95,7 +95,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
 
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
-        assert repo.head.peel(pygit2.Commit).message == "merge commit"
+        assert repo.head_commit.message == "merge commit"
         assert RepoState.get_state(repo) != RepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")
@@ -169,7 +169,7 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
 
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
-        assert repo.head.peel(pygit2.Commit).message == "merge commit"
+        assert repo.head_commit.message == "merge commit"
         assert RepoState.get_state(repo) != RepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")

@@ -107,12 +107,12 @@ def test_commit(
         print("commit:", commit_id)
 
         assert str(repo.head.target) == commit_id
-        commit = repo.head.peel(pygit2.Commit)
+        commit = repo.head_commit
         assert commit.message == "test-commit-1"
         assert time.time() - commit.commit_time < 3
 
         dataset = rs[layer]
-        tree = repo.head.peel(pygit2.Tree)
+        tree = repo.head_tree
         assert dataset.encode_1pk_to_path(pk_del) not in tree
 
         wc = WorkingCopy.get(repo)
@@ -183,7 +183,7 @@ def test_commit_message(
         repo = SnoRepo(repo_dir)
 
         def last_message():
-            return repo.head.peel(pygit2.Commit).message
+            return repo.head_commit.message
 
         # normal
         r = cli_runner.invoke(
@@ -325,7 +325,7 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
         )
         assert r.exit_code == 0, r
 
-        author = repo.head.peel(pygit2.Commit).author
+        author = repo.head_commit.author
         assert author.name == "bob"
         assert author.email == "user@example.com"
         assert author.time == 1000000000

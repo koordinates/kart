@@ -698,7 +698,7 @@ def test_feature_find_decode_performance(
 
     repo_path = data_imported(archive, source_gpkg, table, repo_version)
     repo = SnoRepo(repo_path)
-    tree = repo.head.peel(pygit2.Tree) / "mytable"
+    tree = repo.head_tree / "mytable"
     dataset = structure.RepositoryStructure(repo)["mytable"]
 
     assert dataset.__class__.__name__ == f"Dataset{repo_version}"
@@ -778,7 +778,7 @@ def test_import_multiple(
     # has two commits
     assert len([c for c in repo.walk(repo.head.target)]) == len(LAYERS)
 
-    tree = repo.head.peel(pygit2.Tree)
+    tree = repo.head_tree
 
     for i, ds in enumerate(datasets):
         assert ds.path == LAYERS[i][2]
@@ -812,7 +812,7 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
             assert r.exit_code == 0, r
 
             repo = SnoRepo(repo_path)
-            assert repo.head.peel(pygit2.Commit)
+            assert repo.head_commit
 
 
 @pytest.mark.slow

@@ -10,7 +10,7 @@ from .structure import RepositoryStructure
 
 
 def _fsck_reset(repo_structure, working_copy, dataset_paths):
-    commit = repo_structure.repo.head.peel(pygit2.Commit)
+    commit = repo_structure.repo.head_commit
     datasets = [repo_structure[p] for p in dataset_paths]
 
     working_copy.drop_table(commit, *datasets)
@@ -61,11 +61,11 @@ def fsck(ctx, reset_datasets, fsck_args):
 
     with working_copy.session() as db:
         dbcur = db.cursor()
-        tree = repo.head.peel(pygit2.Tree)
+        tree = repo.head_tree
 
         # compare repo tree id to what's in the DB
         try:
-            oid = working_copy.assert_db_tree_match(repo.head.peel(pygit2.Tree))
+            oid = working_copy.assert_db_tree_match(repo.head_tree)
             click.secho(
                 f"✔︎ Working Copy tree id matches repository: {oid}", fg="green"
             )

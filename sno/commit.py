@@ -82,7 +82,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
 
     check_git_user(repo)
 
-    commit = repo.head.peel(pygit2.Commit)
+    commit = repo.head_commit
     tree = commit.tree
 
     working_copy = WorkingCopy.get(repo)

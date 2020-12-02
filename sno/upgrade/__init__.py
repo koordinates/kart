@@ -57,7 +57,7 @@ def upgrade(ctx, source, dest):
             f"'{source}': not an existing sno repository", param_hint="SOURCE"
         )
 
-    source_version = get_repo_version(source_repo)
+    source_version = get_repo_version(source_repo, allow_legacy_versions=True)
     if source_version == 2:
         raise InvalidOperation(
             "Cannot upgrade: source repository is already at latest version (Datasets V2)"
@@ -187,7 +187,7 @@ def _upgrade_commit(
         extra_cmd_args=["--force"],
     )
 
-    dest_commit = dest_repo.head.peel(pygit2.Commit)
+    dest_commit = dest_repo.head_commit
     commit_map[source_commit.hex] = dest_commit.hex
 
     commit_time = datetime.fromtimestamp(source_commit.commit_time)

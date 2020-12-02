@@ -87,9 +87,9 @@ def test_clone(
         assert repo.head.name == f"refs/heads/{branch_name}"
 
         if branch_ref == "HEAD^":
-            assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD1_SHA
+            assert repo.head_commit.hex == H.POINTS.HEAD1_SHA
         else:
-            assert repo.head.peel(pygit2.Commit).hex == H.POINTS.HEAD_SHA
+            assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         branch = repo.branches.local[repo.head.shorthand]
         assert branch.is_head()
@@ -116,7 +116,7 @@ def test_clone(
             wc_tree_id = dbcur.execute(
                 """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';""",
             ).fetchone()[0]
-            assert wc_tree_id == repo.head.peel(pygit2.Tree).hex
+            assert wc_tree_id == repo.head_tree.hex
         else:
             assert not wc.exists()
 
@@ -169,7 +169,7 @@ def test_fetch(
 
         assert repo.head.name == "refs/heads/master"
         assert repo.head.target.hex == commit_id
-        commit = repo.head.peel(pygit2.Commit)
+        commit = repo.head_commit
         assert len(commit.parents) == 1
         assert commit.parents[0].hex == h
 
@@ -227,7 +227,7 @@ def test_pull(
 
             assert repo.head.name == "refs/heads/master"
             assert repo.head.target.hex == commit_id
-            commit = repo.head.peel(pygit2.Commit)
+            commit = repo.head_commit
             assert len(commit.parents) == 1
             assert commit.parents[0].hex == h
 

@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 import click
 
-from . import checkout, git_util
+from . import checkout
 from .exceptions import InvalidOperation
 from .sno_repo import SnoRepo
 from .working_copy.base import WorkingCopy
@@ -99,6 +99,6 @@ def clone(ctx, bare, do_checkout, wc_path, do_progress, depth, branch, url, dire
     repo = SnoRepo.clone_repository(url, repo_path, args, wc_path, bare)
 
     # Create working copy, if needed.
-    head_commit = git_util.get_head_commit(repo)
+    head_commit = repo.head_commit
     if head_commit is not None and do_checkout and not bare:
         checkout.reset_wc_if_needed(repo, head_commit)
