@@ -493,7 +493,7 @@ class OgrImportSource(ImportSource):
             data_type = data_type_info
             extra_type_info = {}
 
-        if data_type in ("text", "blob"):
+        if data_type in ("TEXT", "BLOB"):
             width = fd.GetWidth()
             if width:
                 extra_type_info["length"] = width
