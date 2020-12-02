@@ -470,32 +470,38 @@ class OgrImportSource(ImportSource):
             ColumnSchema.new_id(), name, "geometry", None, **extra_type_info
         )
 
-    def _should_import_as_numeric(self, ogr_type, ogr_width):
-        if ogr_width == 0:
-            # Note 1: Unfortunately, these three all collide:
+    def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
+        if ogr_type not in ("Real", "Integer", "Integer64"):
+            return False
+        if (
+            # Unfortunately, these three all collide:
             #    NUMERIC (unqualified) --> ogr.Real(0.0) --> double
             #    FLOAT --> ogr.Real(0.0) --> double
             #    DOUBLE PRECISION --> ogr.Real(0.0) --> double
             # Fixing this collision might be a good reason to move away from OGR
             # for import processing in the near future.
+            ogr_width == 0
+            # a double or float imported from a fixed width format like shapefile
+            or (ogr_type == "Real" and ogr_width == 24 or ogr_precision == 15)
+            # smallint or integer imported from a fixed-width format like shapefile
+            or (ogr_type == "Integer" and ogr_width in (5, 9))
+            # integer64 imported from a fixed-width format like shapefile
+            or (ogr_type == "Integer64" and ogr_width == 18)
+        ):
             return False
         else:
             # This is a fixed-length numeric. OGR turns them into integers/reals,
             # but it does actually preserve their precision, so we can turn them back.
-            return (
-                (ogr_type == "Real")
-                # when OGR is translating a modern format to a fixed-width format like shapefile,
-                # it turns int32 fields into 'Integer(9.0)' and int64 into 'Integer64(18.0)'
-                # this should generally be interpreted as an int, rather than NUMERIC(9,0)
-                or (ogr_type == "Integer" and ogr_width != 9)
-                or (ogr_type == "Integer64" and ogr_width != 18)
-            )
+            return True
 
     def _field_to_v2_column_schema(self, fd):
         ogr_type = fd.GetTypeName()
         ogr_width = fd.GetWidth()
+        ogr_precision = fd.GetPrecision()
         ogr_subtype = fd.GetSubType()
-        if (not ogr_subtype) and self._should_import_as_numeric(ogr_type, ogr_width):
+        if (not ogr_subtype) and self._should_import_as_numeric(
+            ogr_type, ogr_width, ogr_precision
+        ):
             data_type = "numeric"
             # Note 2: Rather confusingly, OGR's concepts of 'width' and 'precision'
             # correspond to 'precision' and 'scale' in most other systems, respectively:
@@ -503,7 +509,7 @@ class OgrImportSource(ImportSource):
                 # total number of decimal digits
                 "precision": ogr_width,
                 # total number of decimal digits to the right of the decimal point
-                "scale": fd.GetPrecision(),
+                "scale": ogr_precision,
             }
         else:
             if ogr_subtype == ogr.OFSTNone:
