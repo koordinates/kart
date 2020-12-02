@@ -117,7 +117,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: vendor/dist/
-          key: vendor-dist-${{ matrix.platform.id}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
+          key: vendor-dist-1-${{ matrix.platform.id}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
 
       - name: "🐧 python"
         uses: actions/setup-python@v1
@@ -393,7 +393,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: vendor/dist/
-          key: vendor-dist-Windows-${{ hashFiles('vendor/makefile.vc') }}
+          key: vendor-dist-1-Windows-${{ hashFiles('vendor/makefile.vc') }}
 
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
