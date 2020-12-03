@@ -11,7 +11,7 @@ WORKDIR /src
 ENV VIRTUAL_ENV=/venv
 
 RUN python3 -m venv /venv \
-    && /venv/bin/python -m pip install --upgrade pip
+    && /venv/bin/python -m pip install --upgrade pip wheel
 ENV PATH=/venv/bin:$PATH
 
 COPY vendor/env/share/gdal/ /venv/share/gdal/

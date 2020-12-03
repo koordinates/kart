@@ -4,6 +4,8 @@ set -eu
 OUTPUT=$1
 shift
 
+yum install -y epel-release
+
 yum install -y ccache openssl-devel gettext
 
 export PATH=/opt/python/cp37-cp37m/bin:${PATH}
