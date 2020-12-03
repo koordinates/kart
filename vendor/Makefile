@@ -369,4 +369,19 @@ print-lib-deps-Darwin:
 .PHONY: print-lib-deps-Linux
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
-	find env/lib/  && find . -name "*.so" -print -exec ldd {} \;
+	find env/lib/ -type f -name "*.so" -print -exec ldd {} \;
+
+.PHONY: check-lib-deps
+check-lib-deps: check-lib-deps-$(PLATFORM)
+
+.PHONY: check-lib-deps-Darwin
+check-lib-deps-Darwin:
+	@echo -e "\nLooking for missing library dependencies..."
+	for SO in `find env/lib/ -type f \( -name "*.dylib" -o -name "*.so" \)`; do \
+		otool -l "$$SO" | grep /usr/local/ && exit 1; \
+	done
+
+.PHONY: check-lib-deps-Linux
+check-lib-deps-Linux:
+	@echo -e "\nLooking for missing library dependencies..."
+	find env/lib/ -type f -name "*.so" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'

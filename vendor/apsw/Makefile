@@ -122,7 +122,10 @@ wheel: $(sqlite_src)
 
 .PHONY: py-deps-Darwin
 py-deps-Darwin:
-	delocate-listdeps wheel/*.whl
+	for W in wheel/*.whl; do \
+		echo "$W"; \
+		! ( delocate-listdeps "$$W" | sed -e '/@rpath/d' | grep '[^[:space:]]' ) || exit 1; \
+	done
 
 .PHONY: py-deps-Linux
 py-deps-Linux:
