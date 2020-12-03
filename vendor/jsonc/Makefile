@@ -1,4 +1,5 @@
-JSONC_VERSION = 0.13.1
+JSONC_VERSION = 0.15
+JSONC_RELEASE_DATE = 20200726
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
@@ -9,7 +10,7 @@ else
 	PLATFORM := $(shell uname -s)
 endif
 
-JSONC_ARCHIVE := json-c-$(JSONC_VERSION)-nodoc.tar.gz
+JSONC_ARCHIVE := json-c-$(JSONC_VERSION).tar.gz
 
 ifeq ($(PLATFORM),Darwin)
 	CCACHE_PATH = /usr/local/opt/ccache/bin
@@ -19,17 +20,17 @@ else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 
-# https://github.com/json-c/json-c/pull/499
-# https://stackoverflow.com/a/45137452/2662
-	export CFLAGS += -C
+	# https://github.com/json-c/json-c/pull/499
+	# https://stackoverflow.com/a/45137452/2662
+	# still not fixed in 0.15
+    export CFLAGS += -C
 endif
-
 
 # use ccache if available
 export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 
-build-jsonc := src/.libs/libjson-c.4.$(LIBSUFFIX)
-configure-jsonc = src/config.status
+build-jsonc := src/.libs/libjson-c.5.$(LIBSUFFIX)
+configure-jsonc = build/Makefile
 
 # default target
 .PHONY: all
@@ -38,16 +39,15 @@ all: $(build-jsonc)
 .PHONY: clean
 clean:
 	-$(RM) -r env
-	-$(RM) src/.libs/libjson-c.* src/libjson-c.la
-	-$(RM) src/json-c*.pc
+	-$(RM) -r $(configure-jsonc)
 
 .PHONY: cleaner
 cleaner: clean
-	-$(MAKE) -C src/ clean
+	-$(MAKE) -C build/ clean
 
 .PHONY: cleanest
 cleanest:
-	-$(RM) -r src/
+	-$(RM) -r build/ src/
 
 .PHONY: clean-configure
 clean-configure:
@@ -58,7 +58,7 @@ clean-configure:
 #
 
 $(JSONC_ARCHIVE):
-	wget https://s3.amazonaws.com/json-c_releases/releases/$@ -O $@
+	wget https://github.com/json-c/json-c/archive/json-c-$(JSONC_VERSION)-$(JSONC_RELEASE_DATE).tar.gz -O $@
 
 .PHONY: archive
 archive: $(JSONC_ARCHIVE)
@@ -79,14 +79,18 @@ source: src
 
 $(configure-jsonc): export PKG_CONFIG_PATH=/dev/null
 $(configure-jsonc): | src
-	cd src/ && ./configure \
-		--prefix=$(PREFIX)
+	mkdir build
+	cd build/ && \
+	cmake \
+		-DBUILD_STATIC_LIBS=OFF \
+		-DCMAKE_INSTALL_PREFIX=$(PREFIX) \
+		../src
 
 .PHONY: configure
 configure: clean-configure $(configure-jsonc)
 
 $(build-jsonc): $(configure-jsonc)
-	$(MAKE) -C src -j 2
+	$(MAKE) -C build -j 2
 	$(MAKE) print-lib-deps-$(PLATFORM)
 	$(MAKE) check-lib-deps-$(PLATFORM)
 
@@ -96,7 +100,7 @@ $(build-jsonc): $(configure-jsonc)
 
 .PHONY: install
 install: $(build-jsonc)
-	$(MAKE) -C src install
+	$(MAKE) -C build install
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)
@@ -104,12 +108,12 @@ print-lib-deps: print-lib-deps-$(PLATFORM)
 .PHONY: print-lib-deps-Darwin
 print-lib-deps-Darwin:
 	@echo -e "\nExamining library dependencies..."
-	cd src/ && find . \( -name "*.dylib" -o -name "*.so" \) -exec otool -L {} \;
+	cd build/ && find . \( -name "*.dylib" -o -name "*.so" \) -exec otool -L {} \;
 
 .PHONY: print-lib-deps-Linux
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
-	cd src/  && find . -name "*.so" -print -exec ldd {} \;
+	cd build/  && find . -name "*.so" -print -exec ldd {} \;
 
 .PHONY: check-lib-deps
 check-lib-deps: check-lib-deps-$(PLATFORM)
@@ -117,9 +121,9 @@ check-lib-deps: check-lib-deps-$(PLATFORM)
 .PHONY: check-lib-deps-Darwin
 check-lib-deps-Darwin:
 	@echo -e "\nLooking for missing library dependencies..."
-	find src \( -name "*.dylib" -o -name "*.so" \) | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
+	find build \( -name "*.dylib" -o -name "*.so" \) | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
 
 .PHONY: check-lib-deps-Linux
 check-lib-deps-Linux:
 	@echo -e "\nLooking for missing library dependencies..."
-	find src -name "*.so" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'
+	find build -name "*.so" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'
