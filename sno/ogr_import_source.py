@@ -139,7 +139,9 @@ class OgrImportSource(ImportSource):
             ) from e
 
         try:
-            klass = globals()[f"{ds.GetDriver().ShortName}ImportSource"]
+            klass = globals()[
+                f"{ds.GetDriver().ShortName.replace(' ', '')}ImportSource"
+            ]
         except KeyError:
             klass = cls
         else:
@@ -473,26 +475,18 @@ class OgrImportSource(ImportSource):
     def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
         if ogr_type not in ("Real", "Integer", "Integer64"):
             return False
-        if (
-            # Unfortunately, these three all collide:
-            #    NUMERIC (unqualified) --> ogr.Real(0.0) --> double
-            #    FLOAT --> ogr.Real(0.0) --> double
-            #    DOUBLE PRECISION --> ogr.Real(0.0) --> double
-            # Fixing this collision might be a good reason to move away from OGR
-            # for import processing in the near future.
-            ogr_width == 0
-            # a double or float imported from a fixed width format like shapefile
-            or (ogr_type == "Real" and ogr_width == 24 or ogr_precision == 15)
-            # smallint or integer imported from a fixed-width format like shapefile
-            or (ogr_type == "Integer" and ogr_width in (5, 9))
-            # integer64 imported from a fixed-width format like shapefile
-            or (ogr_type == "Integer64" and ogr_width == 18)
-        ):
-            return False
-        else:
-            # This is a fixed-length numeric. OGR turns them into integers/reals,
-            # but it does actually preserve their precision, so we can turn them back.
-            return True
+        # We import numeric real/integer as numeric if they have a
+        # nonzero width specified.
+        # Unfortunately, that means these three all collide:
+        #    NUMERIC (unqualified) --> ogr.Real(0.0) --> double
+        #    FLOAT --> ogr.Real(0.0) --> double
+        #    DOUBLE PRECISION --> ogr.Real(0.0) --> double
+        # Fixing this collision might be a good reason to move away from OGR
+        # for import processing in the near future.
+        #
+        # Note that the shapefile importsource overrides this since OGR *always* reports
+        # a nonzero width for floats/ints in shapefiles.
+        return ogr_width != 0
 
     def _field_to_v2_column_schema(self, fd):
         ogr_type = fd.GetTypeName()
@@ -597,6 +591,29 @@ class OgrImportSource(ImportSource):
             uri = element.getAttribute("xmlns") or element.namespaceURI or "(unknown)"
 
         return {uri: {"text/xml": xml_metadata}}
+
+
+class ESRIShapefileImportSource(OgrImportSource):
+    def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
+        if not super()._should_import_as_numeric(ogr_type, ogr_width, ogr_precision):
+            return False
+
+        # Generally speaking, we import Real/Integer with nonzero 'width'
+        # as fixed-width NUMERIC.
+        # However, OGR *always* reports a nonzero 'width' for real/integer
+        # in shapefiles. They have specific widths.
+        # If we find fields with those specific widths, we can assume they're
+        # actually ints/doubles, not NUMERIC
+        if (
+            # double or float
+            (ogr_type == "Real" and ogr_width == 24 and ogr_precision == 15)
+            # smallint or integer. normally integer is 9 but some can be 10
+            or (ogr_type == "Integer" and ogr_width in (5, 9, 10))
+            # integer64. normally width is 18 but can be up to 20
+            or (ogr_type == "Integer64" and ogr_width in (18, 19, 20))
+        ):
+            return False
+        return True
 
 
 class GPKGImportSource(OgrImportSource):
