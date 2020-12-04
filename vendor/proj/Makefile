@@ -104,6 +104,7 @@ $(configure-proj): | src $(libs)
 $(build-proj): $(configure-proj)
 	$(MAKE) -C src/ -j 2
 	$(MAKE) print-lib-deps-$(PLATFORM)
+	$(MAKE) check-lib-deps-$(PLATFORM)
 
 .PHONY: install
 install: $(build-proj)
@@ -121,3 +122,16 @@ print-lib-deps-Darwin:
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
 	find src/ -name "*.so" -print -exec ldd {} \;
+
+.PHONY: check-lib-deps
+check-lib-deps: check-lib-deps-$(PLATFORM)
+
+.PHONY: check-lib-deps-Darwin
+check-lib-deps-Darwin:
+	@echo -e "\nLooking for missing library dependencies..."
+	find src \( -name "*.dylib" -o -name "*.so" \) | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
+
+.PHONY: check-lib-deps-Linux
+check-lib-deps-Linux:
+	@echo -e "\nLooking for missing library dependencies..."
+	find src -name "*.so" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'

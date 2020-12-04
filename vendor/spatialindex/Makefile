@@ -89,6 +89,7 @@ configure: clean-configure $(configure-spatialindex)
 $(build-spatialindex): $(configure-spatialindex)
 	$(MAKE) -C build -j 2
 	$(MAKE) print-lib-deps-$(PLATFORM)
+	$(MAKE) check-lib-deps-$(PLATFORM)
 
 #
 # INSTALLATION
@@ -116,3 +117,16 @@ print-lib-deps-Darwin:
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
 	cd build/  && find . -name "*.so" -print -exec ldd {} \;
+
+.PHONY: check-lib-deps
+check-lib-deps: check-lib-deps-$(PLATFORM)
+
+.PHONY: check-lib-deps-Darwin
+check-lib-deps-Darwin:
+	@echo -e "\nLooking for missing library dependencies..."
+	find src \( -name "*.dylib" -o -name "*.so" \) | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
+
+.PHONY: check-lib-deps-Linux
+check-lib-deps-Linux:
+	@echo -e "\nLooking for missing library dependencies..."
+	find src -name "*.so" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'

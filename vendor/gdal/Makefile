@@ -193,19 +193,22 @@ lib-fix-Darwin:
 	install_name_tool \
 		-change $(SQLITE_PREFIX)/lib/libsqlite3.0.dylib @rpath/libsqlite3.0.dylib \
 		-change /usr/local/opt/geos/lib/libgeos_c.1.dylib @rpath/libgeos_c.1.dylib \
-		-change $(JSONC_PREFIX)/lib/libjson-c.4.dylib @rpath/libjson-c.4.dylib \
+		-change $(JSONC_PREFIX)/lib/libjson-c.5.dylib @rpath/libjson-c.5.dylib \
 		-change $(PROJ_PREFIX)/lib/libproj.15.dylib @rpath/libproj.15.dylib \
 		-change $(PG_PREFIX)/lib/libpq.5.dylib @rpath/libpq.5.dylib \
 		-id libgdal.26.dylib \
 		src/.libs/libgdal.26.dylib
 
-	$(MAKE) print-lib-deps-$(PLATFORM)
+	$(MAKE) check-lib-deps-$(PLATFORM)
 
 .PHONY: lib-fix-Linux
 lib-fix-Linux:
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)
+
+.PHONY: check-lib-deps
+check-lib-deps: check-lib-deps-$(PLATFORM)
 
 $(pywheel): $(build-gdal)
 	-$(RM) -r wheel src/swig/python/build
@@ -223,7 +226,10 @@ $(pywheel): $(build-gdal)
 
 .PHONY: py-deps-Darwin
 py-deps-Darwin:
-	delocate-listdeps $(pywheel)
+	for W in wheel/*.whl; do \
+		echo "$W"; \
+		! ( delocate-listdeps "$$W" | sed -e '/@rpath/d' | grep '[^[:space:]]' ) || exit 1; \
+	done
 
 .PHONY: py-deps-Linux
 py-deps-Linux:
@@ -258,6 +264,16 @@ print-lib-deps-Darwin:
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
 	find src -name "*.so" -print -exec ldd {} \;
+
+.PHONY: check-lib-deps-Darwin
+check-lib-deps-Darwin:
+	@echo -e "\nLooking for missing library dependencies..."
+	find src \( -name "*.dylib" -o -name "*.so" \) | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
+
+.PHONY: check-lib-deps-Linux
+check-lib-deps-Linux:
+	@echo -e "\nLooking for missing library dependencies..."
+	find src -name "*.so" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'
 
 #
 # INSTALLATION

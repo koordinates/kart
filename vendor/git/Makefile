@@ -109,6 +109,7 @@ $(build-git): export PKG_CONFIG_PATH=/dev/null
 $(build-git): $(configure-git)
 	$(MAKE) -C src -j 2 $(CONFIG_FLAGS) all strip
 	$(MAKE) print-lib-deps-$(PLATFORM)
+	$(MAKE) check-lib-deps-$(PLATFORM)
 
 #
 # INSTALLATION
@@ -130,3 +131,16 @@ print-lib-deps-Darwin:
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
 	cd src/ && find . -perm -o=x -type f -name "git*" -print -exec sh -c "ldd {} && readelf -d {} | grep 'RPATH'" \;
+
+.PHONY: check-lib-deps
+check-lib-deps: check-lib-deps-$(PLATFORM)
+
+.PHONY: check-lib-deps-Darwin
+check-lib-deps-Darwin:
+	@echo -e "\nLooking for missing library dependencies..."
+	cd src/ && find . -perm -o=x -type f -name "git*" | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
+
+.PHONY: check-lib-deps-Linux
+check-lib-deps-Linux:
+	@echo -e "\nLooking for missing library dependencies..."
+	cd src/ && find . -perm -o=x -type f -name "git*" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'
