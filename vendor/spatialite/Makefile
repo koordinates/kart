@@ -1,4 +1,4 @@
-SPATIALITE_VERSION ?= 4.3.0a
+SPATIALITE_VERSION ?= 5.0.0
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
@@ -99,12 +99,15 @@ $(configure-spatialite): | src $(libs)
 	@test "`command -v geos-config`" && echo ">> geos-config: `command -v geos-config`" || ( echo ">> geos-config not found"; exit 1 )
 	cd src && ./configure \
 		--prefix=$(PREFIX) \
-		--disable-freexl \
-		--disable-libxml2 \
-		--disable-examples \
-		--disable-gcp \
-		--disable-gcov \
-		--disable-dependency-tracking
+		--disable-dependency-tracking \
+		--enable-examples=no \
+		--enable-freexl=no \
+		--enable-gcov=no \
+		--enable-gcp=no \
+		--enable-knn=no \
+		--enable-libxml2=no \
+		--enable-mathsql=no \
+		--enable-minizip=no
 
 .PHONY: configure
 configure: clean-configure $(configure-spatialite)
