@@ -15,8 +15,8 @@ from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .fast_import import fast_import_tables, ReplaceExisting
 from .structure import RepositoryStructure
-from .sno_repo import SnoRepo
-from .repository_version import (
+from .repo import SnoRepo
+from .repo_version import (
     REPO_VERSIONS_CHOICE,
     REPO_VERSIONS_DEFAULT_CHOICE,
 )

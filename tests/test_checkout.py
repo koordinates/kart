@@ -1,7 +1,7 @@
 import pytest
 
 
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.structs import CommitWithReference
 from sno.exceptions import NO_BRANCH, NO_COMMIT
 

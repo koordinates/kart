@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .sno_repo import SnoRepo
+from .repo import SnoRepo
 from .exceptions import NotFound, NO_REPOSITORY
 from .repo_files import RepoState
 from .working_copy import WorkingCopy

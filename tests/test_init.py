@@ -4,7 +4,7 @@ import shutil
 import pytest
 import pygit2
 
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (

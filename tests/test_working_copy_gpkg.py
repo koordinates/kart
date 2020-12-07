@@ -9,7 +9,7 @@ import pygit2
 
 from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 from sno.working_copy.gpkg import WorkingCopy_GPKG_1

@@ -17,7 +17,7 @@ from sno.exceptions import (
     SCHEMA_VIOLATION,
 )
 from sno.repo_files import fallback_editor
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
 

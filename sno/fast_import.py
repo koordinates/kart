@@ -11,7 +11,7 @@ from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .base_dataset import BaseDataset
 from .structure import RepositoryStructure
-from .repository_version import extra_blobs_for_version
+from .repo_version import extra_blobs_for_version
 from .timestamps import minutes_to_tz_offset
 
 

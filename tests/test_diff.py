@@ -7,7 +7,7 @@ import pytest
 
 from sno.diff_structs import Delta, DeltaDiff
 from sno.geometry import hex_wkb_to_ogr
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.structure import RepositoryStructure
 
 

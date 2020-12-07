@@ -17,11 +17,11 @@ from .exceptions import (
     NotFound,
     NO_REPOSITORY,
 )
-from .repository_version import REPO_VERSIONS, get_repo_version
+from .repo_version import REPO_VERSIONS, get_repo_version
 from .timestamps import tz_offset_to_minutes
 from .working_copy import WorkingCopy
 
-L = logging.getLogger("sno.sno_repo")
+L = logging.getLogger("sno.repo")
 
 
 class SnoRepoFiles:

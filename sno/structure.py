@@ -15,7 +15,7 @@ from .exceptions import (
     SCHEMA_VIOLATION,
 )
 from .rich_tree_builder import RichTreeBuilder
-from .repository_version import get_repo_version, extra_blobs_for_version
+from .repo_version import get_repo_version, extra_blobs_for_version
 from .schema import Schema
 
 

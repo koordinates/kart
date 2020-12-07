@@ -4,7 +4,7 @@ from pathlib import Path
 import pygit2
 import pytest
 from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, NOT_YET_IMPLEMENTED
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

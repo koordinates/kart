@@ -5,7 +5,7 @@ from osgeo import gdal
 
 from sno import structure
 from sno.ogr_import_source import PostgreSQLImportSource
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 
 
 def test_postgres_url_parsing():

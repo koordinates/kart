@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

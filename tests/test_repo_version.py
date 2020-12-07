@@ -1,7 +1,7 @@
 import pytest
 
-from sno.sno_repo import SnoRepo
-from sno.repository_version import get_repo_version
+from sno.repo import SnoRepo
+from sno.repo_version import get_repo_version
 
 
 @pytest.mark.parametrize("archive", ["points", "polygons", "table"])

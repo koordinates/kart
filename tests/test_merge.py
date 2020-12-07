@@ -14,7 +14,7 @@ from sno.repo_files import (
     read_repo_file,
     RepoState,
 )
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

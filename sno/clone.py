@@ -7,7 +7,7 @@ import click
 
 from . import checkout
 from .exceptions import InvalidOperation
-from .sno_repo import SnoRepo
+from .repo import SnoRepo
 from .working_copy.base import WorkingCopy
 
 

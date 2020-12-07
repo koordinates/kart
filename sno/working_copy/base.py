@@ -15,7 +15,7 @@ from sno.exceptions import (
     NO_WORKING_COPY,
 )
 from sno.filter_util import UNFILTERED
-from sno.repository_version import get_repo_version
+from sno.repo_version import get_repo_version
 from sno.schema import Schema
 from sno.structure import RepositoryStructure
 

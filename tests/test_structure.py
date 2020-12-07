@@ -16,8 +16,8 @@ from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
-from sno.sno_repo import SnoRepo
-from sno.repository_version import REPO_VERSIONS_CHOICE
+from sno.repo import SnoRepo
+from sno.repo_version import REPO_VERSIONS_CHOICE
 
 
 H = pytest.helpers.helpers()

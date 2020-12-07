@@ -5,7 +5,7 @@ import pytest
 import pygit2
 
 from sno.clone import get_directory_from_url
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

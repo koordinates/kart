@@ -3,7 +3,7 @@ import pytest
 from psycopg2.sql import Identifier, SQL
 import pygit2
 
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.working_copy import WorkingCopy, postgis_adapter
 from sno.structure import RepositoryStructure
 from test_working_copy import compute_approximated_types

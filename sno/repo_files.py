@@ -8,7 +8,7 @@ import click
 
 from . import is_windows
 from .exceptions import SubprocessError, InvalidOperation, NotFound
-from .sno_repo import SnoRepoFiles
+from .repo import SnoRepoFiles
 
 
 # TODO - fold this file into SnoRepo -

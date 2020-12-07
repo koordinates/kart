@@ -1,7 +1,7 @@
 import subprocess
 
-from sno.sno_repo import SnoRepo, LockedGitIndex
-from sno.repository_version import DEFAULT_REPO_VERSION
+from sno.repo import SnoRepo, LockedGitIndex
+from sno.repo_version import DEFAULT_REPO_VERSION
 
 
 def test_init_repository(tmp_path):

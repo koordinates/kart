@@ -8,9 +8,9 @@ from pathlib import Path
 from sno import checkout, context
 from sno.exceptions import InvalidOperation, NotFound
 from sno.fast_import import fast_import_tables, ReplaceExisting
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 from sno.structure import RepositoryStructure
-from sno.repository_version import get_repo_version
+from sno.repo_version import get_repo_version
 from sno.timestamps import minutes_to_tz_offset
 
 
@@ -201,7 +201,7 @@ def _upgrade_commit(
 @click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
 def upgrade_to_tidy(source):
     """
-    Upgrade in-place a sno repository that is bare-style to be tidy-style. See sno_repo.py
+    Upgrade in-place a sno repository that is bare-style to be tidy-style. See.repo.py
     To be used on sno-repo's that are not actually intended to be bare, but are "bare-style"
     because they were created using Sno 0.5 or less, and that was all Sno supported.
     Doesn't upgrade the repository version, or change the contents at all.

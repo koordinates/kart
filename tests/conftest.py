@@ -19,8 +19,8 @@ import pytest
 import click
 from click.testing import CliRunner
 from sno.db_util import execute_insert_dict, changes_rowcount
-from sno.repository_version import DEFAULT_REPO_VERSION
-from sno.sno_repo import SnoRepo
+from sno.repo_version import DEFAULT_REPO_VERSION
+from sno.repo import SnoRepo
 from sno.working_copy import WorkingCopy
 
 import apsw

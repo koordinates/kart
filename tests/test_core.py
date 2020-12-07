@@ -9,7 +9,7 @@ import pygit2
 import pytest
 
 from sno.core import walk_tree, check_git_user
-from sno.sno_repo import SnoRepo
+from sno.repo import SnoRepo
 
 
 def test_walk_tree_1(data_archive):
