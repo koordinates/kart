@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 import apsw
-import pygit2
 
 from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
@@ -45,6 +44,9 @@ def test_checkout_workingcopy(
         H.clear_working_copy()
 
         repo = SnoRepo(repo_path)
+        dataset = RepositoryStructure(repo)[table]
+        geom_cols = dataset.schema.geometry_columns
+
         r = cli_runner.invoke(["checkout"])
         wc = Path(repo.config["sno.workingcopy.path"])
         assert r.exit_code == 0, r
@@ -68,10 +70,19 @@ def test_checkout_workingcopy(
         )
         assert wc_tree_id == head_tree.hex
 
+        if geom_cols:
+            spatial_index_count = (
+                db.cursor()
+                .execute(
+                    f"""SELECT COUNT(*) FROM "rtree_{table}_{geom_cols[0].name}";"""
+                )
+                .fetchone()[0]
+            )
+            assert spatial_index_count == dataset.feature_count
+
         wc = WorkingCopy.get(repo)
         assert wc.assert_db_tree_match(head_tree)
 
-        dataset = RepositoryStructure(repo)[table]
         table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
         expected_col_spec = (
             f'"{dataset.primary_key}" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL'
