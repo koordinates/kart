@@ -236,6 +236,18 @@ class WorkingCopy_GPKG(WorkingCopy):
                 );
             """
             )
+            dbcur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS gpkg_extensions (
+                    table_name TEXT,
+                    column_name TEXT,
+                    extension_name TEXT NOT NULL,
+                    definition TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    CONSTRAINT ge_tce UNIQUE (table_name, column_name, extension_name)
+                );
+                """
+            )
 
             dbcur.execute(
                 f"""
@@ -435,29 +447,34 @@ class WorkingCopy_GPKG(WorkingCopy):
             )
 
     def _create_spatial_index(self, dbcur, dataset):
-        L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
+        L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
         geom_col = dataset.geom_column_name
 
         # Create the GeoPackage Spatial Index
         t0 = time.monotonic()
-        sql = f"SELECT CreateSpatialIndex({gpkg.param_str(dataset.table_name)}, {gpkg.param_str(geom_col)});"
-        L.debug(
-            "Creating spatial index for %s.%s: %s", dataset.table_name, geom_col, sql
+        L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
+
+        dbcur.execute(
+            "SELECT gpkgAddSpatialIndex(?, ?);", (dataset.table_name, geom_col)
         )
-        dbcur.execute(sql)
+
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
     def _drop_spatial_index(self, dbcur, dataset):
-        L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
+        L = logging.getLogger(f"{self.__class__.__qualname__}._drop_spatial_index")
         geom_col = dataset.geom_column_name
 
         # Delete the GeoPackage Spatial Index
         t0 = time.monotonic()
-        sql = f"SELECT DisableSpatialIndex({gpkg.param_str(dataset.table_name)}, {gpkg.param_str(geom_col)});"
-        L.debug(
-            "Dropping spatial index for %s.%s: %s", dataset.table_name, geom_col, sql
+        L.debug("Dropping spatial index for %s.%s", dataset.table_name, geom_col)
+
+        rtree_table = f"rtree_{dataset.table_name}_{geom_col}"
+        dbcur.execute(f"DROP TABLE {gpkg.ident(rtree_table)};")
+        dbcur.execute(
+            f"DELETE FROM gpkg_extensions WHERE (table_name, column_name, extension_name) = (?, ?, ?)",
+            (dataset.table_name, geom_col, "gpkg_rtree_index"),
         )
-        dbcur.execute(sql)
+
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
 
     def _drop_triggers(self, dbcur, dataset):
@@ -645,6 +662,9 @@ class WorkingCopy_GPKG(WorkingCopy):
 
                 dbcur.execute(f"""CREATE TABLE {gpkg.ident(table)} ({table_spec});""")
 
+                if dataset.has_geometry:
+                    self._create_spatial_index(dbcur, dataset)
+
                 L.info("Creating features...")
                 sql_insert_features = f"""
                     INSERT INTO {gpkg.ident(table)}
@@ -680,9 +700,6 @@ class WorkingCopy_GPKG(WorkingCopy):
                 L.info(
                     "Overall rate: %d features/s", (feat_progress / (t1 - t0 or 0.001))
                 )
-
-                if dataset.has_geometry:
-                    self._create_spatial_index(dbcur, dataset)
 
                 self.update_gpkg_contents(dataset, change_time)
                 self._create_triggers(dbcur, dataset)
