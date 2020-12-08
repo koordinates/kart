@@ -126,6 +126,7 @@ delocate-deps: | env
 	rm -rf .delocate/
 
 $(lib-sqlite): $(brew-deps) | env
+	cp /usr/local/opt/sqlite3/include/*.h $(PREFIX)/include/
 	$(MAKE) .delocate
 	cp -av /usr/local/opt/sqlite3/lib/libsqlite3*.dylib .delocate
 	$(MAKE) delocate-deps

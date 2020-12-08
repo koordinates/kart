@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Bugfix - imports now preserve fixed-precision numeric types in most situations.
  * Bugfix - imports now preserve length of text/string fields.
  * Bugfix - imported fields of type `numeric` now stored internally as strings, as required by datasets V2 spec. [#325](https://github.com/koordinates/sno/pull/325)
+ * Dependency upgrades (GDAL; Git; Pygit2; Libgit2; Spatialite; GEOS) [#327](https://github.com/koordinates/sno/pull/327)
 
 ## 0.6.0
 

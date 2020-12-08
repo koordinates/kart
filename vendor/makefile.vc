@@ -1,9 +1,9 @@
 PATH=$(MAKEDIR)\env\Scripts;$(PATH);C:\Program Files\7-zip;
 
-GIT_VER=2.25.1
-LIBGIT_REF=v0.99.0
-PYGIT2_REF=ccf4df153c68d4af7d3d0f4f4f9104afc6f38d43
-PYGIT2_VER=1.1.0
+GIT_VER=2.29.2
+LIBGIT_REF=v1.1.0
+PYGIT2_REF=da410961f0a426cdecbd36548c2b36dc13c674c2
+PYGIT2_VER=1.3.0
 SQLITE_VER=3.31.1  # and APSW (-r1/.post1)
 
 # ==================================================================
@@ -65,9 +65,7 @@ git: $(git)
 
 # Spatialite
 
-# TODO: upgrade to v5.0 when a mod_spatialite build is available
-#SPATIALITE_URL = 'http://www.gaia-gis.it/gaia-sins/windows-bin-NEXTGEN-amd64/mod_spatialite-NG-win-amd64.7z'
-SPATIALITE_URL = 'https://s3-us-west-1.amazonaws.com/build-artifacts.sno.earth/vendor/mod_spatialite-NG-win-amd64.7z'
+SPATIALITE_URL="http://www.gaia-gis.it/gaia-sins/windows-bin-NEXTGEN-amd64/spatialite-loadable-modules-5.0.0-win-amd64.7z"
 spatialite=dist\env\lib
 
 spatialite\mod_spatialite.7z:
