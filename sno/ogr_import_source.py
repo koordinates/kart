@@ -17,9 +17,9 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
-from .geometry import Geometry, ogr_to_gpkg_geom
+from .geometry import Geometry
 from .import_source import ImportSource
-from .ogr_util import adapt_value_noop, get_type_value_adapter
+from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
 from .utils import ungenerator
@@ -352,34 +352,19 @@ class OgrImportSource(ImportSource):
 
     @property
     @functools.lru_cache(maxsize=1)
-    @ungenerator(dict)
     def field_adapter_map(self):
-        ld = self.ogrlayer.GetLayerDefn()
-
-        if self.primary_key:
-            yield self.primary_key, adapt_value_noop
-
-        for name in self.geometry_column_names:
-            yield name, adapt_value_noop
-
-        for i in range(ld.GetFieldCount()):
-            field = ld.GetFieldDefn(i)
-            name = field.GetName()
-            yield name, get_type_value_adapter(field.GetType())
+        return {col.name: get_type_value_adapter(col.data_type) for col in self.schema}
 
     @ungenerator(dict)
     def _ogr_feature_to_sno_feature(self, ogr_feature):
         for name, adapter in self.field_adapter_map.items():
-            if name in self.geometry_column_names:
-                yield (
-                    name,
-                    Geometry.of(ogr_to_gpkg_geom(ogr_feature.GetGeometryRef())),
-                )
-            elif name == self.primary_key:
-                yield name, self._get_primary_key_value(ogr_feature, name)
+            if name == self.primary_key:
+                value = self._get_primary_key_value(ogr_feature, name)
+            elif name in self.geometry_column_names:
+                value = ogr_feature.GetGeometryRef()
             else:
                 value = ogr_feature.GetField(name)
-                yield name, adapter(value)
+            yield name, adapter(value)
 
     def _iter_ogr_features(self):
         l = self.ogrlayer
