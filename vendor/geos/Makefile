@@ -1,4 +1,4 @@
-GEOS_VERSION = 3.8.0
+GEOS_VERSION = 3.8.1
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
