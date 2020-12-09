@@ -28,14 +28,6 @@ L = logging.getLogger("sno.pull")
     ),
 )
 @click.option(
-    "--ff-only",
-    default=False,
-    is_flag=True,
-    help=(
-        "Refuse to merge and exit with a non-zero status unless the current HEAD is already up to date or the merge can be resolved as a fast-forward."
-    ),
-)
-@click.option(
     "--progress/--quiet",
     "do_progress",
     is_flag=True,
