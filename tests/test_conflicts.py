@@ -21,8 +21,7 @@ def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
         ancestor_id = repo.merge_base(ours.id, theirs.id)
         assert ancestor_id.hex == ancestor.id.hex
 
-        with repo.no_locked_index_file():
-            index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
+        index = repo.merge_trees(ancestor.tree, ours.tree, theirs.tree)
         assert index.conflicts
 
         # Create a MergeIndex object, and roundtrip it into a tree and back.

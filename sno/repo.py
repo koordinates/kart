@@ -1,4 +1,3 @@
-import contextlib
 import logging
 import os
 import re
@@ -373,17 +372,6 @@ class SnoRepo(pygit2.Repository):
             raise InvalidOperation(f'"{dir_path}" isn\'t empty')
         elif not dir_path.exists():
             dir_path.mkdir(parents=True)
-
-    @contextlib.contextmanager
-    def no_locked_index_file(self):
-        try:
-            (self.gitdir_path / SnoRepoFiles.INDEX).unlink()
-        except FileNotFoundError:
-            pass  # Use missing_ok once we have python 3.8
-        try:
-            yield
-        finally:
-            self.lock_git_index()
 
     @property
     def head_commit(self):
