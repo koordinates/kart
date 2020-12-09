@@ -258,11 +258,17 @@ class Dataset2(RichBaseDataset):
         for path, definition in source.crs_definitions():
             rel_meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))
 
+        if hasattr(source, "encode_generated_pk_data"):
+            rel_meta_blobs.append(source.encode_generated_pk_data(relative=True))
+
         for rel_path, content in rel_meta_blobs:
             if content is None:
                 continue
-            is_json = rel_path.endswith(".json")
-            content = json_pack(content) if is_json else ensure_bytes(content)
+            if not isinstance(content, bytes):
+                if rel_path.endswith(".json"):
+                    content = json_pack(content)
+                else:
+                    content = ensure_bytes(content)
             yield self.full_path(rel_path), content
 
     def iter_legend_blob_data(self):
@@ -310,11 +316,6 @@ class Dataset2(RichBaseDataset):
                 return
         for feature in resultset:
             yield self.encode_feature(feature, schema)
-
-    def encode_feature_blob(self, feature):
-        # TODO - the dataset interface still needs some work:
-        # - having a _blob version of encode_feature is too many similar methods.
-        return self.encode_feature(feature, self.schema)[1]
 
     def apply_meta_diff(
         self, meta_diff, tree_builder, *, allow_missing_old_values=False
