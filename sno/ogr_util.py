@@ -32,6 +32,9 @@ def adapt_ogr_geometry(value):
 
 
 def ensure_bool(value):
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+
     if value is not None and not isinstance(value, bool):
         raise ValueError(f"Expected boolean but found {value!r}")
     return value
