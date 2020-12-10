@@ -7,19 +7,17 @@ import pygit2
 
 from .diff_output import text_row, json_row, geojson_row
 from .filter_util import UNFILTERED
-from .repo_files import (
-    MERGE_HEAD,
-    MERGE_INDEX,
-    MERGE_BRANCH,
-    read_repo_file,
-    write_repo_file,
-    remove_repo_file,
-    repo_file_path,
-)
+from .repo import SnoRepoFiles
 from .structs import CommitWithReference
 from .structure import RepositoryStructure
 from .utils import ungenerator
 
+MERGE_HEAD = SnoRepoFiles.MERGE_HEAD
+MERGE_INDEX = SnoRepoFiles.MERGE_INDEX
+MERGE_BRANCH = SnoRepoFiles.MERGE_BRANCH
+MERGE_MSG = SnoRepoFiles.MERGE_MSG
+
+ALL_MERGE_FILES = (MERGE_HEAD, MERGE_INDEX, MERGE_BRANCH, MERGE_MSG)
 
 # Utility classes relevant to merges - used by merge command, conflicts command, resolve command.
 
@@ -272,7 +270,7 @@ class MergeIndex:
     @classmethod
     def read_from_repo(cls, repo):
         """Deserialise a MergeIndex from the MERGE_INDEX file in the given repo."""
-        return cls.read(repo_file_path(repo, MERGE_INDEX))
+        return cls.read(repo.gitdir_file(MERGE_INDEX))
 
     def write(self, path):
         """
@@ -293,7 +291,7 @@ class MergeIndex:
 
     def write_to_repo(self, repo):
         """Serialise this MergeIndex to the MERGE_INDEX file in the given repo."""
-        self.write(repo_file_path(repo, MERGE_INDEX))
+        self.write(repo.gitdir_file(MERGE_INDEX))
 
     def write_resolved_tree(self, repo):
         """
@@ -419,7 +417,7 @@ class MergeContext:
 
         head = CommitWithReference.resolve(repo, "HEAD")
         ours_commit_id = head.id
-        theirs_commit_id = pygit2.Oid(hex=read_repo_file(repo, MERGE_HEAD).strip())
+        theirs_commit_id = pygit2.Oid(hex=repo.read_gitdir_file(MERGE_HEAD).strip())
 
         commit_ids3 = AncestorOursTheirs(
             # We find the ancestor by recalculating it fresh each time.
@@ -431,7 +429,7 @@ class MergeContext:
         branches3 = AncestorOursTheirs(
             None,
             head.branch_shorthand,
-            read_repo_file(repo, MERGE_BRANCH, missing_ok=True, strip=True),
+            repo.read_gitdir_file(MERGE_BRANCH, missing_ok=True, strip=True),
         )
 
         return cls._zip_together(repo, commit_ids3, short_ids3, branches3)
@@ -440,15 +438,15 @@ class MergeContext:
         # We don't write ancestor.commit_id - we just recalculate it when needed.
         # We don't write ours.commit_id - we can learn that from HEAD.
         # So we just write theirs.commit_id in MERGE_HEAD.
-        write_repo_file(repo, MERGE_HEAD, self.versions.theirs.commit_id.hex)
+        repo.write_gitdir_file(MERGE_HEAD, self.versions.theirs.commit_id.hex)
 
         # We don't write ancestor.branch, since it's always None anyway.
         # We don't write ours.branch. we can learn that from HEAD.
         # So we just write theirs.branch in MERGE_BRANCH, unless its None.
         if self.versions.theirs.branch:
-            write_repo_file(repo, MERGE_BRANCH, self.versions.theirs.branch)
+            repo.write_gitdir_file(MERGE_BRANCH, self.versions.theirs.branch)
         else:
-            remove_repo_file(repo, MERGE_BRANCH)
+            repo.remove_gitdir_file(MERGE_BRANCH)
 
     def get_message(self):
         theirs = self.versions.theirs

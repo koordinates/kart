@@ -4,9 +4,8 @@ import subprocess
 import pytest
 
 from sno.exceptions import NO_REPOSITORY
-from sno.repo_files import RepoState
+from sno.repo import SnoRepoState
 from sno.structs import CommitWithReference
-
 
 H = pytest.helpers.helpers()
 
@@ -299,7 +298,7 @@ def test_status_merging(create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch"])
         assert r.exit_code == 0, r
 
-        assert RepoState.get_state(repo) == RepoState.MERGING
+        assert repo.state == SnoRepoState.MERGING
         assert text_status(cli_runner) == [
             "On branch ours_branch",
             "",

@@ -21,7 +21,7 @@ from .exceptions import (
     UNCATEGORIZED_ERROR,
 )
 from .filter_util import build_feature_filter, UNFILTERED
-from .repo_files import RepoState
+from .repo import SnoRepoState
 from .structure import RepositoryStructure
 
 
@@ -126,7 +126,7 @@ def diff_with_writer(
         if isinstance(output_path, str) and output_path != "-":
             output_path = Path(output_path).expanduser()
 
-        repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+        repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
 
         # Parse <commit> or <commit>...<commit>
         commit_spec = commit_spec or "HEAD"

@@ -6,7 +6,7 @@ from . import status
 from .cli_util import add_help_subcommand
 from .output_util import dump_json_output
 from .structure import RepositoryStructure
-from .repo_files import RepoState
+from .repo import SnoRepoState
 
 
 # Changing these items would generally break the repo;
@@ -31,7 +31,7 @@ def data(ctx, **kwargs):
 @click.pass_context
 def data_ls(ctx, output_format, refish):
     """List all of the datasets in the sno repository"""
-    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
     if repo.is_empty:
         ds_paths = []
     else:
@@ -59,7 +59,7 @@ def data_ls(ctx, output_format, refish):
 @click.pass_context
 def data_version(ctx, output_format):
     """Show the repository structure version"""
-    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
     version = repo.version
     if output_format == "text":
         click.echo(f"Sno repository uses Datasets v{version}")

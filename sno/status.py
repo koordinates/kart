@@ -5,9 +5,9 @@ import pygit2
 
 from .conflicts import list_conflicts
 from .output_util import dump_json_output
-from .repo_files import RepoState
 from .merge import merge_status_to_text
 from .merge_util import MergeContext, MergeIndex
+from .repo import SnoRepoState
 from .working_copy import WorkingCopy
 
 
@@ -21,10 +21,10 @@ from .working_copy import WorkingCopy
 )
 def status(ctx, output_format):
     """ Show the working copy status """
-    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
 
-    if RepoState.get_state(repo) == RepoState.MERGING:
+    if repo.state == SnoRepoState.MERGING:
         merge_index = MergeIndex.read_from_repo(repo)
         merge_context = MergeContext.read_from_repo(repo)
         jdict["merging"] = merge_context.as_json()
@@ -93,7 +93,7 @@ def get_diff_status_json(diff):
 def status_to_text(jdict):
     branch_status = branch_status_to_text(jdict)
     is_empty = not jdict["commit"]
-    is_merging = jdict.get("state", None) == RepoState.MERGING
+    is_merging = jdict.get("state", None) == SnoRepoState.MERGING.value
 
     if is_merging:
         merge_status = merge_status_to_text(jdict, fresh=False)

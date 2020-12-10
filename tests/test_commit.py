@@ -6,9 +6,7 @@ import time
 
 import pytest
 
-import pygit2
-
-from sno import repo_files
+import sno
 from sno.exceptions import (
     INVALID_ARGUMENT,
     NO_CHANGES,
@@ -16,7 +14,7 @@ from sno.exceptions import (
     NO_REPOSITORY,
     SCHEMA_VIOLATION,
 )
-from sno.repo_files import fallback_editor
+from sno.commit import fallback_editor
 from sno.repo import SnoRepo
 from sno.structure import RepositoryStructure
 from sno.working_copy import WorkingCopy
@@ -174,7 +172,7 @@ def test_commit_message(
             else:
                 assert False, "Didn't expect editor to launch"
 
-    monkeypatch.setattr(repo_files, "run_editor_cmd", monkey_editor)
+    monkeypatch.setattr(sno.commit, "run_editor_cmd", monkey_editor)
     monkeypatch.delenv("EDITOR", raising=False)
     monkeypatch.delenv("VISUAL", raising=False)
     monkeypatch.delenv("GIT_EDITOR", raising=False)

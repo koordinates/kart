@@ -4,8 +4,8 @@ from datetime import datetime, timezone, timedelta
 import click
 
 from .crs_util import CoordinateReferenceString
-from .repo_files import RepoState
 from .output_util import dump_json_output, resolve_output_path
+from .repo import SnoRepoState
 from .structs import CommitWithReference
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff
@@ -15,7 +15,7 @@ EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 def _get_parent(ctx, refish):
-    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
+    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
     # Ensures we were given a reference to a commit, and not a tree or something
     commit = CommitWithReference.resolve(repo, refish).commit
 

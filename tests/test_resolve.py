@@ -1,12 +1,10 @@
 import json
 import pytest
 
-import pygit2
-
 from sno.diff_output import json_row
 from sno.exceptions import INVALID_OPERATION
 from sno.merge_util import MergeIndex
-from sno.repo_files import RepoState
+from sno.repo import SnoRepoState
 from sno.structure import RepositoryStructure
 
 
@@ -44,7 +42,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
-        assert RepoState.get_state(repo) == RepoState.MERGING
+        assert repo.state == SnoRepoState.MERGING
 
         # Can't just complete the merge until we resolve the conflicts.
         r = cli_runner.invoke(["merge", "--continue"])
@@ -96,7 +94,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
         assert repo.head_commit.message == "merge commit"
-        assert RepoState.get_state(repo) != RepoState.MERGING
+        assert repo.state != SnoRepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")
         ours = RepositoryStructure.lookup(repo, "ours_branch")
@@ -170,7 +168,7 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
         assert repo.head_commit.message == "merge commit"
-        assert RepoState.get_state(repo) != RepoState.MERGING
+        assert repo.state != SnoRepoState.MERGING
 
         merged = RepositoryStructure.lookup(repo, "HEAD")
         ours = RepositoryStructure.lookup(repo, "ours_branch")

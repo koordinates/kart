@@ -4,6 +4,7 @@ import re
 import struct
 import subprocess
 import sys
+from enum import Enum
 from pathlib import Path
 
 import click
@@ -37,6 +38,28 @@ class SnoRepoFiles:
     # Sno-specific files:
     MERGE_INDEX = "MERGE_INDEX"
     MERGE_BRANCH = "MERGE_BRANCH"
+
+
+class SnoRepoState(Enum):
+    NORMAL = "normal"
+    MERGING = "merging"
+
+    @classmethod
+    def bad_state_message(cls, bad_state, allowed_states, command_extra):
+        """Generates a generic message about a disallowed_state if no specific message is provided."""
+        # Only two states exist right now so logic is pretty simple:
+        cmd = click.get_current_context().command_path
+        if command_extra:
+            cmd = f"{cmd} {command_extra}"
+        if bad_state == SnoRepoState.MERGING:
+            return (
+                f'`{cmd}` does not work while the sno repo is in "merging" state.\n'
+                "Use `sno merge --abort` to abandon the merge and get back to the previous state."
+            )
+        return f'`{cmd}` only works when the sno repo is in "merging" state, but it is in "normal" state.'
+
+
+SnoRepoState.ALL_STATES = (SnoRepoState.NORMAL, SnoRepoState.MERGING)
 
 
 class SnoConfigKeys:
@@ -264,8 +287,7 @@ class SnoRepo(pygit2.Repository):
                 if self.is_bare_style_sno_repo()
                 else self.SNO_TIDY_STYLE_README
             )
-            readme_path = self.workdir_path / "SNO_README.txt"
-            readme_path.write_text(text)
+            self.workdir_file("SNO_README.txt").write_text(text)
         except Exception as e:
             L.warn(e)
 
@@ -348,11 +370,16 @@ class SnoRepo(pygit2.Repository):
             LockedGitIndex.LOCKED_EMPTY_GIT_INDEX
         )
 
-    def ensure_state(self, allowed_states, bad_state_message=None, command_extra=None):
-        """Ensures the sno repo is in one of the given states, or raises an error."""
-        from .repo_files import RepoState
-
-        RepoState.ensure_state(self, allowed_states, bad_state_message, command_extra)
+    @property
+    def state(self):
+        merge_head = self.gitdir_file(SnoRepoFiles.MERGE_HEAD).exists()
+        merge_index = self.gitdir_file(SnoRepoFiles.MERGE_INDEX).exists()
+        if merge_head and not merge_index:
+            raise NotFound(
+                'sno repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
+                "Try `sno merge --abort` to return to a good state."
+            )
+        return SnoRepoState.MERGING if merge_head else SnoRepoState.NORMAL
 
     def del_config(self, key):
         config = self.config
@@ -440,6 +467,33 @@ class SnoRepo(pygit2.Repository):
 
     def committer_signature(self, **overrides):
         return self._signature("COMMITTER", **overrides)
+
+    def gitdir_file(self, rel_path):
+        return self.gitdir_path / rel_path
+
+    def workdir_file(self, rel_path):
+        return self.workdir_path / rel_path
+
+    def write_gitdir_file(self, rel_path, text):
+        assert isinstance(text, str)
+        if not text.endswith("\n"):
+            text += "\n"
+        self.gitdir_file(rel_path).write_text(text, encoding="utf-8")
+
+    def read_gitdir_file(self, rel_path, missing_ok=False, strip=False):
+        path = self.gitdir_file(rel_path)
+        if missing_ok and not path.exists():
+            return None
+        result = path.read_text(encoding="utf-8")
+        if strip:
+            result = result.strip()
+        return result
+
+    def remove_gitdir_file(self, rel_path, missing_ok=True):
+        path = self.gitdir_file(rel_path)
+        if missing_ok and not path.exists():
+            return
+        path.unlink()
 
     SNO_COMMON_README = [
         "",

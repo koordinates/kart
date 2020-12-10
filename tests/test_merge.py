@@ -1,20 +1,16 @@
 import json
 import pytest
 
-import pygit2
-
 from sno.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
-from sno.merge_util import MergeIndex, CommitWithReference
-from sno.repo_files import (
+from sno.merge_util import (
+    MergeIndex,
+    CommitWithReference,
     MERGE_HEAD,
     MERGE_BRANCH,
     MERGE_MSG,
-    MERGE_INDEX,
-    repo_file_exists,
-    read_repo_file,
-    RepoState,
+    ALL_MERGE_FILES,
 )
-from sno.repo import SnoRepo
+from sno.repo import SnoRepo, SnoRepoState
 
 
 H = pytest.helpers.helpers()
@@ -319,10 +315,10 @@ def test_merge_conflicts(
             }
 
         if not dry_run:
-            assert read_repo_file(repo, MERGE_HEAD) == theirs.id.hex + "\n"
-            assert read_repo_file(repo, MERGE_BRANCH) == "theirs_branch\n"
+            assert repo.read_gitdir_file(MERGE_HEAD).strip() == theirs.id.hex
+            assert repo.read_gitdir_file(MERGE_BRANCH).strip() == "theirs_branch"
             assert (
-                read_repo_file(repo, MERGE_MSG)
+                repo.read_gitdir_file(MERGE_MSG)
                 == 'Merge branch "theirs_branch" into ours_branch\n'
             )
 
@@ -330,10 +326,8 @@ def test_merge_conflicts(
             assert len(merge_index.conflicts) == 4
             cli_runner.invoke(["merge", "--abort"])
 
-        assert not repo_file_exists(repo, MERGE_HEAD)
-        assert not repo_file_exists(repo, MERGE_BRANCH)
-        assert not repo_file_exists(repo, MERGE_MSG)
-        assert not repo_file_exists(repo, MERGE_INDEX)
+        for filename in ALL_MERGE_FILES:
+            assert not repo.gitdir_file(filename).exists()
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
@@ -341,7 +335,7 @@ def test_merge_state_lock(repo_version, create_conflicts, cli_runner):
     with create_conflicts(H.POINTS, repo_version) as repo:
         # Repo state: normal
         # sno checkout works, but sno conflicts and sno resolve do not.
-        assert RepoState.get_state(repo) == RepoState.NORMAL
+        assert repo.state == SnoRepoState.NORMAL
 
         r = cli_runner.invoke(["checkout", "ours_branch"])
         assert r.exit_code == SUCCESS
@@ -354,7 +348,7 @@ def test_merge_state_lock(repo_version, create_conflicts, cli_runner):
         assert r.exit_code == SUCCESS
 
         # Repo state: merging
-        assert RepoState.get_state(repo) == RepoState.MERGING
+        assert repo.state == SnoRepoState.MERGING
 
         # sno checkout is locked, but sno conflicts and sno resolve work.
         r = cli_runner.invoke(["checkout", "ours_branch"])

@@ -1,8 +1,8 @@
+from collections.abc import Iterable
 from pathlib import Path
 
-from .repo import SnoRepo
-from .exceptions import NotFound, NO_REPOSITORY
-from .repo_files import RepoState
+from .repo import SnoRepo, SnoRepoState
+from .exceptions import InvalidOperation, NotFound, NO_REPOSITORY
 from .working_copy import WorkingCopy
 
 
@@ -46,7 +46,7 @@ class Context(object):
 
     def get_repo(
         self,
-        allowed_states=(RepoState.NORMAL,),
+        allowed_states=SnoRepoState.NORMAL,
         bad_state_message=None,
         command_extra=None,
     ):
@@ -68,11 +68,23 @@ class Context(object):
 
                 raise NotFound(message, exit_code=NO_REPOSITORY, param_hint=param_hint)
 
-        self._repo.ensure_state(allowed_states, bad_state_message, command_extra)
+        state = self._repo.state
+        state_is_allowed = (
+            state in allowed_states
+            if isinstance(allowed_states, Iterable)
+            else state == allowed_states
+        )
+        if not state_is_allowed:
+            if not bad_state_message:
+                bad_state_message = SnoRepoState.bad_state_message(
+                    state, allowed_states, command_extra
+                )
+            raise InvalidOperation(bad_state_message)
+
         return self._repo
 
     def check_not_dirty(self, help_message=None):
-        repo = self.get_repo(allowed_states=RepoState.ALL_STATES)
+        repo = self.get_repo(allowed_states=SnoRepoState.ALL_STATES)
         working_copy = WorkingCopy.get(repo)
         if working_copy:
             working_copy.check_not_dirty(help_message)

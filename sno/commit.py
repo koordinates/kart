@@ -1,27 +1,26 @@
-import re
-
-import sys
 from datetime import datetime, timedelta, timezone
+import re
+import os
+import shlex
+import shutil
+import subprocess
+import sys
 
 import click
 import pygit2
 
+from . import is_windows
 from .cli_util import StringFromFile
 from .core import check_git_user
 from .exceptions import (
     NotFound,
+    SubprocessError,
     NO_CHANGES,
     NO_DATA,
     NO_WORKING_COPY,
 )
 from .filter_util import build_feature_filter
 from .output_util import dump_json_output
-from .repo_files import (
-    COMMIT_EDITMSG,
-    write_repo_file,
-    read_repo_file,
-    user_edit_repo_file,
-)
 from .status import (
     get_branch_status_message,
     get_diff_status_message,
@@ -33,8 +32,9 @@ from .timestamps import (
     timedelta_to_iso8601_tz,
     commit_time_to_text,
 )
-from .working_copy import WorkingCopy
+from .repo import SnoRepoFiles
 from .structure import RepositoryStructure
+from .working_copy import WorkingCopy
 
 
 @click.command()
@@ -142,11 +142,12 @@ def get_commit_message(repo, diff, draft_message="", quiet=False):
         "#",
     ]
 
-    write_repo_file(repo, COMMIT_EDITMSG, "\n".join(initial_message) + "\n")
+    commit_editmsg_file = repo.gitdir_file(SnoRepoFiles.COMMIT_EDITMSG)
+    commit_editmsg_file.write_text("\n".join(initial_message) + "\n", encoding="utf-8")
     if not quiet:
         click.echo("hint: Waiting for your editor to close the file...")
-    user_edit_repo_file(repo, COMMIT_EDITMSG)
-    message = read_repo_file(repo, COMMIT_EDITMSG)
+    user_edit_file(commit_editmsg_file)
+    message = commit_editmsg_file.read_text(encoding="utf-8")
 
     # strip:
     # - whitespace at start/end
@@ -154,6 +155,42 @@ def get_commit_message(repo, diff, draft_message="", quiet=False):
     # - blank lines surrounding comment lines
     message = re.sub(r"^\n*#.*\n", "", message, flags=re.MULTILINE)
     return message.strip()
+
+
+def fallback_editor():
+    if is_windows:
+        return "notepad.exe"
+    else:
+        return shutil.which("nano") and "nano" or "vi"
+
+
+def user_edit_file(path):
+    editor = os.environ.get("GIT_EDITOR")
+    if not editor:
+        editor = os.environ.get("VISUAL")
+    if not editor:
+        editor = os.environ.get("EDITOR")
+    if not editor:
+        editor = fallback_editor()
+
+    path = str(path.resolve())
+    if is_windows:
+        # No shlex.quote() on windows
+        # " isn't legal in filenames
+        editor_cmd = f'{editor} "{path}"'
+    else:
+        editor_cmd = f"{editor} {shlex.quote(path)}"
+    try:
+        run_editor_cmd(editor_cmd)
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with the editor '{editor}': {e}",
+            called_process_error=e,
+        ) from e
+
+
+def run_editor_cmd(editor_cmd):
+    subprocess.check_call(editor_cmd, shell=True)
 
 
 def commit_obj_to_json(commit, repo, wc_diff):

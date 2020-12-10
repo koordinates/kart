@@ -11,17 +11,9 @@ from .conflicts import (
 )
 from .diff import get_repo_diff
 from .exceptions import InvalidOperation
-from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext
+from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext, ALL_MERGE_FILES
 from .output_util import dump_json_output
-from .repo_files import (
-    MERGE_HEAD,
-    MERGE_MSG,
-    write_repo_file,
-    read_repo_file,
-    remove_all_merge_repo_files,
-    repo_file_exists,
-    RepoState,
-)
+from .repo import SnoRepoFiles, SnoRepoState
 from .structs import CommitWithReference
 from .structure import RepositoryStructure
 from .working_copy import WorkingCopy
@@ -35,7 +27,7 @@ def get_commit_message(
 ):
     merge_message = None
     if read_msg_file:
-        merge_message = read_repo_file(repo, MERGE_MSG, missing_ok=True)
+        merge_message = repo.read_gitdir_file(SnoRepoFiles.MERGE_MSG, missing_ok=True)
     if not merge_message:
         merge_message = merge_context.get_message()
     head = RepositoryStructure.lookup(repo, "HEAD")
@@ -158,11 +150,11 @@ def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     merge_context - the MergeContext object for the merge.
     merge_message - the commit message for when the merge is completed.
     """
-    assert RepoState.get_state(repo) != RepoState.MERGING
+    assert repo.state != SnoRepoState.MERGING
     merge_index.write_to_repo(repo)
     merge_context.write_to_repo(repo)
-    write_repo_file(repo, MERGE_MSG, merge_message)
-    assert RepoState.get_state(repo) == RepoState.MERGING
+    repo.write_gitdir_file(SnoRepoFiles.MERGE_MSG, merge_message)
+    assert repo.state == SnoRepoState.MERGING
 
 
 def abort_merging_state(ctx):
@@ -170,16 +162,19 @@ def abort_merging_state(ctx):
     Put things back how they were before the merge began.
     Tries to be robust against failure, in case the user has messed up the repo's state.
     """
-    repo = ctx.obj.get_repo(allowed_states=RepoState.ALL_STATES)
-    is_ongoing_merge = repo_file_exists(repo, MERGE_HEAD)
+    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
+    is_ongoing_merge = repo.gitdir_file(SnoRepoFiles.MERGE_HEAD).exists()
+
     # If we are in a merge, we now need to delete all the MERGE_* files.
     # If we are not in a merge, we should clean them up anyway.
-    remove_all_merge_repo_files(repo)
-    assert RepoState.get_state(repo) != RepoState.MERGING
+    for filename in ALL_MERGE_FILES:
+        repo.remove_gitdir_file(filename)
+
+    assert repo.state != SnoRepoState.MERGING
 
     if not is_ongoing_merge:
-        message = RepoState.bad_state_message(
-            RepoState.NORMAL, [RepoState.MERGING], command_extra="--abort"
+        message = SnoRepoState.bad_state_message(
+            SnoRepoState.NORMAL, [SnoRepoState.MERGING], command_extra="--abort"
         )
         raise InvalidOperation(message)
 
@@ -191,7 +186,7 @@ def complete_merging_state(ctx):
     HEAD now at the merge commit. Only works if all conflicts have been resolved.
     """
     repo = ctx.obj.get_repo(
-        allowed_states=[RepoState.MERGING],
+        allowed_states=SnoRepoState.MERGING,
         command_extra="--continue",
     )
     merge_index = MergeIndex.read_from_repo(repo)
@@ -240,8 +235,10 @@ def complete_merging_state(ctx):
         # we don't have any way of preserving them right now.
         wc.reset(merge_commit, force=True)
 
-    remove_all_merge_repo_files(repo)
-    assert RepoState.get_state(repo) != RepoState.MERGING
+    for filename in ALL_MERGE_FILES:
+        repo.remove_gitdir_file(filename)
+
+    assert repo.state != SnoRepoState.MERGING
 
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
@@ -384,7 +381,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
 
     repo = ctx.obj.get_repo(
-        allowed_states=[RepoState.NORMAL],
+        allowed_states=SnoRepoState.NORMAL,
         bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
     )
     ctx.obj.check_not_dirty()
