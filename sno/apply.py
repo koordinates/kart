@@ -15,7 +15,7 @@ from .exceptions import (
 from .diff_structs import RepoDiff, DeltaDiff, Delta
 from .geometry import hex_wkb_to_gpkg_geom
 from .schema import Schema
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 from .working_copy import WorkingCopy
 
@@ -116,7 +116,7 @@ def apply_patch(
         except KeyError:
             raise NotFound(f"No such ref {ref}")
 
-    rs = RepositoryStructure.lookup(repo, ref)
+    rs = RepoStructure.lookup(repo, ref)
     wc = WorkingCopy.get(repo)
     if not do_commit and not wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?

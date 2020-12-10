@@ -22,7 +22,7 @@ from .exceptions import (
 )
 from .filter_util import build_feature_filter, UNFILTERED
 from .repo import SnoRepoState
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 
 
 L = logging.getLogger("sno.diff")
@@ -63,7 +63,7 @@ def get_dataset_diff(
 
 
 def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
-    """Generates a Diff for every dataset in both RepositoryStructures."""
+    """Generates a Diff for every dataset in both RepoStructures."""
     all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
 
     if feature_filter is not UNFILTERED:
@@ -91,7 +91,7 @@ def get_common_ancestor(repo, rs1, rs2):
         raise InvalidOperation(
             "The .. operator tries to find the common ancestor, but no common ancestor was found. Perhaps try the ... operator."
         )
-    return RepositoryStructure.lookup(repo, ancestor_id)
+    return RepoStructure.lookup(repo, ancestor_id)
 
 
 def diff_with_writer(
@@ -134,8 +134,8 @@ def diff_with_writer(
 
         if len(commit_parts) == 3:
             # Two commits specified - base and target. We diff base<>target.
-            base_rs = RepositoryStructure.lookup(repo, commit_parts[0] or "HEAD")
-            target_rs = RepositoryStructure.lookup(repo, commit_parts[2] or "HEAD")
+            base_rs = RepoStructure.lookup(repo, commit_parts[0] or "HEAD")
+            target_rs = RepoStructure.lookup(repo, commit_parts[2] or "HEAD")
             if commit_parts[1] == "..":
                 # A   C    A...C is A<>C
                 #  \ /     A..C  is B<>C
@@ -147,8 +147,8 @@ def diff_with_writer(
             # When no commits are specified, base is HEAD, and we do the same.
             # We diff base<>working_copy by diffing base<>target + target<>working_copy,
             # and target is set to HEAD.
-            base_rs = RepositoryStructure.lookup(repo, commit_parts[0])
-            target_rs = RepositoryStructure.lookup(repo, "HEAD")
+            base_rs = RepoStructure.lookup(repo, commit_parts[0])
+            target_rs = RepoStructure.lookup(repo, "HEAD")
             working_copy = WorkingCopy.get(repo)
             if not working_copy:
                 raise NotFound("No working copy", exit_code=NO_WORKING_COPY)

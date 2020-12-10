@@ -9,7 +9,7 @@ from .diff_output import text_row, json_row, geojson_row
 from .filter_util import UNFILTERED
 from .repo import SnoRepoFiles
 from .structs import CommitWithReference
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 from .utils import ungenerator
 
 MERGE_HEAD = SnoRepoFiles.MERGE_HEAD
@@ -84,7 +84,7 @@ class MergeIndex:
     Entry = namedtuple("Entry", ("path", "id", "mode"))
 
     # Note that MergeIndex only contains Entries, which are simple structs -
-    # not RichConflicts, which refer to the entire RepositoryStructure to give extra functionality.
+    # not RichConflicts, which refer to the entire RepoStructure to give extra functionality.
 
     def __init__(self, entries, conflicts, resolves):
         self.entries = entries
@@ -371,7 +371,7 @@ class VersionContext:
     @property
     @functools.lru_cache(maxsize=1)
     def repo_structure(self):
-        return RepositoryStructure.lookup(self.repo, self.commit_id)
+        return RepoStructure.lookup(self.repo, self.commit_id)
 
     @property
     def shorthand(self):

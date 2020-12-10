@@ -14,7 +14,7 @@ from .output_util import (
     resolve_output_path,
     wrap_text_to_terminal,
 )
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 
 # Changing these items would generally break the repo;
 # we disallow that.
@@ -57,7 +57,7 @@ def meta_get(ctx, output_format, json_style, ref, dataset, keys):
 
     Optionally, output can be filtered to a dataset and a particular key.
     """
-    rs = RepositoryStructure.lookup(ctx.obj.repo, ref)
+    rs = RepoStructure.lookup(ctx.obj.repo, ref)
 
     if dataset:
         try:
@@ -147,7 +147,7 @@ def meta_set(ctx, message, dataset, items):
     """
     Sets multiple meta items for a dataset, and creates a commit.
     """
-    rs = RepositoryStructure(ctx.obj.repo)
+    rs = RepoStructure(ctx.obj.repo)
 
     if rs.version < 2:
         raise InvalidOperation(

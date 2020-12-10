@@ -15,14 +15,14 @@ from .exceptions import (
     SCHEMA_VIOLATION,
 )
 from .rich_tree_builder import RichTreeBuilder
-from .repo_version import get_repo_version, extra_blobs_for_version
+from .repo_version import extra_blobs_for_version
 from .schema import Schema
 
 
 L = logging.getLogger("sno.structure")
 
 
-class RepositoryStructure:
+class RepoStructure:
     @staticmethod
     def lookup(repo, key):
         L.debug(f"key={key}")
@@ -34,12 +34,12 @@ class RepositoryStructure:
             raise NotFound(f"{key} is not a commit or tree", exit_code=NO_COMMIT)
 
         try:
-            return RepositoryStructure(repo, commit=obj.peel(pygit2.Commit))
+            return RepoStructure(repo, commit=obj.peel(pygit2.Commit))
         except pygit2.InvalidSpecError:
             pass
 
         try:
-            return RepositoryStructure(repo, tree=obj.peel(pygit2.Tree))
+            return RepoStructure(repo, tree=obj.peel(pygit2.Tree))
         except pygit2.InvalidSpecError:
             pass
 

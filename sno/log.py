@@ -8,7 +8,7 @@ from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 
 
 @click.command(
@@ -147,7 +147,7 @@ def _get_dataset_tree_ids(repo, commit, dataset_change_cache):
     commit_id = commit.id.hex
     if commit_id not in dataset_change_cache:
         result = {}
-        rs = RepositoryStructure(repo, commit)
+        rs = RepoStructure(repo, commit)
         for dataset in rs:
             result[dataset.path] = dataset.tree.id.hex
         dataset_change_cache[commit_id] = result

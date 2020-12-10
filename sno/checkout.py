@@ -9,7 +9,7 @@ from .exceptions import (
     NO_WORKING_COPY,
 )
 
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 from .structs import CommitWithReference
 from .working_copy import WorkingCopy
 
@@ -31,7 +31,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if not working_copy.is_initialised():
         click.echo(f"Creating working copy at {working_copy.path} ...")
         working_copy.create_and_initialise()
-        datasets = list(RepositoryStructure(repo))
+        datasets = list(RepoStructure(repo))
         working_copy.write_full(target_tree_or_commit, *datasets, safe=False)
 
     db_tree_matches = (

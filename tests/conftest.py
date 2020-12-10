@@ -259,7 +259,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
-    from sno.structure import RepositoryStructure
+    from sno.structure import RepoStructure
 
     incr = 0
 
@@ -272,7 +272,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 name = name[:-5]
 
             repo = SnoRepo(repo_dir)
-            rs = RepositoryStructure(repo)
+            rs = RepoStructure(repo)
             if rs.working_copy:
                 wc_path = rs.working_copy.full_path
                 if force_new:

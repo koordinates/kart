@@ -99,7 +99,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
 
     assert r.exit_code == 0, r.stderr
     repo = SnoRepo(tmp_path / "repo1")
-    dataset = structure.RepositoryStructure(repo)["typoes"]
+    dataset = structure.RepoStructure(repo)["typoes"]
 
     cols = _dataset_col_types(dataset)
 
@@ -147,7 +147,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
 
     assert r.exit_code == 0, r.stderr
     repo = SnoRepo(tmp_path / "repo2")
-    dataset = structure.RepositoryStructure(repo)["typoes"]
+    dataset = structure.RepoStructure(repo)["typoes"]
 
     cols = _dataset_col_types(dataset)
     assert cols == {

@@ -9,7 +9,7 @@ from sno import checkout, context
 from sno.exceptions import InvalidOperation, NotFound
 from sno.fast_import import fast_import_tables, ReplaceExisting
 from sno.repo import SnoRepo
-from sno.structure import RepositoryStructure
+from sno.structure import RepoStructure
 from sno.repo_version import get_repo_version
 from sno.timestamps import minutes_to_tz_offset
 
@@ -154,7 +154,7 @@ def _upgrade_commit(
 
     sources = [
         ds
-        for ds in RepositoryStructure(
+        for ds in RepoStructure(
             source_repo,
             commit=source_commit,
             version=source_version,

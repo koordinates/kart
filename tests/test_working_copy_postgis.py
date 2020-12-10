@@ -5,7 +5,7 @@ import pygit2
 
 from sno.repo import SnoRepo
 from sno.working_copy import WorkingCopy, postgis_adapter
-from sno.structure import RepositoryStructure
+from sno.structure import RepoStructure
 from test_working_copy import compute_approximated_types
 
 
@@ -384,7 +384,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                     # Now sno diff should show the change, and it is possible to commit the change.
                     assert wc.is_dirty()
 
-                    commit_id = RepositoryStructure(repo).commit(
+                    commit_id = RepoStructure(repo).commit(
                         wc.diff_to_tree(), "Modify CRS"
                     )
                     wc.update_state_table_tree(commit_id.hex)

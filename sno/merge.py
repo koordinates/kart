@@ -15,7 +15,7 @@ from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext, ALL_MERGE_
 from .output_util import dump_json_output
 from .repo import SnoRepoFiles, SnoRepoState
 from .structs import CommitWithReference
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 from .working_copy import WorkingCopy
 
 
@@ -30,8 +30,8 @@ def get_commit_message(
         merge_message = repo.read_gitdir_file(SnoRepoFiles.MERGE_MSG, missing_ok=True)
     if not merge_message:
         merge_message = merge_context.get_message()
-    head = RepositoryStructure.lookup(repo, "HEAD")
-    merged = RepositoryStructure.lookup(repo, merge_tree_id)
+    head = RepoStructure.lookup(repo, "HEAD")
+    merged = RepoStructure.lookup(repo, merge_tree_id)
     diff = get_repo_diff(head, merged)
     merge_message = commit.get_commit_message(
         repo, diff, draft_message=merge_message, quiet=quiet

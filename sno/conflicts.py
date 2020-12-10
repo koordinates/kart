@@ -45,7 +45,7 @@ def list_conflicts(
     }
 
     merge_index - MergeIndex object containing the conflicts found.
-    merge_context - MergeContext object containing RepositoryStructures.
+    merge_context - MergeContext object containing RepoStructures.
     output_format - one of 'text', 'json', 'geojson'
     summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
     categorise - if True, adds another layer between feature and ID which is the type of conflict, eg "edit/edit"

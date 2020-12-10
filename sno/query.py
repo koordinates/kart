@@ -30,7 +30,7 @@ def query(ctx, path, command, params):
     Significantly, indexes don't update when the repo changes in any way.
     """
     repo = ctx.obj.repo
-    rs = structure.RepositoryStructure(repo)
+    rs = structure.RepoStructure(repo)
     dataset = rs[path]
 
     if command == "index":

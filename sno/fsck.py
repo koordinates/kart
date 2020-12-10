@@ -6,7 +6,7 @@ import pygit2
 
 from . import gpkg
 from .exceptions import NotFound, NO_WORKING_COPY
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 
 
 def _fsck_reset(repo_structure, working_copy, dataset_paths):
@@ -37,7 +37,7 @@ def fsck(ctx, reset_datasets, fsck_args):
 
     # now check our stuff:
     # 1. working copy
-    rs = RepositoryStructure(repo)
+    rs = RepoStructure(repo)
 
     if "sno.workingcopy.path" not in repo.config:
         click.echo("No working-copy configured")

@@ -16,7 +16,7 @@ from sno.exceptions import (
 )
 from sno.commit import fallback_editor
 from sno.repo import SnoRepo
-from sno.structure import RepositoryStructure
+from sno.structure import RepoStructure
 from sno.working_copy import WorkingCopy
 
 
@@ -89,7 +89,7 @@ def test_commit(
         print(f"deleted fid={pk_del}")
 
         repo = SnoRepo(repo_dir)
-        rs = RepositoryStructure(repo)
+        rs = RepoStructure(repo)
         wc = rs.working_copy
         original_change_count = _count_tracking_table_changes(db, wc, layer)
 

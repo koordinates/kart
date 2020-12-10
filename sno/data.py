@@ -5,7 +5,7 @@ import click
 from . import status
 from .cli_util import add_help_subcommand
 from .output_util import dump_json_output
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 from .repo import SnoRepoState
 
 
@@ -35,7 +35,7 @@ def data_ls(ctx, output_format, refish):
     if repo.is_empty:
         ds_paths = []
     else:
-        rs = RepositoryStructure.lookup(repo, refish)
+        rs = RepoStructure.lookup(repo, refish)
         ds_paths = [ds.path for ds in rs]
 
     if output_format == "text":

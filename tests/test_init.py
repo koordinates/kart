@@ -5,7 +5,7 @@ import pytest
 import pygit2
 
 from sno.repo import SnoRepo
-from sno.structure import RepositoryStructure
+from sno.structure import RepoStructure
 from sno.working_copy import WorkingCopy
 from sno.exceptions import (
     INVALID_OPERATION,
@@ -340,8 +340,8 @@ def test_import_replace_existing_with_compatible_schema_changes(
             assert not diff.get("feature")
 
             repo = SnoRepo(repo_path)
-            head_rs = RepositoryStructure.lookup(repo, "HEAD")
-            old_rs = RepositoryStructure.lookup(repo, "HEAD^")
+            head_rs = RepoStructure.lookup(repo, "HEAD")
+            old_rs = RepoStructure.lookup(repo, "HEAD^")
             assert head_rs.tree != old_rs.tree
             new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
             old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
@@ -399,8 +399,8 @@ def test_import_replace_existing_with_column_renames(
             assert not diff.get("feature")
 
             repo = SnoRepo(repo_path)
-            head_rs = RepositoryStructure.lookup(repo, "HEAD")
-            old_rs = RepositoryStructure.lookup(repo, "HEAD^")
+            head_rs = RepoStructure.lookup(repo, "HEAD")
+            old_rs = RepoStructure.lookup(repo, "HEAD^")
             assert head_rs.tree != old_rs.tree
             new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
             old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"

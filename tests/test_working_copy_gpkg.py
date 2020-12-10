@@ -9,7 +9,7 @@ import apsw
 from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
-from sno.structure import RepositoryStructure
+from sno.structure import RepoStructure
 from sno.working_copy import WorkingCopy
 from sno.working_copy.gpkg import WorkingCopy_GPKG_1
 from sno.db_util import changes_rowcount, execute_insert_dict
@@ -44,7 +44,7 @@ def test_checkout_workingcopy(
         H.clear_working_copy()
 
         repo = SnoRepo(repo_path)
-        dataset = RepositoryStructure(repo)[table]
+        dataset = RepoStructure(repo)[table]
         geom_cols = dataset.schema.geometry_columns
 
         r = cli_runner.invoke(["checkout"])

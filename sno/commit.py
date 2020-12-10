@@ -33,7 +33,7 @@ from .timestamps import (
     commit_time_to_text,
 )
 from .repo import SnoRepoFiles
-from .structure import RepositoryStructure
+from .structure import RepoStructure
 from .working_copy import WorkingCopy
 
 
@@ -106,7 +106,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
 
-    rs = RepositoryStructure(repo)
+    rs = RepoStructure(repo)
     new_commit_id = rs.commit(wc_diff, commit_msg, allow_empty=allow_empty)
     new_commit = repo[new_commit_id].peel(pygit2.Commit)
 
