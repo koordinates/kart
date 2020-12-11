@@ -104,7 +104,7 @@ def show_output_text(*, target, output_path, **kwargs):
     Contextmanager.
 
     Arguments:
-        target: a pygit2.Commit instance to show a patch for
+        target: a RepoStructure instance for the commit to show a patch for
         output_path:   where the output should go; a path, file-like object or '-'
 
     All other kwargs are passed to sno.diff.diff_output_text.
@@ -121,7 +121,7 @@ def show_output_text(*, target, output_path, **kwargs):
     In particular, geometry WKT is abbreviated and null values are represented
     by a unicode "␀" character.
     """
-    commit = target.head_commit
+    commit = target.commit
     fp = resolve_output_path(output_path)
     pecho = {"file": fp, "color": fp.isatty()}
     with diff.diff_output_text(output_path=fp, **kwargs) as diff_writer:
@@ -167,7 +167,7 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
     authorTime is always returned in UTC, in Z-suffixed ISO8601 format.
     """
 
-    commit = target.head_commit
+    commit = target.commit
     author = commit.author
     author_time = datetime.fromtimestamp(author.time, timezone.utc)
     author_time_offset = timedelta(minutes=author.offset)
@@ -199,7 +199,7 @@ def patch_output(*, target, output_path, json_style, **kwargs):
     This is duplicated for clarity, because all this diff callback stuff is complex enough.
     """
 
-    commit = target.head_commit
+    commit = target.commit
     author = commit.author
     author_time = datetime.fromtimestamp(author.time, timezone.utc)
     author_time_offset = timedelta(minutes=author.offset)

@@ -8,7 +8,6 @@ import pytest
 from sno.diff_structs import Delta, DeltaDiff
 from sno.geometry import hex_wkb_to_ogr
 from sno.repo import SnoRepo
-from sno.structure import RepoStructure
 
 
 H = pytest.helpers.helpers()
@@ -1545,8 +1544,8 @@ def test_diff_streaming(repo_version, data_archive_readonly):
     data_archive = "points2" if repo_version == 2 else "points"
     with data_archive_readonly(data_archive) as repo_path:
         repo = SnoRepo(repo_path)
-        old = RepoStructure.lookup(repo, "HEAD^")[H.POINTS.LAYER]
-        new = RepoStructure.lookup(repo, "HEAD")[H.POINTS.LAYER]
+        old = repo.datasets("HEAD^")[H.POINTS.LAYER]
+        new = repo.datasets("HEAD")[H.POINTS.LAYER]
 
         def override_get_feature(self, *args, **kwargs):
             self.get_feature_calls += 1

@@ -2,11 +2,8 @@ import json
 import shutil
 
 import pytest
-import pygit2
 
 from sno.repo import SnoRepo
-from sno.structure import RepoStructure
-from sno.working_copy import WorkingCopy
 from sno.exceptions import (
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
@@ -138,7 +135,7 @@ def test_import_table_meta_overrides(
             cli_runner.invoke(["checkout"])
 
             repo = SnoRepo(repo_path)
-            wc = WorkingCopy.get(repo)
+            wc = repo.working_copy
             db = geopackage(wc.path)
             cur = db.cursor()
             title, description = cur.execute(
@@ -340,8 +337,8 @@ def test_import_replace_existing_with_compatible_schema_changes(
             assert not diff.get("feature")
 
             repo = SnoRepo(repo_path)
-            head_rs = RepoStructure.lookup(repo, "HEAD")
-            old_rs = RepoStructure.lookup(repo, "HEAD^")
+            head_rs = repo.structure("HEAD")
+            old_rs = repo.structure("HEAD^")
             assert head_rs.tree != old_rs.tree
             new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
             old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
@@ -399,8 +396,8 @@ def test_import_replace_existing_with_column_renames(
             assert not diff.get("feature")
 
             repo = SnoRepo(repo_path)
-            head_rs = RepoStructure.lookup(repo, "HEAD")
-            old_rs = RepoStructure.lookup(repo, "HEAD^")
+            head_rs = repo.structure("HEAD")
+            old_rs = repo.structure("HEAD^")
             assert head_rs.tree != old_rs.tree
             new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
             old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
@@ -426,7 +423,7 @@ def test_init_import_table_ogr_types(
 
         # There's a bunch of wacky types in here, let's check them
         repo = SnoRepo(repo_path)
-        wc = WorkingCopy.get(repo)
+        wc = repo.working_copy
         with wc.session() as db:
             table_info = [
                 dict(row) for row in db.cursor().execute("PRAGMA table_info('types');")
@@ -922,7 +919,7 @@ def test_import_existing_wc(
             assert r.exit_code == 0, r
 
         repo = SnoRepo(repo_path)
-        wc = WorkingCopy.get(repo)
+        wc = repo.working_copy
         db = geopackage(wcdb)
 
         assert H.row_count(db, "nz_waca_adjustments") > 0

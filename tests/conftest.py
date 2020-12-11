@@ -259,8 +259,6 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """
-    from sno.structure import RepoStructure
-
     incr = 0
 
     @contextlib.contextmanager
@@ -272,16 +270,15 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 name = name[:-5]
 
             repo = SnoRepo(repo_dir)
-            rs = RepoStructure(repo)
-            if rs.working_copy:
-                wc_path = rs.working_copy.full_path
+            if repo.working_copy:
+                wc_path = repo.working_copy.full_path
                 if force_new:
                     L.info("force_new is set, deleting existing WC: %s", wc_path)
-                    del rs.working_copy
-                    assert not hasattr(rs, "_working_copy")
+                    del repo.working_copy
+                    assert not hasattr(repo, "_working_copy")
                     del wc_path
 
-            if not rs.working_copy:
+            if not repo.working_copy:
                 wc_path = (
                     tmp_path_factory.mktemp(request.node.name, str(incr))
                     / f"{name}.gpkg"
@@ -291,7 +288,6 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 r = cli_runner.invoke(["create-workingcopy", wc_path])
                 assert r.exit_code == 0, r
 
-            del rs
             del repo
 
             L.info("data_working_copy: %s %s", repo_dir, wc_path)

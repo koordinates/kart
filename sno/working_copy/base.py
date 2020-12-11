@@ -261,7 +261,7 @@ class WorkingCopy:
         repo_filter = repo_filter or UNFILTERED
 
         repo_diff = RepoDiff()
-        for dataset in RepoStructure.lookup(self.repo, self.get_db_tree()):
+        for dataset in self.repo.datasets(self.get_db_tree()):
             if dataset.path not in repo_filter:
                 continue
             ds_diff = self.diff_db_to_tree(
@@ -509,19 +509,16 @@ class WorkingCopy:
             f"reset(): commit={commit.id if commit else 'none'} track_changes_as_dirty={track_changes_as_dirty}",
         )
 
-        repo_structure = RepoStructure(self.repo)
         base_datasets = {
             ds.table_name: ds
-            for ds in self._filter_by_paths(repo_structure.iter_at(base_tree), paths)
+            for ds in self._filter_by_paths(self.repo.datasets(base_tree), paths)
         }
         if base_tree == target_tree:
             target_datasets = base_datasets
         else:
             target_datasets = {
                 ds.table_name: ds
-                for ds in self._filter_by_paths(
-                    repo_structure.iter_at(target_tree), paths
-                )
+                for ds in self._filter_by_paths(self.repo.datasets(target_tree), paths)
             }
 
         table_inserts = target_datasets.keys() - base_datasets.keys()

@@ -371,7 +371,7 @@ class VersionContext:
     @property
     @functools.lru_cache(maxsize=1)
     def repo_structure(self):
-        return RepoStructure.lookup(self.repo, self.commit_id)
+        return self.repo.structure(self.commit_id)
 
     @property
     def shorthand(self):
@@ -507,7 +507,7 @@ class RichConflictVersion:
 
     @property
     def dataset(self):
-        return self.repo_structure[self.dataset_path]
+        return self.repo_structure.datasets[self.dataset_path]
 
     @property
     def dataset_part(self):

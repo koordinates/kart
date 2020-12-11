@@ -3,7 +3,6 @@ from pathlib import Path
 
 from .repo import SnoRepo, SnoRepoState
 from .exceptions import InvalidOperation, NotFound, NO_REPOSITORY
-from .working_copy import WorkingCopy
 
 
 class Context(object):
@@ -85,6 +84,6 @@ class Context(object):
 
     def check_not_dirty(self, help_message=None):
         repo = self.get_repo(allowed_states=SnoRepoState.ALL_STATES)
-        working_copy = WorkingCopy.get(repo)
+        working_copy = repo.working_copy
         if working_copy:
             working_copy.check_not_dirty(help_message)

@@ -33,8 +33,6 @@ from .timestamps import (
     commit_time_to_text,
 )
 from .repo import SnoRepoFiles
-from .structure import RepoStructure
-from .working_copy import WorkingCopy
 
 
 @click.command()
@@ -85,7 +83,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
     commit = repo.head_commit
     tree = commit.tree
 
-    working_copy = WorkingCopy.get(repo)
+    working_copy = repo.working_copy
     if not working_copy:
         raise NotFound("No working copy, use 'checkout'", exit_code=NO_WORKING_COPY)
 
@@ -106,8 +104,9 @@ def commit(ctx, message, allow_empty, output_format, filters):
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
 
-    rs = RepoStructure(repo)
-    new_commit_id = rs.commit(wc_diff, commit_msg, allow_empty=allow_empty)
+    new_commit_id = repo.structure().commit_diff(
+        wc_diff, commit_msg, allow_empty=allow_empty
+    )
     new_commit = repo[new_commit_id].peel(pygit2.Commit)
 
     working_copy.reset_tracking_table(commit_filter)

@@ -62,7 +62,8 @@ class BaseDataset(ImportSource):
         Used for finding all the datasets in a given repo, etc.
         """
         return (
-            cls.DATASET_DIRNAME in tree
+            tree is not None
+            and cls.DATASET_DIRNAME in tree
             and (tree / cls.DATASET_DIRNAME).type_str == "tree"
         )
 

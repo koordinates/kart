@@ -151,18 +151,15 @@ def _upgrade_commit(
     dest_repo,
     commit_map,
 ):
-
-    sources = [
-        ds
-        for ds in RepoStructure(
-            source_repo,
-            commit=source_commit,
-            version=source_version,
-            dataset_class=source_dataset_class,
-        )
-    ]
-    dataset_count = len(sources)
-    feature_count = sum(s.feature_count for s in sources)
+    rs = RepoStructure(
+        source_repo,
+        source_commit,
+        version=source_version,
+        dataset_class=source_dataset_class,
+    )
+    source_datasets = list(rs.datasets)
+    dataset_count = len(source_datasets)
+    feature_count = sum(s.feature_count for s in source_datasets)
 
     s = source_commit
     author_time = f"{s.author.time} {minutes_to_tz_offset(s.author.offset)}"
@@ -178,7 +175,7 @@ def _upgrade_commit(
 
     fast_import_tables(
         dest_repo,
-        sources,
+        source_datasets,
         replace_existing=ReplaceExisting.ALL,
         quiet=True,
         header=header,

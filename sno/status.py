@@ -8,7 +8,6 @@ from .output_util import dump_json_output
 from .merge import merge_status_to_text
 from .merge_util import MergeContext, MergeIndex
 from .repo import SnoRepoState
-from .working_copy import WorkingCopy
 
 
 @click.command()
@@ -72,7 +71,7 @@ def get_working_copy_status_json(repo):
     if repo.is_empty:
         return None
 
-    working_copy = WorkingCopy.get(repo)
+    working_copy = repo.working_copy
     if not working_copy:
         return None
 

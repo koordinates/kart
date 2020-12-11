@@ -24,82 +24,75 @@ L = logging.getLogger("sno.structure")
 
 class RepoStructure:
     @staticmethod
-    def lookup(repo, key):
-        L.debug(f"key={key}")
-        if isinstance(key, pygit2.Oid):
-            key = key.hex
+    def resolve_refish(repo, refish):
+        """
+        Given a ref / refish / commit / tree / OID, returns as many as possible of the following:
+        >>> (ref, commit, tree)
+        """
+        if refish is None or refish == "HEAD":
+            return "HEAD", repo.head_commit, repo.head_tree
+
+        if isinstance(refish, pygit2.Oid):
+            refish = refish.hex
+
+        if isinstance(refish, (pygit2.Commit, pygit2.Tree)):
+            return (None, *RepoStructure._peel_obj(refish))
+
         try:
-            obj = repo.revparse_single(key)
+            obj, reference = repo.resolve_refish(refish)
+            return (reference, *RepoStructure._peel_obj(obj))
         except KeyError:
-            raise NotFound(f"{key} is not a commit or tree", exit_code=NO_COMMIT)
-
-        try:
-            return RepoStructure(repo, commit=obj.peel(pygit2.Commit))
-        except pygit2.InvalidSpecError:
             pass
 
         try:
-            return RepoStructure(repo, tree=obj.peel(pygit2.Tree))
-        except pygit2.InvalidSpecError:
+            obj = repo.revparse_single(refish)
+            return (None, *RepoStructure._peel_obj(obj))
+        except KeyError:
             pass
 
-        raise NotFound(
-            f"{key} is a {obj.type_str}, not a commit or tree", exit_code=NO_COMMIT
-        )
+        raise NotFound(f"{refish} is not a ref, commit or tree", exit_code=NO_COMMIT)
 
-    def __init__(self, repo, commit=None, tree=None, version=None, dataset_class=None):
+    @staticmethod
+    def _peel_obj(obj):
+        commit, tree = None, None
+        try:
+            commit = obj.peel(pygit2.Commit)
+        except pygit2.InvalidSpecError:
+            pass
+        try:
+            tree = obj.peel(pygit2.Tree)
+        except pygit2.InvalidSpecError:
+            pass
+        return commit, tree
+
+    def __init__(self, repo, refish, version=None, dataset_class=None):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
-        # If _commit is not None, self.tree -> self._commit.tree, so _tree is not set.
-        if commit is not None:
-            self._commit = commit
-        elif tree is not None:
-            self._commit = None
-            self._tree = tree
-        elif self.repo.is_empty:
-            self._commit = None
-            self._tree = None
-        else:
-            self._commit = self.repo.head_commit
+        self.ref, self.commit, self.tree = RepoStructure.resolve_refish(repo, refish)
 
-        if version is not None:
-            self._version = version
-        else:
-            self._version = self.repo.version
+        self.version = version if version is not None else repo.version
 
-        if dataset_class is not None:
-            self._dataset_class = dataset_class
-        else:
-            self._dataset_class = BaseDataset.for_version(self._version)
-
-    def __getitem__(self, path):
-        """ Get a specific dataset by path """
-        if self.tree is None:
-            raise KeyError(path)
-        return self.get_at(path, self.tree)
+        self.dataset_class = (
+            dataset_class
+            if dataset_class is not None
+            else BaseDataset.for_version(self.version)
+        )
+        self.datasets = Datasets(self.tree, self.dataset_class)
 
     def __eq__(self, other):
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
 
     def __repr__(self):
         name = f"RepoStructureV{self.version}"
-        if self._commit is not None:
-            return f"{name}<{self.repo.path}@{self._commit.id}>"
-        elif self._tree is not None:
-            return f"{name}<{self.repo.path}@tree={self._tree.id}>"
+        if self.ref is not None:
+            return f"{name}<{self.repo.path}@{self.ref}={self.commit.id}>"
+        elif self.commit is not None:
+            return f"{name}<{self.repo.path}@{self.commit.id}>"
+        elif self.tree is not None:
+            return f"{name}<{self.repo.path}@tree={self.tree.id}>"
         else:
             return f"{name}<{self.repo.path} <empty>>"
-
-    @property
-    def version(self):
-        """Returns the dataset version to use for this entire repo."""
-        return self._version
-
-    @property
-    def dataset_class(self):
-        """Returns the dataset implementation to use for this entire repo."""
-        return self._dataset_class
 
     def decode_path(self, full_path):
         """
@@ -111,15 +104,7 @@ class RepoStructure:
         dataset_dirname = self.dataset_class.DATASET_DIRNAME
         dataset_path, rel_path = full_path.split(f"/{dataset_dirname}/", 1)
         rel_path = f"{dataset_dirname}/{rel_path}"
-        return (dataset_path,) + self.get(dataset_path).decode_path(rel_path)
-
-    def get(self, path):
-        if self.tree is None:
-            return None
-        try:
-            return self.get_at(path, self.tree)
-        except KeyError:
-            return None
+        return (dataset_path,) + self.datasets[dataset_path].decode_path(rel_path)
 
     def get_at(self, path, tree):
         """ Get a specific dataset by path using a specified Tree """
@@ -132,72 +117,15 @@ class RepoStructure:
 
         raise KeyError(f"No valid dataset found at '{path}'")
 
-    def __iter__(self):
-        """ Iterate over available datasets in this repository """
-        return self.iter_at(self.tree)
-
-    def iter_at(self, tree):
-        """ Iterate over available datasets in this repository using a specified Tree """
-        if tree is None:
-            return
-
-        to_examine = deque([(tree, "")])
-
-        while to_examine:
-            tree, path = to_examine.popleft()
-
-            for child in tree:
-                # Ignore everything other than directories
-                if child.type_str != "tree":
-                    continue
-
-                if path:
-                    child_path = "/".join([path, child.name])
-                else:
-                    child_path = child.name
-
-                if self.dataset_class.is_dataset_tree(child):
-                    ds = self.dataset_class(child, child_path)
-                    yield ds
-                else:
-                    # Examine inside this directory
-                    to_examine.append((child, child_path))
-
     @property
     def id(self):
-        obj = self._commit or self._tree
+        obj = self.commit or self.tree
         return obj.id if obj is not None else None
 
     @property
     def short_id(self):
-        obj = self._commit or self._tree
+        obj = self.commit or self.tree
         return obj.short_id if obj is not None else None
-
-    @property
-    def head_commit(self):
-        return self._commit
-
-    @property
-    def tree(self):
-        if self._commit is not None:
-            return self._commit.peel(pygit2.Tree)
-        return self._tree
-
-    @property
-    def working_copy(self):
-        from .working_copy import WorkingCopy
-
-        if getattr(self, "_working_copy", None) is None:
-            self._working_copy = WorkingCopy.get(self.repo)
-
-        return self._working_copy
-
-    @working_copy.deleter
-    def working_copy(self):
-        wc = self.working_copy
-        if wc:
-            wc.delete()
-        del self._working_copy
 
     def create_tree_from_diff(self, repo_diff, *, allow_missing_old_values=False):
         """
@@ -235,7 +163,7 @@ class RepoStructure:
             if schema_delta and schema_delta.type == "insert":
                 dataset = dataset_class(tree=None, path=ds_path)
             else:
-                dataset = self[ds_path]
+                dataset = self.datasets[ds_path]
 
             dataset.apply_diff(
                 ds_diff, tree_builder, allow_missing_old_values=allow_missing_old_values
@@ -266,7 +194,7 @@ class RepoStructure:
                 else:
                     new_schema = Schema.from_column_dicts(schema_delta.new_value)
             else:
-                new_schema = self.get(ds_path).schema
+                new_schema = self.datasets[ds_path].schema
 
             feature_diff = ds_diff.get("feature") or {}
             for feature_delta in feature_diff.values():
@@ -291,7 +219,7 @@ class RepoStructure:
                 exit_code=SCHEMA_VIOLATION,
             )
 
-    def commit(
+    def commit_diff(
         self,
         wcdiff,
         message,
@@ -341,3 +269,54 @@ class RepoStructure:
         L.info(f"Commit: {new_commit}")
 
         return new_commit
+
+
+class Datasets:
+    def __init__(self, tree, dataset_class):
+        self.tree = tree
+        self.dataset_class = dataset_class
+
+    def __getitem__(self, ds_path):
+        """Get a specific dataset by path"""
+        try:
+            ds_tree = self.tree / ds_path if self.tree is not None else None
+        except KeyError:
+            ds_tree = None
+
+        if self.dataset_class.is_dataset_tree(ds_tree):
+            return self.dataset_class(ds_tree, ds_path)
+
+        raise KeyError(f"No valid dataset found at '{ds_path}'")
+
+    def get(self, ds_path):
+        try:
+            return self.__getitem__(ds_path)
+        except KeyError:
+            return None
+
+    def __iter__(self):
+        """Iterate over all available datasets in self.tree."""
+        if self.tree is None:
+            return
+
+        to_examine = deque([(self.tree, "")])
+
+        while to_examine:
+            tree, path = to_examine.popleft()
+
+            for child in tree:
+                # Ignore everything other than directories
+                if child.type_str != "tree":
+                    continue
+
+                if path:
+                    child_path = "/".join([path, child.name])
+                else:
+                    child_path = child.name
+
+                if self.dataset_class.is_dataset_tree(child):
+                    ds = self.dataset_class(child, child_path)
+                    yield ds
+                else:
+                    # Examine inside this directory
+                    to_examine.append((child, child_path))

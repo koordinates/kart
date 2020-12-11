@@ -3,7 +3,6 @@ from datetime import datetime
 from enum import Enum, auto
 
 import click
-import pygit2
 
 from .exceptions import (
     NO_TABLE,
@@ -15,9 +14,7 @@ from .exceptions import (
 from .diff_structs import RepoDiff, DeltaDiff, Delta
 from .geometry import hex_wkb_to_gpkg_geom
 from .schema import Schema
-from .structure import RepoStructure
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
-from .working_copy import WorkingCopy
 
 
 V1_NO_META_UPDATE = (
@@ -116,8 +113,8 @@ def apply_patch(
         except KeyError:
             raise NotFound(f"No such ref {ref}")
 
-    rs = RepoStructure.lookup(repo, ref)
-    wc = WorkingCopy.get(repo)
+    rs = repo.structure(ref)
+    wc = repo.working_copy
     if not do_commit and not wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
         raise NotFound("--no-commit requires a working copy", exit_code=NO_WORKING_COPY)
@@ -127,10 +124,10 @@ def apply_patch(
 
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():
-        dataset = rs.get(ds_path)
+        dataset = rs.datasets.get(ds_path)
         meta_change_type = _meta_change_type(ds_diff_dict, allow_missing_old_values)
         check_change_supported(
-            rs.version, dataset, ds_path, meta_change_type, do_commit
+            repo.version, dataset, ds_path, meta_change_type, do_commit
         )
 
         meta_changes = ds_diff_dict.get("meta", {})
@@ -203,7 +200,7 @@ def apply_patch(
             )
 
         author = repo.author_signature(**author_kwargs)
-        oid = rs.commit(
+        oid = rs.commit_diff(
             repo_diff,
             metadata["message"],
             author=author,

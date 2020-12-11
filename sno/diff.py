@@ -22,7 +22,6 @@ from .exceptions import (
 )
 from .filter_util import build_feature_filter, UNFILTERED
 from .repo import SnoRepoState
-from .structure import RepoStructure
 
 
 L = logging.getLogger("sno.diff")
@@ -35,8 +34,8 @@ def get_dataset_diff(
 
     if base_rs != target_rs:
         # diff += base_rs<>target_rs
-        base_ds = base_rs.get(dataset_path)
-        target_ds = target_rs.get(dataset_path)
+        base_ds = base_rs.datasets.get(dataset_path)
+        target_ds = target_rs.datasets.get(dataset_path)
 
         params = {}
         if not base_ds:
@@ -49,7 +48,7 @@ def get_dataset_diff(
 
     if working_copy:
         # diff += target_rs<>working_copy
-        target_ds = target_rs.get(dataset_path)
+        target_ds = target_rs.datasets.get(dataset_path)
         diff_wc = working_copy.diff_db_to_tree(target_ds, ds_filter=ds_filter)
         L.debug(
             "commit<>working_copy diff (%s): %s",
@@ -64,17 +63,19 @@ def get_dataset_diff(
 
 def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
     """Generates a Diff for every dataset in both RepoStructures."""
-    all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
+    base_ds_paths = {ds.path for ds in base_rs.datasets}
+    target_ds_paths = {ds.path for ds in target_rs.datasets}
+    all_ds_paths = base_ds_paths | target_ds_paths
 
     if feature_filter is not UNFILTERED:
-        all_datasets = all_datasets.intersection(feature_filter.keys())
+        all_ds_paths = all_ds_paths.intersection(feature_filter.keys())
 
     result = RepoDiff()
-    for dataset in sorted(all_datasets):
+    for ds_path in sorted(all_ds_paths):
         ds_diff = get_dataset_diff(
-            base_rs, target_rs, None, dataset, feature_filter[dataset]
+            base_rs, target_rs, None, ds_path, feature_filter[ds_path]
         )
-        result[dataset] = ds_diff
+        result[ds_path] = ds_diff
 
     result.prune()
     return result
@@ -82,7 +83,7 @@ def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
 
 def get_common_ancestor(repo, rs1, rs2):
     for rs in rs1, rs2:
-        if not rs.head_commit:
+        if not rs.commit:
             raise click.UsageError(
                 f"The .. operator works on commits, not trees - {rs.id} is a tree. (Perhaps try the ... operator)"
             )
@@ -91,7 +92,7 @@ def get_common_ancestor(repo, rs1, rs2):
         raise InvalidOperation(
             "The .. operator tries to find the common ancestor, but no common ancestor was found. Perhaps try the ... operator."
         )
-    return RepoStructure.lookup(repo, ancestor_id)
+    return repo.structure(ancestor_id)
 
 
 def diff_with_writer(
@@ -120,8 +121,6 @@ def diff_with_writer(
       filters:     Limit the diff to certain datasets or features.
       target_crs:  An osr.SpatialReference object, or None
     """
-    from .working_copy import WorkingCopy
-
     try:
         if isinstance(output_path, str) and output_path != "-":
             output_path = Path(output_path).expanduser()
@@ -134,8 +133,8 @@ def diff_with_writer(
 
         if len(commit_parts) == 3:
             # Two commits specified - base and target. We diff base<>target.
-            base_rs = RepoStructure.lookup(repo, commit_parts[0] or "HEAD")
-            target_rs = RepoStructure.lookup(repo, commit_parts[2] or "HEAD")
+            base_rs = repo.structure(commit_parts[0] or "HEAD")
+            target_rs = repo.structure(commit_parts[2] or "HEAD")
             if commit_parts[1] == "..":
                 # A   C    A...C is A<>C
                 #  \ /     A..C  is B<>C
@@ -147,9 +146,9 @@ def diff_with_writer(
             # When no commits are specified, base is HEAD, and we do the same.
             # We diff base<>working_copy by diffing base<>target + target<>working_copy,
             # and target is set to HEAD.
-            base_rs = RepoStructure.lookup(repo, commit_parts[0])
-            target_rs = RepoStructure.lookup(repo, "HEAD")
-            working_copy = WorkingCopy.get(repo)
+            base_rs = repo.structure(commit_parts[0])
+            target_rs = repo.structure("HEAD")
+            working_copy = repo.working_copy
             if not working_copy:
                 raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
             working_copy.assert_db_tree_match(target_rs.tree)
@@ -161,25 +160,27 @@ def diff_with_writer(
         target_str = "working-copy" if working_copy else target_rs.id
         L.debug("base=%s target=%s", base_str, target_str)
 
-        all_datasets = {ds.path for ds in base_rs} | {ds.path for ds in target_rs}
+        base_ds_paths = {ds.path for ds in base_rs.datasets}
+        target_ds_paths = {ds.path for ds in target_rs.datasets}
+        all_ds_paths = base_ds_paths | target_ds_paths
 
         if feature_filter is not UNFILTERED:
-            all_datasets = all_datasets.intersection(feature_filter.keys())
+            all_ds_paths = all_ds_paths.intersection(feature_filter.keys())
 
         dataset_geometry_transforms = {}
         if target_crs is not None:
-            for dataset_path in all_datasets:
-                dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
-                transform = dataset.get_geometry_transform(target_crs)
+            for ds_path in all_ds_paths:
+                ds = base_rs.datasets.get(ds_path) or target_rs.datasets.get(ds_path)
+                transform = ds.get_geometry_transform(target_crs)
                 if transform is not None:
-                    dataset_geometry_transforms[dataset_path] = transform
+                    dataset_geometry_transforms[ds_path] = transform
 
         writer_params = {
             "repo": repo,
             "base": base_rs,
             "target": target_rs,
             "output_path": output_path,
-            "dataset_count": len(all_datasets),
+            "dataset_count": len(all_ds_paths),
             "json_style": json_style,
             "dataset_geometry_transforms": dataset_geometry_transforms,
         }
@@ -193,18 +194,18 @@ def diff_with_writer(
 
         num_changes = 0
         with diff_writer(**writer_params) as w:
-            for dataset_path in all_datasets:
+            for ds_path in all_ds_paths:
                 diff = get_dataset_diff(
                     base_rs,
                     target_rs,
                     working_copy,
-                    dataset_path,
-                    feature_filter[dataset_path],
+                    ds_path,
+                    feature_filter[ds_path],
                 )
-                dataset = base_rs.get(dataset_path) or target_rs.get(dataset_path)
+                ds = base_rs.datasets.get(ds_path) or target_rs.datasets.get(ds_path)
                 num_changes += len(diff)
-                L.debug("overall diff (%s): %s", dataset_path, repr(diff))
-                w(dataset, diff)
+                L.debug("overall diff (%s): %s", ds_path, repr(diff))
+                w(ds, diff)
 
     except click.ClickException as e:
         L.debug("Caught ClickException: %s", e)

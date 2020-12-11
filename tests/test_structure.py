@@ -9,7 +9,7 @@ from osgeo import gdal, ogr
 import pygit2
 import pytest
 
-from sno import fast_import, gpkg, structure
+from sno import fast_import, gpkg
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from sno.base_dataset import BaseDataset
 from sno.dataset1 import Dataset1
@@ -61,7 +61,7 @@ def test_dataset_versions():
 
 def _import_check(repo_path, table, source_gpkg, geopackage, repo_version=None):
     repo = SnoRepo(repo_path)
-    dataset = structure.RepoStructure(repo)[table]
+    dataset = repo.datasets()[table]
 
     if repo_version is not None:
         assert dataset.VERSION == int(repo_version)
@@ -349,7 +349,7 @@ def test_import_from_non_gpkg(
             assert r.exit_code == 0, r
 
         gpkg_repo = SnoRepo(gpkg_repo_path)
-        gpkg_dataset = structure.RepoStructure(gpkg_repo)[table]
+        gpkg_dataset = gpkg_repo.datasets()[table]
 
         # convert to a new format using OGR
         source_filename = tmp_path / f"data.{source_format.lower()}"
@@ -394,7 +394,7 @@ def test_import_from_non_gpkg(
 
             # Compare the meta items to the GPKG-imported ones
             repo = SnoRepo(repo_path)
-            dataset = structure.RepoStructure(repo)[table]
+            dataset = repo.datasets()[table]
 
             _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
 
@@ -450,7 +450,7 @@ def test_shp_import_meta(
         # now check metadata
         path = "nz_waca_adjustments"
         repo = SnoRepo(repo_path)
-        dataset = structure.RepoStructure(repo)[path]
+        dataset = repo.datasets()[path]
 
         meta_items = dict(dataset.meta_items())
         assert set(meta_items) == {
@@ -546,7 +546,7 @@ def _test_postgis_import(
         assert r.exit_code == 0, r
     # now check metadata
     repo = SnoRepo(repo_path)
-    dataset = structure.RepoStructure(repo)[table_name]
+    dataset = repo.datasets()[table_name]
 
     meta_items = dict(dataset.meta_items())
     assert set(meta_items.keys()) == {
@@ -691,7 +691,7 @@ def test_postgis_import_from_view_no_pk(
         )
 
         repo = SnoRepo(repo_path)
-        dataset = structure.RepoStructure(repo)["nz_waca_adjustments_view"]
+        dataset = repo.datasets()["nz_waca_adjustments_view"]
         initial_pks = [f["generated-pk"] for f in dataset.features()]
         assert len(initial_pks) == 161
         assert max(initial_pks) == 161
@@ -720,7 +720,7 @@ def test_postgis_import_from_view_no_pk(
         )
         assert r.exit_code == 0, r.stderr
         repo = SnoRepo(repo_path)
-        dataset = structure.RepoStructure(repo)["nz_waca_adjustments_view"]
+        dataset = repo.datasets()["nz_waca_adjustments_view"]
         new_pks = [f["generated-pk"] for f in dataset.features()]
 
         assert len(new_pks) == 159
@@ -778,7 +778,7 @@ def test_feature_find_decode_performance(
     repo_path = data_imported(archive, source_gpkg, table, repo_version)
     repo = SnoRepo(repo_path)
     tree = repo.head_tree / "mytable"
-    dataset = structure.RepoStructure(repo)["mytable"]
+    dataset = repo.datasets()["mytable"]
 
     assert dataset.__class__.__name__ == f"Dataset{repo_version}"
     assert dataset.VERSION == int(repo_version)
@@ -978,7 +978,7 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
             assert repo.head.name == "refs/heads/master"
             assert repo.head.shorthand == "master"
 
-            dataset = structure.RepoStructure(repo)[table]
+            dataset = repo.datasets()[table]
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1

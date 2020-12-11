@@ -3,7 +3,6 @@ from pathlib import Path
 
 
 import click
-import pygit2
 from osgeo import gdal
 
 from sno import is_windows
@@ -14,7 +13,6 @@ from .exceptions import InvalidOperation
 from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .fast_import import fast_import_tables, ReplaceExisting
-from .structure import RepoStructure
 from .repo import SnoRepo
 from .repo_version import (
     REPO_VERSIONS_CHOICE,
@@ -202,13 +200,7 @@ def import_table(
     repo = ctx.obj.repo
     check_git_user(repo)
 
-    if (
-        not do_checkout
-        and WorkingCopy.get(
-            repo,
-        )
-        is not None
-    ):
+    if not do_checkout and repo.working_copy is not None:
         click.echo(
             "Warning: '--no-checkout' has no effect as a working copy already exists",
             err=True,
@@ -239,13 +231,12 @@ def import_table(
             xml_metadata=info.get("xmlMetadata"),
         )
         if replace_existing:
-            rs = RepoStructure(repo)
-            if rs.version < 2:
+            if repo.version < 2:
                 raise InvalidOperation(
-                    f"--replace-existing is not supported for V{rs.version} datasets"
+                    f"--replace-existing is not supported for V{repo.version} datasets"
                 )
             try:
-                existing_ds = rs[dest_path]
+                existing_ds = repo.datasets()[dest_path]
             except KeyError:
                 # no such existing dataset. no problems
                 pass
@@ -272,11 +263,10 @@ def import_table(
         allow_empty=allow_empty,
     )
 
-    rs = RepoStructure(repo)
     if do_checkout:
         _add_datasets_to_working_copy(
             repo,
-            *[rs[s.dest_path] for s in import_sources],
+            *[repo.datasets()[s.dest_path] for s in import_sources],
             replace_existing=replace_existing,
         )
 

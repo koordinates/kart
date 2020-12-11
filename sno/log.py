@@ -147,8 +147,7 @@ def _get_dataset_tree_ids(repo, commit, dataset_change_cache):
     commit_id = commit.id.hex
     if commit_id not in dataset_change_cache:
         result = {}
-        rs = RepoStructure(repo, commit)
-        for dataset in rs:
+        for dataset in repo.datasets(commit):
             result[dataset.path] = dataset.tree.id.hex
         dataset_change_cache[commit_id] = result
 

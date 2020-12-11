@@ -9,8 +9,6 @@ import apsw
 from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
-from sno.structure import RepoStructure
-from sno.working_copy import WorkingCopy
 from sno.working_copy.gpkg import WorkingCopy_GPKG_1
 from sno.db_util import changes_rowcount, execute_insert_dict
 from test_working_copy import compute_approximated_types
@@ -44,7 +42,7 @@ def test_checkout_workingcopy(
         H.clear_working_copy()
 
         repo = SnoRepo(repo_path)
-        dataset = RepoStructure(repo)[table]
+        dataset = repo.datasets()[table]
         geom_cols = dataset.schema.geometry_columns
 
         r = cli_runner.invoke(["checkout"])
@@ -80,7 +78,7 @@ def test_checkout_workingcopy(
             )
             assert spatial_index_count == dataset.feature_count
 
-        wc = WorkingCopy.get(repo)
+        wc = repo.working_copy
         assert wc.assert_db_tree_match(head_tree)
 
         table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)

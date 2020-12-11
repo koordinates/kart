@@ -2,16 +2,14 @@ import os
 import subprocess
 
 import click
-import pygit2
 
 from . import gpkg
 from .exceptions import NotFound, NO_WORKING_COPY
-from .structure import RepoStructure
 
 
-def _fsck_reset(repo_structure, working_copy, dataset_paths):
-    commit = repo_structure.repo.head_commit
-    datasets = [repo_structure[p] for p in dataset_paths]
+def _fsck_reset(repo, working_copy, dataset_paths):
+    commit = repo.head_commit
+    datasets = [repo.datasets()[p] for p in dataset_paths]
 
     working_copy.drop_table(commit, *datasets)
     working_copy.write_full(commit, *datasets)
@@ -37,19 +35,17 @@ def fsck(ctx, reset_datasets, fsck_args):
 
     # now check our stuff:
     # 1. working copy
-    rs = RepoStructure(repo)
-
     if "sno.workingcopy.path" not in repo.config:
         click.echo("No working-copy configured")
         return
 
     working_copy_path = repo.config["sno.workingcopy.path"]
-    if not os.path.isfile(working_copy_path):
+    working_copy = repo.working_copy
+    if not working_copy:
         raise NotFound(
             click.style(f"Working copy missing: {working_copy_path}", fg="red"),
             exit_code=NO_WORKING_COPY,
         )
-    working_copy = rs.working_copy
 
     click.secho(f"✔︎ Working copy: {working_copy_path}", fg="green")
 
@@ -57,7 +53,7 @@ def fsck(ctx, reset_datasets, fsck_args):
         click.secho(
             f"Resetting working copy for {', '.join(reset_datasets)} ...", bold=True
         )
-        return _fsck_reset(rs, working_copy, reset_datasets)
+        return _fsck_reset(repo, working_copy, reset_datasets)
 
     with working_copy.session() as db:
         dbcur = db.cursor()
@@ -77,7 +73,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             raise click.Abort()
 
         has_err = False
-        for dataset in rs:
+        for dataset in repo.datasets():
             click.secho(
                 f"\nDataset: '{dataset.path}/' (table: '{dataset.table_name}')",
                 bold=True,

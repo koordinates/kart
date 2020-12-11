@@ -1,3 +1,4 @@
+import functools
 import logging
 import os
 import re
@@ -18,6 +19,7 @@ from .exceptions import (
     NO_REPOSITORY,
 )
 from .repo_version import REPO_VERSIONS, get_repo_version
+from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
 from .working_copy import WorkingCopy
 
@@ -380,6 +382,28 @@ class SnoRepo(pygit2.Repository):
                 "Try `sno merge --abort` to return to a good state."
             )
         return SnoRepoState.MERGING if merge_head else SnoRepoState.NORMAL
+
+    @functools.lru_cache()
+    def structure(self, refish="HEAD"):
+        return RepoStructure(self, refish)
+
+    def datasets(self, refish="HEAD"):
+        return self.structure(refish).datasets
+
+    @property
+    def working_copy(self):
+        try:
+            return self._working_copy
+        except AttributeError:
+            self._working_copy = WorkingCopy.get(self)
+            return self._working_copy
+
+    @working_copy.deleter
+    def working_copy(self):
+        wc = WorkingCopy.get(self, allow_invalid_state=True)
+        if wc:
+            wc.delete()
+        del self._working_copy
 
     def del_config(self, key):
         config = self.config

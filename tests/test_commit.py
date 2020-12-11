@@ -16,8 +16,6 @@ from sno.exceptions import (
 )
 from sno.commit import fallback_editor
 from sno.repo import SnoRepo
-from sno.structure import RepoStructure
-from sno.working_copy import WorkingCopy
 
 
 H = pytest.helpers.helpers()
@@ -89,8 +87,7 @@ def test_commit(
         print(f"deleted fid={pk_del}")
 
         repo = SnoRepo(repo_dir)
-        rs = RepoStructure(repo)
-        wc = rs.working_copy
+        wc = repo.working_copy
         original_change_count = _count_tracking_table_changes(db, wc, layer)
 
         if partial:
@@ -109,11 +106,10 @@ def test_commit(
         assert commit.message == "test-commit-1"
         assert time.time() - commit.commit_time < 3
 
-        dataset = rs[layer]
+        dataset = repo.datasets()[layer]
         tree = repo.head_tree
         assert dataset.encode_1pk_to_path(pk_del) not in tree
 
-        wc = WorkingCopy.get(repo)
         wc.assert_db_tree_match(tree)
         change_count = _count_tracking_table_changes(db, wc, layer)
 

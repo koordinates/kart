@@ -10,7 +10,6 @@ import pygit2
 from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .base_dataset import BaseDataset
-from .structure import RepoStructure
 from .repo_version import extra_blobs_for_version
 from .timestamps import minutes_to_tz_offset
 from .pk_generation import PkGeneratingImportSource
@@ -131,7 +130,7 @@ def fast_import_tables(
                 p.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
 
                 try:
-                    replacing_dataset = RepoStructure(repo)[source.dest_path]
+                    replacing_dataset = repo.datasets()[source.dest_path]
                 except KeyError:
                     pass
                 else:

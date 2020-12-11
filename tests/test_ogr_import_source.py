@@ -3,7 +3,6 @@ import pytest
 
 from osgeo import gdal
 
-from sno import structure
 from sno.ogr_import_source import PostgreSQLImportSource
 from sno.repo import SnoRepo
 
@@ -99,7 +98,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
 
     assert r.exit_code == 0, r.stderr
     repo = SnoRepo(tmp_path / "repo1")
-    dataset = structure.RepoStructure(repo)["typoes"]
+    dataset = repo.datasets()["typoes"]
 
     cols = _dataset_col_types(dataset)
 
@@ -147,7 +146,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
 
     assert r.exit_code == 0, r.stderr
     repo = SnoRepo(tmp_path / "repo2")
-    dataset = structure.RepoStructure(repo)["typoes"]
+    dataset = repo.datasets()["typoes"]
 
     cols = _dataset_col_types(dataset)
     assert cols == {

@@ -4,8 +4,7 @@ from psycopg2.sql import Identifier, SQL
 import pygit2
 
 from sno.repo import SnoRepo
-from sno.working_copy import WorkingCopy, postgis_adapter
-from sno.structure import RepoStructure
+from sno.working_copy import postgis_adapter
 from test_working_copy import compute_approximated_types
 
 
@@ -64,7 +63,7 @@ def test_checkout_workingcopy(
                 "Nothing to commit, working copy clean",
             ]
 
-            wc = WorkingCopy.get(repo)
+            wc = repo.working_copy
             assert wc.is_created()
 
             head_tree_id = repo.head_tree.hex
@@ -107,7 +106,7 @@ def test_init_import(
             assert (repo_path / ".sno" / "HEAD").exists()
 
             repo = SnoRepo(repo_path)
-            wc = WorkingCopy.get(repo)
+            wc = repo.working_copy
 
             assert wc.is_created()
             assert wc.is_initialised()
@@ -154,7 +153,7 @@ def test_commit_edits(
                 "Nothing to commit, working copy clean",
             ]
 
-            wc = WorkingCopy.get(repo)
+            wc = repo.working_copy
             assert wc.is_created()
 
             table_prefix = postgres_schema + "."
@@ -212,7 +211,7 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["create-workingcopy", postgres_url])
             assert r.exit_code == 0, r.stderr
 
-            wc = WorkingCopy.get(repo)
+            wc = repo.working_copy
             assert wc.is_created()
 
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
@@ -337,7 +336,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["create-workingcopy", postgres_url])
             assert r.exit_code == 0, r.stderr
 
-            wc = WorkingCopy.get(repo)
+            wc = repo.working_copy
             assert wc.is_created()
             assert not wc.is_dirty()
 
@@ -384,7 +383,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                     # Now sno diff should show the change, and it is possible to commit the change.
                     assert wc.is_dirty()
 
-                    commit_id = RepoStructure(repo).commit(
+                    commit_id = repo.structure().commit_diff(
                         wc.diff_to_tree(), "Modify CRS"
                     )
                     wc.update_state_table_tree(commit_id.hex)

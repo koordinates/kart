@@ -15,8 +15,6 @@ from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext, ALL_MERGE_
 from .output_util import dump_json_output
 from .repo import SnoRepoFiles, SnoRepoState
 from .structs import CommitWithReference
-from .structure import RepoStructure
-from .working_copy import WorkingCopy
 
 
 L = logging.getLogger("sno.merge")
@@ -30,8 +28,8 @@ def get_commit_message(
         merge_message = repo.read_gitdir_file(SnoRepoFiles.MERGE_MSG, missing_ok=True)
     if not merge_message:
         merge_message = merge_context.get_message()
-    head = RepoStructure.lookup(repo, "HEAD")
-    merged = RepoStructure.lookup(repo, merge_tree_id)
+    head = repo.structure("HEAD")
+    merged = repo.structure(merge_tree_id)
     diff = get_repo_diff(head, merged)
     merge_message = commit.get_commit_message(
         repo, diff, draft_message=merge_message, quiet=quiet
@@ -227,7 +225,7 @@ def complete_merging_state(ctx):
         "message": merge_message,
     }
 
-    wc = WorkingCopy.get(repo)
+    wc = repo.working_copy
     if wc:
         L.debug(f"Updating {wc.path} ...")
         merge_commit = repo[merge_commit_id]
@@ -395,7 +393,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     if not no_op and not conflicts:
         # Update working copy.
         # TODO - maybe lock the working copy during a merge?
-        wc = WorkingCopy.get(repo)
+        wc = repo.working_copy
         if wc:
             L.debug(f"Updating {wc.path} ...")
             merge_commit = repo[jdict["commit"]]

@@ -9,7 +9,6 @@ from .exceptions import (
     NO_WORKING_COPY,
 )
 
-from .structure import RepoStructure
 from .structs import CommitWithReference
 from .working_copy import WorkingCopy
 
@@ -31,7 +30,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if not working_copy.is_initialised():
         click.echo(f"Creating working copy at {working_copy.path} ...")
         working_copy.create_and_initialise()
-        datasets = list(RepoStructure(repo))
+        datasets = list(repo.datasets())
         working_copy.write_full(target_tree_or_commit, *datasets, safe=False)
 
     db_tree_matches = (
@@ -290,7 +289,7 @@ def restore(ctx, source, pathspec):
     """
     repo = ctx.obj.repo
 
-    working_copy = WorkingCopy.get(repo)
+    working_copy = repo.working_copy
     if not working_copy:
         raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 

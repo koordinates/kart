@@ -5,7 +5,6 @@ import time
 
 import click
 
-from . import structure
 from .exceptions import NotFound
 from .output_util import dump_json_output
 
@@ -30,8 +29,7 @@ def query(ctx, path, command, params):
     Significantly, indexes don't update when the repo changes in any way.
     """
     repo = ctx.obj.repo
-    rs = structure.RepoStructure(repo)
-    dataset = rs[path]
+    dataset = repo.datasets()[path]
 
     if command == "index":
         USAGE = "index"

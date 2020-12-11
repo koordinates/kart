@@ -5,7 +5,6 @@ from sno.diff_output import json_row
 from sno.exceptions import INVALID_OPERATION
 from sno.merge_util import MergeIndex
 from sno.repo import SnoRepoState
-from sno.structure import RepoStructure
 
 
 H = pytest.helpers.helpers()
@@ -30,7 +29,7 @@ def delete_remaining_conflicts(cli_runner):
 
 def get_json_feature(rs, layer, pk):
     try:
-        feature = rs[layer].get_feature(pk)
+        feature = rs.datasets[layer].get_feature(pk)
         return json_row(feature, pk)
     except KeyError:
         return None
@@ -96,9 +95,9 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         assert repo.head_commit.message == "merge commit"
         assert repo.state != SnoRepoState.MERGING
 
-        merged = RepoStructure.lookup(repo, "HEAD")
-        ours = RepoStructure.lookup(repo, "ours_branch")
-        theirs = RepoStructure.lookup(repo, "theirs_branch")
+        merged = repo.structure("HEAD")
+        ours = repo.structure("ours_branch")
+        theirs = repo.structure("theirs_branch")
         l = H.POLYGONS.LAYER
 
         pk0, pk1, pk2, pk3 = pk_order
@@ -170,9 +169,9 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
         assert repo.head_commit.message == "merge commit"
         assert repo.state != SnoRepoState.MERGING
 
-        merged = RepoStructure.lookup(repo, "HEAD")
-        ours = RepoStructure.lookup(repo, "ours_branch")
-        theirs = RepoStructure.lookup(repo, "theirs_branch")
+        merged = repo.structure("HEAD")
+        ours = repo.structure("ours_branch")
+        theirs = repo.structure("theirs_branch")
         l = H.POLYGONS.LAYER
 
         # Both features are present in the merged repo, ours at 98001 and theirs at 98002.
