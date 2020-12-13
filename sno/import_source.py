@@ -1,5 +1,4 @@
 import click
-import functools
 
 from .meta_items import META_ITEM_NAMES
 from .schema import Schema
@@ -101,9 +100,27 @@ class ImportSource:
         )
 
     @property
-    @functools.lru_cache(maxsize=1)
     def schema(self):
-        """Convenience method for loading the schema.json into a Schema object"""
+        """
+        An ImportSource has a settable schema - although the ImportSource has the reponsibility to load the schema
+        from the import-source that it represents (in _init_schema), the importer has the option to modify it.
+        This is commonly done to replace the schema with one that is aligned with pre-existing data, if present.
+        """
+        try:
+            return self._schema
+        except AttributeError:
+            self._schema = self._init_schema()
+            return self._schema
+
+    @schema.setter
+    def schema(self, value):
+        self._schema = value
+
+    def _init_schema(self):
+        """
+        Default implementation - simply loads the schema.json meta item into a Schema object.
+        Subclasses can override if they choose to instantiate a schema directly.
+        """
         return Schema.from_column_dicts(self.get_meta_item("schema.json"))
 
     @property

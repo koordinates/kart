@@ -544,22 +544,11 @@ class OgrImportSource(ImportSource):
 
         return f"{v2_type} {z}{m}".strip()
 
-    @property
-    def schema(self):
-        try:
-            return self._schema
-        except AttributeError:
-            pk_col = self.pk_column_schema
-            pk_cols = [pk_col] if pk_col else []
-            columns = (
-                pk_cols + self.geometry_columns_schema + self.regular_columns_schema
-            )
-            self._schema = Schema(columns)
-            return self._schema
-
-    @schema.setter
-    def schema(self, value):
-        self._schema = value
+    def _init_schema(self):
+        pk_col = self.pk_column_schema
+        pk_cols = [pk_col] if pk_col else []
+        columns = pk_cols + self.geometry_columns_schema + self.regular_columns_schema
+        return Schema(columns)
 
     _KNOWN_METADATA_URIS = {
         "GDALMultiDomainMetadata": "http://gdal.org",

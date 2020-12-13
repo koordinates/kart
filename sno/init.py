@@ -12,6 +12,7 @@ from .cli_util import call_and_exit_flag, MutexOption, StringFromFile, JsonFromF
 from .exceptions import InvalidOperation
 from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
+from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import SnoRepo
 from .repo_version import (
@@ -244,6 +245,11 @@ def import_table(
                 # Align the column IDs to the existing schema.
                 # This is important, otherwise importing the same data twice
                 # will result in a new schema object, and thus a new blob for every feature.
+                # Note that alignment works better if we add the generated-pk-column first (when needed),
+                # if one schema has this and the other lacks it they will be harder to align.
+                import_source = PkGeneratingImportSource.wrap_if_needed(
+                    import_source, repo
+                )
                 import_source.schema = existing_ds.schema.align_to_self(
                     import_source.schema
                 )

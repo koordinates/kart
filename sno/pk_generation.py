@@ -1,13 +1,14 @@
-import functools
+from collections.abc import Iterable
+
+from .import_source import ImportSource
 from .serialise_util import (
     json_pack,
     json_unpack,
 )
-from collections.abc import Iterable
 from .schema import ColumnSchema, Schema
 
 
-class PkGeneratingImportSource:
+class PkGeneratingImportSource(ImportSource):
     """
     Wrapper of ImportSource that makes it appear to have a primary key, even though the delegate ImportSource does not.
     In the simplest case, every feature encountered is just assigned a primary key from the sequence 1, 2, 3...
@@ -138,9 +139,7 @@ class PkGeneratingImportSource:
             result[h].append(pk)
         return result
 
-    @property
-    @functools.lru_cache(maxsize=1)
-    def schema(self):
+    def _init_schema(self):
         cols = self.delegate.schema.to_column_dicts()
         return Schema.from_column_dicts([self.pk_col] + cols)
 
