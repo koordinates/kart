@@ -17,7 +17,6 @@ from sno.exceptions import (
 from sno.filter_util import UNFILTERED
 from sno.repo_version import get_repo_version
 from sno.schema import Schema
-from sno.structure import RepoStructure
 
 
 L = logging.getLogger("sno.working_copy.base")

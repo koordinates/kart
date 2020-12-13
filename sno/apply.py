@@ -200,30 +200,30 @@ def apply_patch(
             )
 
         author = repo.author_signature(**author_kwargs)
-        oid = rs.commit_diff(
+        commit = rs.commit_diff(
             repo_diff,
             metadata["message"],
             author=author,
             allow_empty=allow_empty,
             allow_missing_old_values=allow_missing_old_values,
-            ref=ref,
         )
-        click.echo(f"Commit {oid.hex}")
+        click.echo(f"Commit {commit.hex}")
 
         # Only touch the working copy if we applied the patch to the head branch
-        reset_wc = oid == repo.head_commit.oid
+        if repo.head_commit == commit:
+            new_wc_target = commit
+        else:
+            new_wc_target = None
     else:
-        oid = rs.create_tree_from_diff(
+        new_wc_target = rs.create_tree_from_diff(
             repo_diff,
             allow_missing_old_values=allow_missing_old_values,
         )
-        reset_wc = True
 
-    if wc and reset_wc:
+    if wc and new_wc_target:
         # oid refers to either a commit or tree
-        wc_target = repo.get(oid)
         click.echo(f"Updating {wc.path} ...")
-        wc.reset(wc_target, track_changes_as_dirty=not do_commit)
+        wc.reset(new_wc_target, track_changes_as_dirty=not do_commit)
 
 
 @click.command()

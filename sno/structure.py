@@ -23,6 +23,18 @@ L = logging.getLogger("sno.structure")
 
 
 class RepoStructure:
+    """
+    The internal structure of a Sno repository, at a particular revision.
+    The sno revision's structure is almost entirely comprised of its datasets, but this may change.
+    The datasets can be accessed at self.datasets, but there is also a shortcut that skips this class - instead of:
+
+    >>> sno_repo.structure(commit_hash).datasets
+
+    You can use:
+
+    >>> sno_repo.datasets(commit_hash)
+    """
+
     @staticmethod
     def resolve_refish(repo, refish):
         """
@@ -40,6 +52,8 @@ class RepoStructure:
 
         try:
             obj, reference = repo.resolve_refish(refish)
+            if isinstance(reference, pygit2.Reference):
+                reference = reference.name
             return (reference, *RepoStructure._peel_obj(obj))
         except KeyError:
             pass
@@ -104,18 +118,7 @@ class RepoStructure:
         dataset_dirname = self.dataset_class.DATASET_DIRNAME
         dataset_path, rel_path = full_path.split(f"/{dataset_dirname}/", 1)
         rel_path = f"{dataset_dirname}/{rel_path}"
-        return (dataset_path,) + self.datasets[dataset_path].decode_path(rel_path)
-
-    def get_at(self, path, tree):
-        """ Get a specific dataset by path using a specified Tree """
-        try:
-            tree = tree / path
-            if self.dataset_class.is_dataset_tree(tree):
-                return self.dataset_class(tree, path)
-        except KeyError:
-            pass
-
-        raise KeyError(f"No valid dataset found at '{path}'")
+        return (dataset_path, *self.datasets[dataset_path].decode_path(rel_path))
 
     @property
     def id(self):
@@ -171,8 +174,8 @@ class RepoStructure:
             tree_builder.flush()
 
         tree = tree_builder.flush()
-        L.info(f"Tree sha: {tree.oid}")
-        return tree.oid
+        L.info(f"Tree sha: {tree.hex}")
+        return tree
 
     def check_values_match_schema(self, repo_diff):
         all_features_valid = True
@@ -228,7 +231,6 @@ class RepoStructure:
         committer=None,
         allow_empty=False,
         allow_missing_old_values=False,
-        ref="HEAD",
     ):
         """
         Update the repository structure and write the updated data to the tree
@@ -236,48 +238,61 @@ class RepoStructure:
         NOTE: Doesn't update working-copy meta or tracking tables, this is the
         responsibility of the caller.
 
-        `ref` should be a key that works with repo.references, i.e.
+        `self.ref` must be a key that works with repo.references, i.e.
         either "HEAD" or "refs/heads/{branchname}"
         """
+        if not self.ref:
+            raise RuntimeError("Can't commit diff - no reference to add commit to")
+
         self.check_values_match_schema(wcdiff)
 
-        old_tree_oid = self.tree.oid if self.tree is not None else None
-        new_tree_oid = self.create_tree_from_diff(
+        new_tree = self.create_tree_from_diff(
             wcdiff,
             allow_missing_old_values=allow_missing_old_values,
         )
-        if (not allow_empty) and new_tree_oid == old_tree_oid:
+        if (not allow_empty) and new_tree == self.tree:
             raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
         L.info("Committing...")
 
-        if ref == "HEAD":
+        if self.ref == "HEAD":
             parent_commit = self.repo.head_commit
         else:
-            parent_commit = self.repo.references[ref].peel(pygit2.Commit)
+            parent_commit = self.repo.references[self.ref].peel(pygit2.Commit)
         parents = [parent_commit.oid] if parent_commit is not None else []
 
-        # this will also update the ref (branch) to point to the new commit
-        new_commit = self.repo.create_commit(
-            ref,
+        # This will also update the ref (branch) to point to the new commit
+        new_commit_id = self.repo.create_commit(
+            self.ref,
             author or self.repo.author_signature(),
             committer or self.repo.committer_signature(),
             message,
-            new_tree_oid,
+            new_tree.id,
             parents,
         )
-        L.info(f"Commit: {new_commit}")
+        new_commit = self.repo[new_commit_id]
 
+        L.info(f"Commit: {new_commit.hex}")
         return new_commit
 
 
 class Datasets:
+    """
+    The collection of datasets found in a particular tree. Can be used as an iterator, or by subscripting:
+
+    >>> [ds.path for ds in structure.datasets]
+    or
+    >>> structure.datasets[path_to_dataset]
+    or
+    >>> structure.datasets.get(path_to_dataset)
+    """
+
     def __init__(self, tree, dataset_class):
         self.tree = tree
         self.dataset_class = dataset_class
 
     def __getitem__(self, ds_path):
-        """Get a specific dataset by path"""
+        """Get a specific dataset by path."""
         try:
             ds_tree = self.tree / ds_path if self.tree is not None else None
         except KeyError:

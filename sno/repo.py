@@ -385,13 +385,19 @@ class SnoRepo(pygit2.Repository):
 
     @functools.lru_cache()
     def structure(self, refish="HEAD"):
+        """Get the structure of this Sno repository at a particular revision."""
         return RepoStructure(self, refish)
 
     def datasets(self, refish="HEAD"):
+        """
+        Get the datasets of this Sno repository at a particular revision.
+        Equivalent to: self.structure(refish).datasets
+        """
         return self.structure(refish).datasets
 
     @property
     def working_copy(self):
+        """Return the working copy of this Sno repository, or None if it it does not exist."""
         try:
             return self._working_copy
         except AttributeError:

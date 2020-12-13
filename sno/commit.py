@@ -104,10 +104,9 @@ def commit(ctx, message, allow_empty, output_format, filters):
     if not commit_msg:
         raise click.UsageError("Aborting commit due to empty commit message.")
 
-    new_commit_id = repo.structure().commit_diff(
+    new_commit = repo.structure().commit_diff(
         wc_diff, commit_msg, allow_empty=allow_empty
     )
-    new_commit = repo[new_commit_id].peel(pygit2.Commit)
 
     working_copy.reset_tracking_table(commit_filter)
     working_copy.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
