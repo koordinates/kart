@@ -130,13 +130,17 @@ class ImportSource:
     def features(self):
         """
         Yields a dict for every feature. Dicts contain key-value pairs for each feature property,
-        and geometries use sno.geometry.Geometry objects, as in the following example:
+        and geometries use sno.geometry.Geometry objects, as in the following example::
+
         {
             "fid": 123,
             "geom": Geometry(b"..."),
             "name": "..."
             "last-modified": "..."
         }
+
+        Each dict is guaranteed to iterate in the same order as the columns are ordered in the schema,
+        so that zip(schema.columns, feature.values()) matches each field with its column.
         """
         raise NotImplementedError()
 
