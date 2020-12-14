@@ -34,7 +34,7 @@ class RichBaseDataset(BaseDataset):
 
     def features_plus_blobs(self):
         for blob in self.feature_blobs():
-            yield self.get_feature(path=blob.name, data=blob.data), blob
+            yield self.get_feature(path=blob.name, data=memoryview(blob)), blob
 
     def build_spatial_index(self, path):
         """

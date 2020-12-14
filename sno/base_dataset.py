@@ -187,7 +187,7 @@ class BaseDataset(ImportSource):
         }
         """
         for blob in self.feature_blobs():
-            yield self.get_feature(path=blob.name, data=blob.data)
+            yield self.get_feature(path=blob.name, data=memoryview(blob))
 
     @property
     def feature_count(self):
