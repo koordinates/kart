@@ -4,18 +4,25 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.7.0 (UNRELEASED)
+## 0.7.0
+
+### Major changes in this release
 
  * Support for importing data without a primary key. Since the Sno model requires that every feature has a primary key, primary keys are assigned during import. [#212](https://github.com/koordinates/sno/issues/212)
- * Support for checking out a dataset with a string primary key (or other non-integer primary key) as a GPKG working copy [#307](https://github.com/koordinates/sno/issues/307)
+ * Support for checking out a dataset with a string primary key (or other non-integer primary key) as a GPKG working copy. [#307](https://github.com/koordinates/sno/issues/307)
+
+### Minor features / fixes:
+
  * Improved error recovery: Sno commands now write to the working copy within a single transaction, which is rolled back if the command fails. [#281](https://github.com/koordinates/sno/pull/281)
- * Bugfix - `sno meta set` didn't allow updates to `schema.json`
- * Bugfix - Fixed a potential `KeyError` in `Schema._try_align`
- * Bugfix - Fixed a potential `unexpected NoneType` in `WorkingCopy.is_dirty`
- * Bugfix - imports now preserve fixed-precision numeric types in most situations.
- * Bugfix - imports now preserve length of text/string fields.
- * Bugfix - imported fields of type `numeric` now stored internally as strings, as required by datasets V2 spec. [#325](https://github.com/koordinates/sno/pull/325)
  * Dependency upgrades (GDAL; Git; Pygit2; Libgit2; Spatialite; GEOS) [#327](https://github.com/koordinates/sno/pull/327)
+ * Bugfixes:
+   - `sno meta set` didn't allow updates to `schema.json`
+   - Fixed a potential `KeyError` in `Schema._try_align`
+   - Fixed a potential `unexpected NoneType` in `WorkingCopy.is_dirty`
+   - Imports now preserve fixed-precision numeric types in most situations.
+   - Imports now preserve length of text/string fields.
+   - Imported fields of type `numeric` now stored internally as strings, as required by datasets V2 spec. [#325](https://github.com/koordinates/sno/pull/325)
+
 
 ## 0.6.0
 
