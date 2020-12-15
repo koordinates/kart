@@ -5,6 +5,7 @@ import re
 import html5lib
 import pytest
 
+import sno
 from sno.diff_structs import Delta, DeltaDiff
 from sno.geometry import hex_wkb_to_ogr
 from sno.repo import SnoRepo
@@ -1498,6 +1499,17 @@ def test_show_json_format(data_archive_readonly, cli_runner):
         assert r.exit_code == 0, r.stderr
         # output is compact, no indentation
         assert '"sno.diff/v1+hexwkb": {"' in r.stdout
+
+
+def test_show_json_coloured(data_archive_readonly, cli_runner, monkeypatch):
+    always_output_colour = lambda x: True
+    monkeypatch.setattr(sno.output_util, "can_output_colour", always_output_colour)
+
+    with data_archive_readonly("points"):
+        r = cli_runner.invoke(["show", f"-o", "json", "--json-style=pretty", "HEAD"])
+        assert r.exit_code == 0, r.stderr
+        # No asserts about colour codes - that would be system specific. Just a basic check:
+        assert '"sno.diff/v1+hexwkb"' in r.stdout
 
 
 @pytest.mark.parametrize(*V1_OR_V2)
