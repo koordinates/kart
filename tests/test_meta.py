@@ -1,6 +1,8 @@
 import json
 import pytest
 
+import sno
+
 EXPECTED_GCG_JSON = {
     "column_name": "geom",
     "geometry_type_name": "POINT",
@@ -137,3 +139,23 @@ def test_meta_get_ref(data_archive, cli_runner):
         assert json.loads(r.stdout) == {
             "nz_pa_points_topo_150k": {"title": "NZ Pa Points (Topo, 1:50k)"}
         }
+
+
+def test_meta_get_coloured(data_archive, cli_runner, monkeypatch):
+    always_output_colour = lambda x: True
+    monkeypatch.setattr(sno.output_util, "can_output_colour", always_output_colour)
+
+    with data_archive("points2"):
+        r = cli_runner.invoke(
+            [
+                "meta",
+                "get",
+                "--ref=HEAD^",
+                "nz_pa_points_topo_150k",
+                "-o",
+                "json",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        # No asserts about colour codes - that would be system specific. Just a basic check:
+        assert "nz_pa_points_topo_150k" in r.stdout

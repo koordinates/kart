@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 import shutil
 import sys
 import textwrap
@@ -7,7 +8,6 @@ import types
 
 import pygments
 from pygments.lexers import JsonLexer
-from pygments.lexer import ExtendedRegexLexer, LexerContext
 
 from .wkt_lexer import WKTLexer
 
@@ -68,7 +68,7 @@ def format_json_for_output(output, fp, json_style="pretty"):
 
     Adds syntax highlighting if appropriate.
     """
-    if json_style == "pretty" and fp == sys.stdout and fp.isatty():
+    if json_style == "pretty" and can_output_colour(fp):
         # Add syntax highlighting
         dumped = json.dumps(output, **JSON_PARAMS[json_style])
         return pygments.highlight(
@@ -79,6 +79,10 @@ def format_json_for_output(output, fp, json_style="pretty"):
         return json.dumps(output, **JSON_PARAMS[json_style]) + "\n"
 
 
+def can_output_colour(fp):
+    return fp == sys.stdout and fp.isatty()
+
+
 def format_wkt_for_output(output, fp=None, syntax_highlight=True):
     """
     Formats WKT whitespace for readability.
@@ -86,7 +90,7 @@ def format_wkt_for_output(output, fp=None, syntax_highlight=True):
     Doesn't print the formatted WKT to fp, just returns it.
     """
     token_iter = WKTLexer().get_tokens(output, pretty_print=True)
-    if syntax_highlight and fp == sys.stdout and fp.isatty():
+    if syntax_highlight and can_output_colour(fp):
         return pygments.format(token_iter, get_terminal_formatter())
     else:
         token_value = (value for token_type, value in token_iter)
@@ -126,13 +130,24 @@ def wrap_text_to_terminal(text, indent=""):
     return "".join(f"{indent}{line}\n" for line in lines)
 
 
-class ExtendedJsonLexer(JsonLexer, ExtendedRegexLexer):
+def _buffer_json_keys(chunk_generator):
     """
-    Inherits patterns from JsonLexer and get_tokens_unprocessed function from ExtendedRegexLexer.
-    get_tokens_unprocessed enables the lexer to lex incomplete chunks of json.
+    We can do chunk-by-chunk JSON highlighting, but only if we buffer everything that might be a key, so that:
+    {"key": value} can be treated differently to ["value", "value", "value", ...]
     """
 
-    pass
+    buf = None
+    for chunk in chunk_generator:
+        if buf is not None:
+            yield buf + chunk
+            buf = None
+        elif re.search(r"""["']\s*$""", chunk):
+            buf = chunk
+        else:
+            yield chunk
+
+    if buf is not None:
+        yield buf
 
 
 def dump_json_output(output, output_path, json_style="pretty"):
@@ -141,21 +156,15 @@ def dump_json_output(output, output_path, json_style="pretty"):
     """
     fp = resolve_output_path(output_path)
 
-    highlit = json_style == "pretty" and fp == sys.stdout and fp.isatty()
+    highlit = json_style == "pretty" and can_output_colour(fp)
     json_encoder = ExtendedJsonEncoder(**JSON_PARAMS[json_style])
     if highlit:
-        ex_json_lexer = ExtendedJsonLexer()
-        # The LexerContext stores the state of the lexer after each call to get_tokens_unprocessed
-        lexer_context = LexerContext("", 0)
-
-        for chunk in json_encoder.iterencode(output):
-            lexer_context.text = chunk
-            lexer_context.pos = 0
-            lexer_context.end = len(chunk)
+        json_lexer = JsonLexer()
+        for chunk in _buffer_json_keys(json_encoder.iterencode(output)):
             token_generator = (
                 (token_type, value)
-                for (index, token_type, value) in ex_json_lexer.get_tokens_unprocessed(
-                    context=lexer_context
+                for (index, token_type, value) in json_lexer.get_tokens_unprocessed(
+                    chunk
                 )
             )
             fp.write(pygments.format(token_generator, get_terminal_formatter()))
