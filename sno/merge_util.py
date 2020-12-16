@@ -9,7 +9,6 @@ from .diff_output import text_row, json_row, geojson_row
 from .filter_util import UNFILTERED
 from .repo import SnoRepoFiles
 from .structs import CommitWithReference
-from .structure import RepoStructure
 from .utils import ungenerator
 
 MERGE_HEAD = SnoRepoFiles.MERGE_HEAD

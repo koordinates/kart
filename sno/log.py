@@ -8,7 +8,6 @@ from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
-from .structure import RepoStructure
 
 
 @click.command(
