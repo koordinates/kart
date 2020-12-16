@@ -4,6 +4,12 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.7.1
+
+#### JSON syntax-highlighting fix
+
+* Any command which outputs JSON would fail in 0.7.0 when run in a terminal unless a JSON style other than `--pretty` was explicitly specified, due to a change in the pygments library which Sno's JSON syntax-highlighting code failed to accomodate. This is fixed in the 0.7.1 release. [#335](https://github.com/koordinates/sno/pull/335)
+
 ## 0.7.0
 
 ### Major changes in this release
