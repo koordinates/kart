@@ -133,6 +133,17 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     help="Replace existing dataset(s) of the same name.",
 )
 @click.option(
+    "--similarity-detection-limit",
+    hidden=True,
+    type=click.INT,
+    default=50,
+    help=(
+        "When replacing an existing dataset where primary keys are auto-generated: the maximum number of unmatched "
+        "features to search through for similar features, so that primary keys can be reassigned for features that "
+        "are similar but have had minor edits. Zero means that no similarity detection is performed. (Advanced users only)"
+    ),
+)
+@click.option(
     "--allow-empty",
     is_flag=True,
     default=False,
@@ -167,6 +178,7 @@ def import_table(
     tables,
     table_info,
     replace_existing,
+    similarity_detection_limit,
     allow_empty,
     max_delta_depth,
     do_checkout,
@@ -247,8 +259,11 @@ def import_table(
                 # will result in a new schema object, and thus a new blob for every feature.
                 # Note that alignment works better if we add the generated-pk-column first (when needed),
                 # if one schema has this and the other lacks it they will be harder to align.
-                import_source = PkGeneratingImportSource.wrap_if_needed(
-                    import_source, repo
+                import_source = PkGeneratingImportSource.wrap_source_if_needed(
+                    import_source,
+                    repo,
+                    dest_path=dest_path,
+                    similarity_detection_limit=similarity_detection_limit,
                 )
                 import_source.schema = existing_ds.schema.align_to_self(
                     import_source.schema

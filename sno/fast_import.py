@@ -82,7 +82,7 @@ def fast_import_tables(
                 )
 
     # Add primary keys if needed.
-    sources = PkGeneratingImportSource.wrap_if_needed(sources, repo)
+    sources = PkGeneratingImportSource.wrap_sources_if_needed(sources, repo)
 
     cmd = [
         "git",

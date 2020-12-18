@@ -672,7 +672,6 @@ def test_postgis_import_from_view_no_pk(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
         c = postgis_db.cursor()
-
         c.execute(
             """
             CREATE VIEW nz_waca_adjustments_view AS (
@@ -716,6 +715,7 @@ def test_postgis_import_from_view_no_pk(
                 os.environ["SNO_POSTGRES_URL"],
                 "nz_waca_adjustments_view",
                 "--replace-existing",
+                "--similarity-detection-limit=10",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -729,6 +729,57 @@ def test_postgis_import_from_view_no_pk(
         # 228 features total - but 161 are in the first group and 159 are in the second group
         # Means 92 features are in both, and should be imported with the same PK both times
         # 159 + 161 is 320, which is 92 more features than the actual total of 228
+
+        # This is similar enough to be detected as an edit - only one field is different.
+        c.execute(
+            "UPDATE nz_waca_adjustments SET survey_reference='foo' WHERE id=1424927;"
+        )
+        # This is similar enough to be detected as an edit - only one field is different.
+        c.execute(
+            "UPDATE nz_waca_adjustments SET adjusted_nodes=12345678 WHERE id=1443053;"
+        )
+        # This will not be detected as an edit - two fields are different,
+        # so it looks like one feature is deleted and a different one is inserted.
+        c.execute(
+            "UPDATE nz_waca_adjustments SET survey_reference='bar', adjusted_nodes=87654321 WHERE id=1452332;"
+        )
+
+        r = cli_runner.invoke(
+            [
+                "--repo",
+                str(repo_path.resolve()),
+                "import",
+                os.environ["SNO_POSTGRES_URL"],
+                "nz_waca_adjustments_view",
+                "--replace-existing",
+                "--similarity-detection-limit=10",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["--repo", str(repo_path.resolve()), "show"])
+        assert r.exit_code == 0, r.stderr
+        # Two edits and one insert + delete:
+        assert r.stdout.splitlines()[-19:] == [
+            "",
+            "--- nz_waca_adjustments_view:feature:1",
+            "+++ nz_waca_adjustments_view:feature:1",
+            "-                         survey_reference = ␀",
+            "+                         survey_reference = foo",
+            "--- nz_waca_adjustments_view:feature:2",
+            "+++ nz_waca_adjustments_view:feature:2",
+            "-                           adjusted_nodes = 1238",
+            "+                           adjusted_nodes = 12345678",
+            "--- nz_waca_adjustments_view:feature:3",
+            "-                                     geom = MULTIPOLYGON(...)",
+            "-                            date_adjusted = 2011-06-07T15:22:58Z",
+            "-                         survey_reference = ␀",
+            "-                           adjusted_nodes = 558",
+            "+++ nz_waca_adjustments_view:feature:229",
+            "+                                     geom = MULTIPOLYGON(...)",
+            "+                            date_adjusted = 2011-06-07T15:22:58Z",
+            "+                         survey_reference = bar",
+            "+                           adjusted_nodes = 87654321",
+        ]
 
 
 def test_pk_encoding():
