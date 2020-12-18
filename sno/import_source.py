@@ -86,6 +86,8 @@ class ImportSource:
         or the only CRS definition if no identifer is supplied.
         """
         # Subclasses may overrdie this to make it more efficient.
+        if not self.has_geometry:
+            return None
         crs_definitions_dict = dict(self.crs_definitions())
         if identifier is not None:
             if identifier.startswith("crs/") and identifier.endswith(".wkt"):

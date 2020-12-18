@@ -328,6 +328,21 @@ def test_diff_reprojection(
             _check_geojson(odata["nz_pa_points_topo_150k"])
 
 
+def test_show_crs_with_aspatial_dataset(data_archive, cli_runner):
+    """
+    --crs should be ignored when used with aspatial data
+    """
+    with data_archive("table2"):
+        r = cli_runner.invoke(
+            [
+                "show",
+                f"--output-format=json",
+                f"--crs=epsg:2193",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 @pytest.mark.parametrize(*V1_OR_V2)
 def test_diff_polygons(
