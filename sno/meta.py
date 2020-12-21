@@ -4,7 +4,7 @@ import io
 import click
 
 from .apply import apply_patch
-from .cli_util import StringFromFile, add_help_subcommand
+from .cli_util import StringFromFile, add_help_subcommand, string_or_string_from_file
 from .exceptions import InvalidOperation
 from .output_util import (
     dump_json_output,
@@ -157,6 +157,7 @@ def meta_set(ctx, message, dataset, items):
         message = f"Update metadata for {dataset}"
 
     def _parse(key, value):
+        value = string_or_string_from_file(value, key, ctx, encoding="utf-8")
         if key.endswith(".json"):
             try:
                 return json.loads(value)

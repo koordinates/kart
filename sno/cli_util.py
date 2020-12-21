@@ -81,13 +81,17 @@ class StringFromFile(click.types.StringParamType):
 
     def convert(self, value, param, ctx):
         value = super().convert(value, param, ctx)
-        if value == "-" or value.startswith("@"):
-            filetype = click.File(**self.file_kwargs)
-            filename = value[1:] if value.startswith("@") else value
-            fp = filetype.convert(filename, param, ctx)
-            return fp.read()
+        return string_or_string_from_file(value, param, ctx, **self.file_kwargs)
 
-        return value
+
+def string_or_string_from_file(value, param, ctx, **file_kwargs):
+    if value == "-" or value.startswith("@"):
+        filetype = click.File(**file_kwargs)
+        filename = value[1:] if value.startswith("@") else value
+        fp = filetype.convert(filename, param, ctx)
+        return fp.read()
+
+    return value
 
 
 class JsonFromFile(StringFromFile):
