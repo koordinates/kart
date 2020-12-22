@@ -691,17 +691,16 @@ class WorkingCopy_Postgis(WorkingCopy):
                     C.column_name, C.ordinal_position, C.data_type, C.udt_name,
                     C.character_maximum_length, C.numeric_precision, C.numeric_scale,
                     KCU.ordinal_position AS pk_ordinal_position,
-                    GC.type AS geometry_type,
-                    GC.srid AS geometry_srid
+                    upper(postgis_typmod_type(A.atttypmod)) AS geometry_type,
+                    postgis_typmod_srid(A.atttypmod) AS geometry_srid
                 FROM information_schema.columns C
                 LEFT OUTER JOIN information_schema.key_column_usage KCU
                 ON (KCU.table_schema = C.table_schema)
                 AND (KCU.table_name = C.table_name)
                 AND (KCU.column_name = C.column_name)
-                LEFT OUTER JOIN public.geometry_columns GC
-                ON (GC.f_table_schema = C.table_schema)
-                AND (GC.f_table_name = C.table_name)
-                AND (GC.f_geometry_column = C.column_name)
+                LEFT OUTER JOIN pg_attribute A
+                ON (A.attname = C.column_name)
+                AND (A.attrelid = (C.table_schema || '.' || C.table_name)::regclass::oid)
                 WHERE C.table_schema=%s AND C.table_name=%s
                 ORDER BY C.ordinal_position;
             """
