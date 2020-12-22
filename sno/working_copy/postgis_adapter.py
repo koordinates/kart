@@ -167,8 +167,6 @@ def _pg_type_to_v2_type(pg_col_info, pg_spatial_ref_sys):
     if v2_type == "geometry":
         return _pg_type_to_v2_geometry_type(pg_col_info, pg_spatial_ref_sys)
 
-    # TODO: standardise on null vs not-present for extra_type_info.
-    # TODO: Fix legacy problems caused by any inconsistency.
     if v2_type == "text":
         length = pg_col_info["character_maximum_length"] or None
         if length is not None:
@@ -176,7 +174,7 @@ def _pg_type_to_v2_type(pg_col_info, pg_spatial_ref_sys):
 
     if v2_type == "numeric":
         extra_type_info["precision"] = pg_col_info["numeric_precision"] or None
-        extra_type_info["scale"] = pg_col_info["numeric_precision"] or None
+        extra_type_info["scale"] = pg_col_info["numeric_scale"] or None
 
     return v2_type, extra_type_info
 
