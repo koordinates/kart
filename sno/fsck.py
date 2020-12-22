@@ -5,6 +5,7 @@ import click
 
 from . import gpkg
 from .exceptions import NotFound, NO_WORKING_COPY
+from .geometry import normalise_gpkg_geom
 
 
 def _fsck_reset(repo, working_copy, dataset_paths):
@@ -157,6 +158,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             if not has_err:
                 click.echo("Checking features...")
                 feature_err_count = 0
+                geom_col = dataset.geom_column_name
                 for feature, blob in dataset.features_plus_blobs():
                     h_verify = os.path.basename(dataset.encode_1pk_to_path(feature[pk]))
                     if blob.name != h_verify:
@@ -170,10 +172,12 @@ def fsck(ctx, reset_datasets, fsck_args):
                         f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=?;",
                         [feature[pk]],
                     )
-                    row = dbcur.fetchone()
-                    if dict(row) != feature:
+                    db_obj = dict(dbcur.fetchone())
+                    if db_obj is not None and geom_col is not None:
+                        db_obj[geom_col] = normalise_gpkg_geom(db_obj[geom_col])
+                    if db_obj != feature:
                         s_old = set(feature.items())
-                        s_new = set(dict(row).items())
+                        s_new = set(db_obj.items())
                         diff_add = dict(s_new - s_old)
                         diff_del = dict(s_old - s_new)
                         all_keys = sorted(set(diff_del.keys()) | set(diff_add.keys()))

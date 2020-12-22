@@ -26,7 +26,7 @@ def test_apply_empty_patch(data_archive_readonly, cli_runner):
 
 
 def test_apply_nonempty_patch_which_makes_no_changes(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points2"):
+    with data_archive_readonly("points"):
         # Despite appearances, this patch is empty because it makes a change
         # which has no actual effect.
         r = cli_runner.invoke(["apply", patches / "points-empty-2.snopatch"])
@@ -133,14 +133,8 @@ def test_apply_meta_changes(data_archive, cli_runner):
             },
         }
     )
+
     with data_archive("points"):
-        # this won't work, v1 doesn't support this patch
-        r = cli_runner.invoke(
-            ["apply", "-"],
-            input=patch_file,
-        )
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
-    with data_archive("points2"):
         r = cli_runner.invoke(
             ["apply", "-"],
             input=patch_file,
@@ -176,7 +170,7 @@ def test_apply_user_info(data_archive, cli_runner):
             },
         }
     )
-    with data_archive("points2"):
+    with data_archive("points"):
         r = cli_runner.invoke(
             ["apply", "--allow-missing-old-values", "-"],
             input=patch_file,
@@ -213,7 +207,7 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
             },
         }
     )
-    with data_working_copy("points2"):
+    with data_working_copy("points"):
         # First create another branch.
         r = cli_runner.invoke(["branch", "otherbranch"])
         assert r.exit_code == 0, r.stderr
@@ -263,7 +257,7 @@ def test_apply_allow_missing_old_values(data_archive, cli_runner):
             },
         }
     )
-    with data_archive("points2"):
+    with data_archive("points"):
         # We ordinarily can't apply this patch,
         # because the "-" object for the title is missing.
         r = cli_runner.invoke(
@@ -290,10 +284,6 @@ def test_apply_allow_missing_old_values(data_archive, cli_runner):
 def test_apply_create_dataset(data_archive, cli_runner):
     patch_path = patches / "polygons.snopatch"
     with data_archive("points"):
-        # this won't work, v1 doesn't support this patch
-        r = cli_runner.invoke(["apply", patch_path])
-        assert r.exit_code == NOT_YET_IMPLEMENTED, r
-    with data_archive("points2"):
         r = cli_runner.invoke(["data", "ls", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["sno.data.ls/v1"] == ["nz_pa_points_topo_150k"]
@@ -343,7 +333,7 @@ def test_add_and_remove_xml_metadata(data_archive, cli_runner):
         },
     }
     patch_file = json.dumps(orig_patch)
-    with data_archive("points2"):
+    with data_archive("points"):
         r = cli_runner.invoke(
             ["apply", "-"],
             input=patch_file,

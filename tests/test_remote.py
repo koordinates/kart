@@ -105,7 +105,7 @@ def test_clone(
             assert wc.exists() and wc.is_file()
 
             table = H.POINTS.LAYER
-            assert repo.config["sno.repository.version"] == "1"
+            assert repo.config["sno.repository.version"] == "2"
             assert repo.config["sno.workingcopy.path"] == wc.name
 
             db = geopackage(wc)
@@ -114,7 +114,7 @@ def test_clone(
             assert nrows > 0
 
             wc_tree_id = dbcur.execute(
-                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';""",
+                """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';""",
             ).fetchone()[0]
             assert wc_tree_id == repo.head_tree.hex
         else:

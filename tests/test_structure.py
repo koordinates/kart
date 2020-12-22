@@ -11,13 +11,10 @@ import pytest
 
 from sno import fast_import, gpkg
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
-from sno.base_dataset import BaseDataset
-from sno.dataset1 import Dataset1
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from sno.repo import SnoRepo
-from sno.repo_version import REPO_VERSIONS_CHOICE
 
 
 H = pytest.helpers.helpers()
@@ -33,7 +30,7 @@ GPKG_IMPORTS = (
             "gpkg-polygons",
             "nz-waca-adjustments.gpkg",
             H.POLYGONS.LAYER,
-            id="polygons-pk",
+            id="polygons",
         ),
         pytest.param(
             "gpkg-au-census",
@@ -48,23 +45,11 @@ GPKG_IMPORTS = (
     ],
 )
 
-V1_OR_V2 = ("repo_version", [1, 2])
 
-
-def test_dataset_versions():
-    assert BaseDataset.for_version(1) == Dataset1
-    assert BaseDataset.for_version(2) == Dataset2
-
-    for choice in REPO_VERSIONS_CHOICE.choices:
-        assert BaseDataset.for_version(choice) is not None
-
-
-def _import_check(repo_path, table, source_gpkg, geopackage, repo_version=None):
+def _import_check(repo_path, table, source_gpkg, geopackage):
     repo = SnoRepo(repo_path)
     dataset = repo.datasets()[table]
-
-    if repo_version is not None:
-        assert dataset.VERSION == int(repo_version)
+    assert dataset.VERSION == 2
 
     db = geopackage(source_gpkg)
     num_rows = db.cursor().execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
@@ -122,9 +107,7 @@ def col_without_id(column_dict):
         ),
     ],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_import(
-    repo_version,
     archive,
     source_gpkg,
     table,
@@ -170,7 +153,7 @@ def test_import(
             assert num_rows == 0
 
         with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--repo-version", repo_version])
+            r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
             repo = SnoRepo(repo_path)
@@ -187,11 +170,8 @@ def test_import(
             assert len(list(repo.walk(repo.head.target))) == 1
 
             dataset = _import_check(
-                repo_path, table, f"{data / source_gpkg}", geopackage, repo_version
+                repo_path, table, f"{data / source_gpkg}", geopackage
             )
-
-            assert dataset.__class__.__name__ == f"Dataset{repo_version}"
-            assert dataset.VERSION == int(repo_version)
 
             pk_field = gpkg.pk(db, table)
 
@@ -285,14 +265,13 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
             "gpkg-polygons",
             "nz-waca-adjustments.gpkg",
             H.POLYGONS.LAYER,
-            id="polygons-pk",
+            id="polygons",
         ),
         pytest.param(
             "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
         ),
     ],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 @pytest.mark.parametrize(
     "source_format,source_ogr_driver",
     [
@@ -308,7 +287,6 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     ids=["SHP"],
 )
 def test_import_from_non_gpkg(
-    repo_version,
     archive,
     source_gpkg,
     table,
@@ -362,7 +340,7 @@ def test_import_from_non_gpkg(
         repo_path = tmp_path / "non-gpkg"
         repo_path.mkdir()
         with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--repo-version", repo_version])
+            r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
             repo = SnoRepo(repo_path)
@@ -386,11 +364,8 @@ def test_import_from_non_gpkg(
             assert len([c for c in repo.walk(repo.head.target)]) == 1
 
             dataset = _import_check(
-                repo_path, table, f"{data / source_gpkg}", geopackage, repo_version
+                repo_path, table, f"{data / source_gpkg}", geopackage
             )
-
-            assert dataset.__class__.__name__ == f"Dataset{repo_version}"
-            assert int(float(dataset.VERSION)) == int(repo_version)
 
             # Compare the meta items to the GPKG-imported ones
             repo = SnoRepo(repo_path)
@@ -783,34 +758,34 @@ def test_postgis_import_from_view_no_pk(
 
 
 def test_pk_encoding():
-    ds = Dataset1(None, "mytable")
-
-    kwargs = {"cast_primary_key": False}
+    ds = Dataset2(None, "mytable")
 
     assert (
-        ds.encode_1pk_to_path(492183, **kwargs) == "mytable/.sno-table/fd/ac/zgAHgpc="
+        ds.encode_1pk_to_path(492183) == "mytable/.sno-dataset/feature/72/91/kc4AB4KX"
     )
-    assert ds.decode_path_to_1pk("mytable/.sno-table/fd/ac/zgAHgpc=") == 492183
+    assert (
+        ds.decode_path_to_1pk("mytable/.sno-dataset/feature/72/91/kc4AB4KX") == 492183
+    )
 
-    enc = [(i, ds.encode_1pk_to_path(i, **kwargs)) for i in range(-50000, 50000, 23)]
+    assert (
+        ds.encode_1pk_to_path("Dave") == "mytable/.sno-dataset/feature/b2/fe/kaREYXZl"
+    )
+    assert (
+        ds.decode_path_to_1pk("mytable/.sno-dataset/feature/b2/fe/kaREYXZl") == "Dave"
+    )
+
+    enc = [(i, ds.encode_1pk_to_path(i)) for i in range(-50000, 50000, 23)]
     assert len(set([k for i, k in enc])) == len(enc)
 
     for i, k in enc:
         assert ds.decode_path_to_1pk(k) == i
 
-    assert (
-        ds.encode_1pk_to_path("Dave", **kwargs) == "mytable/.sno-table/b5/24/pERhdmU="
-    )
-    assert ds.decode_path_to_1pk("mytable/.sno-table/b5/24/pERhdmU=") == "Dave"
-
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-@pytest.mark.parametrize(*V1_OR_V2)
-@pytest.mark.parametrize("profile", ["get_feature", "feature_to_dict"])
+@pytest.mark.parametrize("profile", ["get_feature_by_pk", "get_feature_from_data"])
 def test_feature_find_decode_performance(
     profile,
-    repo_version,
     archive,
     source_gpkg,
     table,
@@ -826,13 +801,10 @@ def test_feature_find_decode_performance(
         f"test_feature_find_decode_performance - {profile} - {param_ids[-1]}"
     )
 
-    repo_path = data_imported(archive, source_gpkg, table, repo_version)
+    repo_path = data_imported(archive, source_gpkg, table)
     repo = SnoRepo(repo_path)
     tree = repo.head_tree / "mytable"
     dataset = repo.datasets()["mytable"]
-
-    assert dataset.__class__.__name__ == f"Dataset{repo_version}"
-    assert dataset.VERSION == int(repo_version)
 
     with data_archive(archive) as data:
         db = geopackage(f"{data / source_gpkg}")
@@ -843,33 +815,25 @@ def test_feature_find_decode_performance(
             f"SELECT {pk_field} FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
         ).fetchone()[0]
 
-    if profile == "get_feature":
+    if profile == "get_feature_by_pk":
         benchmark(dataset.get_feature, pk)
 
-    elif profile == "feature_to_dict":
+    elif profile == "get_feature_from_data":
         feature_path = dataset.encode_1pk_to_path(pk, relative=True)
         feature_data = memoryview(tree / feature_path)
 
-        # TODO: try to avoid two sets of code for two dataset versions -
-        # either by making their interfaces more similar, or by deleting v1
-        if repo_version == 1:
-            benchmark(dataset.repo_feature_to_dict, feature_path, feature_data)
-        elif repo_version == 2:
-            benchmark(dataset.get_feature, path=feature_path, data=feature_data)
+        benchmark(dataset.get_feature, path=feature_path, data=feature_data)
     else:
         raise NotImplementedError(f"Unknown profile: {profile}")
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("repo_version", ["1"])
-def test_import_multiple(
-    repo_version, data_archive, chdir, cli_runner, tmp_path, geopackage
-):
+def test_import_multiple(data_archive, chdir, cli_runner, tmp_path, geopackage):
     repo_path = tmp_path / "data.sno"
     repo_path.mkdir()
 
     with chdir(repo_path):
-        r = cli_runner.invoke(["init", "--repo-version", repo_version])
+        r = cli_runner.invoke(["init"])
         assert r.exit_code == 0, r
 
     repo = SnoRepo(repo_path)
@@ -893,7 +857,6 @@ def test_import_multiple(
                         table,
                         f"{data / source_gpkg}",
                         geopackage,
-                        repo_version,
                     )
                 )
 
@@ -947,9 +910,7 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_write_feature_performance(
-    repo_version,
     archive,
     source_gpkg,
     table,
@@ -971,30 +932,25 @@ def test_write_feature_performance(
         benchmark.group = f"test_write_feature_performance - {param_ids[-1]}"
 
         with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--repo-version", repo_version])
+            r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
             repo = SnoRepo(repo_path)
 
             source = OgrImportSource.open(data / source_gpkg, table=table)
             with source:
-                dataset = BaseDataset.for_version(repo_version)(None, table)
+                dataset = Dataset2(None, table)
                 feature_iter = itertools.cycle(source.features())
 
                 index = pygit2.Index()
 
-                if repo_version == 1:
-                    kwargs = {
-                        "field_cid_map": dataset.get_field_cid_map(source),
-                        "primary_key": source.primary_key,
-                        "cast_primary_key": False,
-                    }
-                elif repo_version == 2:
-                    kwargs = {"schema": source.schema}
+                encode_kwargs = {"schema": source.schema}
 
                 def _write_feature():
                     feature = next(feature_iter)
-                    dest_path, dest_data = dataset.encode_feature(feature, **kwargs)
+                    dest_path, dest_data = dataset.encode_feature(
+                        feature, **encode_kwargs
+                    )
                     blob_id = repo.create_blob(dest_data)
                     entry = pygit2.IndexEntry(
                         f"{dataset.path}/{dest_path}", blob_id, pygit2.GIT_FILEMODE_BLOB
@@ -1005,8 +961,7 @@ def test_write_feature_performance(
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
+def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
     table = H.POINTS.LAYER
     with data_archive("gpkg-points") as data:
         # list tables
@@ -1014,7 +969,7 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
         repo_path.mkdir()
 
         with chdir(repo_path):
-            r = cli_runner.invoke(["init", "--repo-version", repo_version])
+            r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
             repo = SnoRepo(repo_path)
@@ -1030,10 +985,10 @@ def test_fast_import(repo_version, data_archive, tmp_path, cli_runner, chdir):
             assert repo.head.shorthand == "master"
 
             dataset = repo.datasets()[table]
+            assert dataset.VERSION == 2
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1
-            assert dataset.VERSION == int(repo_version)
             assert list(dataset.meta_items())
 
             # has the right number of features

@@ -12,19 +12,6 @@ EXPECTED_GCG_JSON = {
     "z": 0,
 }
 
-EXPECTED_GCG_TEXT = """
-nz_pa_points_topo_150k
-    gpkg_geometry_columns
-        {
-          "column_name": "geom",
-          "geometry_type_name": "POINT",
-          "m": 0,
-          "srs_id": 4326,
-          "table_name": "nz_pa_points_topo_150k",
-          "z": 0
-        }
-""".strip()
-
 EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
 
 
@@ -80,7 +67,8 @@ class TestMetaGet:
             )
             assert r.exit_code == 0, r
             if output_format == "text":
-                assert EXPECTED_GCG_TEXT in r.stdout
+                assert "nz_pa_points_topo_150k" in r.stdout
+                assert "gpkg_geometry_columns" in r.stdout
                 assert "gpkg_contents" not in r.stdout
                 assert "sqlite_table_info" not in r.stdout
             else:
@@ -92,7 +80,7 @@ class TestMetaGet:
 
 
 def test_meta_set(data_archive, cli_runner):
-    with data_archive("points2"):
+    with data_archive("points"):
         r = cli_runner.invoke(
             [
                 "meta",
@@ -114,7 +102,7 @@ def test_meta_set(data_archive, cli_runner):
 
 
 def test_meta_get_ref(data_archive, cli_runner):
-    with data_archive("points2"):
+    with data_archive("points"):
         r = cli_runner.invoke(
             [
                 "meta",
@@ -145,7 +133,7 @@ def test_meta_get_coloured(data_archive, cli_runner, monkeypatch):
     always_output_colour = lambda x: True
     monkeypatch.setattr(sno.output_util, "can_output_colour", always_output_colour)
 
-    with data_archive("points2"):
+    with data_archive("points"):
         r = cli_runner.invoke(
             [
                 "meta",

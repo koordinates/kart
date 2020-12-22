@@ -8,13 +8,9 @@ from sno.structs import CommitWithReference
 H = pytest.helpers.helpers()
 
 
-V1_OR_V2 = ("repo_version", [1, 2])
-
-
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
+def test_merge_index_roundtrip(create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS, repo_version) as repo:
+    with create_conflicts(H.POLYGONS) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
@@ -27,7 +23,7 @@ def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
 
         # Create a MergeIndex object, and roundtrip it into a tree and back.
         orig = MergeIndex.from_pygit2_index(index)
-        assert len(orig.entries) == 236 if repo_version == 2 else 242
+        assert len(orig.entries) == 236
         assert len(orig.conflicts) == 4
         assert len(orig.resolves) == 0
         assert len(orig.unresolved_conflicts) == 4
@@ -46,7 +42,7 @@ def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
         key, conflict = items[1]
         r1.add_resolve(key, [])
         assert r1 != orig
-        assert len(r1.entries) == 236 if repo_version == 2 else 242
+        assert len(r1.entries) == 236
         assert len(r1.conflicts) == 4
         assert len(r1.resolves) == 2
         assert len(r1.unresolved_conflicts) == 2
@@ -57,10 +53,9 @@ def test_merge_index_roundtrip(repo_version, create_conflicts, cli_runner):
         assert r2 == r1
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_summarise_conflicts(repo_version, create_conflicts, cli_runner):
+def test_summarise_conflicts(create_conflicts, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS, repo_version) as repo:
+    with create_conflicts(H.POLYGONS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         r = cli_runner.invoke(["conflicts", "-s"])
@@ -98,9 +93,8 @@ def test_summarise_conflicts(repo_version, create_conflicts, cli_runner):
         }
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_list_conflicts(repo_version, create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS, repo_version) as repo:
+def test_list_conflicts(create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         expected_text = [
@@ -250,9 +244,8 @@ def test_list_conflicts(repo_version, create_conflicts, cli_runner):
             assert version in features_geojson
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_list_conflicts_transform_crs(repo_version, create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS, repo_version) as repo:
+def test_list_conflicts_transform_crs(create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         r = cli_runner.invoke(
@@ -304,10 +297,8 @@ def test_list_conflicts_transform_crs(repo_version, create_conflicts, cli_runner
         assert coords == [1975606.0592274915, 5775365.736491613]
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_find_renames(repo_version, data_working_copy, geopackage, cli_runner):
-    archive = "points2" if repo_version == 2 else "points"
-    with data_working_copy(archive) as (repo_path, wc):
+def test_find_renames(data_working_copy, geopackage, cli_runner):
+    with data_working_copy("points") as (repo_path, wc):
         db = geopackage(wc)
 
         cli_runner.invoke(["checkout", "-b", "ancestor_branch"])

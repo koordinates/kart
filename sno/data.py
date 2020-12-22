@@ -6,6 +6,7 @@ from . import status
 from .cli_util import add_help_subcommand
 from .output_util import dump_json_output
 from .repo import SnoRepoState
+from .repo_version import get_repo_version
 
 
 # Changing these items would generally break the repo;
@@ -58,7 +59,7 @@ def data_ls(ctx, output_format, refish):
 def data_version(ctx, output_format):
     """Show the repository structure version"""
     repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
-    version = repo.version
+    version = get_repo_version(repo, allow_legacy_versions=True)
     if output_format == "text":
         click.echo(f"Sno repository uses Datasets v{version}")
         if version >= 1:

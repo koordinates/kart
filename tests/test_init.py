@@ -23,7 +23,7 @@ GPKG_IMPORTS = (
             "gpkg-polygons",
             "nz-waca-adjustments.gpkg",
             H.POLYGONS.LAYER,
-            id="polygons-pk",
+            id="polygons",
         ),
         pytest.param(
             "gpkg-au-census",
@@ -38,7 +38,6 @@ GPKG_IMPORTS = (
         pytest.param("gpkg-stringpk", "stringpk.gpkg", "stringpk", id="stringpk"),
     ],
 )
-V1_OR_V2 = ("repo_version", [1, 2])
 
 
 @pytest.mark.slow
@@ -404,16 +403,12 @@ def test_import_replace_existing_with_column_renames(
             assert new_feature_tree == old_feature_tree
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_init_import_table_ogr_types(
-    data_archive_readonly, tmp_path, cli_runner, repo_version
-):
+def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):
     with data_archive_readonly("gpkg-types") as data:
         repo_path = tmp_path / "repo"
         r = cli_runner.invoke(
             [
                 "init",
-                f"--repo-version={repo_version}",
                 "--import",
                 data / "types.gpkg",
                 str(repo_path),
@@ -530,7 +525,6 @@ def test_init_import_table_ogr_types(
 
 @pytest.mark.slow
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_init_import(
     archive,
     gpkg,
@@ -540,10 +534,8 @@ def test_init_import(
     cli_runner,
     chdir,
     geopackage,
-    repo_version,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    state_table = "gpkg_sno_state" if repo_version == 2 else ".sno-meta"
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "data.sno"
@@ -555,7 +547,6 @@ def test_init_import(
                 "--import",
                 f"gpkg:{data / gpkg}",
                 str(repo_path),
-                f"--repo-version={repo_version}",
             ]
         )
         assert r.exit_code == 0, r
@@ -576,7 +567,7 @@ def test_init_import(
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.repository.version"] == str(repo_version)
+        assert repo.config["sno.repository.version"] == "2"
         assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
         db = geopackage(wc)
@@ -585,7 +576,7 @@ def test_init_import(
         wc_tree_id = (
             db.cursor()
             .execute(
-                f"""SELECT value FROM "{state_table}" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )
@@ -928,7 +919,7 @@ def test_import_existing_wc(
         with db:
             dbcur = db.cursor()
             dbcur.execute(
-                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+                """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
             )
             wc_tree_id = dbcur.fetchone()[0]
         assert wc_tree_id == head_tree.hex
@@ -962,7 +953,7 @@ def test_import_existing_wc(
         with db:
             dbcur = db.cursor()
             dbcur.execute(
-                """SELECT value FROM ".sno-meta" WHERE table_name='*' AND key='tree';"""
+                """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
             )
             wc_tree_id = dbcur.fetchone()[0]
         assert wc_tree_id == head_tree.hex

@@ -1,23 +1,14 @@
 import json
+from pathlib import Path
 import pytest
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
-@pytest.mark.parametrize(
-    "archive_name",
-    [
-        pytest.param(
-            "points",
-            id="1",
-        ),
-        pytest.param("points2", id="2"),
-    ],
-)
-def test_data_ls(archive_name, output_format, data_archive_readonly, cli_runner):
+def test_data_ls(output_format, data_archive_readonly, cli_runner):
     # All datasets now support getting metadata in either V1 or V2 format,
     # but if you don't specify a particular item, they will show all V2 items -
     # these are more self-explanatory to an end-user.
-    with data_archive_readonly(archive_name):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["data", "ls", "-o", output_format])
         assert r.exit_code == 0, r
         if output_format == "text":
@@ -28,10 +19,9 @@ def test_data_ls(archive_name, output_format, data_archive_readonly, cli_runner)
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
-@pytest.mark.parametrize("repo_version", [1, 2])
-def test_data_ls_empty(repo_version, output_format, tmp_path, cli_runner, chdir):
+def test_data_ls_empty(output_format, tmp_path, cli_runner, chdir):
     repo_path = tmp_path / "emptydir"
-    r = cli_runner.invoke(["init", repo_path, "--repo-version", repo_version])
+    r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0
     with chdir(repo_path):
         r = cli_runner.invoke(["data", "ls", "-o", output_format])
@@ -47,7 +37,7 @@ def test_data_ls_empty(repo_version, output_format, tmp_path, cli_runner, chdir)
 
 
 def test_data_ls_with_ref(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points2"):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["data", "ls", "-o", "json", "HEAD^"])
         assert r.exit_code == 0, r
 
@@ -56,19 +46,15 @@ def test_data_ls_with_ref(data_archive_readonly, cli_runner):
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
-@pytest.mark.parametrize(
-    "archive_name",
-    [
-        pytest.param(
-            "points",
-            id="1",
-        ),
-        pytest.param("points2", id="2"),
-    ],
-)
-def test_data_version(archive_name, output_format, data_archive_readonly, cli_runner):
-    version = 2 if archive_name.endswith("2") else 1
-    with data_archive_readonly(archive_name):
+@pytest.mark.parametrize("version", (0, 1, 2))
+def test_data_version(version, output_format, data_archive_readonly, cli_runner):
+    archive_paths = {
+        0: Path("upgrade") / "v0" / "points0.snow.tgz",
+        1: Path("upgrade") / "v1" / "points.tgz",
+        2: Path("points.tgz"),
+    }
+
+    with data_archive_readonly(archive_paths[version]):
         r = cli_runner.invoke(["data", "version", "-o", output_format])
         assert r.exit_code == 0, r
         if output_format == "text":

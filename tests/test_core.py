@@ -23,30 +23,50 @@ def test_walk_tree_1(data_archive):
                 assert path == "root"
                 assert tree == root_tree
                 assert dirs == ["nz_pa_points_topo_150k"]
-                assert blobs == []
+                assert blobs == [".sno.repository.version"]
             elif i == 1:
                 assert path == "/".join(["root", "nz_pa_points_topo_150k"])
                 assert tree == (root_tree / "nz_pa_points_topo_150k")
                 assert dirs == [
-                    ".sno-table",
+                    ".sno-dataset",
                 ]
                 assert blobs == []
             elif i == 2:
                 assert path == "/".join(
-                    ["root", "nz_pa_points_topo_150k", ".sno-table"]
+                    ["root", "nz_pa_points_topo_150k", ".sno-dataset"]
                 )
-                assert tree == (root_tree / "nz_pa_points_topo_150k" / ".sno-table")
-                assert set(dirs) == set(["meta"] + [f"{x:02x}" for x in range(256)])
-                assert blobs == []
-            elif i == 4:
+                assert tree == (root_tree / "nz_pa_points_topo_150k" / ".sno-dataset")
+                assert set(dirs) == set(["meta", "feature"])
+            elif i == 3:
                 assert path == "/".join(
-                    ["root", "nz_pa_points_topo_150k", ".sno-table", "00", "0e"]
+                    ["root", "nz_pa_points_topo_150k", ".sno-dataset", "feature"]
                 )
                 assert tree == (
-                    root_tree / "nz_pa_points_topo_150k" / ".sno-table" / "00" / "0e"
+                    root_tree / "nz_pa_points_topo_150k" / ".sno-dataset" / "feature"
+                )
+                assert set(dirs) == set([f"{x:02x}" for x in range(256)])
+                assert blobs == []
+            elif i == 5:
+                assert path == "/".join(
+                    [
+                        "root",
+                        "nz_pa_points_topo_150k",
+                        ".sno-dataset",
+                        "feature",
+                        "00",
+                        "01",
+                    ]
+                )
+                assert tree == (
+                    root_tree
+                    / "nz_pa_points_topo_150k"
+                    / ".sno-dataset"
+                    / "feature"
+                    / "00"
+                    / "01"
                 )
                 assert dirs == []
-                assert blobs == ["zQZR"]
+                assert blobs == ["kc0BMA=="]
 
         o = subprocess.check_output(["git", "ls-tree", "-r", "-d", "HEAD"])
         count = len(o.splitlines())
@@ -65,10 +85,10 @@ def test_walk_tree_2(data_archive):
                 assert tree == root_tree
                 assert path == ""
                 assert dirs == ["nz_pa_points_topo_150k"]
-                assert blobs == []
+                assert blobs == [".sno.repository.version"]
             elif i == 2:
-                assert tree == (root_tree / "nz_pa_points_topo_150k" / ".sno-table")
-                assert path == "/".join(["nz_pa_points_topo_150k", ".sno-table"])
+                assert tree == (root_tree / "nz_pa_points_topo_150k" / ".sno-dataset")
+                assert path == "/".join(["nz_pa_points_topo_150k", ".sno-dataset"])
                 assert "meta" in dirs
                 assert blobs == []
 
@@ -76,25 +96,19 @@ def test_walk_tree_2(data_archive):
                 dirs[:] = ["meta"]
             elif i == 3:
                 assert tree == (
-                    root_tree / "nz_pa_points_topo_150k" / ".sno-table" / "meta"
+                    root_tree / "nz_pa_points_topo_150k" / ".sno-dataset" / "meta"
                 )
                 assert path == "/".join(
-                    ["nz_pa_points_topo_150k", ".sno-table", "meta"]
+                    ["nz_pa_points_topo_150k", ".sno-dataset", "meta"]
                 )
-                assert dirs == ["fields"]
-                assert blobs == [
-                    "gpkg_contents",
-                    "gpkg_geometry_columns",
-                    "gpkg_metadata",
-                    "gpkg_metadata_reference",
-                    "gpkg_spatial_ref_sys",
-                    "primary_key",
-                    "sqlite_table_info",
-                    "version",
-                ]
+                assert dirs == ["crs", "legend", "metadata"]
+                assert blobs == ["description", "schema.json", "title"]
 
             path_list.append(path)
-            path_list += ["/".join([path, b]) for b in blobs]
+            if path:
+                path_list += ["/".join([path, b]) for b in blobs]
+            else:
+                path_list += blobs
 
         o = subprocess.check_output(
             [
@@ -103,7 +117,8 @@ def test_walk_tree_2(data_archive):
                 "-r",
                 "-t",
                 "HEAD",
-                "nz_pa_points_topo_150k/.sno-table/meta",
+                ".sno.repository.version",
+                "nz_pa_points_topo_150k/.sno-dataset/meta",
             ]
         )
         git_paths = [""] + [
@@ -128,54 +143,93 @@ def test_walk_tree_3(data_archive):
             print(i, tree, path, dirs, blobs)
             if i == 0:
                 assert path == "/".join(
-                    ["root", "nz_pa_points_topo_150k", ".sno-table", "00", "0e"]
+                    [
+                        "root",
+                        "nz_pa_points_topo_150k",
+                        ".sno-dataset",
+                        "feature",
+                        "00",
+                        "01",
+                    ]
                 )
                 assert tree == (
-                    root_tree / "nz_pa_points_topo_150k" / ".sno-table" / "00" / "0e"
+                    root_tree
+                    / "nz_pa_points_topo_150k"
+                    / ".sno-dataset"
+                    / "feature"
+                    / "00"
+                    / "01"
                 )
                 assert dirs == []
-                assert blobs == ["zQZR"]
-            elif i == 13:
+                assert blobs == ["kc0BMA=="]
+            elif i == 12:
                 assert path == "/".join(
-                    ["root", "nz_pa_points_topo_150k", ".sno-table", "00"]
+                    ["root", "nz_pa_points_topo_150k", ".sno-dataset", "feature", "00"]
                 )
                 assert tree == (
-                    root_tree / "nz_pa_points_topo_150k" / ".sno-table" / "00"
+                    root_tree
+                    / "nz_pa_points_topo_150k"
+                    / ".sno-dataset"
+                    / "feature"
+                    / "00"
                 )
                 assert dirs == [
-                    "0e",
-                    "22",
-                    "28",
-                    "68",
-                    "7c",
-                    "87",
-                    "a5",
-                    "cb",
-                    "e1",
-                    "e4",
-                    "f1",
-                    "f7",
-                    "fb",
+                    "01",
+                    "09",
+                    "20",
+                    "21",
+                    "34",
+                    "4e",
+                    "6c",
+                    "81",
+                    "85",
+                    "a8",
+                    "af",
+                    "bb",
                 ]
                 assert blobs == []
-            elif i == 14:
+            elif i == 13:
                 assert path == "/".join(
-                    ["root", "nz_pa_points_topo_150k", ".sno-table", "01", "00"]
+                    [
+                        "root",
+                        "nz_pa_points_topo_150k",
+                        ".sno-dataset",
+                        "feature",
+                        "01",
+                        "15",
+                    ]
                 )
                 assert tree == (
-                    root_tree / "nz_pa_points_topo_150k" / ".sno-table" / "01" / "00"
+                    root_tree
+                    / "nz_pa_points_topo_150k"
+                    / ".sno-dataset"
+                    / "feature"
+                    / "01"
+                    / "15"
                 )
                 assert dirs == []
-                assert blobs == ["zQbL"]
+                assert blobs == ["kc0Ekg==", "kc0GZw=="]
             elif i == 22:
                 assert path == "/".join(
-                    ["root", "nz_pa_points_topo_150k", ".sno-table", "02", "58"]
+                    [
+                        "root",
+                        "nz_pa_points_topo_150k",
+                        ".sno-dataset",
+                        "feature",
+                        "02",
+                        "70",
+                    ]
                 )
                 assert tree == (
-                    root_tree / "nz_pa_points_topo_150k" / ".sno-table" / "02" / "58"
+                    root_tree
+                    / "nz_pa_points_topo_150k"
+                    / ".sno-dataset"
+                    / "feature"
+                    / "02"
+                    / "70"
                 )
                 assert dirs == []
-                assert blobs == ["zQX5", "zQee"]
+                assert blobs == ["kc0D0w=="]
 
         o = subprocess.check_output(["git", "ls-tree", "-r", "-d", "HEAD"])
         count = len(o.splitlines())

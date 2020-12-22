@@ -15,7 +15,6 @@ H = pytest.helpers.helpers()
 
 DIFF_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet", "html"]
 SHOW_OUTPUT_FORMATS = ["text", "json"]
-V1_OR_V2 = ("repo_version", [1, 2])
 
 
 def _check_html_output(s):
@@ -31,13 +30,9 @@ def _check_html_output(s):
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_diff_points(
-    repo_version, output_format, data_working_copy, geopackage, cli_runner
-):
+def test_diff_points(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
-    data_archive = "points2" if repo_version == 2 else "points"
-    with data_working_copy(data_archive) as (repo, wc):
+    with data_working_copy("points") as (repo, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -264,13 +259,9 @@ def test_diff_points(
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_diff_reprojection(
-    repo_version, output_format, data_working_copy, geopackage, cli_runner
-):
+def test_diff_reprojection(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
-    data_archive = "points2" if repo_version == 2 else "points"
-    with data_working_copy(data_archive) as (repo, wc):
+    with data_working_copy("points") as (repo, wc):
         # make some changes
         db = geopackage(wc)
         with db:
@@ -332,7 +323,7 @@ def test_show_crs_with_aspatial_dataset(data_archive, cli_runner):
     """
     --crs should be ignored when used with aspatial data
     """
-    with data_archive("table2"):
+    with data_archive("table"):
         r = cli_runner.invoke(
             [
                 "show",
@@ -344,13 +335,9 @@ def test_show_crs_with_aspatial_dataset(data_archive, cli_runner):
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_diff_polygons(
-    repo_version, output_format, data_working_copy, geopackage, cli_runner
-):
+def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
-    data_archive = "polygons2" if repo_version == 2 else "polygons"
-    with data_working_copy(data_archive) as (repo, wc):
+    with data_working_copy("polygons") as (repo, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -681,13 +668,9 @@ def test_diff_polygons(
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_diff_table(
-    repo_version, output_format, data_working_copy, geopackage, cli_runner
-):
+def test_diff_table(output_format, data_working_copy, geopackage, cli_runner):
     """ diff the working copy against HEAD """
-    data_archive = "table2" if repo_version == 2 else "table"
-    with data_working_copy(data_archive) as (repo, wc):
+    with data_working_copy("table") as (repo, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -1114,8 +1097,8 @@ def test_diff_rev_wc(data_working_copy, geopackage, cli_runner):
 
     # Columns: id,value
 
-    R0 = "c4ee0b7c540492bcaff2b27aa5c22a4b08e47d13"
-    R1 = "020da410459f08b69cbad4233c40a6b05706bda0"  # HEAD
+    R0 = "075b0cf1414d71a6edbcdb4f05da93e1083ccdc2"
+    R1 = "c9d8c52ec9e8b1260aec153958954c880573e24a"  # HEAD
 
     with data_working_copy("editing") as (repo, wc):
         # empty HEAD -> no working copy changes
@@ -1357,15 +1340,11 @@ def test_diff_3way(data_working_copy, geopackage, cli_runner, insert, request):
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_show_points_HEAD(
-    repo_version, output_format, data_archive_readonly, cli_runner
-):
+def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
     """
     Show a patch; ref defaults to HEAD
     """
-    data_archive = "points2" if repo_version == 2 else "points"
-    with data_archive_readonly(data_archive):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["show", f"--output-format={output_format}", "HEAD"])
         assert r.exit_code == 0, r.stderr
 
@@ -1432,10 +1411,8 @@ def test_show_points_HEAD(
             }
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_diff_filtered(repo_version, data_archive_readonly, cli_runner):
-    data_archive = "points2" if repo_version == 2 else "points"
-    with data_archive_readonly(data_archive):
+def test_diff_filtered(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["diff", "HEAD^...", "nz_pa_points_topo_150k:1182"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
@@ -1451,10 +1428,7 @@ def test_diff_filtered(repo_version, data_archive_readonly, cli_runner):
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_show_polygons_initial(
-    repo_version, output_format, data_archive_readonly, cli_runner
-):
+def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner):
     """Make sure we can show the initial commit"""
     with data_archive_readonly("polygons"):
         r = cli_runner.invoke(["log"])
@@ -1470,7 +1444,7 @@ def test_show_polygons_initial(
             lines = r.stdout.splitlines()
 
             assert lines[0:6] == [
-                "commit 1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec",
+                "commit a149557b7cec7a35c07a9bc404a5d53f6c5ad154",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Mon Jul 22 12:05:39 2019 +0100",
                 "",
@@ -1527,13 +1501,11 @@ def test_show_json_coloured(data_archive_readonly, cli_runner, monkeypatch):
         assert '"sno.diff/v1+hexwkb"' in r.stdout
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_create_patch(repo_version, data_archive_readonly, cli_runner):
+def test_create_patch(data_archive_readonly, cli_runner):
     """
     Show a patch; ref defaults to HEAD
     """
-    data_archive = "points2" if repo_version == 2 else "points"
-    with data_archive_readonly(data_archive):
+    with data_archive_readonly("points"):
         r = cli_runner.invoke(["create-patch"])
         assert r.exit_code == 2, r.stderr
         r = cli_runner.invoke(["create-patch", "HEAD"])
@@ -1564,12 +1536,10 @@ def test_show_shallow_clone(data_archive_readonly, cli_runner, tmp_path, chdir):
             assert r.exit_code == 0, r
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_diff_streaming(repo_version, data_archive_readonly):
+def test_diff_streaming(data_archive_readonly):
     # Test that a diff can be created without reading every feature,
     # and that the features in that diff can be read one by one.
-    data_archive = "points2" if repo_version == 2 else "points"
-    with data_archive_readonly(data_archive) as repo_path:
+    with data_archive_readonly("points") as repo_path:
         repo = SnoRepo(repo_path)
         old = repo.datasets("HEAD^")[H.POINTS.LAYER]
         new = repo.datasets("HEAD")[H.POINTS.LAYER]
