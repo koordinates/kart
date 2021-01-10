@@ -340,7 +340,7 @@ build-Linux:
 		-v /build \
 		-e CCACHE_DIR=/root/.cache/ccache \
 		-e CCACHE_COMPRESS \
-		pyca/cryptography-manylinux2010:x86_64 \
+		ghcr.io/pyca/cryptography-manylinux2010:x86_64 \
 		bash -c '/src/build-manylinux.sh /src/$(VENDOR) ${LINUX_DEBUG_CMD_$(LINUX_DEBUG)}'
 
 	tar czf $(vendor-Linux-archive) -C $(VENDOR) env wheelhouse
