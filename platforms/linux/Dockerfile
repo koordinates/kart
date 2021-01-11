@@ -1,5 +1,5 @@
 # syntax = docker/dockerfile:experimental
-FROM pyca/cryptography-manylinux2010:x86_64
+FROM ghcr.io/pyca/cryptography-manylinux2010:x86_64
 
 ENV PATH=/opt/python/cp37-cp37m/bin:${PATH}
 
