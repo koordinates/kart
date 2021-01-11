@@ -138,7 +138,7 @@ jobs:
         run: |
           brew update-reset
           sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
-          brew install ccache pkg-config sqlite3
+          brew install --force ccache pkg-config sqlite3 pandoc
           brew install --force --cask Packages
 
       - name: "vendor: ccache"
