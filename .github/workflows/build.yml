@@ -136,6 +136,7 @@ jobs:
       - name: "🍎 prerequisites"
         if: runner.os == 'macOS'
         run: |
+          brew uninstall --force php
           brew update-reset
           sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
           brew install --force ccache pkg-config sqlite3 pandoc
