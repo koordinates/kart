@@ -17,8 +17,9 @@ from .exceptions import (
     InvalidOperation,
     NotFound,
     NO_REPOSITORY,
+    UNSUPPORTED_VERSION,
 )
-from .repo_version import REPO_VERSIONS, get_repo_version
+from .repo_version import LATEST_REPO_VERSION, LATEST_DATASET_CLASS, get_repo_version
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
 from .working_copy import WorkingCopy
@@ -152,7 +153,7 @@ class SnoRepo(pygit2.Repository):
             self.validate_sno_repo_style()
 
     @classmethod
-    def init_repository(cls, repo_root_path, repo_version, wc_path=None, bare=False):
+    def init_repository(cls, repo_root_path, wc_path=None, bare=False):
         """
         Initialise a new sno repo. A sno repo is basically a git repo, except -
         - git internals are stored in .sno instead of .git
@@ -195,7 +196,7 @@ class SnoRepo(pygit2.Repository):
             )
             sno_repo.lock_git_index()
 
-        sno_repo.write_config(repo_version, wc_path, bare)
+        sno_repo.write_config(wc_path, bare)
         sno_repo.write_readme()
         sno_repo.activate()
         return sno_repo
@@ -241,7 +242,7 @@ class SnoRepo(pygit2.Repository):
             )
             sno_repo.lock_git_index()
 
-        sno_repo.write_config(get_repo_version(sno_repo), wc_path, bare)
+        sno_repo.write_config(wc_path, bare)
         sno_repo.write_readme()
         sno_repo.activate()
         return sno_repo
@@ -265,22 +266,26 @@ class SnoRepo(pygit2.Repository):
 
     def write_config(
         self,
-        repo_version,
         wc_path=None,
         bare=False,
     ):
-        repo_version = int(repo_version)
-        if repo_version not in REPO_VERSIONS:
-            raise click.UsageError(f"Unknown sno repo version {repo_version}")
         # Bare-style sno repos are always implemented as bare git repos:
         if self.is_bare_style_sno_repo():
             self.config["core.bare"] = True
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
         # Write sno repo version to config:
-        self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(repo_version)
+        self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(LATEST_REPO_VERSION)
         # Write working copy config:
         WorkingCopy.write_config(self, wc_path, bare)
+
+    def ensure_latest_version(self):
+        if self.version != LATEST_REPO_VERSION:
+            raise InvalidOperation(
+                f"This Sno repo uses Datasets v{self.version}, which is no longer supported.\n"
+                f"The latest version is v{LATEST_REPO_VERSION}. Use `sno upgrade SOURCE DEST` to upgrade this repo.",
+                exit_code=UNSUPPORTED_VERSION,
+            )
 
     def write_readme(self):
         try:
@@ -386,7 +391,8 @@ class SnoRepo(pygit2.Repository):
     @functools.lru_cache()
     def structure(self, refish="HEAD"):
         """Get the structure of this Sno repository at a particular revision."""
-        return RepoStructure(self, refish)
+        self.ensure_latest_version()
+        return RepoStructure(self, refish, dataset_class=LATEST_DATASET_CLASS)
 
     def datasets(self, refish="HEAD"):
         """

@@ -45,6 +45,7 @@ class Context(object):
 
     def get_repo(
         self,
+        allow_legacy_versions=False,
         allowed_states=SnoRepoState.NORMAL,
         bad_state_message=None,
         command_extra=None,
@@ -66,6 +67,9 @@ class Context(object):
                     param_hint = None
 
                 raise NotFound(message, exit_code=NO_REPOSITORY, param_hint=param_hint)
+
+        if not allow_legacy_versions:
+            self._repo.ensure_latest_version()
 
         state = self._repo.state
         state_is_allowed = (

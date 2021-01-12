@@ -4,7 +4,6 @@ from collections import deque
 import click
 import pygit2
 
-from .base_dataset import BaseDataset
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -79,26 +78,26 @@ class RepoStructure:
             pass
         return commit, tree
 
-    def __init__(self, repo, refish, version=None, dataset_class=None):
+    def __init__(
+        self,
+        repo,
+        refish,
+        dataset_class,
+    ):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
         self.ref, self.commit, self.tree = RepoStructure.resolve_refish(repo, refish)
 
-        self.version = version if version is not None else repo.version
-
-        self.dataset_class = (
-            dataset_class
-            if dataset_class is not None
-            else BaseDataset.for_version(self.version)
-        )
+        self.dataset_class = dataset_class
+        self.version = dataset_class.VERSION
         self.datasets = Datasets(self.tree, self.dataset_class)
 
     def __eq__(self, other):
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
 
     def __repr__(self):
-        name = f"RepoStructureV{self.version}"
+        name = f"RepoStructure"
         if self.ref is not None:
             return f"{name}<{self.repo.path}@{self.ref}={self.commit.id}>"
         elif self.commit is not None:
@@ -142,7 +141,6 @@ class RepoStructure:
         from the same base revision.
         """
         tree_builder = RichTreeBuilder(self.repo, self.tree)
-        dataset_class = BaseDataset.for_version(self.version)
 
         if not self.tree:
             # This is the first commit to this branch - we may need to add extra blobs
@@ -164,7 +162,7 @@ class RepoStructure:
                 continue
 
             if schema_delta and schema_delta.type == "insert":
-                dataset = dataset_class(tree=None, path=ds_path)
+                dataset = self.dataset_class(tree=None, path=ds_path)
             else:
                 dataset = self.datasets[ds_path]
 

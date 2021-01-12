@@ -19,7 +19,6 @@ import pytest
 import click
 from click.testing import CliRunner
 from sno.db_util import execute_insert_dict, changes_rowcount
-from sno.repo_version import DEFAULT_REPO_VERSION
 from sno.repo import SnoRepo
 from sno.working_copy import WorkingCopy
 
@@ -310,10 +309,10 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
     L = logging.getLogger("data_imported")
     incr = 0
 
-    def _data_imported(archive, source_gpkg, table, repo_version=DEFAULT_REPO_VERSION):
+    def _data_imported(archive, source_gpkg, table):
         nonlocal incr
 
-        params = [archive, source_gpkg, table, str(repo_version)]
+        params = [archive, source_gpkg, table]
         cache_key = f"data_imported~{'~'.join(params)}"
 
         repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
@@ -327,7 +326,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
             import_path.mkdir()
             with chdir(import_path):
-                r = cli_runner.invoke(["init", "--repo-version", repo_version])
+                r = cli_runner.invoke(["init"])
                 assert r.exit_code == 0, r
 
                 repo = SnoRepo(import_path)

@@ -15,10 +15,6 @@ from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import SnoRepo
-from .repo_version import (
-    REPO_VERSIONS_CHOICE,
-    REPO_VERSIONS_DEFAULT_CHOICE,
-)
 from .working_copy import WorkingCopy
 
 
@@ -316,12 +312,6 @@ def import_table(
     help="Commit message (when used with --import). By default this is auto-generated.",
 )
 @click.option(
-    "--repo-version",
-    type=REPO_VERSIONS_CHOICE,
-    default=REPO_VERSIONS_DEFAULT_CHOICE,
-    hidden=True,
-)
-@click.option(
     "--bare",
     is_flag=True,
     default=False,
@@ -345,7 +335,6 @@ def init(
     ctx,
     message,
     directory,
-    repo_version,
     import_from,
     do_checkout,
     bare,
@@ -379,7 +368,7 @@ def init(
         sources = [base_source.clone_for_table(t) for t in tables]
 
     # Create the repository
-    repo = SnoRepo.init_repository(repo_path, repo_version, wc_path, bare)
+    repo = SnoRepo.init_repository(repo_path, wc_path, bare)
 
     if import_from:
         fast_import_tables(

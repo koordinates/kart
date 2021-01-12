@@ -2,6 +2,7 @@ import json
 import pytest
 from pathlib import Path
 
+from sno.exceptions import UNSUPPORTED_VERSION
 from sno.repo import SnoRepo
 
 
@@ -20,6 +21,16 @@ H = pytest.helpers.helpers()
 def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir):
     archive_path = Path("upgrade") / "v0" / archive
     with data_archive_readonly(archive_path) as source_path:
+        r = cli_runner.invoke(["data", "version", "--output-format=json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {"sno.data.version": 0}
+
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == UNSUPPORTED_VERSION
+        assert (
+            "This Sno repo uses Datasets v0, which is no longer supported." in r.stderr
+        )
+
         r = cli_runner.invoke(["upgrade", source_path, tmp_path / "dest"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines()[-1] == "Upgrade complete"
@@ -56,9 +67,15 @@ def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir)
 def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path, chdir):
     archive_path = Path("upgrade") / "v1" / archive
     with data_archive_readonly(archive_path) as source_path:
-        r = cli_runner.invoke(["status", "--output-format=json"])
+        r = cli_runner.invoke(["data", "version", "--output-format=json"])
         assert r.exit_code == 0, r.stderr
-        src_branch = json.loads(r.stdout)["sno.status/v1"]["branch"]
+        assert json.loads(r.stdout) == {"sno.data.version": 1}
+
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == UNSUPPORTED_VERSION
+        assert (
+            "This Sno repo uses Datasets v1, which is no longer supported." in r.stderr
+        )
 
         r = cli_runner.invoke(["upgrade", source_path, tmp_path / "dest"])
         assert r.exit_code == 0, r.stderr
@@ -85,8 +102,6 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r
-        dest_branch = json.loads(r.stdout)["sno.status/v1"]["branch"]
-        assert dest_branch == src_branch
 
 
 def test_upgrade_to_tidy(data_archive, cli_runner, chdir):

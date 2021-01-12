@@ -6,8 +6,8 @@ from .import_source import ImportSource
 
 class BaseDataset(ImportSource):
     """
-    Common interface for all datasets - so far this is Dataset1, Dataset2 -
-    and even Dataset0 (but this is only supported for `sno upgrade`)
+    Common interface for all datasets - mainly Dataset2, but
+    there is also Dataset0 and Dataset1 used by `sno upgrade`.
     """
 
     # Constants that subclasses should generally define.
@@ -26,9 +26,7 @@ class BaseDataset(ImportSource):
         The tree can be None if this dataset hasn't yet been written to the repo.
         """
         if self.__class__ is BaseDataset:
-            raise TypeError(
-                "Cannot construct a BaseDataset - use a subclass (see BaseDataset.for_version)"
-            )
+            raise TypeError("Cannot construct a BaseDataset - you may want Dataset2")
 
         self.tree = tree
         self.path = path.strip("/")
@@ -37,19 +35,6 @@ class BaseDataset(ImportSource):
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.path}>"
-
-    @classmethod
-    def for_version(cls, version):
-        from .dataset1 import Dataset1
-        from .dataset2 import Dataset2
-
-        version = int(version)
-        if version == 1:
-            return Dataset1
-        elif version == 2:
-            return Dataset2
-
-        raise ValueError(f"No Dataset implementation found for version={version}")
 
     def default_dest_path(self):
         # ImportSource method - by default, a dataset should import with the same path it already has.

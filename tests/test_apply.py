@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import pytest
-from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY, NOT_YET_IMPLEMENTED
+from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
 from sno.repo import SnoRepo
 
 
