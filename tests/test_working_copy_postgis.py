@@ -26,9 +26,7 @@ H = pytest.helpers.helpers()
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
-@pytest.mark.parametrize("version", [1, 2])
 def test_checkout_workingcopy(
-    version,
     archive,
     table,
     commit_sha,
@@ -38,8 +36,6 @@ def test_checkout_workingcopy(
     new_postgis_db_schema,
 ):
     """ Checkout a working copy """
-    if version == "2":
-        archive += "2"
     with data_archive(archive) as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
@@ -119,9 +115,7 @@ def test_init_import(
     "archive,table,commit_sha",
     [
         pytest.param("points", H.POINTS.LAYER, H.POINTS.HEAD_SHA, id="points"),
-        pytest.param(
-            "polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons-pk"
-        ),
+        pytest.param("polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons"),
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
@@ -137,7 +131,7 @@ def test_commit_edits(
     edit_table,
 ):
     """ Checkout a working copy and make some edits """
-    with data_archive(f"{archive}2") as repo_path:
+    with data_archive(archive) as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
@@ -203,7 +197,7 @@ def test_commit_edits(
 
 
 def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
-    with data_archive("polygons2") as repo_path:
+    with data_archive("polygons") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
@@ -328,7 +322,7 @@ class SucceedAndRollback(Exception):
 
 
 def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
-    with data_archive("points2") as repo_path:
+    with data_archive("points") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
@@ -407,7 +401,7 @@ def test_approximated_types():
 
 
 def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
-    with data_archive("types2") as repo_path:
+    with data_archive("types") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 

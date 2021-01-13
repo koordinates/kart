@@ -1,5 +1,4 @@
 import json
-import os
 import re
 import shlex
 import time
@@ -32,9 +31,6 @@ def _count_tracking_table_changes(db, working_copy, layer):
     return change_count
 
 
-V1_OR_V2 = ("repo_version", [1, 2])
-
-
 @pytest.mark.parametrize(
     "partial",
     [pytest.param(False, id=""), pytest.param(True, id="partial")],
@@ -47,9 +43,7 @@ V1_OR_V2 = ("repo_version", [1, 2])
         pytest.param("table", H.TABLE.LAYER, id="table"),
     ],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_commit(
-    repo_version,
     archive,
     layer,
     partial,
@@ -62,9 +56,8 @@ def test_commit(
     edit_table,
 ):
     """ commit outstanding changes from the working copy """
-    versioned_archive = archive + "2" if repo_version == 2 else archive
 
-    with data_working_copy(versioned_archive) as (repo_dir, wc_path):
+    with data_working_copy(archive) as (repo_dir, wc_path):
         # empty
         r = cli_runner.invoke(["commit", "-m", "test-commit-empty"])
         assert r.exit_code == NO_CHANGES, r
@@ -236,7 +229,7 @@ def test_commit_message(
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
         r = cli_runner.invoke(["commit"])
         assert r.exit_code == 0, r
-        editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
+        editmsg_path = str(repo.gitdir_file("COMMIT_EDITMSG"))
         assert re.match(
             rf'{fallback_editor()} "?{re.escape(editmsg_path)}"?$', editor_cmd
         )
@@ -264,7 +257,7 @@ def test_commit_message(
         editor_out = "sqwark 🐧\n"
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == 0, r
-        editmsg_path = f"{repo_dir}{os.sep}COMMIT_EDITMSG"
+        editmsg_path = str(repo.gitdir_file("COMMIT_EDITMSG"))
         assert re.match(
             rf'/path/to/some/editor -abc "?{re.escape(editmsg_path)}"?$', editor_cmd
         )
@@ -327,7 +320,7 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
 
 
 def test_commit_schema_violation(cli_runner, data_working_copy, geopackage):
-    with data_working_copy("points2") as (repo_dir, wc_path):
+    with data_working_copy("points") as (repo_dir, wc_path):
         db = geopackage(wc_path)
         with db:
             dbcur = db.cursor()

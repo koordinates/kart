@@ -210,7 +210,7 @@ DIFF_OUTPUT_FORMATS = ["text", "geojson", "json"]
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_edit_schema_points(output_format, data_working_copy, geopackage, cli_runner):
-    with data_working_copy("points2") as (repo, wc_path):
+    with data_working_copy("points") as (repo, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=text", "--exit-code"])
         assert r.exit_code == 0, r
@@ -239,7 +239,7 @@ def test_edit_schema_points(output_format, data_working_copy, geopackage, cli_ru
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_edit_schema_polygons(output_format, data_working_copy, geopackage, cli_runner):
-    with data_working_copy("polygons2") as (repo, wc_path):
+    with data_working_copy("polygons") as (repo, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
         assert r.exit_code == 0, r
@@ -268,7 +268,7 @@ def test_edit_schema_polygons(output_format, data_working_copy, geopackage, cli_
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_edit_schema_table(output_format, data_working_copy, geopackage, cli_runner):
-    with data_working_copy("table2") as (repo, wc_path):
+    with data_working_copy("table") as (repo, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
         assert r.exit_code == 0, r
@@ -351,7 +351,7 @@ def check_points_diff_output(r, output_format):
             '      "length": 75',
             "    },",
             "+   {",
-            '+     "id": "74853a9a-83b1-2b4d-5a70-fc678161d470",',
+            '+     "id": "28c65b9a-2cd2-5507-a5b1-b3267c513fc3",',
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "length": 32',
@@ -463,7 +463,7 @@ def check_points_diff_output(r, output_format):
                                 },
                                 {
                                     "dataType": "text",
-                                    "id": "74853a9a-83b1-2b4d-5a70-fc678161d470",
+                                    "id": "28c65b9a-2cd2-5507-a5b1-b3267c513fc3",
                                     "length": 32,
                                     "name": "colour",
                                 },
@@ -652,7 +652,7 @@ def check_polygons_diff_output(r, output_format):
             '      "size": 32',
             "    },",
             "+   {",
-            '+     "id": "4f3f4df1-c5a9-a768-f14d-9c3d001f5141",',
+            '+     "id": "50851f24-296b-89a9-56b1-b474bf9474fb",',
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "length": 32',
@@ -749,7 +749,7 @@ def check_polygons_diff_output(r, output_format):
                                 },
                                 {
                                     "dataType": "text",
-                                    "id": "4f3f4df1-c5a9-a768-f14d-9c3d001f5141",
+                                    "id": "50851f24-296b-89a9-56b1-b474bf9474fb",
                                     "length": 32,
                                     "name": "colour",
                                 },

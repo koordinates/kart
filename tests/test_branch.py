@@ -39,8 +39,8 @@ def test_branches(
                 "current": "master",
                 "branches": {
                     "master": {
-                        "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
-                        "abbrevCommit": "2a1b7be",
+                        "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                        "abbrevCommit": "0c64d82",
                         "branch": "master",
                         "upstream": None,
                     }
@@ -51,14 +51,14 @@ def test_branches(
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
 
-        assert text_branches(cli_runner) == ["* (HEAD detached at 63a9492)", "  master"]
+        assert text_branches(cli_runner) == ["* (HEAD detached at 7bc3b56)", "  master"]
         assert json_branches(cli_runner) == {
             "sno.branch/v1": {
                 "current": None,
                 "branches": {
                     "master": {
-                        "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
-                        "abbrevCommit": "2a1b7be",
+                        "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                        "abbrevCommit": "0c64d82",
                         "branch": "master",
                         "upstream": None,
                     }

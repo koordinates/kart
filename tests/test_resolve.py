@@ -9,8 +9,6 @@ from sno.repo import SnoRepoState
 
 H = pytest.helpers.helpers()
 
-V1_OR_V2 = ("repo_version", [1, 2])
-
 
 def get_conflict_ids(cli_runner):
     r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
@@ -35,9 +33,8 @@ def get_json_feature(rs, layer, pk):
         return None
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
-    with create_conflicts(H.POLYGONS, repo_version) as repo:
+def test_resolve_with_version(create_conflicts, cli_runner):
+    with create_conflicts(H.POLYGONS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
@@ -78,7 +75,7 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         assert len(conflict_ids) == 0
 
         merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 236 if repo_version == 2 else 242
+        assert len(merge_index.entries) == 236
         assert len(merge_index.conflicts) == 4
         assert len(merge_index.resolves) == 4
 
@@ -108,9 +105,8 @@ def test_resolve_with_version(repo_version, create_conflicts, cli_runner):
         assert get_json_feature(merged, l, pk3) is None
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
-    with create_conflicts(H.POLYGONS, repo_version) as repo:
+def test_resolve_with_file(create_conflicts, cli_runner):
+    with create_conflicts(H.POLYGONS) as repo:
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r.stderr
         ours_geojson = json.loads(r.stdout)["features"][0]
@@ -155,7 +151,7 @@ def test_resolve_with_file(repo_version, create_conflicts, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 236 if repo_version == 2 else 242
+        assert len(merge_index.entries) == 236
         assert len(merge_index.conflicts) == 4
         assert len(merge_index.resolves) == 1
 

@@ -15,8 +15,6 @@ from sno.repo import SnoRepo, SnoRepoState
 
 H = pytest.helpers.helpers()
 
-V1_OR_V2 = ("repo_version", [1, 2])
-
 
 @pytest.mark.parametrize(
     "data",
@@ -32,12 +30,10 @@ V1_OR_V2 = ("repo_version", [1, 2])
         pytest.param(H.TABLE, id="table"),
     ],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_fastforward(
-    repo_version, data, data_working_copy, geopackage, cli_runner, insert, request
+    data, data_working_copy, geopackage, cli_runner, insert, request
 ):
-    archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
-    with data_working_copy(archive) as (repo_path, wc):
+    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
         repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -85,9 +81,7 @@ def test_merge_fastforward(
         pytest.param(H.TABLE, id="table"),
     ],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_fastforward_noff(
-    repo_version,
     data,
     data_working_copy,
     geopackage,
@@ -96,8 +90,7 @@ def test_merge_fastforward_noff(
     request,
     disable_editor,
 ):
-    archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
-    with data_working_copy(archive) as (repo_path, wc):
+    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
         repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -150,9 +143,7 @@ def test_merge_fastforward_noff(
         pytest.param(H.TABLE, id="table"),
     ],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_true(
-    repo_version,
     data,
     data_working_copy,
     geopackage,
@@ -161,8 +152,7 @@ def test_merge_true(
     request,
     disable_editor,
 ):
-    archive = f"{data.ARCHIVE}2" if repo_version == 2 else data.ARCHIVE
-    with data_working_copy(archive) as (repo_path, wc):
+    with data_working_copy(data.ARCHIVE) as (repo_path, wc):
         repo = SnoRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -238,16 +228,14 @@ def test_merge_true(
     "dry_run",
     [pytest.param(False, id=""), pytest.param(True, id="dryrun")],
 )
-@pytest.mark.parametrize(*V1_OR_V2)
 def test_merge_conflicts(
-    repo_version,
     data,
     output_format,
     dry_run,
     create_conflicts,
     cli_runner,
 ):
-    with create_conflicts(data, repo_version) as repo:
+    with create_conflicts(data) as repo:
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
@@ -330,9 +318,8 @@ def test_merge_conflicts(
             assert not repo.gitdir_file(filename).exists()
 
 
-@pytest.mark.parametrize(*V1_OR_V2)
-def test_merge_state_lock(repo_version, create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS, repo_version) as repo:
+def test_merge_state_lock(create_conflicts, cli_runner):
+    with create_conflicts(H.POINTS) as repo:
         # Repo state: normal
         # sno checkout works, but sno conflicts and sno resolve do not.
         assert repo.state == SnoRepoState.NORMAL

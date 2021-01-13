@@ -47,8 +47,11 @@ vendor/Brewfile.lock.json
 /platforms/linux/sqlite3
 
 /tests/data/*/
-!/tests/data/patches
 /tests/data/*.zip
+!/tests/data/patches
+!/tests/data/upgrade
+/tests/data/upgrade/v0/*/
+/tests/data/upgrade/v1/*/
 /coverage
 pytest.xml
 .coverage

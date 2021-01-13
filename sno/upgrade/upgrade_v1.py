@@ -1,9 +1,174 @@
 from sno.geometry import normalise_gpkg_geom
-from sno.dataset1 import Dataset1
+
+import base64
+import functools
+import os
+import re
+
+import json
+import msgpack
+import pygit2
+
+from sno import gpkg_adapter
+from sno.geometry import Geometry
+from sno.base_dataset import BaseDataset
+from sno.serialise_util import json_unpack
 
 
-class UpgradeDataset1(Dataset1):
-    """Variation on Dataset1 specifically for upgrading to V2 and beyond."""
+class Dataset1(BaseDataset):
+    """
+    - messagePack
+    - primary key values
+    - blob per feature
+    - add at any location: `sno import GPKG:my.gpkg:mytable path/to/mylayer`
+
+    any/structure/mylayer/
+      .sno-table/
+        meta/
+          version      = {"version": "1.0"}
+          primary_key
+          fields/
+            [field]  # map to attribute-id
+            ...
+        [hex(pk-hash):2]/
+          [hex(pk-hash):2]/
+            [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
+    """
+
+    VERSION = 1
+
+    DATASET_DIRNAME = ".sno-table"
+    DATASET_PATH = ".sno-table/"
+    FEATURE_PATH = DATASET_PATH
+    VERSION_PATH = ".sno-table/meta/version"
+    VERSION_CONTENTS = {"version": "1.0"}
+
+    MSGPACK_EXT_GEOM = 71  # 'G'
+    META_PATH = ".sno-table/meta/"
+
+    def _msgpack_unpack_ext(self, code, data):
+        if code == self.MSGPACK_EXT_GEOM:
+            return Geometry.of(data)  # bytes
+        else:
+            self.L.warn("Unexpected msgpack extension: %d", code)
+            return msgpack.ExtType(code, data)
+
+    @functools.lru_cache()
+    def get_gpkg_meta_item(self, name):
+        rel_path = self.META_PATH + name
+        data = self.get_data_at(
+            rel_path, missing_ok=gpkg_adapter.is_gpkg_meta_item(name)
+        )
+        if data is None:
+            return data
+
+        # Dataset 1 meta items are always JSON.
+        return json_unpack(data)
+
+    def meta_items(self):
+        return gpkg_adapter.all_v2_meta_items(self)
+
+    @functools.lru_cache()
+    def get_meta_item(self, name):
+        return gpkg_adapter.generate_v2_meta_item(self, name)
+
+    def crs_definitions(self):
+        return gpkg_adapter.all_v2_crs_definitions(self)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def feature_tree(self):
+        return self.tree
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def cid_field_map(self):
+        cid_map = {}
+        for te in self.meta_tree / "fields":
+            if not isinstance(te, pygit2.Blob):
+                self.L.warn(
+                    "cid_field_map: Unexpected TreeEntry type=%s @ meta/fields/%s",
+                    te.type_str,
+                    te.name,
+                )
+                continue
+
+            cid = json.loads(te.data)
+            field_name = te.name
+            cid_map[cid] = field_name
+        return cid_map
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def field_cid_map(self):
+        return {v: k for k, v in self.cid_field_map.items()}
+
+    def get_field_cid_map(self, source):
+        return {column.name: i for i, column in enumerate(source.schema)}
+
+    @property
+    def primary_key(self):
+        return self.get_gpkg_meta_item("primary_key")
+
+    @classmethod
+    def decode_path_to_1pk(cls, path):
+        encoded = os.path.basename(path)
+        return msgpack.unpackb(base64.urlsafe_b64decode(encoded), raw=False)
+
+    def get_feature(self, path, data):
+        feature = {
+            self.primary_key: self.decode_path_to_1pk(path),
+        }
+        bin_feature = msgpack.unpackb(
+            data,
+            ext_hook=self._msgpack_unpack_ext,
+            raw=False,
+        )
+        for colid, value in sorted(bin_feature.items()):
+            field_name = self.cid_field_map[colid]
+            feature[field_name] = value
+
+        return feature
+
+    def feature_blobs(self):
+        """
+        Yields all the blobs in self.tree that match the expected pattern for a feature.
+        """
+        if self.FEATURE_PATH not in self.tree:
+            return
+
+        feature_tree = self.tree / self.FEATURE_PATH
+
+        # .sno-table/
+        #   [hex(pk-hash):2]/
+        #     [hex(pk-hash):2]/
+        #       [base64(pk-value)]=[msgpack({attribute-id: attribute-value, ...})]
+        URLSAFE_B64 = r"A-Za-z0-9_\-"
+
+        RE_DIR = re.compile(r"([0-9a-f]{2})?$")
+        RE_LEAF = re.compile(
+            fr"(?:[{URLSAFE_B64}]{{4}})*(?:[{URLSAFE_B64}]{{2}}==|[{URLSAFE_B64}]{{3}}=)?$"
+        )
+
+        for dir1 in feature_tree:
+            if hasattr(dir1, "data") or not RE_DIR.match(dir1.name):
+                continue
+
+            for dir2 in dir1:
+                if hasattr(dir2, "data") or not RE_DIR.match(dir2.name):
+                    continue
+
+                for leaf in dir2:
+                    if not RE_LEAF.match(leaf.name):
+                        continue
+                    elif not hasattr(leaf, "data"):
+                        path = f".sno-table/{dir1.name}/{dir2.name}/{leaf.name}"
+                        self.L.warn(
+                            f"features: No data found at path {path}, type={type(leaf)}"
+                        )
+                        continue
+
+                    yield leaf
 
     def features(self):
         # Geometries weren't normalised in V1, but they are in V2.

@@ -48,8 +48,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
-                "abbrevCommit": "2a1b7be",
+                "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                "abbrevCommit": "0c64d82",
                 "branch": "master",
                 "upstream": None,
                 "workingCopy": {"path": str(wc), "changes": None},
@@ -60,14 +60,14 @@ def test_status(
         assert r.exit_code == 0, r
 
         assert text_status(cli_runner) == [
-            "HEAD detached at 63a9492",
+            "HEAD detached at 7bc3b56",
             "",
             "Nothing to commit, working copy clean",
         ]
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "commit": "63a9492dd785b1f04dfc446330fa017f9459db4f",
-                "abbrevCommit": "63a9492",
+                "commit": "7bc3b56f20d1559208bcf5bb56860dda6e190b70",
+                "abbrevCommit": "7bc3b56",
                 "branch": None,
                 "upstream": None,
                 "workingCopy": {"path": str(wc), "changes": None},
@@ -133,8 +133,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "sno.status/v1": {
-                "commit": "2a1b7be8bdef32aea1510668e3edccbc6d454852",
-                "abbrevCommit": "2a1b7be",
+                "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                "abbrevCommit": "0c64d82",
                 "branch": "master",
                 "upstream": {
                     "branch": "myremote/master",

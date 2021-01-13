@@ -7,6 +7,12 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.8.0 (UNRELEASED)
 
+### End of support for Datasets V1
+
+ * Backwards compatibility with Datasets V1 ends at Sno 0.8.0 - all Sno commands except `sno upgrade` will no longer work in a V1 repository. Since Datasets V2 has been the default since Sno 0.5.0, most users will be unaffected. Remaining V1 repositories can be upgraded to V2 using `sno upgrade EXISTING_REPO NEW_REPO`, and the ability to upgrade from V1 to V2 continues to be supported indefinitely. [#342](https://github.com/koordinates/sno/pull/342)
+
+### Other changes
+
  * Support for detecting features which have changed slightly during a re-import from a data source without a primary key, and reimporting them with the same primary key as last time so they show as edits as opposed to inserts. [#212](https://github.com/koordinates/sno/issues/212)
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
 

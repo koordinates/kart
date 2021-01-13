@@ -9,7 +9,7 @@ import apsw
 from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
-from sno.working_copy.gpkg import WorkingCopy_GPKG_1
+from sno.working_copy.gpkg import WorkingCopy_GPKG_2
 from sno.db_util import changes_rowcount, execute_insert_dict
 from test_working_copy import compute_approximated_types
 
@@ -21,23 +21,14 @@ H = pytest.helpers.helpers()
     "archive,table,commit_sha",
     [
         pytest.param("points", H.POINTS.LAYER, H.POINTS.HEAD_SHA, id="points"),
-        pytest.param(
-            "polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons-pk"
-        ),
+        pytest.param("polygons", H.POLYGONS.LAYER, H.POLYGONS.HEAD_SHA, id="polygons"),
         pytest.param("table", H.TABLE.LAYER, H.TABLE.HEAD_SHA, id="table"),
     ],
 )
-@pytest.mark.parametrize("version", [1, 2])
 def test_checkout_workingcopy(
-    version, archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
+    archive, table, commit_sha, data_archive, tmp_path, cli_runner, geopackage
 ):
     """ Checkout a working copy to edit """
-    if version == "2":
-        archive += "2"
-        sno_state_table = "gpkg_sno_state"
-    else:
-        sno_state_table = ".sno-meta"
-
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
 
@@ -62,7 +53,7 @@ def test_checkout_workingcopy(
         wc_tree_id = (
             db.cursor()
             .execute(
-                f"""SELECT value FROM "{sno_state_table}" WHERE table_name='*' AND key='tree';"""
+                f"""SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
             )
             .fetchone()[0]
         )
@@ -320,7 +311,7 @@ def test_switch_branch(data_working_copy, geopackage, cli_runner, tmp_path):
     "archive,layer",
     [
         pytest.param("points", H.POINTS.LAYER, id="points"),
-        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons-pk"),
+        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons"),
         pytest.param("table", H.TABLE.LAYER, id="table"),
     ],
 )
@@ -396,7 +387,7 @@ def test_working_copy_reset(
             )
             assert db.changes() == 1
 
-            cur.execute("""SELECT COUNT(*) FROM ".sno-track";""")
+            cur.execute("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
             change_count = cur.fetchone()[0]
             assert change_count == (1 + 4 + 5 + 2)
 
@@ -411,7 +402,7 @@ def test_working_copy_reset(
             r = cli_runner.invoke(["checkout", "HEAD"])
             assert r.exit_code == INVALID_OPERATION, r
 
-            cur.execute("""SELECT COUNT(*) FROM ".sno-track";""")
+            cur.execute("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
             change_count = cur.fetchone()[0]
             assert change_count == (1 + 4 + 5 + 2)
 
@@ -421,7 +412,7 @@ def test_working_copy_reset(
         else:
             raise NotImplementedError(f"via={via}")
 
-        cur.execute("""SELECT COUNT(*) FROM ".sno-track";""")
+        cur.execute("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
         change_count = cur.fetchone()[0]
         assert change_count == 0
 
@@ -458,7 +449,7 @@ def test_working_copy_reset(
 
 
 def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
-    with data_working_copy("points2") as (repo, wc):
+    with data_working_copy("points") as (repo, wc):
         db = geopackage(wc)
         cur = db.cursor()
         cur.execute(
@@ -493,7 +484,7 @@ def test_switch_with_meta_items(data_working_copy, geopackage, cli_runner):
 
 def test_switch_with_trivial_schema_change(data_working_copy, geopackage, cli_runner):
     # Column renames are one of the only schema changes we can do without having to recreate the whole table.
-    with data_working_copy("points2") as (repo, wc):
+    with data_working_copy("points") as (repo, wc):
         db = geopackage(wc)
         cur = db.cursor()
         cur.execute(
@@ -519,7 +510,7 @@ def test_switch_with_trivial_schema_change(data_working_copy, geopackage, cli_ru
 
 
 def test_switch_with_schema_change(data_working_copy, geopackage, cli_runner):
-    with data_working_copy("polygons2") as (repo, wc):
+    with data_working_copy("polygons") as (repo, wc):
         db = geopackage(wc)
         cur = db.cursor()
         cur.execute(f"""ALTER TABLE {H.POLYGONS.LAYER} ADD COLUMN colour TEXT""")
@@ -560,7 +551,7 @@ def test_switch_pre_import_post_import(
     repo_version, data_working_copy, data_archive_readonly, geopackage, cli_runner
 ):
     with data_archive_readonly("gpkg-au-census") as data:
-        data_wc_archive = "polygons2" if repo_version == 2 else "polygons"
+        data_wc_archive = "polygons" if repo_version == 2 else "polygons"
         with data_working_copy(data_wc_archive) as (repo, wc):
             r = cli_runner.invoke(
                 [
@@ -592,7 +583,7 @@ def test_switch_pre_import_post_import(
 
 
 def test_switch_xml_metadata_added(data_working_copy, geopackage, cli_runner):
-    with data_working_copy("table2") as (repo, wc):
+    with data_working_copy("table") as (repo, wc):
         db = geopackage(wc)
         cur = db.cursor()
         cur.execute(
@@ -644,7 +635,7 @@ def test_geopackage_locking_edit(
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = WorkingCopy_GPKG_1.write_features
+        orig_func = WorkingCopy_GPKG_2.write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -657,7 +648,7 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(WorkingCopy_GPKG_1, "write_features", _wrap)
+        monkeypatch.setattr(WorkingCopy_GPKG_2, "write_features", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r
@@ -771,10 +762,10 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             changes_pre = [
                 r[0]
                 for r in cur.execute(
-                    'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
+                    'SELECT pk FROM "gpkg_sno_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
-            # .sno-track stores pk as strings
+            # gpkg_sno_track stores pk as strings
             assert changes_pre == [
                 "1",
                 "2",
@@ -797,12 +788,12 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
         changes_post = [
             r[0]
             for r in cur.execute(
-                'SELECT pk FROM ".sno-track" ORDER BY CAST(pk AS INTEGER);'
+                'SELECT pk FROM "gpkg_sno_track" ORDER BY CAST(pk AS INTEGER);'
             )
         ]
 
         cur.execute(
-            f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';"""
+            f"""SELECT value FROM "gpkg_sno_state" WHERE key = 'tree' AND table_name='*';"""
         )
         head_sha = cur.fetchone()[0]
 
@@ -832,7 +823,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner, geopackage):
             print(f"E: Bad Tree? {head_sha}")
 
         cur.execute(
-            f"""SELECT value FROM ".sno-meta" WHERE key = 'tree' AND table_name='*';"""
+            f"""SELECT value FROM "gpkg_sno_state" WHERE key = 'tree' AND table_name='*';"""
         )
         head_sha = cur.fetchone()[0]
         if head_sha != new_commit:
@@ -923,7 +914,7 @@ def test_approximated_types():
 def test_types_roundtrip(data_working_copy, cli_runner):
     # If type-approximation roundtrip code isn't working,
     # we would get spurious diffs on types that GPKG doesn't support.
-    with data_working_copy("types2") as (repo_path, wc):
+    with data_working_copy("types") as (repo_path, wc):
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stdout
 
@@ -953,7 +944,7 @@ def _edit_string_pk_polygons(dbcur):
 
 
 def test_edit_string_pks(data_working_copy, cli_runner, geopackage, edit_polygons):
-    with data_working_copy("string-pks2") as (repo_path, wc):
+    with data_working_copy("string-pks") as (repo_path, wc):
         db = geopackage(wc)
         with db:
             cur = db.cursor()
@@ -987,7 +978,7 @@ def test_edit_string_pks(data_working_copy, cli_runner, geopackage, edit_polygon
 
 
 def test_reset_transaction(data_working_copy, cli_runner, geopackage, edit_points):
-    with data_working_copy("points2") as (repo_path, wc):
+    with data_working_copy("points") as (repo_path, wc):
         db = geopackage(wc)
         with db:
             cur = db.cursor()

@@ -19,7 +19,6 @@ import pytest
 import click
 from click.testing import CliRunner
 from sno.db_util import execute_insert_dict, changes_rowcount
-from sno.repo_version import DEFAULT_REPO_VERSION
 from sno.repo import SnoRepo
 from sno.working_copy import WorkingCopy
 
@@ -162,23 +161,25 @@ def cleanup_dir(d):
 
 
 def get_archive_path(name):
-    return Path(__file__).parent / "data" / f"{name}.tgz"
+    return Path(__file__).parent / "data" / Path(name).with_suffix(".tgz")
 
 
-def extract_archive(name, extract_dir):
-    archive_name = f"{name}.tgz"
-    archive_path = get_archive_path(name)
+def extract_archive(archive_path, extract_dir):
+    archive_path = get_archive_path(archive_path)
     with tarfile.open(archive_path) as archive:
         archive.extractall(extract_dir)
 
-    L.info("Extracted %s to %s", archive_name, extract_dir)
+    L.info("Extracted %s to %s", archive_path.name, extract_dir)
 
     # data archive should have a single dir at the top-level, matching the archive name.
+    top_dir = archive_path.stem
     assert (
         len(os.listdir(extract_dir)) == 1
-    ), f"Expected {name}/ as the only top-level item in {archive_name}"
-    d = extract_dir / name
-    assert d.is_dir(), f"Expected {name}/ as the only top-level item in {archive_name}"
+    ), f"Expected {top_dir}/ as the only top-level item in {archive_path.name}"
+    d = extract_dir / top_dir
+    assert (
+        d.is_dir()
+    ), f"Expected {top_dir}/ as the only top-level item in {archive_path.name}"
     return d
 
 
@@ -230,21 +231,23 @@ def data_archive_readonly(request, pytestconfig):
     """
 
     @contextlib.contextmanager
-    def ctx(name):
-        if name not in _archive_hashes:
+    def ctx(archive_path):
+        archive_path = get_archive_path(archive_path)
+        key = str(archive_path.relative_to(Path(__file__).parent))
+
+        if key not in _archive_hashes:
             # Store extracted data in a content-addressed cache,
             # so if the archives change we don't have to manually `pytest --cache-clear`
-            archive_path = get_archive_path(name)
             with archive_path.open("rb") as f:
-                _archive_hashes[name] = hashlib.md5(f.read()).hexdigest()
+                _archive_hashes[key] = hashlib.md5(f.read()).hexdigest()
 
         root = Path(request.config.cache.makedir("data_archive_readonly"))
-        path = root / _archive_hashes[name]
+        path = root / _archive_hashes[key]
         if path.exists():
             L.info("Found cache at %s", path)
         else:
-            extract_archive(name, path)
-        path /= name
+            extract_archive(archive_path, path)
+        path /= archive_path.stem
         with chdir_(path):
             yield path
 
@@ -262,13 +265,11 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
     incr = 0
 
     @contextlib.contextmanager
-    def _data_working_copy(name, force_new=False):
+    def _data_working_copy(archive_path, force_new=False):
         nonlocal incr
 
-        with data_archive(name) as repo_dir:
-            if name.endswith(".sno"):
-                name = name[:-5]
-
+        archive_path = get_archive_path(archive_path)
+        with data_archive(archive_path) as repo_dir:
             repo = SnoRepo(repo_dir)
             if repo.working_copy:
                 wc_path = repo.working_copy.full_path
@@ -281,7 +282,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
             if not repo.working_copy:
                 wc_path = (
                     tmp_path_factory.mktemp(request.node.name, str(incr))
-                    / f"{name}.gpkg"
+                    / archive_path.with_suffix(".gpkg").name
                 )
                 incr += 1
                 L.info("Creating working copy at %s", wc_path)
@@ -308,10 +309,10 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
     L = logging.getLogger("data_imported")
     incr = 0
 
-    def _data_imported(archive, source_gpkg, table, repo_version=DEFAULT_REPO_VERSION):
+    def _data_imported(archive, source_gpkg, table):
         nonlocal incr
 
-        params = [archive, source_gpkg, table, str(repo_version)]
+        params = [archive, source_gpkg, table]
         cache_key = f"data_imported~{'~'.join(params)}"
 
         repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
@@ -325,7 +326,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
 
             import_path.mkdir()
             with chdir(import_path):
-                r = cli_runner.invoke(["init", "--repo-version", repo_version])
+                r = cli_runner.invoke(["init"])
                 assert r.exit_code == 0, r
 
                 repo = SnoRepo(import_path)
@@ -471,10 +472,10 @@ class TestHelpers:
             "macronated": "N",
             "name": "Te Motu-a-kore",
         }
-        HEAD_SHA = "2a1b7be8bdef32aea1510668e3edccbc6d454852"
-        HEAD1_SHA = "63a9492dd785b1f04dfc446330fa017f9459db4f"
-        HEAD_TREE_SHA = "81f330e76b854e7448523307ff78bd6b83cadf21"
-        HEAD1_TREE_SHA = "007ee9ab7f00b70a4199120cb274753c28e8ab92"
+        HEAD_SHA = "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16"
+        HEAD1_SHA = "7bc3b56f20d1559208bcf5bb56860dda6e190b70"
+        HEAD_TREE_SHA = "a8fa3347aed53547b194fc2101974b79b7fc337b"
+        HEAD1_TREE_SHA = "8feb827cf21831cc4766345894cd122947bba748"
         ROWCOUNT = 2143
         TEXT_FIELD = "name"
         SAMPLE_PKS = list(range(1, 11))
@@ -497,7 +498,7 @@ class TestHelpers:
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
         }
-        HEAD_SHA = "1fb58eb54237c6e7bfcbd7ea65dc999a164b78ec"
+        HEAD_SHA = "a149557b7cec7a35c07a9bc404a5d53f6c5ad154"
         ROWCOUNT = 228
         TEXT_FIELD = "survey_reference"
         SAMPLE_PKS = [
@@ -538,7 +539,7 @@ class TestHelpers:
             "Shape_Leng": 4.055_459_982_439_92,
             "Shape_Area": 0.565_449_933_741_451,
         }
-        HEAD_SHA = "03622015ea5a82bc75228de052d9c84bc6f41667"
+        HEAD_SHA = "e3d4ad33461d1603098666052310cb330bc812b5"
         ROWCOUNT = 3141
         TEXT_FIELD = "NAME"
         SAMPLE_PKS = list(range(1, 11))
@@ -841,9 +842,8 @@ def create_conflicts(
     insert,
 ):
     @contextlib.contextmanager
-    def ctx(data, repo_version=1):
-        archive = f"{data.ARCHIVE}2" if int(repo_version) == 2 else data.ARCHIVE
-        with data_working_copy(archive) as (repo_path, wc):
+    def ctx(data):
+        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
             repo = SnoRepo(repo_path)
             sample_pks = data.SAMPLE_PKS
 

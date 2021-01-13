@@ -1,14 +1,13 @@
 import subprocess
 
 from sno.repo import SnoRepo, LockedGitIndex
-from sno.repo_version import DEFAULT_REPO_VERSION
 
 
 def test_init_repository(tmp_path):
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
 
-    sno_repo = SnoRepo.init_repository(repo_path, DEFAULT_REPO_VERSION)
+    sno_repo = SnoRepo.init_repository(repo_path)
 
     assert (repo_path / ".git").is_file()
     assert (repo_path / ".git").read_text() == "gitdir: .sno\n"

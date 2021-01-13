@@ -7,7 +7,7 @@ from sno.geometry import normalise_gpkg_geom
 from sno.base_dataset import BaseDataset
 
 
-class UpgradeDataset0(BaseDataset):
+class Dataset0(BaseDataset):
     """A V0 dataset / import source, only used for upgrading to V2 and beyond."""
 
     VERSION = 0

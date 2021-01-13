@@ -10,7 +10,6 @@ from sno.exceptions import InvalidOperation, NotFound
 from sno.fast_import import fast_import_tables, ReplaceExisting
 from sno.repo import SnoRepo
 from sno.structure import RepoStructure
-from sno.repo_version import get_repo_version
 from sno.timestamps import minutes_to_tz_offset
 
 
@@ -18,14 +17,14 @@ UPGRADED_REPO_VERSION = 2
 
 
 def dataset_class_for_version(version):
-    from .upgrade_v0 import UpgradeDataset0
-    from .upgrade_v1 import UpgradeDataset1
+    from .upgrade_v0 import Dataset0
+    from .upgrade_v1 import Dataset1
 
     version = int(version)
     if version == 0:
-        return UpgradeDataset0
+        return Dataset0
     elif version == 1:
-        return UpgradeDataset1
+        return Dataset1
 
     raise ValueError(
         f"No upgradeable Dataset implementation found for version={version}"
@@ -57,7 +56,7 @@ def upgrade(ctx, source, dest):
             f"'{source}': not an existing sno repository", param_hint="SOURCE"
         )
 
-    source_version = get_repo_version(source_repo, allow_legacy_versions=True)
+    source_version = source_repo.version
     if source_version == 2:
         raise InvalidOperation(
             "Cannot upgrade: source repository is already at latest version (Datasets V2)"
@@ -65,7 +64,7 @@ def upgrade(ctx, source, dest):
 
     if source_version not in (0, 1):
         raise InvalidOperation(
-            "Unrecognised source repository version: {source_version}"
+            f"Unrecognised source repository version: {source_version}"
         )
 
     source_dataset_class = dataset_class_for_version(source_version)
@@ -73,9 +72,7 @@ def upgrade(ctx, source, dest):
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
-    dest_repo = SnoRepo.init_repository(
-        dest, UPGRADED_REPO_VERSION, wc_path=None, bare=True
-    )
+    dest_repo = SnoRepo.init_repository(dest, wc_path=None, bare=True)
 
     # walk _all_ references
     source_walker = source_repo.walk(
@@ -154,7 +151,6 @@ def _upgrade_commit(
     rs = RepoStructure(
         source_repo,
         source_commit,
-        version=source_version,
         dataset_class=source_dataset_class,
     )
     source_datasets = list(rs.datasets)
@@ -215,12 +211,12 @@ def upgrade_to_tidy(source):
             f"'{source}': not an existing sno repository", param_hint="SOURCE"
         )
 
+    source_repo.ensure_latest_version()
     if source_repo.is_tidy_style_sno_repo():
-        raise click.InvalidOperation(
+        raise InvalidOperation(
             "Cannot upgrade in-place - source repo is already tidy-style"
         )
 
-    repo_version = source_repo.version
     wc_path = source_repo.workingcopy_path
     is_bare = source_repo.is_bare
 
@@ -229,7 +225,7 @@ def upgrade_to_tidy(source):
 
     dot_sno_path = source / ".sno"
     if dot_sno_path.exists() and any(dot_sno_path.iterdir()):
-        raise click.InvalidOperation(".sno already exists and is not empty")
+        raise InvalidOperation(".sno already exists and is not empty")
     elif not dot_sno_path.exists():
         dot_sno_path.mkdir()
 
@@ -244,7 +240,7 @@ def upgrade_to_tidy(source):
     tidy_repo.lock_git_index()
     tidy_repo.config["core.bare"] = False
     tidy_repo.config["sno.workingcopy.bare"] = False
-    tidy_repo.write_config(repo_version, wc_path, is_bare)
+    tidy_repo.write_config(wc_path, is_bare)
     tidy_repo.activate()
 
     click.secho("In-place upgrade complete: repo is now tidy", fg="green", bold=True)
