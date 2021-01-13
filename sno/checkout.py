@@ -276,16 +276,16 @@ def _find_remote_branch_by_name(repo, name):
     "--source",
     "-s",
     help=(
-        "Restore the working tree files with the content from the given tree. "
+        "Restore the working copy with the content from the given tree. "
         "It is common to specify the source tree by naming a commit, branch or "
-        "tag associated with it."
+        "tag associated with it. "
     ),
     default="HEAD",
 )
 @click.argument("pathspec", nargs=-1)
 def restore(ctx, source, pathspec):
     """
-    Restore specified paths in the working tree with some contents from a restore source.
+    Restore specified paths in the working copy with some contents from a restore source.
     """
     repo = ctx.obj.repo
 
@@ -305,6 +305,41 @@ def restore(ctx, source, pathspec):
         track_changes_as_dirty=True,
         paths=pathspec,
     )
+
+
+@click.command()
+@click.pass_context
+@click.option(
+    "--discard-changes",
+    "--force",
+    "-f",
+    is_flag=True,
+    help="Discard local changes in working copy if necessary",
+)
+@click.argument("refish")
+def reset(ctx, discard_changes, refish):
+    """
+    Reset the branch head to point to a different commit.
+    """
+    repo = ctx.obj.repo
+
+    try:
+        commit_or_tree, ref = repo.resolve_refish(refish)
+        commit = commit_or_tree.peel(pygit2.Commit)
+    except (KeyError, pygit2.InvalidSpecError):
+        raise NotFound(f"{refish} is not a commit", exit_code=NO_COMMIT)
+
+    same_commit = repo.head_commit == commit
+    if not discard_changes and not same_commit:
+        ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
+
+    head_branch = repo.head_branch
+    if head_branch is not None:
+        repo.references[head_branch].set_target(commit.id)
+    else:
+        repo.set_head(commit.id)
+
+    reset_wc_if_needed(repo, repo.head_commit, discard_changes=discard_changes)
 
 
 @click.command("create-workingcopy")

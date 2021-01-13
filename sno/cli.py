@@ -169,9 +169,10 @@ def cli(ctx, repo_dir, verbose, post_mortem):
 cli.add_command(apply.apply)
 cli.add_command(branch.branch)
 cli.add_command(checkout.checkout)
+cli.add_command(checkout.create_workingcopy)
+cli.add_command(checkout.reset)
 cli.add_command(checkout.restore)
 cli.add_command(checkout.switch)
-cli.add_command(checkout.create_workingcopy)
 cli.add_command(clone.clone)
 cli.add_command(conflicts.conflicts)
 cli.add_command(commit.commit)
@@ -191,16 +192,6 @@ cli.add_command(status.status)
 cli.add_command(query.query)
 cli.add_command(upgrade.upgrade)
 cli.add_command(upgrade.upgrade_to_tidy)
-
-
-# aliases/shortcuts
-
-
-@cli.command()
-@click.pass_context
-def reset(ctx):
-    """ Discard changes made in the working copy (ie. reset to HEAD """
-    ctx.invoke(checkout.checkout, discard_changes=True, refish="HEAD")
 
 
 # straight process-replace commands
