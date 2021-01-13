@@ -5,33 +5,34 @@
 #    make py-requirements
 #
 apipkg==1.5               # via execnet
-appnope==0.1.2            # via -r requirements/dev.in
+appnope==0.1.2            # via -r requirements/dev.in, ipython
 attrs==20.3.0             # via -c requirements/../requirements.txt, -c requirements/test.txt, pytest
 backcall==0.2.0           # via ipython
 colorama==0.4.4           # via -c requirements/test.txt, -r requirements/dev.in
 decorator==4.4.2          # via ipython
 execnet==1.7.1            # via pytest-xdist
-importlib-metadata==3.1.1  # via -c requirements/../requirements.txt, -c requirements/test.txt, pluggy, pytest
+importlib-metadata==3.4.0  # via -c requirements/../requirements.txt, -c requirements/test.txt, pluggy, pytest
 iniconfig==1.1.1          # via -c requirements/test.txt, pytest
 ipdb==0.13.4              # via -r requirements/dev.in
 ipython-genutils==0.2.0   # via traitlets
 ipython==7.19.0           # via -r requirements/dev.in, ipdb
-jedi==0.17.2              # via ipython
-packaging==20.7           # via -c requirements/test.txt, pytest
-parso==0.7.1              # via jedi
+jedi==0.18.0              # via ipython
+packaging==20.8           # via -c requirements/test.txt, pytest
+parso==0.8.1              # via jedi
 pexpect==4.8.0            # via -r requirements/dev.in, ipython
 pickleshare==0.7.5        # via ipython
 pluggy==0.13.1            # via -c requirements/test.txt, pytest
-prompt-toolkit==3.0.8     # via ipython
-ptyprocess==0.6.0         # via pexpect
-py==1.9.0                 # via -c requirements/test.txt, pytest, pytest-forked
-pygments==2.7.3           # via -c requirements/../requirements.txt, ipython
+prompt-toolkit==3.0.10    # via ipython
+ptyprocess==0.7.0         # via pexpect
+py==1.10.0                # via -c requirements/test.txt, pytest, pytest-forked
+pygments==2.7.4           # via -c requirements/../requirements.txt, ipython
 pyparsing==2.4.7          # via -c requirements/test.txt, packaging
 pytest-forked==1.3.0      # via pytest-xdist
 pytest-xdist==2.2.0       # via -r requirements/dev.in
 pytest==6.2.1             # via -c requirements/test.txt, pytest-forked, pytest-xdist
 toml==0.10.2              # via -c requirements/test.txt, pytest
 traitlets==5.0.5          # via ipython
+typing-extensions==3.7.4.3  # via -c requirements/../requirements.txt, -c requirements/test.txt, importlib-metadata
 wcwidth==0.2.5            # via prompt-toolkit
 zipp==3.4.0               # via -c requirements/../requirements.txt, -c requirements/test.txt, importlib-metadata
 
