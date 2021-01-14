@@ -1,9 +1,10 @@
+import json
 import pytest
 
 
+from sno.exceptions import INVALID_OPERATION, NO_BRANCH, NO_COMMIT
 from sno.repo import SnoRepo
 from sno.structs import CommitWithReference
-from sno.exceptions import NO_BRANCH, NO_COMMIT
 
 
 @pytest.mark.parametrize(
@@ -90,3 +91,35 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
             r = cli_runner.invoke(["branch"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == ["  four", "  one", "* two"]
+
+
+def test_reset(data_working_copy, cli_runner, geopackage, edit_points):
+    with data_working_copy("points") as (repo_path, wc):
+        db = geopackage(wc)
+        with db:
+            cur = db.cursor()
+            edit_points(cur)
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 1
+        r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "0c64d82 (HEAD -> master) Improve naming on Coromandel East coast",
+            "7bc3b56 Import from nz-pa-points-topo-150k.gpkg",
+        ]
+
+        r = cli_runner.invoke(["reset", "HEAD^"])
+        assert r.exit_code == INVALID_OPERATION
+        assert "You have uncommitted changes in your working copy." in r.stderr
+
+        r = cli_runner.invoke(["reset", "HEAD^", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0
+        r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "7bc3b56 (HEAD -> master) Import from nz-pa-points-topo-150k.gpkg",
+        ]
