@@ -50,6 +50,10 @@ class Geometry(bytes):
     def to_ogr(self):
         return gpkg_geom_to_ogr(self)
 
+    def with_crs_id(self, crs_id):
+        crs_id_bytes = struct.pack("<i", crs_id)
+        return Geometry.of(self[:4] + crs_id_bytes + self[8:])
+
 
 def make_crs(crs_text):
     """
