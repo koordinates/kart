@@ -142,29 +142,28 @@ def apply_patch(
             )
             repo_diff.recursive_set([ds_path, "meta"], meta_diff)
 
-        if dataset is not None:
-            pk_name = dataset.primary_key
-            geom_column_name = dataset.geom_column_name
-        else:
-            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
-            pk_name = schema.pk_columns[0].name
-            geom_columns = schema.geometry_columns
-            geom_column_name = geom_columns[0].name if geom_columns else None
-
         feature_changes = ds_diff_dict.get("feature", [])
-
-        def extract_key(feature):
-            if feature is None:
-                return None
-            return feature[pk_name], feature
-
-        def parse_delta(change):
-            return Delta(
-                extract_key(unjson_feature(geom_column_name, change.get("-"))),
-                extract_key(unjson_feature(geom_column_name, change.get("+"))),
-            )
-
         if feature_changes:
+            if dataset is not None:
+                pk_name = dataset.primary_key
+                geom_column_name = dataset.geom_column_name
+            else:
+                schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+                pk_name = schema.pk_columns[0].name
+                geom_columns = schema.geometry_columns
+                geom_column_name = geom_columns[0].name if geom_columns else None
+
+            def extract_key(feature):
+                if feature is None:
+                    return None
+                return feature[pk_name], feature
+
+            def parse_delta(change):
+                return Delta(
+                    extract_key(unjson_feature(geom_column_name, change.get("-"))),
+                    extract_key(unjson_feature(geom_column_name, change.get("+"))),
+                )
+
             feature_diff = DeltaDiff(
                 (parse_delta(change) for change in feature_changes)
             )
