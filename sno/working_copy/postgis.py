@@ -508,20 +508,6 @@ class WorkingCopy_Postgis(WorkingCopy):
             wc_tree_id = row[0]
             return wc_tree_id
 
-    def _placeholders_with_setsrid(self, dataset):
-        # We have to call ST_SetSRID on all geometries so that they will fit in their columns:
-        # Unlike GPKG, the geometries in a column with a CRS of X can't all just have a CRS of 0.
-        result = [SQL("%s")] * len(dataset.schema.columns)
-        for i, col in enumerate(dataset.schema):
-            if col.data_type != "geometry":
-                continue
-            crs_name = col.extra_type_info.get("geometryCRS", None)
-            if crs_name is None:
-                continue
-            crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
-            result[i] = SQL(f"ST_SetSRID(%s::GEOMETRY, {crs_id})")
-        return result
-
     def write_full(self, commit, *datasets, **kwargs):
         """
         Writes a full layer into a working-copy table
@@ -561,7 +547,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 ).format(
                     self._table_identifier(table),
                     SQL(",").join([Identifier(c) for c in col_names]),
-                    SQL(",").join(self._placeholders_with_setsrid(dataset)),
+                    SQL(",").join([SQL("%s")] * len(col_names)),
                 )
 
                 feat_count = 0
@@ -569,7 +555,9 @@ class WorkingCopy_Postgis(WorkingCopy):
                 t0p = t0
 
                 CHUNK_SIZE = 10000
-                for row_dicts in self._chunk(dataset.features(), CHUNK_SIZE):
+                for row_dicts in self._chunk(
+                    dataset.features_with_crs_ids(), CHUNK_SIZE
+                ):
                     row_tuples = (tuple(row_dict.values()) for row_dict in row_dicts)
                     dbcur.executemany(sql_insert_features, row_tuples)
                     feat_count += changes_rowcount(dbcur)
@@ -621,7 +609,7 @@ class WorkingCopy_Postgis(WorkingCopy):
             table=self._table_identifier(dataset.table_name),
             cols=SQL(",").join([Identifier(k) for k in col_names]),
             pk=Identifier(pk_field),
-            placeholders=SQL(",").join(self._placeholders_with_setsrid(dataset)),
+            placeholders=SQL(",").join([SQL("%s")] * len(col_names)),
         )
         upd_clause = []
         for k in col_names:
@@ -631,7 +619,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         feat_count = 0
         CHUNK_SIZE = 10000
         for row_dicts in self._chunk(
-            dataset.get_features(pk_iter, ignore_missing=ignore_missing),
+            dataset.get_features_with_crs_ids(pk_iter, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
             row_tuples = (tuple(row_dict.values()) for row_dict in row_dicts)

@@ -6,6 +6,7 @@ import time
 from osgeo import osr
 
 
+from . import crs_util
 from .diff_structs import DatasetDiff, DeltaDiff, Delta
 from .exceptions import (
     InvalidOperation,
@@ -35,6 +36,49 @@ class RichBaseDataset(BaseDataset):
     def features_plus_blobs(self):
         for blob in self.feature_blobs():
             yield self.get_feature(path=blob.name, data=memoryview(blob)), blob
+
+    def features_with_crs_ids(self):
+        """
+        Same as base_dataset.features(), but includes the CRS ID from the schema in every Geometry object.
+        By contrast, base_dataset.features() Geometries only contain CRS IDs of zero, so the schema must
+        be consulted separately to learn about CRS IDs.
+        """
+        yield from self._add_crs_ids_to_features(self.features())
+
+    def get_features_with_crs_ids(self, row_pks, *, ignore_missing=False):
+        """
+        Same as base_dataset.get_features(...), but includes the CRS ID from the Schema in every Geometry object.
+        By contrast, base_dataset.get_features_with_crs_ids(...) Geometries only contain CRS IDs of zero, so the schema
+        must be consulted separately to learn about CRS IDs.
+        """
+        yield from self._add_crs_ids_to_features(
+            self.get_features(row_pks, ignore_missing=ignore_missing)
+        )
+
+    def _add_crs_ids_to_features(self, features):
+        cols_to_crs_ids = self._cols_to_crs_ids()
+
+        if not cols_to_crs_ids:
+            yield from features
+        else:
+            for feature in features:
+                yield self._add_crs_ids_to_feature(feature, cols_to_crs_ids)
+
+    def _add_crs_ids_to_feature(self, feature, cols_to_crs_ids):
+        for col_name, crs_id in cols_to_crs_ids.items():
+            geometry = feature[col_name]
+            if geometry is not None:
+                feature[col_name] = geometry.with_crs_id(crs_id)
+        return feature
+
+    def _cols_to_crs_ids(self):
+        result = {}
+        for col in self.schema.geometry_columns:
+            crs_name = col.extra_type_info.get("geometryCRS", None)
+            crs_id = crs_util.get_identifier_int_from_dataset(self, crs_name)
+            if crs_id:
+                result[col.name] = crs_id
+        return result
 
     def build_spatial_index(self, path):
         """

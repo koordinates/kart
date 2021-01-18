@@ -600,20 +600,6 @@ class WorkingCopy_GPKG(WorkingCopy):
         """
         )
 
-    def _placeholders_with_setsrid(self, dataset):
-        # We make sure every geometry has the SRID of the column that it belongs to.
-        # This is different to in dataset storage, where we normalise each geometry and store it with an SRID of 0.
-        result = ["?"] * len(dataset.schema.columns)
-        for i, col in enumerate(dataset.schema):
-            if col.data_type != "geometry":
-                continue
-            crs_name = col.extra_type_info.get("geometryCRS", None)
-            if crs_name is None:
-                continue
-            crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
-            result[i] = f"SetSRID(?, {crs_id})"
-        return ",".join(result)
-
     def _db_geom_to_gpkg_geom(self, g):
         # Its possible in GPKG to put arbitrary values in columns, regardless of type.
         # We don't try to convert them here - we let the commit validation step report this as an error.
@@ -670,7 +656,7 @@ class WorkingCopy_GPKG(WorkingCopy):
                     INSERT INTO {gpkg.ident(table)}
                         ({','.join([gpkg.ident(col.name) for col in dataset.schema])})
                     VALUES
-                        ({self._placeholders_with_setsrid(dataset)});
+                        ({placeholders(dataset.schema.columns)});
                 """
                 feat_progress = 0
                 t0 = time.monotonic()
@@ -678,7 +664,9 @@ class WorkingCopy_GPKG(WorkingCopy):
 
                 CHUNK_SIZE = 10000
                 total_features = dataset.feature_count
-                for row_dicts in self._chunk(dataset.features(), CHUNK_SIZE):
+                for row_dicts in self._chunk(
+                    dataset.features_with_crs_ids(), CHUNK_SIZE
+                ):
                     row_tuples = (row_dict.values() for row_dict in row_dicts)
                     dbcur.executemany(sql_insert_features, row_tuples)
                     feat_progress += len(row_dicts)
@@ -714,13 +702,13 @@ class WorkingCopy_GPKG(WorkingCopy):
             INSERT OR REPLACE INTO {gpkg.ident(dataset.table_name)}
                 ({','.join([gpkg.ident(col.name) for col in dataset.schema])})
             VALUES
-                ({self._placeholders_with_setsrid(dataset)});
+                ({placeholders(dataset.schema.columns)});
         """
 
         feat_count = 0
         CHUNK_SIZE = 10000
         for row_dicts in self._chunk(
-            dataset.get_features(pk_iter, ignore_missing=ignore_missing),
+            dataset.get_features_with_crs_ids(pk_iter, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
             row_tuples = (row_dict.values() for row_dict in row_dicts)
@@ -986,11 +974,6 @@ class WorkingCopy_GPKG_1(WorkingCopy_GPKG):
             return g
         # In V1 we don't normalise the geometries - we just roundtrip them as-is.
         return Geometry.of(g)
-
-    def _placeholders_with_setsrid(self, dataset):
-        # In V1 we just roundtrip geometries as-is, and we don't zero out the SRIDs to normalise them -
-        # so we don't need to set the SRID to the true value when we write them to GPKG.
-        return ",".join(["?"] * len(dataset.schema.columns))
 
 
 class WorkingCopy_GPKG_2(WorkingCopy_GPKG):
