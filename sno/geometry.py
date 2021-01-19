@@ -47,12 +47,31 @@ class Geometry(bytes):
     def to_hex_wkb(self):
         return gpkg_geom_to_hex_wkb(self)
 
+    def to_ewkb(self):
+        return gpkg_geom_to_ewkb(self)
+
     def to_ogr(self):
         return gpkg_geom_to_ogr(self)
 
     def with_crs_id(self, crs_id):
         crs_id_bytes = struct.pack("<i", crs_id)
         return Geometry.of(self[:4] + crs_id_bytes + self[8:])
+
+    @classmethod
+    def from_wkt(cls, wkt):
+        return wkt_to_gpkg_geom(wkt)
+
+    @classmethod
+    def from_wkb(cls, wkb):
+        return wkb_to_gpkg_geom(wkb)
+
+    @classmethod
+    def from_hex_wkb(cls, wkb):
+        return hex_wkb_to_gpkg_geom(wkb)
+
+    @classmethod
+    def from_hex_ewkb(cls, hex_ewkb):
+        return hex_ewkb_to_gpkg_geom(hex_ewkb)
 
 
 def make_crs(crs_text):
@@ -271,6 +290,11 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
     return geom
 
 
+def wkt_to_gpkg_geom(wkb, **kwargs):
+    ogr_geom = ogr.CreateGeometryFromWkt(wkb)
+    return ogr_to_gpkg_geom(ogr_geom, **kwargs)
+
+
 def wkb_to_gpkg_geom(wkb, **kwargs):
     ogr_geom = ogr.CreateGeometryFromWkb(wkb)
     return ogr_to_gpkg_geom(ogr_geom, **kwargs)
@@ -413,15 +437,15 @@ def gpkg_geom_to_ewkb(gpkg_geom):
     return ewkb
 
 
-def hexewkb_to_gpkg_geom(hexewkb):
+def hex_ewkb_to_gpkg_geom(hex_ewkb):
     """
     Parse PostGIS Hex EWKB to GeoPackage geometry
     https://github.com/postgis/postgis/blob/master/doc/ZMSgeoms.txt
     """
-    if hexewkb is None:
+    if hex_ewkb is None:
         return None
 
-    ewkb = bytes.fromhex(hexewkb)
+    ewkb = bytes.fromhex(hex_ewkb)
     is_le = struct.unpack_from("B", ewkb)[0]
     bo = _bo(is_le)
 

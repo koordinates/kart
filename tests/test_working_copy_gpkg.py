@@ -900,7 +900,6 @@ def _edit_string_pk_polygons(dbcur):
         dbcur,
         layer,
         insert_record,
-        gpkg_funcs={1: "GeomFromEWKT(?)"},
     )
     assert rc == 1
     dbcur.execute(f"UPDATE {layer} SET id='POLY9998' WHERE id='POLY1424927';")

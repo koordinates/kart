@@ -14,7 +14,8 @@ from psycopg2.sql import Identifier, SQL
 
 from .base import WorkingCopy
 from . import postgis_adapter
-from sno import geometry, crs_util
+from sno import crs_util
+from sno.geometry import Geometry
 from sno.db_util import changes_rowcount
 from sno.exceptions import NotFound, NO_WORKING_COPY
 from sno.filter_util import UNFILTERED
@@ -34,14 +35,14 @@ L = logging.getLogger("sno.working_copy.postgis")
 
 
 def _adapt_geometry_to_db(g):
-    return Binary(geometry.gpkg_geom_to_ewkb(g))
+    return Binary(g.to_ewkb())
 
 
-register_adapter(geometry.Geometry, _adapt_geometry_to_db)
+register_adapter(Geometry, _adapt_geometry_to_db)
 
 
 def adapt_geometry_from_db(g, dbcur):
-    return geometry.hexewkb_to_gpkg_geom(g)
+    return Geometry.from_hex_ewkb(g)
 
 
 def adapt_timestamp_from_db(t, dbcur):

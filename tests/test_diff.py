@@ -383,7 +383,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                 "-                         survey_reference = ␀",
                 "-                           adjusted_nodes = 558",
                 "+++ nz_waca_adjustments:feature:9999999",
-                "+                                     geom = POLYGON(...)",
+                "+                                     geom = MULTIPOLYGON(...)",
                 "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
                 "+                         survey_reference = Null Island™ 🗺",
                 "+                           adjusted_nodes = 123",
@@ -576,14 +576,16 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                         "geometry": {
                             "coordinates": [
                                 [
-                                    [0.0, 0.0],
-                                    [0.0, 0.001],
-                                    [0.001, 0.001],
-                                    [0.001, 0.0],
-                                    [0.0, 0.0],
+                                    [
+                                        [0.0, 0.0],
+                                        [0.0, 0.001],
+                                        [0.001, 0.001],
+                                        [0.001, 0.0],
+                                        [0.0, 0.0],
+                                    ]
                                 ]
                             ],
-                            "type": "Polygon",
+                            "type": "MultiPolygon",
                         },
                         "id": "I::9999999",
                         "properties": {
@@ -653,7 +655,7 @@ def test_diff_polygons(output_format, data_working_copy, geopackage, cli_runner)
                                 "+": {
                                     "adjusted_nodes": 123,
                                     "date_adjusted": "2019-07-05T13:04:00+01:00",
-                                    "geom": "01030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000",
+                                    "geom": "01060000000100000001030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000",
                                     "id": 9999999,
                                     "survey_reference": "Null Island™ 🗺",
                                 }

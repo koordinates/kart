@@ -11,7 +11,7 @@ import pygit2
 from osgeo import gdal
 
 from .base import WorkingCopy
-from sno import crs_util, gpkg, gpkg_adapter
+from sno import gpkg, gpkg_adapter
 from sno.db_util import changes_rowcount
 from sno.filter_util import UNFILTERED
 from sno.geometry import Geometry, normalise_gpkg_geom

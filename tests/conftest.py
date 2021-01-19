@@ -19,6 +19,7 @@ import pytest
 import click
 from click.testing import CliRunner
 from sno.db_util import execute_insert_dict, changes_rowcount
+from sno.geometry import Geometry
 from sno.repo import SnoRepo
 from sno.working_copy import WorkingCopy
 
@@ -462,11 +463,11 @@ class TestHelpers:
             INSERT INTO {LAYER}
                             (fid, geom, t50_fid, name_ascii, macronated, name)
                         VALUES
-                            (:fid, GeomFromEWKT(:geom), :t50_fid, :name_ascii, :macronated, :name);
+                            (:fid, :geom, :t50_fid, :name_ascii, :macronated, :name);
         """
         RECORD = {
             "fid": 9999,
-            "geom": "POINT(0 0)",
+            "geom": Geometry.from_wkt("POINT(0 0)").with_crs_id(4326),
             "t50_fid": 9_999_999,
             "name_ascii": "Te Motu-a-kore",
             "macronated": "N",
@@ -489,11 +490,13 @@ class TestHelpers:
             INSERT INTO {LAYER}
                             (id, geom, date_adjusted, survey_reference, adjusted_nodes)
                         VALUES
-                            (:id, GeomFromEWKT(:geom), :date_adjusted, :survey_reference, :adjusted_nodes);
+                            (:id, :geom, :date_adjusted, :survey_reference, :adjusted_nodes);
         """
         RECORD = {
             "id": 9_999_999,
-            "geom": "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))",
+            "geom": Geometry.from_wkt(
+                "MULTIPOLYGON(((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0)))"
+            ).with_crs_id(4167),
             "date_adjusted": "2019-07-05T13:04:00+01:00",
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
@@ -764,8 +767,6 @@ def _edit_points(dbcur, table_prefix=""):
         dbcur,
         layer,
         H.POINTS.RECORD,
-        gpkg_funcs={1: "GeomFromEWKT(?)"},
-        pg_funcs={1: "ST_SetSRID(%s::GEOMETRY, 4326)"},
     )
     assert rc == 1
     dbcur.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
@@ -790,8 +791,6 @@ def _edit_polygons(dbcur, table_prefix=""):
         dbcur,
         layer,
         H.POLYGONS.RECORD,
-        gpkg_funcs={1: "GeomFromEWKT(?)"},
-        pg_funcs={1: "ST_Multi(ST_SetSRID(%s::GEOMETRY, 4167))"},
     )
     assert rc == 1
     dbcur.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
