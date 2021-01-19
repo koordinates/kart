@@ -290,9 +290,9 @@ class Dataset2(RichBaseDataset):
             if not change_types["pk_updates"]:
                 # We can probably avoid rewriting all features.
                 for feature in resultset:
-                    pk_values = (feature[replacing_dataset.primary_key],)
-                    rel_path = self.encode_pks_to_path(pk_values, relative=True)
                     try:
+                        pk_values = (feature[replacing_dataset.primary_key],)
+                        rel_path = self.encode_pks_to_path(pk_values, relative=True)
                         existing_data = replacing_dataset.get_data_at(
                             rel_path, as_memoryview=True
                         )
