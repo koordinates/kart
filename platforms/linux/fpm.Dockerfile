@@ -11,6 +11,7 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update -q -y \
         libffi-dev \
         ruby-ffi \
         rpm \
+        git \
     && gem install fpm \
     && mkdir /src
 
