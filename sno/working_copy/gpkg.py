@@ -49,6 +49,9 @@ def sql_insert_dict(dbcur, sql_command, table_name, row_dict):
 
 
 class WorkingCopy_GPKG(WorkingCopy):
+    # Using this prefix means OGR/QGIS doesn't list these tables as datasets
+    SNO_TABLE_PREFIX = "gpkg_sno_"
+
     def __init__(self, repo, path):
         self.repo = repo
         self.path = path
@@ -955,31 +958,3 @@ class WorkingCopy_GPKG(WorkingCopy):
 
         rc = changes_rowcount(dbcur)
         assert rc == 1, f"gpkg_contents update: expected 1Δ, got {rc}"
-
-
-class WorkingCopy_GPKG_1(WorkingCopy_GPKG):
-    """
-    GeoPackage Working Copy for v0.1-v0.4 repositories
-    """
-
-    SNO_TABLE_PREFIX = ".sno-"
-
-    # The state table was called "meta" in GPKG_1 but we have too many things called meta.
-    STATE_NAME = "meta"
-
-    def _db_geom_to_gpkg_geom(self, g):
-        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
-        # We don't try to convert them here - we let the commit validation step report this as an error.
-        if not isinstance(g, bytes):
-            return g
-        # In V1 we don't normalise the geometries - we just roundtrip them as-is.
-        return Geometry.of(g)
-
-
-class WorkingCopy_GPKG_2(WorkingCopy_GPKG):
-    """
-    GeoPackage Working Copy for v0.5+ repositories
-    """
-
-    # Using this prefix means OGR/QGIS doesn't list these tables as datasets
-    SNO_TABLE_PREFIX = "gpkg_sno_"

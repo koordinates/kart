@@ -9,7 +9,7 @@ import apsw
 from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
-from sno.working_copy.gpkg import WorkingCopy_GPKG_2
+from sno.working_copy.gpkg import WorkingCopy_GPKG
 from sno.db_util import changes_rowcount, execute_insert_dict
 from test_working_copy import compute_approximated_types
 
@@ -635,7 +635,7 @@ def test_geopackage_locking_edit(
         db = geopackage(wc)
 
         is_checked = False
-        orig_func = WorkingCopy_GPKG_2.write_features
+        orig_func = WorkingCopy_GPKG.write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -648,7 +648,7 @@ def test_geopackage_locking_edit(
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(WorkingCopy_GPKG_2, "write_features", _wrap)
+        monkeypatch.setattr(WorkingCopy_GPKG, "write_features", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r

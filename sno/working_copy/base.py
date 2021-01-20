@@ -42,8 +42,6 @@ class Mismatch(ValueError):
 class WorkingCopy:
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
-    VALID_VERSIONS = (1, 2)
-
     TRACKING_NAME = "track"
     STATE_NAME = "state"
 
@@ -89,16 +87,9 @@ class WorkingCopy:
 
             result = WorkingCopy_Postgis(repo, path)
         else:
-            version = get_repo_version(repo)
-            if version not in cls.VALID_VERSIONS:
-                raise NotImplementedError(f"Working copy version: {version}")
+            from .gpkg import WorkingCopy_GPKG
 
-            from .gpkg import WorkingCopy_GPKG_1, WorkingCopy_GPKG_2
-
-            if version < 2:
-                result = WorkingCopy_GPKG_1(repo, path)
-            else:
-                result = WorkingCopy_GPKG_2(repo, path)
+            result = WorkingCopy_GPKG(repo, path)
 
         if not allow_invalid_state:
             result.check_valid_state()
