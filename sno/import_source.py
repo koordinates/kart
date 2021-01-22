@@ -169,7 +169,9 @@ class ImportSource:
     def import_source_desc(self):
         """Return a description of this ImportSource."""
         # Subclasses should override if str() does not return the right information.
-        return f"Import from {self} to {self.dest_path}/"
+        return (
+            f"Importing {self.feature_count} features from {self} to {self.dest_path}/"
+        )
 
     def aggregate_import_source_desc(self, import_sources):
         """

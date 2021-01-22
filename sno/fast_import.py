@@ -255,18 +255,3 @@ def generate_header(repo, sources, message, branch):
 def generate_message(sources):
     first_source = next(iter(sources))
     return first_source.aggregate_import_source_desc(sources)
-
-    """
-    if len(sources) == 1:
-        for path, source in sources.items():
-            message = f"Import from {Path(source.source).name} to {path}/"
-    else:
-        source = next(iter(sources.values()))
-        message = f"Import {len(sources)} datasets from '{Path(source.source).name}':\n"
-        for path, source in sources.items():
-            if path == source.table:
-                message += f"\n* {path}/"
-            else:
-                message += f"\n* {path} (from {source.table})"
-    return message
-    """

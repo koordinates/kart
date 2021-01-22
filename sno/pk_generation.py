@@ -1,10 +1,9 @@
 from itertools import zip_longest
 import pygit2
-import subprocess
 
 from .dataset2 import Dataset2
 from .import_source import ImportSource
-from .exceptions import NotYetImplemented, SubprocessError
+from .exceptions import NotYetImplemented
 from .serialise_util import (
     json_pack,
 )
@@ -155,14 +154,21 @@ class PkGeneratingImportSource(ImportSource):
             return None
 
         prev_import_commit = None
-        for commit in repo.walk(repo.head_commit.id):
-            if self._get_generated_pks_tree(commit) == current_pks_tree:
-                prev_import_commit = commit
-            else:
-                # We've reached the commit before the previous import
-                break
+        try:
+            for commit in repo.walk(repo.head_commit.id):
+                if self._get_generated_pks_tree(commit) == current_pks_tree:
+                    prev_import_commit = commit
+                else:
+                    # We've reached the commit before the previous import
+                    break
 
-        return prev_import_commit.peel(pygit2.Tree) / self.dest_path
+            return prev_import_commit.peel(pygit2.Tree) / self.dest_path
+
+        except KeyError:
+            # This can happen for shallow-clones - we couldn't find the last-import commit.
+            #  We return the tree of the last non-import commit instead.
+            # This means similarity detection works subtly differently.
+            return repo.head_tree / self.dest_path
 
     def _get_generated_pks_tree(self, commit_or_tree):
         root_tree = commit_or_tree.peel(pygit2.Tree)
@@ -366,7 +372,7 @@ class PkGeneratingImportSource(ImportSource):
         return self.delegate.__exit__(*args)
 
     def __str__(self):
-        return f"PkGeneratingImportSource({self.__class__.__name__})"
+        return f"PkGeneratingImportSource({self.delegate})"
 
     def import_source_desc(self):
         return self.delegate.import_source_desc()
