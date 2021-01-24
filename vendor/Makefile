@@ -35,7 +35,7 @@ PYDEPS := pip wheel $(WHEELTOOL) cmake==3.* certifi
 # so we only do it for apsw's fetch step
 export CERTIFI_SSL_CERT_FILE=$(abspath $(PREFIX)/lib/python3.7/site-packages/certifi/cacert.pem)
 
-packages = proj jsonc geos gdal spatialite libgit2 pygit2 apsw psycopg2
+packages = proj jsonc geos gdal spatialite libgit2 pygit2 apsw psycopg2 pysqlite3
 ifeq ($(PLATFORM),Linux)
 packages += sqlite spatialindex git curl libpq
 endif
@@ -56,9 +56,10 @@ lib-spatialite := env/lib/mod_spatialite.$(LIBSUFFIX)
 lib-gdal := env/lib/python3.7/site-packages/osgeo/__init__.py
 lib-libgit2 := env/lib/libgit2.$(LIBSUFFIX)
 lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
+lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
 lib-apsw := env/lib/python3.7/site-packages/apsw.cpython-37m-$(shell echo $(PLATFORM) | tr A-Z a-z).so
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-apsw)
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-apsw) $(lib-pysqlite3)
 
 
 # default target
@@ -95,6 +96,10 @@ $(lib-psycopg2): $(lib-pq)
 	$(MAKE) -C psycopg2 wheel
 	pip3 install --force-reinstall psycopg2/wheel/psycopg2-*$(WHEELID).whl
 
+$(lib-pysqlite3): $(lib-sqlite)
+	$(MAKE) -C pysqlite3 wheel
+	pip3 install --force-reinstall pysqlite3/wheel/pysqlite3-*$(WHEELID).whl
+
 ifeq ($(PLATFORM),Darwin)
 #
 # MacOS
@@ -126,6 +131,7 @@ delocate-deps: | env
 	rm -rf .delocate/
 
 $(lib-sqlite): $(brew-deps) | env
+	$(MAKE) -C sqlite src  # needed for pysqlite3
 	cp /usr/local/opt/sqlite3/include/*.h $(PREFIX)/include/
 	$(MAKE) .delocate
 	cp -av /usr/local/opt/sqlite3/lib/libsqlite3*.dylib .delocate
@@ -271,6 +277,9 @@ lib-pq: $(lib-pq)
 .PHONY: lib-sqlite
 lib-sqlite: $(lib-sqlite)
 
+.PHONY: lib-pysqlite3
+lib-pysqlite3: $(lib-pysqlite3)
+
 .PHONY: lib-curl
 lib-curl: $(lib-curl)
 
@@ -307,6 +316,7 @@ build-Darwin: $(build-libs) $(brew-libs)
 
 	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf apsw/wheel/apsw-*$(WHEELID).whl $(VENDOR)/wheelhouse/
+	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
 
@@ -321,8 +331,8 @@ build-Darwin: $(build-libs) $(brew-libs)
 	ccache --show-stats
 
 # set LINUX_DEBUG=1,2,3 for different debugging options for build-Linux
-LINUX_DEBUG_CMD_1 = "|| bash; exit 1"  # drop to shell on errors
-LINUX_DEBUG_CMD_2 = "; bash"  # drop to shell after
+LINUX_DEBUG_CMD_1 = || bash; exit 1  # drop to shell on errors
+LINUX_DEBUG_CMD_2 = ; bash  # drop to shell after
 LINUX_DEBUG_CMD_3 = bash  # launch a shell instead of the build
 
 .PHONY: build-Linux
