@@ -51,8 +51,6 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: "1"
-      PY3_PKG: python-3.7.6-macosx10.9.pkg
-      PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     services: ${{ matrix.platform.services }}
@@ -78,24 +76,6 @@ jobs:
           make -C vendor sources
           mkdir -p .cache/vendor-source
           tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
-
-      #
-      # python distribution
-      #
-
-      - name: "🍎 python: cache"
-        id: cache-pydist
-        uses: actions/cache@v1
-        if: runner.os == 'macOS'
-        with:
-          path: .cache/pydist
-          key: pydist-${{ matrix.platform.id}}-${{ env.PY3_PKG }}
-
-      - name: "🍎 python: download"
-        if: runner.os == 'macOS' && steps.cache-pydist.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p .cache/pydist
-          wget -nv ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
 
       - name: "python: pip cache"
         uses: actions/cache@v1
@@ -138,8 +118,9 @@ jobs:
         run: |
           brew uninstall --force php
           brew update-reset
-          sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
-          brew install --force ccache pkg-config sqlite3 pandoc
+          brew install --force python@3.7 ccache pkg-config sqlite3 pandoc
+          # python@3.7 is keg-only and won't link automatically - link manually like so:
+          echo "/usr/local/opt/python@3.7/bin:$PATH" >> $GITHUB_PATH
           brew install --force --cask Packages
 
       - name: "vendor: ccache"
