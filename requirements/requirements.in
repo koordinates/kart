@@ -4,6 +4,7 @@ Rtree~=0.9.4
 certifi
 Pygments
 jsonschema
+sqlalchemy
 
 # these are only here for dependencies
 psycopg2==2.8.5
