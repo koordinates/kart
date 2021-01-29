@@ -18,14 +18,14 @@ import pytest
 
 import click
 from click.testing import CliRunner
+import pygit2
+import sqlalchemy
+
+
 from sno.geometry import Geometry
 from sno.repo import SnoRepo
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy import gpkg_engine, postgis_engine
 from sno.working_copy import WorkingCopy
-
-import pygit2
-import psycopg2
-from psycopg2.sql import Identifier, SQL
 
 
 pytest_plugins = ["helpers_namespace"]
@@ -734,30 +734,28 @@ def update(request, cli_runner):
     return func
 
 
-def _is_postgis(dbcur):
-    return type(dbcur).__module__.startswith("psycopg2")
+def _insert_command(table_name, col_names, schema=None):
+    return sqlalchemy.table(
+        table_name,
+        *[sqlalchemy.column(c) for c in col_names],
+        schema=schema,
+    ).insert()
 
 
-def _portable_insert(insert_sql, table_prefix, db):
-    # TODO - Fix this to use sqlalchemy, instead of using regex to change the syntax.
-    if _is_postgis(db):
-        insert_sql = insert_sql.replace("INSERT INTO ", f"INSERT INTO {table_prefix}")
-        return re.sub(":([A-Za-z0-9_]+)", lambda x: f"%({x.group(1)})s", insert_sql)
-    return insert_sql
-
-
-def _edit_points(db, table_prefix=""):
+def _edit_points(db, schema=None):
     H = pytest.helpers.helpers()
-    layer = table_prefix + H.POINTS.LAYER
-    # TODO: Fix this to use only sqlalchemy
-    r = db.execute(_portable_insert(H.POINTS.INSERT, table_prefix, db), H.POINTS.RECORD)
-    assert (r or db).rowcount == 1
+    layer = f'"{schema}"."{H.POINTS.LAYER}"' if schema else H.POINTS.LAYER
+    r = db.execute(
+        _insert_command(H.POINTS.LAYER, H.POINTS.RECORD.keys(), schema=schema),
+        H.POINTS.RECORD,
+    )
+    assert r.rowcount == 1
     r = db.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
-    assert (r or db).rowcount == 5
+    assert r.rowcount == 5
     pk_del = 3
     return pk_del
 
@@ -767,22 +765,22 @@ def edit_points():
     return _edit_points
 
 
-def _edit_polygons(db, table_prefix=""):
+def _edit_polygons(db, schema=None):
     H = pytest.helpers.helpers()
-    layer = table_prefix + H.POLYGONS.LAYER
-    # TODO: Fix this to use only sqlalchemy
+    layer = f'"{schema}"."{H.POLYGONS.LAYER}"' if schema else H.POLYGONS.LAYER
     r = db.execute(
-        _portable_insert(H.POLYGONS.INSERT, table_prefix, db), H.POLYGONS.RECORD
+        _insert_command(H.POLYGONS.LAYER, H.POLYGONS.RECORD.keys(), schema=schema),
+        H.POLYGONS.RECORD,
     )
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(
         f"DELETE FROM {layer} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
     )
-    assert (r or db).rowcount == 5
+    assert r.rowcount == 5
     pk_del = 1452332
     return pk_del
 
@@ -792,18 +790,20 @@ def edit_polygons():
     return _edit_polygons
 
 
-def _edit_table(db, table_prefix=""):
+def _edit_table(db, schema=None):
     H = pytest.helpers.helpers()
-    layer = table_prefix + H.TABLE.LAYER
-    # TODO: Fix this to use only sqlalchemy
-    r = db.execute(_portable_insert(H.TABLE.INSERT, table_prefix, db), H.TABLE.RECORD)
-    assert (r or db).rowcount == 1
+    layer = f'"{schema}"."{H.TABLE.LAYER}"' if schema else H.TABLE.LAYER
+    r = db.execute(
+        _insert_command(H.TABLE.LAYER, H.TABLE.RECORD.keys(), schema=schema),
+        H.TABLE.RECORD,
+    )
+    assert r.rowcount == 1
     r = db.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
-    assert (r or db).rowcount == 1
+    assert r.rowcount == 1
     r = db.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
-    assert (r or db).rowcount == 5
+    assert r.rowcount == 5
     pk_del = 3
     return pk_del
 
@@ -872,15 +872,14 @@ def postgis_db():
         raise pytest.skip(
             "Requires postgres - read docstring at sno.test_structure.postgis_db"
         )
-    conn = psycopg2.connect(os.environ["SNO_POSTGRES_URL"])
-    conn.autocommit = True
-    with conn.cursor() as cur:
+    engine = postgis_engine(os.environ["SNO_POSTGRES_URL"])
+    with engine.connect() as conn:
         # test connection and postgis support
         try:
-            cur.execute("""SELECT postgis_version()""")
-        except psycopg2.errors.UndefinedFunction:
+            conn.execute("SELECT postgis_version();")
+        except sqlalchemy.exc.DBAPIError:
             raise pytest.skip("Requires PostGIS")
-    yield conn
+    yield engine
 
 
 @pytest.fixture()
@@ -889,14 +888,12 @@ def new_postgis_db_schema(request, postgis_db):
     def ctx(create=False):
         sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
         schema = f"sno_test_{sha}"
-        with postgis_db.cursor() as c:
+        with postgis_db.connect() as conn:
             # Start by deleting in case it is left over from last test-run...
-            c.execute(
-                SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
-            )
+            conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
             # Actually create only if create=True, otherwise the test will create it
             if create:
-                c.execute(SQL("CREATE SCHEMA {}").format(Identifier(schema)))
+                conn.execute(f"""CREATE SCHEMA "{schema}";""")
         try:
             url = urlsplit(os.environ["SNO_POSTGRES_URL"])
             url_path = url.path.rstrip("/") + "/" + schema
@@ -906,9 +903,7 @@ def new_postgis_db_schema(request, postgis_db):
             yield new_schema_url, schema
         finally:
             # Clean up - delete it again if it exists.
-            with postgis_db.cursor() as c:
-                c.execute(
-                    SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
-                )
+            with postgis_db.connect() as conn:
+                conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
 
     return ctx

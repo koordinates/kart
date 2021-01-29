@@ -9,18 +9,6 @@ def ident(identifier):
     return f'"{escaped}"'
 
 
-def param_str(value):
-    """
-    Sqlite parameter string replacement.
-
-    Generally don't use this. Needed for creating triggers/etc though.
-    """
-    if value is None:
-        return "NULL"
-    escaped = value.replace("'", "''")
-    return f"'{escaped}'"
-
-
 def get_gpkg_meta_items_obj(db, layer):
     """
     Returns an object that supports .gpkg_meta_items and .get_gpkg_meta_item, for a single layer -

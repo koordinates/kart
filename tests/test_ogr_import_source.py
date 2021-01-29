@@ -62,8 +62,8 @@ def _dataset_col_types(dataset):
 
 def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
     # Using postgres here because it has the best type preservation
-    with postgis_db.cursor() as c:
-        c.execute(
+    with postgis_db.connect() as conn:
+        conn.execute(
             """
                 DROP TABLE IF EXISTS typoes;
                 CREATE TABLE typoes (

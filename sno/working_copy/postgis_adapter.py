@@ -1,9 +1,18 @@
 from osgeo.osr import SpatialReference
-from psycopg2.sql import Identifier, SQL
 
 
 from sno import crs_util
 from sno.schema import Schema, ColumnSchema
+
+from sqlalchemy.sql.compiler import IdentifierPreparer
+from sqlalchemy.dialects.postgresql.base import PGDialect
+
+
+_PREPARER = IdentifierPreparer(PGDialect())
+
+
+def quote(ident):
+    return _PREPARER.quote(ident)
 
 
 V2_TYPE_TO_PG_TYPE = {
@@ -58,16 +67,13 @@ def v2_schema_to_postgis_spec(schema, v2_obj):
     Generate the SQL CREATE TABLE spec from a V2 object eg:
     'fid INTEGER, geom GEOMETRY(POINT,2136), desc VARCHAR(128), PRIMARY KEY(fid)'
     """
-    result = [
-        SQL("{} {}").format(Identifier(col.name), SQL(v2_type_to_pg_type(col, v2_obj)))
-        for col in schema
-    ]
+    result = [f"{quote(col.name)} {v2_type_to_pg_type(col, v2_obj)}" for col in schema]
 
     if schema.pk_columns:
-        pk_col_names = (Identifier(col.name) for col in schema.pk_columns)
-        result.append(SQL("PRIMARY KEY({})").format(SQL(", ").join(pk_col_names)))
+        pk_col_names = ", ".join((quote(col.name) for col in schema.pk_columns))
+        result.append(f"PRIMARY KEY({pk_col_names})")
 
-    return SQL(", ").join(result)
+    return ", ".join(result)
 
 
 def v2_type_to_pg_type(column_schema, v2_obj):

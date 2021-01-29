@@ -9,7 +9,7 @@ from sno import gpkg_adapter
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
 from sno.sqlalchemy import gpkg_engine
-from sno.working_copy.gpkg import WorkingCopy_GPKG
+from sno.working_copy.base import WorkingCopy
 from test_working_copy import compute_approximated_types
 
 
@@ -54,9 +54,7 @@ def test_checkout_workingcopy(
                 assert spatial_index_count == dataset.feature_count
 
         table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
-        expected_col_spec = (
-            f'"{dataset.primary_key}" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL'
-        )
+        expected_col_spec = f"{gpkg_adapter.quote(dataset.primary_key)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
         assert expected_col_spec in table_spec
 
 
@@ -369,8 +367,7 @@ def test_working_copy_discard_changes(
             )
             assert r.rowcount == 1
 
-            r = db.execute("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
-            change_count = r.scalar()
+            change_count = db.scalar("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
             assert change_count == (1 + 4 + 5 + 2)
 
         if via == "restore":
@@ -410,17 +407,17 @@ def test_working_copy_discard_changes(
                     print(
                         "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
                     )
-                r = db.execute(
+                count = db.scalar(
                     f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;",
                     {"pk": del_pk},
                 )
-                if r.scalar() != 4:
+                if count != 4:
                     print("E: Deleted rows {pk_field}<{del_pk} still missing")
-                r = db.execute(
+                count = db.scalar(
                     f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
                     {"value": upd_field_value},
                 )
-                if r.scalar() != 0:
+                if count != 0:
                     print("E: Updated rows not reset")
                 r = db.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;"
@@ -482,19 +479,17 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
         with wc.session() as db:
-            r = db.execute(
+            name = db.scalar(
                 f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
             )
-            name = r.scalar()
             assert name == "name_ascii"
 
         r = cli_runner.invoke(["checkout", "master"])
         assert r.exit_code == 0, r.stderr
         with wc.session() as db:
-            r = db.execute(
+            name = db.scalar(
                 f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
             )
-            name = r.scalar()
             assert name == "name_latin1"
 
 
@@ -558,20 +553,18 @@ def test_switch_pre_import_post_import(
             assert r.exit_code == 0, r.stderr
 
             with wc.session() as db:
-                r = db.execute(
+                count = db.scalar(
                     f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
                 )
-                count = r.scalar()
                 assert count == 0
 
             r = cli_runner.invoke(["checkout", "master"])
             assert r.exit_code == 0, r.stderr
 
             with wc.session() as db:
-                r = db.execute(
+                count = db.scalar(
                     f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
                 )
-                count = r.scalar()
                 assert count == 1
 
 
@@ -628,7 +621,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
         wc = SnoRepo(repo_path).working_copy
 
         is_checked = False
-        orig_func = WorkingCopy_GPKG.write_features
+        orig_func = WorkingCopy._write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -642,7 +635,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(WorkingCopy_GPKG, "write_features", _wrap)
+        monkeypatch.setattr(WorkingCopy, "_write_features", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r
@@ -813,10 +806,9 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
             if head_sha != new_commit:
                 print(f"E: Bad Tree? {head_sha}")
 
-            r = db.execute(
+            head_sha = db.scalar(
                 """SELECT value FROM "gpkg_sno_state" WHERE key = 'tree' AND table_name='*';"""
             )
-            head_sha = r.scalar()
             if head_sha != new_commit:
                 print(f"E: Bad Tree? {head_sha}")
 
@@ -828,16 +820,16 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
                 print(
                     "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
                 )
-            r = db.execute(
+            count = db.scalar(
                 f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;", {"pk": del_pk}
             )
-            if r.scalar() != 4:
+            if count != 4:
                 print("E: Deleted rows {pk_field}<{del_pk} still missing")
-            r = db.execute(
+            count = db.scalar(
                 f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
                 {"value": upd_field_value},
             )
-            if r.scalar() != 0:
+            if count != 0:
                 print("E: Updated rows not reset")
             r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
             if r.fetchone():
@@ -962,8 +954,7 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
             db.execute(
                 """ALTER TABLE "gpkg_sno_state" RENAME TO "gpkg_sno_state_backup";"""
             )
-            r = db.execute("SELECT value FROM gpkg_sno_state_backup;")
-            value = r.scalar()
+            value = db.scalar("SELECT value FROM gpkg_sno_state_backup;")
             db.execute(
                 f"""
                 CREATE TABLE "gpkg_sno_state"

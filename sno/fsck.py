@@ -89,8 +89,9 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            r = db.execute(f"SELECT COUNT(*) FROM {gpkg.ident(table)};")
-            wc_count = r.scalar()
+            wc_count = db.scalar(
+                f"SELECT COUNT(*) FROM {working_copy.table_identifier(dataset)};"
+            )
             click.echo(f"{wc_count} features in {table}")
             ds_count = dataset.feature_count
             if wc_count != ds_count:
@@ -100,11 +101,10 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            r = db.execute(
-                f"SELECT COUNT(*) FROM {working_copy.TRACKING_TABLE} WHERE table_name=:table_name;",
+            track_count = db.scalar(
+                f"SELECT COUNT(*) FROM {working_copy.SNO_TRACK} WHERE table_name=:table_name;",
                 {"table_name": table},
             )
-            track_count = r.scalar()
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
             wc_diff = working_copy.diff_db_to_tree(dataset)
@@ -168,7 +168,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                         )
 
                     f = db.execute(
-                        f"SELECT * FROM {gpkg.ident(table)} WHERE {gpkg.ident(pk)}=:pk;",
+                        f"SELECT * FROM {working_copy.table_identifier(dataset)} WHERE {working_copy.quote(pk)}=:pk;",
                         {"pk": feature[pk]},
                     )
                     db_obj = dict(f.fetchone())

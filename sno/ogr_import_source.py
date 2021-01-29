@@ -8,6 +8,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 import click
 from osgeo import gdal, ogr
+import sqlalchemy
 
 from . import crs_util, gpkg, gpkg_adapter
 from .exceptions import (
@@ -22,7 +23,7 @@ from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
-from .sqlalchemy import gpkg_engine
+from .sqlalchemy import gpkg_engine, postgis_engine
 from .utils import ungenerator
 
 
@@ -608,7 +609,7 @@ class GPKGImportSource(OgrImportSource):
         """
         SQLite-conformant identifier quoting
         """
-        return gpkg.ident(part)
+        return gpkg_adapter.quote(part)
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -711,16 +712,16 @@ class PostgreSQLImportSource(OgrImportSource):
         open_options.append("LIST_ALL_TABLES=YES")
         return super()._ogr_open(ogr_source, **open_kwargs)
 
-    def psycopg2_conn(self):
-        import psycopg2
-
+    @property
+    @functools.lru_cache(maxsize=1)
+    def engine(self):
         conn_str = self.source
         if conn_str.startswith("OGR:"):
             conn_str = conn_str[4:]
         if conn_str.startswith("PG:"):
             conn_str = conn_str[3:]
         # this will either be a URL or a key=value conn str
-        return psycopg2.connect(conn_str)
+        return postgis_engine(conn_str)
 
     def _get_primary_key_value(self, ogr_feature, name):
         try:
@@ -736,20 +737,21 @@ class PostgreSQLImportSource(OgrImportSource):
     def primary_key(self):
         if self._primary_key:
             return self._primary_key
-        conn = self.psycopg2_conn()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
+        with self.engine.connect() as conn:
+            r = conn.execute(
+                sqlalchemy.text(
+                    """
                 SELECT a.attname
                 FROM   pg_index i
                 JOIN   pg_attribute a ON a.attrelid = i.indrelid
                                      AND a.attnum = ANY(i.indkey)
-                WHERE  i.indrelid = %s::regclass
+                WHERE  i.indrelid = (:table)::regclass
                 AND    i.indisprimary;
-                """,
-                [self.table],
+                """
+                ),
+                {"table": self.table},
             )
-            rows = cur.fetchall()
+            rows = list(r)
             num_pks = len(rows)
             if num_pks == 0:
                 return None

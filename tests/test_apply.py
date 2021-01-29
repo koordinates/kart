@@ -391,12 +391,12 @@ def test_apply_with_working_copy(
         assert bits[2] == "Updating"
 
         with gpkg_engine(wc_path).connect() as db:
-            r = db.execute(
+            name = db.scalar(
                 f"""
                 SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;
                 """
             )
-            assert r.scalar() is None
+            assert name is None
 
         # Check that the `sno create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])

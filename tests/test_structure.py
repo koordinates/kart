@@ -469,12 +469,8 @@ def postgis_layer(postgis_db, data_archive):
                 layers=[table],
             )
         yield
-        with postgis_db.cursor() as c:
-            c.execute(
-                f"""
-                DROP TABLE IF EXISTS {quote_ident(table)} CASCADE
-                """
-            )
+        with postgis_db.connect() as conn:
+            conn.execute(f"""DROP TABLE IF EXISTS {quote_ident(table)} CASCADE;""")
 
     return _postgis_layer
 
@@ -564,14 +560,14 @@ def test_postgis_import_from_view(
     with postgis_layer(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
-        c = postgis_db.cursor()
-        c.execute(
-            """
-            CREATE VIEW nz_waca_adjustments_view AS (
-                SELECT * FROM nz_waca_adjustments
+        with postgis_db.connect() as conn:
+            conn.execute(
+                """
+                CREATE VIEW nz_waca_adjustments_view AS (
+                    SELECT * FROM nz_waca_adjustments
+                );
+                """
             )
-        """
-        )
         _test_postgis_import(
             tmp_path / "repo",
             cli_runner,
@@ -595,16 +591,15 @@ def test_postgis_import_from_view_with_ogc_fid(
     with postgis_layer(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
-        c = postgis_db.cursor()
-
-        c.execute(
-            """
-            CREATE VIEW nz_waca_adjustments_view AS (
-                SELECT id AS ogc_fid, date_adjusted, survey_reference, adjusted_nodes, geom
-                FROM nz_waca_adjustments
+        with postgis_db.connect() as conn:
+            conn.execute(
+                """
+                CREATE VIEW nz_waca_adjustments_view AS (
+                    SELECT id AS ogc_fid, date_adjusted, survey_reference, adjusted_nodes, geom
+                    FROM nz_waca_adjustments
+                );
+                """
             )
-        """
-        )
         _test_postgis_import(
             tmp_path / "repo",
             cli_runner,
@@ -628,16 +623,16 @@ def test_postgis_import_from_view_no_pk(
     with postgis_layer(
         "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
     ):
-        c = postgis_db.cursor()
-        c.execute(
-            """
-            CREATE VIEW nz_waca_adjustments_view AS (
-                SELECT date_adjusted, survey_reference, adjusted_nodes, geom
-                FROM nz_waca_adjustments
-                WHERE id % 3 != 0
+        with postgis_db.connect() as conn:
+            conn.execute(
+                """
+                CREATE VIEW nz_waca_adjustments_view AS (
+                    SELECT date_adjusted, survey_reference, adjusted_nodes, geom
+                    FROM nz_waca_adjustments
+                    WHERE id %% 3 != 0
+                );
+                """
             )
-        """
-        )
         _test_postgis_import(
             repo_path,
             cli_runner,
@@ -653,16 +648,17 @@ def test_postgis_import_from_view_no_pk(
         assert max(initial_pks) == 161
         assert sorted(initial_pks) == list(range(1, 161 + 1))
 
-        c.execute("DROP VIEW nz_waca_adjustments_view;")
-        c.execute(
-            """
-            CREATE VIEW nz_waca_adjustments_view AS (
-                SELECT date_adjusted, survey_reference, adjusted_nodes, geom
-                FROM nz_waca_adjustments
-                WHERE id % 3 != 1
+        with postgis_db.connect() as conn:
+            conn.execute("DROP VIEW nz_waca_adjustments_view;")
+            conn.execute(
+                """
+                CREATE VIEW nz_waca_adjustments_view AS (
+                    SELECT date_adjusted, survey_reference, adjusted_nodes, geom
+                    FROM nz_waca_adjustments
+                    WHERE id %% 3 != 1
+                );
+                """
             )
-        """
-        )
 
         r = cli_runner.invoke(
             [
@@ -687,19 +683,20 @@ def test_postgis_import_from_view_no_pk(
         # Means 92 features are in both, and should be imported with the same PK both times
         # 159 + 161 is 320, which is 92 more features than the actual total of 228
 
-        # This is similar enough to be detected as an edit - only one field is different.
-        c.execute(
-            "UPDATE nz_waca_adjustments SET survey_reference='foo' WHERE id=1424927;"
-        )
-        # This is similar enough to be detected as an edit - only one field is different.
-        c.execute(
-            "UPDATE nz_waca_adjustments SET adjusted_nodes=12345678 WHERE id=1443053;"
-        )
-        # This will not be detected as an edit - two fields are different,
-        # so it looks like one feature is deleted and a different one is inserted.
-        c.execute(
-            "UPDATE nz_waca_adjustments SET survey_reference='bar', adjusted_nodes=87654321 WHERE id=1452332;"
-        )
+        with postgis_db.connect() as conn:
+            # This is similar enough to be detected as an edit - only one field is different.
+            conn.execute(
+                "UPDATE nz_waca_adjustments SET survey_reference='foo' WHERE id=1424927;"
+            )
+            # This is similar enough to be detected as an edit - only one field is different.
+            conn.execute(
+                "UPDATE nz_waca_adjustments SET adjusted_nodes=12345678 WHERE id=1443053;"
+            )
+            # This will not be detected as an edit - two fields are different,
+            # so it looks like one feature is deleted and a different one is inserted.
+            conn.execute(
+                "UPDATE nz_waca_adjustments SET survey_reference='bar', adjusted_nodes=87654321 WHERE id=1452332;"
+            )
 
         r = cli_runner.invoke(
             [
