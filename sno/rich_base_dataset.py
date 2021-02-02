@@ -373,10 +373,14 @@ class RichBaseDataset(BaseDataset):
             old_key = delta.old_key
             new_key = delta.new_key
             old_path = (
-                self.encode_1pk_to_path(old_key, relative=True) if old_key else None
+                self.encode_1pk_to_path(old_key, relative=True)
+                if old_key is not None
+                else None
             )
             new_path = (
-                self.encode_1pk_to_path(new_key, relative=True) if new_key else None
+                self.encode_1pk_to_path(new_key, relative=True)
+                if new_key is not None
+                else None
             )
 
             # Conflict detection
