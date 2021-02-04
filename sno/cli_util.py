@@ -10,9 +10,9 @@ def add_help_subcommand(group):
     def help(ctx, topic, **kw):
         # https://www.burgundywall.com/post/having-click-help-subcommand
         if topic is None:
-            print(ctx.parent.get_help())
+            click.echo(ctx.parent.get_help())
         else:
-            print(group.commands[topic].get_help(ctx))
+            click.echo(group.get_command(ctx, topic).get_help(ctx))
 
     return group
 
