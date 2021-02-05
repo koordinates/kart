@@ -9,8 +9,11 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import apsw
-import pygit2
+from sno.repo import SnoRepo
+from sno.working_copy.base import WorkingCopy
+
+
+QMARK = "?"
 
 
 def main():
@@ -73,7 +76,7 @@ def main():
 
     options = parser.parse_args()
 
-    repo = pygit2.Repository(options.repo)
+    repo = SnoRepo(options.repo)
     if options.commits and not repo:
         parser.error(
             f"No repository found at: '{options.repo}'. Specify path via --repo or use COMMITS=0"
@@ -83,11 +86,12 @@ def main():
         db_path = options.gpkg
         if not Path(db_path).exists():
             parser.error(f"GeoPackage {db_path} not found")
+        wc = WorkingCopy.get_at_path(repo, db_path)
     elif repo:
-        if "sno.workingcopy.path" not in repo.config:
+        wc = repo.working_copy
+        if not wc:
             parser.error(f"No working copy found, specify with --gpkg?")
 
-        db_path = str(Path(repo.path) / repo.config["sno.workingcopy.path"])
     else:
         parser.error("If no repository, need to specify GeoPackage path with --gpkg")
 
@@ -105,81 +109,73 @@ def main():
     def row_factory(cursor, row):
         return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
 
-    db = apsw.Connection(str(db_path))
-    db.setrowtrace(row_factory)
-    if options.debug:
-        db.setexectrace(db_debug)
-    dbcur = db.cursor()
-    db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
-    db.loadextension(str(Path(sys.prefix) / "lib" / "mod_spatialite"))
-    dbcur.execute("SELECT EnableGpkgMode();")
-    print(f"Connected to {db_path}")
+    with wc.session() as sess:
+        print(f"Connected to {wc.path}")
 
-    all_tables = [r[0] for r in dbcur.execute("SELECT table_name FROM gpkg_contents;")]
-    if options.tables:
-        tables = options.tables
-        assert set(tables) <= set(
-            all_tables
-        ), f"Couldn't find some of those tables: {set(tables) - set(all_tables)}"
-    else:
-        tables = all_tables
+        all_tables = [
+            r[0] for r in sess.execute("SELECT table_name FROM gpkg_contents;")
+        ]
+        if options.tables:
+            tables = options.tables
+            assert set(tables) <= set(
+                all_tables
+            ), f"Couldn't find some of those tables: {set(tables) - set(all_tables)}"
+        else:
+            tables = all_tables
 
-    print(f"Tables:", *tables, sep="\n\t")
+        print(f"Tables:", *tables, sep="\n\t")
 
-    print("Getting row counts...")
-    row_counts = {}
-    for table in tables:
-        row_counts[table] = dbcur.execute(
-            f'SELECT COUNT(*) FROM "{table}";'
-        ).fetchone()[0]
-        print(f"\t{table:40}\t{row_counts[table]:9,}")
+        print("Getting row counts...")
+        row_counts = {}
+        for table in tables:
+            row_counts[table] = sess.execute(
+                f'SELECT COUNT(*) FROM "{table}";'
+            ).fetchone()[0]
+            print(f"\t{table:40}\t{row_counts[table]:9,}")
 
-    print("Getting schema information...")
-    col_info = {}
-    pk_info = {}
-    for table in tables:
-        q = dbcur.execute(f'PRAGMA table_info("{table}");')
-        cols = {}
-        for row in q:
-            if row["pk"]:
-                pk_info[table] = row["name"]
-            else:
-                cols[row["name"]] = row["type"]
-        col_info[table] = cols
+        print("Getting schema information...")
+        col_info = {}
+        pk_info = {}
+        for table in tables:
+            q = sess.execute(f'PRAGMA table_info("{table}");')
+            cols = {}
+            for row in q:
+                if row["pk"]:
+                    pk_info[table] = row["name"]
+                else:
+                    cols[row["name"]] = row["type"]
+            col_info[table] = cols
 
-    def insert(table, n):
+    def insert(sess, table, n):
         cols = col_info[table]
         cols_expr = ", ".join([f'"{c}"' for c in cols])
         offset = random.randint(0, row_counts[table] - n - 1)
-        dbcur = db.cursor()
         sql = (
             f"""INSERT INTO "{table}" """
             f"""({cols_expr}) """
             f"""SELECT {cols_expr} FROM "{table}" LIMIT {n} OFFSET {offset}"""
         )
         debug(sql, fg=36, prefix="🌀📝")
-        dbcur.execute(sql)
-        assert db.changes() == n
+        r = sess.execute(sql)
+        assert r.rowcount == n
         row_counts[table] += n
 
-    def delete(table, n):
+    def delete(sess, table, n):
         offset = random.randint(0, row_counts[table] - n - 1)
         pk = pk_info[table]
-        dbcur = db.cursor()
         sql = f"""DELETE FROM "{table}" WHERE "{pk}" IN (SELECT "{pk}" FROM "{table}" LIMIT {n} OFFSET {offset});"""
         debug(sql, fg=36, prefix="🌀📝")
-        dbcur.execute(sql)
-        assert db.changes() == n
+        r = sess.execute(sql)
+        assert r.rowcount == n
         row_counts[table] -= n
 
-    def update(table, n):
+    def update(sess, table, n):
         cols = col_info[table]
         pk = pk_info[table]
-        dbcur = db.cursor()
         for i in range(n):
             offset = random.randint(0, row_counts[table] - 1)
             f_old = dict(
-                dbcur.execute(
+                sess.execute(
                     f"""SELECT * FROM "{table}" LIMIT 1 OFFSET {offset};"""
                 ).fetchone()
             )
@@ -190,14 +186,15 @@ def main():
                 f_new[c] = evolve(cols[c], f_old[c])
 
             upd_expr = []
-            params = []
+            params = {}
 
             for c, (e, v) in f_new.items():
+                placeholder = f":v{len(params)}"
                 if e is None:
-                    upd_expr.append(f'"{c}"=?')
+                    upd_expr.append(f'"{c}"={placeholder}')
                 else:
-                    upd_expr.append(f'"{c}"={e}')
-                params.append(v)
+                    upd_expr.append(f'"{c}"={e.replace(QMARK, placeholder)}')
+                params[placeholder[1:]] = v
 
             if options.debug:
                 d_old = {
@@ -217,15 +214,15 @@ def main():
                 }
                 debug(f"{pk}={f_old[pk]}:", d_old, "\n  -> ", d_new, prefix="🔶", fg=33)
 
-            params.append(f_old[pk])
+            params["pk"] = f_old[pk]
             sql = (
                 f"""UPDATE "{table}" """
                 f"""SET {", ".join(upd_expr)} """
-                f"""WHERE "{pk}"=?;"""
+                f"""WHERE "{pk}"=:pk;"""
             )
             debug(sql, params, fg=36, prefix="🌀📝")
-            dbcur.execute(sql, params)
-            assert db.changes() == 1
+            r = sess.execute(sql, params)
+            assert r.rowcount == 1
 
     def evolve(typ, old):
         if old is None:
@@ -276,19 +273,16 @@ def main():
     t0 = time.monotonic()
     try:
         for i in range(options.commits or 1):
-            db.execute("BEGIN")
 
-            for table in tables:
-                update(table, num_updates)
-                insert(table, num_inserts)
-                delete(table, num_deletes)
+            with wc.session() as sess:
+                for table in tables:
+                    update(sess, table, num_updates)
+                    insert(sess, table, num_inserts)
+                    delete(sess, table, num_deletes)
 
-            if options.debug:
-                print("Aborting for --debug ...")
-                db.execute("ROLLBACK")
-                return
-            else:
-                db.execute("COMMIT")
+                if options.debug:
+                    print("Aborting for --debug ...")
+                    raise RuntimeError("ROLLBACK")
 
             if not options.commits:
                 print("GeoPackage changes made, skipping sno commit.")
