@@ -131,8 +131,8 @@ class WorkingCopy_GPKG(WorkingCopy):
         """
         if not self.is_created():
             return False
-        with self.session() as db:
-            count = db.scalar(
+        with self.session() as sess:
+            count = sess.scalar(
                 f"""
                 SELECT count(*) FROM sqlite_master
                 WHERE type='table' AND name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
@@ -146,8 +146,8 @@ class WorkingCopy_GPKG(WorkingCopy):
         """
         if not self.is_created():
             return False
-        with self.session() as db:
-            count = db.scalar(
+        with self.session() as sess:
+            count = sess.scalar(
                 f"""
                 SELECT count(*) FROM sqlite_master
                 WHERE type='table'
@@ -164,19 +164,21 @@ class WorkingCopy_GPKG(WorkingCopy):
         gdal_ds = gdal_driver.Create(str(self.full_path), 0, 0, 0, gdal.GDT_Unknown)
         del gdal_ds
 
-        with self.session() as db:
+        with self.session() as sess:
             # Remove placeholder stuff GDAL creates
-            db.execute(
+            sess.execute(
                 "DELETE FROM gpkg_geometry_columns WHERE table_name='ogr_empty_table';"
             )
-            db.execute("DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';")
-            db.execute("DROP TABLE IF EXISTS ogr_empty_table;")
+            sess.execute(
+                "DELETE FROM gpkg_contents WHERE table_name='ogr_empty_table';"
+            )
+            sess.execute("DROP TABLE IF EXISTS ogr_empty_table;")
 
             # Create metadata tables
-            GpkgTables.create_all(db)
-            GpkgSnoTables.create_all(db)
+            GpkgTables.create_all(sess)
+            GpkgSnoTables.create_all(sess)
 
-    def _create_table_for_dataset(self, db, dataset):
+    def _create_table_for_dataset(self, sess, dataset):
         table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
 
         # GPKG requires an integer primary key for spatial tables, so we add it in if needed:
@@ -186,9 +188,11 @@ class WorkingCopy_GPKG(WorkingCopy):
                 + table_spec
             )
 
-        db.execute(f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});""")
+        sess.execute(
+            f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
+        )
 
-    def _write_meta(self, db, dataset):
+    def _write_meta(self, sess, dataset):
         """
         Populate the following tables with data from this dataset:
         gpkg_contents, gpkg_geometry_columns, gpkg_spatial_ref_sys, gpkg_metadata, gpkg_metadata_reference
@@ -207,10 +211,10 @@ class WorkingCopy_GPKG(WorkingCopy):
         gpkg_geometry_columns = dataset.get_gpkg_meta_item("gpkg_geometry_columns")
         gpkg_spatial_ref_sys = dataset.get_gpkg_meta_item("gpkg_spatial_ref_sys")
 
-        with self.session() as db:
+        with self.session() as sess:
             # Update GeoPackage core tables
             if gpkg_spatial_ref_sys:
-                db.execute(
+                sess.execute(
                     GpkgTables.gpkg_spatial_ref_sys.insert().prefix_with("OR REPLACE"),
                     gpkg_spatial_ref_sys,
                 )
@@ -218,10 +222,10 @@ class WorkingCopy_GPKG(WorkingCopy):
             # Our repo copy doesn't include all fields from gpkg_contents
             # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y}
             # should deal with the remaining fields.
-            db.execute(GpkgTables.gpkg_contents.insert(), gpkg_contents)
+            sess.execute(GpkgTables.gpkg_contents.insert(), gpkg_contents)
 
             if gpkg_geometry_columns:
-                db.execute(
+                sess.execute(
                     GpkgTables.gpkg_geometry_columns.insert(), gpkg_geometry_columns
                 )
 
@@ -231,11 +235,15 @@ class WorkingCopy_GPKG(WorkingCopy):
             )
             if gpkg_metadata and gpkg_metadata_reference:
                 self._write_meta_metadata(
-                    table_name, gpkg_metadata, gpkg_metadata_reference, db
+                    sess, table_name, gpkg_metadata, gpkg_metadata_reference
                 )
 
     def _write_meta_metadata(
-        self, table_name, gpkg_metadata, gpkg_metadata_reference, db
+        self,
+        sess,
+        table_name,
+        gpkg_metadata,
+        gpkg_metadata_reference,
     ):
         """Populate gpkg_metadata and gpkg_metadata_reference tables."""
         # gpkg_metadata_reference.md_file_id is a foreign key -> gpkg_metadata.id,
@@ -245,7 +253,7 @@ class WorkingCopy_GPKG(WorkingCopy):
             params = dict(row.items())
             params.pop("id")
 
-            r = db.execute(GpkgTables.gpkg_metadata.insert(), params)
+            r = sess.execute(GpkgTables.gpkg_metadata.insert(), params)
             metadata_id_map[row["id"]] = r.lastrowid
 
         for row in gpkg_metadata_reference:
@@ -254,7 +262,7 @@ class WorkingCopy_GPKG(WorkingCopy):
             params["md_parent_id"] = metadata_id_map.get(row["md_parent_id"], None)
             params["table_name"] = table_name
 
-            db.execute(GpkgTables.gpkg_metadata_reference.insert(), params)
+            sess.execute(GpkgTables.gpkg_metadata_reference.insert(), params)
 
     def meta_items(self, dataset):
         """
@@ -263,8 +271,8 @@ class WorkingCopy_GPKG(WorkingCopy):
         - the generated column IDs are stable, but do not necessarily match the ones in the dataset.
         Calling Schema.align_* is required to find how the columns matches the existing schema.
         """
-        with self.session() as db:
-            gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(db, dataset.table_name)
+        with self.session() as sess:
+            gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(sess, dataset.table_name)
 
         gpkg_name = os.path.basename(self.path)
 
@@ -332,35 +340,35 @@ class WorkingCopy_GPKG(WorkingCopy):
 
     def delete_meta(self, dataset):
         table_name = dataset.table_name
-        with self.session() as db:
-            self._delete_meta_metadata(table_name, db)
+        with self.session() as sess:
+            self._delete_meta_metadata(sess, table_name)
             # FOREIGN KEY constraints are still active, so we delete in a particular order:
-            db.execute(
+            sess.execute(
                 """DELETE FROM gpkg_geometry_columns WHERE table_name = :table_name;""",
                 {"table_name": dataset.table_name},
             )
-            db.execute(
+            sess.execute(
                 """DELETE FROM gpkg_contents WHERE table_name = :table_name;""",
                 {"table_name": dataset.table_name},
             )
 
-    def _delete_meta_metadata(self, table_name, db):
-        r = db.execute(
+    def _delete_meta_metadata(self, sess, table_name):
+        r = sess.execute(
             """SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name = :table_name;""",
             {"table_name": table_name},
         )
         ids = [row[0] for row in r]
-        db.execute(
+        sess.execute(
             """DELETE FROM gpkg_metadata_reference WHERE table_name = :table_name;""",
             {"table_name": table_name},
         )
         if ids:
-            db.execute(
+            sess.execute(
                 """DELETE FROM gpkg_metadata WHERE id = :id;""",
                 [{"id": i} for i in ids],
             )
 
-    def _create_spatial_index(self, db, dataset):
+    def _create_spatial_index(self, sess, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
         geom_col = dataset.geom_column_name
 
@@ -368,14 +376,14 @@ class WorkingCopy_GPKG(WorkingCopy):
         t0 = time.monotonic()
         L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
 
-        db.execute(
+        sess.execute(
             "SELECT gpkgAddSpatialIndex(:table, :geom);",
             {"table": dataset.table_name, "geom": geom_col},
         )
 
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
-    def _drop_spatial_index(self, dbcur, dataset):
+    def _drop_spatial_index(self, sess, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._drop_spatial_index")
         geom_col = dataset.geom_column_name
 
@@ -384,33 +392,33 @@ class WorkingCopy_GPKG(WorkingCopy):
         L.debug("Dropping spatial index for %s.%s", dataset.table_name, geom_col)
 
         rtree_table = f"rtree_{dataset.table_name}_{geom_col}"
-        dbcur.execute(f"DROP TABLE {self.quote(rtree_table)};")
-        dbcur.execute(
+        sess.execute(f"DROP TABLE {self.quote(rtree_table)};")
+        sess.execute(
             f"DELETE FROM gpkg_extensions WHERE (table_name, column_name, extension_name) = (:table_name, :column_name, 'gpkg_rtree_index')",
             {"table_name": dataset.table_name, "column_name": geom_col},
         )
 
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
 
-    def _drop_triggers(self, dbcur, dataset):
-        dbcur.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'ins')}")
-        dbcur.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'upd')}")
-        dbcur.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'del')}")
+    def _drop_triggers(self, sess, dataset):
+        sess.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'ins')}")
+        sess.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'upd')}")
+        sess.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'del')}")
 
     @contextlib.contextmanager
-    def _suspend_triggers(self, dbcur, dataset):
-        self._drop_triggers(dbcur, dataset)
+    def _suspend_triggers(self, sess, dataset):
+        self._drop_triggers(sess, dataset)
         yield
-        self._create_triggers(dbcur, dataset)
+        self._create_triggers(sess, dataset)
 
-    def _create_triggers(self, db, dataset):
+    def _create_triggers(self, sess, dataset):
         table_identifier = self.table_identifier(dataset)
         pk_column = self.quote(dataset.primary_key)
 
         # SQLite doesn't let you do param substitutions in CREATE TRIGGER:
         escaped_table_name = dataset.table_name.replace("'", "''")
 
-        db.execute(
+        sess.execute(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset, 'ins')}
                AFTER INSERT ON {table_identifier}
@@ -421,11 +429,10 @@ class WorkingCopy_GPKG(WorkingCopy):
             END;
             """
         )
-        db.execute(
+        sess.execute(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset, 'upd')}
-               AFTER UPDATE
-               ON {table_identifier}
+               AFTER UPDATE ON {table_identifier}
             BEGIN
                 INSERT OR REPLACE INTO {self.SNO_TRACK}
                     (table_name, pk)
@@ -435,11 +442,10 @@ class WorkingCopy_GPKG(WorkingCopy):
             END;
             """
         )
-        db.execute(
+        sess.execute(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset, 'del')}
-               AFTER DELETE
-               ON {table_identifier}
+               AFTER DELETE ON {table_identifier}
             BEGIN
                 INSERT OR REPLACE INTO {self.SNO_TRACK}
                     (table_name, pk)
@@ -489,22 +495,22 @@ class WorkingCopy_GPKG(WorkingCopy):
         dt.pop("name_updates")
         return sum(dt.values()) == 0
 
-    def _apply_meta_title(self, dataset, src_value, dest_value, db):
+    def _apply_meta_title(self, sess, dataset, src_value, dest_value):
         # TODO - find a better way to roundtrip titles while keeping them unique
         table_name = dataset.table_name
         identifier = f"{table_name}: {dest_value}"
-        db.execute(
+        sess.execute(
             """UPDATE gpkg_contents SET identifier = :identifier WHERE table_name = :table_name""",
             {"identifier": identifier, "table_name": table_name},
         )
 
-    def _apply_meta_description(self, dataset, src_value, dest_value, db):
-        db.execute(
+    def _apply_meta_description(self, sess, dataset, src_value, dest_value):
+        sess.execute(
             """UPDATE gpkg_contents SET description = :description WHERE table_name = :table_name""",
             {"description": dest_value, "table_name": dataset.table_name},
         )
 
-    def _apply_meta_schema_json(self, dataset, src_value, dest_value, db):
+    def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 
@@ -518,27 +524,29 @@ class WorkingCopy_GPKG(WorkingCopy):
         for col_id in name_updates:
             src_name = src_schema[col_id].name
             dest_name = dest_schema[col_id].name
-            db.execute(
+            sess.execute(
                 f"""
                 ALTER TABLE {self.table_identifier(dataset)}
                 RENAME COLUMN {self.quote(src_name)} TO {self.quote(dest_name)}
                 """
             )
 
-    def _apply_meta_metadata_dataset_json(self, dataset, src_value, dest_value, db):
+    def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):
         table = dataset.table_name
-        self._delete_meta_metadata(table, db)
+        self._delete_meta_metadata(sess, table)
         if dest_value:
             gpkg_metadata = gpkg_adapter.json_to_gpkg_metadata(dest_value, table)
             gpkg_metadata_reference = gpkg_adapter.json_to_gpkg_metadata(
                 dest_value, table, reference=True
             )
-            self._write_meta_metadata(table, gpkg_metadata, gpkg_metadata_reference, db)
+            self._write_meta_metadata(
+                sess, table, gpkg_metadata, gpkg_metadata_reference
+            )
 
-    def _update_last_write_time(self, db, dataset, commit=None):
-        self._update_gpkg_contents(db, dataset, commit)
+    def _update_last_write_time(self, sess, dataset, commit=None):
+        self._update_gpkg_contents(sess, dataset, commit)
 
-    def _update_gpkg_contents(self, db, dataset, commit=None):
+    def _update_gpkg_contents(self, sess, dataset, commit=None):
         """
         Update the metadata for the given table in gpkg_contents to have the new bounding-box / last-updated timestamp.
         """
@@ -553,14 +561,14 @@ class WorkingCopy_GPKG(WorkingCopy):
         geom_col = dataset.geom_column_name
         if geom_col is not None:
             # FIXME: Why doesn't Extent(geom) work here as an aggregate?
-            r = db.execute(
+            r = sess.execute(
                 f"""
                 WITH _E AS (SELECT extent({self.quote(geom_col)}) AS extent FROM {table_identifer})
                 SELECT ST_MinX(extent), ST_MinY(extent), ST_MaxX(extent), ST_MaxY(extent) FROM _E
                 """
             )
             min_x, min_y, max_x, max_y = r.fetchone()
-            rc = db.execute(
+            rc = sess.execute(
                 """
                 UPDATE gpkg_contents
                 SET (last_change, min_x, min_y, max_x, max_y) = (:last_change, :min_x, :min_y, :max_x, :max_y)
@@ -576,7 +584,7 @@ class WorkingCopy_GPKG(WorkingCopy):
                 },
             ).rowcount
         else:
-            rc = db.execute(
+            rc = sess.execute(
                 """UPDATE gpkg_contents SET last_change=:last_change WHERE table_name=:table_name;""",
                 {"last_change": gpkg_change_time, "table_name": dataset.table_name},
             ).rowcount

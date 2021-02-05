@@ -154,8 +154,8 @@ class WorkingCopy_Postgis(WorkingCopy):
         or configured, without it triggering code that checks for corrupted working copies.
         Note that it might not be initialised as a working copy - see self.is_initialised.
         """
-        with self.session() as db:
-            count = db.scalar(
+        with self.session() as sess:
+            count = sess.scalar(
                 """
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema=:table_schema;
@@ -169,8 +169,8 @@ class WorkingCopy_Postgis(WorkingCopy):
         Returns true if the postgis working copy is initialised -
         the schema exists and has the necessary sno tables, _sno_state and _sno_track.
         """
-        with self.session() as db:
-            count = db.scalar(
+        with self.session() as sess:
+            count = sess.scalar(
                 f"""
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema=:table_schema AND table_name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
@@ -183,8 +183,8 @@ class WorkingCopy_Postgis(WorkingCopy):
         """
         Returns true if the postgis working copy seems to have user-created content already.
         """
-        with self.session() as db:
-            count = db.scalar(
+        with self.session() as sess:
+            count = sess.scalar(
                 f"""
                 SELECT COUNT(*) FROM information_schema.tables
                 WHERE table_schema=:table_schema AND table_name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
@@ -194,11 +194,11 @@ class WorkingCopy_Postgis(WorkingCopy):
             return count > 0
 
     def create_and_initialise(self):
-        with self.session() as db:
-            db.execute(f"CREATE SCHEMA IF NOT EXISTS {self.DB_SCHEMA};")
-            self.sno_tables.create_all(db)
+        with self.session() as sess:
+            sess.execute(f"CREATE SCHEMA IF NOT EXISTS {self.DB_SCHEMA};")
+            self.sno_tables.create_all(sess)
 
-            db.execute(
+            sess.execute(
                 f"""
                 CREATE OR REPLACE FUNCTION {self.DB_SCHEMA}._sno_track_trigger() RETURNS TRIGGER AS $body$
                 DECLARE
@@ -236,11 +236,11 @@ class WorkingCopy_Postgis(WorkingCopy):
         """Delete all tables in the schema."""
         # We don't use drop ... cascade since that could also delete things outside the schema.
         # Better to fail to delete the schema, than to delete things the user didn't want to delete.
-        with self.session() as db:
+        with self.session() as sess:
             # Don't worry about constraints when dropping everything.
-            db.execute("SET CONSTRAINTS ALL DEFERRED;")
+            sess.execute("SET CONSTRAINTS ALL DEFERRED;")
             # Drop tables
-            r = db.execute(
+            r = sess.execute(
                 "SELECT tablename FROM pg_tables where schemaname=:schema;",
                 {"schema": self.db_schema},
             )
@@ -248,10 +248,10 @@ class WorkingCopy_Postgis(WorkingCopy):
                 table_identifiers = ", ".join(
                     (self.table_identifier(row[0]) for row in r)
                 )
-                db.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
+                sess.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
 
             # Drop functions
-            r = db.execute(
+            r = sess.execute(
                 "SELECT proname from pg_proc WHERE pronamespace = (:schema)::regnamespace;",
                 {"schema": self.db_schema},
             )
@@ -259,31 +259,31 @@ class WorkingCopy_Postgis(WorkingCopy):
                 function_identifiers = ", ".join(
                     (self.table_identifier(row[0]) for row in r)
                 )
-                db.execute(f"DROP FUNCTION IF EXISTS {function_identifiers};")
+                sess.execute(f"DROP FUNCTION IF EXISTS {function_identifiers};")
 
             # Drop schema, unless keep_db_schema_if_possible=True
             if not keep_db_schema_if_possible:
-                db.execute(f"""DROP SCHEMA IF EXISTS {self.DB_SCHEMA};""")
+                sess.execute(f"""DROP SCHEMA IF EXISTS {self.DB_SCHEMA};""")
 
-    def _create_table_for_dataset(self, db, dataset):
+    def _create_table_for_dataset(self, sess, dataset):
         table_spec = postgis_adapter.v2_schema_to_postgis_spec(dataset.schema, dataset)
-        db.execute(
+        sess.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
 
-    def _write_meta(self, db, dataset):
+    def _write_meta(self, sess, dataset):
         """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
-        self._write_meta_title(db, dataset)
-        self._write_meta_crs(db, dataset)
+        self._write_meta_title(sess, dataset)
+        self._write_meta_crs(sess, dataset)
 
-    def _write_meta_title(self, db, dataset):
+    def _write_meta_title(self, sess, dataset):
         """Write the dataset title as a comment on the table."""
-        db.execute(
+        sess.execute(
             f"""COMMENT ON TABLE {self.table_identifier(dataset)} IS :comment""",
             {"comment": dataset.get_meta_item("title")},
         )
 
-    def _write_meta_crs(self, db, dataset):
+    def _write_meta_crs(self, sess, dataset):
         """Populate the spatial_ref_sys table with data from this dataset."""
         spatial_refs = postgis_adapter.generate_postgis_spatial_ref_sys(dataset)
         if not spatial_refs:
@@ -293,7 +293,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         # of the Postgis builtin definitions - Postgis has lots of EPSG and ESRI
         # definitions built-in, plus the 900913 (GOOGLE) definition.
         # See POSTGIS_WC.md for help on working with CRS definitions in a Postgis WC.
-        db.execute(
+        sess.execute(
             """
             INSERT INTO spatial_ref_sys AS SRS (srid, auth_name, auth_srid, srtext, proj4text)
             VALUES (:srid, :auth_name, :auth_srid, :srtext, :proj4text)
@@ -309,7 +309,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         """Delete any metadata that is only needed by this dataset."""
         pass  # There is no metadata except for the spatial_ref_sys table.
 
-    def _create_spatial_index(self, db, dataset):
+    def _create_spatial_index(self, sess, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
 
         geom_col = dataset.geom_column_name
@@ -317,7 +317,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         # Create the PostGIS Spatial Index
         L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
         t0 = time.monotonic()
-        db.execute(
+        sess.execute(
             f"""
             CREATE INDEX "{dataset.table_name}_idx_{geom_col}"
             ON {self.table_identifier(dataset)} USING GIST ({self.quote(geom_col)});
@@ -325,12 +325,12 @@ class WorkingCopy_Postgis(WorkingCopy):
         )
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
-    def _drop_spatial_index(self, dbcur, dataset):
+    def _drop_spatial_index(self, sess, dataset):
         # PostGIS deletes the spatial index automatically when the table is deleted.
         pass
 
-    def _create_triggers(self, db, dataset):
-        db.execute(
+    def _create_triggers(self, sess, dataset):
+        sess.execute(
             f"""
             CREATE TRIGGER "sno_track" AFTER INSERT OR UPDATE OR DELETE ON {self.table_identifier(dataset)}
             FOR EACH ROW EXECUTE PROCEDURE {self.DB_SCHEMA}._sno_track_trigger(:pk_field)
@@ -339,18 +339,18 @@ class WorkingCopy_Postgis(WorkingCopy):
         )
 
     @contextlib.contextmanager
-    def _suspend_triggers(self, db, dataset):
-        db.execute(
+    def _suspend_triggers(self, sess, dataset):
+        sess.execute(
             f"""ALTER TABLE {self.table_identifier(dataset)} DISABLE TRIGGER "sno_track";"""
         )
         yield
-        db.execute(
+        sess.execute(
             f"""ALTER TABLE {self.table_identifier(dataset)} ENABLE TRIGGER "sno_track";"""
         )
 
     def meta_items(self, dataset):
-        with self.session() as db:
-            title = db.scalar(
+        with self.session() as sess:
+            title = sess.scalar(
                 "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
                 {"table_identifier": f"{self.db_schema}.{dataset.table_name}"},
             )
@@ -374,7 +374,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 WHERE C.table_schema=:table_schema AND C.table_name=:table_name
                 ORDER BY C.ordinal_position;
             """
-            r = db.execute(
+            r = sess.execute(
                 table_info_sql,
                 {"table_schema": self.db_schema, "table_name": dataset.table_name},
             )
@@ -385,7 +385,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 LEFT OUTER JOIN geometry_columns GC ON (GC.srid = SRS.srid)
                 WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
             """
-            r = db.execute(
+            r = sess.execute(
                 spatial_ref_sys_sql,
                 {"table_schema": self.db_schema, "table_name": dataset.table_name},
             )
@@ -461,19 +461,19 @@ class WorkingCopy_Postgis(WorkingCopy):
         dt.pop("type_updates")
         return sum(dt.values()) == 0
 
-    def _apply_meta_title(self, dataset, src_value, dest_value, db):
+    def _apply_meta_title(self, sess, dataset, src_value, dest_value):
         db.execute(
             f"COMMENT ON TABLE {self._table_identifier(dataset.table_name)} IS :comment",
             {"comment": dest_value},
         )
 
-    def _apply_meta_description(self, dataset, src_value, dest_value, db):
+    def _apply_meta_description(self, sess, dataset, src_value, dest_value):
         pass  # This is a no-op for postgis
 
-    def _apply_meta_metadata_dataset_json(self, dataset, src_value, dest_value, db):
+    def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):
         pass  # This is a no-op for postgis
 
-    def _apply_meta_schema_json(self, dataset, src_value, dest_value, db):
+    def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
 
@@ -491,7 +491,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         table = dataset.table_name
         for col_id in deletes:
             src_name = src_schema[col_id].name
-            db.execute(
+            sess.execute(
                 f"""
                 ALTER TABLE {self._table_identifier(table)}
                 DROP COLUMN IF EXISTS {self.quote(src_name)};"""
@@ -500,7 +500,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         for col_id in name_updates:
             src_name = src_schema[col_id].name
             dest_name = dest_schema[col_id].name
-            db.execute(
+            sess.execute(
                 f"""
                 ALTER TABLE {self._table_identifier(table)}
                 RENAME COLUMN {self.quote(src_name)} TO {self.quote(dest_name)};
@@ -520,9 +520,9 @@ class WorkingCopy_Postgis(WorkingCopy):
                         dest_type += f""" USING ST_SetSRID({self.quote(col.name)}"::GEOMETRY, {crs_id})"""
                         do_write_crs = True
 
-            db.execute(
+            sess.execute(
                 f"""ALTER TABLE {self._table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
             )
 
         if do_write_crs:
-            self._write_meta_crs(db, dataset)
+            self._write_meta_crs(sess, dataset)
