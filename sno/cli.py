@@ -38,6 +38,7 @@ def print_version(ctx):
     import apsw
     import osgeo
     import psycopg2
+    import pysqlite3
     import rtree
 
     import sno
@@ -80,8 +81,8 @@ def print_version(ctx):
             f"» PyGit2 v{pygit2.__version__}; "
             f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
             f"Git v{git_version}\n"
-            f"» APSW v{apsw.apswversion()}; "
-            f"SQLite v{apsw.sqlitelibversion()}; "
+            f"» APSW v{apsw.apswversion()}/v{apsw.sqlitelibversion()}; "
+            f"pysqlite3 v{pysqlite3.version}/v{pysqlite3.sqlite_version}; "
             f"SpatiaLite v{spatialite_version}; "
             f"Libpq v{pq_version}\n"
             f"» SpatialIndex v{sidx_version}"

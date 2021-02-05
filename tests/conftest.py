@@ -18,15 +18,14 @@ import pytest
 
 import click
 from click.testing import CliRunner
-from sno.db_util import execute_insert_dict, changes_rowcount
+import pygit2
+import sqlalchemy
+
+
 from sno.geometry import Geometry
 from sno.repo import SnoRepo
+from sno.sqlalchemy import gpkg_engine, postgis_engine
 from sno.working_copy import WorkingCopy
-
-import apsw
-import pygit2
-import psycopg2
-from psycopg2.sql import Identifier, SQL
 
 
 pytest_plugins = ["helpers_namespace"]
@@ -352,26 +351,6 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
     return _data_imported
 
 
-@pytest.fixture
-def geopackage():
-    """ Return a SQLite3 (APSW) db connection for the specified DB, with spatialite loaded """
-
-    def _geopackage(path, **kwargs):
-        from sno import spatialite_path
-        from sno.gpkg import Row
-
-        db = apsw.Connection(str(path), **kwargs)
-        db.setrowtrace(Row)
-        dbcur = db.cursor()
-        dbcur.execute("PRAGMA foreign_keys = ON;")
-        db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
-        db.loadextension(spatialite_path)
-        dbcur.execute("SELECT EnableGpkgMode();")
-        return db
-
-    return _geopackage
-
-
 class SnoCliRunner(CliRunner):
     def __init__(self, *args, in_pdb=False, mix_stderr=False, **kwargs):
         self._in_pdb = in_pdb
@@ -461,7 +440,7 @@ class TestHelpers:
         LAYER_PK = "fid"
         INSERT = f"""
             INSERT INTO {LAYER}
-                            (fid, geom, t50_fid, name_ascii, macronated, name)
+                            ("fid", "geom", "t50_fid", "name_ascii", "macronated", "name")
                         VALUES
                             (:fid, :geom, :t50_fid, :name_ascii, :macronated, :name);
         """
@@ -488,7 +467,7 @@ class TestHelpers:
         LAYER_PK = "id"
         INSERT = f"""
             INSERT INTO {LAYER}
-                            (id, geom, date_adjusted, survey_reference, adjusted_nodes)
+                            ("id", "geom", "date_adjusted", "survey_reference", "adjusted_nodes")
                         VALUES
                             (:id, :geom, :date_adjusted, :survey_reference, :adjusted_nodes);
         """
@@ -524,7 +503,7 @@ class TestHelpers:
         LAYER_PK = "OBJECTID"
         INSERT = f"""
             INSERT INTO {LAYER}
-                            (OBJECTID, NAME, STATE_NAME, STATE_FIPS, CNTY_FIPS, FIPS, AREA, POP1990, POP2000, POP90_SQMI, Shape_Leng, Shape_Area)
+                            ("OBJECTID", "NAME", "STATE_NAME", "STATE_FIPS", "CNTY_FIPS", "FIPS", "AREA", "POP1990", "POP2000", "POP90_SQMI", "Shape_Leng", "Shape_Area")
                         VALUES
                             (:OBJECTID, :NAME, :STATE_NAME, :STATE_FIPS, :CNTY_FIPS, :FIPS, :AREA, :POP1990, :POP2000, :POP90_SQMI, :Shape_Leng, :Shape_Area);
         """
@@ -558,18 +537,14 @@ class TestHelpers:
         Get the last change time from the GeoPackage DB.
         This is the same as the commit time.
         """
-        return (
-            db.cursor()
-            .execute(
-                f"SELECT last_change FROM gpkg_contents WHERE table_name=?;",
-                [table],
-            )
-            .fetchone()[0]
-        )
+        return db.execute(
+            f"SELECT last_change FROM gpkg_contents WHERE table_name=:table_name;",
+            {"table_name": table},
+        ).scalar()
 
     @classmethod
     def row_count(cls, db, table):
-        return db.cursor().execute(f'SELECT COUNT(*) FROM "{table}";').fetchone()[0]
+        return db.execute(f'SELECT COUNT(*) FROM "{table}";').scalar()
 
     @classmethod
     def clear_working_copy(cls, repo_path="."):
@@ -594,14 +569,11 @@ class TestHelpers:
             pk = "ROWID"
 
         sql = f"SELECT * FROM {table} ORDER BY {pk};"
-        with db:
-            cur = db.cursor()
-            cur.execute(sql)
-            r = cur.fetchall()
-            h = hashlib.sha1()
-            for row in r:
-                h.update("🔸".join(repr(col) for col in row).encode("utf-8"))
-            return h.hexdigest()
+        r = db.execute(sql)
+        h = hashlib.sha1()
+        for row in r:
+            h.update("🔸".join(repr(col) for col in row).encode("utf-8"))
+        return h.hexdigest()
 
     @classmethod
     def git_graph(cls, request, message, count=10, *paths):
@@ -638,23 +610,22 @@ class TestHelpers:
     @classmethod
     def verify_gpkg_extent(cls, db, table):
         """ Check the aggregate layer extent from the table matches the values in gpkg_contents """
-        dbcur = db.cursor()
-        r = dbcur.execute(
-            """SELECT column_name FROM "gpkg_geometry_columns" WHERE table_name=?;""",
-            [table],
+        r = db.execute(
+            """SELECT column_name FROM "gpkg_geometry_columns" WHERE table_name=:table_name;""",
+            {"table_name": table},
         ).fetchone()
         geom_col = r[0] if r else None
 
         gpkg_extent = tuple(
-            dbcur.execute(
-                """SELECT min_x,min_y,max_x,max_y FROM "gpkg_contents" WHERE table_name=?;""",
-                [table],
+            db.execute(
+                """SELECT min_x,min_y,max_x,max_y FROM "gpkg_contents" WHERE table_name=:table_name;""",
+                {"table_name": table},
             ).fetchone()
         )
 
         if geom_col:
             layer_extent = tuple(
-                dbcur.execute(
+                db.execute(
                     f"""
                 WITH _E AS (
                     SELECT extent("{geom_col}") AS extent
@@ -676,14 +647,14 @@ class TestHelpers:
 
 def _find_layer(db):
     H = pytest.helpers.helpers()
-    return (
-        db.cursor()
-        .execute(
-            "SELECT table_name FROM gpkg_contents WHERE table_name IN (?,?,?) LIMIT 1",
-            [H.POINTS.LAYER, H.POLYGONS.LAYER, H.TABLE.LAYER],
-        )
-        .fetchone()[0]
-    )
+    return db.execute(
+        "SELECT table_name FROM gpkg_contents WHERE table_name IN (:points, :polygons, :table) LIMIT 1",
+        {
+            "points": H.POINTS.LAYER,
+            "polygons": H.POLYGONS.LAYER,
+            "table": H.TABLE.LAYER,
+        },
+    ).scalar()
 
 
 @pytest.fixture
@@ -708,15 +679,15 @@ def insert(request, cli_runner):
         if insert_str:
             rec[metadata.TEXT_FIELD] = insert_str
 
-        with db:
-            cur = db.cursor()
-            cur.execute(sql, rec)
-            assert db.changes() == 1
-            func.inserted_fids.append(new_pk)
+        r = db.execute(sql, rec)
+        assert r.rowcount == 1
+        func.inserted_fids.append(new_pk)
 
         func.index += 1
 
         if commit:
+            if hasattr(db, "commit"):
+                db.commit()
             r = cli_runner.invoke(
                 ["commit", "-m", f"commit-{func.index}", "-o", "json"]
             )
@@ -743,12 +714,15 @@ def update(request, cli_runner):
         pk_field = metadata.LAYER_PK
         text_field = metadata.TEXT_FIELD
 
-        with db:
-            sql = f"""UPDATE {layer} SET {text_field} = :update_str WHERE {pk_field} = {pk}"""
-            db.cursor().execute(sql, {"update_str": update_str})
-            assert db.changes() == 1
+        sql = (
+            f"""UPDATE {layer} SET {text_field} = :update_str WHERE {pk_field} = {pk}"""
+        )
+        r = db.execute(sql, {"update_str": update_str})
+        assert r.rowcount == 1
 
         if commit:
+            if hasattr(db, "commit"):
+                db.commit()
             r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
             assert r.exit_code == 0, r
 
@@ -760,21 +734,28 @@ def update(request, cli_runner):
     return func
 
 
-def _edit_points(dbcur, table_prefix=""):
+def _insert_command(table_name, col_names, schema=None):
+    return sqlalchemy.table(
+        table_name,
+        *[sqlalchemy.column(c) for c in col_names],
+        schema=schema,
+    ).insert()
+
+
+def _edit_points(db, schema=None):
     H = pytest.helpers.helpers()
-    layer = table_prefix + H.POINTS.LAYER
-    rc = execute_insert_dict(
-        dbcur,
-        layer,
+    layer = f'"{schema}"."{H.POINTS.LAYER}"' if schema else H.POINTS.LAYER
+    r = db.execute(
+        _insert_command(H.POINTS.LAYER, H.POINTS.RECORD.keys(), schema=schema),
         H.POINTS.RECORD,
     )
-    assert rc == 1
-    dbcur.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
-    assert changes_rowcount(dbcur) == 5
+    assert r.rowcount == 1
+    r = db.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
+    assert r.rowcount == 1
+    r = db.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
+    assert r.rowcount == 1
+    r = db.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
+    assert r.rowcount == 5
     pk_del = 3
     return pk_del
 
@@ -784,23 +765,22 @@ def edit_points():
     return _edit_points
 
 
-def _edit_polygons(dbcur, table_prefix=""):
+def _edit_polygons(db, schema=None):
     H = pytest.helpers.helpers()
-    layer = table_prefix + H.POLYGONS.LAYER
-    rc = execute_insert_dict(
-        dbcur,
-        layer,
+    layer = f'"{schema}"."{H.POLYGONS.LAYER}"' if schema else H.POLYGONS.LAYER
+    r = db.execute(
+        _insert_command(H.POLYGONS.LAYER, H.POLYGONS.RECORD.keys(), schema=schema),
         H.POLYGONS.RECORD,
     )
-    assert rc == 1
-    dbcur.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(
+    assert r.rowcount == 1
+    r = db.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
+    assert r.rowcount == 1
+    r = db.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
+    assert r.rowcount == 1
+    r = db.execute(
         f"DELETE FROM {layer} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
     )
-    assert changes_rowcount(dbcur) == 5
+    assert r.rowcount == 5
     pk_del = 1452332
     return pk_del
 
@@ -810,19 +790,20 @@ def edit_polygons():
     return _edit_polygons
 
 
-def _edit_table(dbcur, table_prefix=""):
+def _edit_table(db, schema=None):
     H = pytest.helpers.helpers()
-    layer = table_prefix + H.TABLE.LAYER
-    H = pytest.helpers.helpers()
-    rc = execute_insert_dict(dbcur, layer, H.TABLE.RECORD)
-    assert rc == 1
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
-    assert changes_rowcount(dbcur) == 1
-    dbcur.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
-    assert changes_rowcount(dbcur) == 5
+    layer = f'"{schema}"."{H.TABLE.LAYER}"' if schema else H.TABLE.LAYER
+    r = db.execute(
+        _insert_command(H.TABLE.LAYER, H.TABLE.RECORD.keys(), schema=schema),
+        H.TABLE.RECORD,
+    )
+    assert r.rowcount == 1
+    r = db.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
+    assert r.rowcount == 1
+    r = db.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
+    assert r.rowcount == 1
+    r = db.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
+    assert r.rowcount == 5
     pk_del = 3
     return pk_del
 
@@ -835,7 +816,6 @@ def edit_table():
 @pytest.fixture
 def create_conflicts(
     data_working_copy,
-    geopackage,
     cli_runner,
     update,
     insert,
@@ -849,23 +829,23 @@ def create_conflicts(
             cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
             cli_runner.invoke(["checkout", "-b", "theirs_branch"])
 
-            db = geopackage(wc)
-            update(db, sample_pks[0], "theirs_version")
-            update(db, sample_pks[1], "ours_theirs_version")
-            update(db, sample_pks[2], "theirs_version")
-            update(db, sample_pks[3], "theirs_version")
-            update(db, sample_pks[4], "theirs_version")
-            insert(db, reset_index=1, insert_str="insert_theirs")
+            with gpkg_engine(wc).connect() as db:
+                update(db, sample_pks[0], "theirs_version")
+                update(db, sample_pks[1], "ours_theirs_version")
+                update(db, sample_pks[2], "theirs_version")
+                update(db, sample_pks[3], "theirs_version")
+                update(db, sample_pks[4], "theirs_version")
+                insert(db, reset_index=1, insert_str="insert_theirs")
 
-            cli_runner.invoke(["checkout", "ancestor_branch"])
-            cli_runner.invoke(["checkout", "-b", "ours_branch"])
+                cli_runner.invoke(["checkout", "ancestor_branch"])
+                cli_runner.invoke(["checkout", "-b", "ours_branch"])
 
-            update(db, sample_pks[1], "ours_theirs_version")
-            update(db, sample_pks[2], "ours_version")
-            update(db, sample_pks[3], "ours_version")
-            update(db, sample_pks[4], "ours_version")
-            update(db, sample_pks[5], "ours_version")
-            insert(db, reset_index=1, insert_str="insert_ours")
+                update(db, sample_pks[1], "ours_theirs_version")
+                update(db, sample_pks[2], "ours_version")
+                update(db, sample_pks[3], "ours_version")
+                update(db, sample_pks[4], "ours_version")
+                update(db, sample_pks[5], "ours_version")
+                insert(db, reset_index=1, insert_str="insert_ours")
 
             yield repo
 
@@ -892,15 +872,14 @@ def postgis_db():
         raise pytest.skip(
             "Requires postgres - read docstring at sno.test_structure.postgis_db"
         )
-    conn = psycopg2.connect(os.environ["SNO_POSTGRES_URL"])
-    conn.autocommit = True
-    with conn.cursor() as cur:
+    engine = postgis_engine(os.environ["SNO_POSTGRES_URL"])
+    with engine.connect() as conn:
         # test connection and postgis support
         try:
-            cur.execute("""SELECT postgis_version()""")
-        except psycopg2.errors.UndefinedFunction:
+            conn.execute("SELECT postgis_version();")
+        except sqlalchemy.exc.DBAPIError:
             raise pytest.skip("Requires PostGIS")
-    yield conn
+    yield engine
 
 
 @pytest.fixture()
@@ -909,14 +888,12 @@ def new_postgis_db_schema(request, postgis_db):
     def ctx(create=False):
         sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
         schema = f"sno_test_{sha}"
-        with postgis_db.cursor() as c:
+        with postgis_db.connect() as conn:
             # Start by deleting in case it is left over from last test-run...
-            c.execute(
-                SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
-            )
+            conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
             # Actually create only if create=True, otherwise the test will create it
             if create:
-                c.execute(SQL("CREATE SCHEMA {}").format(Identifier(schema)))
+                conn.execute(f"""CREATE SCHEMA "{schema}";""")
         try:
             url = urlsplit(os.environ["SNO_POSTGRES_URL"])
             url_path = url.path.rstrip("/") + "/" + schema
@@ -926,9 +903,7 @@ def new_postgis_db_schema(request, postgis_db):
             yield new_schema_url, schema
         finally:
             # Clean up - delete it again if it exists.
-            with postgis_db.cursor() as c:
-                c.execute(
-                    SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(Identifier(schema))
-                )
+            with postgis_db.connect() as conn:
+                conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
 
     return ctx

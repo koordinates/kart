@@ -5,6 +5,7 @@ LIBGIT_REF=v1.1.0
 PYGIT2_REF=da410961f0a426cdecbd36548c2b36dc13c674c2
 PYGIT2_VER=1.3.0
 SQLITE_VER=3.31.1  # and APSW (-r1/.post1)
+SQLITE_URL=https://www.sqlite.org/2020/sqlite-amalgamation-3310100.zip
 
 # ==================================================================
 _PS=powershell.exe -NoLogo -Command
@@ -20,7 +21,7 @@ PWSH=powershell.exe
 CFLAGS=-O2
 CXXFLAGS=-O2
 
-_ARCHIVE=dist/vendor-Windows.zip
+_ARCHIVE=dist\vendor-Windows.zip
 
 !IFNDEF PY3
 PY3=%LOCALAPPDATA%\Programs\Python\Python37\python.exe
@@ -33,6 +34,7 @@ clean:
 	-rmdir /Q /S dist env
 	-rmdir /Q /S libgit2\build libgit2\env
 	-rmdir /Q /S pygit2\src\build pygit2\src\dist
+	-rmdir /Q /S pysqlite3\src\build pysqlite3\src\dist
 	-rmdir /Q /S apsw\src\build apsw\src\dist
 
 cleaner: clean
@@ -41,6 +43,8 @@ cleaner: clean
 	-del spatialite\mod_spatialite.7z
 	-del libgit2\libgit2.zip
 	-del pygit2\pygit2.zip
+	-del pysqlite3\pysqlite3.zip
+	-del pysqlite3\sqlite.zip
 	-del apsw\apsw.zip
 	-rmdir /Q /S wheelhouse
 
@@ -65,7 +69,7 @@ git: $(git)
 
 # Spatialite
 
-SPATIALITE_URL="http://www.gaia-gis.it/gaia-sins/windows-bin-NEXTGEN-amd64/spatialite-loadable-modules-5.0.0-win-amd64.7z"
+SPATIALITE_URL="http://www.gaia-gis.it/gaia-sins/windows-bin-amd64/spatialite-loadable-modules-5.0.0-win-amd64.7z"
 spatialite=dist\env\lib
 
 spatialite\mod_spatialite.7z:
@@ -223,8 +227,35 @@ $(apsw): env $(apsw_src)
 
 apsw: $(apsw)
 
+
+# PySQLITE3
+PYSQLITE_VER=0.4.5
+PYSQLITE3_URL="https://github.com/coleifer/pysqlite3/archive/$(PYSQLITE_VER).zip"
+pysqlite3_src=pysqlite3\src
+pysqlite3=dist\wheelhouse\pysqlite3-$(PYSQLITE_VER)-cp37-cp37m-win_amd64.whl
+
+pysqlite3\sqlite.zip:
+	$(_PSDL) -Uri $(SQLITE_URL) -OutFile $@ $(_PSDLE)
+
+pysqlite3\pysqlite3.zip:
+	$(_PSDL) -Uri $(PYSQLITE3_URL) -OutFile $@ $(_PSDLE)
+
+$(pysqlite3_src): pysqlite3\pysqlite3.zip pysqlite3\sqlite.zip
+	if exist $@~ rmdir /S /Q $@~
+	7z x pysqlite3\pysqlite3.zip -aoa -o$@~
+	move /Y $@~\pysqlite3-* $@
+	7z e pysqlite3\sqlite.zip -aoa -o$@ *\sqlite3.c *\sqlite3.h
+
+$(pysqlite3): env $(pysqlite3_src)
+	if not exist dist\wheelhouse mkdir dist\wheelhouse
+	(cd pysqlite3\src && $(MAKEDIR)\env\Scripts\python setup.py build_static)
+	(cd pysqlite3\src && $(MAKEDIR)\env\Scripts\python setup.py bdist_wheel -d $(MAKEDIR)\dist\wheelhouse)
+
+pysqlite3: $(pysqlite3)
+
+
 # Archive
-$(_ARCHIVE): $(pygit2) $(apsw) wheels $(git) $(spatialite) $(vcredist)
+$(_ARCHIVE): $(pygit2) $(apsw) $(pysqlite3) wheels $(git) $(spatialite) $(vcredist)
 	if exist $@ del $@
 	7z a $@ .\dist\*
 

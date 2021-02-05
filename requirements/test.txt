@@ -4,32 +4,83 @@
 #
 #    make py-requirements
 #
-aspectlib==1.5.2          # via pytest-benchmark
-atomicwrites==1.4.0       # via -r requirements/test.in
-attrs==20.3.0             # via -c requirements/../requirements.txt, pytest
-colorama==0.4.4           # via -r requirements/test.in
-coverage==5.3.1           # via pytest-cov
-fields==5.0.0             # via aspectlib
-gprof2dot==2019.11.30     # via pytest-profiling
-html5lib==1.1             # via -r requirements/test.in
-importlib-metadata==3.4.0  # via -c requirements/../requirements.txt, pluggy, pytest
-iniconfig==1.1.1          # via pytest
-lovely-pytest-docker==0.2.0  # via -r requirements/test.in
-packaging==20.8           # via pytest, pytest-sugar
-pluggy==0.13.1            # via pytest
-py-cpuinfo==7.0.0         # via pytest-benchmark
-py==1.10.0                # via pytest
-pyparsing==2.4.7          # via packaging
-pytest-benchmark[aspect]==3.2.3  # via -r requirements/test.in
-pytest-cov==2.10.1        # via -r requirements/test.in
-pytest-helpers-namespace==2019.1.8  # via -r requirements/test.in
-pytest-profiling==1.7.0   # via -r requirements/test.in
-pytest-shard==0.1.2       # via -r requirements/test.in
-pytest-sugar==0.9.4       # via -r requirements/test.in
-pytest==6.2.1             # via -r requirements/test.in, lovely-pytest-docker, pytest-benchmark, pytest-cov, pytest-helpers-namespace, pytest-profiling, pytest-shard, pytest-sugar
-six==1.15.0               # via -c requirements/../requirements.txt, html5lib, pytest-profiling
-termcolor==1.1.0          # via pytest-sugar
-toml==0.10.2              # via pytest
-typing-extensions==3.7.4.3  # via -c requirements/../requirements.txt, importlib-metadata
-webencodings==0.5.1       # via html5lib
-zipp==3.4.0               # via -c requirements/../requirements.txt, importlib-metadata
+aspectlib==1.5.2
+    # via pytest-benchmark
+atomicwrites==1.4.0
+    # via -r requirements/test.in
+attrs==20.3.0
+    # via
+    #   -c requirements/../requirements.txt
+    #   pytest
+colorama==0.4.4
+    # via -r requirements/test.in
+coverage==5.3.1
+    # via pytest-cov
+fields==5.0.0
+    # via aspectlib
+gprof2dot==2019.11.30
+    # via pytest-profiling
+html5lib==1.1
+    # via -r requirements/test.in
+importlib-metadata==3.4.0
+    # via
+    #   -c requirements/../requirements.txt
+    #   pluggy
+    #   pytest
+iniconfig==1.1.1
+    # via pytest
+lovely-pytest-docker==0.2.0
+    # via -r requirements/test.in
+packaging==20.8
+    # via
+    #   pytest
+    #   pytest-sugar
+pluggy==0.13.1
+    # via pytest
+py-cpuinfo==7.0.0
+    # via pytest-benchmark
+py==1.10.0
+    # via pytest
+pyparsing==2.4.7
+    # via packaging
+pytest-benchmark[aspect]==3.2.3
+    # via -r requirements/test.in
+pytest-cov==2.11.1
+    # via -r requirements/test.in
+pytest-helpers-namespace==2019.1.8
+    # via -r requirements/test.in
+pytest-profiling==1.7.0
+    # via -r requirements/test.in
+pytest-shard==0.1.2
+    # via -r requirements/test.in
+pytest-sugar==0.9.4
+    # via -r requirements/test.in
+pytest==6.2.2
+    # via
+    #   -r requirements/test.in
+    #   lovely-pytest-docker
+    #   pytest-benchmark
+    #   pytest-cov
+    #   pytest-helpers-namespace
+    #   pytest-profiling
+    #   pytest-shard
+    #   pytest-sugar
+six==1.15.0
+    # via
+    #   -c requirements/../requirements.txt
+    #   html5lib
+    #   pytest-profiling
+termcolor==1.1.0
+    # via pytest-sugar
+toml==0.10.2
+    # via pytest
+typing-extensions==3.7.4.3
+    # via
+    #   -c requirements/../requirements.txt
+    #   importlib-metadata
+webencodings==0.5.1
+    # via html5lib
+zipp==3.4.0
+    # via
+    #   -c requirements/../requirements.txt
+    #   importlib-metadata

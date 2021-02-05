@@ -64,6 +64,7 @@ requirement%.txt requirements/%.txt:
 	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
 	sed -E -i.~bak -e 's/^(apsw=)/\#\1/' $@
 	sed -E -i.~bak -e 's/^(psycopg2=)/\#\1/' $@
+	sed -E -i.~bak -e 's/^(pysqlite3=)/\#\1/' $@
 	$(RM) $@.~bak
 
 # Python dependency license checking
@@ -100,8 +101,8 @@ ifeq ($(PLATFORM),Darwin)
 endif
 	# note: pip is pinned here, because https://github.com/dhatim/python-license-check/issues/40
 	pip install \
-		'pip~=20.0.0' \
-		pip-tools \
+		'pip==20.*' \
+		'pip-tools==5.*' \
 		liccheck \
 		pipdeptree \
 		'pyinstaller==3.6.*' \

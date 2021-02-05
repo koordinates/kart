@@ -6,7 +6,7 @@ shift
 
 yum install -y epel-release
 
-yum install -y ccache openssl-devel gettext
+yum install -y ccache openssl-devel gettext wget
 
 export PATH=/opt/python/cp37-cp37m/bin:${PATH}
 export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}
@@ -74,6 +74,10 @@ else
     echo ">>> Building APSW ..."
     make lib-apsw
     cp -fav apsw/wheel/apsw-*.whl "$OUTPUT/wheelhouse"
+
+    echo ">>> Building pysqlite3 ..."
+    make lib-pysqlite3
+    cp -fav pysqlite3/wheel/pysqlite3-*.whl "$OUTPUT/wheelhouse"
 
     echo ">>> Building psycopg2 ..."
     make lib-psycopg2

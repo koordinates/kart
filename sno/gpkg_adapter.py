@@ -1,15 +1,25 @@
 from datetime import datetime
 import re
 
-from . import crs_util, gpkg
+from . import crs_util
 from .meta_items import META_ITEM_NAMES as V2_META_ITEM_NAMES
 from .schema import Schema, ColumnSchema
 from .timestamps import datetime_to_iso8601_utc
+
+from sqlalchemy.sql.compiler import IdentifierPreparer
+from sqlalchemy.dialects.sqlite.base import SQLiteDialect
 
 # Given a "gpkg_obj" which supports get_gpkg_meta_item, adapts it to support get_meta_item.
 # See generate_v2_meta_item.
 # Given a "v2_obj" which supports get_meta_item, adapts it to support get_gpkg_meta_item.
 # See generate_gpkg_meta_item.
+
+
+_PREPARER = IdentifierPreparer(SQLiteDialect())
+
+
+def quote(ident):
+    return _PREPARER.quote(ident)
 
 
 GPKG_META_ITEM_NAMES = (
@@ -238,7 +248,7 @@ def v2_schema_to_sqlite_spec(v2_obj):
 
 def v2_column_schema_to_gpkg_spec(column_schema, has_geometry):
     gpkg_type = v2_type_to_gpkg_type(column_schema, has_geometry)
-    col_name = gpkg.ident(column_schema.name)
+    col_name = quote(column_schema.name)
     result = f"{col_name} {gpkg_type}"
 
     is_pk = column_schema.pk_index is not None

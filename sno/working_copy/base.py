@@ -1,12 +1,17 @@
 import contextlib
+import functools
 import itertools
 import logging
+import time
 from pathlib import Path
 
 
 import pygit2
+import sqlalchemy
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 
 
+from sno.base_dataset import BaseDataset
 from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
 from sno.exceptions import (
     InvalidOperation,
@@ -15,7 +20,6 @@ from sno.exceptions import (
     NO_WORKING_COPY,
 )
 from sno.filter_util import UNFILTERED
-from sno.repo_version import get_repo_version
 from sno.schema import Schema
 
 
@@ -40,18 +44,99 @@ class Mismatch(ValueError):
 
 
 class WorkingCopy:
+    """
+    Abstract working copy implementation.
+    Subclasses to override any unimplemented methods below, and also to set the following fields:
+
+    self.repo - SnoRepo containing this WorkingCopy
+    self.path - string describing the location of this WorkingCopy
+    self.engine - sqlalchemy engine for connecting to the database
+    self.sessionmaker - sqlalchemy sessionmaker bound to the engine
+    self.preparer - sqlalchemy IdentifierPreparer for quoting SQL in the appropriate dialect
+
+    self.db_schema - database-schema that this working copy controls, if any.
+    self.sno_tables - sqlalchemy Table definitions for sno_track and sno_state tables.
+    """
+
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
-    TRACKING_NAME = "track"
-    STATE_NAME = "state"
+    @property
+    @functools.lru_cache(maxsize=1)
+    def DB_SCHEMA(self):
+        """Escaped, dialect-specific name of the database-schema owned by this working copy (if any)."""
+        if self.db_schema is None:
+            raise RuntimeError("No schema to escape.")
+        return self.preparer.format_schema(self.db_schema)
 
     @property
-    def TRACKING_TABLE(self):
-        return self._sno_table(self.TRACKING_NAME)
+    @functools.lru_cache(maxsize=1)
+    def SNO_TRACK(self):
+        """Escaped, dialect-specific fully-qualified name of sno_track table."""
+        return self.table_identifier(self.sno_tables.sno_track)
 
     @property
-    def STATE_TABLE(self):
-        return self._sno_table(self.STATE_NAME)
+    @functools.lru_cache(maxsize=1)
+    def SNO_STATE(self):
+        """Escaped, dialect-specific fully-qualified name of sno_state table."""
+        return self.table_identifier(self.sno_tables.sno_state)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def SNO_TRACK_NAME(self):
+        """The table name of sno_track table, not including the schema."""
+        return self.sno_tables.sno_track.name
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def SNO_STATE_NAME(self):
+        """The table name of sno_track table, not including the schema."""
+        return self.sno_tables.sno_state.name
+
+    def quote(self, ident):
+        """Conditionally quote an identifier - eg if it is a reserved word or contains special characters."""
+        return self.preparer.quote(ident)
+
+    @functools.lru_cache()
+    def table_identifier(self, dataset_or_table):
+        """Given a dataset, tablename, or sqlalchemy table, escapes its fullname for use in a SQL statement."""
+        table = (
+            dataset_or_table.table_name
+            if isinstance(dataset_or_table, BaseDataset)
+            else dataset_or_table
+        )
+        sqlalchemy_table = (
+            sqlalchemy.table(table, schema=self.db_schema)
+            if isinstance(table, str)
+            else table
+        )
+        return self.preparer.format_table(sqlalchemy_table)
+
+    @functools.lru_cache()
+    def table_def_for_dataset(self, dataset):
+        """
+        A minimal table definition for a dataset.
+        Specifies table and column names only - the minimum required such that an insert() or update() will work.
+        """
+        return sqlalchemy.table(
+            dataset.table_name,
+            *[sqlalchemy.column(c.name) for c in dataset.schema.columns],
+            schema=self.db_schema,
+        )
+
+    def insert_into_dataset(self, dataset):
+        """Returns a SQL command for inserting features into the table for that dataset."""
+        return self.table_def_for_dataset(dataset).insert()
+
+    def insert_or_replace_into_dataset(self, dataset):
+        """
+        Returns a SQL command for inserting/replacing features that may or may not already exist in the table
+        for that dataset.
+        """
+        # Even though this uses the postgresql_insert sqlalchemy feature, it results in generic SQL.
+        pk_col_names = [c.name for c in dataset.schema.pk_columns]
+        stmt = postgresql_insert(self.table_def_for_dataset(dataset))
+        update_dict = {c.name: c for c in stmt.excluded if c.name not in pk_col_names}
+        return stmt.on_conflict_do_update(index_elements=pk_col_names, set_=update_dict)
 
     @classmethod
     def get(cls, repo, *, allow_uncreated=False, allow_invalid_state=False):
@@ -200,17 +285,78 @@ class WorkingCopy:
                 pass
         return str(path)
 
-    def get_db_tree(self, table_name="*"):
-        """Returns the hex tree ID from the state table."""
+    @contextlib.contextmanager
+    def session(self, bulk=0):
+        """
+        Context manager for DB sessions, yields a session object inside a transaction
+        Calling again yields the _same_ session, the transaction/etc only happen in the outer one.
+
+        @bulk controls bulk-loading operating mode - subject to change. See ./gpkg.py
+        """
         raise NotImplementedError()
 
+    def is_created(self):
+        """
+        Returns true if the location specified by self.path alreaddy exists.
+        Note that it might not be initialised as a working copy - see self.is_initialised.
+        """
+        raise NotImplementedError()
+
+    def is_initialised(self):
+        """
+        Returns true if the working copy is initialised -
+        it exists and has the necessary sno tables - sno_state and sno_track.
+        """
+        raise NotImplementedError()
+
+    def has_data(self):
+        """Returns true if the working copy seems to have user-created content already."""
+        raise NotImplementedError()
+
+    def create_and_initialise(self):
+        """Create the database container or database schema if required, and the sno tables."""
+        raise NotImplementedError()
+
+    def delete(self, keep_db_schema_if_possible=False):
+        """
+        Delete the entire working copy.
+
+        keep_db_schema_if_possible - set to True if the WC is being recreated in the same location
+        in a moment's time. It's possible we lack permission to recreate the db schema, so in this
+        case, better not to delete it.
+        """
+        raise NotImplementedError()
+
+    def get_db_tree(self, table_name="*"):
+        """Returns the hex tree ID from the state table."""
+        with self.session() as db:
+            return db.scalar(
+                f"""SELECT value FROM {self.SNO_STATE} WHERE table_name=:table_name AND key='tree';""",
+                {"table_name": table_name},
+            )
+
     def assert_db_tree_match(self, tree, *, table_name="*"):
+        """Raises a Mismatch if sno_state refers to a different tree and not the given tree."""
         wc_tree_id = self.get_db_tree(table_name)
         expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
 
         if wc_tree_id != expected_tree_id:
             raise Mismatch(wc_tree_id, expected_tree_id)
         return wc_tree_id
+
+    def tracking_changes_count(self, dataset=None):
+        """
+        Returns the total number of changes tracked in sno_track,
+        or the number of changes tracked for the given dataset.
+        """
+        with self.session() as db:
+            if dataset is not None:
+                return db.scalar(
+                    f"SELECT COUNT(*) FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
+                    {"table_name": dataset.table_name},
+                )
+            else:
+                return db.scalar(f"SELECT COUNT(*) FROM {self.SNO_TRACK};")
 
     def _chunk(self, iterable, size):
         """Generator. Yield successive chunks from iterable of length <size>."""
@@ -235,7 +381,7 @@ class WorkingCopy:
         Returns True if there are uncommitted changes in the working copy,
         or False otherwise.
         """
-        if not self.get_db_tree():
+        if not self.is_initialised() or self.get_db_tree() is None:
             return False
         try:
             self.diff_to_tree(raise_if_dirty=True)
@@ -250,18 +396,19 @@ class WorkingCopy:
         """
         repo_filter = repo_filter or UNFILTERED
 
-        repo_diff = RepoDiff()
-        for dataset in self.repo.datasets(self.get_db_tree()):
-            if dataset.path not in repo_filter:
-                continue
-            ds_diff = self.diff_db_to_tree(
-                dataset,
-                ds_filter=repo_filter[dataset.path],
-                raise_if_dirty=raise_if_dirty,
-            )
-            repo_diff[dataset.path] = ds_diff
-        repo_diff.prune()
-        return repo_diff
+        with self.session():
+            repo_diff = RepoDiff()
+            for dataset in self.repo.datasets(self.get_db_tree()):
+                if dataset.path not in repo_filter:
+                    continue
+                ds_diff = self.diff_db_to_tree(
+                    dataset,
+                    ds_filter=repo_filter[dataset.path],
+                    raise_if_dirty=raise_if_dirty,
+                )
+                repo_diff[dataset.path] = ds_diff
+            repo_diff.prune()
+            return repo_diff
 
     def diff_db_to_tree(self, dataset, ds_filter=None, raise_if_dirty=False):
         """
@@ -318,15 +465,14 @@ class WorkingCopy:
         find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as db:
-            dbcur = db.cursor()
-            self._execute_diff_query(dbcur, dataset, feature_filter, meta_diff)
+            r = self._execute_dirty_rows_query(db, dataset, feature_filter, meta_diff)
 
             feature_diff = DeltaDiff()
             insert_count = delete_count = 0
 
             geom_col = dataset.geom_column_name
 
-            for row in dbcur:
+            for row in r:
                 track_pk = row[0]  # This is always a str
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
@@ -366,27 +512,76 @@ class WorkingCopy:
 
         return feature_diff
 
-    def _execute_diff_query(self, dbcur, dataset, feature_filter):
+    def _execute_dirty_rows_query(
+        self, db, dataset, feature_filter=None, meta_diff=None
+    ):
         """
-        Does a join on the tracking table and the table for the given dataset, such that the dbcursor's result
-        is all the rows that have been inserted / updated / deleted.
+        Does a join on the tracking table and the table for the given dataset, and returns a result
+        containing all the rows that have been inserted / updated / deleted.
         """
-        raise NotImplementedError()
 
-    def _execute_dirty_rows_query(self, dbcur, dataset):
+        feature_filter = feature_filter or UNFILTERED
+
+        if (
+            meta_diff
+            and "schema.json" in meta_diff
+            and meta_diff["schema.json"].new_value
+        ):
+            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+        else:
+            schema = dataset.schema
+
+        table_identifier = self.table_identifier(dataset)
+        pk_column = self.quote(schema.pk_columns[0].name)
+        col_names = ",".join(
+            [f"{table_identifier}.{self.quote(col.name)}" for col in schema]
+        )
+
+        sql = f"""
+            SELECT
+                {self.SNO_TRACK}.pk AS ".__track_pk",
+                {col_names}
+            FROM {self.SNO_TRACK} LEFT OUTER JOIN {table_identifier}
+            ON ({self.SNO_TRACK}.pk = CAST({table_identifier}.{pk_column} AS TEXT))
+            WHERE ({self.SNO_TRACK}.table_name = :table_name)
         """
-        Queries the tracking table for the rows belonging to the given dataset, such that the dbcursor's result
-        is the primary keys of all the rows that have been inserted / updated / deleted.
-        """
-        raise NotImplementedError()
+
+        if feature_filter is UNFILTERED:
+            return db.execute(sql, {"table_name": dataset.table_name})
+        else:
+            pks = list(feature_filter)
+            sql += f" AND {self.SNO_TRACK}.pk IN :pks"
+            t = sqlalchemy.text(sql)
+            t = t.bindparams(sqlalchemy.bindparam("pks", expanding=True))
+            return db.execute(t, {"table_name": dataset.table_name, "pks": pks})
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):
         """Delete the rows from the tracking table that match the given filter."""
-        raise NotImplementedError()
+        reset_filter = reset_filter or UNFILTERED
 
-    def _reset_tracking_table_for_dataset(self, dbcur, dataset):
-        """Delete the rows from the tracking table that match the given dataset."""
-        raise NotImplementedError()
+        with self.session() as db:
+            if reset_filter == UNFILTERED:
+                db.execute(f"DELETE FROM {self.SNO_TRACK};")
+                return
+
+            for dataset_path, dataset_filter in reset_filter.items():
+                table_name = dataset_path.strip("/").replace("/", "__")
+                if (
+                    dataset_filter == UNFILTERED
+                    or dataset_filter.get("feature") == UNFILTERED
+                ):
+                    db.execute(
+                        f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
+                        {"table_name": table_name},
+                    )
+                    continue
+
+                pks = list(dataset_filter.get("feature", []))
+                t = sqlalchemy.text(
+                    f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name AND pk IN :pks;"
+                )
+                t = t.bindparams(sqlalchemy.bindparam("pks", expanding=True))
+                db.execute(t, {"table_name": table_name, "pks": pks})
 
     def _db_geom_to_gpkg_geom(self, g):
         """Convert a geometry as returned by the database to a sno geometry.Geometry object."""
@@ -441,16 +636,158 @@ class WorkingCopy:
         tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
         L.info(f"Tree sha: {tree_id}")
         with self.session() as db:
-            dbcur = db.cursor()
-            changes = self._update_state_table_tree_impl(dbcur, tree_id)
-        assert changes == 1, f"{self.STATE_TABLE} update: expected 1Δ, got {changes}"
+            changes = self._update_state_table_tree_impl(db, tree_id)
+        assert changes == 1, f"{self.SNO_STATE} update: expected 1Δ, got {changes}"
 
-    def _update_state_table_tree_impl(self, dbcur, tree_id):
+    def _update_state_table_tree_impl(self, db, tree_id):
         """
         Write the given tree ID to the state table.
         tree_id - str, the hex SHA of the tree at HEAD.
         """
+        r = db.execute(
+            f"UPDATE {self.SNO_STATE} SET value=:value WHERE table_name='*' AND key='tree';",
+            {"value": tree_id},
+        )
+        return r.rowcount
+
+    def write_full(self, commit, *datasets, **kwargs):
+        """
+        Writes a full layer into a working-copy table
+
+        Use for new working-copy checkouts.
+        """
+        L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
+
+        with self.session(bulk=2) as db:
+
+            for dataset in datasets:
+                # Create the table
+                self._create_table_for_dataset(db, dataset)
+                self._write_meta(db, dataset)
+
+                if dataset.has_geometry:
+                    # This should be called while the table is still empty.
+                    self._create_spatial_index(db, dataset)
+
+                L.info("Creating features...")
+                sql = self.insert_into_dataset(dataset)
+                feat_progress = 0
+                t0 = time.monotonic()
+                t0p = t0
+
+                CHUNK_SIZE = 10000
+                total_features = dataset.feature_count
+
+                for row_dicts in self._chunk(
+                    dataset.features_with_crs_ids(), CHUNK_SIZE
+                ):
+                    db.execute(sql, row_dicts)
+                    feat_progress += len(row_dicts)
+
+                    t0a = time.monotonic()
+                    L.info(
+                        "%.1f%% %d/%d features... @%.1fs (+%.1fs, ~%d F/s)",
+                        feat_progress / total_features * 100,
+                        feat_progress,
+                        total_features,
+                        t0a - t0,
+                        t0a - t0p,
+                        CHUNK_SIZE / (t0a - t0p or 0.001),
+                    )
+                    t0p = t0a
+
+                t1 = time.monotonic()
+                L.info(
+                    "Added %d features to working copy in %.1fs", feat_progress, t1 - t0
+                )
+                L.info(
+                    "Overall rate: %d features/s", (feat_progress / (t1 - t0 or 0.001))
+                )
+
+                self._create_triggers(db, dataset)
+                self._update_last_write_time(db, dataset, commit)
+
+            db.execute(
+                f"""
+                INSERT INTO {self.SNO_STATE} (table_name, key, value) VALUES ('*', 'tree', :value)
+                ON CONFLICT (table_name, key) DO UPDATE SET value=EXCLUDED.value;
+                """,
+                {"value": commit.peel(pygit2.Tree).hex},
+            )
+
+    def _create_table_for_dataset(self, db, dataset):
+        """Create the working-copy table for checking out the given dataset."""
+        raise NotImplementedError
+
+    def _write_meta(self, db, dataset):
+        """Write any non-feature data relating to dataset - title, description, CRS, etc."""
         raise NotImplementedError()
+
+    def _create_spatial_index(self, db, dataset):
+        """
+        Creates a spatial index for the table for the given dataset.
+        The spatial index is configured so that it is automatically updated when the table is modified.
+        It is not guaranteed that the spatial index will take into account features that are already present
+        in the table when this function is called - therefore, this should be called while the table is still empty.
+        """
+        raise NotImplementedError()
+
+    def _drop_spatial_index(self, db, dataset):
+        """Inverse of _create_spatial_index - deletes the spatial index."""
+        raise NotImplementedError()
+
+    def _update_last_write_time(self, db, dataset, commit=None):
+        """Hook for updating the last-modified timestamp stored for a particular dataset, if there is one."""
+        pass
+
+    def _write_features(self, db, dataset, pk_list, *, ignore_missing=False):
+        """Write the features from the dataset with the given PKs to the table for the dataset."""
+        if not pk_list:
+            return 0
+
+        sql = self.insert_or_replace_into_dataset(dataset)
+        feat_count = 0
+        CHUNK_SIZE = 10000
+        for row_dicts in self._chunk(
+            dataset.get_features_with_crs_ids(pk_list, ignore_missing=ignore_missing),
+            CHUNK_SIZE,
+        ):
+            r = db.execute(sql, row_dicts)
+            feat_count += r.rowcount
+
+        return feat_count
+
+    def _delete_features(self, db, dataset, pk_list):
+        if not pk_list:
+            return 0
+
+        pk_column = self.preparer.quote(dataset.primary_key)
+        sql = f"""DELETE FROM {self.table_identifier(dataset)} WHERE {pk_column} IN :pks;"""
+        stmt = sqlalchemy.text(sql).bindparams(
+            sqlalchemy.bindparam("pks", expanding=True)
+        )
+        feat_count = 0
+        CHUNK_SIZE = 100
+        for pks in self._chunk(pk_list, CHUNK_SIZE):
+            r = db.execute(stmt, {"pks": pks})
+            feat_count += r.rowcount
+
+        return feat_count
+
+    def drop_table(self, target_tree_or_commit, *datasets):
+        """Drop the tables for all the given datasets."""
+        with self.session() as db:
+            for dataset in datasets:
+                if dataset.has_geometry:
+                    self._drop_spatial_index(db, dataset)
+
+                db.execute(f"DROP TABLE IF EXISTS {self.table_identifier(dataset)};")
+                self.delete_meta(dataset)
+
+                db.execute(
+                    f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
+                    {"table_name": dataset.table_name},
+                )
 
     def reset(
         self,
@@ -559,7 +896,6 @@ class WorkingCopy:
             )
 
         with self.session(bulk=1) as db:
-            dbcur = db.cursor()
             # Delete old tables
             if table_deletes:
                 self.drop_table(
@@ -579,14 +915,14 @@ class WorkingCopy:
                 self._update_table(
                     base_ds,
                     target_ds,
-                    dbcur,
+                    db,
                     commit,
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
 
             if not track_changes_as_dirty:
                 # update the tree id
-                self._update_state_table_tree_impl(dbcur, target_tree_id)
+                self._update_state_table_tree_impl(db, target_tree_id)
 
     def _filter_by_paths(self, datasets, paths):
         """Filters the datasets so that only those matching the paths are returned."""
@@ -596,7 +932,7 @@ class WorkingCopy:
             return datasets
 
     def _update_table(
-        self, base_ds, target_ds, dbcur, commit=None, track_changes_as_dirty=False
+        self, base_ds, target_ds, db, commit=None, track_changes_as_dirty=False
     ):
         """
         Update the given table in working copy from its current state to target_ds.
@@ -604,19 +940,21 @@ class WorkingCopy:
         and not have any unsupported meta changes - see _is_meta_update_supported.
         base_ds - the dataset that this working copy table is currently based on.
         target_ds - the target desired state for this working copy table.
-        dbcur - database cursor.
+        db - database.
         commit - the commit that contains target_ds, if any.
         track_changes_if_dirty - whether to track changes made from base_ds -> target_ds as WC edits.
         """
 
-        self._apply_meta_diff(base_ds, ~self.diff_db_to_tree_meta(base_ds), dbcur)
+        self._apply_meta_diff(base_ds, ~self.diff_db_to_tree_meta(base_ds), db)
         # WC now has base_ds structure and so we can write base_ds features to WC.
-        self._reset_dirty_rows(base_ds, dbcur)
+        self._reset_dirty_rows(base_ds, db)
 
         if target_ds != base_ds:
-            self._apply_meta_diff(target_ds, base_ds.diff_meta(target_ds), dbcur)
+            self._apply_meta_diff(target_ds, base_ds.diff_meta(target_ds), db)
             # WC now has target_ds structure and so we can write target_ds features to WC.
-            self._apply_feature_diff(base_ds, target_ds, dbcur, track_changes_as_dirty)
+            self._apply_feature_diff(base_ds, target_ds, db, track_changes_as_dirty)
+
+        self._update_last_write_time(db, target_ds, commit)
 
     def _apply_feature_diff(
         self, base_ds, target_ds, dbcur, track_changes_as_dirty=False
@@ -661,8 +999,8 @@ class WorkingCopy:
             ctx = contextlib.nullcontext()
 
         with ctx:
-            self.delete_features(dbcur, base_ds, delete_pks)
-            self.write_features(dbcur, target_ds, insert_and_update_pks)
+            self._delete_features(dbcur, base_ds, delete_pks)
+            self._write_features(dbcur, target_ds, insert_and_update_pks)
 
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """
@@ -676,13 +1014,13 @@ class WorkingCopy:
         # Subclasses can override to support various types of meta updates.
         return not meta_diff
 
-    def _apply_meta_diff(self, target_ds, meta_diff, dbcur):
+    def _apply_meta_diff(self, target_ds, meta_diff, db):
         """
         Change the metadata of this working copy according to the given meta diff.
         Not all changes are possible or supported - see _is_meta_update_supported.
         target_ds - controls which table to update. May also be used to look up target CRS.
         meta_diff - a DeltaDiff object containing meta-item deltas for this dataset.
-        dbcur - database cursor.
+        db - database cursor.
         """
         L.debug("Meta diff: %s changes", len(meta_diff))
         for key in meta_diff:
@@ -692,32 +1030,36 @@ class WorkingCopy:
             func_key = key.replace("/", "_").replace(".", "_")
             func = getattr(self, f"_apply_meta_{func_key}")
             delta = meta_diff[key]
-            func(target_ds, delta.old_value, delta.new_value, dbcur)
+            func(target_ds, delta.old_value, delta.new_value, db)
 
-    def _reset_dirty_rows(self, base_ds, dbcur):
+    def _reset_dirty_rows(self, base_ds, db):
         """
         Reset the dirty rows recorded in the tracking table to match the originals from the dataset.
         base_ds - the dataset this WC table is based on.
-        dbcur - database cursor.
+        db - database cursor.
         """
-        track_count = self._execute_dirty_rows_query(dbcur, base_ds)
-        dirty_pk_list = [r[0] for r in dbcur]
+        r = db.execute(
+            f"""SELECT pk FROM {self.SNO_TRACK} WHERE table_name = :table_name;""",
+            {"table_name": base_ds.table_name},
+        )
+        dirty_pk_list = [row[0] for row in r]
+        track_count = len(dirty_pk_list)
         if not dirty_pk_list:
             return
 
         # We're resetting the dirty rows so we don't track these changes in the tracking table.
-        with self._suspend_triggers(dbcur, base_ds):
+        with self._suspend_triggers(db, base_ds):
             # todo: suspend/remove spatial index
             L.debug("Cleaning up dirty rows...")
 
-            count = self.delete_features(dbcur, base_ds, dirty_pk_list)
+            count = self._delete_features(db, base_ds, dirty_pk_list)
             L.debug(
                 "_reset_dirty_rows(): removed %s features, tracking Δ count=%s",
                 count,
                 track_count,
             )
-            count = self.write_features(
-                dbcur, base_ds, dirty_pk_list, ignore_missing=True
+            count = self._write_features(
+                db, base_ds, dirty_pk_list, ignore_missing=True
             )
             L.debug(
                 "_reset_dirty_rows(): wrote %s features, tracking Δ count=%s",
@@ -725,4 +1067,7 @@ class WorkingCopy:
                 track_count,
             )
 
-            self._reset_tracking_table_for_dataset(dbcur, base_ds)
+            db.execute(
+                f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
+                {"table_name": base_ds.table_name},
+            )

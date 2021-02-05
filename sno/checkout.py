@@ -392,8 +392,8 @@ def create_workingcopy(ctx, discard_changes, wc_path):
     # Delete anything the already exists in the new target location also, and start fresh.
     if new_wc.is_created():
         click.echo(f"Deleting working copy at {new_wc.path} ...")
-        # There's a possibility we lack permission to recreate the working copy container (eg a postgis schema),
+        # There's a possibility we lack permission to recreate the db schema,
         # so if it already exists, we keep that part.
-        new_wc.delete(keep_container_if_possible=True)
+        new_wc.delete(keep_db_schema_if_possible=True)
 
     reset_wc_if_needed(repo, repo.head_commit)
