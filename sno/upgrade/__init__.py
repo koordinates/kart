@@ -161,8 +161,8 @@ def _upgrade_commit(
     author_time = f"{s.author.time} {minutes_to_tz_offset(s.author.offset)}"
     commit_time = f"{s.commit_time} {minutes_to_tz_offset(s.commit_time_offset)}"
     header = (
-        # We import every commit onto refs/heads/master and fix the branch heads later.
-        "commit refs/heads/master\n"
+        # We import every commit onto refs/heads/main and fix the branch heads later.
+        "commit refs/heads/main\n"
         f"author {s.author.name} <{s.author.email}> {author_time}\n"
         f"committer {s.committer.name} <{s.committer.email}> {commit_time}\n"
         f"data {len(s.message.encode('utf8'))}\n{s.message}\n"
@@ -175,8 +175,8 @@ def _upgrade_commit(
         replace_existing=ReplaceExisting.ALL,
         quiet=True,
         header=header,
-        # We import every commit onto refs/heads/master, even though not all commits are related - this means
-        # the master branch head will jump all over the place. git-fast-import only allows this with --force.
+        # We import every commit onto refs/heads/main, even though not all commits are related - this means
+        # the main branch head will jump all over the place. git-fast-import only allows this with --force.
         extra_cmd_args=["--force"],
     )
 

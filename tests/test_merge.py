@@ -50,7 +50,7 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
         H.git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
         assert repo.head.target.hex != commit_id
 
@@ -59,7 +59,7 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
 
         H.git_graph(request, "post-merge")
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == commit_id
         c = repo.head_commit
         assert len(c.parents) == 1
@@ -106,7 +106,7 @@ def test_merge_fastforward_noff(
         H.git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
         assert repo.head.target.hex != commit_id
 
@@ -118,13 +118,13 @@ def test_merge_fastforward_noff(
 
         merge_commit_id = json.loads(r.stdout)["sno.merge/v1"]["commit"]
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == merge_commit_id
         c = repo.head_commit
         assert len(c.parents) == 2
         assert c.parents[0].hex == h
         assert c.parents[1].hex == commit_id
-        assert c.message == 'Merge branch "changes" into master'
+        assert c.message == 'Merge branch "changes" into main'
 
 
 @pytest.mark.parametrize(
@@ -166,13 +166,13 @@ def test_merge_true(
             b_commit_id = insert(db)
             assert repo.head.target.hex == b_commit_id
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
         assert repo.head.target.hex != b_commit_id
 
         with wc.session() as db:
             m_commit_id = insert(db)
-        H.git_graph(request, "pre-merge-master")
+        H.git_graph(request, "pre-merge-main")
 
         # fastforward merge should fail
         r = cli_runner.invoke(["merge", "--ff-only", "changes"])
@@ -187,14 +187,14 @@ def test_merge_true(
 
         merge_commit_id = json.loads(r.stdout)["sno.merge/v1"]["commit"]
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == merge_commit_id
         c = repo.head_commit
         assert len(c.parents) == 2
         assert c.parents[0].hex == m_commit_id
         assert c.parents[1].hex == b_commit_id
         assert c.parents[0].parents[0].hex == h
-        assert c.message == 'Merge branch "changes" into master'
+        assert c.message == 'Merge branch "changes" into main'
 
         # check the database state
         num_inserts = len(insert.inserted_fids)

@@ -169,9 +169,9 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
         # refish could be:
         # - '' -> HEAD
-        # - branch name eg 'master'
+        # - branch name eg 'main'
         # - tag name
-        # - remote branch eg 'origin/master'
+        # - remote branch eg 'origin/main'
         # - HEAD
         # - HEAD~1/etc
         # - 'c0ffee' commit ref
@@ -211,14 +211,14 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
         # Switch to existing branch
         #
         # refish could be:
-        # - local branch name (eg 'master')
-        # - local branch name (eg 'master') that as yet only exists on remote (if do_guess is True)
-        #   (But not a remote branch eg 'origin/master')
+        # - local branch name (eg 'main')
+        # - local branch name (eg 'main') that as yet only exists on remote (if do_guess is True)
+        #   (But not a remote branch eg 'origin/main')
         if not refish:
             raise click.UsageError("Missing argument: REFISH")
 
         if refish in repo.branches.remote:
-            # User specified something like "origin/master"
+            # User specified something like "origin/main"
             raise click.BadParameter(
                 f"A branch is expected, got remote branch {refish}",
                 param_hint="refish",
@@ -258,7 +258,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
 def _find_remote_branch_by_name(repo, name):
     """
-    Returns the only remote branch with the given name eg "master".
+    Returns the only remote branch with the given name eg "main".
     Returns None if there is no remote branch with that unique name.
     """
     results = []

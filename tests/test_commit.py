@@ -224,7 +224,7 @@ def test_commit_message(
             "# Please enter the commit message for your changes. Lines starting",
             "# with '#' will be ignored, and an empty message aborts the commit.",
             "#",
-            "# On branch master",
+            "# On branch main",
             "#",
             "# Changes to be committed:",
             "#",
@@ -252,7 +252,7 @@ def test_commit_message(
             "# Please enter the commit message for your changes. Lines starting\n"
             "# with '#' will be ignored, and an empty message aborts the commit.\n"
             "#\n"
-            "# On branch master\n"
+            "# On branch main\n"
             "#\n"
             "# Changes to be committed:\n"
             "#\n"

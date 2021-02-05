@@ -46,7 +46,7 @@ def test_get_directory_from_url():
     "branch_name,branch_ref",
     [
         ("mytag", "HEAD^"),
-        ("master", None),
+        ("main", None),
     ],
 )
 def test_clone(
@@ -136,7 +136,7 @@ def test_fetch(
         with gpkg_engine(wc).connect() as db:
             commit_id = insert(db)
 
-        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r
 
     with data_working_copy("points") as (path2, wc):
@@ -151,20 +151,20 @@ def test_fetch(
 
         H.git_graph(request, "post-fetch")
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == h
 
-        remote_branch = repo.lookup_reference_dwim("myremote/master")
+        remote_branch = repo.lookup_reference_dwim("myremote/main")
         assert remote_branch.target.hex == commit_id
 
         fetch_head = repo.lookup_reference("FETCH_HEAD")
         assert fetch_head.target.hex == commit_id
 
         # merge
-        r = cli_runner.invoke(["merge", "myremote/master"])
+        r = cli_runner.invoke(["merge", "myremote/main"])
         assert r.exit_code == 0, r
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == commit_id
         commit = repo.head_commit
         assert len(commit.parents) == 1
@@ -189,7 +189,7 @@ def test_pull(
             r = cli_runner.invoke(["remote", "add", "origin", tmp_path])
             assert r.exit_code == 0, r
 
-            r = cli_runner.invoke(["push", "--set-upstream", "origin", "master"])
+            r = cli_runner.invoke(["push", "--set-upstream", "origin", "main"])
             assert r.exit_code == 0, r
 
         with chdir(path2):
@@ -199,7 +199,7 @@ def test_pull(
             r = cli_runner.invoke(["fetch", "origin"])
             assert r.exit_code == 0, r
 
-            r = cli_runner.invoke(["branch", "--set-upstream-to=origin/master"])
+            r = cli_runner.invoke(["branch", "--set-upstream-to=origin/main"])
             assert r.exit_code == 0, r
 
         with chdir(path1):
@@ -218,10 +218,10 @@ def test_pull(
 
             H.git_graph(request, "post-pull")
 
-            remote_branch = repo.lookup_reference_dwim("origin/master")
+            remote_branch = repo.lookup_reference_dwim("origin/main")
             assert remote_branch.target.hex == commit_id
 
-            assert repo.head.name == "refs/heads/master"
+            assert repo.head.name == "refs/heads/main"
             assert repo.head.target.hex == commit_id
             commit = repo.head_commit
             assert len(commit.parents) == 1

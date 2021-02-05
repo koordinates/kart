@@ -155,8 +155,8 @@ def test_import(
             assert r.exit_code == 0, r
 
             assert not repo.is_empty
-            assert repo.head.name == "refs/heads/master"
-            assert repo.head.shorthand == "master"
+            assert repo.head.name == "refs/heads/main"
+            assert repo.head.shorthand == "main"
 
             # has a single commit
             assert len(list(repo.walk(repo.head.target))) == 1
@@ -341,8 +341,8 @@ def test_import_from_non_gpkg(
             assert r.exit_code == 0, r
 
             assert not repo.is_empty
-            assert repo.head.name == "refs/heads/master"
-            assert repo.head.shorthand == "master"
+            assert repo.head.name == "refs/heads/main"
+            assert repo.head.shorthand == "main"
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1
@@ -869,12 +869,12 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
             r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
             assert r.exit_code == 0, r
 
-            # delete the master branch.
+            # delete the main branch.
             # HEAD still points to it, but that's okay - this just means
             # the branch is empty.
             # We still need to be able to import from this state.
             repo = SnoRepo(repo_path)
-            repo.references.delete("refs/heads/master")
+            repo.references.delete("refs/heads/main")
             assert repo.head_is_unborn
 
             r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
@@ -957,8 +957,8 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
             fast_import.fast_import_tables(repo, [source])
 
             assert not repo.is_empty
-            assert repo.head.name == "refs/heads/master"
-            assert repo.head.shorthand == "master"
+            assert repo.head.name == "refs/heads/main"
+            assert repo.head.shorthand == "main"
 
             dataset = repo.datasets()[table]
             assert dataset.VERSION == 2

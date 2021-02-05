@@ -318,6 +318,15 @@ def import_table(
     help='Whether the new repository should be "bare" and have no working copy',
 )
 @click.option(
+    "-b",
+    "--initial-branch",
+    default=None,  # Not specified? We use git's `init.defaultBranch` config
+    help=(
+        "Use the specified name for the initial branch "
+        "in the newly created repository."
+    ),
+)
+@click.option(
     "--workingcopy-path",
     "--workingcopy",
     "wc_path",
@@ -338,6 +347,7 @@ def init(
     import_from,
     do_checkout,
     bare,
+    initial_branch,
     wc_path,
     max_delta_depth,
 ):
@@ -368,7 +378,9 @@ def init(
         sources = [base_source.clone_for_table(t) for t in tables]
 
     # Create the repository
-    repo = SnoRepo.init_repository(repo_path, wc_path, bare)
+    repo = SnoRepo.init_repository(
+        repo_path, wc_path, bare, initial_branch=initial_branch
+    )
 
     if import_from:
         fast_import_tables(

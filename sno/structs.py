@@ -9,13 +9,13 @@ class CommitWithReference:
     When struct is passed around in place of sole commit, then any code that uses the commit
     is able to give a better human-readable name to describe it.
     Example:
-    >>> cwr = CommitWithReference.resolve(repo, "master")
+    >>> cwr = CommitWithReference.resolve(repo, "main")
     >>> cwr.commit.id
     fa003dadb153248d282230a05add62cdb012f926
     >>> cwr.reference.shortname
-    'master'
+    'main'
     >>> str(cwr)
-    '"master" (fa003dadb153248d282230a05add62cdb012f926)'
+    '"main" (fa003dadb153248d282230a05add62cdb012f926)'
     """
 
     def __init__(self, commit, reference=None):

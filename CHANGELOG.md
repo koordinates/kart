@@ -15,6 +15,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ### Other changes
 
  * Support for detecting features which have changed slightly during a re-import from a data source without a primary key, and reimporting them with the same primary key as last time so they show as edits as opposed to inserts. [#212](https://github.com/koordinates/sno/issues/212)
+ * `init` now accepts a `--initial-branch` option
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
 
 ## 0.7.1

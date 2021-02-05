@@ -103,7 +103,7 @@ def test_reset(data_working_copy, cli_runner, edit_points):
         r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "0c64d82 (HEAD -> master) Improve naming on Coromandel East coast",
+            "0c64d82 (HEAD -> main) Improve naming on Coromandel East coast",
             "7bc3b56 Import from nz-pa-points-topo-150k.gpkg",
         ]
 
@@ -119,5 +119,5 @@ def test_reset(data_working_copy, cli_runner, edit_points):
         r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "7bc3b56 (HEAD -> master) Import from nz-pa-points-topo-150k.gpkg",
+            "7bc3b56 (HEAD -> main) Import from nz-pa-points-topo-150k.gpkg",
         ]

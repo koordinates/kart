@@ -98,14 +98,14 @@ def test_e2e(
             sha_edit1 = r.stdout.splitlines()[-1].split()[1]
             print("Edit SHA:", sha_edit1)
 
-            # go back to master
-            r = cli_runner.invoke(["switch", "master"])
+            # go back to main
+            r = cli_runner.invoke(["switch", "main"])
             assert r.exit_code == 0
             assert r.stdout.splitlines()[0] == f"Updating {working_copy.name} ..."
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0
-            assert r.stdout.splitlines()[0] == "On branch master"
+            assert r.stdout.splitlines()[0] == "On branch main"
 
             # merge it
             r = cli_runner.invoke(["merge", "edit-1", "--no-ff", "-m", "merge-1"])
@@ -121,10 +121,10 @@ def test_e2e(
             assert r.exit_code == 0
 
             # push
-            r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+            r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
             assert r.exit_code == 0
             assert re.match(
-                r"Branch '?master'? set up to track remote branch '?master'? from '?myremote'?\.$",
+                r"Branch '?main'? set up to track remote branch '?main'? from '?myremote'?\.$",
                 r.stdout.splitlines()[0],
             )
 
@@ -133,7 +133,7 @@ def test_e2e(
             assert r.exit_code == 0
             assert [x.split(" ", 1)[1] for x in r.stdout.splitlines()][0:4] == [
                 "HEAD@{0}: commit (merge): merge-1",
-                "HEAD@{1}: checkout: moving from edit-1 to master",
+                "HEAD@{1}: checkout: moving from edit-1 to main",
                 "HEAD@{2}: commit: commit-1",
-                "HEAD@{3}: checkout: moving from master to edit-1",
+                "HEAD@{3}: checkout: moving from main to edit-1",
             ]

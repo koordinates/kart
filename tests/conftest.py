@@ -122,7 +122,9 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
             # make `gc` syncronous in testing.
             # otherwise it has race conditions with test teardown.
             f"[gc]\n"
-            f"\tautoDetach = false"
+            f"\tautoDetach = false\n"
+            f"[init]\n"
+            f"\tdefaultBranch = main\n"
         )
 
     L.debug("Temporary HOME for git config: %s", home)

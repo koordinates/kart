@@ -53,7 +53,7 @@ def test_checkout_workingcopy(
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == [
-                "On branch master",
+                "On branch main",
                 "",
                 "Nothing to commit, working copy clean",
             ]
@@ -141,7 +141,7 @@ def test_commit_edits(
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == [
-                "On branch master",
+                "On branch main",
                 "",
                 "Nothing to commit, working copy clean",
             ]
@@ -160,7 +160,7 @@ def test_commit_edits(
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == [
-                "On branch master",
+                "On branch main",
                 "",
                 "Changes in working copy:",
                 '  (use "sno commit" to commit)',
@@ -180,7 +180,7 @@ def test_commit_edits(
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == [
-                "On branch master",
+                "On branch main",
                 "",
                 "Nothing to commit, working copy clean",
             ]
@@ -288,7 +288,7 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == [
-                "On branch master",
+                "On branch main",
                 "",
                 "Nothing to commit, working copy clean",
             ]
