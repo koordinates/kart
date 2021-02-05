@@ -50,7 +50,7 @@ $SQLITE=(Join-Path $SNO_PREFIX 'sqlite3.exe')
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
 try {
-    Exec { sno init . }
+    Exec { sno init --initial-branch=main . }
     Exec { sno -v config --local 'user.name' 'Sno E2E Test 1' }
     Exec { sno -v config --local 'user.email' 'sno-e2e-test-1@email.invalid' }
     Exec { sno -v config --local 'core.pager' false }
@@ -73,7 +73,7 @@ try {
     Exec { sno status }
     Exec { sno diff --crs=EPSG:3857 }
     Exec { sno commit -m 'my-commit' }
-    Exec { sno switch 'master' }
+    Exec { sno switch 'main' }
     Exec { sno status }
     Exec { sno merge 'edit-1' --no-ff -m 'my-merge'}
     Exec { sno log }

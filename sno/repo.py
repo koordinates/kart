@@ -153,7 +153,9 @@ class SnoRepo(pygit2.Repository):
             self.validate_sno_repo_style()
 
     @classmethod
-    def init_repository(cls, repo_root_path, wc_path=None, bare=False):
+    def init_repository(
+        cls, repo_root_path, wc_path=None, bare=False, initial_branch=None
+    ):
         """
         Initialise a new sno repo. A sno repo is basically a git repo, except -
         - git internals are stored in .sno instead of .git
@@ -173,10 +175,19 @@ class SnoRepo(pygit2.Repository):
         if not bare:
             WorkingCopy.check_valid_creation_path(wc_path, wc_path)
 
+        extra_args = []
+        if initial_branch is not None:
+            extra_args += [f"--initial-branch={initial_branch}"]
         if bare:
             # Create bare-style repo:
             sno_repo = cls._create_with_git_command(
-                ["git", "init", "--bare", str(repo_root_path)],
+                [
+                    "git",
+                    "init",
+                    "--bare",
+                    *extra_args,
+                    str(repo_root_path),
+                ],
                 gitdir_path=repo_root_path,
             )
         else:
@@ -189,6 +200,7 @@ class SnoRepo(pygit2.Repository):
                     "git",
                     "init",
                     f"--separate-git-dir={dot_sno_path}",
+                    *extra_args,
                     str(dot_init_path),
                 ],
                 gitdir_path=dot_sno_path,

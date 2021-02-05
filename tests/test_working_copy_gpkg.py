@@ -42,8 +42,8 @@ def test_checkout_workingcopy(
         assert wc_path.exists()
         wc = repo.working_copy
 
-        assert repo.head.name == "refs/heads/master"
-        assert repo.head.shorthand == "master"
+        assert repo.head.name == "refs/heads/main"
+        assert repo.head.shorthand == "main"
         assert wc.get_db_tree() == repo.head_tree.hex
 
         if geom_cols:
@@ -90,7 +90,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        r = cli_runner.invoke(["push", "myremote", "master"])
+        r = cli_runner.invoke(["push", "myremote", "main"])
         assert r.exit_code == 0, r
 
         def r_head():
@@ -99,7 +99,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         # checkout the HEAD commit
         r = cli_runner.invoke(["checkout", "HEAD"])
         assert r.exit_code == 0, r
-        assert r_head() == ("refs/heads/master", H.POINTS.HEAD_SHA)
+        assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
         with wc.session() as db:
             assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
@@ -112,10 +112,10 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         with wc.session() as db:
             assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
-        # checkout the master HEAD via branch-name
-        r = cli_runner.invoke(["checkout", "master"])
+        # checkout the main HEAD via branch-name
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
-        assert r_head() == ("refs/heads/master", H.POINTS.HEAD_SHA)
+        assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
         with wc.session() as db:
             assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
@@ -128,10 +128,10 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         with wc.session() as db:
             assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
 
-        # checkout the master HEAD via refspec
-        r = cli_runner.invoke(["checkout", "refs/heads/master"])
+        # checkout the main HEAD via refspec
+        r = cli_runner.invoke(["checkout", "refs/heads/main"])
         assert r.exit_code == 0, r
-        assert r_head() == ("refs/heads/master", H.POINTS.HEAD_SHA)
+        assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
         with wc.session() as db:
             assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
@@ -145,7 +145,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
             assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the remote branch
-        r = cli_runner.invoke(["checkout", "myremote/master"])
+        r = cli_runner.invoke(["checkout", "myremote/main"])
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
@@ -156,17 +156,17 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
 def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, wc):
         # creating a new branch with existing name errors
-        r = cli_runner.invoke(["checkout", "-b", "master"])
+        r = cli_runner.invoke(["checkout", "-b", "main"])
         assert r.exit_code == INVALID_ARGUMENT, r
         assert r.stderr.splitlines()[-1].endswith(
-            "A branch named 'master' already exists."
+            "A branch named 'main' already exists."
         )
 
         subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r
 
         # new branch
@@ -188,36 +188,36 @@ def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
 
         assert repo.head_commit.hex != H.POINTS.HEAD_SHA
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # new branch from remote
-        r = cli_runner.invoke(["checkout", "-b", "test99", "myremote/master"])
+        r = cli_runner.invoke(["checkout", "-b", "test99", "myremote/main"])
         assert r.exit_code == 0, r
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
         branch = repo.branches["test99"]
-        assert branch.upstream_name == "refs/remotes/myremote/master"
+        assert branch.upstream_name == "refs/remotes/myremote/main"
 
 
 def test_switch_branch(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, wc):
         # creating a new branch with existing name errors
-        r = cli_runner.invoke(["switch", "-c", "master"])
+        r = cli_runner.invoke(["switch", "-c", "main"])
         assert r.exit_code == INVALID_ARGUMENT
         assert r.stderr.splitlines()[-1].endswith(
-            "A branch named 'master' already exists."
+            "A branch named 'main' already exists."
         )
 
         subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r.stderr
 
-        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r.stderr
 
         # new branch
@@ -244,13 +244,13 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         new_commit = repo.head_commit.hex
         assert new_commit != H.POINTS.HEAD_SHA
 
-        r = cli_runner.invoke(["switch", "master"])
+        r = cli_runner.invoke(["switch", "main"])
         assert r.exit_code == 0, r
 
         with wc.session() as db:
             assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
-        assert repo.head.name == "refs/heads/master"
+        assert repo.head.name == "refs/heads/main"
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
@@ -275,13 +275,13 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         assert repo.head_commit.hex == new_commit
 
         # new branch from remote
-        r = cli_runner.invoke(["switch", "-c", "test99", "myremote/master"])
+        r = cli_runner.invoke(["switch", "-c", "test99", "myremote/main"])
         assert r.exit_code == 0, r.stderr
         assert repo.head.name == "refs/heads/test99"
         assert "test99" in repo.branches
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
         branch = repo.branches["test99"]
-        assert branch.upstream_name == "refs/remotes/myremote/master"
+        assert branch.upstream_name == "refs/remotes/myremote/main"
 
         with wc.session() as db:
             assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
@@ -455,7 +455,7 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
             assert identifier == "nz_pa_points_topo_150k: NZ Pa Points (Topo, 1:50k)"
             assert description.startswith("Defensive earthworks")
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
         with wc.session() as db:
@@ -484,7 +484,7 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
             )
             assert name == "name_ascii"
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         with wc.session() as db:
             name = db.scalar(
@@ -517,7 +517,7 @@ def test_switch_with_schema_change(data_working_copy, cli_runner):
                 ("adjusted_nodes", "MEDIUMINT"),
             ]
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         with wc.session() as db:
             r = db.execute(
@@ -558,7 +558,7 @@ def test_switch_pre_import_post_import(
                 )
                 assert count == 0
 
-            r = cli_runner.invoke(["checkout", "master"])
+            r = cli_runner.invoke(["checkout", "main"])
             assert r.exit_code == 0, r.stderr
 
             with wc.session() as db:
@@ -601,7 +601,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
             ).fetchone()
             assert not xml_metadata
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
         with wc.session() as db:
@@ -851,7 +851,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
 def test_delete_branch(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
         # prevent deleting the current branch
-        r = cli_runner.invoke(["branch", "-d", "master"])
+        r = cli_runner.invoke(["branch", "-d", "main"])
         assert r.exit_code == INVALID_OPERATION, r
         assert "Cannot delete" in r.stderr
 
@@ -861,7 +861,7 @@ def test_delete_branch(data_working_copy, cli_runner):
         r = cli_runner.invoke(["branch", "-d", "test"])
         assert r.exit_code == INVALID_OPERATION, r
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
 
         r = cli_runner.invoke(["branch", "-d", "test"])

@@ -32,7 +32,7 @@ mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
 set -x
 
-sno init .
+sno init --initial-branch=main .
 sno config user.name "Sno E2E Test 1"
 sno config user.email "sno-e2e-test-1@email.invalid"
 sno import "GPKG:${TEST_GPKG}" mylayer
@@ -48,7 +48,7 @@ sqlite3 --bail test.gpkg "
 sno status
 sno diff --crs=EPSG:3857
 sno commit -m my-commit
-sno switch master
+sno switch main
 sno status
 sno merge edit-1 --no-ff -m merge-1
 sno log

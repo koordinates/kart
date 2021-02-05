@@ -42,7 +42,7 @@ def test_status(
 ):
     with data_working_copy("points") as (path1, wc):
         assert text_status(cli_runner) == [
-            "On branch master",
+            "On branch main",
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -50,7 +50,7 @@ def test_status(
             "sno.status/v1": {
                 "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
                 "abbrevCommit": "0c64d82",
-                "branch": "master",
+                "branch": "main",
                 "upstream": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
@@ -74,7 +74,7 @@ def test_status(
             }
         }
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
 
         subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
@@ -85,12 +85,12 @@ def test_status(
         with gpkg_engine(wc).connect() as db:
             insert(db)
 
-        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r
 
         assert text_status(cli_runner) == [
-            "On branch master",
-            "Your branch is up to date with 'myremote/master'.",
+            "On branch main",
+            "Your branch is up to date with 'myremote/main'.",
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -100,9 +100,9 @@ def test_status(
             "sno.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
-                "branch": "master",
+                "branch": "main",
                 "upstream": {
-                    "branch": "myremote/master",
+                    "branch": "myremote/main",
                     "ahead": 0,
                     "behind": 0,
                 },
@@ -119,14 +119,14 @@ def test_status(
         r = cli_runner.invoke(["fetch", "myremote"])
         assert r.exit_code == 0, r
 
-        r = cli_runner.invoke(["branch", "--set-upstream-to=myremote/master"])
+        r = cli_runner.invoke(["branch", "--set-upstream-to=myremote/main"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-fetch")
 
         assert text_status(cli_runner) == [
-            "On branch master",
-            "Your branch is behind 'myremote/master' by 1 commit, and can be fast-forwarded.",
+            "On branch main",
+            "Your branch is behind 'myremote/main' by 1 commit, and can be fast-forwarded.",
             '  (use "sno pull" to update your local branch)',
             "",
             "Nothing to commit, working copy clean",
@@ -135,9 +135,9 @@ def test_status(
             "sno.status/v1": {
                 "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
                 "abbrevCommit": "0c64d82",
-                "branch": "master",
+                "branch": "main",
                 "upstream": {
-                    "branch": "myremote/master",
+                    "branch": "myremote/main",
                     "ahead": 0,
                     "behind": 1,
                 },
@@ -152,8 +152,8 @@ def test_status(
         H.git_graph(request, "post-commit")
 
         assert text_status(cli_runner) == [
-            "On branch master",
-            "Your branch and 'myremote/master' have diverged,",
+            "On branch main",
+            "Your branch and 'myremote/main' have diverged,",
             "and have 1 and 1 different commits each, respectively.",
             '  (use "sno pull" to merge the remote branch into yours)',
             "",
@@ -165,9 +165,9 @@ def test_status(
             "sno.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
-                "branch": "master",
+                "branch": "main",
                 "upstream": {
-                    "branch": "myremote/master",
+                    "branch": "myremote/main",
                     "ahead": 1,
                     "behind": 1,
                 },
@@ -175,14 +175,14 @@ def test_status(
             }
         }
 
-        r = cli_runner.invoke(["merge", "myremote/master"])
+        r = cli_runner.invoke(["merge", "myremote/main"])
         assert r.exit_code == 0, r
 
         H.git_graph(request, "post-merge")
 
         assert text_status(cli_runner) == [
-            "On branch master",
-            "Your branch is ahead of 'myremote/master' by 2 commits.",
+            "On branch main",
+            "Your branch is ahead of 'myremote/main' by 2 commits.",
             '  (use "sno push" to publish your local commits)',
             "",
             "Nothing to commit, working copy clean",
@@ -193,9 +193,9 @@ def test_status(
             "sno.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
-                "branch": "master",
+                "branch": "main",
                 "upstream": {
-                    "branch": "myremote/master",
+                    "branch": "myremote/main",
                     "ahead": 2,
                     "behind": 0,
                 },
@@ -210,8 +210,8 @@ def test_status(
             db.execute(f"UPDATE {H.POINTS.LAYER} SET name='test0' WHERE fid <= 5;")
 
         assert text_status(cli_runner) == [
-            "On branch master",
-            "Your branch is ahead of 'myremote/master' by 2 commits.",
+            "On branch main",
+            "Your branch is ahead of 'myremote/main' by 2 commits.",
             '  (use "sno push" to publish your local commits)',
             "",
             "Changes in working copy:",
@@ -231,9 +231,9 @@ def test_status(
             "sno.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
-                "branch": "master",
+                "branch": "main",
                 "upstream": {
-                    "branch": "myremote/master",
+                    "branch": "myremote/main",
                     "ahead": 2,
                     "behind": 0,
                 },

@@ -23,8 +23,8 @@ def json_branches(cli_runner):
 
 
 def get_commit_ids(jdict):
-    commit = jdict["sno.branch/v1"]["branches"]["master"]["commit"]
-    abbrev_commit = jdict["sno.branch/v1"]["branches"]["master"]["abbrevCommit"]
+    commit = jdict["sno.branch/v1"]["branches"]["main"]["commit"]
+    abbrev_commit = jdict["sno.branch/v1"]["branches"]["main"]["abbrevCommit"]
     assert commit and abbrev_commit
     assert commit.startswith(abbrev_commit)
     return commit, abbrev_commit
@@ -34,15 +34,15 @@ def test_branches(
     data_archive, data_working_copy, cli_runner, insert, tmp_path, request
 ):
     with data_working_copy("points") as (path1, wc):
-        assert text_branches(cli_runner) == ["* master"]
+        assert text_branches(cli_runner) == ["* main"]
         assert json_branches(cli_runner) == {
             "sno.branch/v1": {
-                "current": "master",
+                "current": "main",
                 "branches": {
-                    "master": {
+                    "main": {
                         "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
                         "abbrevCommit": "0c64d82",
-                        "branch": "master",
+                        "branch": "main",
                         "upstream": None,
                     }
                 },
@@ -52,22 +52,22 @@ def test_branches(
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
 
-        assert text_branches(cli_runner) == ["* (HEAD detached at 7bc3b56)", "  master"]
+        assert text_branches(cli_runner) == ["* (HEAD detached at 7bc3b56)", "  main"]
         assert json_branches(cli_runner) == {
             "sno.branch/v1": {
                 "current": None,
                 "branches": {
-                    "master": {
+                    "main": {
                         "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
                         "abbrevCommit": "0c64d82",
-                        "branch": "master",
+                        "branch": "main",
                         "upstream": None,
                     }
                 },
             }
         }
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
 
         subprocess.run(["git", "init", "--bare", str(tmp_path)], check=True)
@@ -78,22 +78,22 @@ def test_branches(
         with gpkg_engine(wc).connect() as db:
             insert(db)
 
-        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "master"])
+        r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r
 
-        assert text_branches(cli_runner) == ["* master"]
+        assert text_branches(cli_runner) == ["* main"]
         jdict = json_branches(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert json_branches(cli_runner) == {
             "sno.branch/v1": {
-                "current": "master",
+                "current": "main",
                 "branches": {
-                    "master": {
+                    "main": {
                         "commit": commit,
                         "abbrevCommit": abbrev_commit,
-                        "branch": "master",
+                        "branch": "main",
                         "upstream": {
-                            "branch": "myremote/master",
+                            "branch": "myremote/main",
                             "ahead": 0,
                             "behind": 0,
                         },
@@ -105,19 +105,19 @@ def test_branches(
         r = cli_runner.invoke(["checkout", "-b", "newbie"])
         assert r.exit_code == 0, r
 
-        assert text_branches(cli_runner) == ["  master", "* newbie"]
+        assert text_branches(cli_runner) == ["  main", "* newbie"]
         jdict = json_branches(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert json_branches(cli_runner) == {
             "sno.branch/v1": {
                 "current": "newbie",
                 "branches": {
-                    "master": {
+                    "main": {
                         "commit": commit,
                         "abbrevCommit": abbrev_commit,
-                        "branch": "master",
+                        "branch": "main",
                         "upstream": {
-                            "branch": "myremote/master",
+                            "branch": "myremote/main",
                             "ahead": 0,
                             "behind": 0,
                         },

@@ -1299,14 +1299,14 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
             b_commit_id = insert(db)
         assert repo.head.target.hex == b_commit_id
 
-        r = cli_runner.invoke(["checkout", "master"])
+        r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         assert repo.head.target.hex != b_commit_id
 
         with engine.connect() as db:
             m_commit_id = insert(db)
 
-        H.git_graph(request, "pre-merge-master")
+        H.git_graph(request, "pre-merge-main")
 
         # Three dots diff should show both sets of changes.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}...{b_commit_id}"])

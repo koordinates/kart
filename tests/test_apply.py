@@ -445,7 +445,7 @@ def test_apply_with_working_copy_with_no_commit(data_working_copy, cli_runner):
 
 def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
     with data_archive("au-census"):
-        r = cli_runner.invoke(["create-patch", "master"])
+        r = cli_runner.invoke(["create-patch", "main"])
         assert r.exit_code == 0, r.stderr
         patch_text = r.stdout
         patch_json = json.loads(patch_text)

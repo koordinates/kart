@@ -553,8 +553,8 @@ def test_init_import(
         assert not repo.is_bare
         assert not repo.is_empty
 
-        assert repo.head.name == "refs/heads/master"
-        assert repo.head.shorthand == "master"
+        assert repo.head.name == "refs/heads/main"
+        assert repo.head.shorthand == "main"
 
         # has a single commit
         assert len([c for c in repo.walk(repo.head.target)]) == 1
@@ -652,7 +652,7 @@ def test_init_import_commit_headers(
         log_entry.pop("abbrevCommit")
         assert log_entry == {
             "message": "Import from nz-pa-points-topo-150k.gpkg:nz_pa_points_topo_150k to nz_pa_points_topo_150k/",
-            "refs": ["HEAD -> master"],
+            "refs": ["HEAD -> main"],
             "authorName": "author",
             "authorEmail": "author@example.com",
             "authorTime": "2000-01-01T00:00:00Z",
