@@ -52,8 +52,8 @@ def _import_check(repo_path, table, source_gpkg):
     dataset = repo.datasets()[table]
     assert dataset.VERSION == 2
 
-    with gpkg_engine(source_gpkg).connect() as db:
-        num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+    with gpkg_engine(source_gpkg).connect() as conn:
+        num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
 
     o = subprocess.check_output(["git", "ls-tree", "-r", "-t", "HEAD", table])
     print("\n".join(l.decode("utf8") for l in o.splitlines()[:20]))
@@ -133,12 +133,12 @@ def test_import(
         repo_path = tmp_path / "data.sno"
         repo_path.mkdir()
 
-        with gpkg_engine(data / source_gpkg).connect() as db:
+        with gpkg_engine(data / source_gpkg).connect() as conn:
             if param_ids[-1] == "empty":
                 print(f"emptying table {table}...")
-                db.execute(f"DELETE FROM {table};")
+                conn.execute(f"DELETE FROM {table};")
 
-            num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+            num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
         benchmark.group = f"test_import - {param_ids[-1]} (N={num_rows})"
 
         if param_ids[-1] == "empty":
@@ -163,15 +163,15 @@ def test_import(
 
             dataset = _import_check(repo_path, table, f"{data / source_gpkg}")
 
-            with gpkg_engine(data / source_gpkg).connect() as db:
-                pk_field = gpkg.pk(db, table)
+            with gpkg_engine(data / source_gpkg).connect() as conn:
+                pk_field = gpkg.pk(conn, table)
 
                 if num_rows > 0:
                     # compare the first feature in the repo against the source DB
                     feature = next(dataset.features())
 
                     row = normalise_feature(
-                        db.execute(
+                        conn.execute(
                             f"SELECT * FROM {table} WHERE {pk_field}=?;",
                             [feature[pk_field]],
                         ).fetchone()
@@ -182,7 +182,7 @@ def test_import(
 
                     # compare a source DB feature against the repo feature
                     row = normalise_feature(
-                        db.execute(
+                        conn.execute(
                             f"SELECT * FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
                         ).fetchone()
                     )
@@ -291,12 +291,12 @@ def test_import_from_non_gpkg(
     param_ids = H.parameter_ids(request)
 
     with data_archive(archive) as data:
-        with gpkg_engine(data / source_gpkg).connect() as db:
+        with gpkg_engine(data / source_gpkg).connect() as conn:
             if param_ids[-1] == "empty":
                 print(f"emptying table {table}...")
-                db.execute(f"DELETE FROM {table};")
+                conn.execute(f"DELETE FROM {table};")
 
-            num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+            num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
 
         if param_ids[-1] == "empty":
             assert num_rows == 0
@@ -785,10 +785,10 @@ def test_feature_find_decode_performance(
     dataset = repo.datasets()["mytable"]
 
     with data_archive(archive) as data:
-        with gpkg_engine(data / source_gpkg).connect() as db:
-            num_rows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-            pk_field = gpkg.pk(db, table)
-            pk = db.execute(
+        with gpkg_engine(data / source_gpkg).connect() as conn:
+            num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+            pk_field = gpkg.pk(conn, table)
+            pk = conn.execute(
                 f"SELECT {pk_field} FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
             ).fetchone()[0]
 

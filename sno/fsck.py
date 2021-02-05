@@ -56,7 +56,7 @@ def fsck(ctx, reset_datasets, fsck_args):
         )
         return _fsck_reset(repo, working_copy, reset_datasets)
 
-    with working_copy.session() as db:
+    with working_copy.session() as sess:
         tree = repo.head_tree
 
         # compare repo tree id to what's in the DB
@@ -80,7 +80,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             )
             table = dataset.table_name
 
-            pk = gpkg.pk(db, table)
+            pk = gpkg.pk(sess, table)
             click.echo(f'Primary key field for table: "{pk}"')
             if pk != dataset.primary_key:
                 has_err = True
@@ -89,7 +89,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            wc_count = db.scalar(
+            wc_count = sess.scalar(
                 f"SELECT COUNT(*) FROM {working_copy.table_identifier(dataset)};"
             )
             click.echo(f"{wc_count} features in {table}")
@@ -101,7 +101,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                     fg="red",
                 )
 
-            track_count = db.scalar(
+            track_count = sess.scalar(
                 f"SELECT COUNT(*) FROM {working_copy.SNO_TRACK} WHERE table_name=:table_name;",
                 {"table_name": table},
             )
@@ -167,7 +167,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                             fg="red",
                         )
 
-                    f = db.execute(
+                    f = sess.execute(
                         f"SELECT * FROM {working_copy.table_identifier(dataset)} WHERE {working_copy.quote(pk)}=:pk;",
                         {"pk": feature[pk]},
                     )

@@ -72,8 +72,8 @@ def test_e2e(
             assert working_copy.exists()
 
             # check we have the right data in the WC
-            with gpkg_engine(working_copy).connect() as db:
-                assert H.row_count(db, table) == row_count
+            with gpkg_engine(working_copy).connect() as conn:
+                assert H.row_count(conn, table) == row_count
 
             # create & switch to a new branch
             r = cli_runner.invoke(["switch", "-c", "edit-1"])
@@ -85,8 +85,8 @@ def test_e2e(
             assert r.stdout.splitlines()[0] == "On branch edit-1"
 
             # make an edit
-            with gpkg_engine(working_copy).connect() as db:
-                insert(db, commit=False)
+            with gpkg_engine(working_copy).connect() as conn:
+                insert(conn, commit=False)
 
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0

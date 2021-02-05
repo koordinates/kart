@@ -149,13 +149,13 @@ def test_commit_edits(
             wc = repo.working_copy
             assert wc.is_created()
 
-            with wc.session() as db:
+            with wc.session() as sess:
                 if archive == "points":
-                    edit_points(db, postgres_schema)
+                    edit_points(sess, postgres_schema)
                 elif archive == "polygons":
-                    edit_polygons(db, postgres_schema)
+                    edit_polygons(sess, postgres_schema)
                 elif archive == "table":
-                    edit_table(db, postgres_schema)
+                    edit_table(sess, postgres_schema)
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
@@ -208,17 +208,17 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as db:
-                db.execute(
+            with wc.session() as sess:
+                sess.execute(
                     f"""COMMENT ON TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" IS 'New title';"""
                 )
-                db.execute(
+                sess.execute(
                     f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ADD COLUMN colour VARCHAR(32);"""
                 )
-                db.execute(
+                sess.execute(
                     f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" DROP COLUMN survey_reference;"""
                 )
-                db.execute(
+                sess.execute(
                     f"""
                     ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ALTER COLUMN geom
                     TYPE geometry(MULTIPOLYGON, 3857)
@@ -328,9 +328,9 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
             # everything in the postgis DB - we don't want these temporary changes to make other
             # tests fail, and we want to roll them immediately whether the test passes or fails.
             with pytest.raises(SucceedAndRollback):
-                with wc.session() as db:
+                with wc.session() as sess:
 
-                    crs = db.scalar(
+                    crs = sess.scalar(
                         "SELECT srtext FROM public.spatial_ref_sys WHERE srid=4326"
                     )
                     assert crs.startswith('GEOGCS["WGS 84",')
@@ -338,7 +338,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
 
                     # Make an unimportant, cosmetic change, while keeping the CRS basically EPSG:4326
                     crs = crs.replace('GEOGCS["WGS 84",', 'GEOGCS["WGS 1984",')
-                    db.execute(
+                    sess.execute(
                         """UPDATE public.spatial_ref_sys SET srtext=:srtext WHERE srid=4326;""",
                         {"srtext": crs},
                     )
@@ -352,7 +352,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                         'AUTHORITY["EPSG","4326"]]', 'AUTHORITY["CUSTOM","4326"]]'
                     )
 
-                    db.execute(
+                    sess.execute(
                         """UPDATE public.spatial_ref_sys SET srtext=:srtext WHERE srid=4326;""",
                         {"srtext": crs},
                     )

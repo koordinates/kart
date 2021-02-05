@@ -600,9 +600,11 @@ class GPKGImportSource(OgrImportSource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.table:
-            with self.engine.connect() as db:
-                self._gpkg_primary_key = gpkg.pk(db, self.table)
-                self.gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(db, self.table)
+            with self.engine.connect() as conn:
+                self._gpkg_primary_key = gpkg.pk(conn, self.table)
+                self.gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(
+                    conn, self.table
+                )
 
     @classmethod
     def quote_ident_part(cls, part):
@@ -633,8 +635,8 @@ class GPKGImportSource(OgrImportSource):
         Overrides the super implementation for performance reasons
         (it turns out that OGR feature iterators for GPKG are quite slow!)
         """
-        with self.engine.connect() as db:
-            r = db.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
+        with self.engine.connect() as conn:
+            r = conn.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
             for gpkg_feature in r:
                 yield self._gpkg_feature_to_sno_feature(gpkg_feature)
 

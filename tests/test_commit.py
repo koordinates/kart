@@ -57,10 +57,10 @@ def test_commit(
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as db:
+        with gpkg_engine(wc_path).connect() as conn:
             try:
                 edit_func = locals()[f"edit_{archive}"]
-                pk_del = edit_func(db)
+                pk_del = edit_func(conn)
             except KeyError:
                 raise NotImplementedError(f"No edit_{archive}")
 
@@ -209,8 +209,8 @@ def test_commit_message(
         # default editor
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as db:
-            edit_points(db)
+        with gpkg_engine(wc_path).connect() as conn:
+            edit_points(conn)
 
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
         r = cli_runner.invoke(["commit"])
@@ -307,10 +307,12 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
 
 def test_commit_schema_violation(cli_runner, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
-        with gpkg_engine(wc_path).connect() as db:
-            db.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
-            db.execute(f"UPDATE {H.POINTS.LAYER} SET t50_fid=123456789012 WHERE fid=2;")
-            db.execute(
+        with gpkg_engine(wc_path).connect() as conn:
+            conn.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
+            conn.execute(
+                f"UPDATE {H.POINTS.LAYER} SET t50_fid=123456789012 WHERE fid=2;"
+            )
+            conn.execute(
                 f"""UPDATE {H.POINTS.LAYER} SET macronated="kinda" WHERE fid=3;"""
             )
 

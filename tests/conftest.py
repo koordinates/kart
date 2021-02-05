@@ -534,19 +534,19 @@ class TestHelpers:
         return next((m for m in metadatas if m.LAYER == l or m.__name__ == l))
 
     @classmethod
-    def last_change_time(cls, db, table=POINTS.LAYER):
+    def last_change_time(cls, conn, table=POINTS.LAYER):
         """
         Get the last change time from the GeoPackage DB.
         This is the same as the commit time.
         """
-        return db.execute(
+        return conn.execute(
             f"SELECT last_change FROM gpkg_contents WHERE table_name=:table_name;",
             {"table_name": table},
         ).scalar()
 
     @classmethod
-    def row_count(cls, db, table):
-        return db.execute(f'SELECT COUNT(*) FROM "{table}";').scalar()
+    def row_count(cls, conn, table):
+        return conn.execute(f'SELECT COUNT(*) FROM "{table}";').scalar()
 
     @classmethod
     def clear_working_copy(cls, repo_path="."):
@@ -565,13 +565,13 @@ class TestHelpers:
             del repo.config["sno.workingcopy.version"]
 
     @classmethod
-    def db_table_hash(cls, db, table, pk=None):
+    def db_table_hash(cls, conn, table, pk=None):
         """ Calculate a SHA1 hash of the contents of a SQLite table """
         if pk is None:
             pk = "ROWID"
 
         sql = f"SELECT * FROM {table} ORDER BY {pk};"
-        r = db.execute(sql)
+        r = conn.execute(sql)
         h = hashlib.sha1()
         for row in r:
             h.update("🔸".join(repr(col) for col in row).encode("utf-8"))
@@ -610,16 +610,16 @@ class TestHelpers:
         return tuple(param_ids)
 
     @classmethod
-    def verify_gpkg_extent(cls, db, table):
+    def verify_gpkg_extent(cls, conn, table):
         """ Check the aggregate layer extent from the table matches the values in gpkg_contents """
-        r = db.execute(
+        r = conn.execute(
             """SELECT column_name FROM "gpkg_geometry_columns" WHERE table_name=:table_name;""",
             {"table_name": table},
         ).fetchone()
         geom_col = r[0] if r else None
 
         gpkg_extent = tuple(
-            db.execute(
+            conn.execute(
                 """SELECT min_x,min_y,max_x,max_y FROM "gpkg_contents" WHERE table_name=:table_name;""",
                 {"table_name": table},
             ).fetchone()
@@ -627,7 +627,7 @@ class TestHelpers:
 
         if geom_col:
             layer_extent = tuple(
-                db.execute(
+                conn.execute(
                     f"""
                 WITH _E AS (
                     SELECT extent("{geom_col}") AS extent
@@ -647,9 +647,9 @@ class TestHelpers:
             assert gpkg_extent == (None, None, None, None)
 
 
-def _find_layer(db):
+def _find_layer(conn):
     H = pytest.helpers.helpers()
-    return db.execute(
+    return conn.execute(
         "SELECT table_name FROM gpkg_contents WHERE table_name IN (:points, :polygons, :table) LIMIT 1",
         {
             "points": H.POINTS.LAYER,
@@ -663,11 +663,11 @@ def _find_layer(db):
 def insert(request, cli_runner):
     H = pytest.helpers.helpers()
 
-    def func(db, layer=None, commit=True, reset_index=None, insert_str=None):
+    def func(conn, layer=None, commit=True, reset_index=None, insert_str=None):
         if reset_index is not None:
             func.index = reset_index
 
-        layer = layer or _find_layer(db)
+        layer = layer or _find_layer(conn)
 
         metadata = H.metadata(layer)
         rec = metadata.RECORD.copy()
@@ -681,15 +681,15 @@ def insert(request, cli_runner):
         if insert_str:
             rec[metadata.TEXT_FIELD] = insert_str
 
-        r = db.execute(sql, rec)
+        r = conn.execute(sql, rec)
         assert r.rowcount == 1
         func.inserted_fids.append(new_pk)
 
         func.index += 1
 
         if commit:
-            if hasattr(db, "commit"):
-                db.commit()
+            if hasattr(conn, "commit"):
+                conn.commit()
             r = cli_runner.invoke(
                 ["commit", "-m", f"commit-{func.index}", "-o", "json"]
             )
@@ -710,8 +710,8 @@ def insert(request, cli_runner):
 def update(request, cli_runner):
     H = pytest.helpers.helpers()
 
-    def func(db, pk, update_str, layer=None, commit=True):
-        layer = layer or _find_layer(db)
+    def func(conn, pk, update_str, layer=None, commit=True):
+        layer = layer or _find_layer(conn)
         metadata = H.metadata(layer)
         pk_field = metadata.LAYER_PK
         text_field = metadata.TEXT_FIELD
@@ -719,12 +719,12 @@ def update(request, cli_runner):
         sql = (
             f"""UPDATE {layer} SET {text_field} = :update_str WHERE {pk_field} = {pk}"""
         )
-        r = db.execute(sql, {"update_str": update_str})
+        r = conn.execute(sql, {"update_str": update_str})
         assert r.rowcount == 1
 
         if commit:
-            if hasattr(db, "commit"):
-                db.commit()
+            if hasattr(conn, "commit"):
+                conn.commit()
             r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
             assert r.exit_code == 0, r
 
@@ -744,19 +744,19 @@ def _insert_command(table_name, col_names, schema=None):
     ).insert()
 
 
-def _edit_points(db, schema=None):
+def _edit_points(conn, schema=None):
     H = pytest.helpers.helpers()
     layer = f'"{schema}"."{H.POINTS.LAYER}"' if schema else H.POINTS.LAYER
-    r = db.execute(
+    r = conn.execute(
         _insert_command(H.POINTS.LAYER, H.POINTS.RECORD.keys(), schema=schema),
         H.POINTS.RECORD,
     )
     assert r.rowcount == 1
-    r = db.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
+    r = conn.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
     assert r.rowcount == 1
-    r = db.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
+    r = conn.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
     assert r.rowcount == 1
-    r = db.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
+    r = conn.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
     assert r.rowcount == 5
     pk_del = 3
     return pk_del
@@ -767,19 +767,19 @@ def edit_points():
     return _edit_points
 
 
-def _edit_polygons(db, schema=None):
+def _edit_polygons(conn, schema=None):
     H = pytest.helpers.helpers()
     layer = f'"{schema}"."{H.POLYGONS.LAYER}"' if schema else H.POLYGONS.LAYER
-    r = db.execute(
+    r = conn.execute(
         _insert_command(H.POLYGONS.LAYER, H.POLYGONS.RECORD.keys(), schema=schema),
         H.POLYGONS.RECORD,
     )
     assert r.rowcount == 1
-    r = db.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
+    r = conn.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
     assert r.rowcount == 1
-    r = db.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
+    r = conn.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
     assert r.rowcount == 1
-    r = db.execute(
+    r = conn.execute(
         f"DELETE FROM {layer} WHERE id IN (1452332, 1456853, 1456912, 1457297, 1457355);"
     )
     assert r.rowcount == 5
@@ -792,19 +792,19 @@ def edit_polygons():
     return _edit_polygons
 
 
-def _edit_table(db, schema=None):
+def _edit_table(conn, schema=None):
     H = pytest.helpers.helpers()
     layer = f'"{schema}"."{H.TABLE.LAYER}"' if schema else H.TABLE.LAYER
-    r = db.execute(
+    r = conn.execute(
         _insert_command(H.TABLE.LAYER, H.TABLE.RECORD.keys(), schema=schema),
         H.TABLE.RECORD,
     )
     assert r.rowcount == 1
-    r = db.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
+    r = conn.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
     assert r.rowcount == 1
-    r = db.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
+    r = conn.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
     assert r.rowcount == 1
-    r = db.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
+    r = conn.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
     assert r.rowcount == 5
     pk_del = 3
     return pk_del
@@ -831,23 +831,23 @@ def create_conflicts(
             cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
             cli_runner.invoke(["checkout", "-b", "theirs_branch"])
 
-            with gpkg_engine(wc).connect() as db:
-                update(db, sample_pks[0], "theirs_version")
-                update(db, sample_pks[1], "ours_theirs_version")
-                update(db, sample_pks[2], "theirs_version")
-                update(db, sample_pks[3], "theirs_version")
-                update(db, sample_pks[4], "theirs_version")
-                insert(db, reset_index=1, insert_str="insert_theirs")
+            with gpkg_engine(wc).connect() as conn:
+                update(conn, sample_pks[0], "theirs_version")
+                update(conn, sample_pks[1], "ours_theirs_version")
+                update(conn, sample_pks[2], "theirs_version")
+                update(conn, sample_pks[3], "theirs_version")
+                update(conn, sample_pks[4], "theirs_version")
+                insert(conn, reset_index=1, insert_str="insert_theirs")
 
                 cli_runner.invoke(["checkout", "ancestor_branch"])
                 cli_runner.invoke(["checkout", "-b", "ours_branch"])
 
-                update(db, sample_pks[1], "ours_theirs_version")
-                update(db, sample_pks[2], "ours_version")
-                update(db, sample_pks[3], "ours_version")
-                update(db, sample_pks[4], "ours_version")
-                update(db, sample_pks[5], "ours_version")
-                insert(db, reset_index=1, insert_str="insert_ours")
+                update(conn, sample_pks[1], "ours_theirs_version")
+                update(conn, sample_pks[2], "ours_version")
+                update(conn, sample_pks[3], "ours_version")
+                update(conn, sample_pks[4], "ours_version")
+                update(conn, sample_pks[5], "ours_version")
+                insert(conn, reset_index=1, insert_str="insert_ours")
 
             yield repo
 

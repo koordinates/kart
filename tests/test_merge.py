@@ -42,10 +42,10 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
         h = repo.head.target.hex
 
         # make some changes
-        with gpkg_engine(wc).connect() as db:
-            insert(db)
-            insert(db)
-            commit_id = insert(db)
+        with gpkg_engine(wc).connect() as conn:
+            insert(conn)
+            insert(conn)
+            commit_id = insert(conn)
 
         H.git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
@@ -98,10 +98,10 @@ def test_merge_fastforward_noff(
         h = repo.head.target.hex
 
         # make some changes
-        with gpkg_engine(wc).connect() as db:
-            insert(db)
-            insert(db)
-            commit_id = insert(db)
+        with gpkg_engine(wc).connect() as conn:
+            insert(conn)
+            insert(conn)
+            commit_id = insert(conn)
 
         H.git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
@@ -160,18 +160,18 @@ def test_merge_true(
         h = repo.head.target.hex
 
         # make some changes
-        with wc.session() as db:
-            insert(db)
-            insert(db)
-            b_commit_id = insert(db)
+        with wc.session() as sess:
+            insert(sess)
+            insert(sess)
+            b_commit_id = insert(sess)
             assert repo.head.target.hex == b_commit_id
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
         assert repo.head.target.hex != b_commit_id
 
-        with wc.session() as db:
-            m_commit_id = insert(db)
+        with wc.session() as sess:
+            m_commit_id = insert(sess)
         H.git_graph(request, "pre-merge-main")
 
         # fastforward merge should fail
@@ -199,10 +199,10 @@ def test_merge_true(
         # check the database state
         num_inserts = len(insert.inserted_fids)
 
-        with wc.session() as db:
+        with wc.session() as sess:
             rowcount = 0
             for pk in insert.inserted_fids:
-                rowcount += db.execute(
+                rowcount += sess.execute(
                     f"SELECT COUNT(*) FROM {data.LAYER} WHERE {data.LAYER_PK} = :pk",
                     {"pk": pk},
                 ).fetchone()[0]

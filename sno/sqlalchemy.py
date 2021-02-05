@@ -27,7 +27,7 @@ def gpkg_engine(path):
 # PostGIS set-up - timestamps:
 
 
-def _adapt_timestamp_from_pg(t, db):
+def _adapt_timestamp_from_pg(t, dbcur):
     if t is None:
         return t
     # Output timestamps in the same variant of ISO 8601 required by GPKG.
@@ -49,7 +49,7 @@ psycopg2.extensions.register_type(TIMESTAMPTZ)
 # Then we can serialise it using MessagePack.
 
 
-def _adapt_to_string(v, db):
+def _adapt_to_string(v, dbcur):
     return str(v) if v is not None else None
 
 
@@ -74,7 +74,7 @@ def _adapt_geometry_to_pg(g):
     return Binary(g.to_ewkb())
 
 
-def _adapt_geometry_from_pg(g, db):
+def _adapt_geometry_from_pg(g, dbcur):
     return Geometry.from_hex_ewkb(g)
 
 

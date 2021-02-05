@@ -136,8 +136,8 @@ def test_import_table_meta_overrides(
 
             repo = SnoRepo(repo_path)
             wc = repo.working_copy
-            with gpkg_engine(wc.path).connect() as db:
-                title, description = db.execute(
+            with gpkg_engine(wc.path).connect() as conn:
+                title, description = conn.execute(
                     """
                     SELECT c.identifier, c.description
                     FROM gpkg_contents c
@@ -147,7 +147,7 @@ def test_import_table_meta_overrides(
                 assert title == "census2016_sdhca_ot_ced_short: test title"
                 assert description == "test description"
 
-                xml_metadata = db.execute(
+                xml_metadata = conn.execute(
                     """
                     SELECT m.metadata
                     FROM gpkg_metadata m JOIN gpkg_metadata_reference r
@@ -198,8 +198,8 @@ def test_import_replace_existing(
             assert r.exit_code == 0, r.stderr
 
             # Now modify the source GPKG
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as db:
-                db.execute(
+            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+                conn.execute(
                     "UPDATE nz_waca_adjustments SET survey_reference = 'edited' WHERE id = 1424927"
                 )
 
@@ -295,8 +295,8 @@ def test_import_replace_existing_with_compatible_schema_changes(
             # * doesn't include the `survey_reference` column
             # * has the columns in a different order
             # * has a new column
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as db:
-                db.execute(
+            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+                conn.execute(
                     """
                         CREATE TABLE IF NOT EXISTS "nz_waca_adjustments_2" (
                             "id" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -307,14 +307,14 @@ def test_import_replace_existing_with_compatible_schema_changes(
                         );
                     """
                 )
-                db.execute(
+                conn.execute(
                     """
                         INSERT INTO nz_waca_adjustments_2 (id, geom, date_adjusted, adjusted_nodes, newcolumn)
                             SELECT id, geom, date_adjusted, adjusted_nodes, NULL FROM nz_waca_adjustments;
                     """
                 )
-                db.execute("""DROP TABLE nz_waca_adjustments;""")
-                db.execute(
+                conn.execute("""DROP TABLE nz_waca_adjustments;""")
+                conn.execute(
                     """ALTER TABLE "nz_waca_adjustments_2" RENAME TO "nz_waca_adjustments";"""
                 )
 
@@ -368,8 +368,8 @@ def test_import_replace_existing_with_column_renames(
             # * doesn't include the `survey_reference` column
             # * has the columns in a different order
             # * has a new column
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as db:
-                db.execute(
+            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+                conn.execute(
                     """
                     ALTER TABLE "nz_waca_adjustments" RENAME COLUMN "survey_reference" TO "renamed_survey_reference";
                     """
@@ -417,9 +417,9 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
         # There's a bunch of wacky types in here, let's check them
         repo = SnoRepo(repo_path)
         wc = repo.working_copy
-        with wc.session() as db:
+        with wc.session() as sess:
             table_info = [
-                dict(row) for row in db.execute("PRAGMA table_info('types');")
+                dict(row) for row in sess.execute("PRAGMA table_info('types');")
             ]
         assert table_info == [
             {
@@ -567,15 +567,15 @@ def test_init_import(
         assert repo.config["sno.repository.version"] == "2"
         assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
-        with gpkg_engine(wc).connect() as db:
-            assert H.row_count(db, table) > 0
+        with gpkg_engine(wc).connect() as conn:
+            assert H.row_count(conn, table) > 0
 
-            wc_tree_id = db.execute(
+            wc_tree_id = conn.execute(
                 """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head_tree.hex
 
-            xml_metadata = db.execute(
+            xml_metadata = conn.execute(
                 f"""
                 SELECT m.metadata
                 FROM gpkg_metadata m JOIN gpkg_metadata_reference r
@@ -594,7 +594,7 @@ def test_init_import(
             else:
                 assert not xml_metadata
 
-            srs_definition = db.execute(
+            srs_definition = conn.execute(
                 f"""
                 SELECT srs.definition
                 FROM gpkg_spatial_ref_sys srs JOIN gpkg_geometry_columns geom
@@ -611,7 +611,7 @@ def test_init_import(
                     'GEOGCS["NZGD2000",\n    DATUM["New_Zealand_Geodetic_Datum_2000"'
                 )
 
-            H.verify_gpkg_extent(db, table)
+            H.verify_gpkg_extent(conn, table)
         with chdir(repo_path):
             # check that we can view the commit we created
             cli_runner.invoke(["show", "-o", "json"])
@@ -812,15 +812,11 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
 
     with chdir(repo_path):
         # working copy exists
-        with gpkg_engine("wc.gpkg").connect() as db:
+        with gpkg_engine("wc.gpkg").connect() as conn:
 
             expected_tables = set(a[3].replace("/", "__") for a in ARCHIVE_PATHS)
-            db_tables = set(
-                r[0]
-                for r in db.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table';"
-                )
-            )
+            r = conn.execute("SELECT name FROM sqlite_master WHERE type='table';")
+            db_tables = set(row[0] for row in r)
             assert expected_tables <= db_tables
 
             for gpkg_t in (
@@ -828,10 +824,8 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
                 "gpkg_geometry_columns",
                 "gpkg_metadata_reference",
             ):
-                table_list = set(
-                    r[0]
-                    for r in db.execute(f"SELECT DISTINCT table_name FROM {gpkg_t};")
-                )
+                r = conn.execute(f"SELECT DISTINCT table_name FROM {gpkg_t};")
+                table_list = set(row[0] for row in r)
                 assert expected_tables >= table_list, gpkg_t
 
         r = cli_runner.invoke(["diff"])
@@ -893,16 +887,16 @@ def test_import_existing_wc(
 
         repo = SnoRepo(repo_path)
         wc = repo.working_copy
-        with wc.session() as db:
-            assert H.row_count(db, "nz_waca_adjustments") > 0
+        with wc.session() as sess:
+            assert H.row_count(sess, "nz_waca_adjustments") > 0
         assert wc.get_db_tree() == repo.head_tree.id.hex
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
 
-        with wc.session() as db:
-            r = db.execute(
+        with wc.session() as sess:
+            r = sess.execute(
                 "DELETE FROM nz_waca_adjustments WHERE rowid IN (SELECT rowid FROM nz_waca_adjustments ORDER BY id LIMIT 10);"
             )
             assert r.rowcount == 10
@@ -917,8 +911,8 @@ def test_import_existing_wc(
             )
             assert r.exit_code == 0, r
 
-        with wc.session() as db:
-            assert H.row_count(db, "waca2") > 0
+        with wc.session() as sess:
+            assert H.row_count(sess, "waca2") > 0
         assert wc.get_db_tree() == repo.head_tree.id.hex
 
         r = cli_runner.invoke(["status"])

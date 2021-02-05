@@ -41,17 +41,17 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        with gpkg_engine(wc).connect() as db:
+        with gpkg_engine(wc).connect() as conn:
 
-            r = db.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+            r = conn.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
-            r = db.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
+            r = conn.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
             assert r.rowcount == 1
-            r = db.execute(
+            r = conn.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
             assert r.rowcount == 1
-            r = db.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid=3;")
+            r = conn.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid=3;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(
@@ -262,8 +262,8 @@ def test_diff_reprojection(output_format, data_working_copy, cli_runner):
     """ diff the working copy against HEAD """
     with data_working_copy("points") as (repo, wc):
         # make some changes
-        with gpkg_engine(wc).connect() as db:
-            r = db.execute(
+        with gpkg_engine(wc).connect() as conn:
+            r = conn.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
             assert r.rowcount == 1
@@ -342,17 +342,17 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        with gpkg_engine(wc).connect() as db:
+        with gpkg_engine(wc).connect() as conn:
 
-            r = db.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
+            r = conn.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
             assert r.rowcount == 1
-            r = db.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
+            r = conn.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
             assert r.rowcount == 1
-            r = db.execute(
+            r = conn.execute(
                 f"UPDATE {H.POLYGONS.LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
             )
             assert r.rowcount == 1
-            r = db.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id=1452332;")
+            r = conn.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id=1452332;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(
@@ -675,19 +675,19 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        with gpkg_engine(wc).connect() as db:
+        with gpkg_engine(wc).connect() as conn:
 
-            r = db.execute(H.TABLE.INSERT, H.TABLE.RECORD)
+            r = conn.execute(H.TABLE.INSERT, H.TABLE.RECORD)
             assert r.rowcount == 1
-            r = db.execute(
+            r = conn.execute(
                 f'UPDATE {H.TABLE.LAYER} SET "OBJECTID"=9998 WHERE OBJECTID=1;'
             )
             assert r.rowcount == 1
-            r = db.execute(
+            r = conn.execute(
                 f"UPDATE {H.TABLE.LAYER} SET name='test', POP2000=9867 WHERE OBJECTID=2;"
             )
             assert r.rowcount == 1
-            r = db.execute(f'DELETE FROM {H.TABLE.LAYER} WHERE "OBJECTID"=3;')
+            r = conn.execute(f'DELETE FROM {H.TABLE.LAYER} WHERE "OBJECTID"=3;')
             assert r.rowcount == 1
 
         r = cli_runner.invoke(
@@ -1103,17 +1103,19 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         # assert r.exit_code == 0, r
 
         # make the R1 -> WC changes
-        with gpkg_engine(wc).connect() as db:
+        with gpkg_engine(wc).connect() as conn:
 
             EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
             for pk, val in EDITS:
-                r = db.execute("UPDATE editing SET value = ? WHERE id = ?;", (val, pk))
+                r = conn.execute(
+                    "UPDATE editing SET value = ? WHERE id = ?;", (val, pk)
+                )
                 assert r.rowcount == 1
 
-            r = db.execute("DELETE FROM editing WHERE id IN (5, 9);")
+            r = conn.execute("DELETE FROM editing WHERE id IN (5, 9);")
             assert r.rowcount == 2
 
-            r = db.execute(
+            r = conn.execute(
                 "INSERT INTO editing (id, value) VALUES (6, 'f'), (11, 'k'), (12, 'l1');"
             )
             assert r.rowcount == 3
@@ -1293,18 +1295,18 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
         assert repo.head.name == "refs/heads/changes"
 
         # make some changes
-        with engine.connect() as db:
-            insert(db)
-            insert(db)
-            b_commit_id = insert(db)
+        with engine.connect() as conn:
+            insert(conn)
+            insert(conn)
+            b_commit_id = insert(conn)
         assert repo.head.target.hex == b_commit_id
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         assert repo.head.target.hex != b_commit_id
 
-        with engine.connect() as db:
-            m_commit_id = insert(db)
+        with engine.connect() as conn:
+            m_commit_id = insert(conn)
 
         H.git_graph(request, "pre-merge-main")
 

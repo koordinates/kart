@@ -95,8 +95,8 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 
 def test_reset(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc):
-        with gpkg_engine(wc).connect() as db:
-            edit_points(db)
+        with gpkg_engine(wc).connect() as conn:
+            edit_points(conn)
 
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 1

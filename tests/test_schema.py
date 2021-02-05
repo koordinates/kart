@@ -218,8 +218,8 @@ def test_edit_schema_points(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as db:
-            edit_points_schema(db)
+        with gpkg_engine(wc_path).connect() as conn:
+            edit_points_schema(conn)
 
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
@@ -245,8 +245,8 @@ def test_edit_schema_polygons(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as db:
-            edit_polygons_schema(db)
+        with gpkg_engine(wc_path).connect() as conn:
+            edit_polygons_schema(conn)
 
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
@@ -272,8 +272,8 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as db:
-            edit_table_schema(db)
+        with gpkg_engine(wc_path).connect() as conn:
+            edit_table_schema(conn)
 
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]

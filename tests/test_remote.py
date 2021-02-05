@@ -107,11 +107,11 @@ def test_clone(
             assert repo.config["sno.repository.version"] == "2"
             assert repo.config["sno.workingcopy.path"] == wc.name
 
-            with gpkg_engine(wc).connect() as db:
-                nrows = db.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
+            with gpkg_engine(wc).connect() as conn:
+                nrows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
                 assert nrows > 0
 
-                wc_tree_id = db.execute(
+                wc_tree_id = conn.execute(
                     """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';""",
                 ).fetchone()[0]
                 assert wc_tree_id == repo.head_tree.hex
@@ -133,8 +133,8 @@ def test_fetch(
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as db:
-            commit_id = insert(db)
+        with gpkg_engine(wc).connect() as conn:
+            commit_id = insert(conn)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r
@@ -203,8 +203,8 @@ def test_pull(
             assert r.exit_code == 0, r
 
         with chdir(path1):
-            with gpkg_engine(wc1).connect() as db:
-                commit_id = insert(db)
+            with gpkg_engine(wc1).connect() as conn:
+                commit_id = insert(conn)
 
             r = cli_runner.invoke(["push"])
             assert r.exit_code == 0, r

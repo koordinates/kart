@@ -75,8 +75,8 @@ def test_branches(
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as db:
-            insert(db)
+        with gpkg_engine(wc).connect() as conn:
+            insert(conn)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r

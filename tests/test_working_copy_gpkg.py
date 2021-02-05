@@ -47,8 +47,8 @@ def test_checkout_workingcopy(
         assert wc.get_db_tree() == repo.head_tree.hex
 
         if geom_cols:
-            with wc.session() as db:
-                spatial_index_count = db.execute(
+            with wc.session() as sess:
+                spatial_index_count = sess.execute(
                     f"""SELECT COUNT(*) FROM "rtree_{table}_{geom_cols[0].name}";"""
                 ).scalar()
                 assert spatial_index_count == dataset.feature_count
@@ -61,15 +61,15 @@ def test_checkout_workingcopy(
 def test_checkout_detached(data_working_copy, cli_runner):
     """ Checkout a working copy to edit """
     with data_working_copy("points") as (repo_dir, wc):
-        with gpkg_engine(wc).connect() as db:
-            assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        with gpkg_engine(wc).connect() as conn:
+            assert H.last_change_time(conn) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the previous commit
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as db:
-            assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+        with gpkg_engine(wc).connect() as conn:
+            assert H.last_change_time(conn) == "2019-06-11T11:03:58.000000Z"
 
         repo = SnoRepo(repo_dir)
         assert repo.head.target.hex == H.POINTS.HEAD1_SHA
@@ -101,56 +101,56 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the HEAD-but-1 commit
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD1_SHA)
         assert repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the main HEAD via branch-name
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r
         assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout a short-sha commit
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD1_SHA)
         assert repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the main HEAD via refspec
         r = cli_runner.invoke(["checkout", "refs/heads/main"])
         assert r.exit_code == 0, r
         assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the tag
         r = cli_runner.invoke(["checkout", "version1"])
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the remote branch
         r = cli_runner.invoke(["checkout", "myremote/main"])
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-20T14:28:33.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
 
 def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
@@ -179,8 +179,8 @@ def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with gpkg_engine(wc).connect() as db:
-            r = db.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+        with gpkg_engine(wc).connect() as conn:
+            r = conn.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
@@ -231,11 +231,11 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with wc.session() as db:
-            r = db.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+        with wc.session() as sess:
+            r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
-            r = db.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=3;")
+            r = sess.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=3;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
@@ -247,18 +247,18 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "main"])
         assert r.exit_code == 0, r
 
-        with wc.session() as db:
-            assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
+        with wc.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
         assert repo.head.name == "refs/heads/main"
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with wc.session() as db:
-            r = db.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+        with wc.session() as sess:
+            r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
-            r = db.execute(f"UPDATE {H.POINTS.LAYER} SET fid=40000 WHERE fid=4;")
+            r = sess.execute(f"UPDATE {H.POINTS.LAYER} SET fid=40000 WHERE fid=4;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(["switch", "foo"])
@@ -268,8 +268,8 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "foo", "--discard-changes"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as db:
-            assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT + 1
+        with wc.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT + 1
 
         assert repo.head.name == "refs/heads/foo"
         assert repo.head_commit.hex == new_commit
@@ -283,8 +283,8 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/main"
 
-        with wc.session() as db:
-            assert H.row_count(db, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
+        with wc.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
 
 @pytest.mark.parametrize(
@@ -345,14 +345,14 @@ def test_working_copy_discard_changes(
         repo = SnoRepo(repo_path)
         wc = repo.working_copy
 
-        with wc.session() as db:
-            h_before = H.db_table_hash(db, layer, pk_field)
-            r = db.execute(sql, rec)
+        with wc.session() as sess:
+            h_before = H.db_table_hash(sess, layer, pk_field)
+            r = sess.execute(sql, rec)
             assert r.rowcount == 1
 
-            r = db.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
+            r = sess.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
             assert r.rowcount == 4
-            r = db.execute(
+            r = sess.execute(
                 f"UPDATE {layer} SET {upd_field} = :value WHERE {pk_field}>=:low AND {pk_field}<:high;",
                 {
                     "value": upd_field_value,
@@ -361,13 +361,13 @@ def test_working_copy_discard_changes(
                 },
             )
             assert r.rowcount == 5
-            r = db.execute(
+            r = sess.execute(
                 f"UPDATE {layer} SET {pk_field}=:new_pk WHERE {pk_field}=:old_pk;",
                 {"new_pk": 9998, "old_pk": id_chg_pk},
             )
             assert r.rowcount == 1
 
-            change_count = db.scalar("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
+            change_count = sess.scalar("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
             assert change_count == (1 + 4 + 5 + 2)
 
         if via == "restore":
@@ -396,10 +396,10 @@ def test_working_copy_discard_changes(
 
         assert wc.tracking_changes_count() == 0
 
-        with wc.session() as db:
-            h_after = H.db_table_hash(db, layer, pk_field)
+        with wc.session() as sess:
+            h_after = H.db_table_hash(sess, layer, pk_field)
             if h_before != h_after:
-                r = db.execute(
+                r = sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=:pk;",
                     {"pk": rec[pk_field]},
                 )
@@ -407,26 +407,26 @@ def test_working_copy_discard_changes(
                     print(
                         "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
                     )
-                count = db.scalar(
+                count = sess.scalar(
                     f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;",
                     {"pk": del_pk},
                 )
                 if count != 4:
                     print("E: Deleted rows {pk_field}<{del_pk} still missing")
-                count = db.scalar(
+                count = sess.scalar(
                     f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
                     {"value": upd_field_value},
                 )
                 if count != 0:
                     print("E: Updated rows not reset")
-                r = db.execute(
+                r = sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;"
                 )
                 if r.fetchone():
                     print(
                         "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
                     )
-                r = db.execute(
+                r = sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = :pk;",
                     {"pk": id_chg_pk},
                 )
@@ -439,8 +439,8 @@ def test_working_copy_discard_changes(
 def test_switch_with_meta_items(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc_path):
         wc = SnoRepo(repo_path).working_copy
-        with wc.session() as db:
-            db.execute(
+        with wc.session() as sess:
+            sess.execute(
                 """UPDATE gpkg_contents SET identifier = 'new identifier', description='new description'"""
             )
 
@@ -449,8 +449,8 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as db:
-            r = db.execute("""SELECT identifier, description FROM gpkg_contents""")
+        with wc.session() as sess:
+            r = sess.execute("""SELECT identifier, description FROM gpkg_contents""")
             identifier, description = r.fetchone()
             assert identifier == "nz_pa_points_topo_150k: NZ Pa Points (Topo, 1:50k)"
             assert description.startswith("Defensive earthworks")
@@ -458,8 +458,8 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as db:
-            r = db.execute("""SELECT identifier, description FROM gpkg_contents""")
+        with wc.session() as sess:
+            r = sess.execute("""SELECT identifier, description FROM gpkg_contents""")
             identifier, description = r.fetchone()
             assert identifier == "nz_pa_points_topo_150k: new identifier"
             assert description == "new description"
@@ -469,8 +469,8 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
     # Column renames are one of the only schema changes we can do without having to recreate the whole table.
     with data_working_copy("points") as (repo_path, wc_path):
         wc = SnoRepo(repo_path).working_copy
-        with wc.session() as db:
-            db.execute(
+        with wc.session() as sess:
+            sess.execute(
                 f"""ALTER TABLE "{H.POINTS.LAYER}" RENAME "name_ascii" TO "name_latin1";"""
             )
 
@@ -478,16 +478,16 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as db:
-            name = db.scalar(
+        with wc.session() as sess:
+            name = sess.scalar(
                 f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
             )
             assert name == "name_ascii"
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as db:
-            name = db.scalar(
+        with wc.session() as sess:
+            name = sess.scalar(
                 f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
             )
             assert name == "name_latin1"
@@ -496,16 +496,16 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
 def test_switch_with_schema_change(data_working_copy, cli_runner):
     with data_working_copy("polygons") as (repo_path, wc_path):
         wc = SnoRepo(repo_path).working_copy
-        with wc.session() as db:
-            db.execute(
+        with wc.session() as sess:
+            sess.execute(
                 f"""ALTER TABLE "{H.POLYGONS.LAYER}" ADD COLUMN "colour" TEXT;"""
             )
         r = cli_runner.invoke(["commit", "-m", "change schema"])
         assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as db:
-            r = db.execute(
+        with wc.session() as sess:
+            r = sess.execute(
                 f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
             )
             result = list(r)
@@ -519,8 +519,8 @@ def test_switch_with_schema_change(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as db:
-            r = db.execute(
+        with wc.session() as sess:
+            r = sess.execute(
                 f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
             )
             result = list(r)
@@ -552,8 +552,8 @@ def test_switch_pre_import_post_import(
             r = cli_runner.invoke(["checkout", "HEAD^"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as db:
-                count = db.scalar(
+            with wc.session() as sess:
+                count = sess.scalar(
                     f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
                 )
                 assert count == 0
@@ -561,8 +561,8 @@ def test_switch_pre_import_post_import(
             r = cli_runner.invoke(["checkout", "main"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as db:
-                count = db.scalar(
+            with wc.session() as sess:
+                count = sess.scalar(
                     f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
                 )
                 assert count == 1
@@ -571,14 +571,14 @@ def test_switch_pre_import_post_import(
 def test_switch_xml_metadata_added(data_working_copy, cli_runner):
     with data_working_copy("table") as (repo_path, wc_path):
         wc = SnoRepo(repo_path).working_copy
-        with wc.session() as db:
-            db.execute(
+        with wc.session() as sess:
+            sess.execute(
                 """
                 INSERT INTO gpkg_metadata (id, md_scope, md_standard_uri, mime_type, metadata)
                 VALUES (1, "dataset", "http://www.isotc211.org/2005/gmd", "text/xml", "<test metadata>");
                 """
             )
-            db.execute(
+            sess.execute(
                 """
                 INSERT INTO gpkg_metadata_reference (reference_scope, table_name, md_file_id)
                 VALUES ("table", "countiestbl", 1);
@@ -590,8 +590,8 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as db:
-            xml_metadata = db.execute(
+        with wc.session() as sess:
+            xml_metadata = sess.execute(
                 """
                 SELECT m.metadata
                 FROM gpkg_metadata m JOIN gpkg_metadata_reference r
@@ -604,8 +604,8 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as db:
-            xml_metadata = db.execute(
+        with wc.session() as sess:
+            xml_metadata = sess.execute(
                 """
                 SELECT m.metadata
                 FROM gpkg_metadata m JOIN gpkg_metadata_reference r
@@ -629,8 +629,8 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
                 with pytest.raises(
                     sqlalchemy.exc.OperationalError, match=r"database is locked"
                 ):
-                    with wc.session() as db:
-                        db.execute("UPDATE gpkg_contents SET table_name=table_name;")
+                    with wc.session() as sess:
+                        sess.execute("UPDATE gpkg_contents SET table_name=table_name;")
                 is_checked = True
 
             return orig_func(*args, **kwargs)
@@ -641,8 +641,8 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
         assert r.exit_code == 0, r
         assert is_checked
 
-        with wc.session() as db:
-            assert H.last_change_time(db) == "2019-06-11T11:03:58.000000Z"
+        with wc.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
 
 def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
@@ -712,8 +712,8 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
         repo = SnoRepo(repo_path)
         wc = repo.working_copy
 
-        with wc.session() as db:
-            r = db.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=300;")
+        with wc.session() as sess:
+            r = sess.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=300;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
@@ -723,13 +723,13 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
         assert new_commit != H.POINTS.HEAD_SHA
         print(f"Original commit={H.POINTS.HEAD_SHA} New commit={new_commit}")
 
-        with wc.session() as db:
-            r = db.execute(sql, rec)
+        with wc.session() as sess:
+            r = sess.execute(sql, rec)
             assert r.rowcount == 1
 
-            r = db.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
+            r = sess.execute(f"DELETE FROM {layer} WHERE {pk_field} < {del_pk};")
             assert r.rowcount == 4
-            r = db.execute(
+            r = sess.execute(
                 f"UPDATE {layer} SET {upd_field} = :value WHERE {pk_field}>=:low AND {pk_field}<:high;",
                 {
                     "value": upd_field_value,
@@ -738,7 +738,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
                 },
             )
             assert r.rowcount == 5
-            r = db.execute(
+            r = sess.execute(
                 f"UPDATE {layer} SET {pk_field}=:new_pk WHERE {pk_field}=:old_pk;",
                 {"new_pk": 9998, "old_pk": id_chg_pk},
             )
@@ -746,7 +746,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
 
             changes_pre = [
                 r[0]
-                for r in db.execute(
+                for r in sess.execute(
                     'SELECT pk FROM "gpkg_sno_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
@@ -770,10 +770,10 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
         r = cli_runner.invoke(["restore"] + source + pathspec)
         assert r.exit_code == 0, r
 
-        with wc.session() as db:
+        with wc.session() as sess:
             changes_post = [
                 r[0]
-                for r in db.execute(
+                for r in sess.execute(
                     'SELECT pk FROM "gpkg_sno_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
@@ -794,7 +794,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
                 if head_sha != H.POINTS.HEAD_SHA:
                     print(f"E: Bad Tree? {head_sha}")
 
-                r = db.execute(
+                r = sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;"
                 )
                 if not r.fetchone():
@@ -806,13 +806,13 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
             if head_sha != new_commit:
                 print(f"E: Bad Tree? {head_sha}")
 
-            head_sha = db.scalar(
+            head_sha = sess.scalar(
                 """SELECT value FROM "gpkg_sno_state" WHERE key = 'tree' AND table_name='*';"""
             )
             if head_sha != new_commit:
                 print(f"E: Bad Tree? {head_sha}")
 
-            r = db.execute(
+            r = sess.execute(
                 f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=:pk;",
                 {"pk": rec[pk_field]},
             )
@@ -820,30 +820,30 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
                 print(
                     "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
                 )
-            count = db.scalar(
+            count = sess.scalar(
                 f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;", {"pk": del_pk}
             )
             if count != 4:
                 print("E: Deleted rows {pk_field}<{del_pk} still missing")
-            count = db.scalar(
+            count = sess.scalar(
                 f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
                 {"value": upd_field_value},
             )
             if count != 0:
                 print("E: Updated rows not reset")
-            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
+            r = sess.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
             if r.fetchone():
                 print(
                     "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
                 )
-            r = db.execute(
+            r = sess.execute(
                 f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = :pk;",
                 {"pk": id_chg_pk},
             )
             if not r.fetchone():
                 print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
 
-            r = db.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
+            r = sess.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
             if not r.fetchone():
                 print("E: Previous PK bad? ({pk_field}=300)")
 
@@ -882,20 +882,20 @@ def test_types_roundtrip(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stdout
 
 
-def _edit_string_pk_polygons(db):
+def _edit_string_pk_polygons(conn):
     H = pytest.helpers.helpers()
     layer = H.POLYGONS.LAYER
     insert_record = H.POLYGONS.RECORD.copy()
     insert_record["id"] = "test1234"
-    r = db.execute(H.POLYGONS.INSERT, insert_record)
+    r = conn.execute(H.POLYGONS.INSERT, insert_record)
     assert r.rowcount == 1
-    r = db.execute(f"UPDATE {layer} SET id='POLY9998' WHERE id='POLY1424927';")
+    r = conn.execute(f"UPDATE {layer} SET id='POLY9998' WHERE id='POLY1424927';")
     assert r.rowcount == 1
-    r = db.execute(
+    r = conn.execute(
         f"UPDATE {layer} SET survey_reference='test' WHERE id='POLY1443053';"
     )
     assert r.rowcount == 1
-    r = db.execute(
+    r = conn.execute(
         f"DELETE FROM {layer} WHERE id IN ('POLY1452332', 'POLY1456853', 'POLY1456912', 'POLY1457297', 'POLY1457355');"
     )
     assert r.rowcount == 5
@@ -905,8 +905,8 @@ def _edit_string_pk_polygons(db):
 
 def test_edit_string_pks(data_working_copy, cli_runner):
     with data_working_copy("string-pks") as (repo_path, wc):
-        with gpkg_engine(wc).connect() as db:
-            _edit_string_pk_polygons(db)
+        with gpkg_engine(wc).connect() as conn:
+            _edit_string_pk_polygons(conn)
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r
@@ -938,8 +938,8 @@ def test_edit_string_pks(data_working_copy, cli_runner):
 def test_reset_transaction(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc_path):
         wc = SnoRepo(repo_path).working_copy
-        with wc.session() as db:
-            edit_points(db)
+        with wc.session() as sess:
+            edit_points(sess)
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r
@@ -948,20 +948,20 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
             H.POINTS.LAYER: {"feature": {"inserts": 1, "updates": 2, "deletes": 5}}
         }
 
-        with wc.session() as db:
+        with wc.session() as sess:
             # This modification makes the gpkg_sno_state table work like normal for reading,
             # but writing to it will fail due to the CHECK.
-            db.execute(
+            sess.execute(
                 """ALTER TABLE "gpkg_sno_state" RENAME TO "gpkg_sno_state_backup";"""
             )
-            value = db.scalar("SELECT value FROM gpkg_sno_state_backup;")
-            db.execute(
+            value = sess.scalar("SELECT value FROM gpkg_sno_state_backup;")
+            sess.execute(
                 f"""
                 CREATE TABLE "gpkg_sno_state"
                     ("table_name" TEXT NOT NULL, "key" TEXT NOT NULL, "value" TEXT NULL CHECK("value" = '{value}'));
                 """
             )
-            db.execute(
+            sess.execute(
                 """INSERT INTO "gpkg_sno_state" SELECT * FROM "gpkg_sno_state_backup";"""
             )
 
@@ -973,9 +973,9 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         with pytest.raises(sqlalchemy.exc.IntegrityError):
             r = cli_runner.invoke(["checkout", "HEAD^", "--discard-changes"])
 
-        with wc.session() as db:
-            db.execute("DROP TABLE IF EXISTS gpkg_sno_state;")
-            db.execute(
+        with wc.session() as sess:
+            sess.execute("DROP TABLE IF EXISTS gpkg_sno_state;")
+            sess.execute(
                 """ALTER TABLE "gpkg_sno_state_backup" RENAME TO "gpkg_sno_state";"""
             )
 
