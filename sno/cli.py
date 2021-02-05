@@ -35,13 +35,14 @@ from .exec import execvp
 
 
 def print_version(ctx):
-    import apsw
     import osgeo
     import psycopg2
     import pysqlite3
     import rtree
+    import sqlalchemy
 
     import sno
+    from sno.sqlalchemy import gpkg_engine
 
     with open(os.path.join(os.path.split(sno.__file__)[0], "VERSION")) as version_file:
         version = version_file.read().strip()
@@ -57,11 +58,9 @@ def print_version(ctx):
 
     sidx_version = rtree.index.__c_api_version__.decode("ascii")
 
-    db = apsw.Connection(":memory:")
-    dbcur = db.cursor()
-    db.config(apsw.SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1)
-    db.loadextension(sno.spatialite_path)
-    spatialite_version = dbcur.execute("SELECT spatialite_version();").fetchone()[0]
+    engine = gpkg_engine(":memory:")
+    with engine.connect() as conn:
+        spatialite_version = conn.scalar("SELECT spatialite_version();")
 
     pq_version = psycopg2.__libpq_version__
     pq_version = "{}.{}.{}".format(
@@ -81,7 +80,7 @@ def print_version(ctx):
             f"» PyGit2 v{pygit2.__version__}; "
             f"Libgit2 v{pygit2.LIBGIT2_VERSION}; "
             f"Git v{git_version}\n"
-            f"» APSW v{apsw.apswversion()}/v{apsw.sqlitelibversion()}; "
+            f"» SQLAlchemy v{sqlalchemy.__version__}; "
             f"pysqlite3 v{pysqlite3.version}/v{pysqlite3.sqlite_version}; "
             f"SpatiaLite v{spatialite_version}; "
             f"Libpq v{pq_version}\n"
