@@ -4,7 +4,7 @@ GIT_VER=2.29.2
 LIBGIT_REF=v1.1.0
 PYGIT2_REF=da410961f0a426cdecbd36548c2b36dc13c674c2
 PYGIT2_VER=1.3.0
-SQLITE_VER=3.31.1  # and APSW (-r1/.post1)
+SQLITE_VER=3.31.1
 SQLITE_URL=https://www.sqlite.org/2020/sqlite-amalgamation-3310100.zip
 
 # ==================================================================
@@ -35,7 +35,6 @@ clean:
 	-rmdir /Q /S libgit2\build libgit2\env
 	-rmdir /Q /S pygit2\src\build pygit2\src\dist
 	-rmdir /Q /S pysqlite3\src\build pysqlite3\src\dist
-	-rmdir /Q /S apsw\src\build apsw\src\dist
 
 cleaner: clean
 	-rmdir /Q /S pygit2\src libgit2\src
@@ -45,7 +44,6 @@ cleaner: clean
 	-del pygit2\pygit2.zip
 	-del pysqlite3\pysqlite3.zip
 	-del pysqlite3\sqlite.zip
-	-del apsw\apsw.zip
 	-rmdir /Q /S wheelhouse
 
 env:
@@ -205,31 +203,6 @@ $(pygit2): env $(pygit2_src) $(libgit2)
 pygit2: $(pygit2)
 
 
-# APSW
-APSW_URL="https://github.com/rogerbinns/apsw/archive/$(SQLITE_VER)-r1.zip"
-apsw_src=apsw\src
-apsw=dist\wheelhouse\apsw-$(SQLITE_VER).post1-cp37-cp37m-win_amd64.whl
-
-apsw\apsw.zip:
-	$(_PSDL) -Uri $(APSW_URL) -OutFile $@ $(_PSDLE)
-
-$(apsw_src): apsw\apsw.zip
-	if exist $@~ rmdir /S /Q $@~
-	7z x %s -o$@~
-	move /Y $@~\apsw-* $@
-# reinstate once https://github.com/actions/virtual-environments/pull/481 is rolled out
-#	rmdir /Q /S $@~
-
-$(apsw): env $(apsw_src)
-	if not exist dist\wheelhouse mkdir dist\wheelhouse
-	(cd apsw\src && $(MAKEDIR)\env\Scripts\python setup.py \
-		fetch --version=$(SQLITE_VER) --missing-checksum-ok --all \
-		build --enable-all-extensions --enable=load_extension \
-		bdist_wheel -d $(MAKEDIR)\dist\wheelhouse)
-
-apsw: $(apsw)
-
-
 # PySQLITE3
 PYSQLITE_VER=0.4.5
 PYSQLITE3_URL="https://github.com/coleifer/pysqlite3/archive/$(PYSQLITE_VER).zip"
@@ -257,7 +230,7 @@ pysqlite3: $(pysqlite3)
 
 
 # Archive
-$(_ARCHIVE): $(pygit2) $(apsw) $(pysqlite3) wheels $(git) $(spatialite) $(vcredist)
+$(_ARCHIVE): $(pygit2) $(pysqlite3) wheels $(git) $(spatialite) $(vcredist)
 	if exist $@ del $@
 	7z a $@ .\dist\*
 

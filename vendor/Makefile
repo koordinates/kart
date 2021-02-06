@@ -32,10 +32,9 @@ PY3 := $(or $(PY3),python3.7)
 
 PYDEPS := pip wheel $(WHEELTOOL) cmake==3.* certifi
 # if we export SSL_CERT_FILE it breaks wget under macos ¯\_(ツ)_/¯
-# so we only do it for apsw's fetch step
 export CERTIFI_SSL_CERT_FILE=$(abspath $(PREFIX)/lib/python3.7/site-packages/certifi/cacert.pem)
 
-packages = proj jsonc geos gdal spatialite libgit2 pygit2 apsw psycopg2 pysqlite3
+packages = proj jsonc geos gdal spatialite libgit2 pygit2 psycopg2 pysqlite3
 ifeq ($(PLATFORM),Linux)
 packages += sqlite spatialindex git curl libpq
 endif
@@ -57,9 +56,8 @@ lib-gdal := env/lib/python3.7/site-packages/osgeo/__init__.py
 lib-libgit2 := env/lib/libgit2.$(LIBSUFFIX)
 lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
 lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
-lib-apsw := env/lib/python3.7/site-packages/apsw.cpython-37m-$(shell echo $(PLATFORM) | tr A-Z a-z).so
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-apsw) $(lib-pysqlite3)
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3)
 
 
 # default target
@@ -88,10 +86,6 @@ $(lib-pygit2): $(lib-libgit2)
 	$(MAKE) -C pygit2 wheel
 	pip3 install --force-reinstall pygit2/wheel/pygit2-*$(WHEELID).whl
 
-$(lib-apsw):
-	$(MAKE) -C apsw wheel
-	pip3 install --force-reinstall apsw/wheel/apsw-*$(WHEELID).whl
-
 $(lib-psycopg2): $(lib-pq)
 	$(MAKE) -C psycopg2 wheel
 	pip3 install --force-reinstall psycopg2/wheel/psycopg2-*$(WHEELID).whl
@@ -116,8 +110,6 @@ brew-deps: $(brew-deps)
 brew-libs: $(brew-libs)
 
 env: brew-deps
-
-apsw_archive: brew-deps
 
 .PHONY: .delocate
 .delocate:
@@ -292,9 +284,6 @@ lib-geos: $(lib-geos)
 .PHONY: lib-proj
 lib-proj: $(lib-proj)
 
-.PHONY: lib-apsw
-lib-apsw: $(lib-apsw)
-
 .PHONY: lib-psycopg2
 lib-psycopg2: $(lib-psycopg2)
 
@@ -315,7 +304,6 @@ build-Darwin: $(build-libs) $(brew-libs)
 	cp -vf pygit2/wheel/pygit2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
-	cp -vf apsw/wheel/apsw-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
