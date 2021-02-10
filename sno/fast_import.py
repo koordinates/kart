@@ -38,7 +38,7 @@ def fast_import_tables(
     repo,
     sources,
     *,
-    quiet=False,
+    verbosity=1,
     header=None,
     message=None,
     replace_existing=ReplaceExisting.DONT_REPLACE,
@@ -53,7 +53,10 @@ def fast_import_tables(
 
     repo - the sno repo to import into.
     sources - an iterable of ImportSource objects. Each source is to be imported to source.dest_path.
-    quiet - if True, no progress information is printed to stdout.
+    verbosity - integer:
+        0: no progress information is printed to stdout.
+        1: basic status information
+        2: full output of `git-fast-import --stats ...`
     header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
     message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
     replace_existing - See ReplaceExisting enum
@@ -90,11 +93,12 @@ def fast_import_tables(
     cmd = [
         "git",
         "fast-import",
-        "--quiet",
         "--done",
         f"--max-pack-size={max_pack_size}",
         f"--depth={max_delta_depth}",
-    ] + list(extra_cmd_args)
+    ]
+    if verbosity < 2:
+        cmd.append("--quiet")
 
     if header is None:
         # import onto a temp branch. then reset the head branch afterwards.
@@ -108,11 +112,11 @@ def fast_import_tables(
         import_branch = None
     orig_commit = repo.head_commit
 
-    if not quiet:
+    if verbosity >= 1:
         click.echo("Starting git-fast-import...")
 
     p = subprocess.Popen(
-        cmd,
+        [*cmd, *extra_cmd_args],
         cwd=repo.path,
         stdin=subprocess.PIPE,
     )
@@ -154,7 +158,7 @@ def fast_import_tables(
                     num_rows = source.feature_count
                     num_rows_text = f"{num_rows:,d}"
 
-                if not quiet:
+                if verbosity >= 1:
                     click.echo(
                         f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
                     )
@@ -169,14 +173,14 @@ def fast_import_tables(
                         src_iterator, source, replacing_dataset=replacing_dataset
                     ),
                 ):
-                    if i and i % 100000 == 0 and not quiet:
+                    if i and i % 100000 == 0 and verbosity >= 1:
                         click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
 
                     if limit is not None and i == (limit - 1):
                         click.secho(f"  Stopping at {limit:,d} features", fg="yellow")
                         break
                 t2 = time.monotonic()
-                if not quiet:
+                if verbosity >= 1:
                     click.echo(f"Added {num_rows:,d} Features to index in {t2-t1:.1f}s")
                     click.echo(
                         f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)"
@@ -201,7 +205,7 @@ def fast_import_tables(
             f"git-fast-import error! {p.returncode}", exit_code=p.returncode
         )
     t3 = time.monotonic()
-    if not quiet:
+    if verbosity >= 1:
         click.echo(f"Closed in {(t3-t2):.0f}s")
 
     if import_branch is not None:
