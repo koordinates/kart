@@ -272,6 +272,7 @@ def import_table(
     fast_import_tables(
         repo,
         import_sources,
+        verbosity=ctx.obj.verbosity + 1,
         message=message,
         max_delta_depth=max_delta_depth,
         replace_existing=ReplaceExisting.GIVEN

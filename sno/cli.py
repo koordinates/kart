@@ -161,6 +161,7 @@ def cli(ctx, repo_dir, verbose, post_mortem):
         ctx.obj.user_repo_path = repo_dir
 
     # default == WARNING; -v == INFO; -vv == DEBUG
+    ctx.obj.verbosity = verbose
     log_level = logging.WARNING - min(10 * verbose, 20)
     logging.basicConfig(level=log_level)
 
