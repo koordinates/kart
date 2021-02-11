@@ -69,7 +69,9 @@ git: $(git)
 
 # Spatialite
 
-SPATIALITE_URL="http://www.gaia-gis.it/gaia-sins/windows-bin-amd64/spatialite-loadable-modules-5.0.0-win-amd64.7z"
+# mirrored from http://www.gaia-gis.it/gaia-sins/windows-bin-amd64/spatialite-loadable-modules-5.0.0-win-amd64.7z
+# (for longevity - it seems the gaia-gis system removes releases as soon as there's a newer release.)
+SPATIALITE_URL="https://s3-us-west-1.amazonaws.com/build-artifacts.sno.earth/mirrored/spatialite-loadable-modules-5.0.0-win-amd64.7z"
 spatialite=dist\env\lib
 
 spatialite\mod_spatialite.7z:
