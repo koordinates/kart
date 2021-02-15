@@ -13,6 +13,7 @@ from .base import WorkingCopy
 from . import postgis_adapter
 from .table_defs import PostgisSnoTables
 from sno import crs_util
+from sno.exceptions import InvalidOperation
 from sno.schema import Schema
 from sno.sqlalchemy import postgis_engine
 
@@ -67,8 +68,19 @@ class WorkingCopy_Postgis(WorkingCopy):
         self.sno_tables = PostgisSnoTables(self.db_schema)
 
     @classmethod
-    def check_valid_uri(cls, uri, workdir_path):
-        url = urlsplit(uri)
+    def check_valid_creation_path(cls, workdir_path, path):
+        cls.check_valid_path(workdir_path, path)
+        postgis_wc = cls(None, path)
+
+        # Less strict on Postgis - we are okay with the schema being already created, so long as its empty.
+        if postgis_wc.has_data():
+            raise InvalidOperation(
+                f"Error creating Postgis working copy at {path} - non-empty schema already exists"
+            )
+
+    @classmethod
+    def check_valid_path(cls, workdir_path, path):
+        url = urlsplit(path)
 
         if url.scheme != "postgresql":
             raise click.UsageError(
@@ -92,6 +104,10 @@ class WorkingCopy_Postgis(WorkingCopy):
                 "Expecting URI in form: postgresql://[HOST]/DBNAME/SCHEMA"
                 + suggestion_message
             )
+
+    @classmethod
+    def normalise_path(cls, repo, path):
+        return path
 
     @classmethod
     def default_schema(cls, workdir_path):

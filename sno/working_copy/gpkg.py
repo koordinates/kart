@@ -14,6 +14,7 @@ from sqlalchemy.sql.compiler import IdentifierPreparer
 from .base import WorkingCopy
 from .table_defs import GpkgTables, GpkgSnoTables
 from sno import gpkg, gpkg_adapter
+from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
 from sno.schema import Schema
 from sno.sqlalchemy import gpkg_engine
@@ -34,12 +35,34 @@ class WorkingCopy_GPKG(WorkingCopy):
         self.sno_tables = GpkgSnoTables
 
     @classmethod
-    def check_valid_path(cls, path):
+    def check_valid_creation_path(cls, workdir_path, path):
+        cls.check_valid_path(workdir_path, path)
+
+        gpkg_path = (workdir_path / path).resolve()
+        if gpkg_path.exists():
+            desc = "path" if gpkg_path.is_dir() else "GPKG file"
+            raise InvalidOperation(
+                f"Error creating GPKG working copy at {path} - {desc} already exists"
+            )
+
+    @classmethod
+    def check_valid_path(cls, workdir_path, path):
         if not str(path).endswith(".gpkg"):
             suggested_path = f"{os.path.splitext(str(path))[0]}.gpkg"
             raise click.UsageError(
                 f"Invalid GPKG path - expected .gpkg suffix, eg {suggested_path}"
             )
+
+    @classmethod
+    def normalise_path(cls, repo, path):
+        """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
+        path = Path(path)
+        if not path.is_absolute():
+            try:
+                return str(path.resolve().relative_to(repo.workdir_path.resolve()))
+            except ValueError:
+                pass
+        return str(path)
 
     @property
     def full_path(self):

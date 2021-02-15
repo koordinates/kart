@@ -375,10 +375,10 @@ def create_workingcopy(ctx, discard_changes, wc_path):
     if not wc_path and WorkingCopy.SNO_WORKINGCOPY_PATH in repo.config:
         wc_path = repo.config[WorkingCopy.SNO_WORKINGCOPY_PATH]
     if not wc_path:
-        wc_path = WorkingCopy.default_path(repo)
+        wc_path = WorkingCopy.default_path(repo.workdir_path)
 
     if wc_path != old_wc_path:
-        WorkingCopy.check_valid_creation_path(wc_path, repo.workdir_path)
+        WorkingCopy.check_valid_creation_path(repo.workdir_path, wc_path)
 
     # Finished sanity checks - start work:
     if old_wc and wc_path != old_wc_path:

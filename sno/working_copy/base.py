@@ -3,9 +3,11 @@ import functools
 import itertools
 import logging
 import time
+from enum import Enum, auto
 from pathlib import Path
 
 
+import click
 import pygit2
 import sqlalchemy
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
@@ -24,6 +26,41 @@ from sno.schema import Schema
 
 
 L = logging.getLogger("sno.working_copy.base")
+
+
+class WorkingCopyType(Enum):
+    """Different types of working copy currently supported by Sno."""
+
+    GPKG = auto()
+    POSTGIS = auto()
+    SQL_SERVER = auto()
+
+    @classmethod
+    def from_path(cls, path):
+        path = str(path)
+        if path.startswith("postgresql:"):
+            return WorkingCopyType.POSTGIS
+        elif path.lower().endswith(".gpkg"):
+            return WorkingCopyType.GPKG
+        else:
+            raise click.UsageError(
+                f"Unrecognised working copy type: {path}\n"
+                "Try one of:\n"
+                "  PATH.gpkg\n"
+                "  postgresql://[HOST]/DBNAME/SCHEMA\n"
+            )
+
+    @property
+    def class_(self):
+        if self is WorkingCopyType.GPKG:
+            from .gpkg import WorkingCopy_GPKG
+
+            return WorkingCopy_GPKG
+        elif self is WorkingCopyType.POSTGIS:
+            from .postgis import WorkingCopy_Postgis
+
+            return WorkingCopy_Postgis
+        raise RuntimeError("Invalid WorkingCopyType")
 
 
 class WorkingCopyDirty(Exception):
@@ -167,14 +204,11 @@ class WorkingCopy:
     def get_at_path(
         cls, repo, path, *, allow_uncreated=False, allow_invalid_state=False
     ):
-        if cls.is_postgres_uri(path):
-            from .postgis import WorkingCopy_Postgis
+        if not path:
+            return None
 
-            result = WorkingCopy_Postgis(repo, path)
-        else:
-            from .gpkg import WorkingCopy_GPKG
-
-            result = WorkingCopy_GPKG(repo, path)
+        class_ = WorkingCopyType.from_path(path).class_
+        result = class_(repo, path)
 
         if not allow_invalid_state:
             result.check_valid_state()
@@ -183,10 +217,6 @@ class WorkingCopy:
             result = None
 
         return result
-
-    @classmethod
-    def is_postgres_uri(cls, path):
-        return str(path).startswith("postgresql:")
 
     @classmethod
     def ensure_config_exists(cls, repo):
@@ -212,9 +242,7 @@ class WorkingCopy:
             repo.del_config(path_key)
         else:
             if path is None:
-                path = cls.default_path(repo)
-            elif cls.is_postgres_uri(path):
-                pass
+                path = cls.default_path(repo.workdir_path)
             else:
                 path = cls.normalise_path(repo, path)
 
@@ -222,38 +250,28 @@ class WorkingCopy:
             repo_cfg[path_key] = str(path)
 
     @classmethod
-    def check_valid_creation_path(cls, path, workdir_path):
+    def check_valid_creation_path(cls, workdir_path, wc_path):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
-        and nothing already exists there that prevents us from creating it.
+        and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
         Doesn't check if we have permissions to create a working copy there.
         """
-        if path is None:
-            return
+        if not wc_path:
+            wc_path = cls.default_path(workdir_path)
+        WorkingCopyType.from_path(wc_path).class_.check_valid_creation_path(
+            workdir_path, wc_path
+        )
 
-        if cls.is_postgres_uri(path):
-            from .postgis import WorkingCopy_Postgis
-
-            WorkingCopy_Postgis.check_valid_uri(path, workdir_path)
-            postgis_wc = WorkingCopy_Postgis(None, path)
-
-            # Less strict on Postgis - we are okay with the schema being already created, so long as its empty.
-            if postgis_wc.has_data():
-                raise InvalidOperation(
-                    f"Error creating Postgis working copy at {path} - non-empty schema already exists"
-                )
-        else:
-            from .gpkg import WorkingCopy_GPKG
-
-            WorkingCopy_GPKG.check_valid_path(path)
-
-            # More strict on GPKG - we don't allow the GPKG file to exist at all.
-            gpkg_path = (Path(workdir_path) / path).resolve()
-            if gpkg_path.exists():
-                desc = "path" if gpkg_path.is_dir() else "GPKG file"
-                raise InvalidOperation(
-                    f"Error creating GPKG working copy at {path} - {desc} already exists"
-                )
+    @classmethod
+    def check_valid_path(cls, workdir_path, wc_path):
+        """
+        Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
+        and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
+        Doesn't check if we have permissions to create a working copy there.
+        """
+        WorkingCopyType.from_path(wc_path).class_.check_valid_path(
+            workdir_path, wc_path
+        )
 
     def check_valid_state(self):
         if self.is_created():
@@ -269,21 +287,15 @@ class WorkingCopy:
                 raise NotFound("\n".join(message), NO_WORKING_COPY)
 
     @classmethod
-    def default_path(cls, repo):
+    def default_path(cls, workdir_path):
         """Returns `example.gpkg` for a sno repo in a directory named `example`."""
-        stem = repo.workdir_path.stem
+        stem = workdir_path.stem
         return f"{stem}.gpkg"
 
     @classmethod
     def normalise_path(cls, repo, path):
-        """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
-        path = Path(path)
-        if not path.is_absolute():
-            try:
-                return str(path.resolve().relative_to(repo.workdir_path.resolve()))
-            except ValueError:
-                pass
-        return str(path)
+        """If the path is in a non-standard form, normalise it to the equivalent standard form."""
+        return WorkingCopyType.from_path(path).class_.normalise_path(repo, path)
 
     @contextlib.contextmanager
     def session(self, bulk=0):
