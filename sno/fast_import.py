@@ -11,8 +11,8 @@ from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .repo_version import (
     extra_blobs_for_version,
-    LATEST_REPO_VERSION,
-    LATEST_DATASET_CLASS,
+    SUPPORTED_REPO_VERSION,
+    SUPPORTED_DATASET_CLASS,
 )
 from .timestamps import minutes_to_tz_offset
 from .pk_generation import PkGeneratingImportSource
@@ -74,9 +74,11 @@ def fast_import_tables(
     if not head_tree:
         replace_existing = ReplaceExisting.ALL
 
-    assert repo.version == LATEST_REPO_VERSION
-    extra_blobs = extra_blobs_for_version(LATEST_REPO_VERSION) if not head_tree else []
-    dataset_class = LATEST_DATASET_CLASS
+    assert repo.version == SUPPORTED_REPO_VERSION
+    extra_blobs = (
+        extra_blobs_for_version(SUPPORTED_REPO_VERSION) if not head_tree else []
+    )
+    dataset_class = SUPPORTED_DATASET_CLASS
 
     ImportSource.check_valid(sources)
 

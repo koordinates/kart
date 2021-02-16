@@ -19,7 +19,11 @@ from .exceptions import (
     NO_REPOSITORY,
     UNSUPPORTED_VERSION,
 )
-from .repo_version import LATEST_REPO_VERSION, LATEST_DATASET_CLASS, get_repo_version
+from .repo_version import (
+    SUPPORTED_REPO_VERSION,
+    SUPPORTED_DATASET_CLASS,
+    get_repo_version,
+)
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
 from .working_copy import WorkingCopy
@@ -287,17 +291,23 @@ class SnoRepo(pygit2.Repository):
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
         # Write sno repo version to config:
-        self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(LATEST_REPO_VERSION)
+        self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(SUPPORTED_REPO_VERSION)
         # Write working copy config:
         WorkingCopy.write_config(self, wc_path, bare)
 
-    def ensure_latest_version(self):
-        if self.version != LATEST_REPO_VERSION:
-            raise InvalidOperation(
-                f"This Sno repo uses Datasets v{self.version}, which is no longer supported.\n"
-                f"The latest version is v{LATEST_REPO_VERSION}. Use `sno upgrade SOURCE DEST` to upgrade this repo.",
-                exit_code=UNSUPPORTED_VERSION,
+    def ensure_supported_version(self):
+        from .cli import get_version
+
+        if self.version != SUPPORTED_REPO_VERSION:
+            message = (
+                f"This Sno repo uses Datasets v{self.version}, "
+                f"but Sno {get_version()} only supports Datasets v{SUPPORTED_REPO_VERSION}.\n"
             )
+            if self.version < SUPPORTED_REPO_VERSION:
+                message += "Use `sno upgrade SOURCE DEST` to upgrade this repo to the supported version."
+            else:
+                message += "Get the latest version of Sno to work with this repo."
+            raise InvalidOperation(message, exit_code=UNSUPPORTED_VERSION)
 
     def write_readme(self):
         try:
@@ -403,8 +413,8 @@ class SnoRepo(pygit2.Repository):
     @functools.lru_cache()
     def structure(self, refish="HEAD"):
         """Get the structure of this Sno repository at a particular revision."""
-        self.ensure_latest_version()
-        return RepoStructure(self, refish, dataset_class=LATEST_DATASET_CLASS)
+        self.ensure_supported_version()
+        return RepoStructure(self, refish, dataset_class=SUPPORTED_DATASET_CLASS)
 
     def datasets(self, refish="HEAD"):
         """

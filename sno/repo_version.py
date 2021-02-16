@@ -11,8 +11,8 @@ REPO_VERSION_CONFIG_PATH = "sno.repository.version"
 ALL_REPO_VERSIONS = (0, 1, 2)
 
 # Only version 2 (or "auto") is currently supported by any commands.
-LATEST_REPO_VERSION = 2
-LATEST_DATASET_CLASS = Dataset2
+SUPPORTED_REPO_VERSION = 2
+SUPPORTED_DATASET_CLASS = Dataset2
 
 
 def encode_repo_version(version):
@@ -52,7 +52,7 @@ def _get_repo_version_from_config(repo):
     repo_cfg = repo.config
     if REPO_VERSION_CONFIG_PATH in repo_cfg:
         return repo_cfg.get_int(REPO_VERSION_CONFIG_PATH)
-    return LATEST_REPO_VERSION
+    return SUPPORTED_REPO_VERSION
 
 
 def _distinguish_v0_v1(tree):

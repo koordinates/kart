@@ -11,12 +11,10 @@ from sno.fast_import import fast_import_tables, ReplaceExisting
 from sno.repo import SnoRepo
 from sno.structure import RepoStructure
 from sno.timestamps import minutes_to_tz_offset
+from sno.repo_version import SUPPORTED_REPO_VERSION
 
 
-UPGRADED_REPO_VERSION = 2
-
-
-def dataset_class_for_version(version):
+def dataset_class_for_legacy_version(version):
     from .upgrade_v0 import Dataset0
     from .upgrade_v1 import Dataset1
 
@@ -26,9 +24,7 @@ def dataset_class_for_version(version):
     elif version == 1:
         return Dataset1
 
-    raise ValueError(
-        f"No upgradeable Dataset implementation found for version={version}"
-    )
+    return None
 
 
 @click.command()
@@ -57,17 +53,22 @@ def upgrade(ctx, source, dest):
         )
 
     source_version = source_repo.version
-    if source_version == 2:
+    if source_version == SUPPORTED_REPO_VERSION:
         raise InvalidOperation(
-            "Cannot upgrade: source repository is already at latest version (Datasets V2)"
+            "Cannot upgrade: source repository is already at latest known version (Datasets V2)"
         )
 
-    if source_version not in (0, 1):
+    if source_version > SUPPORTED_REPO_VERSION:
+        # Repo is too advanced for this version of Sno to understand, we can't upgrade it.
+        # This prints a good error messsage explaining the whole situation.
+        source_repo.ensure_supported_version()
+
+    source_dataset_class = dataset_class_for_legacy_version(source_version)
+
+    if not source_dataset_class:
         raise InvalidOperation(
             f"Unrecognised source repository version: {source_version}"
         )
-
-    source_dataset_class = dataset_class_for_version(source_version)
 
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
@@ -211,7 +212,7 @@ def upgrade_to_tidy(source):
             f"'{source}': not an existing sno repository", param_hint="SOURCE"
         )
 
-    source_repo.ensure_latest_version()
+    source_repo.ensure_supported_version()
     if source_repo.is_tidy_style_sno_repo():
         raise InvalidOperation(
             "Cannot upgrade in-place - source repo is already tidy-style"

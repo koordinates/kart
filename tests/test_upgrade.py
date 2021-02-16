@@ -2,6 +2,7 @@ import json
 import pytest
 from pathlib import Path
 
+from sno.cli import get_version
 from sno.exceptions import UNSUPPORTED_VERSION
 from sno.repo import SnoRepo
 
@@ -27,9 +28,8 @@ def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir)
 
         r = cli_runner.invoke(["log"])
         assert r.exit_code == UNSUPPORTED_VERSION
-        assert (
-            "This Sno repo uses Datasets v0, which is no longer supported." in r.stderr
-        )
+        assert "This Sno repo uses Datasets v0" in r.stderr
+        assert f"Sno {get_version()} only supports Datasets v2" in r.stderr
 
         r = cli_runner.invoke(["upgrade", source_path, tmp_path / "dest"])
         assert r.exit_code == 0, r.stderr
@@ -73,9 +73,8 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
 
         r = cli_runner.invoke(["log"])
         assert r.exit_code == UNSUPPORTED_VERSION
-        assert (
-            "This Sno repo uses Datasets v1, which is no longer supported." in r.stderr
-        )
+        assert "This Sno repo uses Datasets v1" in r.stderr
+        assert f"Sno {get_version()} only supports Datasets v2" in r.stderr
 
         r = cli_runner.invoke(["upgrade", source_path, tmp_path / "dest"])
         assert r.exit_code == 0, r.stderr

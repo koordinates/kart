@@ -59,7 +59,7 @@ def data_ls(ctx, output_format, refish):
 def data_version(ctx, output_format):
     """Show the repository structure version"""
     repo = ctx.obj.get_repo(
-        allowed_states=SnoRepoState.ALL_STATES, allow_legacy_versions=True
+        allowed_states=SnoRepoState.ALL_STATES, allow_unsupported_versions=True
     )
     version = repo.version
     if output_format == "text":

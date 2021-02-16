@@ -34,6 +34,13 @@ from .context import Context
 from .exec import execvp
 
 
+def get_version():
+    import sno
+
+    with open(os.path.join(os.path.split(sno.__file__)[0], "VERSION")) as version_file:
+        return version_file.read().strip()
+
+
 def print_version(ctx):
     import osgeo
     import psycopg2
@@ -41,13 +48,9 @@ def print_version(ctx):
     import rtree
     import sqlalchemy
 
-    import sno
     from sno.sqlalchemy import gpkg_engine
 
-    with open(os.path.join(os.path.split(sno.__file__)[0], "VERSION")) as version_file:
-        version = version_file.read().strip()
-
-    click.echo(f"Sno v{version}, Copyright (c) Sno Contributors")
+    click.echo(f"Sno v{get_version()}, Copyright (c) Sno Contributors")
 
     git_version = (
         subprocess.check_output(["git", "--version"])
