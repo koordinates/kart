@@ -119,6 +119,38 @@ def test_clone(
             assert not wc.exists()
 
 
+def test_clone_filter(
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+):
+    with data_archive("points") as remote_path:
+        with chdir(tmp_path):
+            args = [
+                "clone",
+                "--filter=blob:none",
+                f"file://{remote_path}",
+                "--bare",
+            ]
+            r = cli_runner.invoke(args)
+            assert r.exit_code == 0, r.stderr
+
+            repo_path = tmp_path / "points"
+            assert repo_path.is_dir()
+
+            # it's kind of hard to tell if `--filter` succeeded tbh.
+            # this is one way though. If --filter wasn't present, this config
+            # var would be an empty string.
+            assert (
+                subprocess.check_output(
+                    ["git", "-C", str(repo_path), "config", "remote.origin.promisor"],
+                    encoding="utf-8",
+                ).strip()
+                == "true"
+            )
+
+
 def test_fetch(
     data_archive_readonly,
     data_working_copy,
