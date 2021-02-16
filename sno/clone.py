@@ -62,6 +62,15 @@ def get_directory_from_url(url):
     help="Create a shallow clone with a history truncated to the specified number of commits.",
 )
 @click.option(
+    "--filter",
+    "filterspec",
+    help=(
+        "(Advanced users only.) Use a partial clone (don't fetch all objects). The supplied <filter-spec> "
+        "is used for the partial clone filter. For example, --filter=blob:none will filter out all blobs. "
+    ),
+    metavar="<filter-spec>",
+)
+@click.option(
     "-b",
     "--branch",
     metavar="NAME",
@@ -78,7 +87,18 @@ def get_directory_from_url(url):
     type=click.Path(exists=False, file_okay=False, writable=True),
     required=False,
 )
-def clone(ctx, bare, do_checkout, wc_path, do_progress, depth, branch, url, directory):
+def clone(
+    ctx,
+    bare,
+    do_checkout,
+    wc_path,
+    do_progress,
+    depth,
+    filterspec,
+    branch,
+    url,
+    directory,
+):
     """ Clone a repository into a new directory """
 
     repo_path = Path(directory or get_directory_from_url(url)).resolve()
@@ -95,6 +115,12 @@ def clone(ctx, bare, do_checkout, wc_path, do_progress, depth, branch, url, dire
         args.append(f"--depth={depth}")
     if branch is not None:
         args.append(f"--branch={branch}")
+    if filterspec is not None:
+        # git itself does reasonable validation of this, so we don't bother here
+        # e.g. "fatal: invalid filter-spec 'hello'"
+        # for the various forms it can take, see
+        # https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---filterltfilter-specgt
+        args.append(f"--filter={filterspec}")
 
     repo = SnoRepo.clone_repository(url, repo_path, args, wc_path, bare)
 
