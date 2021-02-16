@@ -10,6 +10,7 @@ from osgeo import gdal
 import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.compiler import IdentifierPreparer
+from sqlalchemy.types import UserDefinedType
 
 
 from . import gpkg_adapter
@@ -75,9 +76,28 @@ class WorkingCopy_GPKG(WorkingCopy):
         # but changing it means migrating working copies, unfortunately.
         return self.quote(f"gpkg_sno_{dataset.table_name}_{trigger_type}")
 
-    def insert_or_replace_into_dataset(self, dataset):
+    def _insert_or_replace_into_dataset(self, dataset):
         # SQLite optimisation.
-        return self.table_def_for_dataset(dataset).insert().prefix_with("OR REPLACE")
+        return self._table_def_for_dataset(dataset).insert().prefix_with("OR REPLACE")
+
+    def _table_def_for_column_schema(self, col, dataset):
+        if col.data_type == "geometry":
+            # This user-defined Geography type adapts WKB to SQL Server's native geography type.
+            return sqlalchemy.column(col.name, GeometryType)
+        else:
+            # Don't need to specify type information for other columns at present, since we just pass through the values.
+            return sqlalchemy.column(col.name)
+
+    def _insert_or_replace_state_table_tree(self, sess, tree_id):
+        r = sess.execute(
+            self.sno_tables.sno_state.insert().prefix_with("OR REPLACE"),
+            {
+                "table_name": "*",
+                "key": "tree",
+                "value": tree_id,
+            },
+        )
+        return r.rowcount
 
     @contextlib.contextmanager
     def session(self, bulk=0):
@@ -646,3 +666,21 @@ class WorkingCopy_GPKG(WorkingCopy):
                 {"last_change": gpkg_change_time, "table_name": dataset.table_name},
             ).rowcount
         assert rc == 1, f"gpkg_contents update: expected 1Δ, got {rc}"
+
+
+class GeometryType(UserDefinedType):
+    """UserDefinedType so that GPKG geometry is normalised to V2 format."""
+
+    def result_processor(self, dialect, coltype):
+        def process(gpkg_bytes):
+            # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+            # We don't try to convert them here - we let the commit validation step report this as an error.
+            if not isinstance(gpkg_bytes, bytes):
+                return gpkg_bytes
+            # We normalise geometries to avoid spurious diffs - diffs where nothing
+            # of any consequence has changed (eg, only endianness has changed).
+            # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
+            # but only one per column at most.
+            return normalise_gpkg_geom(gpkg_bytes)
+
+        return process

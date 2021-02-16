@@ -57,6 +57,11 @@ class Geometry(bytes):
         crs_id_bytes = struct.pack("<i", crs_id)
         return Geometry.of(self[:4] + crs_id_bytes + self[8:])
 
+    @property
+    def crs_id(self):
+        wkb_offset, is_le, crs_id = parse_gpkg_geom(self)
+        return crs_id
+
     @classmethod
     def from_wkt(cls, wkt):
         return wkt_to_gpkg_geom(wkt)
@@ -290,12 +295,18 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
     return geom
 
 
-def wkt_to_gpkg_geom(wkb, **kwargs):
-    ogr_geom = ogr.CreateGeometryFromWkt(wkb)
+def wkt_to_gpkg_geom(wkt, **kwargs):
+    if wkt is None:
+        return None
+
+    ogr_geom = ogr.CreateGeometryFromWkt(wkt)
     return ogr_to_gpkg_geom(ogr_geom, **kwargs)
 
 
 def wkb_to_gpkg_geom(wkb, **kwargs):
+    if wkb is None:
+        return None
+
     ogr_geom = ogr.CreateGeometryFromWkb(wkb)
     return ogr_to_gpkg_geom(ogr_geom, **kwargs)
 

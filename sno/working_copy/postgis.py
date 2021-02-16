@@ -5,6 +5,7 @@ import time
 from urllib.parse import urlsplit, urlunsplit
 
 import click
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
@@ -53,14 +54,8 @@ class WorkingCopy_Postgis(WorkingCopy):
         url_path = f"/{path_parts[0]}"
         self.db_schema = path_parts[1]
 
-        url_query = url.query
-        if "fallback_application_name" not in url_query:
-            url_query = "&".join(
-                filter(None, [url_query, "fallback_application_name=sno"])
-            )
-
         # Rebuild DB URL suitable for postgres
-        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url_query, ""])
+        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url.query, ""])
         self.engine = postgis_engine(self.dburl)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = IdentifierPreparer(self.engine.dialect)
@@ -287,6 +282,12 @@ class WorkingCopy_Postgis(WorkingCopy):
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
 
+    def _insert_or_replace_into_dataset(self, dataset):
+        pk_col_names = [c.name for c in dataset.schema.pk_columns]
+        stmt = postgresql_insert(self._table_def_for_dataset(dataset))
+        update_dict = {c.name: c for c in stmt.excluded if c.name not in pk_col_names}
+        return stmt.on_conflict_do_update(index_elements=pk_col_names, set_=update_dict)
+
     def _write_meta(self, sess, dataset):
         """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
         self._write_meta_title(sess, dataset)
@@ -333,9 +334,10 @@ class WorkingCopy_Postgis(WorkingCopy):
         # Create the PostGIS Spatial Index
         L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
         t0 = time.monotonic()
+        index_name = f"{dataset.table_name}_idx_{geom_col}"
         sess.execute(
             f"""
-            CREATE INDEX "{dataset.table_name}_idx_{geom_col}"
+            CREATE INDEX {self.quote(index_name)}
             ON {self.table_identifier(dataset)} USING GIST ({self.quote(geom_col)});
             """
         )
@@ -460,10 +462,6 @@ class WorkingCopy_Postgis(WorkingCopy):
                 del wc_meta_items[key]
             # If either definition is custom, we keep the diff, since it could be important.
 
-    def _db_geom_to_gpkg_geom(self, g):
-        # This is already handled by register_type
-        return g
-
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
@@ -492,7 +490,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         return sum(dt.values()) == 0
 
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
-        db.execute(
+        sess.execute(
             f"COMMENT ON TABLE {self._table_identifier(dataset.table_name)} IS :comment",
             {"comment": dest_value},
         )
@@ -501,6 +499,9 @@ class WorkingCopy_Postgis(WorkingCopy):
         pass  # This is a no-op for postgis
 
     def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):
+        pass  # This is a no-op for postgis
+
+    def _apply_meta_metadata_xml(self, sess, dataset, src_value, dest_value):
         pass  # This is a no-op for postgis
 
     def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):

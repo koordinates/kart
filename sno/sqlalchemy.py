@@ -1,3 +1,8 @@
+import re
+import socket
+from urllib.parse import urlsplit, urlunsplit
+
+
 import sqlalchemy
 from pysqlite3 import dbapi2 as sqlite
 import psycopg2
@@ -95,7 +100,51 @@ def postgis_engine(pgurl):
             geometry_type = new_type((r[0],), "GEOMETRY", _adapt_geometry_from_pg)
             register_type(geometry_type, psycopg2_conn)
 
+    pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "sno"})
+
     engine = sqlalchemy.create_engine(pgurl, module=psycopg2)
     sqlalchemy.event.listen(engine, "connect", _on_connect)
 
     return engine
+
+
+CANONICAL_SQL_SERVER_SCHEME = "mssql"
+INTERNAL_SQL_SERVER_SCHEME = "mssql+pyodbc"
+SQL_SERVER_DRIVER_LIB = "ODBC+Driver+17+for+SQL+Server"
+
+
+def sqlserver_engine(msurl):
+    url = urlsplit(msurl)
+    if url.scheme != CANONICAL_SQL_SERVER_SCHEME:
+        raise ValueError("Expecting mssql://")
+
+    # SQL server driver is fussy - doesn't like localhost, prefers 127.0.0.1
+    url_netloc = re.sub(r"\blocalhost\b", _replace_with_localhost, url.netloc)
+
+    url_query = _append_to_query(
+        url.query, {"driver": SQL_SERVER_DRIVER_LIB, "Application+Name": "sno"}
+    )
+
+    msurl = urlunsplit(
+        [INTERNAL_SQL_SERVER_SCHEME, url_netloc, url.path, url_query, ""]
+    )
+
+    engine = sqlalchemy.create_engine(msurl)
+    return engine
+
+
+def _replace_with_localhost(*args, **kwargs):
+    return socket.gethostbyname("localhost")
+
+
+def _append_query_to_url(uri, query_dict):
+    url = urlsplit(uri)
+    url_query = _append_to_query(url.query, query_dict)
+    return urlunsplit([url.scheme, url.netloc, url.path, url_query, ""])
+
+
+def _append_to_query(url_query, query_dict):
+    for key, value in query_dict.items():
+        if key not in url_query:
+            url_query = "&".join(filter(None, [url_query, f"{key}={value}"]))
+    return url_query

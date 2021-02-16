@@ -58,7 +58,7 @@ PG_TYPE_TO_V2_TYPE = {
     "varchar": "text",
 }
 
-# Types that can't be roundtrip perfectly in Postgis, and what they end up as.
+# Types that can't be roundtripped perfectly in PostGIS, and what they end up as.
 APPROXIMATED_TYPES = {("integer", 8): ("integer", 16)}
 
 

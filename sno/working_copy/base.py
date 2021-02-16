@@ -9,8 +9,6 @@ from enum import Enum, auto
 import click
 import pygit2
 import sqlalchemy
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
-
 
 from sno.base_dataset import BaseDataset
 from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
@@ -39,6 +37,8 @@ class WorkingCopyType(Enum):
         path = str(path)
         if path.startswith("postgresql:"):
             return WorkingCopyType.POSTGIS
+        elif path.startswith("mssql:"):
+            return WorkingCopyType.SQL_SERVER
         elif path.lower().endswith(".gpkg"):
             return WorkingCopyType.GPKG
         elif allow_invalid:
@@ -61,6 +61,10 @@ class WorkingCopyType(Enum):
             from .postgis import WorkingCopy_Postgis
 
             return WorkingCopy_Postgis
+        elif self is WorkingCopyType.SQL_SERVER:
+            from .sqlserver import WorkingCopy_SqlServer
+
+            return WorkingCopy_SqlServer
         raise RuntimeError("Invalid WorkingCopyType")
 
 
@@ -149,32 +153,36 @@ class WorkingCopy:
         )
         return self.preparer.format_table(sqlalchemy_table)
 
+    def _table_def_for_column_schema(self, col, dataset):
+        # This is just used for selects/inserts/updates - we don't need the full type information.
+        # We only need type information if some automatic conversion needs to happen on read or write.
+        # TODO: return the full type information so we can also use it for CREATE TABLE.
+        return sqlalchemy.column(col.name)
+
     @functools.lru_cache()
-    def table_def_for_dataset(self, dataset):
+    def _table_def_for_dataset(self, dataset, schema=None):
         """
         A minimal table definition for a dataset.
         Specifies table and column names only - the minimum required such that an insert() or update() will work.
         """
+        schema = schema or dataset.schema
         return sqlalchemy.table(
             dataset.table_name,
-            *[sqlalchemy.column(c.name) for c in dataset.schema.columns],
+            *[self._table_def_for_column_schema(c, dataset) for c in schema],
             schema=self.db_schema,
         )
 
-    def insert_into_dataset(self, dataset):
+    def _insert_into_dataset(self, dataset):
         """Returns a SQL command for inserting features into the table for that dataset."""
-        return self.table_def_for_dataset(dataset).insert()
+        return self._table_def_for_dataset(dataset).insert()
 
-    def insert_or_replace_into_dataset(self, dataset):
+    def _insert_or_replace_into_dataset(self, dataset):
         """
         Returns a SQL command for inserting/replacing features that may or may not already exist in the table
         for that dataset.
         """
-        # Even though this uses the postgresql_insert sqlalchemy feature, it results in generic SQL.
-        pk_col_names = [c.name for c in dataset.schema.pk_columns]
-        stmt = postgresql_insert(self.table_def_for_dataset(dataset))
-        update_dict = {c.name: c for c in stmt.excluded if c.name not in pk_col_names}
-        return stmt.on_conflict_do_update(index_elements=pk_col_names, set_=update_dict)
+        # Its not possible to do this in a DB agnostic way.
+        raise NotImplementedError()
 
     @classmethod
     def get(cls, repo, *, allow_uncreated=False, allow_invalid_state=False):
@@ -342,17 +350,16 @@ class WorkingCopy:
         """
         raise NotImplementedError()
 
-    def get_db_tree(self, table_name="*"):
+    def get_db_tree(self):
         """Returns the hex tree ID from the state table."""
         with self.session() as sess:
             return sess.scalar(
-                f"""SELECT value FROM {self.SNO_STATE} WHERE table_name=:table_name AND key='tree';""",
-                {"table_name": table_name},
+                f"""SELECT value FROM {self.SNO_STATE} WHERE "table_name"='*' AND "key"='tree';""",
             )
 
-    def assert_db_tree_match(self, tree, *, table_name="*"):
+    def assert_db_tree_match(self, tree):
         """Raises a Mismatch if sno_state refers to a different tree and not the given tree."""
-        wc_tree_id = self.get_db_tree(table_name)
+        wc_tree_id = self.get_db_tree()
         expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
 
         if wc_tree_id != expected_tree_id:
@@ -499,17 +506,12 @@ class WorkingCopy:
             feature_diff = DeltaDiff()
             insert_count = delete_count = 0
 
-            geom_col = dataset.geom_column_name
-
             for row in r:
                 track_pk = row[0]  # This is always a str
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
                 if db_obj[pk_field] is None:
                     db_obj = None
-
-                if db_obj is not None and geom_col is not None:
-                    db_obj[geom_col] = self._db_geom_to_gpkg_geom(db_obj[geom_col])
 
                 try:
                     repo_obj = dataset.get_feature(track_pk)
@@ -560,29 +562,32 @@ class WorkingCopy:
         else:
             schema = dataset.schema
 
-        table_identifier = self.table_identifier(dataset)
-        pk_column = self.quote(schema.pk_columns[0].name)
-        col_names = ",".join(
-            [f"{table_identifier}.{self.quote(col.name)}" for col in schema]
+        sno_track = self.sno_tables.sno_track
+        table = self._table_def_for_dataset(dataset, schema=schema)
+
+        cols_to_select = [sno_track.c.pk.label(".__track_pk"), *table.columns]
+        pk_column = table.columns[schema.pk_columns[0].name]
+        tracking_col_type = sno_track.c.pk.type
+
+        base_query = sqlalchemy.select(columns=cols_to_select).select_from(
+            sno_track.outerjoin(
+                table,
+                sno_track.c.pk == sqlalchemy.cast(pk_column, tracking_col_type),
+            )
         )
 
-        sql = f"""
-            SELECT
-                {self.SNO_TRACK}.pk AS ".__track_pk",
-                {col_names}
-            FROM {self.SNO_TRACK} LEFT OUTER JOIN {table_identifier}
-            ON ({self.SNO_TRACK}.pk = CAST({table_identifier}.{pk_column} AS TEXT))
-            WHERE ({self.SNO_TRACK}.table_name = :table_name)
-        """
-
         if feature_filter is UNFILTERED:
-            return sess.execute(sql, {"table_name": dataset.table_name})
+            query = base_query.where(sno_track.c.table_name == dataset.table_name)
         else:
             pks = list(feature_filter)
-            sql += f" AND {self.SNO_TRACK}.pk IN :pks"
-            t = sqlalchemy.text(sql)
-            t = t.bindparams(sqlalchemy.bindparam("pks", expanding=True))
-            return sess.execute(t, {"table_name": dataset.table_name, "pks": pks})
+            query = base_query.where(
+                sqlalchemy.and_(
+                    sno_track.c.table_name == dataset.table_name,
+                    sno_track.c.pk.in_(pks),
+                )
+            )
+
+        return sess.execute(query)
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):
         """Delete the rows from the tracking table that match the given filter."""
@@ -611,10 +616,6 @@ class WorkingCopy:
                 )
                 t = t.bindparams(sqlalchemy.bindparam("pks", expanding=True))
                 sess.execute(t, {"table_name": table_name, "pks": pks})
-
-    def _db_geom_to_gpkg_geom(self, g):
-        """Convert a geometry as returned by the database to a sno geometry.Geometry object."""
-        raise NotImplementedError()
 
     def can_find_renames(self, meta_diff):
         """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
@@ -665,10 +666,10 @@ class WorkingCopy:
         tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
         L.info(f"Tree sha: {tree_id}")
         with self.session() as sess:
-            changes = self._update_state_table_tree_impl(sess, tree_id)
+            changes = self._insert_or_replace_state_table_tree(sess, tree_id)
         assert changes == 1, f"{self.SNO_STATE} update: expected 1Δ, got {changes}"
 
-    def _update_state_table_tree_impl(self, sess, tree_id):
+    def _insert_or_replace_state_table_tree(self, sess, tree_id):
         """
         Write the given tree ID to the state table.
 
@@ -676,7 +677,10 @@ class WorkingCopy:
         tree_id - str, the hex SHA of the tree at HEAD.
         """
         r = sess.execute(
-            f"UPDATE {self.SNO_STATE} SET value=:value WHERE table_name='*' AND key='tree';",
+            f"""
+            INSERT INTO {self.SNO_STATE} ("table_name", "key", "value") VALUES ('*', 'tree', :value)
+            ON CONFLICT ("table_name", "key") DO UPDATE SET value=EXCLUDED.value;
+            """,
             {"value": tree_id},
         )
         return r.rowcount
@@ -701,7 +705,7 @@ class WorkingCopy:
                     self._create_spatial_index(sess, dataset)
 
                 L.info("Creating features...")
-                sql = self.insert_into_dataset(dataset)
+                sql = self._insert_into_dataset(dataset)
                 feat_progress = 0
                 t0 = time.monotonic()
                 t0p = t0
@@ -738,12 +742,8 @@ class WorkingCopy:
                 self._create_triggers(sess, dataset)
                 self._update_last_write_time(sess, dataset, commit)
 
-            sess.execute(
-                f"""
-                INSERT INTO {self.SNO_STATE} (table_name, key, value) VALUES ('*', 'tree', :value)
-                ON CONFLICT (table_name, key) DO UPDATE SET value=EXCLUDED.value;
-                """,
-                {"value": commit.peel(pygit2.Tree).hex},
+            self._insert_or_replace_state_table_tree(
+                sess, commit.peel(pygit2.Tree).id.hex
             )
 
     def _create_table_for_dataset(self, sess, dataset):
@@ -776,15 +776,15 @@ class WorkingCopy:
         if not pk_list:
             return 0
 
-        sql = self.insert_or_replace_into_dataset(dataset)
+        sql = self._insert_or_replace_into_dataset(dataset)
         feat_count = 0
         CHUNK_SIZE = 10000
         for row_dicts in self._chunk(
             dataset.get_features_with_crs_ids(pk_list, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
-            r = sess.execute(sql, row_dicts)
-            feat_count += r.rowcount
+            sess.execute(sql, row_dicts)
+            feat_count += len(row_dicts)
 
         return feat_count
 
@@ -953,7 +953,7 @@ class WorkingCopy:
 
             if not track_changes_as_dirty:
                 # update the tree id
-                self._update_state_table_tree_impl(sess, target_tree_id)
+                self._insert_or_replace_state_table_tree(sess, target_tree_id)
 
     def _filter_by_paths(self, datasets, paths):
         """Filters the datasets so that only those matching the paths are returned."""

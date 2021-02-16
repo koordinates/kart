@@ -3,7 +3,7 @@ import pytest
 import pygit2
 
 from sno.repo import SnoRepo
-from sno.working_copy import postgis_adapter
+from sno.working_copy import sqlserver_adapter
 from test_working_copy import compute_approximated_types
 
 
@@ -32,22 +32,22 @@ def test_checkout_workingcopy(
     existing_schema,
     data_archive,
     cli_runner,
-    new_postgis_db_schema,
+    new_sqlserver_db_schema,
 ):
     """ Checkout a working copy """
     with data_archive(archive) as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
-        with new_postgis_db_schema(create=existing_schema) as (
-            postgres_url,
-            postgres_schema,
+        with new_sqlserver_db_schema(create=existing_schema) as (
+            sqlserver_url,
+            sqlserver_schema,
         ):
-            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            r = cli_runner.invoke(["create-workingcopy", sqlserver_url])
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {postgres_url} ..."
+                == f"Creating working copy at {sqlserver_url} ..."
             )
 
             r = cli_runner.invoke(["status"])
@@ -74,7 +74,7 @@ def test_checkout_workingcopy(
 )
 def test_init_import(
     existing_schema,
-    new_postgis_db_schema,
+    new_sqlserver_db_schema,
     data_archive,
     tmp_path,
     cli_runner,
@@ -84,9 +84,9 @@ def test_init_import(
     repo_path.mkdir()
 
     with data_archive("gpkg-points") as data:
-        with new_postgis_db_schema(create=existing_schema) as (
-            postgres_url,
-            postgres_schema,
+        with new_sqlserver_db_schema(create=existing_schema) as (
+            sqlserver_url,
+            sqlserver_schema,
         ):
             r = cli_runner.invoke(
                 [
@@ -94,7 +94,7 @@ def test_init_import(
                     "--import",
                     f"gpkg:{data / 'nz-pa-points-topo-150k.gpkg'}",
                     str(repo_path),
-                    f"--workingcopy-path={postgres_url}",
+                    f"--workingcopy-path={sqlserver_url}",
                 ]
             )
             assert r.exit_code == 0, r.stderr
@@ -107,7 +107,7 @@ def test_init_import(
             assert wc.is_initialised()
             assert wc.has_data()
 
-            assert wc.path == postgres_url
+            assert wc.path == sqlserver_url
 
 
 @pytest.mark.parametrize(
@@ -124,7 +124,7 @@ def test_commit_edits(
     commit_sha,
     data_archive,
     cli_runner,
-    new_postgis_db_schema,
+    new_sqlserver_db_schema,
     edit_points,
     edit_polygons,
     edit_table,
@@ -134,8 +134,8 @@ def test_commit_edits(
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
-        with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            r = cli_runner.invoke(["create-workingcopy", sqlserver_url])
             assert r.exit_code == 0, r.stderr
 
             r = cli_runner.invoke(["status"])
@@ -193,13 +193,13 @@ def test_commit_edits(
             assert repo.head.peel(pygit2.Commit).hex == orig_head
 
 
-def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
+def test_edit_schema(data_archive, cli_runner, new_sqlserver_db_schema):
     with data_archive("polygons") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
-        with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            r = cli_runner.invoke(["create-workingcopy", sqlserver_url])
             assert r.exit_code == 0, r.stderr
 
             wc = repo.working_copy
@@ -210,32 +210,20 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
 
             with wc.session() as sess:
                 sess.execute(
-                    f"""COMMENT ON TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" IS 'New title';"""
+                    f"""ALTER TABLE "{sqlserver_schema}"."{H.POLYGONS.LAYER}" ADD colour NVARCHAR(32);"""
                 )
                 sess.execute(
-                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ADD COLUMN colour VARCHAR(32);"""
-                )
-                sess.execute(
-                    f"""ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" DROP COLUMN survey_reference;"""
-                )
-                sess.execute(
-                    f"""
-                    ALTER TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" ALTER COLUMN geom
-                    TYPE geometry(MULTIPOLYGON, 3857)
-                    USING ST_SetSRID(geom, 3857);
-                    """
+                    f"""ALTER TABLE "{sqlserver_schema}"."{H.POLYGONS.LAYER}" DROP COLUMN survey_reference;"""
                 )
 
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0, r.stderr
             diff = r.stdout.splitlines()
-            assert "--- nz_waca_adjustments:meta:crs/EPSG:4167.wkt" in diff
-            assert "+++ nz_waca_adjustments:meta:crs/EPSG:3857.wkt" in diff
 
             # New column "colour" has an ID is deterministically generated from the commit hash,
             # but we don't care exactly what it is.
             try:
-                colour_id_line = diff[-10]
+                colour_id_line = diff[-6]
             except KeyError:
                 colour_id_line = ""
 
@@ -255,8 +243,7 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
                 '      "name": "geom",',
                 '      "dataType": "geometry",',
                 '      "geometryType": "MULTIPOLYGON",',
-                '-     "geometryCRS": "EPSG:4167",',
-                '+     "geometryCRS": "EPSG:3857",',
+                '      "geometryCRS": "EPSG:4167"',
                 "    },",
                 "    {",
                 '      "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",',
@@ -282,10 +269,6 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
                 '+     "length": 32',
                 "+   },",
                 "  ]",
-                "--- nz_waca_adjustments:meta:title",
-                "+++ nz_waca_adjustments:meta:title",
-                "- NZ WACA Adjustments",
-                "+ New title",
             ]
 
             orig_head = repo.head.peel(pygit2.Commit).hex
@@ -309,95 +292,19 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             assert repo.head.peel(pygit2.Commit).hex == orig_head
 
 
-class SucceedAndRollback(Exception):
-    """
-    This test passed, but raising an exception will cause the DB transaction to rollback.
-    Which is what we want to do, to undo any changes to public.spatial_ref_sys
-    """
-
-    pass
-
-
-def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
-    with data_archive("points") as repo_path:
-        repo = SnoRepo(repo_path)
-        H.clear_working_copy()
-
-        with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            r = cli_runner.invoke(["create-workingcopy", postgres_url])
-            assert r.exit_code == 0, r.stderr
-
-            wc = repo.working_copy
-            assert wc.is_created()
-            assert not wc.is_dirty()
-
-            # The test is run inside a single transaction which we always roll back -
-            # this is because we are editing the public.spatial_ref_sys table, which is shared by
-            # everything in the postgis DB - we don't want these temporary changes to make other
-            # tests fail, and we want to roll them immediately whether the test passes or fails.
-            with pytest.raises(SucceedAndRollback):
-                with wc.session() as sess:
-
-                    crs = sess.scalar(
-                        "SELECT srtext FROM public.spatial_ref_sys WHERE srid=4326"
-                    )
-                    assert crs.startswith('GEOGCS["WGS 84",')
-                    assert crs.endswith('AUTHORITY["EPSG","4326"]]')
-
-                    # Make an unimportant, cosmetic change, while keeping the CRS basically EPSG:4326
-                    crs = crs.replace('GEOGCS["WGS 84",', 'GEOGCS["WGS 1984",')
-                    sess.execute(
-                        """UPDATE public.spatial_ref_sys SET srtext=:srtext WHERE srid=4326;""",
-                        {"srtext": crs},
-                    )
-
-                    # sno diff hides differences between dataset CRS and WC CRS if they are both supposed to be EPSG:4326
-                    # (or any other standard CRS). See POSTGIS_WC.md
-                    assert not wc.is_dirty()
-
-                    # Change the CRS authority to CUSTOM
-                    crs = crs.replace(
-                        'AUTHORITY["EPSG","4326"]]', 'AUTHORITY["CUSTOM","4326"]]'
-                    )
-
-                    sess.execute(
-                        """UPDATE public.spatial_ref_sys SET srtext=:srtext WHERE srid=4326;""",
-                        {"srtext": crs},
-                    )
-
-                    # Now sno diff should show the change, and it is possible to commit the change.
-                    assert wc.is_dirty()
-
-                    commit_id = repo.structure().commit_diff(
-                        wc.diff_to_tree(), "Modify CRS"
-                    )
-                    wc.update_state_table_tree(commit_id.hex)
-
-                    assert not wc.is_dirty()
-
-                    r = cli_runner.invoke(["show"])
-                    lines = r.stdout.splitlines()
-                    assert "--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt" in lines
-                    assert (
-                        "+++ nz_pa_points_topo_150k:meta:crs/CUSTOM:4326.wkt" in lines
-                    )
-
-                    raise SucceedAndRollback()
-
-
 def test_approximated_types():
-    assert postgis_adapter.APPROXIMATED_TYPES == compute_approximated_types(
-        postgis_adapter.V2_TYPE_TO_PG_TYPE, postgis_adapter.PG_TYPE_TO_V2_TYPE
+    assert sqlserver_adapter.APPROXIMATED_TYPES == compute_approximated_types(
+        sqlserver_adapter.V2_TYPE_TO_MS_TYPE, sqlserver_adapter.MS_TYPE_TO_V2_TYPE
     )
 
 
-def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
+def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
     with data_archive("types") as repo_path:
         repo = SnoRepo(repo_path)
         H.clear_working_copy()
 
-        with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            repo.config["sno.workingcopy.path"] = postgres_url
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            repo.config["sno.workingcopy.path"] = sqlserver_url
             r = cli_runner.invoke(["checkout"])
 
             # If type-approximation roundtrip code isn't working,

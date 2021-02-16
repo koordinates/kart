@@ -377,7 +377,7 @@ GPKG_TYPE_TO_V2_TYPE = {
 }
 
 
-# Types that can't be roundtrip perfectly in GPKG, and what they end up as.
+# Types that can't be roundtripped perfectly in GPKG, and what they end up as.
 APPROXIMATED_TYPES = {"interval": "text", "time": "text", "numeric": "text"}
 
 

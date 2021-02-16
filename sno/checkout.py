@@ -20,7 +20,7 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
 
 def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     """Resets the working copy to the target if it does not already match, or if discard_changes is True."""
-    working_copy = WorkingCopy.get(repo, allow_uncreated=True)
+    working_copy = WorkingCopy.get(repo, allow_uncreated=True, allow_invalid_state=True)
     if working_copy is None:
         click.echo(
             "(Bare sno repository - to create a working copy, use `sno create-workingcopy`)"
