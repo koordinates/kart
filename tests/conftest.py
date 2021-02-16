@@ -125,6 +125,9 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
             f"\tautoDetach = false\n"
             f"[init]\n"
             f"\tdefaultBranch = main\n"
+            # used by test_clone_filter
+            f"[uploadPack]\n"
+            f"\tallowFilter = true\n"
         )
 
     L.debug("Temporary HOME for git config: %s", home)
