@@ -1,6 +1,47 @@
 import json
 import click
 import jsonschema
+import os
+
+import pygit2
+
+
+def _pygit2_configs():
+    """
+    Yields pygit2.Config objects in order of decreasing specificity.
+    """
+    try:
+        # ~/.gitconfig
+        yield pygit2.Config.get_global_config()
+    except OSError:
+        pass
+    try:
+        # ~/.config/git/config
+        yield pygit2.Config.get_xdg_config()
+    except OSError:
+        pass
+
+    if "GIT_CONFIG_NOSYSTEM" not in os.environ:
+        # /etc/gitconfig
+        try:
+            yield pygit2.Config.get_system_config()
+        except OSError:
+            pass
+
+
+def startup_load_git_init_config():
+    """
+    Initialises the default value for the `init.defaultBranch` config variable.
+    Call this before calling git init, clone, or config.
+    """
+    for config in _pygit2_configs():
+        if "init.defaultBranch" in config:
+            break
+    else:
+        existing = ""
+        if "GIT_CONFIG_PARAMETERS" in os.environ:
+            existing = f" {os.environ['GIT_CONFIG_PARAMETERS']}"
+        os.environ["GIT_CONFIG_PARAMETERS"] = f"'init.defaultBranch=main'{existing}"
 
 
 def add_help_subcommand(group):
