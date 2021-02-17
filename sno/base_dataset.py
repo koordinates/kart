@@ -135,11 +135,6 @@ class BaseDataset(ImportSource):
         """Finds or generates the meta item with the given name, according to the V2 spec."""
         raise NotImplementedError()
 
-    @functools.lru_cache()
-    def get_gpkg_meta_item(self, name):
-        """Finds or generates a gpkg meta item with the given name, according to the GPKG / V1 spec."""
-        raise NotImplementedError()
-
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):

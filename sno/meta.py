@@ -96,12 +96,10 @@ def meta_get(ctx, output_format, json_style, ref, dataset, keys):
 def get_meta_items(ds, keys):
     items = {}
     for key in keys:
-        for func in (ds.get_meta_item, ds.get_gpkg_meta_item):
-            try:
-                items[key] = func(key)
-                break
-            except KeyError:
-                continue
+        try:
+            items[key] = ds.get_meta_item(key)
+        except KeyError:
+            pass
 
     missing_keys = list(keys - items.keys())
     if missing_keys:

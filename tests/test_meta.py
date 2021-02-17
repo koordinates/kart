@@ -3,15 +3,6 @@ import pytest
 
 import sno
 
-EXPECTED_GCG_JSON = {
-    "column_name": "geom",
-    "geometry_type_name": "POINT",
-    "m": 0,
-    "srs_id": 4326,
-    "table_name": "nz_pa_points_topo_150k",
-    "z": 0,
-}
-
 EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
 
 
@@ -62,21 +53,21 @@ class TestMetaGet:
                     "nz_pa_points_topo_150k",
                     "-o",
                     output_format,
-                    "gpkg_geometry_columns",
+                    "title",
                 ]
             )
             assert r.exit_code == 0, r
             if output_format == "text":
                 assert "nz_pa_points_topo_150k" in r.stdout
-                assert "gpkg_geometry_columns" in r.stdout
-                assert "gpkg_contents" not in r.stdout
-                assert "sqlite_table_info" not in r.stdout
+                assert "title" in r.stdout
+                assert "description" not in r.stdout
+                assert "schema.json" not in r.stdout
             else:
                 output = json.loads(r.stdout)
                 output = output["nz_pa_points_topo_150k"]
-                assert output["gpkg_geometry_columns"] == EXPECTED_GCG_JSON
-                assert "gpkg_contents" not in output
-                assert "sqlite_table_info" not in output
+                assert output["title"] == EXPECTED_TITLE
+                assert "description" not in output
+                assert "schema.json" not in output
 
 
 def test_meta_set(data_archive, cli_runner):

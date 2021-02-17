@@ -4,7 +4,7 @@ import os
 import click
 import pygit2
 
-from . import crs_util, gpkg_adapter
+from . import crs_util
 from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
 from .meta_items import META_ITEM_NAMES
@@ -107,10 +107,6 @@ class Dataset2(RichBaseDataset):
             return crs_util.normalise_wkt(ensure_text(data))
         else:
             return ensure_text(data)
-
-    @functools.lru_cache()
-    def get_gpkg_meta_item(self, name):
-        return gpkg_adapter.generate_gpkg_meta_item(self, name, self.table_name)
 
     def crs_definitions(self):
         """Yields (identifier, definition) for all CRS definitions in this dataset."""

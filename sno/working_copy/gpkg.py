@@ -221,7 +221,8 @@ class WorkingCopy_GPKG(WorkingCopy):
         gpkg_contents, gpkg_geometry_columns, gpkg_spatial_ref_sys, gpkg_metadata, gpkg_metadata_reference
         """
         table_name = dataset.table_name
-        gpkg_contents = dataset.get_gpkg_meta_item("gpkg_contents")
+        gpkg_meta_items = dict(gpkg_adapter.all_gpkg_meta_items(dataset, table_name))
+        gpkg_contents = gpkg_meta_items["gpkg_contents"]
         gpkg_contents["table_name"] = table_name
 
         # FIXME: find a better way to roundtrip identifiers
@@ -231,8 +232,8 @@ class WorkingCopy_GPKG(WorkingCopy):
                 identifier_prefix + gpkg_contents["identifier"]
             )
 
-        gpkg_geometry_columns = dataset.get_gpkg_meta_item("gpkg_geometry_columns")
-        gpkg_spatial_ref_sys = dataset.get_gpkg_meta_item("gpkg_spatial_ref_sys")
+        gpkg_geometry_columns = gpkg_meta_items.get("gpkg_geometry_columns")
+        gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")
 
         with self.session() as sess:
             # Update GeoPackage core tables
@@ -252,10 +253,8 @@ class WorkingCopy_GPKG(WorkingCopy):
                     GpkgTables.gpkg_geometry_columns.insert(), gpkg_geometry_columns
                 )
 
-            gpkg_metadata = dataset.get_gpkg_meta_item("gpkg_metadata")
-            gpkg_metadata_reference = dataset.get_gpkg_meta_item(
-                "gpkg_metadata_reference"
-            )
+            gpkg_metadata = gpkg_meta_items.get("gpkg_metadata")
+            gpkg_metadata_reference = gpkg_meta_items.get("gpkg_metadata_reference")
             if gpkg_metadata and gpkg_metadata_reference:
                 self._write_meta_metadata(
                     sess, table_name, gpkg_metadata, gpkg_metadata_reference

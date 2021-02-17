@@ -56,8 +56,6 @@ class ImportSource:
 
     def get_meta_item(self, name):
         """Find or generate a V2 meta item."""
-        # If self.get_gpkg_meta_item works already, this method can be implemented as follows:
-        # >>> return gpkg_adapter.generate_v2_meta_item(self, name)
         raise NotImplementedError()
 
     def meta_items(self):
