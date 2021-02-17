@@ -7,6 +7,7 @@ from pathlib import Path
 
 import click
 from osgeo import gdal
+import sqlalchemy
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.compiler import IdentifierPreparer
 
@@ -378,19 +379,22 @@ class WorkingCopy_GPKG(WorkingCopy):
 
     def _delete_meta_metadata(self, sess, table_name):
         r = sess.execute(
-            """SELECT md_file_id FROM gpkg_metadata_reference WHERE table_name = :table_name;""",
+            gpkg_adapter.METADATA_QUERY.format(select="M.id"),
             {"table_name": table_name},
         )
         ids = [row[0] for row in r]
-        sess.execute(
-            """DELETE FROM gpkg_metadata_reference WHERE table_name = :table_name;""",
-            {"table_name": table_name},
+        if not ids:
+            return
+
+        sqls = (
+            """DELETE FROM gpkg_metadata_reference WHERE md_file_id IN :ids;""",
+            """DELETE FROM gpkg_metadata WHERE id IN :ids;""",
         )
-        if ids:
-            sess.execute(
-                """DELETE FROM gpkg_metadata WHERE id = :id;""",
-                [{"id": i} for i in ids],
+        for sql in sqls:
+            stmt = sqlalchemy.text(sql).bindparams(
+                sqlalchemy.bindparam("ids", expanding=True)
             )
+            sess.execute(stmt, {"ids": ids})
 
     def _create_spatial_index(self, sess, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
@@ -553,6 +557,18 @@ class WorkingCopy_GPKG(WorkingCopy):
                 ALTER TABLE {self.table_identifier(dataset)}
                 RENAME COLUMN {self.quote(src_name)} TO {self.quote(dest_name)}
                 """
+            )
+
+    def _apply_meta_metadata_xml(self, sess, dataset, src_value, dest_value):
+        table = dataset.table_name
+        self._delete_meta_metadata(sess, table)
+        if dest_value:
+            gpkg_metadata = gpkg_adapter.xml_to_gpkg_metadata(dest_value, table)
+            gpkg_metadata_reference = gpkg_adapter.xml_to_gpkg_metadata(
+                dest_value, table, reference=True
+            )
+            self._write_meta_metadata(
+                sess, table, gpkg_metadata, gpkg_metadata_reference
             )
 
     def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):

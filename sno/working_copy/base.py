@@ -4,7 +4,6 @@ import itertools
 import logging
 import time
 from enum import Enum, auto
-from pathlib import Path
 
 
 import click
@@ -465,6 +464,18 @@ class WorkingCopy:
         Subclasses can override and make more changes, depending on the WC's limitations - for instance, if the WC
         can't store the dataset description, then that should be removed from the diff.
         """
+
+        # A dataset should have at most ONE of "metadata.xml" or "metadata/dataset.json".
+        # The XML file is newer and supercedes the JSON file.
+        # The GPKG adapter generates both, so we delete one so as to match the dataset.
+        try:
+            if "metadata/dataset.json" in ds_meta_items:
+                del wc_meta_items["metadata.xml"]
+            else:
+                del wc_meta_items["metadata/dataset.json"]
+        except KeyError:
+            pass
+
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
             ds_schema = ds_meta_items["schema.json"]
             wc_schema = wc_meta_items["schema.json"]

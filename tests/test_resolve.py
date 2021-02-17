@@ -75,7 +75,7 @@ def test_resolve_with_version(create_conflicts, cli_runner):
         assert len(conflict_ids) == 0
 
         merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 236
+        assert len(merge_index.entries) == 237
         assert len(merge_index.conflicts) == 4
         assert len(merge_index.resolves) == 4
 
@@ -151,7 +151,7 @@ def test_resolve_with_file(create_conflicts, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         merge_index = MergeIndex.read_from_repo(repo)
-        assert len(merge_index.entries) == 236
+        assert len(merge_index.entries) == 237
         assert len(merge_index.conflicts) == 4
         assert len(merge_index.resolves) == 1
 

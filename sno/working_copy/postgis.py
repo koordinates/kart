@@ -419,7 +419,7 @@ class WorkingCopy_Postgis(WorkingCopy):
                 yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
     # Postgis has nowhere obvious to put this metadata.
-    _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json")
+    _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json", "metadata.xml")
 
     # Postgis approximates an int8 as an int16 - see super()._remove_hidden_meta_diffs
     _APPROXIMATED_TYPES = postgis_adapter.APPROXIMATED_TYPES

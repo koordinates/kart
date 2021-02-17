@@ -135,9 +135,8 @@ def test_import_table_meta_overrides(
             cli_runner.invoke(["checkout"])
 
             repo = SnoRepo(repo_path)
-            wc = repo.working_copy
-            with gpkg_engine(wc.path).connect() as conn:
-                title, description = conn.execute(
+            with repo.working_copy.session() as sess:
+                title, description = sess.execute(
                     """
                     SELECT c.identifier, c.description
                     FROM gpkg_contents c
@@ -147,14 +146,14 @@ def test_import_table_meta_overrides(
                 assert title == "census2016_sdhca_ot_ced_short: test title"
                 assert description == "test description"
 
-                xml_metadata = conn.execute(
+                xml_metadata = sess.scalar(
                     """
                     SELECT m.metadata
                     FROM gpkg_metadata m JOIN gpkg_metadata_reference r
                     ON m.id = r.md_file_id
                     WHERE r.table_name = 'census2016_sdhca_ot_ced_short'
                     """
-                ).fetchone()[0]
+                )
                 assert xml_metadata == original_xml_metadata
 
 

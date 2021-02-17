@@ -235,9 +235,9 @@ class RichBaseDataset(BaseDataset):
                 "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
             )
 
-            if d.old_file and d.old_file.path.startswith(self.META_PATH):
+            if d.old_file and not d.old_file.path.startswith(self.FEATURE_PATH):
                 continue
-            elif d.new_file and d.new_file.path.startswith(self.META_PATH):
+            elif d.new_file and not d.new_file.path.startswith(self.FEATURE_PATH):
                 continue
 
             if d.status in self._INSERT_UPDATE_DELETE:

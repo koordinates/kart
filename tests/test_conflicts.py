@@ -24,7 +24,7 @@ def test_merge_index_roundtrip(create_conflicts, cli_runner):
 
         # Create a MergeIndex object, and roundtrip it into a tree and back.
         orig = MergeIndex.from_pygit2_index(index)
-        assert len(orig.entries) == 236
+        assert len(orig.entries) == 237
         assert len(orig.conflicts) == 4
         assert len(orig.resolves) == 0
         assert len(orig.unresolved_conflicts) == 4
@@ -43,7 +43,7 @@ def test_merge_index_roundtrip(create_conflicts, cli_runner):
         key, conflict = items[1]
         r1.add_resolve(key, [])
         assert r1 != orig
-        assert len(r1.entries) == 236
+        assert len(r1.entries) == 237
         assert len(r1.conflicts) == 4
         assert len(r1.resolves) == 2
         assert len(r1.unresolved_conflicts) == 2

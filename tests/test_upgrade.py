@@ -86,13 +86,13 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
 
         if layer == H.POINTS.LAYER:
             assert r.stdout.splitlines() == [
-                "commit e0f39729ffe37b9f858afe0783ff0a29c98d699d",
+                "commit e04c6466e7420fe8e4ea2180bbaf5a041a8bff0f",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
-                "commit 31f8edfc3bfb660c36e0568d67722affd71813eb",
+                "commit 0924b05a94c26e86cfbbae98416513e39e17a2be",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Tue Jun 11 12:03:58 2019 +0100",
                 "",

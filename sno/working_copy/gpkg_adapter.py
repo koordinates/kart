@@ -94,6 +94,11 @@ def generate_v2_meta_item(gpkg_meta_items, path, id_salt=None):
             gpkg_meta_items.get("gpkg_metadata"),
             gpkg_meta_items.get("gpkg_metadata_reference"),
         )
+    elif path == "metadata.xml":
+        return gpkg_metadata_to_xml(
+            gpkg_meta_items.get("gpkg_metadata"),
+            gpkg_meta_items.get("gpkg_metadata_reference"),
+        )
 
     elif path.startswith("crs/"):
         gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys") or ()
@@ -437,8 +442,13 @@ def v2_type_to_gpkg_type(column_schema, has_geometry):
 
 
 def generate_gpkg_metadata(v2_obj, table_name, reference=False):
+    metadata_xml = v2_obj.get_meta_item("metadata.xml")
+    if metadata_xml is not None:
+        return xml_to_gpkg_metadata(metadata_xml, table_name, reference)
     v2json = v2_obj.get_meta_item("metadata/dataset.json")
-    return json_to_gpkg_metadata(v2json, table_name, reference) if v2json else None
+    if v2json is not None:
+        return json_to_gpkg_metadata(v2json, table_name, reference)
+    return None
 
 
 def json_to_gpkg_metadata(v2_metadata_json, table_name, reference=False):
@@ -474,29 +484,111 @@ def json_to_gpkg_metadata(v2_metadata_json, table_name, reference=False):
     return result
 
 
+_KNOWN_METADATA_URIS = {
+    "GDALMultiDomainMetadata": "http://gdal.org",
+}
+
+
+def _get_uri_from_xml(xml_metadata):
+    from xml.dom.minidom import parseString
+
+    try:
+        doc = parseString(xml_metadata)
+        element = doc.documentElement
+        return (
+            _KNOWN_METADATA_URIS.get(element.tagName)
+            or element.getAttribute("xmlns")
+            or element.namespaceURI
+            or "(unknown)"
+        )
+    except Exception:
+        return "(unknown)"
+
+
+def xml_to_gpkg_metadata(metadata_xml, table_name, reference=False):
+    if reference:
+        timestamp = datetime_to_iso8601_utc(datetime.now())
+        return [
+            {
+                "reference_scope": "table",
+                "table_name": table_name,
+                "column_name": None,
+                "row_id_value": None,
+                "timestamp": timestamp,
+                "md_file_id": 1,
+                "md_parent_id": None,
+            }
+        ]
+    else:
+        return [
+            {
+                "id": 1,
+                "md_scope": "dataset",
+                "md_standard_uri": _get_uri_from_xml(metadata_xml),
+                "mime_type": "text/xml",
+                "metadata": metadata_xml,
+            }
+        ]
+
+
+def _join_gpkg_metadata(gpkg_metadata, gpkg_metadata_reference):
+    id_to_gm = {gm["id"]: gm for gm in gpkg_metadata}
+    id_to_gmr = {gmr["md_file_id"]: gmr for gmr in gpkg_metadata_reference}
+    return [{**id_to_gm[i], **id_to_gmr[i]} for i in id_to_gm.keys() & id_to_gmr.keys()]
+
+
+def _row_matches(row, pattern):
+    return pattern.items() <= row.items()
+
+
 def gpkg_metadata_to_json(gpkg_metadata, gpkg_metadata_reference):
+    # Note that the rows fetched are only those that match the pattern we care about:
+    # Table-scoped XML metadata (see query in gpkg_meta_items_from_db).
     if not gpkg_metadata or not gpkg_metadata_reference:
         return None
 
-    result = {}
-    ref_rows = {ref_row["md_file_id"]: ref_row for ref_row in gpkg_metadata_reference}
+    joined_rows = _join_gpkg_metadata(gpkg_metadata, gpkg_metadata_reference)
+    if not joined_rows:
+        return None
 
-    for gm_row in gpkg_metadata:
-        if gm_row["md_scope"] != "dataset":
-            continue
+    return {
+        row["md_standard_uri"]: {"text/xml": row["metadata"]} for row in joined_rows
+    }
 
-        ref = ref_rows[gm_row["id"]]
-        r = (ref["reference_scope"], ref["column_name"], ref["row_id_value"])
-        if r != ("table", None, None):
-            continue
 
-        uri = gm_row["md_standard_uri"]
-        mime_type = gm_row["mime_type"]
-        content = gm_row["metadata"]
-        uri_metadata = result.setdefault(uri, {})
-        uri_metadata[mime_type] = content
+def gpkg_metadata_to_xml(gpkg_metadata, gpkg_metadata_reference):
+    # Note that the rows fetched are only those that match the pattern we care about:
+    # Table-scoped XML metadata (see query in gpkg_meta_items_from_db).
+    if not gpkg_metadata or not gpkg_metadata_reference:
+        return None
 
-    return result
+    joined_rows = _join_gpkg_metadata(gpkg_metadata, gpkg_metadata_reference)
+    if not joined_rows:
+        return None
+
+    xml_list = [row["metadata"] for row in joined_rows]
+    if not xml_list:
+        return None
+    if len(xml_list) == 1:
+        return xml_list[0]
+
+    # We can't actually commit a whole list of XML, but we need to return something that makes sense.
+    # Simply throwing an error here stops dirty-detection working, and stops commands that would fix the situation
+    # from working, like `sno reset HEAD --discard-changes` or `sno create-workingcopy --discard-changes`.
+    return xml_list
+
+
+METADATA_QUERY = """
+    SELECT {select}
+    FROM gpkg_metadata_reference MR
+        INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
+    WHERE
+        M.md_scope='dataset'
+        AND M.mime_type='text/xml'
+        AND MR.table_name=:table_name
+        AND MR.column_name IS NULL
+        AND MR.row_id_value IS NULL;
+    """
 
 
 def gpkg_meta_items_from_db(conn, table_name, keys=None):
@@ -522,28 +614,12 @@ def gpkg_meta_items_from_db(conn, table_name, keys=None):
             dict,
         ),
         "sqlite_table_info": (f"PRAGMA table_info({quote(table_name)});", list),
-        "gpkg_metadata_reference": (
-            """
-            SELECT MR.*
-            FROM gpkg_metadata_reference MR
-                INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
-            WHERE
-                MR.table_name=:table_name
-                AND MR.column_name IS NULL
-                AND MR.row_id_value IS NULL;
-            """,
+        "gpkg_metadata": (
+            METADATA_QUERY.format(select="M.*"),
             list,
         ),
-        "gpkg_metadata": (
-            """
-            SELECT M.*
-            FROM gpkg_metadata_reference MR
-                INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
-            WHERE
-                MR.table_name=:table_name
-                AND MR.column_name IS NULL
-                AND MR.row_id_value IS NULL;
-            """,
+        "gpkg_metadata_reference": (
+            METADATA_QUERY.format(select="MR.*"),
             list,
         ),
         "gpkg_spatial_ref_sys": (
