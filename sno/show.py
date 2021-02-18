@@ -178,6 +178,7 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
             "authorEmail": author.email,
             "authorTime": datetime_to_iso8601_utc(author_time),
             "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
+            "commit": commit.oid.hex,
             "message": commit.message,
         }
         dump_json_output(data, *args, **kwargs)

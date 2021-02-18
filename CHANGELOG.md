@@ -19,6 +19,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Internal dependency change - Sno no longer depends on [apsw](https://pypi.org/project/apsw/), instead it depends on [SQLAlchemy](https://www.sqlalchemy.org/).
  * `init` now accepts a `--initial-branch` option
  * `clone` now accepts a `--filter` option (advanced users only)
+ * `show -o json` now includes the commit hash in the output
 
 ## 0.7.1
 
