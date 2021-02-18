@@ -1,4 +1,4 @@
-from sno.gpkg_adapter import generate_sqlite_table_info
+from sno.working_copy.gpkg_adapter import generate_sqlite_table_info
 from sno.schema import Schema
 
 V2_SCHEMA_DATA = [

@@ -74,8 +74,6 @@ class ImportSource:
         The identifier should be a string that uniquely identifies the CRS eg "EPSG:4326"
         The definition should be a string containing a WKT definition eg 'GEOGCS["WGS 84"...'
         """
-        # If self.get_gpkg_meta_item works already, this method can be implemented as follows:
-        # >>> return gpkg_adapter.all_v2_crs_definitions(self)
         raise NotImplementedError()
 
     def get_crs_definition(self, identifier=None):

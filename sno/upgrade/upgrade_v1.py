@@ -5,14 +5,13 @@ import functools
 import os
 import re
 
-import json
 import msgpack
 import pygit2
 
-from sno import gpkg_adapter
 from sno.geometry import Geometry
 from sno.base_dataset import BaseDataset
 from sno.serialise_util import json_unpack
+from sno.working_copy import gpkg_adapter
 
 
 class Dataset1(BaseDataset):
@@ -54,26 +53,20 @@ class Dataset1(BaseDataset):
             return msgpack.ExtType(code, data)
 
     @functools.lru_cache()
-    def get_gpkg_meta_item(self, name):
-        rel_path = self.META_PATH + name
-        data = self.get_data_at(
-            rel_path, missing_ok=gpkg_adapter.is_gpkg_meta_item(name)
-        )
-        if data is None:
-            return data
-
-        # Dataset 1 meta items are always JSON.
-        return json_unpack(data)
-
-    def meta_items(self):
-        return gpkg_adapter.all_v2_meta_items(self)
-
-    @functools.lru_cache()
     def get_meta_item(self, name):
-        return gpkg_adapter.generate_v2_meta_item(self, name)
+        return gpkg_adapter.generate_v2_meta_item(self.gpkg_meta_items, name)
 
     def crs_definitions(self):
-        return gpkg_adapter.all_v2_crs_definitions(self)
+        return gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def gpkg_meta_items(self):
+        # For V0 / V1, all data is serialised using json.dumps
+        return {
+            name: self.get_json_data_at(self.META_PATH + name, missing_ok=True)
+            for name in gpkg_adapter.GPKG_META_ITEM_NAMES
+        }
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -93,7 +86,7 @@ class Dataset1(BaseDataset):
                 )
                 continue
 
-            cid = json.loads(te.data)
+            cid = json_unpack(te.data)
             field_name = te.name
             cid_map[cid] = field_name
         return cid_map
@@ -105,10 +98,6 @@ class Dataset1(BaseDataset):
 
     def get_field_cid_map(self, source):
         return {column.name: i for i, column in enumerate(source.schema)}
-
-    @property
-    def primary_key(self):
-        return self.get_gpkg_meta_item("primary_key")
 
     @classmethod
     def decode_path_to_1pk(cls, path):

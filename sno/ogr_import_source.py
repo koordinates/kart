@@ -10,7 +10,7 @@ import click
 from osgeo import gdal, ogr
 import sqlalchemy
 
-from . import crs_util, gpkg, gpkg_adapter
+from . import crs_util
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -25,6 +25,7 @@ from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
 from .sqlalchemy import gpkg_engine, postgis_engine
 from .utils import ungenerator
+from .working_copy import gpkg_adapter
 
 
 # This defines what formats are allowed, as well as mapping
@@ -601,9 +602,9 @@ class GPKGImportSource(OgrImportSource):
         super().__init__(*args, **kwargs)
         if self.table:
             with self.engine.connect() as conn:
-                self._gpkg_primary_key = gpkg.pk(conn, self.table)
-                self.gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(
-                    conn, self.table
+                self._gpkg_primary_key = gpkg_adapter.pk(conn, self.table)
+                self.gpkg_meta_items = dict(
+                    gpkg_adapter.gpkg_meta_items_from_db(conn, self.table)
                 )
 
     @classmethod
@@ -648,11 +649,11 @@ class GPKGImportSource(OgrImportSource):
             return super().get_v2_metadata_json()
 
         return gpkg_adapter.generate_v2_meta_item(
-            self.gpkg_meta_items_obj, "metadata/dataset.json"
+            self.gpkg_meta_items, "metadata/dataset.json"
         )
 
     def crs_definitions(self):
-        yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items_obj)
+        yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
 
 
 class PostgreSQLImportSource(OgrImportSource):

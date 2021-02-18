@@ -11,9 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.compiler import IdentifierPreparer
 
 
+from . import gpkg_adapter
 from .base import WorkingCopy
 from .table_defs import GpkgTables, GpkgSnoTables
-from sno import gpkg, gpkg_adapter
 from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
 from sno.schema import Schema
@@ -294,7 +294,9 @@ class WorkingCopy_GPKG(WorkingCopy):
         Calling Schema.align_* is required to find how the columns matches the existing schema.
         """
         with self.session() as sess:
-            gpkg_meta_items_obj = gpkg.get_gpkg_meta_items_obj(sess, dataset.table_name)
+            gpkg_meta_items = dict(
+                gpkg_adapter.gpkg_meta_items_from_db(sess, dataset.table_name)
+            )
 
         gpkg_name = os.path.basename(self.path)
 
@@ -304,7 +306,7 @@ class WorkingCopy_GPKG(WorkingCopy):
         # for two unrelated columns.
         id_salt = f"{gpkg_name} {dataset.table_name} {self.get_db_tree()}"
 
-        yield from gpkg_adapter.all_v2_meta_items(gpkg_meta_items_obj, id_salt=id_salt)
+        yield from gpkg_adapter.all_v2_meta_items(gpkg_meta_items, id_salt=id_salt)
 
     # Some types are approximated as text in GPKG - see super()._remove_hidden_meta_diffs
     _APPROXIMATED_TYPES = gpkg_adapter.APPROXIMATED_TYPES

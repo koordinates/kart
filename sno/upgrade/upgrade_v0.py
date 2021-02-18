@@ -1,10 +1,10 @@
 import functools
-import json
 import re
 
-from sno import gpkg_adapter
 from sno.geometry import normalise_gpkg_geom
 from sno.base_dataset import BaseDataset
+from sno.serialise_util import json_unpack
+from sno.working_copy import gpkg_adapter
 
 
 class Dataset0(BaseDataset):
@@ -46,23 +46,22 @@ class Dataset0(BaseDataset):
 
     @functools.lru_cache()
     def get_meta_item(self, name):
-        return gpkg_adapter.generate_v2_meta_item(self, name)
-
-    @functools.lru_cache()
-    def get_gpkg_meta_item(self, name):
-        rel_path = self.META_PATH + name
-        data = self.get_data_at(
-            rel_path, missing_ok=(name in gpkg_adapter.GPKG_META_ITEM_NAMES)
-        )
-        # For V0 / V1, all data is serialised using json.dumps
-        return json.loads(data) if data is not None else None
+        return gpkg_adapter.generate_v2_meta_item(self.gpkg_meta_items, name)
 
     def crs_definitions(self):
-        return gpkg_adapter.all_v2_crs_definitions(self)
+        return gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def gpkg_meta_items(self):
+        # For V0 / V1, all data is serialised using json.dumps
+        return {
+            name: self.get_json_data_at(self.META_PATH + name, missing_ok=True)
+            for name in gpkg_adapter.GPKG_META_ITEM_NAMES
+        }
 
     def features(self):
-        ggc = self.get_gpkg_meta_item("gpkg_geometry_columns")
-        geom_field = ggc["column_name"] if ggc else None
+        geom_column = self.geom_column_name
 
         for feature_dir in self._iter_feature_dirs():
             source_feature_dict = {}
@@ -70,12 +69,10 @@ class Dataset0(BaseDataset):
                 if not hasattr(attr_blob, "data"):
                     continue
                 attr = attr_blob.name
-                if attr == geom_field:
+                if attr == geom_column:
                     source_feature_dict[attr] = normalise_gpkg_geom(attr_blob.data)
                 else:
-                    source_feature_dict[attr] = json.loads(
-                        attr_blob.data.decode("utf8")
-                    )
+                    source_feature_dict[attr] = json_unpack(attr_blob.data)
             yield source_feature_dict
 
     @property

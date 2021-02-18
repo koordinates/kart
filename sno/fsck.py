@@ -3,7 +3,7 @@ import subprocess
 
 import click
 
-from . import gpkg
+from .working_copy import gpkg_adapter
 from .exceptions import NotFound, NO_WORKING_COPY
 from .geometry import normalise_gpkg_geom
 
@@ -80,7 +80,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             )
             table = dataset.table_name
 
-            pk = gpkg.pk(sess, table)
+            pk = gpkg_adapter.pk(sess, table)
             click.echo(f'Primary key field for table: "{pk}"')
             if pk != dataset.primary_key:
                 has_err = True

@@ -1,18 +1,19 @@
+import collections
 from datetime import datetime
 import re
 
-from . import crs_util
-from .meta_items import META_ITEM_NAMES as V2_META_ITEM_NAMES
-from .schema import Schema, ColumnSchema
-from .timestamps import datetime_to_iso8601_utc
+from sno import crs_util
+from sno.meta_items import META_ITEM_NAMES as V2_META_ITEM_NAMES
+from sno.schema import Schema, ColumnSchema
+from sno.timestamps import datetime_to_iso8601_utc
 
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.dialects.sqlite.base import SQLiteDialect
 
-# Given a "gpkg_obj" which supports get_gpkg_meta_item, adapts it to support get_meta_item.
-# See generate_v2_meta_item.
+# Given a dict of all "gpkg_meta_items", generates some or all v2 meta items.
+# See generate_v2_meta_item, all_v2_meta_items.
 # Given a "v2_obj" which supports get_meta_item, adapts it to support get_gpkg_meta_item.
-# See generate_gpkg_meta_item.
+# See generate_gpkg_meta_item, all_gpkg_meta_items.
 
 
 _PREPARER = IdentifierPreparer(SQLiteDialect())
@@ -65,7 +66,7 @@ def is_v2_meta_item(path):
     return path in V2_META_ITEM_NAMES or path.startswith("crs/")
 
 
-def generate_v2_meta_item(gpkg_obj, path, id_salt=None):
+def generate_v2_meta_item(gpkg_meta_items, path, id_salt=None):
     """
     Generate the requested meta_item, given a gpkg object that supports get_gpkg_meta_item.
     Varying the id_salt varies the ids that are generated for the schema.json item.
@@ -75,27 +76,27 @@ def generate_v2_meta_item(gpkg_obj, path, id_salt=None):
         raise KeyError(f"Not a v2 meta_item: {path}")
 
     if path == "title":
-        return extract_title(gpkg_obj)
+        return extract_title(gpkg_meta_items["gpkg_contents"])
 
     elif path == "description":
-        description = gpkg_obj.get_gpkg_meta_item("gpkg_contents").get("description")
+        description = gpkg_meta_items["gpkg_contents"].get("description")
         return description
 
     elif path == "schema.json":
         return gpkg_to_v2_schema(
-            gpkg_obj.get_gpkg_meta_item("sqlite_table_info"),
-            gpkg_obj.get_gpkg_meta_item("gpkg_geometry_columns"),
-            gpkg_obj.get_gpkg_meta_item("gpkg_spatial_ref_sys"),
-            id_salt or get_table_name(gpkg_obj),
+            gpkg_meta_items.get("sqlite_table_info"),
+            gpkg_meta_items.get("gpkg_geometry_columns"),
+            gpkg_meta_items.get("gpkg_spatial_ref_sys"),
+            id_salt or get_table_name(gpkg_meta_items["gpkg_contents"]),
         ).to_column_dicts()
     elif path == "metadata/dataset.json":
         return gpkg_metadata_to_json(
-            gpkg_obj.get_gpkg_meta_item("gpkg_metadata"),
-            gpkg_obj.get_gpkg_meta_item("gpkg_metadata_reference"),
+            gpkg_meta_items.get("gpkg_metadata"),
+            gpkg_meta_items.get("gpkg_metadata_reference"),
         )
 
     elif path.startswith("crs/"):
-        gpkg_spatial_ref_sys = gpkg_obj.get_gpkg_meta_item("gpkg_spatial_ref_sys") or ()
+        gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys") or ()
         for gsrs in gpkg_spatial_ref_sys:
             definition = gsrs["definition"]
             if not definition or definition == "undefined":
@@ -105,18 +106,18 @@ def generate_v2_meta_item(gpkg_obj, path, id_salt=None):
         raise KeyError(f"No CRS found for {path}")
 
 
-def all_v2_meta_items(gpkg_obj, id_salt=None):
+def all_v2_meta_items(gpkg_meta_items, id_salt=None):
     for path in V2_META_ITEM_NAMES:
-        result = generate_v2_meta_item(gpkg_obj, path, id_salt=id_salt)
+        result = generate_v2_meta_item(gpkg_meta_items, path, id_salt=id_salt)
         if result is not None:
             yield path, result
 
-    for identifier, definition in all_v2_crs_definitions(gpkg_obj):
+    for identifier, definition in all_v2_crs_definitions(gpkg_meta_items):
         yield f"crs/{identifier}.wkt", definition
 
 
-def all_v2_crs_definitions(gpkg_obj):
-    gpkg_spatial_ref_sys = gpkg_obj.get_gpkg_meta_item("gpkg_spatial_ref_sys")
+def all_v2_crs_definitions(gpkg_meta_items):
+    gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")
     for gsrs in gpkg_spatial_ref_sys:
         d = gsrs["definition"]
         if not d or d == "undefined":
@@ -124,13 +125,12 @@ def all_v2_crs_definitions(gpkg_obj):
         yield crs_util.get_identifier_str(d), crs_util.normalise_wkt(d)
 
 
-def get_table_name(gpkg_obj):
-    return gpkg_obj.get_gpkg_meta_item("gpkg_contents").get("table_name", "")
+def get_table_name(gpkg_contents):
+    return gpkg_contents.get("table_name", "")
 
 
-def extract_title(gpkg_obj):
+def extract_title(gpkg_contents):
     """Extract the dataset title from a v1 dataset."""
-    gpkg_contents = gpkg_obj.get_gpkg_meta_item("gpkg_contents")
     identifier = gpkg_contents.get("identifier", "")
     table_name = gpkg_contents.get("table_name", "")
     # FIXME: find a better way of roundtripping identifiers?
@@ -497,3 +497,107 @@ def gpkg_metadata_to_json(gpkg_metadata, gpkg_metadata_reference):
         uri_metadata[mime_type] = content
 
     return result
+
+
+def gpkg_meta_items_from_db(conn, table_name, keys=None):
+    """
+    Returns metadata from the gpkg_* tables about this GPKG.
+    Keep this in sync with OgrImportSource.gpkg_meta_items for other datasource types.
+    """
+
+    QUERIES = {
+        "gpkg_contents": (
+            # we ignore dynamic fields (last-change, min_x, min_y, max_x, max_y)
+            """
+            SELECT table_name, data_type, identifier, description, srs_id
+            FROM gpkg_contents WHERE table_name=:table_name;
+            """,
+            dict,
+        ),
+        "gpkg_geometry_columns": (
+            """
+            SELECT table_name, column_name, geometry_type_name, srs_id, z, m
+            FROM gpkg_geometry_columns WHERE table_name=:table_name;
+            """,
+            dict,
+        ),
+        "sqlite_table_info": (f"PRAGMA table_info({quote(table_name)});", list),
+        "gpkg_metadata_reference": (
+            """
+            SELECT MR.*
+            FROM gpkg_metadata_reference MR
+                INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
+            WHERE
+                MR.table_name=:table_name
+                AND MR.column_name IS NULL
+                AND MR.row_id_value IS NULL;
+            """,
+            list,
+        ),
+        "gpkg_metadata": (
+            """
+            SELECT M.*
+            FROM gpkg_metadata_reference MR
+                INNER JOIN gpkg_metadata M ON (MR.md_file_id = M.id)
+            WHERE
+                MR.table_name=:table_name
+                AND MR.column_name IS NULL
+                AND MR.row_id_value IS NULL;
+            """,
+            list,
+        ),
+        "gpkg_spatial_ref_sys": (
+            """
+            SELECT DISTINCT SRS.*
+            FROM gpkg_spatial_ref_sys SRS
+                LEFT OUTER JOIN gpkg_contents C ON (C.srs_id = SRS.srs_id)
+                LEFT OUTER JOIN gpkg_geometry_columns G ON (G.srs_id = SRS.srs_id)
+            WHERE
+                (C.table_name=:table_name OR G.table_name=:table_name)
+            """,
+            list,
+        ),
+    }
+    try:
+        for key, (sql, rtype) in QUERIES.items():
+            if keys is not None and key not in keys:
+                continue
+            # check table exists, the metadata ones may not
+            if not key.startswith("sqlite_"):
+                r = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=:name;",
+                    {"name": key},
+                )
+                if not r.fetchone():
+                    continue
+
+            r = conn.execute(sql, {"table_name": table_name})
+            value = [collections.OrderedDict(sorted(zip(row.keys(), row))) for row in r]
+            if rtype is dict:
+                value = value[0] if len(value) else None
+            yield (key, value)
+    except Exception:
+        print(f"Error building meta/{key}")
+        raise
+
+
+def pk(conn, table):
+    """ Find the primary key for a GeoPackage table """
+
+    # Requirement 150:
+    # A feature table or view SHALL have a column that uniquely identifies the
+    # row. For a feature table, the column SHOULD be a primary key. If there
+    # is no primary key column, the first column SHALL be of type INTEGER and
+    # SHALL contain unique values for each row.
+
+    q = conn.execute(f"PRAGMA table_info({quote(table)});")
+    fields = []
+    for field in q:
+        if field["pk"]:
+            return field["name"]
+        fields.append(field)
+
+    if fields[0]["type"] == "INTEGER":
+        return fields[0]["name"]
+    else:
+        raise ValueError("No valid GeoPackage primary key field found")

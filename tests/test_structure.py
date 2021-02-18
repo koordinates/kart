@@ -9,13 +9,14 @@ from osgeo import gdal, ogr
 import pygit2
 import pytest
 
-from sno import fast_import, gpkg
+from sno import fast_import
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
 from sno.sqlalchemy import gpkg_engine
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from sno.repo import SnoRepo
+from sno.working_copy import gpkg_adapter
 
 
 H = pytest.helpers.helpers()
@@ -164,7 +165,7 @@ def test_import(
             dataset = _import_check(repo_path, table, f"{data / source_gpkg}")
 
             with gpkg_engine(data / source_gpkg).connect() as conn:
-                pk_field = gpkg.pk(conn, table)
+                pk_field = gpkg_adapter.pk(conn, table)
 
                 if num_rows > 0:
                     # compare the first feature in the repo against the source DB
@@ -787,7 +788,7 @@ def test_feature_find_decode_performance(
     with data_archive(archive) as data:
         with gpkg_engine(data / source_gpkg).connect() as conn:
             num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-            pk_field = gpkg.pk(conn, table)
+            pk_field = gpkg_adapter.pk(conn, table)
             pk = conn.execute(
                 f"SELECT {pk_field} FROM {table} ORDER BY {pk_field} LIMIT 1 OFFSET {min(97,num_rows-1)};"
             ).fetchone()[0]

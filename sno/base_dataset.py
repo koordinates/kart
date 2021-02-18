@@ -2,6 +2,7 @@ import functools
 import logging
 
 from .import_source import ImportSource
+from .serialise_util import json_unpack
 
 
 class BaseDataset(ImportSource):
@@ -99,6 +100,10 @@ class BaseDataset(ImportSource):
             return None
         else:
             raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
+
+    def get_json_data_at(self, rel_path, missing_ok=False):
+        data = self.get_data_at(rel_path, missing_ok=missing_ok)
+        return json_unpack(data) if data is not None else None
 
     def full_path(self, rel_path):
         """Given a path relative to this dataset, returns its full path from the repo root."""
