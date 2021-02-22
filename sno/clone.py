@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 import click
 
 from . import checkout
+from .cli_util import startup_load_git_init_config
 from .exceptions import InvalidOperation
 from .repo import SnoRepo
 from .working_copy.base import WorkingCopy
@@ -100,7 +101,7 @@ def clone(
     directory,
 ):
     """ Clone a repository into a new directory """
-
+    startup_load_git_init_config()
     repo_path = Path(directory or get_directory_from_url(url)).resolve()
 
     if repo_path.exists() and any(repo_path.iterdir()):
