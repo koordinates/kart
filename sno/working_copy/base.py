@@ -36,12 +36,14 @@ class WorkingCopyType(Enum):
     SQL_SERVER = auto()
 
     @classmethod
-    def from_path(cls, path):
+    def from_path(cls, path, allow_invalid=False):
         path = str(path)
         if path.startswith("postgresql:"):
             return WorkingCopyType.POSTGIS
         elif path.lower().endswith(".gpkg"):
             return WorkingCopyType.GPKG
+        elif allow_invalid:
+            return None
         else:
             raise click.UsageError(
                 f"Unrecognised working copy type: {path}\n"
@@ -207,16 +209,18 @@ class WorkingCopy:
         if not path:
             return None
 
-        class_ = WorkingCopyType.from_path(path).class_
-        result = class_(repo, path)
+        wc_type = WorkingCopyType.from_path(path, allow_invalid=allow_invalid_state)
+        if not wc_type:
+            return None
+        wc = wc_type.class_(repo, path)
 
         if not allow_invalid_state:
-            result.check_valid_state()
+            wc.check_valid_state()
 
-        if not result.is_created() and not allow_uncreated:
-            result = None
+        if not wc.is_created() and not allow_uncreated:
+            wc = None
 
-        return result
+        return wc
 
     @classmethod
     def ensure_config_exists(cls, repo):
