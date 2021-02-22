@@ -2,10 +2,18 @@ import json
 import io
 
 import click
+import pygit2
 
 from .apply import apply_patch
-from .cli_util import StringFromFile, add_help_subcommand, string_or_string_from_file
-from .exceptions import InvalidOperation
+from .cli_util import (
+    StringFromFile,
+    add_help_subcommand,
+    string_or_string_from_file,
+    bytes_or_bytes_from_file,
+)
+from .checkout import reset_wc_if_needed
+from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
+from .rich_tree_builder import RichTreeBuilder
 from .output_util import (
     dump_json_output,
     format_json_for_output,
@@ -182,3 +190,66 @@ def meta_set(ctx, message, dataset, items):
         allow_empty=False,
         allow_missing_old_values=True,
     )
+
+
+@click.command("commit-files", hidden=True)
+@click.option(
+    "--message",
+    "-m",
+    required=True,
+    help="Use the given message as the commit message",
+    type=StringFromFile(encoding="utf-8"),
+)
+@click.option("--ref", default="HEAD")
+@click.argument(
+    "items",
+    type=KeyValueType(),
+    required=True,
+    nargs=-1,
+    metavar="KEY=VALUE [KEY=VALUE...]",
+)
+@click.pass_context
+def commit_files(ctx, message, ref, items):
+    """Usage: sno commit-files -m MESSAGE KEY=VALUE [KEY=VALUE...]"""
+    repo = ctx.obj.repo
+    ctx.obj.check_not_dirty()
+
+    if not message:
+        raise click.UsageError("Aborting commit due to empty commit message.")
+
+    if not items:
+        raise NotFound("No changes to commit", exit_code=NO_CHANGES)
+
+    if ref == "HEAD":
+        parent_commit = repo.head_commit
+    else:
+        parent_commit = repo.references[ref].peel(pygit2.Commit)
+
+    if not parent_commit:
+        raise NotYetImplemented(
+            "Sorry, using `sno commit-files` to create the initial commit is not yet supported"
+        )
+
+    tree_builder = RichTreeBuilder(repo, parent_commit.peel(pygit2.Tree))
+    for key, value in items:
+        value = bytes_or_bytes_from_file(value, key, ctx, encoding="utf-8")
+        tree_builder.insert(key, value or None)  # Empty bytestring -> deletes file.
+
+    new_tree = tree_builder.flush()
+
+    click.echo("Committing...")
+    parents = [parent_commit.oid] if parent_commit is not None else []
+
+    # This will also update the ref (branch) to point to the new commit
+    new_commit_id = repo.create_commit(
+        ref,
+        repo.author_signature(),
+        repo.committer_signature(),
+        message,
+        new_tree.id,
+        parents,
+    )
+    new_commit = repo[new_commit_id]
+
+    click.echo(f"Committed as: {new_commit.hex}")
+    reset_wc_if_needed(repo, new_commit)
