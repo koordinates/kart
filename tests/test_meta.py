@@ -1,5 +1,6 @@
 import json
 import pytest
+import subprocess
 
 import sno
 
@@ -138,3 +139,33 @@ def test_meta_get_coloured(data_archive, cli_runner, monkeypatch):
         assert r.exit_code == 0, r.stderr
         # No asserts about colour codes - that would be system specific. Just a basic check:
         assert "nz_pa_points_topo_150k" in r.stdout
+
+
+def test_commit_files(data_archive, cli_runner):
+    with data_archive("points"):
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Updating attachments",
+                "LICENSE=Do not even look at this data",
+                "nz_pa_points_topo_150k/metadata.xml=<xml></xml>",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = subprocess.check_output(["git", "show"])
+        diff = r.decode("utf-8").splitlines()
+
+        assert diff[9:13] == [
+            "--- /dev/null",
+            "+++ b/LICENSE",
+            "@@ -0,0 +1 @@",
+            "+Do not even look at this data",
+        ]
+
+        assert diff[17:21] == [
+            "--- /dev/null",
+            "+++ b/nz_pa_points_topo_150k/metadata.xml",
+            "@@ -0,0 +1 @@",
+            "+<xml></xml>",
+        ]

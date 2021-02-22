@@ -94,6 +94,16 @@ def string_or_string_from_file(value, param, ctx, **file_kwargs):
     return value
 
 
+def bytes_or_bytes_from_file(value, param, ctx, encoding="utf-8", **file_kwargs):
+    if value == "-" or value.startswith("@"):
+        filetype = click.File(mode="rb", **file_kwargs)
+        filename = value[1:] if value.startswith("@") else value
+        fp = filetype.convert(filename, param, ctx)
+        return fp.read()
+
+    return value.encode(encoding)
+
+
 class JsonFromFile(StringFromFile):
     name = "json"
 
