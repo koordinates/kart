@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 import click
 
 from .crs_util import CoordinateReferenceString
+from .log import commit_obj_to_json
 from .output_util import dump_json_output, resolve_output_path
 from .repo import SnoRepoState
 from .structs import CommitWithReference
@@ -168,19 +169,9 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
     """
 
     commit = target.commit
-    author = commit.author
-    author_time = datetime.fromtimestamp(author.time, timezone.utc)
-    author_time_offset = timedelta(minutes=author.offset)
 
     def dump_function(data, *args, **kwargs):
-        data["sno.show/v1"] = {
-            "authorName": author.name,
-            "authorEmail": author.email,
-            "authorTime": datetime_to_iso8601_utc(author_time),
-            "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
-            "commit": commit.oid.hex,
-            "message": commit.message,
-        }
+        data["sno.show/v1"] = commit_obj_to_json(commit)
         dump_json_output(data, *args, **kwargs)
 
     with diff.diff_output_json(

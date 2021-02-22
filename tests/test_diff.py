@@ -1409,8 +1409,15 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
                 "authorName": "Robert Coup",
                 "authorTime": "2019-06-20T14:28:33Z",
                 "authorTimeOffset": "+01:00",
+                "committerEmail": "robert@coup.net.nz",
+                "committerName": "Robert Coup",
+                "commitTime": "2019-06-20T14:28:33Z",
+                "commitTimeOffset": "+01:00",
                 "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                "abbrevCommit": "0c64d82",
                 "message": "Improve naming on Coromandel East coast",
+                "parents": ["7bc3b56f20d1559208bcf5bb56860dda6e190b70"],
+                "abbrevParents": ["7bc3b56"],
             }
 
 
@@ -1480,8 +1487,15 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
                 "authorName": "Robert Coup",
                 "authorTime": "2019-07-22T11:05:39Z",
                 "authorTimeOffset": "+01:00",
+                "committerEmail": "robert@coup.net.nz",
+                "committerName": "Robert Coup",
+                "commitTime": "2019-07-22T11:05:39Z",
+                "commitTimeOffset": "+01:00",
                 "commit": "a149557b7cec7a35c07a9bc404a5d53f6c5ad154",
+                "abbrevCommit": "a149557",
                 "message": "Import from nz-waca-adjustments.gpkg",
+                "parents": [],
+                "abbrevParents": [],
             }
 
 

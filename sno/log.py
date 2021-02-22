@@ -62,7 +62,7 @@ def log(ctx, output_format, json_style, do_dataset_changes, args):
 
         commit_log = [
             commit_obj_to_json(
-                repo, repo[commit_id], refs, do_dataset_changes, dataset_change_cache
+                repo[commit_id], repo, refs, do_dataset_changes, dataset_change_cache
             )
             for (commit_id, refs) in commit_ids_and_refs_log
         ]
@@ -78,7 +78,7 @@ def _parse_git_log_output(lines):
 
 
 def commit_obj_to_json(
-    repo, commit, refs, do_dataset_changes=False, dataset_change_cache={}
+    commit, repo=None, refs=None, do_dataset_changes=False, dataset_change_cache={}
 ):
     """Given a commit object, returns a dict ready for dumping as JSON."""
     author = commit.author
@@ -99,7 +99,6 @@ def commit_obj_to_json(
         "commit": commit.id.hex,
         "abbrevCommit": commit.short_id,
         "message": commit.message,
-        "refs": refs,
         "authorName": author.name,
         "authorEmail": author.email,
         "authorTime": datetime_to_iso8601_utc(author_time),
@@ -111,6 +110,8 @@ def commit_obj_to_json(
         "parents": [oid.hex for oid in commit.parent_ids],
         "abbrevParents": abbrev_parents,
     }
+    if refs is not None:
+        result["refs"] = refs
     if do_dataset_changes:
         result["datasetChanges"] = get_dataset_changes(
             repo, commit, dataset_change_cache
