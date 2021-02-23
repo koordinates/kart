@@ -611,6 +611,14 @@ def check_points_diff_output(r, output_format):
 def check_polygons_diff_output(r, output_format):
     if output_format == "text":
         assert r.exit_code == 0, r
+
+        # New column "colour" has an ID is deterministically generated from the commit hash,
+        # but we don't care exactly what it is.
+        try:
+            colour_id_line = r.stdout.splitlines()[36]
+        except KeyError:
+            colour_id_line = ""
+
         assert r.stdout.splitlines() == [
             "--- nz_waca_adjustments:meta:schema.json",
             "+++ nz_waca_adjustments:meta:schema.json",
@@ -648,7 +656,7 @@ def check_polygons_diff_output(r, output_format):
             '      "size": 32',
             "    },",
             "+   {",
-            '+     "id": "50851f24-296b-89a9-56b1-b474bf9474fb",',
+            colour_id_line,
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "length": 32',
@@ -673,6 +681,17 @@ def check_polygons_diff_output(r, output_format):
         ]
     elif output_format == "json":
         assert r.exit_code == 0, r
+
+        # New column "colour" has an ID is deterministically generated from the commit hash,
+        # but we don't care exactly what it is.
+        try:
+            schema_json = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
+                "nz_waca_adjustments"
+            ]["meta"]["schema.json"]
+            colour_id = schema_json["+"][-1]["id"]
+        except KeyError:
+            colour_id = None
+
         assert json.loads(r.stdout) == {
             "sno.diff/v1+hexwkb": {
                 "nz_waca_adjustments": {
@@ -745,7 +764,7 @@ def check_polygons_diff_output(r, output_format):
                                 },
                                 {
                                     "dataType": "text",
-                                    "id": "50851f24-296b-89a9-56b1-b474bf9474fb",
+                                    "id": colour_id,
                                     "length": 32,
                                     "name": "colour",
                                 },

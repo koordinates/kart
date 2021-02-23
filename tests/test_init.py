@@ -583,13 +583,9 @@ def test_init_import(
                 WHERE r.table_name = '{table}'
                 """
             ).fetchone()
-            if table == "nz_pa_points_topo_150k":
+            if table in ("nz_pa_points_topo_150k", "nz_waca_adjustments"):
                 assert xml_metadata[0].startswith(
                     '<gmd:MD_Metadata xmlns:gco="http://www.isotc211.org/2005/gco"'
-                )
-            elif table == "nz_waca_adjustments":
-                assert xml_metadata[0].startswith(
-                    '<GDALMultiDomainMetadata>\n  <Metadata>\n    <MDI key="GPKG_METADATA_ITEM_1">'
                 )
             else:
                 assert not xml_metadata

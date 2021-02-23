@@ -231,6 +231,14 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             diff = r.stdout.splitlines()
             assert "--- nz_waca_adjustments:meta:crs/EPSG:4167.wkt" in diff
             assert "+++ nz_waca_adjustments:meta:crs/EPSG:3857.wkt" in diff
+
+            # New column "colour" has an ID is deterministically generated from the commit hash,
+            # but we don't care exactly what it is.
+            try:
+                colour_id_line = diff[-10]
+            except KeyError:
+                colour_id_line = ""
+
             assert diff[-46:] == [
                 "--- nz_waca_adjustments:meta:schema.json",
                 "+++ nz_waca_adjustments:meta:schema.json",
@@ -268,7 +276,7 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
                 '      "size": 32',
                 "    },",
                 "+   {",
-                '+     "id": "f14e9f9b-e47a-d309-6eff-fe498e0ee443",',
+                colour_id_line,
                 '+     "name": "colour",',
                 '+     "dataType": "text",',
                 '+     "length": 32',

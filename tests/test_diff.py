@@ -1454,7 +1454,7 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
             lines = r.stdout.splitlines()
 
             assert lines[0:6] == [
-                "commit a149557b7cec7a35c07a9bc404a5d53f6c5ad154",
+                "commit 7f4f6ec962aa1757a97ad89f3c7ba4f4cc2d0615",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Mon Jul 22 12:05:39 2019 +0100",
                 "",
@@ -1491,9 +1491,9 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
                 "committerName": "Robert Coup",
                 "commitTime": "2019-07-22T11:05:39Z",
                 "commitTimeOffset": "+01:00",
-                "commit": "a149557b7cec7a35c07a9bc404a5d53f6c5ad154",
-                "abbrevCommit": "a149557",
-                "message": "Import from nz-waca-adjustments.gpkg",
+                "commit": "7f4f6ec962aa1757a97ad89f3c7ba4f4cc2d0615",
+                "abbrevCommit": "7f4f6ec",
+                "message": "Import from nz-waca-adjustments.gpkg\n",
                 "parents": [],
                 "abbrevParents": [],
             }
