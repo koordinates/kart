@@ -5,8 +5,14 @@ META_ITEM_NAMES = (
     "title",
     "description",
     "schema.json",
-    "metadata/dataset.json",
+    "metadata.xml",
+    "metadata/dataset.json",  # deprecated - imported as metadata.xml going forward.
 )
+
+# These meta items aren't stored at <dataset>/.sno-dataset/meta/<meta-item-name>
+# Instead they are stored at <dataset>/<meta-item-name>.
+# This will eventually become a user-visible area, where users can check in changes directly.
+ATTACHMENT_META_ITEMS = ("metadata.xml",)
 
 # In addition to these meta items, CRS definitions are also meta items.
 # These have names in the following format:

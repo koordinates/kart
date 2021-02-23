@@ -7,7 +7,7 @@ import pygit2
 from . import crs_util
 from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
-from .meta_items import META_ITEM_NAMES
+from .meta_items import META_ITEM_NAMES, ATTACHMENT_META_ITEMS
 from .schema import Legend, Schema
 from .serialise_util import (
     msg_pack,
@@ -81,15 +81,19 @@ class Dataset2(RichBaseDataset):
 
     CRS_PATH = META_PATH + "crs/"
 
-    METADATA_PATH = META_PATH + "metadata/"
-    DATASET_METADATA_PATH = METADATA_PATH + "dataset.json"
+    ATTACHMENT_PATH = ""
+    METADATA_XML_PATH = ATTACHMENT_PATH + "metadata.xml"
 
     @functools.lru_cache()
     def get_meta_item(self, name):
         if name == "version":
             return 2
 
-        rel_path = self.META_PATH + name
+        if name in ATTACHMENT_META_ITEMS:
+            rel_path = self.ATTACHMENT_PATH + name
+        else:
+            rel_path = self.META_PATH + name
+
         data = self.get_data_at(rel_path, missing_ok=name in META_ITEM_NAMES)
         if data is None:
             return data
@@ -248,7 +252,7 @@ class Dataset2(RichBaseDataset):
         rel_meta_blobs = [
             (self.TITLE_PATH, source.get_meta_item("title")),
             (self.DESCRIPTION_PATH, source.get_meta_item("description")),
-            (self.DATASET_METADATA_PATH, source.get_meta_item("metadata/dataset.json")),
+            (self.METADATA_XML_PATH, source.get_meta_item("metadata.xml")),
         ]
 
         for path, definition in source.crs_definitions():
@@ -319,81 +323,113 @@ class Dataset2(RichBaseDataset):
         """Apply a meta diff to this dataset. Checks for conflicts."""
         if not meta_diff:
             return
-
-        # Applying diffs works even if there is no tree yet created for the dataset,
-        # as is the case when the dataset is first being created right now.
-        meta_tree = self.meta_tree if self.tree is not None else ()
+        self._check_meta_diff_is_commitable(meta_diff)
 
         has_conflicts = False
+        # Apply diff to hidden meta items folder: <dataset>/.sno-dataset/meta/<item-name>
         with tree_builder.chdir(self.META_PATH):
-            for delta in meta_diff.values():
-                name = delta.key
-                old_value = delta.old_value
-                new_value = delta.new_value
+            has_conflicts |= self._apply_meta_deltas_to_tree(
+                (d for d in meta_diff.values() if d.key not in ATTACHMENT_META_ITEMS),
+                tree_builder,
+                self.meta_tree if self.tree is not None else None,
+                allow_missing_old_values=allow_missing_old_values,
+            )
 
-                # Schema.json needs some special-casing - for one thing, we need to write the legend too.
-                if name == "schema.json":
-                    old_schema = (
-                        Schema.from_column_dicts(old_value) if old_value else None
-                    )
-                    new_schema = (
-                        Schema.from_column_dicts(new_value) if new_value else None
-                    )
-
-                    if old_schema and new_schema:
-                        if not old_schema.is_pk_compatible(new_schema):
-                            raise NotYetImplemented(
-                                "Schema changes that involve primary key changes are not yet supported"
-                            )
-                    if new_schema:
-                        legend = new_schema.legend
-                        tree_builder.insert(
-                            f"{self.LEGEND_DIRNAME}/{legend.hexhash()}", legend.dumps()
-                        )
-
-                # Conflict detection
-                if delta.type == "delete" and name not in meta_tree:
-                    has_conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to delete nonexistent meta item: {name}"
-                    )
-                    continue
-                if (
-                    delta.type == "insert"
-                    and (not allow_missing_old_values)
-                    and name in meta_tree
-                ):
-                    has_conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to create meta item that already exists: {name}"
-                    )
-                    continue
-
-                if delta.type == "update" and name not in meta_tree:
-                    has_conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to update nonexistent meta item: {name}"
-                    )
-                    continue
-                if delta.type == "update" and self.get_meta_item(name) != old_value:
-                    has_conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to update out-of-date meta item: {name}"
-                    )
-                    continue
-
-                # General case
-                if new_value is not None:
-                    if name.endswith(".json"):
-                        new_value = json_pack(new_value)
-                    else:
-                        new_value = ensure_bytes(new_value)
-                    tree_builder.insert(name, new_value)
-                else:
-                    tree_builder.remove(name)
+        # Apply diff to visible attachment meta items: <dataset>/<item-name>
+        has_conflicts |= self._apply_meta_deltas_to_tree(
+            (d for d in meta_diff.values() if d.key in ATTACHMENT_META_ITEMS),
+            tree_builder,
+            self.attachment_tree,
+            allow_missing_old_values=allow_missing_old_values,
+        )
 
         if has_conflicts:
             raise InvalidOperation(
                 "Patch does not apply",
                 exit_code=PATCH_DOES_NOT_APPLY,
             )
+
+    def _check_meta_diff_is_commitable(self, meta_diff):
+        # This is currently the only case where we sometimes generate a diff we cannot commit -
+        # if the user has tried to attach more than one XML metadata blob to a dataset.
+        if "metadata.xml" in meta_diff and isinstance(
+            meta_diff["metadata.xml"].new_value, list
+        ):
+            raise NotYetImplemented(
+                "Sorry, committing more than one XML metadata file is not supported"
+            )
+
+    def _apply_meta_deltas_to_tree(
+        self, deltas, tree_builder, existing_tree, *, allow_missing_old_values=False
+    ):
+        # Applying diffs works even if there is no tree yet created for the dataset,
+        # as is the case when the dataset is first being created right now.
+        if existing_tree is None:
+            # This lets us test if something is in existing_tree without crashing.
+            existing_tree = ()
+
+        has_conflicts = False
+        for delta in deltas:
+            name = delta.key
+            old_value = delta.old_value
+            new_value = delta.new_value
+
+            # Schema.json needs some special-casing - for one thing, we need to write the legend too.
+            if name == "schema.json":
+                old_schema = Schema.from_column_dicts(old_value) if old_value else None
+                new_schema = Schema.from_column_dicts(new_value) if new_value else None
+
+                if old_schema and new_schema:
+                    if not old_schema.is_pk_compatible(new_schema):
+                        raise NotYetImplemented(
+                            "Schema changes that involve primary key changes are not yet supported"
+                        )
+                if new_schema:
+                    legend = new_schema.legend
+                    tree_builder.insert(
+                        f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
+                        legend.dumps(),
+                    )
+
+            # Conflict detection
+            if delta.type == "delete" and name not in existing_tree:
+                has_conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to delete nonexistent meta item: {name}"
+                )
+                continue
+            if (
+                delta.type == "insert"
+                and (not allow_missing_old_values)
+                and name in existing_tree
+            ):
+                has_conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to create meta item that already exists: {name}"
+                )
+                continue
+
+            if delta.type == "update" and name not in existing_tree:
+                has_conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update nonexistent meta item: {name}"
+                )
+                continue
+            if delta.type == "update" and self.get_meta_item(name) != old_value:
+                has_conflicts = True
+                click.echo(
+                    f"{self.path}: Trying to update out-of-date meta item: {name}"
+                )
+                continue
+
+            # General case
+            if new_value is not None:
+                if name.endswith(".json"):
+                    new_value = json_pack(new_value)
+                else:
+                    new_value = ensure_bytes(new_value)
+                tree_builder.insert(name, new_value)
+            else:
+                tree_builder.remove(name)
+
+        return has_conflicts

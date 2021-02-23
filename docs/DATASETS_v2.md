@@ -188,18 +188,6 @@ Each legend has a unique filename based on the sha256 hash of its contents. Lege
 #### `meta/crs/{identifier}.wkt`
 A dataset should contain coordinate-reference-system (CRS) definitions for any CRS needed to interpret its geometry. These are stored in [Well-Known-Text format](http://docs.opengeospatial.org/is/18-010r7/18-010r7.html) (WKT). The identifier that is part of the filename here should be the same as the `geometryCRS` identifier in the schema.
 
-#### `meta/metadata/dataset.json`
-A dataset may contain other structured metadata files that apply to the entire dataset, for instance XML metadata according to the http://www.isotc211.org/2005/gmd schema. These are stored in the `metadata/dataset.json` file, where they are keyed first by the metadata standard that is being adhered to, and then by the mimetype of the file.
-
-Here is a truncated example of a `dataset.json` file with only one entry:
-```json
-{
-  "http://www.isotc211.org/2005/gmd": {
-    "text/xml": "<gmd:MD_Metadata …"
-  }
-}
-```
-
 ### Features
 
 Every database table row is stored in its own file. It is stored as an array of values plus the name of the legend that should be used to read it. This array is serialised using [MessagePack](https://msgpack.org/), but for the sake of readability, the example below is shown in JSON.

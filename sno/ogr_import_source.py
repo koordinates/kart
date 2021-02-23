@@ -197,6 +197,10 @@ class OgrImportSource(ImportSource):
         self._meta_overrides = {
             k: v for k, v in meta_overrides.items() if v is not None
         }
+        if "metadata/dataset.json" in self._meta_overrides:
+            raise click.UsageError(
+                "metadata/dataset.json is no longer supported, use metadata.xml"
+            )
 
     def default_dest_path(self):
         return self.table
@@ -394,8 +398,8 @@ class OgrImportSource(ImportSource):
             return ogr_metadata.get("DESCRIPTION") or ""
         elif name == "schema.json":
             return self.schema.to_column_dicts()
-        elif name == "metadata/dataset.json":
-            return self.get_v2_metadata_json()
+        elif name == "metadata.xml":
+            return self.get_metadata_xml()
         elif name.startswith("crs/"):
             return self.get_crs_definition(name)
         raise KeyError(f"No meta item found with name: {name}")
@@ -557,21 +561,12 @@ class OgrImportSource(ImportSource):
         "GDALMultiDomainMetadata": "http://gdal.org",
     }
 
-    def get_v2_metadata_json(self):
-        xml_metadata = self._meta_overrides.get("xml_metadata")
-        if not xml_metadata:
-            return None
-
-        from xml.dom.minidom import parseString
-
-        doc = parseString(xml_metadata)
-        element = doc.documentElement
-        if element.tagName in self._KNOWN_METADATA_URIS:
-            uri = self._KNOWN_METADATA_URIS[element.tagName]
-        else:
-            uri = element.getAttribute("xmlns") or element.namespaceURI or "(unknown)"
-
-        return {uri: {"text/xml": xml_metadata}}
+    def get_metadata_xml(self):
+        for key in ("metadata.xml", "xml_metadata"):
+            result = self._meta_overrides.get(key)
+            if result is not None:
+                return result
+        return None
 
 
 class ESRIShapefileImportSource(OgrImportSource):
@@ -641,16 +636,12 @@ class GPKGImportSource(OgrImportSource):
             for gpkg_feature in r:
                 yield self._gpkg_feature_to_sno_feature(gpkg_feature)
 
-    def get_v2_metadata_json(self):
-        if (
-            "xml_metadata" in self._meta_overrides
-            or "metadata/dataset.json" in self._meta_overrides
-        ):
-            return super().get_v2_metadata_json()
+    def get_metadata_xml(self):
+        user_specified = super().get_metadata_xml()
+        if user_specified:
+            return user_specified
 
-        return gpkg_adapter.generate_v2_meta_item(
-            self.gpkg_meta_items, "metadata/dataset.json"
-        )
+        return gpkg_adapter.generate_v2_meta_item(self.gpkg_meta_items, "metadata.xml")
 
     def crs_definitions(self):
         yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)

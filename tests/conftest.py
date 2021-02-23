@@ -485,7 +485,7 @@ class TestHelpers:
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
         }
-        HEAD_SHA = "7f4f6ec962aa1757a97ad89f3c7ba4f4cc2d0615"
+        HEAD_SHA = "5bb25a2da966b15ae7743db4666c1599001e2443"
         ROWCOUNT = 228
         TEXT_FIELD = "survey_reference"
         SAMPLE_PKS = [

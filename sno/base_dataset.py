@@ -60,6 +60,10 @@ class BaseDataset(ImportSource):
         return self.tree / self.META_PATH
 
     @property
+    def attachment_tree(self):
+        return self.tree
+
+    @property
     @functools.lru_cache(maxsize=1)
     def feature_tree(self):
         """Returns the root of the feature tree. Caller take care: fails if no feature tree exists."""
