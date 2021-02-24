@@ -421,8 +421,22 @@ class WorkingCopy_Postgis(WorkingCopy):
     # Postgis has nowhere obvious to put this metadata.
     _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json", "metadata.xml")
 
-    # Postgis approximates an int8 as an int16 - see super()._remove_hidden_meta_diffs
-    _APPROXIMATED_TYPES = postgis_adapter.APPROXIMATED_TYPES
+    # PostGIS approximates an int8 as an int16 - see super()._remove_hidden_meta_diffs
+    @classmethod
+    def try_align_schema_col(cls, old_col_dict, new_col_dict):
+        old_type = old_col_dict["dataType"]
+        new_type = new_col_dict["dataType"]
+
+        if old_type == "integer" and new_type == "integer":
+            old_size = old_col_dict.get("size")
+            new_size = new_col_dict.get("size")
+            if postgis_adapter.APPROXIMATED_TYPES.get((old_type, old_size)) == (
+                new_type,
+                new_size,
+            ):
+                new_col_dict["size"] = old_size
+
+        return new_type == old_type
 
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)

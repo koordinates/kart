@@ -24,8 +24,7 @@ def compute_approximated_types(v2_to_db, db_to_v2):
                 continue
 
             if orig_size is not None:
-                result.setdefault(orig_type, {})
-                result[orig_type][orig_size] = (roundtripped_type, roundtripped_size)
+                result[(orig_type, orig_size)] = (roundtripped_type, roundtripped_size)
             else:
                 result[orig_type] = roundtripped_type
 

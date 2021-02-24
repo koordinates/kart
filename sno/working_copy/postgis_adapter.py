@@ -59,7 +59,7 @@ PG_TYPE_TO_V2_TYPE = {
 }
 
 # Types that can't be roundtrip perfectly in Postgis, and what they end up as.
-APPROXIMATED_TYPES = {"integer": {8: ("integer", 16)}}
+APPROXIMATED_TYPES = {("integer", 8): ("integer", 16)}
 
 
 def v2_schema_to_postgis_spec(schema, v2_obj):

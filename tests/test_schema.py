@@ -88,6 +88,18 @@ def test_align_schema(gen_uuid):
 
 
 def test_align_schema_type_changed(gen_uuid):
+    class SimpleRoundtripContext:
+        @classmethod
+        def try_align_schema_col(cls, old_col_dict, new_col_dict):
+            if (
+                old_col_dict["dataType"] == "numeric"
+                and new_col_dict["dataType"] == "text"
+            ):
+                new_col_dict["dataType"] = "text"
+                return True
+            else:
+                return new_col_dict["dataType"] == old_col_dict["dataType"]
+
     # Make sure we don't align columns if they are different types:
     old_schema = Schema(
         [
@@ -102,7 +114,7 @@ def test_align_schema_type_changed(gen_uuid):
         ]
     )
     aligned_schema = old_schema.align_to_self(
-        new_schema, approximated_types={"numeric": "text"}
+        new_schema, roundtrip_ctx=SimpleRoundtripContext
     )
 
     aligned = {}
@@ -123,7 +135,7 @@ def test_align_schema_type_changed(gen_uuid):
         ]
     )
     aligned_schema = old_schema.align_to_self(
-        new_schema, approximated_types={"numeric": "text"}
+        new_schema, roundtrip_ctx=SimpleRoundtripContext
     )
 
     aligned = {}

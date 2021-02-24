@@ -192,6 +192,12 @@ class ColumnSchema(
             )
         )
 
+    @classmethod
+    def _normalise_dict(cls, col_dict):
+        for key in list(col_dict.keys()):
+            if key not in ("id", "name", "dataType") and col_dict[key] is None:
+                del col_dict[key]
+
 
 class Schema:
     """A schema is just an immutable ordered list of ColumnSchemas."""
@@ -368,33 +374,27 @@ class Schema:
                 pk_values[i] = int(pk_values[i])
         return tuple(pk_values)
 
-    def align_to_self(self, new_schema, approximated_types=None):
+    def align_to_self(self, new_schema, roundtrip_ctx=None):
         """
         Returns a new schema the same as the one given, except that some column IDs might be changed to match those in
         self. Column IDs are copied from self onto the resulting schema if the columns in the resulting schema
         are the "same" as columns in the previous schema. Uses a heuristic - columns are the same if they have the
         same name + type (handles reordering), or, if they have the same position and type (handles renames).
 
-        approximated_types - if the new_schema has been roundtripped through a database that doesn't support all sno
-            types, then some of them will have had to be approximated. Aligning the schema also restores them to their
-            original type if they had been approximated as close as possible. approximated_types should be a dict
-            mapping type to approximated type, sometimes with an extra sub-dict for size subtypes eg:
-            {
-                "timestamp": "string",                                  # timestamp is approximated as text
-                "integer": {8: ("integer", 32), 16: ("integer", 32)}    # int8, int16 are approximated as int32
-            }
-
+        roundtrip_ctx - if the new_schema has been roundtripped through a database that doesn't support all Sno
+            types, then some of them will have had to be approximated. If a roundtrip context is supplied,
+            this function also removes changes in new_schema - restores new_schema to be more like `self` -
+            for changes that were not requested by the user, but instead are simply side-effects of the roundtrip.
+            See DefaultRoundtripContext.
         """
         # TODO - could prompt the user to help with more complex schema changes.
         old_cols = self.to_column_dicts()
         new_cols = new_schema.to_column_dicts()
-        Schema.align_schema_cols(
-            old_cols, new_cols, approximated_types=approximated_types
-        )
+        Schema.align_schema_cols(old_cols, new_cols, roundtrip_ctx=roundtrip_ctx)
         return Schema.from_column_dicts(new_cols)
 
     @classmethod
-    def align_schema_cols(cls, old_cols, new_cols, approximated_types=None):
+    def align_schema_cols(cls, old_cols, new_cols, roundtrip_ctx=None):
         """Same as align_to_self, but mutates new_cols list, instead of returning a new Schema object."""
         for old_col in old_cols:
             old_col["done"] = False
@@ -405,21 +405,23 @@ class Schema:
         old_cols_by_name = {c["name"]: c for c in old_cols}
         for new_col in new_cols:
             cls._try_align(
-                old_cols_by_name.get(new_col["name"]), new_col, approximated_types
+                old_cols_by_name.get(new_col["name"]), new_col, roundtrip_ctx
             )
 
         # Align columns by position + type - handles renames.
         for old_col, new_col in zip(old_cols, new_cols):
-            cls._try_align(old_col, new_col, approximated_types)
+            cls._try_align(old_col, new_col, roundtrip_ctx)
 
         for old_col in old_cols:
             del old_col["done"]
         for new_col in new_cols:
+            ColumnSchema._normalise_dict(new_col)
             del new_col["done"]
+
         return new_cols
 
     @classmethod
-    def _try_align(cls, old_col, new_col, approximated_types=None):
+    def _try_align(cls, old_col, new_col, roundtrip_ctx=None):
         if old_col is None or new_col is None:
             return False
         if old_col["done"] or new_col["done"]:
@@ -427,36 +429,15 @@ class Schema:
         if old_col.get("primaryKeyIndex") != new_col.get("primaryKeyIndex"):
             return False
 
-        old_type, new_type = old_col["dataType"], new_col["dataType"]
-        if old_type != new_type:
-            if approximated_types and approximated_types.get(old_type) == new_type:
-                # new_col's type was the best approximation we could manage of old_col's type.
-                new_col["dataType"] = old_col["dataType"]
-                for k in ("scale", "precision"):
-                    if k in old_col:
-                        new_col[k] = old_col[k]
-            else:
-                return False
-
-        # The two columns are similar enough that we can align their IDs.
-
-        new_col["id"] = old_col["id"]
-
-        old_size, new_size = old_col.get("size"), new_col.get("size")
-        if old_size != new_size:
-            data_type = old_type
-            approx_info = approximated_types and approximated_types.get(data_type)
-
-            if old_col.get("primaryKeyIndex") is not None and new_size == 64:
-                # We can't roundtrip size properly for GPKG primary keys since they have to be of type INTEGER.
-                new_col["size"] = old_col.get("size")
-            elif approx_info and approx_info.get(old_size) == (data_type, new_size):
-                # new_col's size was the best approximation we could manage of old_col's size.
-                new_col["size"] = old_col.get("size")
-
-        old_col["done"] = True
-        new_col["done"] = True
-        return True
+        roundtrip_ctx = roundtrip_ctx or DefaultRoundtripContext
+        if roundtrip_ctx.try_align_schema_col(old_col, new_col):
+            # The two columns are similar enough that we can align their IDs.
+            new_col["id"] = old_col["id"]
+            old_col["done"] = True
+            new_col["done"] = True
+            return True
+        else:
+            return False
 
     def diff_types(self, new_schema):
         """Returns a dict showing which columns have been affected by which types of changes."""
@@ -581,3 +562,37 @@ class Schema:
             return (integer + 1).bit_length() + 1
         else:
             return integer.bit_length() + 1
+
+
+class DefaultRoundtripContext:
+    """
+    DefaultRoundtripContext is appropriate in the case the new column hasn't been roundtripped through any storage
+    format that is lossy - all of the original information has been preserved.
+    """
+
+    @classmethod
+    def try_align_schema_col(cls, old_col_dict, new_col_dict):
+        """
+        This function is given two columns that are suspected of being different versions of the same column, since they
+        have the same name or position. Its job is to decide if they are the same (or at least, they could be the same -
+        we can't know for sure, as this is a heuristic). If they could be the same column, return True.
+
+        For example:
+        If old_col is int16 and new_col is int16 -> return True
+        If old_col is int16 and new_col is int32 -> return True. We assume the user modified the column width.
+        If old_col is a geometry and new_col is int32 -> return False.
+        These must be different columns, since geometry data cannot become integer data.
+
+        This is the default strategy - it needs to be redefined in the case where the new column has been roundtripped
+        through a format that doesn't support every Sno type. For instance, GPKG doesn't have a numeric type. So, when
+        new_col has been roundtripped through a GPKG, the following logic would be added:
+
+        If old_col is numeric and new_col is text -> return True.
+
+        But before returning True, any differences that are simply artifacts of the roundtrip should be removed.
+        In this case, that would mean:
+        - restore new_col's type to "numeric"
+        - copy "precision" and "scale" attributes from old_col to new_col, since these will have been lost too.
+        """
+
+        return new_col_dict["dataType"] == old_col_dict["dataType"]

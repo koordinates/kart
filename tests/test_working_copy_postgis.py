@@ -401,6 +401,6 @@ def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["checkout"])
 
             # If type-approximation roundtrip code isn't working,
-            # we would get spurious diffs on types that GPKG doesn't support.
+            # we would get spurious diffs on types that PostGIS doesn't support.
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stdout

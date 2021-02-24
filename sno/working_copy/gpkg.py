@@ -310,7 +310,24 @@ class WorkingCopy_GPKG(WorkingCopy):
         yield from gpkg_adapter.all_v2_meta_items(gpkg_meta_items, id_salt=id_salt)
 
     # Some types are approximated as text in GPKG - see super()._remove_hidden_meta_diffs
-    _APPROXIMATED_TYPES = gpkg_adapter.APPROXIMATED_TYPES
+    @classmethod
+    def try_align_schema_col(cls, old_col_dict, new_col_dict):
+        old_type = old_col_dict["dataType"]
+        new_type = new_col_dict["dataType"]
+
+        # Some types have to be approximated as other types in GPKG, and they also lose any extra type info.
+        if gpkg_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
+            new_col_dict["dataType"] = new_type = old_type
+            for key in ("precision", "scale"):
+                new_col_dict[key] = old_col_dict.get(key)
+
+        # GPKG primary keys have to be int64, so we approximate int8, int16, int32 primary keys as int64s.
+        if old_type == "integer" and new_type == "integer":
+            if new_col_dict.get("size") != old_col_dict.get("size"):
+                if new_col_dict.get("primaryKeyIndex") is not None:
+                    new_col_dict["size"] = old_col_dict.get("size")
+
+        return new_type == old_type
 
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         # Fix up anything we may have done to the primary key before calling super()

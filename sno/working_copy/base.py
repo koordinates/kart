@@ -21,7 +21,7 @@ from sno.exceptions import (
     NO_WORKING_COPY,
 )
 from sno.filter_util import UNFILTERED
-from sno.schema import Schema
+from sno.schema import Schema, DefaultRoundtripContext
 
 
 L = logging.getLogger("sno.working_copy.base")
@@ -454,8 +454,10 @@ class WorkingCopy:
             raise WorkingCopyDirty()
         return result
 
-    # Subclasses should override if there are certain types they cannot represent perfectly.
-    _APPROXIMATED_TYPES = None
+    # Subclasses should override this function if there are certain types they cannot represent perfectly.
+    @classmethod
+    def try_align_schema_col(cls, old_col_dict, new_col_dict):
+        return DefaultRoundtripContext.try_align_schema_col(old_col_dict, new_col_dict)
 
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         """
@@ -479,7 +481,7 @@ class WorkingCopy:
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
             ds_schema = ds_meta_items["schema.json"]
             wc_schema = wc_meta_items["schema.json"]
-            Schema.align_schema_cols(ds_schema, wc_schema, self._APPROXIMATED_TYPES)
+            Schema.align_schema_cols(ds_schema, wc_schema, roundtrip_ctx=self)
 
     def meta_items(self, dataset):
         """Returns all the meta items for the given dataset from the working copy DB."""
