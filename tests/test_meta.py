@@ -169,3 +169,32 @@ def test_commit_files(data_archive, cli_runner):
             "@@ -0,0 +1 @@",
             "+<xml></xml>",
         ]
+
+
+def test_commit_files_amend(data_archive, cli_runner):
+    with data_archive("points"):
+        r = cli_runner.invoke(["log", "--pretty=%s"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "Improve naming on Coromandel East coast",
+            "Import from nz-pa-points-topo-150k.gpkg",
+        ]
+
+        r = cli_runner.invoke(["log", "--pretty=%t"])
+        assert r.exit_code == 0, r.stderr
+        actual_tree_contents = r.stdout.splitlines()
+
+        r = cli_runner.invoke(
+            ["commit-files", "-m", "A more informative commit message", "--amend"]
+        )
+
+        r = cli_runner.invoke(["log", "--pretty=%s"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "A more informative commit message",
+            "Import from nz-pa-points-topo-150k.gpkg",
+        ]
+
+        r = cli_runner.invoke(["log", "--pretty=%t"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == actual_tree_contents
