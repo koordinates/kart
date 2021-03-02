@@ -201,23 +201,29 @@ def meta_set(ctx, message, dataset, items):
     type=StringFromFile(encoding="utf-8"),
 )
 @click.option("--ref", default="HEAD")
+@click.option(
+    "--amend",
+    default=False,
+    is_flag=True,
+    help="Amend the previous commit instead of adding a new commit",
+)
 @click.argument(
     "items",
     type=KeyValueType(),
-    required=True,
+    required=False,
     nargs=-1,
     metavar="KEY=VALUE [KEY=VALUE...]",
 )
 @click.pass_context
-def commit_files(ctx, message, ref, items):
+def commit_files(ctx, message, ref, amend, items):
     """Usage: sno commit-files -m MESSAGE KEY=VALUE [KEY=VALUE...]"""
     repo = ctx.obj.repo
     ctx.obj.check_not_dirty()
 
-    if not message:
+    if not message and not amend:
         raise click.UsageError("Aborting commit due to empty commit message.")
 
-    if not items:
+    if not items and not (amend and message):
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
     if ref == "HEAD":
@@ -230,6 +236,9 @@ def commit_files(ctx, message, ref, items):
             "Sorry, using `sno commit-files` to create the initial commit is not yet supported"
         )
 
+    if amend and not message:
+        message = parent_commit.message
+
     tree_builder = RichTreeBuilder(repo, parent_commit.peel(pygit2.Tree))
     for key, value in items:
         value = bytes_or_bytes_from_file(value, key, ctx, encoding="utf-8")
@@ -238,11 +247,14 @@ def commit_files(ctx, message, ref, items):
     new_tree = tree_builder.flush()
 
     click.echo("Committing...")
-    parents = [parent_commit.oid] if parent_commit is not None else []
+    parents = (
+        [parent_commit.id] if not amend else [gp.id for gp in parent_commit.parents]
+    )
+    commit_to_ref = ref if not amend else None
 
     # This will also update the ref (branch) to point to the new commit
     new_commit_id = repo.create_commit(
-        ref,
+        commit_to_ref,
         repo.author_signature(),
         repo.committer_signature(),
         message,
@@ -250,6 +262,14 @@ def commit_files(ctx, message, ref, items):
         parents,
     )
     new_commit = repo[new_commit_id]
+
+    if amend:
+        if ref == "HEAD" and repo.head_branch is None:
+            repo.head.set_target(new_commit.id)
+        elif ref == "HEAD" and repo.head_branch is not None:
+            repo.references[repo.head_branch].set_target(new_commit.id)
+        else:
+            repo.references[ref].set_target(new_commit.id)
 
     click.echo(f"Committed as: {new_commit.hex}")
     reset_wc_if_needed(repo, new_commit)
