@@ -196,7 +196,7 @@ def meta_set(ctx, message, dataset, items):
 @click.option(
     "--message",
     "-m",
-    required=True,
+    required=False,
     help="Use the given message as the commit message",
     type=StringFromFile(encoding="utf-8"),
 )

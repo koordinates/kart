@@ -207,6 +207,7 @@ def test_commit_files_amend(data_archive, cli_runner):
         assert r.exit_code == 0, r.stderr
         actual_tree_contents = r.stdout.splitlines()
 
+        # --amend the previous commit
         r = cli_runner.invoke(
             ["commit-files", "-m", "A more informative commit message", "--amend"]
         )
@@ -221,3 +222,12 @@ def test_commit_files_amend(data_archive, cli_runner):
         r = cli_runner.invoke(["log", "--pretty=%t"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == actual_tree_contents
+
+        # --amend without a message just uses the same message as previous commit
+        r = cli_runner.invoke(["commit-files", "--amend", "x=y"])
+        r = cli_runner.invoke(["log", "--pretty=%s"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "A more informative commit message",
+            "Import from nz-pa-points-topo-150k.gpkg",
+        ]
