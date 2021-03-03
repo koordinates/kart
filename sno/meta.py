@@ -207,6 +207,16 @@ def meta_set(ctx, message, dataset, items):
     is_flag=True,
     help="Amend the previous commit instead of adding a new commit",
 )
+@click.option(
+    "--allow-empty",
+    is_flag=True,
+    default=False,
+    help=(
+        "Usually recording a commit that has the exact same tree as its sole "
+        "parent commit is a mistake, and the command prevents you from making "
+        "such a commit. This option bypasses the safety"
+    ),
+)
 @click.argument(
     "items",
     type=KeyValueType(),
@@ -215,16 +225,13 @@ def meta_set(ctx, message, dataset, items):
     metavar="KEY=VALUE [KEY=VALUE...]",
 )
 @click.pass_context
-def commit_files(ctx, message, ref, amend, items):
+def commit_files(ctx, message, ref, amend, allow_empty, items):
     """Usage: sno commit-files -m MESSAGE KEY=VALUE [KEY=VALUE...]"""
     repo = ctx.obj.repo
     ctx.obj.check_not_dirty()
 
     if not message and not amend:
         raise click.UsageError("Aborting commit due to empty commit message.")
-
-    if not items and not (amend and message):
-        raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
     if ref == "HEAD":
         parent_commit = repo.head_commit
@@ -239,12 +246,15 @@ def commit_files(ctx, message, ref, amend, items):
     if amend and not message:
         message = parent_commit.message
 
-    tree_builder = RichTreeBuilder(repo, parent_commit.peel(pygit2.Tree))
+    original_tree = parent_commit.peel(pygit2.Tree)
+    tree_builder = RichTreeBuilder(repo, original_tree)
     for key, value in items:
         value = bytes_or_bytes_from_file(value, key, ctx, encoding="utf-8")
         tree_builder.insert(key, value or None)  # Empty bytestring -> deletes file.
 
     new_tree = tree_builder.flush()
+    if new_tree == original_tree and not amend and not allow_empty:
+        raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
     click.echo("Committing...")
     parents = (

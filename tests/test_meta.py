@@ -153,8 +153,8 @@ def test_commit_files(data_archive, cli_runner):
             ]
         )
         assert r.exit_code == 0, r.stderr
-        r = subprocess.check_output(["git", "show"])
-        diff = r.decode("utf-8").splitlines()
+        r = subprocess.check_output(["git", "show"], encoding="utf-8")
+        diff = r.splitlines()
 
         assert diff[9:13] == [
             "--- /dev/null",
@@ -169,6 +169,29 @@ def test_commit_files(data_archive, cli_runner):
             "@@ -0,0 +1 @@",
             "+<xml></xml>",
         ]
+
+        # committing a noop change is rejected
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Updating attachments 2",
+                "LICENSE=Do not even look at this data",
+            ]
+        )
+        assert r.exit_code == 44, r.stderr
+
+        # ... unless you're amending an existing commit
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Updating attachments 3",
+                "LICENSE=Do not even look at this data",
+                "--amend",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
 
 
 def test_commit_files_amend(data_archive, cli_runner):
