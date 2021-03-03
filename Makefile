@@ -192,8 +192,7 @@ ci-test:
 		--cov-report term \
 		--cov-report html:test-results/coverage/ \
 		--junit-xml=test-results/junit.xml \
-		--benchmark-enable \
-		-p no:xdist
+		--benchmark-enable
 
 # Cleanup
 

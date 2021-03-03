@@ -4,6 +4,7 @@ import io
 import json
 import logging
 import os
+import platform
 import random
 import re
 import shutil
@@ -35,10 +36,10 @@ L = logging.getLogger("sno.tests")
 
 
 def pytest_addoption(parser):
-    if "CI" in os.environ:
+    if "CI" in os.environ and platform.system() == "Windows":
         # pytest.ini sets --numprocesses=auto
         # for parallelism in local dev.
-        # But in CI we disable xdist because it causes a crash in windows builds.
+        # But in CI on Windows we disable xdist because it causes a crash in builds.
         # (simply doing --numprocesses=0 is insufficient; the plugin needs to be
         # disabled completely)
         # However, there's no way to *remove* an option that's in pytest.ini's addopts.
