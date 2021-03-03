@@ -71,10 +71,6 @@ else
     echo ">>> Building spatialindex ..."
     make lib-spatialindex
 
-    echo ">>> Building APSW ..."
-    make lib-apsw
-    cp -fav apsw/wheel/apsw-*.whl "$OUTPUT/wheelhouse"
-
     echo ">>> Building pysqlite3 ..."
     make lib-pysqlite3
     cp -fav pysqlite3/wheel/pysqlite3-*.whl "$OUTPUT/wheelhouse"

@@ -9,7 +9,6 @@ sqlalchemy
 # these are only here for dependencies
 psycopg2==2.8.5
 pygit2==1.3.0
-#apsw==3.31.1.post1  # X.Y.Z.post1 maps to X.Y.Z-r1 release version
 
 # workaround weird import error with pyinstaller
 # https://github.com/pypa/setuptools/issues/1963#issuecomment-656811086

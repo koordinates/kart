@@ -141,6 +141,7 @@ jobs:
           sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
           brew install --force ccache pkg-config sqlite3 pandoc
           brew install --force --cask Packages
+          brew upgrade python@3.9 || true
 
       - name: "vendor: ccache"
         uses: actions/cache@v1
