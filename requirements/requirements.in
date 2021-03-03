@@ -1,9 +1,10 @@
-Click~=7.0
-msgpack~=0.6.1
-Rtree~=0.9.4
 certifi
-Pygments
+Click~=7.0
 jsonschema
+msgpack~=0.6.1
+Pygments
+pyodbc
+Rtree~=0.9.4
 sqlalchemy
 
 # these are only here for dependencies
