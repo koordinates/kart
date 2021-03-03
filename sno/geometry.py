@@ -59,6 +59,11 @@ class Geometry(bytes):
 
     @property
     def crs_id(self):
+        """
+        Returns the CRS ID as it is embedded in the GPKG header - before the WKB.
+        Note that datasets V2 zeroes this field before committing,
+        so will return zero when called on Geometry where it has been zeroed.
+        """
         wkb_offset, is_le, crs_id = parse_gpkg_geom(self)
         return crs_id
 
@@ -296,6 +301,7 @@ def gpkg_geom_to_ogr(gpkg_geom, parse_crs=False):
 
 
 def wkt_to_gpkg_geom(wkt, **kwargs):
+    """Given a well-known-text string, returns a GPKG Geometry object."""
     if wkt is None:
         return None
 
@@ -304,6 +310,7 @@ def wkt_to_gpkg_geom(wkt, **kwargs):
 
 
 def wkb_to_gpkg_geom(wkb, **kwargs):
+    """Given a well-known-binary bytestring, returns a GPKG Geometry object."""
     if wkb is None:
         return None
 
@@ -312,6 +319,7 @@ def wkb_to_gpkg_geom(wkb, **kwargs):
 
 
 def hex_wkb_to_gpkg_geom(hex_wkb, **kwargs):
+    """Given a hex-encoded well-known-binary bytestring, returns a GPKG Geometry object."""
     if hex_wkb is None:
         return None
 

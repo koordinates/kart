@@ -1,11 +1,9 @@
 import contextlib
 import logging
-import re
 import time
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
-import click
-import sqlalchemy
+import sqlalchemy as sa
 from sqlalchemy import literal_column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
@@ -15,28 +13,28 @@ from sqlalchemy.sql.functions import Function
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.types import UserDefinedType
 
-from .base import WorkingCopy
 from . import sqlserver_adapter
+from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import SqlServerSnoTables
 from sno import crs_util
 from sno.geometry import Geometry
-from sno.exceptions import InvalidOperation
 from sno.sqlalchemy import sqlserver_engine
 
 
-"""
-* database needs to exist
-* database needs to have postgis enabled
-* database user needs to be able to:
-    1. create 'sno' schema & tables
-    2. create & alter tables in the default (or specified) schema
-    3. create triggers
-"""
+class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
+    """
+    SQL Server working copy implementation.
 
-L = logging.getLogger("sno.working_copy.postgis")
+    Requirements:
+    1. The database needs to exist
+    2. The database user needs to be able to:
+        - Create the specified schema (unless it already exists).
+        - Create, delete and alter tables and triggers in the specified schema.
+    """
 
+    WORKING_COPY_TYPE_NAME = "SQL Server"
+    URI_SCHEME = "mssql"
 
-class WorkingCopy_SqlServer(WorkingCopy):
     def __init__(self, repo, uri):
         """
         uri: connection string of the form mssql://[user[:password]@][netloc][:port][/dbname/schema][?param1=value1&...]
@@ -47,77 +45,14 @@ class WorkingCopy_SqlServer(WorkingCopy):
         self.uri = uri
         self.path = uri
 
-        url = urlsplit(uri)
+        self.check_valid_db_uri(uri)
+        self.db_uri, self.db_schema = self._separate_db_schema(uri)
 
-        if url.scheme != "mssql":
-            raise ValueError("Expecting mssql://")
-
-        url_path = url.path
-        path_parts = url_path[1:].split("/", 3) if url_path else []
-        if len(path_parts) != 2:
-            raise ValueError("Expecting mssql://[HOST]/DBNAME/SCHEMA")
-        url_path = f"/{path_parts[0]}"
-        self.db_schema = path_parts[1]
-
-        # Rebuild DB URL suitable for sqlserver_engine.
-        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url.query, ""])
-        self.engine = sqlserver_engine(self.dburl)
+        self.engine = sqlserver_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = IdentifierPreparer(self.engine.dialect)
 
         self.sno_tables = SqlServerSnoTables(self.db_schema)
-
-    @classmethod
-    def check_valid_creation_path(cls, workdir_path, path):
-        # TODO - promote to superclass
-        cls.check_valid_path(workdir_path, path)
-        sqlserver_wc = cls(None, path)
-
-        # We are okay with the schema being already created, so long as its empty.
-        if sqlserver_wc.has_data():
-            raise InvalidOperation(
-                f"Error creating SQL Server working copy at {path} - non-empty schema already exists"
-            )
-
-    @classmethod
-    def check_valid_path(cls, workdir_path, path):
-        url = urlsplit(path)
-
-        if url.scheme != "mssql":
-            raise click.UsageError(
-                "Invalid postgres URI - Expecting URI in form: mssql://[HOST]/DBNAME/SCHEMA"
-            )
-
-        url_path = url.path
-        path_parts = url_path[1:].split("/", 3) if url_path else []
-
-        suggestion_message = ""
-        if len(path_parts) == 1 and workdir_path is not None:
-            suggested_path = f"/{path_parts[0]}/{cls.default_schema(workdir_path)}"
-            suggested_uri = urlunsplit(
-                [url.scheme, url.netloc, suggested_path, url.query, ""]
-            )
-            suggestion_message = f"\nFor example: {suggested_uri}"
-
-        if len(path_parts) != 2:
-            raise click.UsageError(
-                "Invalid mssql URI - SQL Server working copy requires both dbname and schema:\n"
-                "Expecting URI in form: mssql://[HOST]/DBNAME/SCHEMA"
-                + suggestion_message
-            )
-
-    @classmethod
-    def normalise_path(cls, repo, path):
-        return path
-
-    @classmethod
-    def default_schema(cls, workdir_path):
-        # TODO - promote to superclass
-        stem = workdir_path.stem
-        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
-        if schema[0].isdigit():
-            schema = "_" + schema
-        return schema
 
     def __str__(self):
         p = urlsplit(self.uri)
@@ -130,38 +65,6 @@ class WorkingCopy_SqlServer(WorkingCopy):
 
             p._replace(netloc=nl)
         return p.geturl()
-
-    @contextlib.contextmanager
-    def session(self, bulk=0):
-        """
-        Context manager for GeoPackage DB sessions, yields a connection object inside a transaction
-
-        Calling again yields the _same_ connection, the transaction/etc only happen in the outer one.
-        """
-        L = logging.getLogger(f"{self.__class__.__qualname__}.session")
-
-        if hasattr(self, "_session"):
-            # inner - reuse
-            L.debug("session: existing...")
-            yield self._session
-            L.debug("session: existing/done")
-
-        else:
-            L.debug("session: new...")
-
-            try:
-                self._session = self.sessionmaker()
-
-                # TODO - use tidier syntax for opening transactions from sqlalchemy.
-                yield self._session
-                self._session.commit()
-            except Exception:
-                self._session.rollback()
-                raise
-            finally:
-                self._session.close()
-                del self._session
-                L.debug("session: new/done")
 
     def is_created(self):
         """
@@ -180,7 +83,7 @@ class WorkingCopy_SqlServer(WorkingCopy):
 
     def is_initialised(self):
         """
-        Returns true if the postgis working copy is initialised -
+        Returns true if the SQL server working copy is initialised -
         the schema exists and has the necessary sno tables, _sno_state and _sno_track.
         """
         with self.session() as sess:
@@ -196,7 +99,7 @@ class WorkingCopy_SqlServer(WorkingCopy):
 
     def has_data(self):
         """
-        Returns true if the postgis working copy seems to have user-created content already.
+        Returns true if the SQL server working copy seems to have user-created content already.
         """
         with self.session() as sess:
             count = sess.scalar(
@@ -245,15 +148,15 @@ class WorkingCopy_SqlServer(WorkingCopy):
 
     def _table_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
-            # This user-defined Geography type adapts WKB to SQL Server's native geography type.
             crs_name = col.extra_type_info.get("geometryCRS", None)
             crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
-            return sqlalchemy.column(col.name, GeographyType(crs_id))
+            # This user-defined GeometryType adapts Sno's GPKG geometry to SQL Server's native geometry type.
+            return sa.column(col.name, GeometryType(crs_id))
         elif col.data_type in ("date", "time", "timestamp"):
-            return sqlalchemy.column(col.name, BaseDateOrTimeType)
+            return sa.column(col.name, BaseDateOrTimeType)
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
-            return sqlalchemy.column(col.name)
+            return sa.column(col.name)
 
     def _insert_or_replace_into_dataset(self, dataset):
         pk_col_names = [c.name for c in dataset.schema.pk_columns]
@@ -282,33 +185,85 @@ class WorkingCopy_SqlServer(WorkingCopy):
         return r.rowcount
 
     def _write_meta(self, sess, dataset):
-        """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
+        """Write the title. Other metadata is not stored in a SQL Server WC."""
         self._write_meta_title(sess, dataset)
 
     def _write_meta_title(self, sess, dataset):
         """Write the dataset title as a comment on the table."""
-        # TODO - probably need to use sp_addextendedproperty @name=N'MS_Description'
+        # TODO - dataset title is not stored anywhere in SQL server working copy right now.
+        # We can probably store it using function sp_addextendedproperty to add property 'MS_Description'
         pass
 
     def delete_meta(self, dataset):
         """Delete any metadata that is only needed by this dataset."""
-        pass  # There is no metadata except for the spatial_ref_sys table.
+        # There is no metadata stored anywhere except the table itself.
+        pass
 
-    def _create_spatial_index(self, sess, dataset):
-        L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
-
+    def _get_geom_extent(self, sess, dataset, default=None):
+        """Returns the envelope around the entire dataset as (min_x, min_y, max_x, max_y)."""
         geom_col = dataset.geom_column_name
-
-        # Create the SQL Server Spatial Index
-        L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
-        t0 = time.monotonic()
-        index_name = f"{dataset.table_name}_idx_{geom_col}"
-        sess.execute(
+        r = sess.execute(
             f"""
-            CREATE SPATIAL INDEX {self.quote(index_name)}
-            ON {self.table_identifier(dataset)} ({self.quote(geom_col)});
+            WITH _E AS (
+                SELECT geometry::EnvelopeAggregate({self.quote(geom_col)}) AS envelope
+                FROM {self.table_identifier(dataset)}
+            )
+            SELECT
+                envelope.STPointN(1).STX AS min_x,
+                envelope.STPointN(1).STY AS min_y,
+                envelope.STPointN(3).STX AS max_x,
+                envelope.STPointN(3).STY AS max_y
+            FROM _E;
             """
         )
+        result = r.fetchone()
+        return default if result == (None, None, None, None) else result
+
+    def _grow_rectangle(self, rectangle, scale_factor):
+        # scale_factor = 1 -> no change, >1 -> grow, <1 -> shrink.
+        min_x, min_y, max_x, max_y = rectangle
+        centre_x, centre_y = (min_x + max_x) / 2, (min_y + max_y) / 2
+        min_x = (min_x - centre_x) * scale_factor + centre_x
+        min_y = (min_y - centre_y) * scale_factor + centre_y
+        max_x = (max_x - centre_x) * scale_factor + centre_x
+        max_y = (max_y - centre_y) * scale_factor + centre_y
+        return min_x, min_y, max_x, max_y
+
+    def _create_spatial_index_post(self, sess, dataset):
+        # Only implementing _create_spatial_index_post:
+        # We need to know the rough extent of the data to create an index in that area,
+        # so we create the spatial index once the bulk of the features have been written.
+
+        L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
+
+        extent = self._get_geom_extent(sess, dataset)
+        if not extent:
+            # Can't create a spatial index if we don't know the rough bounding box we need to index.
+            return
+
+        # Add 20% room to grow.
+        GROW_FACTOR = 1.2
+        min_x, min_y, max_x, max_y = self._grow_rectangle(extent, GROW_FACTOR)
+
+        geom_col = dataset.geom_column_name
+        index_name = f"{dataset.table_name}_idx_{geom_col}"
+
+        L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
+        t0 = time.monotonic()
+
+        create_index = sa.text(
+            f"""
+            CREATE SPATIAL INDEX {self.quote(index_name)}
+            ON {self.table_identifier(dataset)} ({self.quote(geom_col)})
+            WITH (BOUNDING_BOX = (:min_x, :min_y, :max_x, :max_y))
+            """
+        ).bindparams(min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y)
+        # Placeholders not allowed in CREATE SPATIAL INDEX - have to use literal_binds.
+        # See https://docs.sqlalchemy.org/en/13/faq/sqlexpressions.html#faq-sql-expression-string
+        create_index.compile(
+            sess.connection(), compile_kwargs={"literal_binds": True}
+        ).execute()
+
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
     def _drop_spatial_index(self, sess, dataset):
@@ -321,24 +276,26 @@ class WorkingCopy_SqlServer(WorkingCopy):
 
     def _create_triggers(self, sess, dataset):
         pk_name = dataset.primary_key
-        escaped_table_name = dataset.table_name.replace("'", "''")
-
-        sess.execute(
+        create_trigger = sa.text(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset)} ON {self.table_identifier(dataset)}
             AFTER INSERT, UPDATE, DELETE AS
             BEGIN
                 MERGE {self.SNO_TRACK} TRA
                 USING
-                    (SELECT '{escaped_table_name}', {self.quote(pk_name)} FROM inserted
-                    UNION SELECT '{escaped_table_name}', {self.quote(pk_name)} FROM deleted)
+                    (SELECT :table_name, {self.quote(pk_name)} FROM inserted
+                    UNION SELECT :table_name, {self.quote(pk_name)} FROM deleted)
                     AS SRC (table_name, pk)
                 ON SRC.table_name = TRA.table_name AND SRC.pk = TRA.pk
                 WHEN NOT MATCHED THEN INSERT (table_name, pk) VALUES (SRC.table_name, SRC.pk);
             END;
-            """,
-            {"table_name": dataset.table_name},
-        )
+            """
+        ).bindparams(table_name=dataset.table_name)
+        # Placeholders not allowed in CREATE TRIGGER - have to use literal_binds.
+        # See https://docs.sqlalchemy.org/en/13/faq/sqlexpressions.html#faq-sql-expression-string
+        create_trigger.compile(
+            sess.connection(), compile_kwargs={"literal_binds": True}
+        ).execute()
 
     @contextlib.contextmanager
     def _suspend_triggers(self, sess, dataset):
@@ -352,24 +309,6 @@ class WorkingCopy_SqlServer(WorkingCopy):
 
     def meta_items(self, dataset):
         with self.session() as sess:
-            table_info_sql = """
-                SELECT
-                    C.column_name, C.ordinal_position, C.data_type, C.udt_name,
-                    C.character_maximum_length, C.numeric_precision, C.numeric_scale,
-                    KCU.ordinal_position AS pk_ordinal_position,
-                    upper(postgis_typmod_type(A.atttypmod)) AS geometry_type,
-                    postgis_typmod_srid(A.atttypmod) AS geometry_srid
-                FROM information_schema.columns C
-                LEFT OUTER JOIN information_schema.key_column_usage KCU
-                ON (KCU.table_schema = C.table_schema)
-                AND (KCU.table_name = C.table_name)
-                AND (KCU.column_name = C.column_name)
-                LEFT OUTER JOIN pg_attribute A
-                ON (A.attname = C.column_name)
-                AND (A.attrelid = (C.table_schema || '.' || C.table_name)::regclass::oid)
-                WHERE C.table_schema=:table_schema AND C.table_name=:table_name
-                ORDER BY C.ordinal_position;
-            """
             table_info_sql = """
                 SELECT
                     C.column_name, C.ordinal_position, C.data_type,
@@ -405,10 +344,6 @@ class WorkingCopy_SqlServer(WorkingCopy):
         old_type = old_col_dict["dataType"]
         new_type = new_col_dict["dataType"]
 
-        # Some types have to be approximated as other types in SQL Server.
-        if sqlserver_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
-            new_col_dict["dataType"] = new_type = old_type
-
         # Geometry type loses its extra type info when roundtripped through SQL Server.
         if new_type == "geometry":
             new_col_dict["geometryType"] = old_col_dict.get("geometryType")
@@ -419,7 +354,7 @@ class WorkingCopy_SqlServer(WorkingCopy):
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
 
-        # Nowhere to put these in postgis WC
+        # Nowhere to put these in SQL Server WC
         for key in self._UNSUPPORTED_META_ITEMS:
             if key in ds_meta_items:
                 del ds_meta_items[key]
@@ -447,15 +382,13 @@ class InstanceFunction(Function):
     >>> function(element)
     """
 
-    pass
-
 
 @compiles(InstanceFunction)
 def compile_instance_function(element, compiler, **kw):
     return "(%s).%s()" % (element.clauses, element.name)
 
 
-class GeographyType(UserDefinedType):
+class GeometryType(UserDefinedType):
     """UserDefinedType so that V2 geometry is adapted to MS binary format."""
 
     def __init__(self, crs_id):
@@ -468,7 +401,7 @@ class GeographyType(UserDefinedType):
     def bind_expression(self, bindvalue):
         # 2. Writing - SQL layer - wrap in call to STGeomFromWKB to convert WKB to MS binary.
         return Function(
-            quoted_name("geography::STGeomFromWKB", False),
+            quoted_name("geometry::STGeomFromWKB", False),
             bindvalue,
             self.crs_id,
             type_=self,
@@ -484,10 +417,14 @@ class GeographyType(UserDefinedType):
 
 
 class BaseDateOrTimeType(UserDefinedType):
-    """UserDefinedType so we read dates, times, and datetimes as text."""
+    """
+    UserDefinedType so we read dates, times, and datetimes as text.
+    They are stored as date / time / datetime in SQL Server, but read back out as text.
+    """
 
     def column_expression(self, col):
         # When reading, convert dates and times to strings using style 127: ISO8601 with time zone Z.
+        # https://docs.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql
         return Function(
             "CONVERT",
             literal_column("NVARCHAR"),

@@ -9,6 +9,10 @@ class BaseDataset(ImportSource):
     """
     Common interface for all datasets - mainly Dataset2, but
     there is also Dataset0 and Dataset1 used by `sno upgrade`.
+
+    A Dataset instance is immutable since it is a view of a particular git tree.
+    To get a new version of a dataset, commit the desired changes,
+    then instantiate a new Dataset instance that references the new git tree.
     """
 
     # Constants that subclasses should generally define.

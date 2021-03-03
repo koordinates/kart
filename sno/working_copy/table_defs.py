@@ -104,9 +104,11 @@ class PostgisSnoTables(TableSet):
 
 class SqlServerSnoTables(TableSet):
     """
-    Tables for sno-specific metadata - PostGIS variant.
+    Tables for sno-specific metadata - SQL Server variant.
     Table names have a user-defined schema, and so unlike other table sets,
     we need to construct an instance with the appropriate schema.
+    Primary keys have to be NVARCHAR of a fixed maximum length -
+    if the total maximum length is too long, SQL Server cannot generate an index.
     """
 
     def __init__(self, schema=None):

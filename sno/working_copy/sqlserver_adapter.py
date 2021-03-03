@@ -1,4 +1,3 @@
-from sno import crs_util
 from sno.schema import Schema, ColumnSchema
 
 from sqlalchemy.sql.compiler import IdentifierPreparer
@@ -17,7 +16,7 @@ V2_TYPE_TO_MS_TYPE = {
     "blob": "varbinary",
     "date": "date",
     "float": {0: "real", 32: "real", 64: "float"},
-    "geometry": "geography",
+    "geometry": "geometry",
     "integer": {
         0: "int",
         8: "tinyint",
@@ -25,7 +24,7 @@ V2_TYPE_TO_MS_TYPE = {
         32: "int",
         64: "bigint",
     },
-    "interval": "nvarchar",
+    "interval": "text",
     "numeric": "numeric",
     "text": "nvarchar",
     "time": "time",
@@ -40,6 +39,8 @@ MS_TYPE_TO_V2_TYPE = {
     "bigint": ("integer", 64),
     "real": ("float", 32),
     "float": ("float", 64),
+    "binary": "blob",
+    "char": "text",
     "date": "date",
     "datetime": "timestamp",
     "datetime2": "timestamp",
@@ -47,9 +48,10 @@ MS_TYPE_TO_V2_TYPE = {
     "decimal": "numeric",
     "geography": "geometry",
     "geometry": "geometry",
-    "interval": "interval",
+    "nchar": "text",
     "numeric": "numeric",
     "nvarchar": "text",
+    "ntext": "text",
     "text": "text",
     "time": "time",
     "varchar": "text",
@@ -91,13 +93,6 @@ def v2_type_to_ms_type(column_schema, v2_obj):
         return ms_type_info.get(extra_type_info.get("size", 0))
 
     ms_type = ms_type_info
-    if ms_type == "geometry":
-        geometry_type = extra_type_info.get("geometryType")
-        crs_name = extra_type_info.get("geometryCRS")
-        crs_id = None
-        if crs_name is not None:
-            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
-        return _v2_geometry_type_to_ms_type(geometry_type, crs_id)
 
     if ms_type in ("varchar", "nvarchar", "varbinary"):
         length = extra_type_info.get("length", None)
@@ -116,33 +111,19 @@ def v2_type_to_ms_type(column_schema, v2_obj):
     return ms_type
 
 
-def _v2_geometry_type_to_ms_type(geometry_type, crs_id):
-    if geometry_type is not None:
-        geometry_type = geometry_type.replace(" ", "")
-
-    if geometry_type is not None and crs_id is not None:
-        return f"geometry({geometry_type},{crs_id})"
-    elif geometry_type is not None:
-        return f"geometry({geometry_type})"
-    else:
-        return "geometry"
-
-
 def sqlserver_to_v2_schema(ms_table_info, id_salt):
-    """Generate a V2 schema from the given postgis metadata tables."""
+    """Generate a V2 schema from the given SQL server metadata."""
     return Schema([_sqlserver_to_column_schema(col, id_salt) for col in ms_table_info])
 
 
 def _sqlserver_to_column_schema(ms_col_info, id_salt):
     """
-    Given the postgis column info for a particular column, and some extra context in
-    case it is a geometry column, converts it to a ColumnSchema. The extra context will
-    only be used if the given ms_col_info is the geometry column.
+    Given the MS column info for a particular column, converts it to a ColumnSchema.
+
     Parameters:
     ms_col_info - info about a single column from ms_table_info.
-    ms_spatial_ref_sys - rows of the "spatial_ref_sys" table that are referenced by this dataset.
     id_salt - the UUIDs of the generated ColumnSchema are deterministic and depend on
-    the name and type of the column, and on this salt.
+              the name and type of the column, and on this salt.
     """
     name = ms_col_info["column_name"]
     pk_index = ms_col_info["pk_ordinal_position"]

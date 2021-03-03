@@ -930,8 +930,8 @@ def new_postgis_db_schema(request, postgis_db):
 def sqlserver_db():
     """
     Using docker, you can run a SQL Server test - such as those in test_working_copy_sqlserver - as follows:
-        docker run -it --rm -d -p 11433:1433 -e ACCEPT_EULA=Y -e 'SA_PASSWORD=Sql(server)' mcr.microsoft.com/mssql/server
-        SNO_SQLSERVER_URL='mssql://sa:Sql(server)@127.0.0.1:11433/master' spytest -k sqlserver --pdb -vvs
+        docker run -it --rm -d -p 11433:1433 -e ACCEPT_EULA=Y -e 'SA_PASSWORD=PassWord1' mcr.microsoft.com/mssql/server
+        SNO_SQLSERVER_URL='mssql://sa:PassWord1@127.0.0.1:11433/master' pytest -k sqlserver --pdb -vvs
     """
     if "SNO_SQLSERVER_URL" not in os.environ:
         raise pytest.skip(
@@ -939,7 +939,7 @@ def sqlserver_db():
         )
     engine = sqlserver_engine(os.environ["SNO_SQLSERVER_URL"])
     with engine.connect() as conn:
-        # test connection and postgis support
+        # Test connection
         try:
             conn.execute("SELECT @@version;")
         except sqlalchemy.exc.DBAPIError:
