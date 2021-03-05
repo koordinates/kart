@@ -15,6 +15,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Other changes
 
+ * The working copy can now be a SQL Server database (previously only GPKG and PostGIS working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `mssql://[HOST]/DBNAME/SCHEMA` [#362](https://github.com/koordinates/sno/issues/362)
+     - Currently requires that the ODBC driver for SQL Server is installed.
+     - Read the documentation at `docs/SQL_SERVER_WC.md`
  * Support for detecting features which have changed slightly during a re-import from a data source without a primary key, and reimporting them with the same primary key as last time so they show as edits as opposed to inserts. [#212](https://github.com/koordinates/sno/issues/212)
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
  * Internally, Sno now stores XML metadata differently. The visible result is that only one XML metadata file can be attached to each dataset, but this is part of a longer term plan to make metadata more accessible.

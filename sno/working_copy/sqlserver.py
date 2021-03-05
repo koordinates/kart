@@ -26,8 +26,10 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
     SQL Server working copy implementation.
 
     Requirements:
-    1. The database needs to exist
-    2. The database user needs to be able to:
+    1. A SQL server driver must be installed on your system.
+       See https://docs.microsoft.com/sql/connect/odbc/microsoft-odbc-driver-for-sql-server
+    2. The database needs to exist
+    3. The database user needs to be able to:
         - Create the specified schema (unless it already exists).
         - Create, delete and alter tables and triggers in the specified schema.
     """
