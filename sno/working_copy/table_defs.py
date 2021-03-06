@@ -9,6 +9,8 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
+from sqlalchemy.types import NVARCHAR
+
 
 class TinyInt(Integer):
     __visit_name__ = "TINYINT"
@@ -93,6 +95,38 @@ class PostgisSnoTables(TableSet):
             "_sno_track",
             self._SQLALCHEMY_METADATA,
             *_copy_columns(SnoTables.sno_track.columns),
+            schema=schema,
+        )
+
+    def create_all(self, session):
+        return self._SQLALCHEMY_METADATA.create_all(session.connection())
+
+
+class SqlServerSnoTables(TableSet):
+    """
+    Tables for sno-specific metadata - SQL Server variant.
+    Table names have a user-defined schema, and so unlike other table sets,
+    we need to construct an instance with the appropriate schema.
+    Primary keys have to be NVARCHAR of a fixed maximum length -
+    if the total maximum length is too long, SQL Server cannot generate an index.
+    """
+
+    def __init__(self, schema=None):
+        self._SQLALCHEMY_METADATA = MetaData()
+
+        self.sno_state = Table(
+            "_sno_state",
+            self._SQLALCHEMY_METADATA,
+            Column("table_name", NVARCHAR(400), nullable=False, primary_key=True),
+            Column("key", NVARCHAR(400), nullable=False, primary_key=True),
+            Column("value", Text, nullable=False),
+            schema=schema,
+        )
+        self.sno_track = Table(
+            "_sno_track",
+            self._SQLALCHEMY_METADATA,
+            Column("table_name", NVARCHAR(400), nullable=False, primary_key=True),
+            Column("pk", NVARCHAR(400), nullable=True, primary_key=True),
             schema=schema,
         )
 

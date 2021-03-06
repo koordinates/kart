@@ -24,7 +24,7 @@ import sqlalchemy
 
 from sno.geometry import Geometry
 from sno.repo import SnoRepo
-from sno.sqlalchemy import gpkg_engine, postgis_engine
+from sno.sqlalchemy import gpkg_engine, postgis_engine, sqlserver_engine
 from sno.working_copy import WorkingCopy
 
 
@@ -739,24 +739,29 @@ def update(request, cli_runner):
     return func
 
 
-def _insert_command(table_name, col_names, schema=None):
+def _insert_command(table_name, col_names):
     return sqlalchemy.table(
-        table_name,
-        *[sqlalchemy.column(c) for c in col_names],
-        schema=schema,
+        table_name, *[sqlalchemy.column(c) for c in col_names]
     ).insert()
 
 
-def _edit_points(conn, schema=None):
+def _edit_points(conn, dataset=None, working_copy=None):
     H = pytest.helpers.helpers()
-    layer = f'"{schema}"."{H.POINTS.LAYER}"' if schema else H.POINTS.LAYER
-    r = conn.execute(
-        _insert_command(H.POINTS.LAYER, H.POINTS.RECORD.keys(), schema=schema),
-        H.POINTS.RECORD,
-    )
-    assert r.rowcount == 1
+
+    if working_copy is None:
+        layer = H.POINTS.LAYER
+        insert_cmd = _insert_command(H.POINTS.LAYER, H.POINTS.RECORD.keys())
+    else:
+        layer = f"{working_copy.DB_SCHEMA}.{H.POINTS.LAYER}"
+        insert_cmd = working_copy._insert_into_dataset(dataset)
+
+    # Note - different DB backends support and interpret rowcount differently.
+    # Sometimes rowcount is not supported for inserts, so it just returns -1.
+    # Rowcount can be 1 or 2 if 1 row has changed its PK
+    r = conn.execute(insert_cmd, H.POINTS.RECORD)
+    assert r.rowcount in (1, -1)
     r = conn.execute(f"UPDATE {layer} SET fid=9998 WHERE fid=1;")
-    assert r.rowcount == 1
+    assert r.rowcount in (1, 2)
     r = conn.execute(f"UPDATE {layer} SET name='test' WHERE fid=2;")
     assert r.rowcount == 1
     r = conn.execute(f"DELETE FROM {layer} WHERE fid IN (3,30,31,32,33);")
@@ -770,16 +775,20 @@ def edit_points():
     return _edit_points
 
 
-def _edit_polygons(conn, schema=None):
+def _edit_polygons(conn, dataset=None, working_copy=None):
     H = pytest.helpers.helpers()
-    layer = f'"{schema}"."{H.POLYGONS.LAYER}"' if schema else H.POLYGONS.LAYER
-    r = conn.execute(
-        _insert_command(H.POLYGONS.LAYER, H.POLYGONS.RECORD.keys(), schema=schema),
-        H.POLYGONS.RECORD,
-    )
-    assert r.rowcount == 1
+    if working_copy is None:
+        layer = H.POLYGONS.LAYER
+        insert_cmd = _insert_command(H.POLYGONS.LAYER, H.POLYGONS.RECORD.keys())
+    else:
+        layer = f"{working_copy.DB_SCHEMA}.{H.POLYGONS.LAYER}"
+        insert_cmd = working_copy._insert_into_dataset(dataset)
+
+    # See note on rowcount at _edit_points
+    r = conn.execute(insert_cmd, H.POLYGONS.RECORD)
+    assert r.rowcount in (1, -1)
     r = conn.execute(f"UPDATE {layer} SET id=9998 WHERE id=1424927;")
-    assert r.rowcount == 1
+    assert r.rowcount in (1, 2)
     r = conn.execute(f"UPDATE {layer} SET survey_reference='test' WHERE id=1443053;")
     assert r.rowcount == 1
     r = conn.execute(
@@ -795,16 +804,21 @@ def edit_polygons():
     return _edit_polygons
 
 
-def _edit_table(conn, schema=None):
+def _edit_table(conn, dataset=None, working_copy=None):
     H = pytest.helpers.helpers()
-    layer = f'"{schema}"."{H.TABLE.LAYER}"' if schema else H.TABLE.LAYER
-    r = conn.execute(
-        _insert_command(H.TABLE.LAYER, H.TABLE.RECORD.keys(), schema=schema),
-        H.TABLE.RECORD,
-    )
-    assert r.rowcount == 1
+
+    if working_copy is None:
+        layer = H.TABLE.LAYER
+        insert_cmd = _insert_command(H.TABLE.LAYER, H.TABLE.RECORD.keys())
+    else:
+        layer = f"{working_copy.DB_SCHEMA}.{H.TABLE.LAYER}"
+        insert_cmd = working_copy._insert_into_dataset(dataset)
+
+    r = conn.execute(insert_cmd, H.TABLE.RECORD)
+    # rowcount is not actually supported for inserts, but works in certain DB types - otherwise is -1.
+    assert r.rowcount in (1, -1)
     r = conn.execute(f"""UPDATE {layer} SET "OBJECTID"=9998 WHERE "OBJECTID"=1;""")
-    assert r.rowcount == 1
+    assert r.rowcount in (1, 2)
     r = conn.execute(f"""UPDATE {layer} SET "NAME"='test' WHERE "OBJECTID"=2;""")
     assert r.rowcount == 1
     r = conn.execute(f"""DELETE FROM {layer} WHERE "OBJECTID" IN (3,30,31,32,33);""")
@@ -869,14 +883,12 @@ def disable_editor():
 @pytest.fixture()
 def postgis_db():
     """
-    Using docker, you can run a PostGres test - such as test_postgis_import - as follows:
+    Using docker, you can run a PostGIS test - such as test_postgis_import - as follows:
         docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
         SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k postgis --pdb -vvs
     """
     if "SNO_POSTGRES_URL" not in os.environ:
-        raise pytest.skip(
-            "Requires postgres - read docstring at sno.test_structure.postgis_db"
-        )
+        raise pytest.skip("Requires PostGIS - read docstring at conftest.postgis_db")
     engine = postgis_engine(os.environ["SNO_POSTGRES_URL"])
     with engine.connect() as conn:
         # test connection and postgis support
@@ -912,3 +924,65 @@ def new_postgis_db_schema(request, postgis_db):
                 conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
 
     return ctx
+
+
+@pytest.fixture()
+def sqlserver_db():
+    """
+    Using docker, you can run a SQL Server test - such as those in test_working_copy_sqlserver - as follows:
+        docker run -it --rm -d -p 11433:1433 -e ACCEPT_EULA=Y -e 'SA_PASSWORD=PassWord1' mcr.microsoft.com/mssql/server
+        SNO_SQLSERVER_URL='mssql://sa:PassWord1@127.0.0.1:11433/master' pytest -k sqlserver --pdb -vvs
+    """
+    if "SNO_SQLSERVER_URL" not in os.environ:
+        raise pytest.skip(
+            "Requires SQL Server - read docstring at conftest.sqlserver_db"
+        )
+    engine = sqlserver_engine(os.environ["SNO_SQLSERVER_URL"])
+    with engine.connect() as conn:
+        # Test connection
+        try:
+            conn.execute("SELECT @@version;")
+        except sqlalchemy.exc.DBAPIError:
+            raise pytest.skip("Requires SQL Server")
+    yield engine
+
+
+@pytest.fixture()
+def new_sqlserver_db_schema(request, sqlserver_db):
+    @contextlib.contextmanager
+    def ctx(create=False):
+        sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
+        schema = f"sno_test_{sha}"
+        with sqlserver_db.connect() as conn:
+            # Start by deleting in case it is left over from last test-run...
+            _sqlserver_drop_schema_cascade(conn, schema)
+            # Actually create only if create=True, otherwise the test will create it
+            if create:
+                conn.execute(f"""CREATE SCHEMA "{schema}";""")
+        try:
+            url = urlsplit(os.environ["SNO_SQLSERVER_URL"])
+            url_path = url.path.rstrip("/") + "/" + schema
+            new_schema_url = urlunsplit(
+                [url.scheme, url.netloc, url_path, url.query, ""]
+            )
+            yield new_schema_url, schema
+        finally:
+            # Clean up - delete it again if it exists.
+            with sqlserver_db.connect() as conn:
+                _sqlserver_drop_schema_cascade(conn, schema)
+
+    return ctx
+
+
+def _sqlserver_drop_schema_cascade(conn, db_schema):
+    r = conn.execute(
+        sqlalchemy.text(
+            "SELECT name FROM sys.tables WHERE schema_id=SCHEMA_ID(:schema);"
+        ),
+        {"schema": db_schema},
+    )
+    table_identifiers = ", ".join([f"{db_schema}.{row[0]}" for row in r])
+    if table_identifiers:
+        conn.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
+
+    conn.execute(f"DROP SCHEMA IF EXISTS {db_schema};")

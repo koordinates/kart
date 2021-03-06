@@ -1,16 +1,13 @@
+from enum import Enum, auto
 import contextlib
 import functools
 import itertools
 import logging
 import time
-from enum import Enum, auto
-
 
 import click
 import pygit2
-import sqlalchemy
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
-
+import sqlalchemy as sa
 
 from sno.base_dataset import BaseDataset
 from sno.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
@@ -39,6 +36,8 @@ class WorkingCopyType(Enum):
         path = str(path)
         if path.startswith("postgresql:"):
             return WorkingCopyType.POSTGIS
+        elif path.startswith("mssql:"):
+            return WorkingCopyType.SQL_SERVER
         elif path.lower().endswith(".gpkg"):
             return WorkingCopyType.GPKG
         elif allow_invalid:
@@ -48,7 +47,8 @@ class WorkingCopyType(Enum):
                 f"Unrecognised working copy type: {path}\n"
                 "Try one of:\n"
                 "  PATH.gpkg\n"
-                "  postgresql://[HOST]/DBNAME/SCHEMA\n"
+                "  postgresql://[HOST]/DBNAME/DBSCHEMA\n"
+                "  mssql://[HOST]/DBNAME/DBSCHEMA"
             )
 
     @property
@@ -61,6 +61,10 @@ class WorkingCopyType(Enum):
             from .postgis import WorkingCopy_Postgis
 
             return WorkingCopy_Postgis
+        elif self is WorkingCopyType.SQL_SERVER:
+            from .sqlserver import WorkingCopy_SqlServer
+
+            return WorkingCopy_SqlServer
         raise RuntimeError("Invalid WorkingCopyType")
 
 
@@ -99,12 +103,9 @@ class WorkingCopy:
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
     @property
-    @functools.lru_cache(maxsize=1)
-    def DB_SCHEMA(self):
-        """Escaped, dialect-specific name of the database-schema owned by this working copy (if any)."""
-        if self.db_schema is None:
-            raise RuntimeError("No schema to escape.")
-        return self.preparer.format_schema(self.db_schema)
+    def WORKING_COPY_TYPE_NAME(self):
+        """Human readable name of this type of working copy, eg "PostGIS"."""
+        raise NotImplementedError()
 
     @property
     @functools.lru_cache(maxsize=1)
@@ -143,38 +144,40 @@ class WorkingCopy:
             else dataset_or_table
         )
         sqlalchemy_table = (
-            sqlalchemy.table(table, schema=self.db_schema)
-            if isinstance(table, str)
-            else table
+            sa.table(table, schema=self.db_schema) if isinstance(table, str) else table
         )
         return self.preparer.format_table(sqlalchemy_table)
 
+    def _table_def_for_column_schema(self, col, dataset):
+        # This is just used for selects/inserts/updates - we don't need the full type information.
+        # We only need type information if some automatic conversion needs to happen on read or write.
+        # TODO: return the full type information so we can also use it for CREATE TABLE.
+        return sa.column(col.name)
+
     @functools.lru_cache()
-    def table_def_for_dataset(self, dataset):
+    def _table_def_for_dataset(self, dataset, schema=None):
         """
         A minimal table definition for a dataset.
         Specifies table and column names only - the minimum required such that an insert() or update() will work.
         """
-        return sqlalchemy.table(
+        schema = schema or dataset.schema
+        return sa.table(
             dataset.table_name,
-            *[sqlalchemy.column(c.name) for c in dataset.schema.columns],
+            *[self._table_def_for_column_schema(c, dataset) for c in schema],
             schema=self.db_schema,
         )
 
-    def insert_into_dataset(self, dataset):
+    def _insert_into_dataset(self, dataset):
         """Returns a SQL command for inserting features into the table for that dataset."""
-        return self.table_def_for_dataset(dataset).insert()
+        return self._table_def_for_dataset(dataset).insert()
 
-    def insert_or_replace_into_dataset(self, dataset):
+    def _insert_or_replace_into_dataset(self, dataset):
         """
         Returns a SQL command for inserting/replacing features that may or may not already exist in the table
         for that dataset.
         """
-        # Even though this uses the postgresql_insert sqlalchemy feature, it results in generic SQL.
-        pk_col_names = [c.name for c in dataset.schema.pk_columns]
-        stmt = postgresql_insert(self.table_def_for_dataset(dataset))
-        update_dict = {c.name: c for c in stmt.excluded if c.name not in pk_col_names}
-        return stmt.on_conflict_do_update(index_elements=pk_col_names, set_=update_dict)
+        # Its not possible to do this in a DB agnostic way.
+        raise NotImplementedError()
 
     @classmethod
     def get(cls, repo, *, allow_uncreated=False, allow_invalid_state=False):
@@ -253,7 +256,16 @@ class WorkingCopy:
             repo_cfg[path_key] = str(path)
 
     @classmethod
-    def check_valid_creation_path(cls, workdir_path, wc_path):
+    def subclass_from_path(cls, wc_path):
+        wct = WorkingCopyType.from_path(wc_path)
+        if wct.class_ is cls:
+            raise RuntimeError(
+                f"No subclass found - don't call subclass_from_path on concrete implementation {cls}."
+            )
+        return wct.class_
+
+    @classmethod
+    def check_valid_creation_path(cls, wc_path, workdir_path=None):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
         and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
@@ -261,20 +273,16 @@ class WorkingCopy:
         """
         if not wc_path:
             wc_path = cls.default_path(workdir_path)
-        WorkingCopyType.from_path(wc_path).class_.check_valid_creation_path(
-            workdir_path, wc_path
-        )
+        cls.subclass_from_path(wc_path).check_valid_creation_path(wc_path, workdir_path)
 
     @classmethod
-    def check_valid_path(cls, workdir_path, wc_path):
+    def check_valid_path(cls, wc_path, workdir_path=None):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
         and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
         Doesn't check if we have permissions to create a working copy there.
         """
-        WorkingCopyType.from_path(wc_path).class_.check_valid_path(
-            workdir_path, wc_path
-        )
+        cls.subclass_from_path(wc_path).check_valid_path(wc_path, workdir_path)
 
     def check_valid_state(self):
         if self.is_created():
@@ -296,19 +304,39 @@ class WorkingCopy:
         return f"{stem}.gpkg"
 
     @classmethod
-    def normalise_path(cls, repo, path):
+    def normalise_path(cls, repo, wc_path):
         """If the path is in a non-standard form, normalise it to the equivalent standard form."""
-        return WorkingCopyType.from_path(path).class_.normalise_path(repo, path)
+        return cls.subclass_from_path(wc_path).normalise_path(repo, wc_path)
 
     @contextlib.contextmanager
     def session(self, bulk=0):
         """
-        Context manager for DB sessions, yields a session object inside a transaction
-        Calling again yields the _same_ session, the transaction/etc only happen in the outer one.
+        Context manager for GeoPackage DB sessions, yields a connection object inside a transaction
 
-        @bulk controls bulk-loading operating mode - subject to change. See ./gpkg.py
+        Calling again yields the _same_ session, the transaction/etc only happen in the outer one.
         """
-        raise NotImplementedError()
+        L = logging.getLogger(f"{self.__class__.__qualname__}.session")
+
+        if hasattr(self, "_session"):
+            # Inner call - reuse existing session.
+            L.debug("session: existing...")
+            yield self._session
+            L.debug("session: existing/done")
+            return
+
+        L.debug("session: new...")
+        self._session = self.sessionmaker()
+        try:
+            # TODO - use tidier syntax for opening transactions from sqlalchemy.
+            yield self._session
+            self._session.commit()
+        except Exception:
+            self._session.rollback()
+            raise
+        finally:
+            self._session.close()
+            del self._session
+            L.debug("session: new/done")
 
     def is_created(self):
         """
@@ -342,17 +370,16 @@ class WorkingCopy:
         """
         raise NotImplementedError()
 
-    def get_db_tree(self, table_name="*"):
+    def get_db_tree(self):
         """Returns the hex tree ID from the state table."""
         with self.session() as sess:
             return sess.scalar(
-                f"""SELECT value FROM {self.SNO_STATE} WHERE table_name=:table_name AND key='tree';""",
-                {"table_name": table_name},
+                f"""SELECT value FROM {self.SNO_STATE} WHERE "table_name"='*' AND "key"='tree';""",
             )
 
-    def assert_db_tree_match(self, tree, *, table_name="*"):
+    def assert_db_tree_match(self, tree):
         """Raises a Mismatch if sno_state refers to a different tree and not the given tree."""
-        wc_tree_id = self.get_db_tree(table_name)
+        wc_tree_id = self.get_db_tree()
         expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
 
         if wc_tree_id != expected_tree_id:
@@ -499,17 +526,12 @@ class WorkingCopy:
             feature_diff = DeltaDiff()
             insert_count = delete_count = 0
 
-            geom_col = dataset.geom_column_name
-
             for row in r:
                 track_pk = row[0]  # This is always a str
                 db_obj = {k: row[k] for k in row.keys() if k != ".__track_pk"}
 
                 if db_obj[pk_field] is None:
                     db_obj = None
-
-                if db_obj is not None and geom_col is not None:
-                    db_obj[geom_col] = self._db_geom_to_gpkg_geom(db_obj[geom_col])
 
                 try:
                     repo_obj = dataset.get_feature(track_pk)
@@ -560,29 +582,32 @@ class WorkingCopy:
         else:
             schema = dataset.schema
 
-        table_identifier = self.table_identifier(dataset)
-        pk_column = self.quote(schema.pk_columns[0].name)
-        col_names = ",".join(
-            [f"{table_identifier}.{self.quote(col.name)}" for col in schema]
+        sno_track = self.sno_tables.sno_track
+        table = self._table_def_for_dataset(dataset, schema=schema)
+
+        cols_to_select = [sno_track.c.pk.label(".__track_pk"), *table.columns]
+        pk_column = table.columns[schema.pk_columns[0].name]
+        tracking_col_type = sno_track.c.pk.type
+
+        base_query = sa.select(columns=cols_to_select).select_from(
+            sno_track.outerjoin(
+                table,
+                sno_track.c.pk == sa.cast(pk_column, tracking_col_type),
+            )
         )
 
-        sql = f"""
-            SELECT
-                {self.SNO_TRACK}.pk AS ".__track_pk",
-                {col_names}
-            FROM {self.SNO_TRACK} LEFT OUTER JOIN {table_identifier}
-            ON ({self.SNO_TRACK}.pk = CAST({table_identifier}.{pk_column} AS TEXT))
-            WHERE ({self.SNO_TRACK}.table_name = :table_name)
-        """
-
         if feature_filter is UNFILTERED:
-            return sess.execute(sql, {"table_name": dataset.table_name})
+            query = base_query.where(sno_track.c.table_name == dataset.table_name)
         else:
             pks = list(feature_filter)
-            sql += f" AND {self.SNO_TRACK}.pk IN :pks"
-            t = sqlalchemy.text(sql)
-            t = t.bindparams(sqlalchemy.bindparam("pks", expanding=True))
-            return sess.execute(t, {"table_name": dataset.table_name, "pks": pks})
+            query = base_query.where(
+                sa.and_(
+                    sno_track.c.table_name == dataset.table_name,
+                    sno_track.c.pk.in_(pks),
+                )
+            )
+
+        return sess.execute(query)
 
     def reset_tracking_table(self, reset_filter=UNFILTERED):
         """Delete the rows from the tracking table that match the given filter."""
@@ -606,15 +631,11 @@ class WorkingCopy:
                     continue
 
                 pks = list(dataset_filter.get("feature", []))
-                t = sqlalchemy.text(
+                t = sa.text(
                     f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name AND pk IN :pks;"
                 )
-                t = t.bindparams(sqlalchemy.bindparam("pks", expanding=True))
+                t = t.bindparams(sa.bindparam("pks", expanding=True))
                 sess.execute(t, {"table_name": table_name, "pks": pks})
-
-    def _db_geom_to_gpkg_geom(self, g):
-        """Convert a geometry as returned by the database to a sno geometry.Geometry object."""
-        raise NotImplementedError()
 
     def can_find_renames(self, meta_diff):
         """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
@@ -665,10 +686,10 @@ class WorkingCopy:
         tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
         L.info(f"Tree sha: {tree_id}")
         with self.session() as sess:
-            changes = self._update_state_table_tree_impl(sess, tree_id)
+            changes = self._insert_or_replace_state_table_tree(sess, tree_id)
         assert changes == 1, f"{self.SNO_STATE} update: expected 1Δ, got {changes}"
 
-    def _update_state_table_tree_impl(self, sess, tree_id):
+    def _insert_or_replace_state_table_tree(self, sess, tree_id):
         """
         Write the given tree ID to the state table.
 
@@ -676,7 +697,10 @@ class WorkingCopy:
         tree_id - str, the hex SHA of the tree at HEAD.
         """
         r = sess.execute(
-            f"UPDATE {self.SNO_STATE} SET value=:value WHERE table_name='*' AND key='tree';",
+            f"""
+            INSERT INTO {self.SNO_STATE} ("table_name", "key", "value") VALUES ('*', 'tree', :value)
+            ON CONFLICT ("table_name", "key") DO UPDATE SET value=EXCLUDED.value;
+            """,
             {"value": tree_id},
         )
         return r.rowcount
@@ -697,11 +721,10 @@ class WorkingCopy:
                 self._write_meta(sess, dataset)
 
                 if dataset.has_geometry:
-                    # This should be called while the table is still empty.
-                    self._create_spatial_index(sess, dataset)
+                    self._create_spatial_index_pre(sess, dataset)
 
                 L.info("Creating features...")
-                sql = self.insert_into_dataset(dataset)
+                sql = self._insert_into_dataset(dataset)
                 feat_progress = 0
                 t0 = time.monotonic()
                 t0p = t0
@@ -735,15 +758,14 @@ class WorkingCopy:
                     "Overall rate: %d features/s", (feat_progress / (t1 - t0 or 0.001))
                 )
 
+                if dataset.has_geometry:
+                    self._create_spatial_index_post(sess, dataset)
+
                 self._create_triggers(sess, dataset)
                 self._update_last_write_time(sess, dataset, commit)
 
-            sess.execute(
-                f"""
-                INSERT INTO {self.SNO_STATE} (table_name, key, value) VALUES ('*', 'tree', :value)
-                ON CONFLICT (table_name, key) DO UPDATE SET value=EXCLUDED.value;
-                """,
-                {"value": commit.peel(pygit2.Tree).hex},
+            self._insert_or_replace_state_table_tree(
+                sess, commit.peel(pygit2.Tree).id.hex
             )
 
     def _create_table_for_dataset(self, sess, dataset):
@@ -754,18 +776,29 @@ class WorkingCopy:
         """Write any non-feature data relating to dataset - title, description, CRS, etc."""
         raise NotImplementedError()
 
-    def _create_spatial_index(self, sess, dataset):
+    def _create_spatial_index_pre(self, sess, dataset):
         """
         Creates a spatial index for the table for the given dataset.
-        The spatial index is configured so that it is automatically updated when the table is modified.
-        It is not guaranteed that the spatial index will take into account features that are already present
-        in the table when this function is called - therefore, this should be called while the table is still empty.
+        This function comes in a pair - _pre is called before features are written, and _post is called afterwards.
+        Once both are called, the index must contain all the features currently in the table, and, be
+        configured such that any further writes cause the index to be updated automatically.
         """
-        raise NotImplementedError()
+
+        # Note that the simplest implementation is to add a trigger here so that any further writes update
+        # the index. Then _create_spatial_index_post needn't be implemented.
+        pass
+
+    def _create_spatial_index_post(self, sess, dataset):
+        """Like _create_spatial_index_pre, but runs AFTER the bulk of features have been written."""
+
+        # Being able to create the index after the bulk of features have been written could be useful for two reasons:
+        # 1. It might be more efficient to write the features first, then index afterwards.
+        # 2. Certain working copies are not able to create an index without first knowing a rough bounding box.
+        pass
 
     def _drop_spatial_index(self, sess, dataset):
-        """Inverse of _create_spatial_index - deletes the spatial index."""
-        raise NotImplementedError()
+        """Inverse of _create_spatial_index_* - deletes the spatial index."""
+        pass
 
     def _update_last_write_time(self, sess, dataset, commit=None):
         """Hook for updating the last-modified timestamp stored for a particular dataset, if there is one."""
@@ -776,15 +809,15 @@ class WorkingCopy:
         if not pk_list:
             return 0
 
-        sql = self.insert_or_replace_into_dataset(dataset)
+        sql = self._insert_or_replace_into_dataset(dataset)
         feat_count = 0
         CHUNK_SIZE = 10000
         for row_dicts in self._chunk(
             dataset.get_features_with_crs_ids(pk_list, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
-            r = sess.execute(sql, row_dicts)
-            feat_count += r.rowcount
+            sess.execute(sql, row_dicts)
+            feat_count += len(row_dicts)
 
         return feat_count
 
@@ -795,9 +828,7 @@ class WorkingCopy:
 
         pk_column = self.preparer.quote(dataset.primary_key)
         sql = f"""DELETE FROM {self.table_identifier(dataset)} WHERE {pk_column} IN :pks;"""
-        stmt = sqlalchemy.text(sql).bindparams(
-            sqlalchemy.bindparam("pks", expanding=True)
-        )
+        stmt = sa.text(sql).bindparams(sa.bindparam("pks", expanding=True))
         feat_count = 0
         CHUNK_SIZE = 100
         for pks in self._chunk(pk_list, CHUNK_SIZE):
@@ -953,7 +984,7 @@ class WorkingCopy:
 
             if not track_changes_as_dirty:
                 # update the tree id
-                self._update_state_table_tree_impl(sess, target_tree_id)
+                self._insert_or_replace_state_table_tree(sess, target_tree_id)
 
     def _filter_by_paths(self, datasets, paths):
         """Filters the datasets so that only those matching the paths are returned."""

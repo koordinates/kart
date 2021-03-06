@@ -1,3 +1,8 @@
+import re
+import socket
+from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
+
+
 import sqlalchemy
 from pysqlite3 import dbapi2 as sqlite
 import psycopg2
@@ -6,6 +11,7 @@ from psycopg2.extensions import Binary, new_type, register_adapter, register_typ
 
 from sno import spatialite_path
 from sno.geometry import Geometry
+from sno.exceptions import NotFound
 
 
 def gpkg_engine(path):
@@ -95,7 +101,62 @@ def postgis_engine(pgurl):
             geometry_type = new_type((r[0],), "GEOMETRY", _adapt_geometry_from_pg)
             register_type(geometry_type, psycopg2_conn)
 
+    pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "sno"})
+
     engine = sqlalchemy.create_engine(pgurl, module=psycopg2)
     sqlalchemy.event.listen(engine, "connect", _on_connect)
 
     return engine
+
+
+CANONICAL_SQL_SERVER_SCHEME = "mssql"
+INTERNAL_SQL_SERVER_SCHEME = "mssql+pyodbc"
+
+
+def sqlserver_engine(msurl):
+    url = urlsplit(msurl)
+    if url.scheme != CANONICAL_SQL_SERVER_SCHEME:
+        raise ValueError("Expecting mssql://")
+
+    # SQL server driver is fussy - doesn't like localhost, prefers 127.0.0.1
+    url_netloc = re.sub(r"\blocalhost\b", _replace_with_localhost, url.netloc)
+
+    url_query = _append_to_query(
+        url.query, {"driver": get_sqlserver_driver(), "Application Name": "sno"}
+    )
+
+    msurl = urlunsplit(
+        [INTERNAL_SQL_SERVER_SCHEME, url_netloc, url.path, url_query, ""]
+    )
+
+    engine = sqlalchemy.create_engine(msurl)
+    return engine
+
+
+def get_sqlserver_driver():
+    import pyodbc
+
+    drivers = [
+        d for d in pyodbc.drivers() if re.search("SQL Server", d, flags=re.IGNORECASE)
+    ]
+    if not drivers:
+        drivers = pyodbc.drivers()
+    if not drivers:
+        raise NotFound("SQL Server driver was not found")
+    return sorted(drivers)[-1]  # Latest driver
+
+
+def _replace_with_localhost(*args, **kwargs):
+    return socket.gethostbyname("localhost")
+
+
+def _append_query_to_url(uri, new_query_dict):
+    url = urlsplit(uri)
+    url_query = _append_to_query(url.query, new_query_dict)
+    return urlunsplit([url.scheme, url.netloc, url.path, url_query, ""])
+
+
+def _append_to_query(existing_query, new_query_dict):
+    query_dict = parse_qs(existing_query)
+    # ignore new keys if they're already set in the querystring
+    return urlencode({**new_query_dict, **query_dict})

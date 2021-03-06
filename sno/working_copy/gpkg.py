@@ -7,9 +7,10 @@ from pathlib import Path
 
 import click
 from osgeo import gdal
-import sqlalchemy
+import sqlalchemy as sa
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql.compiler import IdentifierPreparer
+from sqlalchemy.types import UserDefinedType
 
 
 from . import gpkg_adapter
@@ -25,6 +26,15 @@ L = logging.getLogger("sno.working_copy.gpkg")
 
 
 class WorkingCopy_GPKG(WorkingCopy):
+    """
+    GPKG working copy implementation.
+
+    Requirements:
+    1. Can read and write to the filesystem at the specified path.
+    """
+
+    WORKING_COPY_TYPE_NAME = "GPKG"
+
     def __init__(self, repo, path):
         self.repo = repo
         self.path = path
@@ -36,34 +46,34 @@ class WorkingCopy_GPKG(WorkingCopy):
         self.sno_tables = GpkgSnoTables
 
     @classmethod
-    def check_valid_creation_path(cls, workdir_path, path):
-        cls.check_valid_path(workdir_path, path)
+    def check_valid_creation_path(cls, wc_path, workdir_path=None):
+        cls.check_valid_path(wc_path, workdir_path)
 
-        gpkg_path = (workdir_path / path).resolve()
+        gpkg_path = (workdir_path / wc_path).resolve()
         if gpkg_path.exists():
             desc = "path" if gpkg_path.is_dir() else "GPKG file"
             raise InvalidOperation(
-                f"Error creating GPKG working copy at {path} - {desc} already exists"
+                f"Error creating GPKG working copy at {wc_path} - {desc} already exists"
             )
 
     @classmethod
-    def check_valid_path(cls, workdir_path, path):
-        if not str(path).endswith(".gpkg"):
-            suggested_path = f"{os.path.splitext(str(path))[0]}.gpkg"
+    def check_valid_path(cls, wc_path, workdir_path=None):
+        if not str(wc_path).endswith(".gpkg"):
+            suggested_path = f"{os.path.splitext(str(wc_path))[0]}.gpkg"
             raise click.UsageError(
                 f"Invalid GPKG path - expected .gpkg suffix, eg {suggested_path}"
             )
 
     @classmethod
-    def normalise_path(cls, repo, path):
+    def normalise_path(cls, repo, wc_path):
         """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
-        path = Path(path)
-        if not path.is_absolute():
+        wc_path = Path(wc_path)
+        if not wc_path.is_absolute():
             try:
-                return str(path.resolve().relative_to(repo.workdir_path.resolve()))
+                return str(wc_path.resolve().relative_to(repo.workdir_path.resolve()))
             except ValueError:
                 pass
-        return str(path)
+        return str(wc_path)
 
     @property
     def full_path(self):
@@ -75,9 +85,28 @@ class WorkingCopy_GPKG(WorkingCopy):
         # but changing it means migrating working copies, unfortunately.
         return self.quote(f"gpkg_sno_{dataset.table_name}_{trigger_type}")
 
-    def insert_or_replace_into_dataset(self, dataset):
+    def _insert_or_replace_into_dataset(self, dataset):
         # SQLite optimisation.
-        return self.table_def_for_dataset(dataset).insert().prefix_with("OR REPLACE")
+        return self._table_def_for_dataset(dataset).insert().prefix_with("OR REPLACE")
+
+    def _table_def_for_column_schema(self, col, dataset):
+        if col.data_type == "geometry":
+            # This user-defined GeometryType normalises GPKG geometry to the Sno V2 GPKG geometry.
+            return sa.column(col.name, GeometryType)
+        else:
+            # Don't need to specify type information for other columns at present, since we just pass through the values.
+            return sa.column(col.name)
+
+    def _insert_or_replace_state_table_tree(self, sess, tree_id):
+        r = sess.execute(
+            self.sno_tables.sno_state.insert().prefix_with("OR REPLACE"),
+            {
+                "table_name": "*",
+                "key": "tree",
+                "value": tree_id,
+            },
+        )
+        return r.rowcount
 
     @contextlib.contextmanager
     def session(self, bulk=0):
@@ -99,37 +128,36 @@ class WorkingCopy_GPKG(WorkingCopy):
         # - do something consistent and safe from then on.
 
         if hasattr(self, "_session"):
-            # inner - reuse
+            # Inner call - reuse existing session.
             L.debug(f"session(bulk={bulk}): existing...")
             yield self._session
             L.debug(f"session(bulk={bulk}): existing/done")
+            return
 
-        else:
-            L.debug(f"session(bulk={bulk}): new...")
+        # Outer call - create new session:
+        L.debug(f"session(bulk={bulk}): new...")
+        self._session = self.sessionmaker()
 
-            try:
-                self._session = self.sessionmaker()
+        try:
+            if bulk:
+                self._session.execute("PRAGMA synchronous = OFF;")
+                self._session.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
+            if bulk >= 2:
+                self._session.execute("PRAGMA journal_mode = MEMORY;")
+                self._session.execute("PRAGMA locking_mode = EXCLUSIVE;")
 
-                if bulk:
-                    self._session.execute("PRAGMA synchronous = OFF;")
-                    self._session.execute(
-                        "PRAGMA cache_size = -1048576;"
-                    )  # -KiB => 1GiB
-                if bulk >= 2:
-                    self._session.execute("PRAGMA journal_mode = MEMORY;")
-                    self._session.execute("PRAGMA locking_mode = EXCLUSIVE;")
+            # TODO - use tidier syntax for opening transactions from sqlalchemy.
+            self._session.execute("BEGIN TRANSACTION;")
+            yield self._session
+            self._session.commit()
 
-                # TODO - use tidier syntax for opening transactions from sqlalchemy.
-                self._session.execute("BEGIN TRANSACTION;")
-                yield self._session
-                self._session.commit()
-            except Exception:
-                self._session.rollback()
-                raise
-            finally:
-                self._session.close()
-                del self._session
-                L.debug(f"session(bulk={bulk}): new/done")
+        except Exception:
+            self._session.rollback()
+            raise
+        finally:
+            self._session.close()
+            del self._session
+            L.debug(f"session(bulk={bulk}): new/done")
 
     def delete(self, keep_db_schema_if_possible=False):
         """Delete the working copy files."""
@@ -408,12 +436,15 @@ class WorkingCopy_GPKG(WorkingCopy):
             """DELETE FROM gpkg_metadata WHERE id IN :ids;""",
         )
         for sql in sqls:
-            stmt = sqlalchemy.text(sql).bindparams(
-                sqlalchemy.bindparam("ids", expanding=True)
-            )
+            stmt = sa.text(sql).bindparams(sa.bindparam("ids", expanding=True))
             sess.execute(stmt, {"ids": ids})
 
-    def _create_spatial_index(self, sess, dataset):
+    def _create_spatial_index_pre(self, sess, dataset):
+        # Implementing only _create_spatial_index_pre:
+        # gpkgAddSpatialIndex has to be called before writing any features,
+        # since it only adds on-write triggers to update the index - it doesn't
+        # add any pre-existing features to the index.
+
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
         geom_col = dataset.geom_column_name
 
@@ -460,56 +491,42 @@ class WorkingCopy_GPKG(WorkingCopy):
         table_identifier = self.table_identifier(dataset)
         pk_column = self.quote(dataset.primary_key)
 
-        # SQLite doesn't let you do param substitutions in CREATE TRIGGER:
-        escaped_table_name = dataset.table_name.replace("'", "''")
-
-        sess.execute(
+        insert_trigger = sa.text(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset, 'ins')}
                AFTER INSERT ON {table_identifier}
             BEGIN
-                INSERT OR REPLACE INTO {self.SNO_TRACK}
-                    (table_name, pk)
-                VALUES ('{escaped_table_name}', NEW.{pk_column});
+                INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                VALUES (:table_name, NEW.{pk_column});
             END;
             """
         )
-        sess.execute(
+        update_trigger = sa.text(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset, 'upd')}
                AFTER UPDATE ON {table_identifier}
             BEGIN
-                INSERT OR REPLACE INTO {self.SNO_TRACK}
-                    (table_name, pk)
-                VALUES
-                    ('{escaped_table_name}', NEW.{pk_column}),
-                    ('{escaped_table_name}', OLD.{pk_column});
+                INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                VALUES (:table_name, NEW.{pk_column}), (:table_name, OLD.{pk_column});
             END;
             """
         )
-        sess.execute(
+        delete_trigger = sa.text(
             f"""
             CREATE TRIGGER {self._quoted_trigger_name(dataset, 'del')}
                AFTER DELETE ON {table_identifier}
             BEGIN
-                INSERT OR REPLACE INTO {self.SNO_TRACK}
-                    (table_name, pk)
-                VALUES
-                    ('{escaped_table_name}', OLD.{pk_column});
+                INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                VALUES (:table_name, OLD.{pk_column});
             END;
             """
         )
-
-    def _db_geom_to_gpkg_geom(self, g):
-        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
-        # We don't try to convert them here - we let the commit validation step report this as an error.
-        if not isinstance(g, bytes):
-            return g
-        # We normalise geometries to avoid spurious diffs - diffs where nothing
-        # of any consequence has changed (eg, only endianness has changed).
-        # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
-        # but only one per column at most.
-        return normalise_gpkg_geom(g)
+        for trigger in (insert_trigger, update_trigger, delete_trigger):
+            # Placeholders not allowed in CREATE TRIGGER - have to use literal_binds.
+            # See https://docs.sqlalchemy.org/en/13/faq/sqlexpressions.html#faq-sql-expression-string
+            trigger.bindparams(table_name=dataset.table_name).compile(
+                sess.connection(), compile_kwargs={"literal_binds": True}
+            ).execute()
 
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """
@@ -603,6 +620,21 @@ class WorkingCopy_GPKG(WorkingCopy):
     def _update_last_write_time(self, sess, dataset, commit=None):
         self._update_gpkg_contents(sess, dataset, commit)
 
+    def _get_geom_extent(self, sess, dataset, default=None):
+        """Returns the envelope around the entire dataset as (min_x, min_y, max_x, max_y)."""
+        # FIXME: Why doesn't Extent(geom) work here as an aggregate?
+        geom_col = dataset.geom_column_name
+        r = sess.execute(
+            f"""
+            WITH _E AS (
+                SELECT Extent({self.quote(geom_col)}) AS extent FROM {self.table_identifier(dataset)}
+            )
+            SELECT ST_MinX(extent), ST_MinY(extent), ST_MaxX(extent), ST_MaxY(extent) FROM _E;
+            """
+        )
+        result = r.fetchone()
+        return default if result == (None, None, None, None) else result
+
     def _update_gpkg_contents(self, sess, dataset, commit=None):
         """
         Update the metadata for the given table in gpkg_contents to have the new bounding-box / last-updated timestamp.
@@ -614,17 +646,11 @@ class WorkingCopy_GPKG(WorkingCopy):
         # GPKG Spec Req. 15:
         gpkg_change_time = change_time.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
-        table_identifer = self.table_identifier(dataset)
         geom_col = dataset.geom_column_name
         if geom_col is not None:
-            # FIXME: Why doesn't Extent(geom) work here as an aggregate?
-            r = sess.execute(
-                f"""
-                WITH _E AS (SELECT extent({self.quote(geom_col)}) AS extent FROM {table_identifer})
-                SELECT ST_MinX(extent), ST_MinY(extent), ST_MaxX(extent), ST_MaxY(extent) FROM _E
-                """
+            min_x, min_y, max_x, max_y = self._get_geom_extent(
+                sess, dataset, default=(None, None, None, None)
             )
-            min_x, min_y, max_x, max_y = r.fetchone()
             rc = sess.execute(
                 """
                 UPDATE gpkg_contents
@@ -646,3 +672,21 @@ class WorkingCopy_GPKG(WorkingCopy):
                 {"last_change": gpkg_change_time, "table_name": dataset.table_name},
             ).rowcount
         assert rc == 1, f"gpkg_contents update: expected 1Δ, got {rc}"
+
+
+class GeometryType(UserDefinedType):
+    """UserDefinedType so that GPKG geometry is normalised to V2 format."""
+
+    def result_processor(self, dialect, coltype):
+        def process(gpkg_bytes):
+            # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+            # We don't try to convert them here - we let the commit validation step report this as an error.
+            if not isinstance(gpkg_bytes, bytes):
+                return gpkg_bytes
+            # We normalise geometries to avoid spurious diffs - diffs where nothing
+            # of any consequence has changed (eg, only endianness has changed).
+            # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
+            # but only one per column at most.
+            return normalise_gpkg_geom(gpkg_bytes)
+
+        return process

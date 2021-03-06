@@ -1,36 +1,39 @@
 import contextlib
 import logging
-import re
 import time
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import urlsplit
 
-import click
+
+from sqlalchemy import Index
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
 
-from .base import WorkingCopy
 from . import postgis_adapter
+from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import PostgisSnoTables
 from sno import crs_util
-from sno.exceptions import InvalidOperation
 from sno.schema import Schema
 from sno.sqlalchemy import postgis_engine
 
 
-"""
-* database needs to exist
-* database needs to have postgis enabled
-* database user needs to be able to:
-    1. create 'sno' schema & tables
-    2. create & alter tables in the default (or specified) schema
-    3. create triggers
-"""
+class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
+    """
+    PosttGIS working copy implementation.
 
-L = logging.getLogger("sno.working_copy.postgis")
+    Requirements:
+    1. The database needs to exist
+    2. If the dataset has geometry, then PostGIS (https://postgis.net/) v2.4 or newer needs
+       to be installed into the database and available in the database user's search path
+    3. The database user needs to be able to:
+        - Create the specified schema (unless it already exists).
+        - Create, delete and alter tables and triggers in the specified schema.
+    """
 
+    WORKING_COPY_TYPE_NAME = "PostGIS"
+    URI_SCHEME = "postgresql"
 
-class WorkingCopy_Postgis(WorkingCopy):
     def __init__(self, repo, uri):
         """
         uri: connection string of the form postgresql://[user[:password]@][netloc][:port][/dbname/schema][?param1=value1&...]
@@ -41,81 +44,18 @@ class WorkingCopy_Postgis(WorkingCopy):
         self.uri = uri
         self.path = uri
 
-        url = urlsplit(uri)
+        self.check_valid_db_uri(uri)
+        self.db_uri, self.db_schema = self._separate_db_schema(uri)
 
-        if url.scheme != "postgresql":
-            raise ValueError("Expecting postgresql://")
-
-        url_path = url.path
-        path_parts = url_path[1:].split("/", 3) if url_path else []
-        if len(path_parts) != 2:
-            raise ValueError("Expecting postgresql://[HOST]/DBNAME/SCHEMA")
-        url_path = f"/{path_parts[0]}"
-        self.db_schema = path_parts[1]
-
-        url_query = url.query
-        if "fallback_application_name" not in url_query:
-            url_query = "&".join(
-                filter(None, [url_query, "fallback_application_name=sno"])
-            )
-
-        # Rebuild DB URL suitable for postgres
-        self.dburl = urlunsplit([url.scheme, url.netloc, url_path, url_query, ""])
-        self.engine = postgis_engine(self.dburl)
+        self.engine = postgis_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = IdentifierPreparer(self.engine.dialect)
 
         self.sno_tables = PostgisSnoTables(self.db_schema)
 
     @classmethod
-    def check_valid_creation_path(cls, workdir_path, path):
-        cls.check_valid_path(workdir_path, path)
-        postgis_wc = cls(None, path)
-
-        # Less strict on Postgis - we are okay with the schema being already created, so long as its empty.
-        if postgis_wc.has_data():
-            raise InvalidOperation(
-                f"Error creating Postgis working copy at {path} - non-empty schema already exists"
-            )
-
-    @classmethod
-    def check_valid_path(cls, workdir_path, path):
-        url = urlsplit(path)
-
-        if url.scheme != "postgresql":
-            raise click.UsageError(
-                "Invalid postgres URI - Expecting URI in form: postgresql://[HOST]/DBNAME/SCHEMA"
-            )
-
-        url_path = url.path
-        path_parts = url_path[1:].split("/", 3) if url_path else []
-
-        suggestion_message = ""
-        if len(path_parts) == 1 and workdir_path is not None:
-            suggested_path = f"/{path_parts[0]}/{cls.default_schema(workdir_path)}"
-            suggested_uri = urlunsplit(
-                [url.scheme, url.netloc, suggested_path, url.query, ""]
-            )
-            suggestion_message = f"\nFor example: {suggested_uri}"
-
-        if len(path_parts) != 2:
-            raise click.UsageError(
-                "Invalid postgres URI - postgis working copy requires both dbname and schema:\n"
-                "Expecting URI in form: postgresql://[HOST]/DBNAME/SCHEMA"
-                + suggestion_message
-            )
-
-    @classmethod
-    def normalise_path(cls, repo, path):
-        return path
-
-    @classmethod
-    def default_schema(cls, workdir_path):
-        stem = workdir_path.stem
-        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
-        if schema[0].isdigit():
-            schema = "_" + schema
-        return schema
+    def check_valid_path(cls, wc_path, workdir_path=None):
+        cls.check_valid_db_uri(wc_path, workdir_path)
 
     def __str__(self):
         p = urlsplit(self.uri)
@@ -129,44 +69,11 @@ class WorkingCopy_Postgis(WorkingCopy):
             p._replace(netloc=nl)
         return p.geturl()
 
-    @contextlib.contextmanager
-    def session(self, bulk=0):
-        """
-        Context manager for GeoPackage DB sessions, yields a connection object inside a transaction
-
-        Calling again yields the _same_ connection, the transaction/etc only happen in the outer one.
-        """
-        L = logging.getLogger(f"{self.__class__.__qualname__}.session")
-
-        if hasattr(self, "_session"):
-            # inner - reuse
-            L.debug("session: existing...")
-            yield self._session
-            L.debug("session: existing/done")
-
-        else:
-            L.debug("session: new...")
-
-            try:
-                self._session = self.sessionmaker()
-
-                # TODO - use tidier syntax for opening transactions from sqlalchemy.
-                self._session.execute("BEGIN TRANSACTION;")
-                yield self._session
-                self._session.commit()
-            except Exception:
-                self._session.rollback()
-                raise
-            finally:
-                self._session.close()
-                del self._session
-                L.debug("session: new/done")
-
     def is_created(self):
         """
-        Returns true if the postgres schema referred to by this working copy exists and
+        Returns true if the DB schema referred to by this working copy exists and
         contains at least one table. If it exists but is empty, it is treated as uncreated.
-        This is so the postgres schema can be created ahead of time before a repo is created
+        This is so the DB schema can be created ahead of time before a repo is created
         or configured, without it triggering code that checks for corrupted working copies.
         Note that it might not be initialised as a working copy - see self.is_initialised.
         """
@@ -182,7 +89,7 @@ class WorkingCopy_Postgis(WorkingCopy):
 
     def is_initialised(self):
         """
-        Returns true if the postgis working copy is initialised -
+        Returns true if the PostGIS working copy is initialised -
         the schema exists and has the necessary sno tables, _sno_state and _sno_track.
         """
         with self.session() as sess:
@@ -197,7 +104,7 @@ class WorkingCopy_Postgis(WorkingCopy):
 
     def has_data(self):
         """
-        Returns true if the postgis working copy seems to have user-created content already.
+        Returns true if the PostGIS working copy seems to have user-created content already.
         """
         with self.session() as sess:
             count = sess.scalar(
@@ -287,6 +194,13 @@ class WorkingCopy_Postgis(WorkingCopy):
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
 
+    def _insert_or_replace_into_dataset(self, dataset):
+        # See https://docs.sqlalchemy.org/en/14/dialects/postgresql.html#insert-on-conflict-upsert
+        pk_col_names = [c.name for c in dataset.schema.pk_columns]
+        stmt = postgresql_insert(self._table_def_for_dataset(dataset))
+        update_dict = {c.name: c for c in stmt.excluded if c.name not in pk_col_names}
+        return stmt.on_conflict_do_update(index_elements=pk_col_names, set_=update_dict)
+
     def _write_meta(self, sess, dataset):
         """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
         self._write_meta_title(sess, dataset)
@@ -325,20 +239,25 @@ class WorkingCopy_Postgis(WorkingCopy):
         """Delete any metadata that is only needed by this dataset."""
         pass  # There is no metadata except for the spatial_ref_sys table.
 
-    def _create_spatial_index(self, sess, dataset):
+    def _create_spatial_index_post(self, sess, dataset):
+        # Only implemented as _create_spatial_index_post:
+        # It is more efficient to write the features first, then index them all in bulk.
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
 
         geom_col = dataset.geom_column_name
+        index_name = f"{dataset.table_name}_idx_{geom_col}"
+        table = self._table_def_for_dataset(dataset)
 
-        # Create the PostGIS Spatial Index
         L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
         t0 = time.monotonic()
-        sess.execute(
-            f"""
-            CREATE INDEX "{dataset.table_name}_idx_{geom_col}"
-            ON {self.table_identifier(dataset)} USING GIST ({self.quote(geom_col)});
-            """
+
+        spatial_index = Index(
+            index_name, table.columns[geom_col], postgres_using="GIST"
         )
+        spatial_index.table = table
+        spatial_index.create(sess.connection())
+        sess.execute(f"""ANALYZE {self.table_identifier(dataset)};""")
+
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
     def _drop_spatial_index(self, sess, dataset):
@@ -460,10 +379,6 @@ class WorkingCopy_Postgis(WorkingCopy):
                 del wc_meta_items[key]
             # If either definition is custom, we keep the diff, since it could be important.
 
-    def _db_geom_to_gpkg_geom(self, g):
-        # This is already handled by register_type
-        return g
-
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
@@ -492,7 +407,7 @@ class WorkingCopy_Postgis(WorkingCopy):
         return sum(dt.values()) == 0
 
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
-        db.execute(
+        sess.execute(
             f"COMMENT ON TABLE {self._table_identifier(dataset.table_name)} IS :comment",
             {"comment": dest_value},
         )
@@ -501,6 +416,9 @@ class WorkingCopy_Postgis(WorkingCopy):
         pass  # This is a no-op for postgis
 
     def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):
+        pass  # This is a no-op for postgis
+
+    def _apply_meta_metadata_xml(self, sess, dataset, src_value, dest_value):
         pass  # This is a no-op for postgis
 
     def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
