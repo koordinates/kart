@@ -15,7 +15,7 @@ from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import PostgisSnoTables
 from sno import crs_util
 from sno.schema import Schema
-from sno.sqlalchemy import postgis_engine
+from sno.sqlalchemy.create_engine import postgis_engine
 
 
 class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):

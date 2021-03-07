@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
-from sno.sqlalchemy import gpkg_engine
 from sno.repo import SnoRepo
 
 
@@ -454,11 +453,9 @@ def test_apply_with_working_copy(
         assert bits[0] == "Commit"
         assert bits[2] == "Updating"
 
-        with gpkg_engine(wc_path).connect() as conn:
-            name = conn.scalar(
-                f"""
-                SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;
-                """
+        with repo.working_copy.session() as sess:
+            name = sess.scalar(
+                f"""SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;"""
             )
             assert name is None
 
@@ -540,8 +537,9 @@ def test_apply_benchmark(data_working_copy, benchmark, cli_runner, monkeypatch):
         assert r.exit_code == 0, r.stderr
 
         # Generate a large change and commit it
-        with gpkg_engine(wc_path).connect() as conn:
-            conn.execute(
+        repo = SnoRepo(repo_dir)
+        with repo.working_copy.session() as sess:
+            sess.execute(
                 "UPDATE nz_pa_points_topo_150k SET name = 'bulk_' || Coalesce(name, 'null')"
             )
 

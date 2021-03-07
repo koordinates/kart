@@ -7,7 +7,6 @@ import sqlalchemy
 
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
-from sno.sqlalchemy import gpkg_engine
 from sno.working_copy import gpkg_adapter
 from sno.working_copy.base import WorkingCopy
 from test_working_copy import compute_approximated_types
@@ -61,17 +60,17 @@ def test_checkout_workingcopy(
 def test_checkout_detached(data_working_copy, cli_runner):
     """ Checkout a working copy to edit """
     with data_working_copy("points") as (repo_dir, wc):
-        with gpkg_engine(wc).connect() as conn:
-            assert H.last_change_time(conn) == "2019-06-20T14:28:33.000000Z"
+        repo = SnoRepo(repo_dir)
+        with repo.working_copy.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the previous commit
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as conn:
-            assert H.last_change_time(conn) == "2019-06-11T11:03:58.000000Z"
+        with repo.working_copy.session() as sess:
+            assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
-        repo = SnoRepo(repo_dir)
         assert repo.head.target.hex == H.POINTS.HEAD1_SHA
         assert repo.head_is_detached
         assert repo.head.name == "HEAD"
@@ -179,8 +178,8 @@ def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-            r = conn.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
         r = cli_runner.invoke(["commit", "-m", "test1"])
@@ -905,8 +904,9 @@ def _edit_string_pk_polygons(conn):
 
 def test_edit_string_pks(data_working_copy, cli_runner):
     with data_working_copy("string-pks") as (repo_path, wc):
-        with gpkg_engine(wc).connect() as conn:
-            _edit_string_pk_polygons(conn)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            _edit_string_pk_polygons(sess)
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r

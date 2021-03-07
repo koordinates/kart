@@ -1,7 +1,6 @@
 import json
 import pytest
 
-from sno.sqlalchemy import gpkg_engine
 from sno.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
 from sno.merge_util import (
     MergeIndex,
@@ -42,10 +41,10 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
         h = repo.head.target.hex
 
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-            insert(conn)
-            insert(conn)
-            commit_id = insert(conn)
+        with repo.working_copy.session() as sess:
+            insert(sess)
+            insert(sess)
+            commit_id = insert(sess)
 
         H.git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id
@@ -98,10 +97,10 @@ def test_merge_fastforward_noff(
         h = repo.head.target.hex
 
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-            insert(conn)
-            insert(conn)
-            commit_id = insert(conn)
+        with repo.working_copy.session() as sess:
+            insert(sess)
+            insert(sess)
+            commit_id = insert(sess)
 
         H.git_graph(request, "pre-merge")
         assert repo.head.target.hex == commit_id

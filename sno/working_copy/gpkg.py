@@ -19,7 +19,7 @@ from .table_defs import GpkgTables, GpkgSnoTables
 from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
 from sno.schema import Schema
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy.create_engine import gpkg_engine
 
 
 L = logging.getLogger("sno.working_copy.gpkg")

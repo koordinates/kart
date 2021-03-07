@@ -24,7 +24,7 @@ import sqlalchemy
 
 from sno.geometry import Geometry
 from sno.repo import SnoRepo
-from sno.sqlalchemy import gpkg_engine, postgis_engine, sqlserver_engine
+from sno.sqlalchemy.create_engine import gpkg_engine, postgis_engine, sqlserver_engine
 from sno.working_copy import WorkingCopy
 
 

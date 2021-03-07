@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy.create_engine import gpkg_engine
 from sno.exceptions import NO_REPOSITORY
 from sno.repo import SnoRepoState
 from sno.structs import CommitWithReference

@@ -14,7 +14,6 @@ from sno.exceptions import (
     SCHEMA_VIOLATION,
 )
 from sno.commit import fallback_editor
-from sno.sqlalchemy import gpkg_engine
 from sno.repo import SnoRepo
 
 
@@ -57,10 +56,11 @@ def test_commit(
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as conn:
+        repo = SnoRepo(repo_dir)
+        with repo.working_copy.session() as sess:
             try:
                 edit_func = locals()[f"edit_{archive}"]
-                pk_del = edit_func(conn)
+                pk_del = edit_func(sess)
             except KeyError:
                 raise NotImplementedError(f"No edit_{archive}")
 
@@ -209,8 +209,9 @@ def test_commit_message(
         # default editor
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as conn:
-            edit_points(conn)
+        repo = SnoRepo(repo_dir)
+        with repo.working_copy.session() as sess:
+            edit_points(sess)
 
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
         r = cli_runner.invoke(["commit"])
@@ -307,12 +308,13 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
 
 def test_commit_schema_violation(cli_runner, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
-        with gpkg_engine(wc_path).connect() as conn:
-            conn.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
-            conn.execute(
+        repo = SnoRepo(repo_dir)
+        with repo.working_copy.session() as sess:
+            sess.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
+            sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET t50_fid=123456789012 WHERE fid=2;"
             )
-            conn.execute(
+            sess.execute(
                 f"""UPDATE {H.POINTS.LAYER} SET macronated="kinda" WHERE fid=3;"""
             )
 

@@ -12,7 +12,7 @@ import pytest
 from sno import fast_import
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy.create_engine import gpkg_engine
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from sno.repo import SnoRepo

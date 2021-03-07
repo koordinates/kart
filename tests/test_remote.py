@@ -4,7 +4,7 @@ from pathlib import PureWindowsPath
 import pytest
 
 from sno.clone import get_directory_from_url
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy.create_engine import gpkg_engine
 from sno.repo import SnoRepo
 
 

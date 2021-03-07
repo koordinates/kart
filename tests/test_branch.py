@@ -3,8 +3,8 @@ import subprocess
 
 import pytest
 
-from sno.sqlalchemy import gpkg_engine
 from sno.exceptions import NO_REPOSITORY
+from sno.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -75,8 +75,9 @@ def test_branches(
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as conn:
-            insert(conn)
+        repo = SnoRepo(path1)
+        with repo.working_copy.session() as sess:
+            insert(sess)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
         assert r.exit_code == 0, r

@@ -4,7 +4,7 @@ import click
 import pytest
 
 from sno.diff_output import schema_diff_as_text
-from sno.sqlalchemy import gpkg_engine
+from sno.repo import SnoRepo
 from sno.schema import Schema, ColumnSchema
 
 
@@ -224,14 +224,15 @@ DIFF_OUTPUT_FORMATS = ["text", "geojson", "json"]
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_edit_schema_points(output_format, data_working_copy, cli_runner):
-    with data_working_copy("points") as (repo, wc_path):
+    with data_working_copy("points") as (repo_path, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=text", "--exit-code"])
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as conn:
-            edit_points_schema(conn)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            edit_points_schema(sess)
 
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
@@ -251,14 +252,15 @@ def test_edit_schema_points(output_format, data_working_copy, cli_runner):
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_edit_schema_polygons(output_format, data_working_copy, cli_runner):
-    with data_working_copy("polygons") as (repo, wc_path):
+    with data_working_copy("polygons") as (repo_path, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as conn:
-            edit_polygons_schema(conn)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            edit_polygons_schema(sess)
 
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
@@ -278,14 +280,15 @@ def test_edit_schema_polygons(output_format, data_working_copy, cli_runner):
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_edit_schema_table(output_format, data_working_copy, cli_runner):
-    with data_working_copy("table") as (repo, wc_path):
+    with data_working_copy("table") as (repo_path, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
         assert r.exit_code == 0, r
 
         # make some changes
-        with gpkg_engine(wc_path).connect() as conn:
-            edit_table_schema(conn)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            edit_table_schema(sess)
 
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]

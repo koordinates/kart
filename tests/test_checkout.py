@@ -2,7 +2,6 @@ import pytest
 
 
 from sno.exceptions import INVALID_OPERATION, NO_BRANCH, NO_COMMIT
-from sno.sqlalchemy import gpkg_engine
 from sno.repo import SnoRepo
 from sno.structs import CommitWithReference
 
@@ -95,8 +94,9 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 
 def test_reset(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc):
-        with gpkg_engine(wc).connect() as conn:
-            edit_points(conn)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            edit_points(sess)
 
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 1

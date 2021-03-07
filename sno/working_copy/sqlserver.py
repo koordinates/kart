@@ -18,7 +18,7 @@ from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import SqlServerSnoTables
 from sno import crs_util
 from sno.geometry import Geometry
-from sno.sqlalchemy import sqlserver_engine
+from sno.sqlalchemy.create_engine import sqlserver_engine
 
 
 class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):

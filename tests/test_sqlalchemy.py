@@ -1,6 +1,6 @@
 import pytest
 
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy.create_engine import gpkg_engine
 
 H = pytest.helpers.helpers()
 

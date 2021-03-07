@@ -52,7 +52,7 @@ def print_version(ctx):
     import rtree
     import sqlalchemy
 
-    from sno.sqlalchemy import gpkg_engine
+    from sno.sqlalchemy.create_engine import gpkg_engine
 
     click.echo(f"Sno v{get_version()}, Copyright (c) Sno Contributors")
 

@@ -7,7 +7,6 @@ import pytest
 
 import sno
 from sno.diff_structs import Delta, DeltaDiff
-from sno.sqlalchemy import gpkg_engine
 from sno.geometry import hex_wkb_to_ogr
 from sno.repo import SnoRepo
 
@@ -33,7 +32,7 @@ def _check_html_output(s):
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_points(output_format, data_working_copy, cli_runner):
     """ diff the working copy against HEAD """
-    with data_working_copy("points") as (repo, wc):
+    with data_working_copy("points") as (repo_path, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -41,17 +40,17 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-
-            r = conn.execute(H.POINTS.INSERT, H.POINTS.RECORD)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
-            r = conn.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
+            r = sess.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
             assert r.rowcount == 1
-            r = conn.execute(
+            r = sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
             assert r.rowcount == 1
-            r = conn.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid=3;")
+            r = sess.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid=3;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(
@@ -260,10 +259,11 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_reprojection(output_format, data_working_copy, cli_runner):
     """ diff the working copy against HEAD """
-    with data_working_copy("points") as (repo, wc):
+    with data_working_copy("points") as (repo_path, wc):
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-            r = conn.execute(
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
             assert r.rowcount == 1
@@ -342,17 +342,17 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-
-            r = conn.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
+        repo = SnoRepo(repo)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
             assert r.rowcount == 1
-            r = conn.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
+            r = sess.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
             assert r.rowcount == 1
-            r = conn.execute(
+            r = sess.execute(
                 f"UPDATE {H.POLYGONS.LAYER} SET survey_reference='test', date_adjusted='2019-01-01T00:00:00Z' WHERE id=1443053;"
             )
             assert r.rowcount == 1
-            r = conn.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id=1452332;")
+            r = sess.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id=1452332;")
             assert r.rowcount == 1
 
         r = cli_runner.invoke(
@@ -667,7 +667,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_table(output_format, data_working_copy, cli_runner):
     """ diff the working copy against HEAD """
-    with data_working_copy("table") as (repo, wc):
+    with data_working_copy("table") as (repo_path, wc):
         # empty
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-", "--exit-code"]
@@ -675,19 +675,19 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        with gpkg_engine(wc).connect() as conn:
-
-            r = conn.execute(H.TABLE.INSERT, H.TABLE.RECORD)
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(H.TABLE.INSERT, H.TABLE.RECORD)
             assert r.rowcount == 1
-            r = conn.execute(
+            r = sess.execute(
                 f'UPDATE {H.TABLE.LAYER} SET "OBJECTID"=9998 WHERE OBJECTID=1;'
             )
             assert r.rowcount == 1
-            r = conn.execute(
+            r = sess.execute(
                 f"UPDATE {H.TABLE.LAYER} SET name='test', POP2000=9867 WHERE OBJECTID=2;"
             )
             assert r.rowcount == 1
-            r = conn.execute(f'DELETE FROM {H.TABLE.LAYER} WHERE "OBJECTID"=3;')
+            r = sess.execute(f'DELETE FROM {H.TABLE.LAYER} WHERE "OBJECTID"=3;')
             assert r.rowcount == 1
 
         r = cli_runner.invoke(
@@ -1097,25 +1097,27 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
     R0 = "075b0cf1414d71a6edbcdb4f05da93e1083ccdc2"
     R1 = "c9d8c52ec9e8b1260aec153958954c880573e24a"  # HEAD
 
-    with data_working_copy("editing") as (repo, wc):
+    with data_working_copy("editing") as (repo_path, wc):
         # empty HEAD -> no working copy changes
         # r = cli_runner.invoke(["diff", "--exit-code", f"HEAD"])
         # assert r.exit_code == 0, r
 
         # make the R1 -> WC changes
-        with gpkg_engine(wc).connect() as conn:
+        repo = SnoRepo(repo_path)
+        with repo.working_copy.session() as sess:
 
             EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
-            for pk, val in EDITS:
-                r = conn.execute(
-                    "UPDATE editing SET value = ? WHERE id = ?;", (val, pk)
+            for pk, value in EDITS:
+                r = sess.execute(
+                    "UPDATE editing SET value = :value WHERE id = :id;",
+                    {"value": value, "id": pk},
                 )
                 assert r.rowcount == 1
 
-            r = conn.execute("DELETE FROM editing WHERE id IN (5, 9);")
+            r = sess.execute("DELETE FROM editing WHERE id IN (5, 9);")
             assert r.rowcount == 2
 
-            r = conn.execute(
+            r = sess.execute(
                 "INSERT INTO editing (id, value) VALUES (6, 'f'), (11, 'k'), (12, 'l1');"
             )
             assert r.rowcount == 3
@@ -1286,7 +1288,6 @@ def test_diff_object_eq_reverse():
 
 def test_diff_3way(data_working_copy, cli_runner, insert, request):
     with data_working_copy("points") as (repo_path, wc):
-        engine = gpkg_engine(wc)
         repo = SnoRepo(repo_path)
 
         # new branch
@@ -1295,18 +1296,18 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
         assert repo.head.name == "refs/heads/changes"
 
         # make some changes
-        with engine.connect() as conn:
-            insert(conn)
-            insert(conn)
-            b_commit_id = insert(conn)
+        with repo.working_copy.session() as sess:
+            insert(sess)
+            insert(sess)
+            b_commit_id = insert(sess)
         assert repo.head.target.hex == b_commit_id
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
         assert repo.head.target.hex != b_commit_id
 
-        with engine.connect() as conn:
-            m_commit_id = insert(conn)
+        with repo.working_copy.session() as sess:
+            m_commit_id = insert(sess)
 
         H.git_graph(request, "pre-merge-main")
 

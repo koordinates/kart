@@ -1,7 +1,6 @@
 import json
 import pytest
 
-from sno.sqlalchemy import gpkg_engine
 from sno.merge_util import MergeIndex
 from sno.repo import SnoRepo
 from sno.structs import CommitWithReference
@@ -300,12 +299,12 @@ def test_list_conflicts_transform_crs(create_conflicts, cli_runner):
 
 def test_find_renames(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
-        engine = gpkg_engine(wc)
+        repo = SnoRepo(repo_path)
 
         cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
         cli_runner.invoke(["checkout", "-b", "theirs_branch"])
-        with engine.connect() as conn:
-            r = conn.execute(
+        with repo.working_copy.session() as sess:
+            r = sess.execute(
                 f"""UPDATE {H.POINTS.LAYER} SET fid = 9998 where fid = 1"""
             )
             assert r.rowcount == 1
@@ -315,15 +314,14 @@ def test_find_renames(data_working_copy, cli_runner):
         cli_runner.invoke(["checkout", "ancestor_branch"])
         cli_runner.invoke(["checkout", "-b", "ours_branch"])
 
-        with engine.connect() as conn:
-            r = conn.execute(
+        with repo.working_copy.session() as sess:
+            r = sess.execute(
                 f"""UPDATE {H.POINTS.LAYER} SET fid = 9999 where fid = 1"""
             )
             assert r.rowcount == 1
 
         cli_runner.invoke(["commit", "-m", "ours_commit"])
 
-        repo = SnoRepo(repo_path)
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")

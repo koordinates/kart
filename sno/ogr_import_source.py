@@ -23,7 +23,7 @@ from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
-from .sqlalchemy import gpkg_engine, postgis_engine
+from .sqlalchemy.create_engine import gpkg_engine, postgis_engine
 from .utils import ungenerator
 from .working_copy import gpkg_adapter
 

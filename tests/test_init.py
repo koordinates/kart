@@ -3,7 +3,7 @@ import shutil
 
 import pytest
 
-from sno.sqlalchemy import gpkg_engine
+from sno.sqlalchemy.create_engine import gpkg_engine
 from sno.repo import SnoRepo
 from sno.exceptions import (
     INVALID_OPERATION,
@@ -566,15 +566,15 @@ def test_init_import(
         assert repo.config["sno.repository.version"] == "2"
         assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
 
-        with gpkg_engine(wc).connect() as conn:
-            assert H.row_count(conn, table) > 0
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, table) > 0
 
-            wc_tree_id = conn.execute(
+            wc_tree_id = sess.execute(
                 """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head_tree.hex
 
-            xml_metadata = conn.execute(
+            xml_metadata = sess.execute(
                 f"""
                 SELECT m.metadata
                 FROM gpkg_metadata m JOIN gpkg_metadata_reference r
@@ -589,7 +589,7 @@ def test_init_import(
             else:
                 assert not xml_metadata
 
-            srs_definition = conn.execute(
+            srs_definition = sess.execute(
                 f"""
                 SELECT srs.definition
                 FROM gpkg_spatial_ref_sys srs JOIN gpkg_geometry_columns geom
@@ -606,7 +606,7 @@ def test_init_import(
                     'GEOGCS["NZGD2000",\n    DATUM["New_Zealand_Geodetic_Datum_2000"'
                 )
 
-            H.verify_gpkg_extent(conn, table)
+            H.verify_gpkg_extent(sess, table)
         with chdir(repo_path):
             # check that we can view the commit we created
             cli_runner.invoke(["show", "-o", "json"])
