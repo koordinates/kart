@@ -140,11 +140,9 @@ def get_sqlserver_driver():
         d for d in pyodbc.drivers() if re.search("SQL Server", d, flags=re.IGNORECASE)
     ]
     if not drivers:
-        drivers = pyodbc.drivers()
-    if not drivers:
         URL = "https://docs.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
         raise NotFound(
-            f"ODBC Driver for SQL Server required but was not found.\nSee {URL}",
+            f"ODBC Driver for SQL Server is required but was not found.\nSee {URL}",
             exit_code=NO_DRIVER,
         )
     return sorted(drivers)[-1]  # Latest driver
