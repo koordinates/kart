@@ -1,5 +1,6 @@
 from collections import namedtuple
 import functools
+import re
 import uuid
 
 import pygit2
@@ -519,49 +520,84 @@ class Schema:
                 # and has_violation is already set to True. No need to investigate this column further.
                 continue
 
-            col_violation = self._find_column_violation(col, feature)
+            col_violation = self.find_column_violation(col, feature.get(col.name))
             if col_violation is not None:
                 col_violations[col.name] = col_violation
                 has_violation = True
 
         return not has_violation
 
-    def _find_column_violation(self, col, feature):
+    def find_column_violation(self, col, value):
         """
-        Returns the error message for how a feature violates the schema in a given column.
-        Returns None if the feature is compliant.
+        Returns the error message for how the feature's value violates the given column schema.
+        Returns None if the feature's value is compliant.
         """
-        if col.name not in feature:
-            return None
-        value = feature[col.name]
         if value is None:
             return None
 
         col_type = col.data_type
         if type(value) not in self.EQUIVALENT_MSGPACK_TYPES[col_type]:
             return f"In column '{col.name}' value {repr(value)} doesn't match schema type {col_type}"
-        elif col_type == "integer" and "size" in col.extra_type_info:
-            size = col.extra_type_info["size"]
-            if self._signed_bit_length(value) > size:
-                bounds = 2 ** (size - 1)
-                return f"In column '{col.name}' value {repr(value)} does not fit into an int{size}: {-bounds} to {bounds-1}"
-        elif col_type == "text" and "length" in col.extra_type_info:
-            length = col.extra_type_info["length"]
-            len_value = len(value)
-            if len_value > length:
-                if len_value > 100:
-                    value = value[:40] + "....." + value[-40:]
-                return f"In column '{col.name}' value {repr(value)} exceeds limit of {length} characters"
 
-        # TODO - more type validation
+        do_find_violation = getattr(
+            self, f"_find_{col_type}_violation", lambda col, value: None
+        )
+        return do_find_violation(col, value)
 
-        return None
+    @classmethod
+    def _find_date_violation(cls, col, value):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
+            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 date ie YYYY-MM-DD"
 
-    def _signed_bit_length(self, integer):
+    @classmethod
+    def _find_integer_violation(cls, col, value):
+        size = col.extra_type_info.get("size")
+        if size and cls._signed_bit_length(value) > size:
+            bounds = 2 ** (size - 1)
+            return f"In column '{col.name}' value {repr(value)} does not fit into an int{size}: {-bounds} to {bounds-1}"
+
+    @classmethod
+    def _find_interval_violation(cls, col, value):
+        DATE_INTERVAL = r"P(\d+Y)?(\d+M)?(\d+W)?(\d+D)?"
+        TIME_INTERVAL = r"(\d+H)?(\d+M)?(\d+(\.\d+)?S)?"
+        parts = value.split("T", maxsplit=2)
+        valid = False
+        if len(parts) == 1:
+            valid = re.fullmatch(DATE_INTERVAL, parts[0])
+        elif len(parts) == 2:
+            valid = re.fullmatch(DATE_INTERVAL, parts[0]) and re.match(
+                TIME_INTERVAL, parts[1]
+            )
+        if not valid:
+            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 duration ie PxYxMxDTxHxMxS"
+
+    @classmethod
+    def _signed_bit_length(cls, integer):
         if integer < 0:
             return (integer + 1).bit_length() + 1
         else:
             return integer.bit_length() + 1
+
+    @classmethod
+    def _find_text_violation(cls, col, value):
+        length = col.extra_type_info.get("length")
+        if not length:
+            return None
+        len_value = len(value)
+        if len_value > length:
+            if len_value > 100:
+                value = value[:40] + "....." + value[-40:]
+            return f"In column '{col.name}' value {repr(value)} exceeds limit of {length} characters"
+
+    @classmethod
+    def _find_time_violation(cls, col, value):
+        if not re.fullmatch(r"\d{2}:\d{2}:\d{2}(\.\d+)?", value):
+            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 time ie HH:MM:SS.SSS"
+
+    @classmethod
+    def _find_timestamp_violation(cls, col, value):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z", value):
+            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 UTC datetime ie YYYY-MM-DDTHH:MM:SS.SSSZ"
 
 
 class DefaultRoundtripContext:

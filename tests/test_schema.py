@@ -4,6 +4,7 @@ import click
 import pytest
 
 from sno.diff_output import schema_diff_as_text
+from sno.geometry import Geometry
 from sno.repo import SnoRepo
 from sno.schema import Schema, ColumnSchema
 
@@ -185,7 +186,7 @@ def edit_polygons_schema(db):
     RECORD = {
         "id": 9_999_999,
         "geom": "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))",
-        "date_adjusted": "2019-07-05T13:04:00+01:00",
+        "date_adjusted": "2019-07-05T13:04:00Z",
         "surv_ref": "Null Island™ 🗺",
         "adjusted_nodes": 123,
         "colour": None,
@@ -227,7 +228,7 @@ def test_edit_schema_points(output_format, data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=text", "--exit-code"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # make some changes
         repo = SnoRepo(repo_path)
@@ -237,12 +238,14 @@ def test_edit_schema_points(output_format, data_working_copy, cli_runner):
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
         )
+        assert r.exit_code == 0, r.stderr
 
         check_points_diff_output(r, output_format)
 
         r = cli_runner.invoke(["commit", "-m", "schema change + feature changes"])
+        assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0
 
         r = cli_runner.invoke(
             ["diff", "HEAD^...HEAD", f"--output-format={output_format}", "--output=-"]
@@ -265,12 +268,14 @@ def test_edit_schema_polygons(output_format, data_working_copy, cli_runner):
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
         )
+        assert r.exit_code == 0, r.stderr
 
         check_polygons_diff_output(r, output_format)
 
         r = cli_runner.invoke(["commit", "-m", "schema change + feature changes"])
+        assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0
 
         r = cli_runner.invoke(
             ["diff", "HEAD^...HEAD", f"--output-format={output_format}", "--output=-"]
@@ -283,7 +288,7 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
     with data_working_copy("table") as (repo_path, wc_path):
         # empty
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         # make some changes
         repo = SnoRepo(repo_path)
@@ -293,7 +298,7 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
         r = cli_runner.invoke(
             ["diff", f"--output-format={output_format}", "--output=-"]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
 
         if output_format == "text":
             orig_diff_output = r.stdout.splitlines()
@@ -301,13 +306,14 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
             orig_diff_output = json.loads(r.stdout)
 
         r = cli_runner.invoke(["commit", "-m", "schema change + feature changes"])
+        assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["diff", "--output-format=quiet"])
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0
 
         r = cli_runner.invoke(
             ["diff", "HEAD^...HEAD", f"--output-format={output_format}", "--output=-"]
         )
-        assert r.exit_code == 0, r
+        assert r.exit_code == 0, r.stderr
         if output_format == "text":
             committed_diff_output = r.stdout.splitlines()
         else:
@@ -689,7 +695,7 @@ def check_polygons_diff_output(r, output_format):
             "+                                   colour = yellow",
             "+++ nz_waca_adjustments:feature:9999999",
             "+                                     geom = POLYGON(...)",
-            "+                            date_adjusted = 2019-07-05T13:04:00+01:00",
+            "+                            date_adjusted = 2019-07-05T13:04:00Z",
             "+                                 surv_ref = Null Island™ 🗺",
             "+                           adjusted_nodes = 123",
             "+                                   colour = ␀",
@@ -825,7 +831,7 @@ def check_polygons_diff_output(r, output_format):
                             "+": {
                                 "adjusted_nodes": 123,
                                 "colour": None,
-                                "date_adjusted": "2019-07-05T13:04:00+01:00",
+                                "date_adjusted": "2019-07-05T13:04:00Z",
                                 "geom": "01030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000",
                                 "id": 9999999,
                                 "surv_ref": "Null Island™ 🗺",
@@ -1008,7 +1014,7 @@ def check_polygons_diff_output(r, output_format):
                     "properties": {
                         "adjusted_nodes": 123,
                         "colour": None,
-                        "date_adjusted": "2019-07-05T13:04:00+01:00",
+                        "date_adjusted": "2019-07-05T13:04:00Z",
                         "id": 9999999,
                         "surv_ref": "Null Island™ 🗺",
                     },
@@ -1138,3 +1144,58 @@ def test_schema_diff_as_text(gen_uuid):
         "    },",
         "  ]",
     ]
+
+
+def test_validate(gen_uuid):
+    schema = Schema(
+        [
+            ColumnSchema(gen_uuid(), "i", "integer", 0, size=32),
+            ColumnSchema(gen_uuid(), "g", "geometry", None),
+            ColumnSchema(gen_uuid(), "t", "text", None, length=10),
+            ColumnSchema(gen_uuid(), "ts", "timestamp", None),
+            ColumnSchema(gen_uuid(), "d", "date", None),
+            ColumnSchema(gen_uuid(), "ti", "time", None),
+            ColumnSchema(gen_uuid(), "i6l", "interval", None),
+        ]
+    )
+
+    for col in schema.columns:
+        assert not schema.find_column_violation(col, None)
+
+    col = schema.columns[0]
+    assert not schema.find_column_violation(schema.columns[0], 123)
+    assert not schema.find_column_violation(schema.columns[0], 123456789)
+    assert schema.find_column_violation(schema.columns[0], 123456789012)
+    assert schema.find_column_violation(schema.columns[0], "text")
+
+    col = schema.columns[1]
+    assert not schema.find_column_violation(col, Geometry.from_wkt("POINT(0 0)"))
+    assert schema.find_column_violation(col, "POINT(0 0)")
+
+    col = schema.columns[2]
+    assert not schema.find_column_violation(col, "1234567890")
+    assert schema.find_column_violation(col, "12345678901234567890")
+    assert schema.find_column_violation(col, 1234)
+
+    col = schema.columns[3]
+    assert not schema.find_column_violation(col, "2021-03-08T00:47:24Z")
+    assert schema.find_column_violation(col, "2021-03-08T00:47:24+0100")
+    assert schema.find_column_violation(col, "text")
+
+    col = schema.columns[4]
+    assert not schema.find_column_violation(col, "2021-03-08")
+    assert schema.find_column_violation(col, "08-03-2021")
+    assert schema.find_column_violation(col, "text")
+
+    col = schema.columns[5]
+    assert not schema.find_column_violation(col, "00:47:24")
+    assert schema.find_column_violation(col, "text")
+
+    col = schema.columns[6]
+    assert not schema.find_column_violation(col, "P3Y6M4DT12H30M5S")
+    assert not schema.find_column_violation(col, "P3Y6M4D")
+    assert not schema.find_column_violation(col, "PT12H30M5S")
+    assert not schema.find_column_violation(col, "PT0S")
+
+    assert schema.find_column_violation(col, "P12H30M5S3Y6M4D")
+    assert schema.find_column_violation(col, "text")

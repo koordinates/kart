@@ -292,7 +292,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 incr += 1
                 L.info("Creating working copy at %s", wc_path)
                 r = cli_runner.invoke(["create-workingcopy", wc_path])
-                assert r.exit_code == 0, r
+                assert r.exit_code == 0, r.stderr
 
             del repo
 
@@ -332,7 +332,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
             import_path.mkdir()
             with chdir(import_path):
                 r = cli_runner.invoke(["init"])
-                assert r.exit_code == 0, r
+                assert r.exit_code == 0, r.stderr
 
                 repo = SnoRepo(import_path)
                 assert repo.is_empty
@@ -346,7 +346,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                         f"{table}:mytable",
                     ]
                 )
-                assert r.exit_code == 0, r
+                assert r.exit_code == 0, r.stderr
 
             time.sleep(1)
             shutil.copytree(import_path, repo_path)
@@ -481,7 +481,7 @@ class TestHelpers:
             "geom": Geometry.from_wkt(
                 "MULTIPOLYGON(((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0)))"
             ).with_crs_id(4167),
-            "date_adjusted": "2019-07-05T13:04:00+01:00",
+            "date_adjusted": "2019-07-05T13:04:00Z",
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
         }
@@ -696,7 +696,7 @@ def insert(request, cli_runner):
             r = cli_runner.invoke(
                 ["commit", "-m", f"commit-{func.index}", "-o", "json"]
             )
-            assert r.exit_code == 0, r
+            assert r.exit_code == 0, r.stderr
 
             commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
             return commit_id
@@ -729,7 +729,7 @@ def update(request, cli_runner):
             if hasattr(conn, "commit"):
                 conn.commit()
             r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
-            assert r.exit_code == 0, r
+            assert r.exit_code == 0, r.stderr
 
             commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
             return commit_id
