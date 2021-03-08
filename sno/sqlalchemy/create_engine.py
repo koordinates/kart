@@ -11,7 +11,7 @@ from psycopg2.extensions import Binary, new_type, register_adapter, register_typ
 
 from sno import spatialite_path
 from sno.geometry import Geometry
-from sno.exceptions import NotFound
+from sno.exceptions import NotFound, NO_DRIVER
 
 
 def gpkg_engine(path):
@@ -142,7 +142,11 @@ def get_sqlserver_driver():
     if not drivers:
         drivers = pyodbc.drivers()
     if not drivers:
-        raise NotFound("SQL Server driver was not found")
+        URL = "https://docs.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
+        raise NotFound(
+            f"ODBC Driver for SQL Server required but was not found.\nSee {URL}",
+            exit_code=NO_DRIVER,
+        )
     return sorted(drivers)[-1]  # Latest driver
 
 
