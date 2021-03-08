@@ -33,7 +33,7 @@ iniconfig==1.1.1
     # via
     #   -c requirements/test.txt
     #   pytest
-ipdb==0.13.5
+ipdb==0.13.6
     # via -r requirements/dev.in
 ipython-genutils==0.2.0
     # via traitlets
@@ -88,6 +88,7 @@ pytest==6.2.2
 toml==0.10.2
     # via
     #   -c requirements/test.txt
+    #   ipdb
     #   pytest
 traitlets==5.0.5
     # via ipython
