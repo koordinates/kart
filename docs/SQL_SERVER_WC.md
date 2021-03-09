@@ -1,5 +1,5 @@
 SQL Server Working Copy
---------------------
+-----------------------
 
 In order to use a [Microsoft SQL Server](https://docs.microsoft.com/sql/sql-server/) working copy, you need to have a SQL Server running. SQL Server 2016 and later is officially supported by Sno (SQL Server 2008 and later are largely compatible but not officially supported).
 
@@ -38,15 +38,28 @@ The schema that Sno is given to manage should be either non-existent or empty at
 
 The database user needs to have full rights to modify objects in the specified schema. (eg: via `GRANT CONTROL ON SCHEMA airport_sno TO sno_user;`).
 
+### Sno limitations - Geometry and Geography types
+
+SQL Server has two different spatial data types, called `Geometry` and `Geography`. See the SQL Server [spatial data types documentation](https://docs.microsoft.com/sql/relational-databases/spatial/spatial-data-types-overview). Sno only has one spatial data type, called `geography`. At present, Sno `geography` data is always written to the working copy in a SQL Server `Geography` column, but a future release of Sno will give the user the option to configure if they want `Geometry` or `Geography`. The SQL Server `Geometry` type treats geometries as if they lie on a flat plane (rather than on the ellipsoidal surface of the Earth), so using SQL Server functions such as `STDistance` or `STArea` that calculate distance or area of the geometries will not give the real-world answer if the geometries describe features on the surface of the Earth. Although the appropriate CRS ID remains attached to each `Geometry` instance, SQL Server doesn't use it at all to do these flat-plane geometry calculations.
+
+If you need to use SQL Server's `Geography` functions on data in your Sno working copy so that the calculations give the correct answers as modeled on the ellipsoidal surface of the Earth, you can convert the `Geometry` instances to `Geography` instance before doing the calculations. For instance, instead of executing the following query to find the area of features in column `geom`:
+```sql
+SELECT geom.STArea() FROM my_table;`
+```
+you would instead execute a query that first converts to `Geography`:
+```sql
+SELECT geography::STGeomFromWKB(geom.STAsBinary(), 4326).STArea() FROM my_table;`
+```
+
 ### SQL Server limitations
 
 Almost all geospatial data can be converted to SQL Server format without losing any fidelity, but it does have the following limitations.
 
 #### Approximated types
 
-There is one type that Sno supports that has no SQL Server equivalent - the `interval`. This type is "approximated" as a string (or more precisely, as an `NVARCHAR`) in the SQL Server working copy while keeping its original type in the Sno dataset. Sno creates a column of type `NVARCHAR` in the appropriate place in the database table, and fills it with with the intervals formatted as [ISO8601 durations](https://en.wikipedia.org/wiki/ISO_8601#Durations). When the working copy is committed, Sno converts the contents of those columns back to `interval`, instead of their actual type, `NVARCHAR`. Since the change from `interval` to `NVARCHAR` is just a limitation of the working copy, this apparent change in type will not show up as a change in the commit log, nor will it show up as an uncommitted change if you run `sno status` to see what local changes you have made but not yet committed.
+There is one type that Sno supports that has no SQL Server equivalent - the `interval`. This type is approximated as `NVARCHAR` in the SQL Server working copy. See [APPROXIMATED_TYPES](APPROXIMATED_TYPES.md) for more information.
 
-#### Geometry types
+#### Unconstrained geometry types
 
 Sno lets you define a column as containing only a particular type of geometry, eg only `POINT` or only `MULTIPOLYGON` types. By contrast, SQL Server lets you put any type of geometry into a geometry column.
 

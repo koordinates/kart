@@ -25,7 +25,7 @@ V2_TYPE_TO_MS_TYPE = {
         32: "int",
         64: "bigint",
     },
-    "interval": "text",
+    "interval": "text",  # Approximated
     "numeric": "numeric",
     "text": "nvarchar",
     "time": "time",
