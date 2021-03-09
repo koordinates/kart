@@ -1,6 +1,7 @@
 import pytest
 
 import pygit2
+from sqlalchemy.exc import IntegrityError
 
 from sno.repo import SnoRepo
 from sno.working_copy import sqlserver_adapter
@@ -311,3 +312,57 @@ def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
             # we would get spurious diffs on types that SQL server doesn't support.
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stdout
+
+
+def test_geometry_constraints(
+    data_archive,
+    cli_runner,
+    new_sqlserver_db_schema,
+    edit_points,
+    edit_polygons,
+    edit_table,
+):
+    """ Checkout a working copy and make some edits """
+    with data_archive("points") as repo_path:
+        repo = SnoRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            r = cli_runner.invoke(["create-workingcopy", sqlserver_url])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0
+
+            wc = repo.working_copy
+            assert wc.is_created()
+
+            with wc.session() as sess:
+                sess.execute(
+                    f"UPDATE {sqlserver_schema}.{H.POINTS.LAYER} "
+                    "SET geom=geometry::STGeomFromText('POINT(0 0)', 4326) WHERE fid=1;"
+                )
+                # Allowed - Geometry type and CRS ID match the points schema.
+
+            with wc.session() as sess:
+                sess.execute(
+                    f"UPDATE {sqlserver_schema}.{H.POINTS.LAYER} "
+                    "SET geom=NULL WHERE fid=2;"
+                )
+                # Allowed - NULLs are also allowed.
+
+            with pytest.raises(IntegrityError):
+                with wc.session() as sess:
+                    sess.execute(
+                        f"UPDATE {sqlserver_schema}.{H.POINTS.LAYER} "
+                        "SET geom=geometry::STGeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))', 4326) WHERE fid=3;"
+                    )
+                # Not allowed - wrong geometry type
+
+            with pytest.raises(IntegrityError):
+                with wc.session() as sess:
+                    sess.execute(
+                        f"UPDATE {sqlserver_schema}.{H.POINTS.LAYER} "
+                        "SET geom=geometry::STGeomFromText('POINT(0 0)', 4327) WHERE fid=4;"
+                    )
+                # Not allowed - wrong CRS ID

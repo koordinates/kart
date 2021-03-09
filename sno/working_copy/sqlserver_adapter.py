@@ -1,3 +1,4 @@
+from sno import crs_util
 from sno.schema import Schema, ColumnSchema
 
 from sqlalchemy.sql.compiler import IdentifierPreparer
@@ -65,12 +66,43 @@ APPROXIMATED_TYPES = {"interval": "text"}
 # geometry type info - the geometry type and CRS - is not roundtripped.
 
 
+# Used for constraining a column to be of a certain type, including subtypes of that type.
+# The CHECK need to explicitly list all types and subtypes, eg for SURFACE:
+# >>> CHECK(geom.STGeometryType() IN ('SURFACE','POLYGON','CURVEPOLYGON'))
+_MS_GEOMETRY_SUBTYPES = {
+    "Geometry": set(["Point", "Curve", "Surface", "GeometryCollection"]),
+    "Curve": set(["LineString", "CircularString", "CompoundCurve"]),
+    "Surface": set(["Polygon", "CurvePolygon"]),
+    "GeometryCollection": set(["MultiPoint", "MultiCurve", "MultiSurface"]),
+    "MultiCurve": set(["MultiLineString"]),
+    "MultiSurface": set(["MultiPolygon"]),
+}
+
+
+# Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
+def _build_transitive_subtypes(type_):
+    subtypes = _MS_GEOMETRY_SUBTYPES.get(type_, set())
+    sub_subtypes = set()
+    for subtype in subtypes:
+        sub_subtypes |= _build_transitive_subtypes(subtype)
+    subtypes |= sub_subtypes
+    # The type itself should also be one of its "subtypes".
+    subtypes.add(type_)
+    # Also key this data by upper case name, so we can find it in a case-insensitive manner
+    # (since V2 geometry types are uppercase).
+    _MS_GEOMETRY_SUBTYPES[type_.upper()] = subtypes
+    return subtypes
+
+
+_build_transitive_subtypes("Geometry")
+
+
 def v2_schema_to_sqlserver_spec(schema, v2_obj):
     """
     Generate the SQL CREATE TABLE spec from a V2 object eg:
     'fid INTEGER, geom GEOMETRY(POINT,2136), desc VARCHAR(128), PRIMARY KEY(fid)'
     """
-    result = [f"{quote(col.name)} {v2_type_to_ms_type(col, v2_obj)}" for col in schema]
+    result = [v2_column_schema_to_sqlserver_spec(col, v2_obj) for col in schema]
 
     if schema.pk_columns:
         pk_col_names = ", ".join((quote(col.name) for col in schema.pk_columns))
@@ -79,7 +111,51 @@ def v2_schema_to_sqlserver_spec(schema, v2_obj):
     return ", ".join(result)
 
 
-def v2_type_to_ms_type(column_schema, v2_obj):
+def v2_column_schema_to_sqlserver_spec(column_schema, v2_obj):
+    name = column_schema.name
+    ms_type = v2_type_to_ms_type(column_schema)
+    constraints = []
+
+    if ms_type == "geometry":
+        extra_type_info = column_schema.extra_type_info
+        geometry_type = extra_type_info.get("geometryType")
+        if geometry_type is not None:
+            geometry_type = geometry_type.split(" ")[0].upper()
+            if geometry_type != "GEOMETRY":
+                constraints.append(_geometry_type_constraint(name, geometry_type))
+
+        crs_name = extra_type_info.get("geometryCRS")
+        crs_id = None
+        if crs_name is not None:
+            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
+        if crs_id is not None:
+            constraints.append(_geometry_crs_constraint(name, crs_id))
+
+    if constraints:
+        constraint = f"CHECK({' AND '.join(constraints)})"
+        return " ".join([quote(column_schema.name), ms_type, constraint])
+
+    return " ".join([quote(column_schema.name), ms_type])
+
+
+def _geometry_type_constraint(col_name, geometry_type):
+    ms_geometry_types = _MS_GEOMETRY_SUBTYPES.get(geometry_type.upper())
+    ms_geometry_types_sql = ",".join(f"'{g}'" for g in ms_geometry_types)
+
+    result = f"({quote(col_name)}).STGeometryType()"
+    if len(ms_geometry_types) > 1:
+        result += f" IN ({ms_geometry_types_sql})"
+    else:
+        result += f" = {ms_geometry_types_sql}"
+
+    return result
+
+
+def _geometry_crs_constraint(col_name, crs_id):
+    return f"({quote(col_name)}).STSrid = {crs_id}"
+
+
+def v2_type_to_ms_type(column_schema):
     """Convert a v2 schema type to a SQL server type."""
 
     v2_type = column_schema.data_type
