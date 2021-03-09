@@ -65,6 +65,9 @@ APPROXIMATED_TYPES = {"interval": "text"}
 # doesn't mean that extra type info is always preserved. Specifically, extra
 # geometry type info - the geometry type and CRS - is not roundtripped.
 
+# Extra type info that might be missing/extra due to an approximated type.
+APPROXIMATED_TYPES_EXTRA_TYPE_INFO = ("length",)
+
 
 # Used for constraining a column to be of a certain type, including subtypes of that type.
 # The CHECK need to explicitly list all types and subtypes, eg for SURFACE:
@@ -224,9 +227,9 @@ def _ms_type_to_v2_type(ms_col_info):
     if v2_type == "geometry":
         return v2_type, extra_type_info
 
-    if v2_type == "text":
+    if v2_type in ("text", "blob"):
         length = ms_col_info["character_maximum_length"] or None
-        if length is not None:
+        if length is not None and length > 0:
             extra_type_info["length"] = length
 
     if v2_type == "numeric":

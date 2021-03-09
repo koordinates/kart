@@ -344,6 +344,12 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         old_type = old_col_dict["dataType"]
         new_type = new_col_dict["dataType"]
 
+        # Some types have to be approximated as other types in SQL Server, and they also lose any extra type info.
+        if sqlserver_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
+            new_col_dict["dataType"] = new_type = old_type
+            for key in sqlserver_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
+                new_col_dict[key] = old_col_dict.get(key)
+
         # Geometry type loses its extra type info when roundtripped through SQL Server.
         if new_type == "geometry":
             new_col_dict["geometryType"] = old_col_dict.get("geometryType")

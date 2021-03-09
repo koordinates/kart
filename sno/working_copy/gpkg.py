@@ -346,7 +346,7 @@ class WorkingCopy_GPKG(WorkingCopy):
         # Some types have to be approximated as other types in GPKG, and they also lose any extra type info.
         if gpkg_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
             new_col_dict["dataType"] = new_type = old_type
-            for key in ("precision", "scale"):
+            for key in gpkg_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
         # GPKG primary keys have to be int64, so we approximate int8, int16, int32 primary keys as int64s.

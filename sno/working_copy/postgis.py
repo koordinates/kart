@@ -346,6 +346,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         old_type = old_col_dict["dataType"]
         new_type = new_col_dict["dataType"]
 
+        # PostGIS can't store a certain integer size.
         if old_type == "integer" and new_type == "integer":
             old_size = old_col_dict.get("size")
             new_size = new_col_dict.get("size")
@@ -354,6 +355,10 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                 new_size,
             ):
                 new_col_dict["size"] = old_size
+
+        # PostGIS can't limit a blob's size to a certain maximum length.
+        if old_type == "blob" and new_type == "blob":
+            new_col_dict["length"] = old_col_dict.get("length")
 
         return new_type == old_type
 

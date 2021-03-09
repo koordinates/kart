@@ -1152,6 +1152,7 @@ def test_validate(gen_uuid):
             ColumnSchema(gen_uuid(), "i", "integer", 0, size=32),
             ColumnSchema(gen_uuid(), "g", "geometry", None),
             ColumnSchema(gen_uuid(), "t", "text", None, length=10),
+            ColumnSchema(gen_uuid(), "b", "blob", None, length=10),
             ColumnSchema(gen_uuid(), "ts", "timestamp", None),
             ColumnSchema(gen_uuid(), "d", "date", None),
             ColumnSchema(gen_uuid(), "ti", "time", None),
@@ -1178,20 +1179,25 @@ def test_validate(gen_uuid):
     assert schema.find_column_violation(col, 1234)
 
     col = schema.columns[3]
+    assert not schema.find_column_violation(col, b"1234567890")
+    assert schema.find_column_violation(col, b"12345678901234567890")
+    assert schema.find_column_violation(col, "text")
+
+    col = schema.columns[4]
     assert not schema.find_column_violation(col, "2021-03-08T00:47:24Z")
     assert schema.find_column_violation(col, "2021-03-08T00:47:24+0100")
     assert schema.find_column_violation(col, "text")
 
-    col = schema.columns[4]
+    col = schema.columns[5]
     assert not schema.find_column_violation(col, "2021-03-08")
     assert schema.find_column_violation(col, "08-03-2021")
     assert schema.find_column_violation(col, "text")
 
-    col = schema.columns[5]
+    col = schema.columns[6]
     assert not schema.find_column_violation(col, "00:47:24")
     assert schema.find_column_violation(col, "text")
 
-    col = schema.columns[6]
+    col = schema.columns[7]
     assert not schema.find_column_violation(col, "P3Y6M4DT12H30M5S")
     assert not schema.find_column_violation(col, "P3Y6M4D")
     assert not schema.find_column_violation(col, "PT12H30M5S")

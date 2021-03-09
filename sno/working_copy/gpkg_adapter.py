@@ -380,6 +380,9 @@ GPKG_TYPE_TO_V2_TYPE = {
 # Types that can't be roundtripped perfectly in GPKG, and what they end up as.
 APPROXIMATED_TYPES = {"interval": "text", "time": "text", "numeric": "text"}
 
+# Extra type info that might be missing/extra due to an approximated type.
+APPROXIMATED_TYPES_EXTRA_TYPE_INFO = ("length", "precision", "scale")
+
 
 def gpkg_type_to_v2_type(gkpg_type):
     """Convert a gpkg type to v2 schema type."""

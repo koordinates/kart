@@ -545,6 +545,17 @@ class Schema:
         return do_find_violation(col, value)
 
     @classmethod
+    def _find_blob_violation(cls, col, value):
+        length = col.extra_type_info.get("length")
+        if not length:
+            return None
+        len_value = len(value)
+        if len_value > length:
+            if len_value > 100:
+                value = value[:40] + b"....." + value[-40:]
+            return f"In column '{col.name}' value {repr(value)} exceeds limit of {length} bytes"
+
+    @classmethod
     def _find_date_violation(cls, col, value):
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
             return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 date ie YYYY-MM-DD"
@@ -556,19 +567,13 @@ class Schema:
             bounds = 2 ** (size - 1)
             return f"In column '{col.name}' value {repr(value)} does not fit into an int{size}: {-bounds} to {bounds-1}"
 
+    _DATE_INTERVAL = r"(\d+Y)?(\d+M)?(\d+W)?(\d+D)?"
+    _TIME_INTERVAL = r"(\d+H)?(\d+M)?(\d+(\.\d+)?S)?"
+    _INTERVAL = rf"P{_DATE_INTERVAL}(T{_TIME_INTERVAL})?"
+
     @classmethod
     def _find_interval_violation(cls, col, value):
-        DATE_INTERVAL = r"P(\d+Y)?(\d+M)?(\d+W)?(\d+D)?"
-        TIME_INTERVAL = r"(\d+H)?(\d+M)?(\d+(\.\d+)?S)?"
-        parts = value.split("T", maxsplit=2)
-        valid = False
-        if len(parts) == 1:
-            valid = re.fullmatch(DATE_INTERVAL, parts[0])
-        elif len(parts) == 2:
-            valid = re.fullmatch(DATE_INTERVAL, parts[0]) and re.match(
-                TIME_INTERVAL, parts[1]
-            )
-        if not valid:
+        if not re.fullmatch(cls._INTERVAL, value):
             return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 duration ie PxYxMxDTxHxMxS"
 
     @classmethod
