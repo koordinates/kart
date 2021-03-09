@@ -43,7 +43,7 @@ Almost all geospatial data can be converted to PostGIS format without losing any
 
 #### Approximated types
 
-There is one type that Sno supports that has no PostGIS equivalent - an 8-bit integer. This type is "approximated" as a `SMALLINT` (which has 16 bits) in the PostGIS working copy while keeping its original type in the Sno dataset. Sno creates a column of type `SMALLINT` in the appropriate place in the GPKG, and when the working copy is committed, Sno acts as if those columns have the original type, 8-bit integer, instead of their actual type, `SMALLINT`. Since the change from 8-bit integer to `SMALLINT` is just a limitation of the working copy, this apparent change in type will not show up as a change in the commit log, nor will it show up as an uncommitted change if you run `Sno status` to see what local changes you have made but not yet committed.
+There is one type that Sno supports that has no PostGIS equivalent - an 8-bit integer. This type is "approximated" as a `SMALLINT` (which has 16 bits) in the PostGIS working copy. See [APPROXIMATED_TYPES](APPROXIMATED_TYPES.md] for more information.
 
 #### CRS definitions
 

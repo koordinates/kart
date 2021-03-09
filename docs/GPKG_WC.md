@@ -14,21 +14,17 @@ Most geospatial data can be converted to GPKG format without losing any fidelity
 GPKG requires integer primary keys for tables that have a geometry column. Other tables do not have this constraint [[GPKG spec]](http://www.geopackage.org/spec120/#feature_user_tables). Sno follows these requirements as described below:
 
  * **Integer primary keys** \
-     Integer primary keys are preserved fully and function normally in a GPKG working copy.
+    Integer primary keys are preserved fully and function normally in a GPKG working copy.
 
  * **String primary keys** (or any other non-integer type) \
-     If the dataset **does not** have a geometry column, then these primary keys are checked out without modification. \
-     If the dataset **does** have a geometry column, then the primary key column is demoted to a regular column (but constrained to be unique and not-null), and another column is added to the table that is an integer primary key column, for the sole purpose of making the table conform to the GPKG specification. The additional integer column is called `.sno-auto-pk`. It is not part of the dataset, its contents are arbitrary (except that they conform to the GPKG requirements), and it is not tracked by Sno - any edits specifically to this column will not be committed.
+    If the dataset **does not** have a geometry column, then these primary keys are checked out without modification. \
+    If the dataset **does** have a geometry column, then the primary key column is demoted to a regular column (but constrained to be unique and not-null), and another column is added to the table that is an integer primary key column, for the sole purpose of making the table conform to the GPKG specification. The additional integer column is called `.sno-auto-pk`. It is not part of the dataset, its contents are arbitrary (except that they conform to the GPKG requirements), and it is not tracked by Sno - any edits specifically to this column will not be committed.
 
  * **No primary key column** \
-   This is not yet supported.
+    Importing data without primary keys is supported, a primary key will be added to each row automatically as it is imported. More documentation on importing data without primary keys will be added soon.
 
  * **Composite primary keys** (multiple primary key columns) \
    This is not yet supported.
-
-Work in this area is ongoing, expect to see support for data without primary keys as Sno development continues.
-
-Tracking bug for data without primary keys: [#212](https://github.com/koordinates/sno/issues/212)
 
 #### No type safety
 
@@ -51,4 +47,4 @@ According to the [GPKG specification](http://www.geopackage.org/spec/), a valid 
 * `TEXT`
 * `TINYINT` (int8)
 
-There are three types that Sno supports that do not have an equivalent on this list: `interval`, `numeric`, and `time`. These types are "approximated" as `TEXT` in the GPKG working copy while keeping their original type in the Sno dataset. Sno creates a column of type `TEXT` in the appropriate place in the GPKG, and when the working copy is committed, Sno acts as if those columns have the original type (eg `interval`) instead of their actual type, `TEXT`. Since the change from (eg) `interval` to `TEXT` is just a limitation of the working copy, this apparent change in type will not show up as a change in the commit log, nor will it show up as an uncommitted change if you run `sno status` to see what local changes you have made but not yet committed.
+There are three types that Sno supports that do not have an equivalent on this list: `interval`, `numeric`, and `time`. These types are "approximated" as `TEXT` in the GPKG working copy. See [APPROXIMATED_TYPES](APPROXIMATED_TYPES.md) for more information. SQLite has a series of [date and time functions](https://sqlite.org/lang_datefunc.html) available which work with ISO8601 date and time strings.
