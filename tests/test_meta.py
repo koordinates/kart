@@ -170,7 +170,7 @@ def test_commit_files(data_archive, cli_runner):
             "+<xml></xml>",
         ]
 
-        # committing a noop change is rejected
+        # committing a noop change is rejected (unless amending)
         r = cli_runner.invoke(
             [
                 "commit-files",
@@ -181,17 +181,39 @@ def test_commit_files(data_archive, cli_runner):
         )
         assert r.exit_code == 44, r.stderr
 
-        # ... unless you're amending an existing commit
+
+def test_commit_files_remove_empty(data_archive, cli_runner):
+    with data_archive("points"):
         r = cli_runner.invoke(
             [
                 "commit-files",
                 "-m",
-                "Updating attachments 3",
-                "LICENSE=Do not even look at this data",
-                "--amend",
+                "adding some files",
+                "x=x",
+                "y=",
             ]
         )
         assert r.exit_code == 0, r.stderr
+        x = subprocess.check_output(["git", "show", "HEAD:x"], encoding="utf-8")
+        assert x == "x"
+        y = subprocess.check_output(["git", "show", "HEAD:y"], encoding="utf-8")
+        assert y == ""
+
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "adding some files",
+                "--remove-empty-files",
+                "x=x",
+                "y=",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        x = subprocess.check_output(["git", "show", "HEAD:x"], encoding="utf-8")
+        assert x == "x"
+        with pytest.raises(subprocess.CalledProcessError):
+            subprocess.check_output(["git", "show", "HEAD:y"], encoding="utf-8")
 
 
 def test_commit_files_amend(data_archive, cli_runner):
@@ -203,13 +225,31 @@ def test_commit_files_amend(data_archive, cli_runner):
             "Import from nz-pa-points-topo-150k.gpkg",
         ]
 
+        # --amend the previous commit
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "new commit message",
+                "--amend",
+                "myfile.txt=myfile",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
         r = cli_runner.invoke(["log", "--pretty=%t"])
         assert r.exit_code == 0, r.stderr
         actual_tree_contents = r.stdout.splitlines()
 
-        # --amend the previous commit
+        # it's okay to amend with an empty change
         r = cli_runner.invoke(
-            ["commit-files", "-m", "A more informative commit message", "--amend"]
+            [
+                "commit-files",
+                "-m",
+                "A more informative commit message",
+                "--amend",
+                "myfile.txt=myfile",
+            ]
         )
 
         r = cli_runner.invoke(["log", "--pretty=%s"])
@@ -218,6 +258,10 @@ def test_commit_files_amend(data_archive, cli_runner):
             "A more informative commit message",
             "Import from nz-pa-points-topo-150k.gpkg",
         ]
+        myfile = subprocess.check_output(
+            ["git", "show", "HEAD:myfile.txt"], encoding="utf-8"
+        )
+        assert myfile == "myfile"
 
         r = cli_runner.invoke(["log", "--pretty=%t"])
         assert r.exit_code == 0, r.stderr

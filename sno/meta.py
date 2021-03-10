@@ -208,6 +208,12 @@ def meta_set(ctx, message, dataset, items):
     help="Amend the previous commit instead of adding a new commit",
 )
 @click.option(
+    "--remove-empty-files",
+    default=False,
+    is_flag=True,
+    help="If the content of any files specified is empty, remove the file.",
+)
+@click.option(
     "--allow-empty",
     is_flag=True,
     default=False,
@@ -225,7 +231,7 @@ def meta_set(ctx, message, dataset, items):
     metavar="KEY=VALUE [KEY=VALUE...]",
 )
 @click.pass_context
-def commit_files(ctx, message, ref, amend, allow_empty, items):
+def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, items):
     """Usage: sno commit-files -m MESSAGE KEY=VALUE [KEY=VALUE...]"""
     repo = ctx.obj.repo
     ctx.obj.check_not_dirty()
@@ -250,7 +256,10 @@ def commit_files(ctx, message, ref, amend, allow_empty, items):
     tree_builder = RichTreeBuilder(repo, original_tree)
     for key, value in items:
         value = bytes_or_bytes_from_file(value, key, ctx, encoding="utf-8")
-        tree_builder.insert(key, value or None)  # Empty bytestring -> deletes file.
+        if remove_empty_files and not value:
+            tree_builder.remove(key)
+        else:
+            tree_builder.insert(key, value)
 
     new_tree = tree_builder.flush()
     if new_tree == original_tree and not amend and not allow_empty:
