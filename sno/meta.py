@@ -261,11 +261,13 @@ def commit_files(ctx, message, ref, amend, allow_empty, items):
         [parent_commit.id] if not amend else [gp.id for gp in parent_commit.parents]
     )
     commit_to_ref = ref if not amend else None
+    author = repo.author_signature() if not amend else parent_commit.author
 
-    # This will also update the ref (branch) to point to the new commit
+    # This will also update the ref (branch) to point to the new commit,
+    # (if commit_to_ref is not None).
     new_commit_id = repo.create_commit(
         commit_to_ref,
-        repo.author_signature(),
+        author,
         repo.committer_signature(),
         message,
         new_tree.id,
