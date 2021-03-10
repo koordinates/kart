@@ -67,58 +67,17 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             p._replace(netloc=nl)
         return p.geturl()
 
-    def is_created(self):
-        """
-        Returns true if the db schema referred to by this working copy exists and
-        contains at least one table. If it exists but is empty, it is treated as uncreated.
-        This is so the  schema can be created ahead of time before a repo is created
-        or configured, without it triggering code that checks for corrupted working copies.
-        Note that it might not be initialised as a working copy - see self.is_initialised.
-        """
-        with self.session() as sess:
-            count = sess.scalar(
-                """SELECT COUNT(*) FROM sys.schemas WHERE name=:schema_name;""",
-                {"schema_name": self.db_schema},
-            )
-            return count > 0
-
-    def is_initialised(self):
-        """
-        Returns true if the SQL server working copy is initialised -
-        the schema exists and has the necessary sno tables, _sno_state and _sno_track.
-        """
-        with self.session() as sess:
-            count = sess.scalar(
-                f"""
-                SELECT COUNT(*) FROM sys.tables
-                WHERE schema_id = SCHEMA_ID(:schema_name)
-                    AND name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
-                """,
-                {"schema_name": self.db_schema},
-            )
-            return count == 2
-
-    def has_data(self):
-        """
-        Returns true if the SQL server working copy seems to have user-created content already.
-        """
-        with self.session() as sess:
-            count = sess.scalar(
-                f"""
-                SELECT COUNT(*) FROM sys.tables
-                WHERE schema_id = SCHEMA_ID(:schema_name)
-                    AND name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
-                """,
-                {"schema_name": self.db_schema},
-            )
-            return count > 0
-
     def create_and_initialise(self):
         with self.session() as sess:
-            if not self.is_created():
-                sess.execute(f"CREATE SCHEMA {self.DB_SCHEMA};")
+            # There's no CREATE IF NOT EXISTS, and CREATE SCHEMA has to be run in its own block.
+            r = sess.execute(
+                "SELECT * FROM sys.schemas WHERE name = :schema",
+                {"schema": self.db_schema},
+            )
+            schema_exists = r.fetchone()
+            if not schema_exists:
+                sess.execute(f"CREATE SCHEMA {self.DB_SCHEMA}")
 
-        with self.session() as sess:
             self.sno_tables.create_all(sess)
 
     def delete(self, keep_db_schema_if_possible=False):

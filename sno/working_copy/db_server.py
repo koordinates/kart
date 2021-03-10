@@ -101,3 +101,50 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         if self.db_schema is None:
             raise RuntimeError("No schema to escape.")
         return self.preparer.format_schema(self.db_schema)
+
+    def is_created(self):
+        """
+        Returns true if the DB schema referred to by this working copy exists and
+        contains at least one table. If it exists but is empty, it is treated as uncreated.
+        This is so the DB schema can be created ahead of time before a repo is created
+        or configured, without it triggering code that checks for corrupted working copies.
+        Note that it might not be initialised as a working copy - see self.is_initialised.
+        """
+        with self.session() as sess:
+            count = sess.scalar(
+                """
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema=:table_schema;
+                """,
+                {"table_schema": self.db_schema},
+            )
+            return count > 0
+
+    def is_initialised(self):
+        """
+        Returns true if the working copy is initialised -
+        the db schema exists and has the necessary sno tables, _sno_state and _sno_track.
+        """
+        with self.session() as sess:
+            count = sess.scalar(
+                f"""
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema=:table_schema AND table_name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
+                """,
+                {"table_schema": self.db_schema},
+            )
+            return count == 2
+
+    def has_data(self):
+        """
+        Returns true if the PostGIS working copy seems to have user-created content already.
+        """
+        with self.session() as sess:
+            count = sess.scalar(
+                f"""
+                SELECT COUNT(*) FROM information_schema.tables
+                WHERE table_schema=:table_schema AND table_name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
+                """,
+                {"table_schema": self.db_schema},
+            )
+            return count > 0
