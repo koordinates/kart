@@ -108,37 +108,23 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             )
 
     def delete(self, keep_db_schema_if_possible=False):
-        """Delete all tables in the schema."""
-        # We don't use drop ... cascade since that could also delete things outside the schema.
-        # Better to fail to delete the schema, than to delete things the user didn't want to delete.
+        # We don't use DROP SCHEMA CASCADE since that could possibly delete things outside the schema
+        # if they've been linked to it using foreign keys, and we only want to delete the schema that we manage.
         with self.session() as sess:
             # Don't worry about constraints when dropping everything.
             sess.execute("SET CONSTRAINTS ALL DEFERRED;")
-            # Drop tables
-            r = sess.execute(
-                "SELECT tablename FROM pg_tables where schemaname=:schema;",
-                {"schema": self.db_schema},
-            )
-            if r:
-                table_identifiers = ", ".join(
-                    (self.table_identifier(row[0]) for row in r)
-                )
-                sess.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
-
-            # Drop functions
-            r = sess.execute(
-                "SELECT proname from pg_proc WHERE pronamespace = (:schema)::regnamespace;",
-                {"schema": self.db_schema},
-            )
-            if r:
-                function_identifiers = ", ".join(
-                    (self.table_identifier(row[0]) for row in r)
-                )
-                sess.execute(f"DROP FUNCTION IF EXISTS {function_identifiers};")
-
-            # Drop schema, unless keep_db_schema_if_possible=True
+            self._drop_all_tables(sess)
+            self._drop_all_functions(sess)
             if not keep_db_schema_if_possible:
-                sess.execute(f"""DROP SCHEMA IF EXISTS {self.DB_SCHEMA};""")
+                self._drop_schema(sess)
+
+    def _drop_all_functions(self, sess):
+        r = sess.execute(
+            "SELECT proname from pg_proc WHERE pronamespace = (:schema)::regnamespace;",
+            {"schema": self.db_schema},
+        )
+        function_identifiers = ", ".join((self.table_identifier(row[0]) for row in r))
+        sess.execute(f"DROP FUNCTION IF EXISTS {function_identifiers};")
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = postgis_adapter.v2_schema_to_postgis_spec(dataset.schema, dataset)

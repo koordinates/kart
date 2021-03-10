@@ -80,24 +80,6 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
             self.sno_tables.create_all(sess)
 
-    def delete(self, keep_db_schema_if_possible=False):
-        """Delete all tables in the schema."""
-        with self.session() as sess:
-            # Drop tables
-            r = sess.execute(
-                "SELECT name FROM sys.tables WHERE schema_id=SCHEMA_ID(:schema);",
-                {"schema": self.db_schema},
-            )
-            table_identifiers = ", ".join((self.table_identifier(row[0]) for row in r))
-            if table_identifiers:
-                sess.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
-
-            # Drop schema, unless keep_db_schema_if_possible=True
-            if not keep_db_schema_if_possible:
-                sess.execute(
-                    f"DROP SCHEMA IF EXISTS {self.DB_SCHEMA};",
-                )
-
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = sqlserver_adapter.v2_schema_to_sqlserver_spec(
             dataset.schema, dataset
