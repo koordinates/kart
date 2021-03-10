@@ -85,28 +85,13 @@ class WorkingCopy_GPKG(WorkingCopy):
         # but changing it means migrating working copies, unfortunately.
         return self.quote(f"gpkg_sno_{dataset.table_name}_{trigger_type}")
 
-    def _insert_or_replace_into_dataset(self, dataset):
-        # SQLite optimisation.
-        return self._table_def_for_dataset(dataset).insert().prefix_with("OR REPLACE")
-
-    def _table_def_for_column_schema(self, col, dataset):
+    def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
             # This user-defined GeometryType normalises GPKG geometry to the Sno V2 GPKG geometry.
-            return sa.column(col.name, GeometryType)
+            return GeometryType
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
-            return sa.column(col.name)
-
-    def _insert_or_replace_state_table_tree(self, sess, tree_id):
-        r = sess.execute(
-            self.sno_tables.sno_state.insert().prefix_with("OR REPLACE"),
-            {
-                "table_name": "*",
-                "key": "tree",
-                "value": tree_id,
-            },
-        )
-        return r.rowcount
+            return None
 
     @contextlib.contextmanager
     def session(self, bulk=0):

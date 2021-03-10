@@ -19,6 +19,7 @@ from sno.exceptions import (
 )
 from sno.filter_util import UNFILTERED
 from sno.schema import Schema, DefaultRoundtripContext
+from sno.sqlalchemy.upsert import Upsert as upsert
 
 
 L = logging.getLogger("sno.working_copy.base")
@@ -148,24 +149,30 @@ class WorkingCopy:
         )
         return self.preparer.format_table(sqlalchemy_table)
 
-    def _table_def_for_column_schema(self, col, dataset):
-        # This is just used for selects/inserts/updates - we don't need the full type information.
-        # We only need type information if some automatic conversion needs to happen on read or write.
-        # TODO: return the full type information so we can also use it for CREATE TABLE.
-        return sa.column(col.name)
-
     @functools.lru_cache()
     def _table_def_for_dataset(self, dataset, schema=None):
-        """
-        A minimal table definition for a dataset.
-        Specifies table and column names only - the minimum required such that an insert() or update() will work.
-        """
+        """Returns a sqlalchemy table definition which can be inserted, updated, or selected from."""
         schema = schema or dataset.schema
-        return sa.table(
+        return sa.Table(
             dataset.table_name,
-            *[self._table_def_for_column_schema(c, dataset) for c in schema],
+            sa.MetaData(),
+            *[self._column_def_for_column_schema(c, dataset) for c in schema],
             schema=self.db_schema,
         )
+
+    def _column_def_for_column_schema(self, col, dataset):
+        return sa.Column(
+            col.name,
+            self._type_def_for_column_schema(col, dataset),
+            primary_key=col.pk_index is not None,
+        )
+
+    def _type_def_for_column_schema(self, col, dataset):
+        # Mostly sqlalchemy doesn't need to know the type, so we can return None.
+        # We only need to set the type if some automatic conversion needs to happen on read or write.
+        # This is currently only used for selects/inserts/update, not for CREATE TABLE.
+        # TODO: Add the full type information and use it for CREATE TABLE.
+        return None
 
     def _insert_into_dataset(self, dataset):
         """Returns a SQL command for inserting features into the table for that dataset."""
@@ -176,8 +183,7 @@ class WorkingCopy:
         Returns a SQL command for inserting/replacing features that may or may not already exist in the table
         for that dataset.
         """
-        # Its not possible to do this in a DB agnostic way.
-        raise NotImplementedError()
+        return upsert(self._table_def_for_dataset(dataset))
 
     @classmethod
     def get(cls, repo, *, allow_uncreated=False, allow_invalid_state=False):
@@ -686,8 +692,7 @@ class WorkingCopy:
         tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
         L.info(f"Tree sha: {tree_id}")
         with self.session() as sess:
-            changes = self._insert_or_replace_state_table_tree(sess, tree_id)
-        assert changes == 1, f"{self.SNO_STATE} update: expected 1Δ, got {changes}"
+            self._insert_or_replace_state_table_tree(sess, tree_id)
 
     def _insert_or_replace_state_table_tree(self, sess, tree_id):
         """
@@ -697,11 +702,8 @@ class WorkingCopy:
         tree_id - str, the hex SHA of the tree at HEAD.
         """
         r = sess.execute(
-            f"""
-            INSERT INTO {self.SNO_STATE} ("table_name", "key", "value") VALUES ('*', 'tree', :value)
-            ON CONFLICT ("table_name", "key") DO UPDATE SET value=EXCLUDED.value;
-            """,
-            {"value": tree_id},
+            upsert(self.sno_tables.sno_state),
+            {"table_name": "*", "key": "tree", "value": tree_id},
         )
         return r.rowcount
 

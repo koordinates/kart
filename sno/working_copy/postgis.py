@@ -5,7 +5,6 @@ from urllib.parse import urlsplit
 
 
 from sqlalchemy import Index
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
@@ -194,13 +193,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
 
-    def _insert_or_replace_into_dataset(self, dataset):
-        # See https://docs.sqlalchemy.org/en/14/dialects/postgresql.html#insert-on-conflict-upsert
-        pk_col_names = [c.name for c in dataset.schema.pk_columns]
-        stmt = postgresql_insert(self._table_def_for_dataset(dataset))
-        update_dict = {c.name: c for c in stmt.excluded if c.name not in pk_col_names}
-        return stmt.on_conflict_do_update(index_elements=pk_col_names, set_=update_dict)
-
     def _write_meta(self, sess, dataset):
         """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
         self._write_meta_title(sess, dataset)
@@ -254,7 +246,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         spatial_index = Index(
             index_name, table.columns[geom_col], postgres_using="GIST"
         )
-        spatial_index.table = table
         spatial_index.create(sess.connection())
         sess.execute(f"""ANALYZE {self.table_identifier(dataset)};""")
 

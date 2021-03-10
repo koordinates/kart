@@ -7,8 +7,7 @@ import sqlalchemy as sa
 from sqlalchemy import literal_column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql import crud, quoted_name
-from sqlalchemy.sql.dml import ValuesBase
+from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function
 from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.types import UserDefinedType
@@ -148,43 +147,17 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
         )
 
-    def _table_def_for_column_schema(self, col, dataset):
+    def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
             crs_name = col.extra_type_info.get("geometryCRS", None)
             crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
             # This user-defined GeometryType adapts Sno's GPKG geometry to SQL Server's native geometry type.
-            return sa.column(col.name, GeometryType(crs_id))
+            return GeometryType(crs_id)
         elif col.data_type in ("date", "time", "timestamp"):
-            return sa.column(col.name, BaseDateOrTimeType)
+            return BaseDateOrTimeType
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
-            return sa.column(col.name)
-
-    def _insert_or_replace_into_dataset(self, dataset):
-        pk_col_names = [c.name for c in dataset.schema.pk_columns]
-        non_pk_col_names = [
-            c.name for c in dataset.schema.columns if c.pk_index is None
-        ]
-        return sqlserver_upsert(
-            self._table_def_for_dataset(dataset),
-            index_elements=pk_col_names,
-            set_=non_pk_col_names,
-        )
-
-    def _insert_or_replace_state_table_tree(self, sess, tree_id):
-        r = sess.execute(
-            f"""
-            MERGE {self.SNO_STATE} STA
-            USING (VALUES ('*', 'tree', :value)) AS SRC("table_name", "key", "value")
-            ON SRC."table_name" = STA."table_name" AND SRC."key" = STA."key"
-            WHEN MATCHED THEN
-                UPDATE SET "value" = SRC."value"
-            WHEN NOT MATCHED THEN
-                INSERT ("table_name", "key", "value") VALUES (SRC."table_name", SRC."key", SRC."value");
-            """,
-            {"value": tree_id},
-        )
-        return r.rowcount
+            return None
 
     def _write_meta(self, sess, dataset):
         """Write the title. Other metadata is not stored in a SQL Server WC."""
@@ -444,55 +417,3 @@ class BaseDateOrTimeType(UserDefinedType):
 
 def sqlserver_upsert(*args, **kwargs):
     return Upsert(*args, **kwargs)
-
-
-class Upsert(ValuesBase):
-    """A SQL server custom upsert command that compiles to a merge statement."""
-
-    def __init__(
-        self,
-        table,
-        values=None,
-        prefixes=None,
-        index_elements=None,
-        set_=None,
-        **dialect_kw,
-    ):
-        ValuesBase.__init__(self, table, values, prefixes)
-        self._validate_dialect_kwargs(dialect_kw)
-        self.index_elements = index_elements
-        self.set_ = set_
-        self.select = self.select_names = None
-        self._returning = None
-
-
-@compiles(Upsert)
-def compile_upsert(upsert_stmt, compiler, **kw):
-    preparer = compiler.preparer
-
-    def list_cols(col_names, prefix=""):
-        return ", ".join([prefix + c for c in col_names])
-
-    crud_params = crud._setup_crud_params(compiler, upsert_stmt, crud.ISINSERT, **kw)
-    crud_values = ", ".join([c[1] for c in crud_params])
-
-    table = preparer.format_table(upsert_stmt.table)
-    all_columns = [preparer.quote(c[0].name) for c in crud_params]
-    index_elements = [preparer.quote(c) for c in upsert_stmt.index_elements]
-    set_ = [preparer.quote(c) for c in upsert_stmt.set_]
-
-    result = f"MERGE {table} TARGET"
-    result += f" USING (VALUES ({crud_values})) AS SOURCE ({list_cols(all_columns)})"
-
-    result += " ON "
-    result += " AND ".join([f"SOURCE.{c} = TARGET.{c}" for c in index_elements])
-
-    result += " WHEN MATCHED THEN UPDATE SET "
-    result += ", ".join([f"{c} = SOURCE.{c}" for c in set_])
-
-    result += " WHEN NOT MATCHED THEN INSERT "
-    result += (
-        f"({list_cols(all_columns)}) VALUES ({list_cols(all_columns, 'SOURCE.')});"
-    )
-
-    return result
