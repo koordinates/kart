@@ -378,9 +378,12 @@ class WorkingCopy:
 
     def get_db_tree(self):
         """Returns the hex tree ID from the state table."""
+        sno_state = self.sno_tables.sno_state
         with self.session() as sess:
             return sess.scalar(
-                f"""SELECT value FROM {self.SNO_STATE} WHERE "table_name"='*' AND "key"='tree';""",
+                sa.select([sno_state.c.value]).where(
+                    sa.and_(sno_state.c.table_name == "*", sno_state.c.key == "tree")
+                )
             )
 
     def assert_db_tree_match(self, tree):
@@ -397,14 +400,16 @@ class WorkingCopy:
         Returns the total number of changes tracked in sno_track,
         or the number of changes tracked for the given dataset.
         """
+        sno_track = self.sno_tables.sno_track
         with self.session() as sess:
             if dataset is not None:
                 return sess.scalar(
-                    f"SELECT COUNT(*) FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
-                    {"table_name": dataset.table_name},
+                    sa.select([sa.func.count()])
+                    .select_from(sno_track)
+                    .where(sno_track.c.table_name == dataset.table_name)
                 )
             else:
-                return sess.scalar(f"SELECT COUNT(*) FROM {self.SNO_TRACK};")
+                return sess.scalar(sa.select([sa.func.count()]).select_from(sno_track))
 
     def _chunk(self, iterable, size):
         """Generator. Yield successive chunks from iterable of length <size>."""
@@ -619,9 +624,10 @@ class WorkingCopy:
         """Delete the rows from the tracking table that match the given filter."""
         reset_filter = reset_filter or UNFILTERED
 
+        sno_track = self.sno_tables.sno_track
         with self.session() as sess:
             if reset_filter == UNFILTERED:
-                sess.execute(f"DELETE FROM {self.SNO_TRACK};")
+                sess.execute(sa.delete(sno_track))
                 return
 
             for dataset_path, dataset_filter in reset_filter.items():
@@ -631,17 +637,18 @@ class WorkingCopy:
                     or dataset_filter.get("feature") == UNFILTERED
                 ):
                     sess.execute(
-                        f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
-                        {"table_name": table_name},
+                        sa.delete(sno_track).where(sno_track.c.table_name == table_name)
                     )
-                    continue
-
-                pks = list(dataset_filter.get("feature", []))
-                t = sa.text(
-                    f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name AND pk IN :pks;"
-                )
-                t = t.bindparams(sa.bindparam("pks", expanding=True))
-                sess.execute(t, {"table_name": table_name, "pks": pks})
+                else:
+                    pks = list(dataset_filter.get("feature", []))
+                    sess.execute(
+                        sa.delete(sno_track).where(
+                            sa.and_(
+                                sno_track.c.table_name == table_name,
+                                sno_track.c.pk.in_(pks),
+                            )
+                        )
+                    )
 
     def can_find_renames(self, meta_diff):
         """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
@@ -849,9 +856,11 @@ class WorkingCopy:
                 sess.execute(f"DROP TABLE IF EXISTS {self.table_identifier(dataset)};")
                 self.delete_meta(dataset)
 
+                sno_track = self.sno_tables.sno_track
                 sess.execute(
-                    f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
-                    {"table_name": dataset.table_name},
+                    sa.delete(sno_track).where(
+                        sno_track.c.table_name == dataset.table_name
+                    )
                 )
 
     def reset(
@@ -1106,9 +1115,11 @@ class WorkingCopy:
         sess - sqlalchemy session.
         base_ds - the dataset this WC table is based on.
         """
+        sno_track = self.sno_tables.sno_track
         r = sess.execute(
-            f"""SELECT pk FROM {self.SNO_TRACK} WHERE table_name = :table_name;""",
-            {"table_name": base_ds.table_name},
+            sa.select([sno_track.c.pk]).where(
+                sno_track.c.table_name == base_ds.table_name
+            )
         )
         dirty_pk_list = [row[0] for row in r]
         track_count = len(dirty_pk_list)
@@ -1122,20 +1133,15 @@ class WorkingCopy:
 
             count = self._delete_features(sess, base_ds, dirty_pk_list)
             L.debug(
-                "_reset_dirty_rows(): removed %s features, tracking Δ count=%s",
-                count,
-                track_count,
+                f"_reset_dirty_rows(): removed {count} features, tracking Δ count={track_count}"
             )
             count = self._write_features(
                 sess, base_ds, dirty_pk_list, ignore_missing=True
             )
             L.debug(
-                "_reset_dirty_rows(): wrote %s features, tracking Δ count=%s",
-                count,
-                track_count,
+                f"_reset_dirty_rows(): wrote {count} features, tracking Δ count={track_count}"
             )
 
             sess.execute(
-                f"DELETE FROM {self.SNO_TRACK} WHERE table_name=:table_name;",
-                {"table_name": base_ds.table_name},
+                sa.delete(sno_track).where(sno_track.c.table_name == base_ds.table_name)
             )
