@@ -177,14 +177,15 @@ install: | $(sno-app-any)
 test: $(py-install-test)
 	pytest -v --cov-report term --cov-report html:coverage
 
-ifeq ($(PLATFORM),Linux)
-# (github actions only supports docker containers on linux)
-ci-test:
-	export SNO_POSTGRES_URL ?= postgresql://docker:docker@localhost:5432/gis
-	export SNO_SQLSERVER_URL ?= mssql://sa:PassWord1@localhost:1433/master
-endif
 
 .PHONY: ci-test
+
+ifeq ($(PLATFORM),Linux)
+# (github actions only supports docker containers on linux)
+ci-test: export SNO_POSTGRES_URL ?= postgresql://docker:docker@localhost:5432/gis
+ci-test: export SNO_SQLSERVER_URL ?= mssql://sa:PassWord1@localhost:1433/master
+endif
+
 ci-test:
 	CI=true pytest \
 		-vv \
