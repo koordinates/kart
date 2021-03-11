@@ -7,7 +7,9 @@
 apipkg==1.5
     # via execnet
 appnope==0.1.2
-    # via -r requirements/dev.in
+    # via
+    #   -r requirements/dev.in
+    #   ipython
 attrs==20.3.0
     # via
     #   -c requirements/../requirements.txt
@@ -21,9 +23,9 @@ colorama==0.4.4
     #   -r requirements/dev.in
 decorator==4.4.2
     # via ipython
-execnet==1.7.1
+execnet==1.8.0
     # via pytest-xdist
-importlib-metadata==3.4.0
+importlib-metadata==3.7.2
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/test.txt
@@ -43,7 +45,7 @@ ipython==7.21.0
     #   ipdb
 jedi==0.18.0
     # via ipython
-packaging==20.8
+packaging==20.9
     # via
     #   -c requirements/test.txt
     #   pytest
@@ -59,7 +61,7 @@ pluggy==0.13.1
     # via
     #   -c requirements/test.txt
     #   pytest
-prompt-toolkit==3.0.14
+prompt-toolkit==3.0.16
     # via ipython
 ptyprocess==0.7.0
     # via pexpect
@@ -68,7 +70,7 @@ py==1.10.0
     #   -c requirements/test.txt
     #   pytest
     #   pytest-forked
-pygments==2.7.4
+pygments==2.8.1
     # via
     #   -c requirements/../requirements.txt
     #   ipython
@@ -99,7 +101,7 @@ typing-extensions==3.7.4.3
     #   importlib-metadata
 wcwidth==0.2.5
     # via prompt-toolkit
-zipp==3.4.0
+zipp==3.4.1
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/test.txt
