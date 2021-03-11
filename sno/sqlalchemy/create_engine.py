@@ -161,4 +161,4 @@ def _append_query_to_url(uri, new_query_dict):
 def _append_to_query(existing_query, new_query_dict):
     query_dict = parse_qs(existing_query)
     # ignore new keys if they're already set in the querystring
-    return urlencode({**new_query_dict, **query_dict})
+    return urlencode({**new_query_dict, **query_dict}, doseq=True)
