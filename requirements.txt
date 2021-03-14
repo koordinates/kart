@@ -28,7 +28,7 @@ pycparser==2.20
     # via -r requirements/requirements.in
 pygments==2.8.1
     # via -r requirements/requirements.in
-pyodbc==4.0.30
+pyodbc==4.0.30 ; platform_system != "Linux"
     # via -r requirements/requirements.in
 pyrsistent==0.17.3
     # via jsonschema
