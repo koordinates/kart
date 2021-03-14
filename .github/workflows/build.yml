@@ -17,7 +17,7 @@ jobs:
         platform:
           - name: Linux
             id: Linux
-            os: ubuntu-20.04
+            os: ubuntu-latest
             package-formats: deb rpm
             services:
               postgis:
@@ -282,8 +282,6 @@ jobs:
         id: package-Linux
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -q -y unixodbc-dev
           make -C platforms deb rpm
           ls -la platforms/linux/dist/*.rpm platforms/linux/dist/*.deb
 
