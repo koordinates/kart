@@ -29,6 +29,14 @@ jobs:
                   --health-retries 5
                 ports:
                   - 5432:5432
+              sqlserver:
+                image: mcr.microsoft.com/mssql/server
+                options: >-
+                  -e ACCEPT_EULA=Y
+                  -e SA_PASSWORD=PassWord1
+                ports:
+                  - 1433:1433
+
           - name: macOS
             id: Darwin
             os: macos-latest

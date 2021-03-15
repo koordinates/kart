@@ -3,6 +3,7 @@ import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
 
+from sno import is_linux
 from sno.repo import SnoRepo
 from sno.working_copy import sqlserver_adapter
 from test_working_copy import compute_approximated_types
@@ -11,6 +12,7 @@ from test_working_copy import compute_approximated_types
 H = pytest.helpers.helpers()
 
 
+@pytest.mark.xfail(is_linux, reason="pyodbc is not yet included in linux build")
 @pytest.mark.parametrize(
     "existing_schema",
     [
@@ -66,6 +68,7 @@ def test_checkout_workingcopy(
             assert wc.assert_db_tree_match(head_tree_id)
 
 
+@pytest.mark.xfail(is_linux, reason="pyodbc is not yet included in linux build")
 @pytest.mark.parametrize(
     "existing_schema",
     [
@@ -111,6 +114,7 @@ def test_init_import(
             assert wc.path == sqlserver_url
 
 
+@pytest.mark.xfail(is_linux, reason="pyodbc is not yet included in linux build")
 @pytest.mark.parametrize(
     "archive,table,commit_sha",
     [
@@ -194,6 +198,7 @@ def test_commit_edits(
             assert repo.head.peel(pygit2.Commit).hex == orig_head
 
 
+@pytest.mark.xfail(is_linux, reason="pyodbc is not yet included in linux build")
 def test_edit_schema(data_archive, cli_runner, new_sqlserver_db_schema):
     with data_archive("polygons") as repo_path:
         repo = SnoRepo(repo_path)
@@ -299,6 +304,7 @@ def test_approximated_types():
     )
 
 
+@pytest.mark.xfail(is_linux, reason="pyodbc is not yet included in linux build")
 def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
     with data_archive("types") as repo_path:
         repo = SnoRepo(repo_path)
@@ -314,6 +320,7 @@ def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
             assert r.exit_code == 0, r.stdout
 
 
+@pytest.mark.xfail(is_linux, reason="pyodbc is not yet included in linux build")
 def test_geometry_constraints(
     data_archive,
     cli_runner,
