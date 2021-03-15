@@ -32,6 +32,8 @@ NO_TABLE = 49
 NO_CONFLICT = 50
 NO_DRIVER = 51
 
+CONNECTION_ERROR = 60
+
 SUBPROCESS_ERROR_FLAG = 128
 DEFAULT_SUBPROCESS_ERROR = 129
 
@@ -86,6 +88,13 @@ class NotYetImplemented(BaseException):
 
 class NotFound(BaseException):
     exit_code = NOT_FOUND
+
+
+class DbConnectionError(BaseException):
+    exit_code = CONNECTION_ERROR
+
+    def __init__(self, message, db_error):
+        super().__init__(f"{message}\nCaused by error:\n{db_error}")
 
 
 class SubprocessError(BaseException):

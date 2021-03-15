@@ -3,9 +3,10 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 import click
+from sqlalchemy.exc import OperationalError
 
 from .base import WorkingCopy
-from sno.exceptions import InvalidOperation
+from sno.exceptions import InvalidOperation, DbConnectionError
 
 
 class DatabaseServer_WorkingCopy(WorkingCopy):
@@ -102,6 +103,10 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
             raise RuntimeError("No schema to escape.")
         return self.preparer.format_schema(self.db_schema)
 
+    def _db_connection_error(self, causal_error):
+        message = f"Error connecting to {self.WORKING_COPY_TYPE_NAME} working copy at {self.path}"
+        return DbConnectionError(message, causal_error)
+
     def is_created(self):
         """
         Returns true if the DB schema referred to by this working copy exists and
@@ -110,44 +115,53 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         or configured, without it triggering code that checks for corrupted working copies.
         Note that it might not be initialised as a working copy - see self.is_initialised.
         """
-        with self.session() as sess:
-            count = sess.scalar(
-                """
-                SELECT COUNT(*) FROM information_schema.tables
-                WHERE table_schema=:table_schema;
-                """,
-                {"table_schema": self.db_schema},
-            )
-            return count > 0
+        try:
+            with self.session() as sess:
+                count = sess.scalar(
+                    """
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema=:table_schema;
+                    """,
+                    {"table_schema": self.db_schema},
+                )
+                return count > 0
+        except OperationalError as e:
+            raise self._db_connection_error(e)
 
     def is_initialised(self):
         """
         Returns true if the working copy is initialised -
         the db schema exists and has the necessary sno tables, _sno_state and _sno_track.
         """
-        with self.session() as sess:
-            count = sess.scalar(
-                f"""
-                SELECT COUNT(*) FROM information_schema.tables
-                WHERE table_schema=:table_schema AND table_name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
-                """,
-                {"table_schema": self.db_schema},
-            )
-            return count == 2
+        try:
+            with self.session() as sess:
+                count = sess.scalar(
+                    f"""
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema=:table_schema AND table_name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
+                    """,
+                    {"table_schema": self.db_schema},
+                )
+                return count == 2
+        except OperationalError as e:
+            raise self._db_connection_error(e)
 
     def has_data(self):
         """
         Returns true if the PostGIS working copy seems to have user-created content already.
         """
-        with self.session() as sess:
-            count = sess.scalar(
-                f"""
-                SELECT COUNT(*) FROM information_schema.tables
-                WHERE table_schema=:table_schema AND table_name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
-                """,
-                {"table_schema": self.db_schema},
-            )
-            return count > 0
+        try:
+            with self.session() as sess:
+                count = sess.scalar(
+                    f"""
+                    SELECT COUNT(*) FROM information_schema.tables
+                    WHERE table_schema=:table_schema AND table_name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
+                    """,
+                    {"table_schema": self.db_schema},
+                )
+                return count > 0
+        except OperationalError as e:
+            raise self._db_connection_error(e)
 
     def delete(self, keep_db_schema_if_possible=False):
         # We don't use DROP SCHEMA CASCADE since that could possibly delete things outside the schema
