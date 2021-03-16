@@ -50,6 +50,7 @@ lib-pq := env/lib/libpq.$(LIBSUFFIX)
 lib-sqlite := env/lib/libsqlite3.$(LIBSUFFIX)
 lib-git := env/bin/git
 lib-curl := env/lib/libcurl.$(LIBSUFFIX)
+lib-unixodbc := env/lib/libodbc.$(LIBSUFFIX)
 
 lib-spatialite := env/lib/mod_spatialite.$(LIBSUFFIX)
 lib-gdal := env/lib/python3.7/site-packages/osgeo/__init__.py
@@ -98,7 +99,7 @@ ifeq ($(PLATFORM),Darwin)
 #
 # MacOS
 #
-brew-libs = $(lib-sqlite) $(lib-curl) $(lib-git) $(lib-spatialindex) $(lib-geos) $(lib-jsonc)
+brew-libs = $(lib-sqlite) $(lib-curl) $(lib-git) $(lib-spatialindex) $(lib-geos) $(lib-jsonc) $(lib-unixodbc)
 
 $(brew-deps): Brewfile
 	brew bundle
@@ -106,7 +107,7 @@ $(brew-deps): Brewfile
 .PHONY: brew-deps
 brew-deps: $(brew-deps)
 
-.PHONE: brew-libs
+.PHONY: brew-libs
 brew-libs: $(brew-libs)
 
 env: brew-deps
@@ -180,6 +181,11 @@ $(lib-spatialindex): $(brew-deps) | env
 $(lib-geos): $(brew-deps) | env
 	$(MAKE) .delocate
 	cp -av /usr/local/opt/geos/lib/libgeos*.dylib .delocate
+	$(MAKE) delocate-deps
+
+$(lib-unixodbc): $(brew-deps) | env
+	$(MAKE) .delocate
+	cp -av /usr/local/opt/unixodbc/lib/libodbc*.dylib .delocate
 	$(MAKE) delocate-deps
 
 else
