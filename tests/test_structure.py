@@ -917,7 +917,7 @@ def test_write_feature_performance(
             source = OgrImportSource.open(data / source_gpkg, table=table)
             with source:
                 dataset = Dataset2(None, table)
-                feature_iter = itertools.cycle(source.features())
+                feature_iter = itertools.cycle(list(source.features()))
 
                 index = pygit2.Index()
 
