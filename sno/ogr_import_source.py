@@ -621,7 +621,7 @@ class ESRIShapefileImportSource(OgrImportSource):
         return True
 
 
-class SQLAlchemyOGRImportSource(OgrImportSource):
+class SQLAlchemyOgrImportSource(OgrImportSource):
     """
     An import source that fetches features via SQLAlchemy,
     instead of via OGR.
@@ -665,7 +665,7 @@ class SQLAlchemyOGRImportSource(OgrImportSource):
                 yield from self._sqlalchemy_to_sno_features(r)
 
 
-class GPKGImportSource(SQLAlchemyOGRImportSource):
+class GPKGImportSource(SQLAlchemyOgrImportSource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.table:
@@ -702,7 +702,7 @@ class GPKGImportSource(SQLAlchemyOGRImportSource):
         yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
 
 
-class PostgreSQLImportSource(SQLAlchemyOGRImportSource):
+class PostgreSQLImportSource(OgrImportSource):
     @classmethod
     def postgres_url_to_ogr_conn_str(cls, url):
         """
