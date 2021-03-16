@@ -226,6 +226,8 @@ class OgrImportSource(ImportSource):
 
     def clone_for_table(self, table, primary_key=None, **meta_overrides):
         meta_overrides = {**self._meta_overrides, **meta_overrides}
+        self.check_table(table)
+
         return self.__class__(
             self.ds,
             table=table,
