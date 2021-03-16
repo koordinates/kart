@@ -68,7 +68,7 @@ class GenerateIDsFromFile(StringFromFile):
             # Get the file object, so we don't have to read the whole thing
             as_file=True,
         )
-        return iter(fp)
+        return (line.rstrip("\n") for line in fp)
 
 
 @click.command("import")
@@ -153,7 +153,7 @@ class GenerateIDsFromFile(StringFromFile):
     type=GenerateIDsFromFile(encoding="utf-8"),
     help=(
         "Replace only features with the given IDs. IDs should be given one-per-line. "
-        "Use file arguments (--replace-ids=@filename.txt)"
+        "Use file arguments (--replace-ids=@filename.txt). Implies --replace-existing"
     ),
 )
 @click.option(

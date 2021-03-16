@@ -8,8 +8,8 @@ from .apply import apply_patch
 from .cli_util import (
     StringFromFile,
     add_help_subcommand,
-    string_or_string_from_file,
-    bytes_or_bytes_from_file,
+    value_optionally_from_text_file,
+    value_optionally_from_binary_file,
 )
 from .checkout import reset_wc_if_needed
 from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
@@ -163,7 +163,7 @@ def meta_set(ctx, message, dataset, items):
         message = f"Update metadata for {dataset}"
 
     def _parse(key, value):
-        value = string_or_string_from_file(value, key, ctx, encoding="utf-8")
+        value = value_optionally_from_text_file(value, key, ctx, encoding="utf-8")
         if key.endswith(".json"):
             try:
                 return json.loads(value)
@@ -255,7 +255,7 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
     original_tree = parent_commit.peel(pygit2.Tree)
     tree_builder = RichTreeBuilder(repo, original_tree)
     for key, value in items:
-        value = bytes_or_bytes_from_file(value, key, ctx, encoding="utf-8")
+        value = value_optionally_from_binary_file(value, key, ctx, encoding="utf-8")
         if remove_empty_files and not value:
             tree_builder.remove(key)
         else:

@@ -123,12 +123,21 @@ class StringFromFile(click.types.StringParamType):
 
     def convert(self, value, param, ctx, as_file=False):
         value = super().convert(value, param, ctx)
-        return string_or_string_from_file(
+        return value_optionally_from_text_file(
             value, param, ctx, as_file=as_file, **self.file_kwargs
         )
 
 
-def string_or_string_from_file(value, param, ctx, as_file=False, **file_kwargs):
+def value_optionally_from_text_file(value, param, ctx, as_file=False, **file_kwargs):
+    """
+    Given a string, interprets it either as:
+    * a filename prefixed with '@', and returns the contents of the file
+    * just a string, and returns the string itself.
+
+    By default, returns the value as a string.
+    If as_file=True, returns a StringIO or a file object. Use this when dealing with
+    large files to save memory.
+    """
     if value == "-" or value.startswith("@"):
         filetype = click.File(**file_kwargs)
         filename = value[1:] if value.startswith("@") else value
@@ -143,7 +152,9 @@ def string_or_string_from_file(value, param, ctx, as_file=False, **file_kwargs):
         return value
 
 
-def bytes_or_bytes_from_file(value, param, ctx, encoding="utf-8", **file_kwargs):
+def value_optionally_from_binary_file(
+    value, param, ctx, encoding="utf-8", **file_kwargs
+):
     if value == "-" or value.startswith("@"):
         filetype = click.File(mode="rb", **file_kwargs)
         filename = value[1:] if value.startswith("@") else value

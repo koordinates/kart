@@ -421,7 +421,7 @@ def test_import_replace_ids(
             )
             assert r.exit_code == 0, r.stderr
 
-            # Now change some features:
+            # Now change four features; two updates and two inserts
             with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
                 conn.execute(
                     """
@@ -435,6 +435,7 @@ def test_import_replace_ids(
                     """
                 )
 
+            # import, but specify --replace-ids to match only one insert and one update
             r = cli_runner.invoke(
                 [
                     "import",
@@ -449,6 +450,8 @@ def test_import_replace_ids(
             assert r.exit_code == 0, r.stderr
             diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
             features = diff.get("feature")
+
+            # one insert and one update were performed, and the other two changes ignored.
             assert len(features) == 2
             assert features == [
                 {

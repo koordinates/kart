@@ -389,22 +389,26 @@ class OgrImportSource(ImportSource):
         for ogr_feature in self._iter_ogr_features():
             yield self._ogr_feature_to_sno_feature(ogr_feature)
 
+    def _ogr_sql_quote_literal(self, x):
+        # OGR follows normal SQL92 string literal quoting rules.
+        # There's no params argument to SetAttributeFilter(),
+        # so we have to quote things ourselves.
+        if isinstance(x, int):
+            return str(x)
+        else:
+            return "'{}'".format(str(x).replace("'", "''"))
+
+    def _first_pk_values(self, row_pks):
+        # (123,) --> 123. we only handle one pk field
+        for x in row_pks:
+            assert len(x) == 1
+            yield x[0]
+
     def get_features(self, row_pks, *, ignore_missing=False):
         pk_field = self.primary_key
 
-        # TODO: does OGR have any better way of quoting these parameters?
-        # there's no params argument to SetAttributeFilter()...
-        def _quote(x):
-            if isinstance(x, int):
-                return str(x)
-            else:
-                return "'{}'".format(str(x).replace("'", "''"))
-
-        # (123,) --> 123. we only handle one pk field
-        row_pks = (x[0] for x in row_pks)
-
-        for batch in chunk(row_pks, 1000):
-            quoted_pks = ",".join(_quote(x) for x in batch)
+        for batch in chunk(self._first_pk_value(row_pks), 1000):
+            quoted_pks = ",".join(self._ogr_sql_quote_literal(x) for x in batch)
             filter_sql = f"{self.quote_ident(pk_field)} IN ({quoted_pks})"
 
             for ogr_feature in self._iter_ogr_features(filter_sql=filter_sql):

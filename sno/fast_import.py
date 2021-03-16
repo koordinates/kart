@@ -61,6 +61,7 @@ def fast_import_tables(
     header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
     message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
     replace_existing - See ReplaceExisting enum
+    replace_ids - list of PK values to replace, or None
     limit - maximum number of features to import per source.
     max_pack_size - maximum size of pack files. Affects performance.
     max_delta_depth - maximum depth of delta-compression chains. Affects performance.
@@ -89,6 +90,7 @@ def fast_import_tables(
                 raise InvalidOperation(
                     f"Cannot import to {source.dest_path}/ - already exists in repository"
                 )
+        assert replace_ids is None
 
     # Add primary keys if needed.
     sources = PkGeneratingImportSource.wrap_sources_if_needed(sources, repo)
