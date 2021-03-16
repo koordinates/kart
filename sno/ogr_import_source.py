@@ -409,7 +409,7 @@ class OgrImportSource(ImportSource):
     def get_features(self, row_pks, *, ignore_missing=False):
         pk_field = self.primary_key
 
-        for batch in chunk(self._first_pk_value(row_pks), 1000):
+        for batch in chunk(self._first_pk_values(row_pks), 1000):
             quoted_pks = ",".join(self._ogr_sql_quote_literal(x) for x in batch)
             filter_sql = f"{self.quote_ident(pk_field)} IN ({quoted_pks})"
 
