@@ -58,7 +58,8 @@ lib-libgit2 := env/lib/libgit2.$(LIBSUFFIX)
 lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
 lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3)
+lib-pyodbc := env/lib/python3.7/site-packages/pyodbc/__init__.py
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3) $(lib-pyodbc)
 
 
 # default target
@@ -94,6 +95,11 @@ $(lib-psycopg2): $(lib-pq)
 $(lib-pysqlite3): $(lib-sqlite)
 	$(MAKE) -C pysqlite3 wheel
 	pip3 install --force-reinstall pysqlite3/wheel/pysqlite3-*$(WHEELID).whl
+
+$(lib-pyodbc): $(lib-unixodbc)
+	$(MAKE) -C pyodbc wheel
+	pip3 install --force-reinstall pyodbc/wheel/pyodbc-*$(WHEELID).whl
+
 
 ifeq ($(PLATFORM),Darwin)
 #
@@ -306,11 +312,10 @@ build-Darwin: $(build-libs) $(brew-libs)
 	cp -vaf env/share/gdal $(VENDOR_ENV)/share/
 	cp -vaf env/share/proj $(VENDOR_ENV)/share/
 
-	# PyGit2
 	cp -vf pygit2/wheel/pygit2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
-
 	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
+	cp -vf pyodbc/wheel/pyodbc-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
 

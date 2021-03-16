@@ -24,10 +24,12 @@ vendor/proj/**
 !vendor/proj/Makefile
 vendor/psycopg2/**
 !vendor/psycopg2/Makefile
-vendor/pysqlite3/**
-!vendor/pysqlite3/Makefile
 vendor/pygit2/**
 !vendor/pygit2/Makefile
+vendor/pyodbc/**
+!vendor/pyodbc/Makefile
+vendor/pysqlite3/**
+!vendor/pysqlite3/Makefile
 vendor/spatialindex/**
 !vendor/spatialindex/Makefile
 vendor/spatialite/**

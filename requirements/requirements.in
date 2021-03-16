@@ -3,7 +3,6 @@ Click~=7.0
 jsonschema
 msgpack~=0.6.1
 Pygments
-pyodbc ; platform_system!="Linux"
 Rtree~=0.9.4
 sqlalchemy
 
