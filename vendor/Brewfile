@@ -15,3 +15,5 @@ brew "json-c"
 brew "curl"
 
 brew "sqlite3"
+
+brew "unixodbc"
