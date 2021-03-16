@@ -621,7 +621,51 @@ class ESRIShapefileImportSource(OgrImportSource):
         return True
 
 
-class GPKGImportSource(OgrImportSource):
+class SQLAlchemyOGRImportSource(OgrImportSource):
+    """
+    An import source that fetches features via SQLAlchemy,
+    instead of via OGR.
+    """
+
+    @property
+    def engine(self):
+        raise NotImplementedError
+
+    @ungenerator(dict)
+    def _sqlalchemy_row_to_sno_feature(self, sa_row):
+        for key, value in sa_row.items():
+            if key in self.geometry_column_names:
+                yield (key, Geometry.of(value))
+            else:
+                yield key, value
+
+    def _sqlalchemy_to_sno_features(self, resultset):
+        for sa_row in resultset:
+            yield self._sqlalchemy_row_to_sno_feature(sa_row)
+
+    def features(self):
+        """
+        Overrides the OGR implementation for performance reasons
+        (it turns out that OGR feature iterators can be quite slow!)
+        """
+        with self.engine.connect() as conn:
+            r = conn.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
+            yield from self._sqlalchemy_to_sno_features(r)
+
+    def get_features(self, row_pks, *, ignore_missing=False):
+        with self.engine.connect() as conn:
+            pk_field = self.primary_key
+            batch_query = sqlalchemy.text(
+                f"SELECT * FROM {self.quote_ident(self.table)} "
+                f"WHERE {self.quote_ident(pk_field)} IN :pks ;"
+            ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
+
+            for batch in chunk(row_pks, 1000):
+                r = conn.execute(batch_query, {"pks": batch})
+                yield from self._sqlalchemy_to_sno_features(r)
+
+
+class GPKGImportSource(SQLAlchemyOGRImportSource):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.table:
@@ -643,42 +687,9 @@ class GPKGImportSource(OgrImportSource):
     def engine(self):
         return gpkg_engine(self.ogr_source)
 
-    @ungenerator(dict)
-    def _gpkg_feature_to_sno_feature(self, gpkg_feature):
-        for key, value in gpkg_feature.items():
-            if key in self.geometry_column_names:
-                yield (key, Geometry.of(value))
-            else:
-                yield key, value
-
     @property
     def primary_key(self):
         return self._primary_key or self._gpkg_primary_key
-
-    def _gpkg_to_sno_features(self, resultset):
-        for gpkg_feature in resultset:
-            yield self._gpkg_feature_to_sno_feature(gpkg_feature)
-
-    def features(self):
-        """
-        Overrides the super implementation for performance reasons
-        (it turns out that OGR feature iterators for GPKG are quite slow!)
-        """
-        with self.engine.connect() as conn:
-            r = conn.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
-            yield from self._gpkg_to_sno_features(r)
-
-    def get_features(self, row_pks, *, ignore_missing=False):
-        with self.engine.connect() as conn:
-            pk_field = self.primary_key
-            batch_query = sqlalchemy.text(
-                f"SELECT * FROM {self.quote_ident(self.table)} "
-                f"WHERE {self.quote_ident(pk_field)} IN :pks ;"
-            ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
-
-            for batch in chunk(row_pks, 1000):
-                r = conn.execute(batch_query, {"pks": batch})
-                yield from self._gpkg_to_sno_features(r)
 
     def get_metadata_xml(self):
         user_specified = super().get_metadata_xml()
@@ -691,7 +702,7 @@ class GPKGImportSource(OgrImportSource):
         yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
 
 
-class PostgreSQLImportSource(OgrImportSource):
+class PostgreSQLImportSource(SQLAlchemyOGRImportSource):
     @classmethod
     def postgres_url_to_ogr_conn_str(cls, url):
         """
