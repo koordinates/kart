@@ -7,9 +7,7 @@
 apipkg==1.5
     # via execnet
 appnope==0.1.2
-    # via
-    #   -r requirements/dev.in
-    #   ipython
+    # via -r requirements/dev.in
 attrs==20.3.0
     # via
     #   -c requirements/../requirements.txt
@@ -35,7 +33,7 @@ iniconfig==1.1.1
     # via
     #   -c requirements/test.txt
     #   pytest
-ipdb==0.13.6
+ipdb==0.13.7
     # via -r requirements/dev.in
 ipython-genutils==0.2.0
     # via traitlets
