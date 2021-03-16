@@ -24,7 +24,7 @@ from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
 from .sqlalchemy.create_engine import gpkg_engine, postgis_engine
-from .utils import ungenerator
+from .utils import ungenerator, chunk
 from .working_copy import gpkg_adapter
 
 
@@ -373,9 +373,11 @@ class OgrImportSource(ImportSource):
                 value = ogr_feature.GetField(name)
             yield name, adapter(value)
 
-    def _iter_ogr_features(self):
+    def _iter_ogr_features(self, filter_sql=None):
         l = self.ogrlayer
         l.ResetReading()
+        if filter_sql is not None:
+            l.SetAttributeFilter(filter_sql)
         f = l.GetNextFeature()
         while f is not None:
             yield f
@@ -386,6 +388,27 @@ class OgrImportSource(ImportSource):
     def features(self):
         for ogr_feature in self._iter_ogr_features():
             yield self._ogr_feature_to_sno_feature(ogr_feature)
+
+    def get_features(self, row_pks, *, ignore_missing=False):
+        pk_field = self.primary_key
+
+        # TODO: does OGR have any better way of quoting these parameters?
+        # there's no params argument to SetAttributeFilter()...
+        def _quote(x):
+            if isinstance(x, int):
+                return str(x)
+            else:
+                return "'{}'".format(str(x).replace("'", "''"))
+
+        # (123,) --> 123. we only handle one pk field
+        row_pks = (x[0] for x in row_pks)
+
+        for batch in chunk(row_pks, 1000):
+            quoted_pks = ",".join(_quote(x) for x in batch)
+            filter_sql = f"{self.quote_ident(pk_field)} IN ({quoted_pks})"
+
+            for ogr_feature in self._iter_ogr_features(filter_sql=filter_sql):
+                yield self._ogr_feature_to_sno_feature(ogr_feature)
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -626,6 +649,10 @@ class GPKGImportSource(OgrImportSource):
     def primary_key(self):
         return self._primary_key or self._gpkg_primary_key
 
+    def _gpkg_to_sno_features(self, resultset):
+        for gpkg_feature in resultset:
+            yield self._gpkg_feature_to_sno_feature(gpkg_feature)
+
     def features(self):
         """
         Overrides the super implementation for performance reasons
@@ -633,8 +660,19 @@ class GPKGImportSource(OgrImportSource):
         """
         with self.engine.connect() as conn:
             r = conn.execute(f"SELECT * FROM {self.quote_ident(self.table)};")
-            for gpkg_feature in r:
-                yield self._gpkg_feature_to_sno_feature(gpkg_feature)
+            yield from self._gpkg_to_sno_features(r)
+
+    def get_features(self, row_pks, *, ignore_missing=False):
+        with self.engine.connect() as conn:
+            pk_field = self.primary_key
+            batch_query = sqlalchemy.text(
+                f"SELECT * FROM {self.quote_ident(self.table)} "
+                f"WHERE {self.quote_ident(pk_field)} IN :pks ;"
+            ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
+
+            for batch in chunk(row_pks, 1000):
+                r = conn.execute(batch_query, {"pks": batch})
+                yield from self._gpkg_to_sno_features(r)
 
     def get_metadata_xml(self):
         user_specified = super().get_metadata_xml()

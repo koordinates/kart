@@ -42,6 +42,7 @@ def fast_import_tables(
     header=None,
     message=None,
     replace_existing=ReplaceExisting.DONT_REPLACE,
+    replace_ids=None,
     allow_empty=False,
     limit=None,
     max_pack_size="2G",
@@ -135,14 +136,24 @@ def fast_import_tables(
         for source in sources:
             replacing_dataset = None
             if replace_existing == ReplaceExisting.GIVEN:
-                # Delete the existing dataset, before we re-import it.
-                p.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
-
                 try:
                     replacing_dataset = repo.datasets()[source.dest_path]
                 except KeyError:
-                    pass
-                else:
+                    # no such dataset; no problem
+                    replacing_dataset = None
+
+                if replacing_dataset is not None:
+                    if replace_ids is None:
+                        # Delete the existing dataset, before we re-import it.
+                        p.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
+                    else:
+                        # delete and reimport meta/
+                        # we also delete the specified features, but we do it further down
+                        # so that we don't have to iterate the IDs more than once.
+                        p.stdin.write(
+                            f"D {source.dest_path}/.sno-dataset/meta\n".encode("utf8")
+                        )
+
                     # We just deleted the legends, but we still need them to reimport
                     # data efficiently. Copy them from the original dataset.
                     for x in write_blobs_to_stream(
@@ -167,7 +178,21 @@ def fast_import_tables(
 
                 # Features
                 t1 = time.monotonic()
-                src_iterator = source.features()
+                if replace_ids is not None:
+
+                    # As we iterate over IDs, also delete them from the dataset.
+                    # This means we don't have to load the whole list into memory.
+                    def _ids():
+                        replacing_schema = replacing_dataset.schema
+                        for pk in replace_ids:
+                            pk = replacing_schema.sanitise_pks(pk)
+                            path = replacing_dataset.encode_pks_to_path(pk)
+                            p.stdin.write(f"D {path}\n".encode("utf8"))
+                            yield pk
+
+                    src_iterator = source.get_features(_ids(), ignore_missing=True)
+                else:
+                    src_iterator = source.features()
 
                 for i, blob_path in write_blobs_to_stream(
                     p.stdin,
