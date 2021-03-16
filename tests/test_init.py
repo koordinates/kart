@@ -363,7 +363,7 @@ def test_import_replace_existing_with_column_renames(
             )
             assert r.exit_code == 0, r.stderr
 
-            # Now reanme
+            # Now rename
             # * doesn't include the `survey_reference` column
             # * has the columns in a different order
             # * has a new column
@@ -398,6 +398,85 @@ def test_import_replace_existing_with_column_renames(
             new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
             old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
             assert new_feature_tree == old_feature_tree
+
+
+def test_import_replace_ids(
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+):
+    with data_archive("gpkg-polygons") as data:
+        repo_path = tmp_path / "emptydir"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+        with chdir(repo_path):
+            # initial import
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # Now change some features:
+            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+                conn.execute(
+                    """
+                    DELETE FROM "nz_waca_adjustments" WHERE id IN (4413497, 4411733)
+                    """
+                )
+                conn.execute(
+                    """
+                    UPDATE "nz_waca_adjustments" SET adjusted_nodes = adjusted_nodes + 5
+                    WHERE id IN (4408774, 4408145)
+                    """
+                )
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    "--replace-ids",
+                    "4408774\n4413497",
+                    data / "nz-waca-adjustments.gpkg",
+                    "nz_waca_adjustments:mytable",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["show", "-o", "json"])
+            assert r.exit_code == 0, r.stderr
+            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+            features = diff.get("feature")
+            assert len(features) == 2
+            assert features == [
+                {
+                    "-": {
+                        "id": 4408774,
+                        "geom": "01060000000100000001030000000100000010000000C885FE1E988C6540B64D609F81CC45C046DF4EB25E8C6540C15BEAE03CCC45C0F188658E208C654079F5E0A49FCB45C05857056A318C6540B96F466883CB45C04D1F1058508C6540DAE0582152CB45C0E056EB54828C6540CD7CF3110BCB45C0D93E44E98A8C6540A55E707CFFCA45C0DE793DF38D8C654046D02963FBCA45C02B069EEB928C65404AF6BEA728CB45C05DBB9EB3978C6540C9E3D8DF5ACB45C0C1CA5CBA9C8C654081C6820293CB45C0E4A03F0E9D8C6540C072BA6C98CB45C03E3F4785A48C6540B7EB364329CC45C0A51E5844A38C65409A9F40F370CC45C0204899AE9A8C6540DAB64D0C80CC45C0C885FE1E988C6540B64D609F81CC45C0",
+                        "date_adjusted": "2016-12-15T15:59:07Z",
+                        "survey_reference": None,
+                        "adjusted_nodes": 2300,
+                    },
+                    "+": {
+                        "id": 4408774,
+                        "geom": "01060000000100000001030000000100000010000000C885FE1E988C6540B64D609F81CC45C046DF4EB25E8C6540C15BEAE03CCC45C0F188658E208C654079F5E0A49FCB45C05857056A318C6540B96F466883CB45C04D1F1058508C6540DAE0582152CB45C0E056EB54828C6540CD7CF3110BCB45C0D93E44E98A8C6540A55E707CFFCA45C0DE793DF38D8C654046D02963FBCA45C02B069EEB928C65404AF6BEA728CB45C05DBB9EB3978C6540C9E3D8DF5ACB45C0C1CA5CBA9C8C654081C6820293CB45C0E4A03F0E9D8C6540C072BA6C98CB45C03E3F4785A48C6540B7EB364329CC45C0A51E5844A38C65409A9F40F370CC45C0204899AE9A8C6540DAB64D0C80CC45C0C885FE1E988C6540B64D609F81CC45C0",
+                        "date_adjusted": "2016-12-15T15:59:07Z",
+                        "survey_reference": None,
+                        "adjusted_nodes": 2305,
+                    },
+                },
+                {
+                    "-": {
+                        "id": 4413497,
+                        "geom": "0106000000010000000103000000010000000F000000A51E5844A38C65409A9F40F370CC45C03BD400EF8E8C6540D6CC24AA13CB45C0DE793DF38D8C654046D02963FBCA45C0ACBE5F719D8C6540ED43F29FDBCA45C0E6453C0ED18C6540EDF0D7648DCA45C017E20260E58C654085B9388570CA45C04CCEFA24208D65407C735A9C7ACA45C0E4045C46208D654023A031F87CCA45C082F17D01268D6540F83908FAE7CA45C090D42C9B2B8D65406A8A6F8D50CB45C0C5E452BB2C8D654067D97F9380CB45C0A54D1AC92B8D65404EFDE10287CB45C0818F66D1208D65401F20A9CF9FCB45C06E75AA0CAC8C6540C74CFD1763CC45C0A51E5844A38C65409A9F40F370CC45C0",
+                        "date_adjusted": "2016-12-16T11:10:05Z",
+                        "survey_reference": None,
+                        "adjusted_nodes": 1296,
+                    }
+                },
+            ]
 
 
 def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):

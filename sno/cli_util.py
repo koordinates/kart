@@ -2,6 +2,7 @@ import json
 import click
 import jsonschema
 import os
+import io
 
 import pygit2
 
@@ -120,19 +121,26 @@ class StringFromFile(click.types.StringParamType):
     def __init__(self, **file_kwargs):
         self.file_kwargs = file_kwargs
 
-    def convert(self, value, param, ctx):
+    def convert(self, value, param, ctx, as_file=False):
         value = super().convert(value, param, ctx)
-        return string_or_string_from_file(value, param, ctx, **self.file_kwargs)
+        return string_or_string_from_file(
+            value, param, ctx, as_file=as_file, **self.file_kwargs
+        )
 
 
-def string_or_string_from_file(value, param, ctx, **file_kwargs):
+def string_or_string_from_file(value, param, ctx, as_file=False, **file_kwargs):
     if value == "-" or value.startswith("@"):
         filetype = click.File(**file_kwargs)
         filename = value[1:] if value.startswith("@") else value
         fp = filetype.convert(filename, param, ctx)
-        return fp.read()
-
-    return value
+        if as_file:
+            return fp
+        else:
+            return fp.read()
+    if as_file:
+        return io.StringIO(value)
+    else:
+        return value
 
 
 def bytes_or_bytes_from_file(value, param, ctx, encoding="utf-8", **file_kwargs):

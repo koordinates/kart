@@ -1,4 +1,5 @@
 import functools
+import itertools
 
 
 def ungenerator(cast_function):
@@ -23,3 +24,13 @@ def ungenerator(cast_function):
         return wrapper
 
     return decorator
+
+
+def chunk(iterable, size):
+    """Generator. Yield successive chunks from iterable of length <size>."""
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, size))
+        if not chunk:
+            return
+        yield chunk

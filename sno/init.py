@@ -57,6 +57,20 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     wc.write_full(commit, *datasets)
 
 
+class GenerateIDsFromFile(StringFromFile):
+    name = "ids"
+
+    def convert(self, value, param, ctx):
+        fp = super().convert(
+            value,
+            param,
+            ctx,
+            # Get the file object, so we don't have to read the whole thing
+            as_file=True,
+        )
+        return iter(fp)
+
+
 @click.command("import")
 @click.pass_context
 @click.argument("source")
@@ -135,6 +149,14 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
     help="Replace existing dataset(s) of the same name.",
 )
 @click.option(
+    "--replace-ids",
+    type=GenerateIDsFromFile(encoding="utf-8"),
+    help=(
+        "Replace only features with the given IDs. IDs should be given one-per-line. "
+        "Use file arguments (--replace-ids=@filename.txt)"
+    ),
+)
+@click.option(
     "--similarity-detection-limit",
     hidden=True,
     type=click.INT,
@@ -180,6 +202,7 @@ def import_table(
     tables,
     table_info,
     replace_existing,
+    replace_ids,
     similarity_detection_limit,
     allow_empty,
     max_delta_depth,
@@ -245,6 +268,18 @@ def import_table(
             description=info.get("description"),
             xml_metadata=info.get("xmlMetadata"),
         )
+        if replace_ids is not None:
+            if repo.version < 2:
+                raise InvalidOperation(
+                    f"--replace-ids is not supported for V{repo.version} datasets"
+                )
+            if not import_source.schema.pk_columns:
+                raise InvalidOperation(
+                    "--replace-ids requires an import source with a primary key"
+                )
+
+            replace_existing = True
+
         if replace_existing:
             if repo.version < 2:
                 raise InvalidOperation(
@@ -284,6 +319,7 @@ def import_table(
         replace_existing=ReplaceExisting.GIVEN
         if replace_existing
         else ReplaceExisting.DONT_REPLACE,
+        replace_ids=replace_ids,
         allow_empty=allow_empty,
     )
 

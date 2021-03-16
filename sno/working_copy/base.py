@@ -1,7 +1,6 @@
 from enum import Enum, auto
 import contextlib
 import functools
-import itertools
 import logging
 import time
 
@@ -20,6 +19,7 @@ from sno.exceptions import (
 from sno.filter_util import UNFILTERED
 from sno.schema import Schema, DefaultRoundtripContext
 from sno.sqlalchemy.upsert import Upsert as upsert
+from sno.utils import chunk
 
 
 L = logging.getLogger("sno.working_copy.base")
@@ -411,15 +411,6 @@ class WorkingCopy:
             else:
                 return sess.scalar(sa.select([sa.func.count()]).select_from(sno_track))
 
-    def _chunk(self, iterable, size):
-        """Generator. Yield successive chunks from iterable of length <size>."""
-        it = iter(iterable)
-        while True:
-            chunk = tuple(itertools.islice(it, size))
-            if not chunk:
-                return
-            yield chunk
-
     def check_not_dirty(self, help_message=None):
         """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
         if not help_message:
@@ -741,9 +732,7 @@ class WorkingCopy:
                 CHUNK_SIZE = 10000
                 total_features = dataset.feature_count
 
-                for row_dicts in self._chunk(
-                    dataset.features_with_crs_ids(), CHUNK_SIZE
-                ):
+                for row_dicts in chunk(dataset.features_with_crs_ids(), CHUNK_SIZE):
                     sess.execute(sql, row_dicts)
                     feat_progress += len(row_dicts)
 
@@ -821,7 +810,7 @@ class WorkingCopy:
         sql = self._insert_or_replace_into_dataset(dataset)
         feat_count = 0
         CHUNK_SIZE = 10000
-        for row_dicts in self._chunk(
+        for row_dicts in chunk(
             dataset.get_features_with_crs_ids(pk_list, ignore_missing=ignore_missing),
             CHUNK_SIZE,
         ):
@@ -840,7 +829,7 @@ class WorkingCopy:
         stmt = sa.text(sql).bindparams(sa.bindparam("pks", expanding=True))
         feat_count = 0
         CHUNK_SIZE = 100
-        for pks in self._chunk(pk_list, CHUNK_SIZE):
+        for pks in chunk(pk_list, CHUNK_SIZE):
             r = sess.execute(stmt, {"pks": pks})
             feat_count += r.rowcount
 
