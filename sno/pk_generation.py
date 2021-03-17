@@ -36,7 +36,7 @@ class PkGeneratingImportSource(ImportSource):
       {
         "primaryKeySchema": {
           "id": "ad068414-3a04-45ab-851d-bfa5104c60d6",
-          "name": "generated-pk",
+          "name": "auto_pk",
           "dataType": "integer",
           "primaryKeyIndex": 0,
           "size": 64
@@ -68,7 +68,7 @@ class PkGeneratingImportSource(ImportSource):
 
     DEFAULT_PK_COL = {
         "id": ColumnSchema.new_id(),
-        "name": "generated-pk",
+        "name": "auto_pk",
         "dataType": "integer",
         "primaryKeyIndex": 0,
         "size": 64,

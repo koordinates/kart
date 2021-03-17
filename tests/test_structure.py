@@ -639,12 +639,12 @@ def test_postgis_import_from_view_no_pk(
             cli_runner,
             chdir,
             table_name="nz_waca_adjustments_view",
-            pk_name="generated-pk",
+            pk_name="auto_pk",
         )
 
         repo = SnoRepo(repo_path)
         dataset = repo.datasets()["nz_waca_adjustments_view"]
-        initial_pks = [f["generated-pk"] for f in dataset.features()]
+        initial_pks = [f["auto_pk"] for f in dataset.features()]
         assert len(initial_pks) == 161
         assert max(initial_pks) == 161
         assert sorted(initial_pks) == list(range(1, 161 + 1))
@@ -675,7 +675,7 @@ def test_postgis_import_from_view_no_pk(
         assert r.exit_code == 0, r.stderr
         repo = SnoRepo(repo_path)
         dataset = repo.datasets()["nz_waca_adjustments_view"]
-        new_pks = [f["generated-pk"] for f in dataset.features()]
+        new_pks = [f["auto_pk"] for f in dataset.features()]
 
         assert len(new_pks) == 159
         assert max(new_pks) == 228

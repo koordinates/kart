@@ -221,8 +221,7 @@ class WorkingCopy_GPKG(WorkingCopy):
         # GPKG requires an integer primary key for spatial tables, so we add it in if needed:
         if dataset.has_geometry and "PRIMARY KEY" not in table_spec:
             table_spec = (
-                '".sno-auto-pk" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,'
-                + table_spec
+                '"auto_int_pk" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,' + table_spec
             )
 
         sess.execute(
