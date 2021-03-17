@@ -19,14 +19,14 @@ ifeq ($(PLATFORM),Darwin)
 	LIBSUFFIX = dylib
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
 	WHEELTOOL = delocate
-	export LDFLAGS+=-Wl,-rpath,'@loader_path/../../../'
+	export LDFLAGS+=-Wl,-rpath,'@loader_path/../..'
 	UNIXODBC_PREFIX = /usr/local/opt/unixodbc
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
-	export LDFLAGS := -Wl,-rpath='$$ORIGIN/../../..'
+	export LDFLAGS := -Wl,-rpath='$$ORIGIN/../..'
 endif
 PY3 := $(or $(PY3),python3.7)
 

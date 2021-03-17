@@ -17,12 +17,14 @@ vendor-Linux-archive = dist/vendor-Linux.tar.gz
 vendor-Darwin-archive = dist/vendor-Darwin.tar.gz
 
 ifeq ($(PLATFORM),Darwin)
+	LIBINFIX = cpython-37m-darwin
 	LIBSUFFIX = dylib
 	WHEELTOOL = delocate
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
 	WHEELID = macosx_10_9_x86_64
 	export LDFLAGS += -Wl,-rpath,'@loader_path'
 else ifeq ($(PLATFORM),Linux)
+	LIBINFIX = cpython-37m-x86_64-linux-gnu
 	LIBSUFFIX = so
 	WHEELTOOL = auditwheel
 	WHEELID = linux_x86_64
@@ -58,7 +60,7 @@ lib-libgit2 := env/lib/libgit2.$(LIBSUFFIX)
 lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
 lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
-lib-pyodbc := env/lib/python3.7/site-packages/pyodbc/__init__.py
+lib-pyodbc := env/lib/python3.7/site-packages/pyodbc.$(LIBINFIX).so
 build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3) $(lib-pyodbc)
 
 

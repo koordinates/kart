@@ -7,7 +7,9 @@
 apipkg==1.5
     # via execnet
 appnope==0.1.2
-    # via -r requirements/dev.in
+    # via
+    #   -r requirements/dev.in
+    #   ipython
 attrs==20.3.0
     # via
     #   -c requirements/../requirements.txt
@@ -59,7 +61,7 @@ pluggy==0.13.1
     # via
     #   -c requirements/test.txt
     #   pytest
-prompt-toolkit==3.0.16
+prompt-toolkit==3.0.17
     # via ipython
 ptyprocess==0.7.0
     # via pexpect
