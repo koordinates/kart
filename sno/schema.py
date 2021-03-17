@@ -373,6 +373,9 @@ class Schema:
         for i, (value, column) in enumerate(zip(pk_values, self.pk_columns)):
             if column.data_type == "integer" and isinstance(value, str):
                 pk_values[i] = int(pk_values[i])
+            elif column.data_type == "float" and isinstance(value, str):
+                # not sure why you'd use floats as a PK value, but we came across it at least once
+                pk_values[i] = float(pk_values[i])
         return tuple(pk_values)
 
     def align_to_self(self, new_schema, roundtrip_ctx=None):
