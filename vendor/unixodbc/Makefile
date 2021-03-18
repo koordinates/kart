@@ -25,6 +25,7 @@ export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
 automake-unixodbc = src/Makefile.in
 automake-libltdl = src/libltdl/Makefile.in
 configure-unixodbc = src/config.status
+build-unixodbc = src/DriverManager/.libs/libodbc.so
 
 # default target
 .PHONY: all
@@ -81,9 +82,10 @@ $(automake-unixodbc): | src
 $(automake-libltdl): | src
 	cd src/libltdl/ && aclocal && automake
 
-$(configure-unixodbc): automake-unixodbc automake-libltdl
+$(configure-unixodbc): $(automake-unixodbc) $(automake-libltdl)
 	cd src/ && ./configure \
-		--prefix=$(PREFIX)
+		--prefix=$(PREFIX) \
+		--with-included-ltdl
 
 .PHONY: configure
 configure: clean-configure $(configure-unixodbc)
@@ -94,7 +96,7 @@ $(build-unixodbc): $(configure-unixodbc)
 	$(MAKE) check-lib-deps-$(PLATFORM)
 
 .PHONY: install
-install: $(build-uniodbc)
+install: $(build-unixodbc)
 	$(MAKE) -C src install
 
 .PHONY: print-lib-deps
