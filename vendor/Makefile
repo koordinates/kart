@@ -302,6 +302,9 @@ lib-proj: $(lib-proj)
 .PHONY: lib-psycopg2
 lib-psycopg2: $(lib-psycopg2)
 
+.PHONY: lib-pyodbc
+lib-pyodbc: $(lib-pyodbc)
+
 .PHONY: build-Darwin
 build-Darwin: VENDOR:=build/vendor-Darwin
 build-Darwin: VENDOR_ENV:=$(VENDOR)/env

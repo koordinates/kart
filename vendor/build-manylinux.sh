@@ -75,6 +75,10 @@ else
     make lib-pysqlite3
     cp -fav pysqlite3/wheel/pysqlite3-*.whl "$OUTPUT/wheelhouse"
 
+    echo ">>> Building pyodbc ..."
+    make lib-pyodbc
+    cp -fav pyodbc/wheel/pyodbc-*.whl "$OUTPUT/wheelhouse"
+
     echo ">>> Building psycopg2 ..."
     make lib-psycopg2
     cp -fav psycopg2/wheel/psycopg2-*.whl "$OUTPUT/wheelhouse"

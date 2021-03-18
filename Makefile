@@ -64,6 +64,7 @@ requirement%.txt requirements/%.txt:
 	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
 	sed -E -i.~bak -e 's/^(psycopg2=)/\#\1/' $@
 	sed -E -i.~bak -e 's/^(pysqlite3=)/\#\1/' $@
+	sed -E -i.~bak -e 's/^(pyodbc=)/\#\1/' $@
 	$(RM) $@.~bak
 
 # Python dependency license checking
