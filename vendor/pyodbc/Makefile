@@ -1,6 +1,6 @@
 PYODBC_REF ?= 4.0.30
 PYODBC_REPO ?= mkleehammer/pyodbc
-PYODBC_ARCHIVE := pyodbc-$(PYGIT2_REF).tar.gz
+PYODBC_ARCHIVE := pyodbc-$(PYODBC_REF).tar.gz
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
@@ -11,7 +11,6 @@ else
 	PLATFORM := $(shell uname -s)
 endif
 
-export LIBGIT2 ?= $(PREFIX)
 export CFLAGS += -g
 
 ifeq ($(PLATFORM),Darwin)
@@ -20,13 +19,15 @@ ifeq ($(PLATFORM),Darwin)
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
 	WHEELTOOL = delocate
 	export LDFLAGS+=-Wl,-rpath,'@loader_path/../..'
-	UNIXODBC_PREFIX = /usr/local/opt/unixodbc
+	UNIXODBC_PREFIX = /usr/local/opt/unixodbc/lib
 else ifeq ($(PLATFORM),Linux)
 	LIBSUFFIX = so
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	WHEELTOOL = auditwheel
 	export LDFLAGS := -Wl,-rpath='$$ORIGIN/../..'
+	UNIXODBC_PREFIX = /usr/lib64
+	LIBLTDL_PREFIX = /usr/local/lib/libltdl.so.7
 endif
 PY3 := $(or $(PY3),python3.7)
 
@@ -87,17 +88,21 @@ source: src
 .PHONY: py-fix-Darwin
 py-fix-Darwin:
 	install_name_tool \
-		-change "$(UNIXODBC_PREFIX)/lib/libodbc.2.dylib" "@rpath/libodbc.2.dylib" \
+		-change "$(UNIXODBC_PREFIX)/libodbc.2.dylib" "@rpath/libodbc.2.dylib" \
 		src/build/lib.macosx*/pyodbc.cpython-37m-darwin.so; \
 	otool -L src/build/lib.macosx*/pyodbc.cpython-37m-darwin.so
 
 .PHONY: py-fix-Linux
 py-fix-Linux:
+	patchelf --remove-rpath \
+		src/build/lib.linux-x86_64-*/pyodbc.cpython-37m-x86_64-linux-gnu.so; \
+	patchelf --force-rpath --set-rpath '$$ORIGIN/../..' \
+		src/build/lib.linux-x86_64-*/pyodbc.cpython-37m-x86_64-linux-gnu.so
 
 .PHONY: install
 install: | src
 	@echo 'CFLAGS=$(CFLAGS) LDFLAGS=$(LDFLAGS) PY3=$(PY3)'
-	python setup.py install
+	cd src && python3 setup.py install
 
 .PHONY: wheel
 wheel: | src

@@ -38,7 +38,7 @@ export CERTIFI_SSL_CERT_FILE=$(abspath $(PREFIX)/lib/python3.7/site-packages/cer
 
 packages = proj jsonc geos gdal spatialite libgit2 pygit2 psycopg2 pysqlite3
 ifeq ($(PLATFORM),Linux)
-packages += sqlite spatialindex git curl libpq
+packages += sqlite spatialindex git curl libpq pyodbc
 endif
 
 brew-deps := Brewfile.lock.json
@@ -201,7 +201,7 @@ else
 # Linux
 #
 
-build-libs += $(lib-spatialindex) $(lib-curl)
+build-libs += $(lib-spatialindex) $(lib-curl) $(lib-unixodbc)
 
 $(lib-spatialindex): spatialindex_build
 $(lib-sqlite): sqlite_build
@@ -210,6 +210,7 @@ $(lib-curl): curl_build
 $(lib-geos): geos_build
 $(lib-jsonc): jsonc_build
 $(lib-pq): libpq_build
+$(lib-unixodbc): unixodbc_build
 endif
 
 
@@ -300,6 +301,9 @@ lib-proj: $(lib-proj)
 
 .PHONY: lib-psycopg2
 lib-psycopg2: $(lib-psycopg2)
+
+.PHONY: lib-pyodbc
+lib-pyodbc: $(lib-pyodbc)
 
 .PHONY: build-Darwin
 build-Darwin: VENDOR:=build/vendor-Darwin

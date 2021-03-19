@@ -37,6 +37,8 @@ vendor/spatialite/**
 vendor/sqlite/**
 !vendor/sqlite/Makefile
 !vendor/sqlite/version.mk
+vendor/unixodbc/**
+!vendor/unixodbc/Makefile
 vendor/.ccache/
 vendor/env/
 vendor/wheelhouse/
