@@ -3,7 +3,7 @@ import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
 
-from sno import is_linux, is_windows
+from sno import is_linux
 from sno.repo import SnoRepo
 from sno.sqlalchemy.create_engine import get_sqlserver_driver
 from sno.working_copy import sqlserver_adapter
@@ -17,7 +17,6 @@ H = pytest.helpers.helpers()
 MSSQL_DRIVER_REASON = "MSSQL driver is not included in the build - SQL Server tests will fail unless it is installed manually."
 
 
-@pytest.mark.xfail(is_windows, reason="pyodbc is not yet included on the Windows build")
 def test_pyodbc():
     import pyodbc
 
