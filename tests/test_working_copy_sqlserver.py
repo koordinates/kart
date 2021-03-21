@@ -3,9 +3,8 @@ import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
 
-from sno import is_linux
 from sno.repo import SnoRepo
-from sno.sqlalchemy.create_engine import get_sqlserver_driver
+from sno.sqlalchemy.create_engine import get_odbc_drivers, get_sqlserver_driver
 from sno.working_copy import sqlserver_adapter
 from test_working_copy import compute_approximated_types
 
@@ -13,26 +12,27 @@ from test_working_copy import compute_approximated_types
 H = pytest.helpers.helpers()
 
 
-# TODO - get these tests to work on github actions.
-MSSQL_DRIVER_REASON = "MSSQL driver is not included in the build - SQL Server tests will fail unless it is installed manually."
-
-
-def test_pyodbc():
-    import pyodbc
-
-    num_drivers = len(pyodbc.drivers())
+def test_pyodbc_drivers():
+    num_drivers = len(get_odbc_drivers())
     # Eventually we should assert that we have useful drivers - eg MSSQL.
     # But for now, we are asserting that we were able to load pyodbc and it seems to be working.
     assert num_drivers >= 0
-    print(f"Found {num_drivers} pyodbc drivers")
+    print(f"Found {num_drivers} ODBC drivers")
 
 
-@pytest.mark.xfail(reason=MSSQL_DRIVER_REASON)
+@pytest.mark.xfail(
+    reason="MSSQL driver is not included in the build - SQL Server tests will fail unless it is installed manually."
+)
 def test_sqlserver_driver():
     assert get_sqlserver_driver() is not None
 
 
-@pytest.mark.xfail(is_linux, reason=MSSQL_DRIVER_REASON)
+# All of the following tests will also fail unless a MSSQL driver has been installed manually.
+# However, they are not marked as xfail, since they do not run unless SNO_SQLSERVER_URL is set
+# (the tests require a running SQL Server instance). This URL should not be set unless the driver
+# has also been installed, otherwise the tests will all fail.
+
+
 @pytest.mark.parametrize(
     "existing_schema",
     [
@@ -88,7 +88,6 @@ def test_checkout_workingcopy(
             assert wc.assert_db_tree_match(head_tree_id)
 
 
-@pytest.mark.xfail(is_linux, reason=MSSQL_DRIVER_REASON)
 @pytest.mark.parametrize(
     "existing_schema",
     [
@@ -134,7 +133,6 @@ def test_init_import(
             assert wc.path == sqlserver_url
 
 
-@pytest.mark.xfail(is_linux, reason=MSSQL_DRIVER_REASON)
 @pytest.mark.parametrize(
     "archive,table,commit_sha",
     [
@@ -218,7 +216,6 @@ def test_commit_edits(
             assert repo.head.peel(pygit2.Commit).hex == orig_head
 
 
-@pytest.mark.xfail(is_linux, reason=MSSQL_DRIVER_REASON)
 def test_edit_schema(data_archive, cli_runner, new_sqlserver_db_schema):
     with data_archive("polygons") as repo_path:
         repo = SnoRepo(repo_path)
@@ -324,7 +321,6 @@ def test_approximated_types():
     )
 
 
-@pytest.mark.xfail(is_linux, reason=MSSQL_DRIVER_REASON)
 def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
     with data_archive("types") as repo_path:
         repo = SnoRepo(repo_path)
@@ -340,7 +336,6 @@ def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
             assert r.exit_code == 0, r.stdout
 
 
-@pytest.mark.xfail(is_linux, reason=MSSQL_DRIVER_REASON)
 def test_geometry_constraints(
     data_archive,
     cli_runner,

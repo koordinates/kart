@@ -17,7 +17,7 @@ jobs:
         platform:
           - name: Linux
             id: Linux
-            os: ubuntu-latest
+            os: ubuntu-20.04
             package-formats: deb rpm
             services:
               postgis:
@@ -220,6 +220,14 @@ jobs:
       - name: "app: install test dependencies"
         run: |
           make py-deps-dev
+
+      - name: "🐧 app: install database drivers for tests"
+        if: runner.os == 'Linux'
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
 
       - name: "app: license check"
         run: |

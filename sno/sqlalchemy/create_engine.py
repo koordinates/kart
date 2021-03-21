@@ -1,3 +1,5 @@
+import os
+from pathlib import Path
 import re
 import socket
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
@@ -9,7 +11,7 @@ import psycopg2
 from psycopg2.extensions import Binary, new_type, register_adapter, register_type
 
 
-from sno import spatialite_path
+from sno import spatialite_path, is_windows
 from sno.geometry import Geometry
 from sno.exceptions import NotFound, NO_DRIVER
 
@@ -133,19 +135,55 @@ def sqlserver_engine(msurl):
     return engine
 
 
-def get_sqlserver_driver():
+def _find_odbc_inst_ini():
+    # Locating the odbcinst.ini file (used by SQL Server via pyodbc via unixODBC).
+    # At least on Linux, unixODBC seems not to look in /etc/odbcinst.ini by default -
+    # which is a pity, since that's most likely where it is.
+    # We can make it look in the right place by setting an environment variable.
+
+    # Don't do this on Windows, don't do this is the user already set these variables.
+    if is_windows or "ODBCSYSINI" in os.environ or "ODBCINSTINI" in os.environ:
+        return
+
+    # Look for odbcinst.ini in the following places:
+    search_path = [
+        Path.home() / ".odbcinst.ini",
+        Path.home() / "Library/ODBC/odbcinst.ini",
+        Path("/etc/odbcinst.ini"),
+        Path("/Library/ODBC/odbcinst.ini"),
+    ]
+    for p in search_path:
+        if p.exists():
+            # Found one - use that one. Set the env variables to point at it.
+            os.environ["ODBCSYSINI"] = str(p.parent)
+            os.environ["ODBCINSTINI"] = str(p.name)
+            return
+    # Didn't find anything. Just leave the environment as-is.
+
+
+def get_odbc_drivers():
+    """Returns a list of names of all ODBC drivers."""
+
+    _find_odbc_inst_ini()  # This must be called before loading pyodbc drivers.
+
     import pyodbc
 
-    drivers = [
-        d for d in pyodbc.drivers() if re.search("SQL Server", d, flags=re.IGNORECASE)
+    return pyodbc.drivers()
+
+
+def get_sqlserver_driver():
+    """Return the name of the SQL Server driver."""
+    drivers = get_odbc_drivers()
+    mssql_drivers = [
+        d for d in drivers if re.search("SQL Server", d, flags=re.IGNORECASE)
     ]
-    if not drivers:
+    if not mssql_drivers:
         URL = "https://docs.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
         raise NotFound(
             f"ODBC Driver for SQL Server is required but was not found.\nSee {URL}",
             exit_code=NO_DRIVER,
         )
-    return sorted(drivers)[-1]  # Latest driver
+    return sorted(mssql_drivers)[-1]  # Latest driver
 
 
 def _replace_with_localhost(*args, **kwargs):
