@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import subprocess
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 
 
@@ -135,36 +136,32 @@ def sqlserver_engine(msurl):
     return engine
 
 
-def _find_odbc_inst_ini():
+def _find_odbc_drivers_config():
     # Locating the odbcinst.ini file (used by SQL Server via pyodbc via unixODBC).
     # At least on Linux, unixODBC seems not to look in /etc/odbcinst.ini by default -
     # which is a pity, since that's most likely where it is.
-    # We can make it look in the right place by setting an environment variable.
+    # To see where to look, we run `odbcinst -j` - this seems to be the official
+    # way to learn where the drivers should be found.
 
     # Don't do this on Windows, don't do this is the user already set these variables.
     if is_windows or "ODBCSYSINI" in os.environ or "ODBCINSTINI" in os.environ:
         return
 
-    # Look for odbcinst.ini in the following places:
-    search_path = [
-        Path.home() / ".odbcinst.ini",
-        Path.home() / "Library/ODBC/odbcinst.ini",
-        Path("/etc/odbcinst.ini"),
-        Path("/Library/ODBC/odbcinst.ini"),
-    ]
-    for p in search_path:
-        if p.exists():
-            # Found one - use that one. Set the env variables to point at it.
-            os.environ["ODBCSYSINI"] = str(p.parent)
-            os.environ["ODBCINSTINI"] = str(p.name)
-            return
-    # Didn't find anything. Just leave the environment as-is.
+    try:
+        output = subprocess.check_output(["odbcinst", "-j"]).decode("ascii")
+        match = re.search(r"^DRIVERS[.]*:\s+(.*)$", output, flags=re.MULTILINE)
+        if match:
+            path = Path(match.group(1))
+            os.environ["ODBCSYSINI"] = str(path.parent)
+            os.environ["ODBCINSTINI"] = str(path.name)
+    except Exception:
+        pass  # Just leave the environment as-is.
 
 
 def get_odbc_drivers():
     """Returns a list of names of all ODBC drivers."""
 
-    _find_odbc_inst_ini()  # This must be called before loading pyodbc drivers.
+    _find_odbc_drivers_config()  # This must be called before loading pyodbc drivers.
 
     import pyodbc
 
