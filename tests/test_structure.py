@@ -564,7 +564,7 @@ def test_postgis_import_from_view(
         with postgis_db.connect() as conn:
             conn.execute(
                 """
-                CREATE VIEW nz_waca_adjustments_view AS (
+                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
                     SELECT * FROM nz_waca_adjustments
                 );
                 """
@@ -595,7 +595,7 @@ def test_postgis_import_from_view_with_ogc_fid(
         with postgis_db.connect() as conn:
             conn.execute(
                 """
-                CREATE VIEW nz_waca_adjustments_view AS (
+                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
                     SELECT id AS ogc_fid, date_adjusted, survey_reference, adjusted_nodes, geom
                     FROM nz_waca_adjustments
                 );
@@ -627,7 +627,7 @@ def test_postgis_import_from_view_no_pk(
         with postgis_db.connect() as conn:
             conn.execute(
                 """
-                CREATE VIEW nz_waca_adjustments_view AS (
+                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
                     SELECT date_adjusted, survey_reference, adjusted_nodes, geom
                     FROM nz_waca_adjustments
                     WHERE id %% 3 != 0
@@ -650,10 +650,10 @@ def test_postgis_import_from_view_no_pk(
         assert sorted(initial_pks) == list(range(1, 161 + 1))
 
         with postgis_db.connect() as conn:
-            conn.execute("DROP VIEW nz_waca_adjustments_view;")
+            conn.execute("DROP VIEW IF EXISTS nz_waca_adjustments_view;")
             conn.execute(
                 """
-                CREATE VIEW nz_waca_adjustments_view AS (
+                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
                     SELECT date_adjusted, survey_reference, adjusted_nodes, geom
                     FROM nz_waca_adjustments
                     WHERE id %% 3 != 1
@@ -753,7 +753,7 @@ def test_postgis_import_replace_no_ids(
         with postgis_db.connect() as conn:
             conn.execute(
                 """
-                CREATE VIEW nz_waca_adjustments_view AS (
+                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
                     SELECT date_adjusted, survey_reference, adjusted_nodes, geom
                     FROM nz_waca_adjustments
                     WHERE id %% 3 != 0

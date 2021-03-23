@@ -68,17 +68,23 @@ def fast_import_tables(
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
-    if replace_existing == ReplaceExisting.ALL:
-        head_tree = None
-    else:
-        head_tree = repo.head_tree
+    # The tree this repo was at before this function was called.
+    # May be None (repo is empty)
+    orig_tree = repo.head_tree
 
-    if not head_tree:
+    # The tree we look at for considering what datasets already exist
+    # depends what we want to replace.
+    if replace_existing == ReplaceExisting.ALL:
+        starting_tree = None
+    else:
+        starting_tree = repo.head_tree
+
+    if not starting_tree:
         replace_existing = ReplaceExisting.ALL
 
     assert repo.version == SUPPORTED_REPO_VERSION
     extra_blobs = (
-        extra_blobs_for_version(SUPPORTED_REPO_VERSION) if not head_tree else []
+        extra_blobs_for_version(SUPPORTED_REPO_VERSION) if not starting_tree else []
     )
     dataset_class = SUPPORTED_DATASET_CLASS
 
@@ -86,7 +92,7 @@ def fast_import_tables(
 
     if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:
-            if source.dest_path in head_tree:
+            if source.dest_path in starting_tree:
                 raise InvalidOperation(
                     f"Cannot import to {source.dest_path}/ - already exists in repository"
                 )
@@ -132,7 +138,7 @@ def fast_import_tables(
 
         # Write the extra blob that records the repo's version:
         for i, blob_path in write_blobs_to_stream(p.stdin, extra_blobs):
-            if replace_existing != ReplaceExisting.ALL and blob_path in head_tree:
+            if replace_existing != ReplaceExisting.ALL and blob_path in starting_tree:
                 raise ValueError(f"{blob_path} already exists")
 
         for source in sources:
@@ -240,13 +246,13 @@ def fast_import_tables(
     if import_branch is not None:
         # we created a temp branch for the import above.
         try:
-            if head_tree and not allow_empty:
-                if repo.revparse_single(import_branch).peel(pygit2.Tree) == head_tree:
+            if orig_tree and not allow_empty:
+                if repo.revparse_single(import_branch).peel(pygit2.Tree) == orig_tree:
                     raise NotFound("No changes to commit", exit_code=NO_CHANGES)
             latest_commit_oid = repo.references[import_branch].peel(pygit2.Commit).oid
             if orig_branch:
                 # reset the original branch head to the import branch, so it gets the new commits
-                if head_tree:
+                if orig_tree:
                     # repo was non-empty before this, and head was not detached.
                     # so orig_branch exists already.
                     # we have to delete and re-create it at the new commit.
