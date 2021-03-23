@@ -153,7 +153,9 @@ class GenerateIDsFromFile(StringFromFile):
     type=GenerateIDsFromFile(encoding="utf-8"),
     help=(
         "Replace only features with the given IDs. IDs should be given one-per-line. "
-        "Use file arguments (--replace-ids=@filename.txt). Implies --replace-existing"
+        "Use file arguments (--replace-ids=@filename.txt). Implies --replace-existing. "
+        "Requires the dataset to have a primary key, unless the value given is an empty "
+        "string (replaces no features)"
     ),
 )
 @click.option(
@@ -274,9 +276,15 @@ def import_table(
                     f"--replace-ids is not supported for V{repo.version} datasets"
                 )
             if not import_source.schema.pk_columns:
-                raise InvalidOperation(
-                    "--replace-ids requires an import source with a primary key"
-                )
+                # non-PK datasets can use this if it's only ever an empty list.
+                try:
+                    next(replace_ids)
+                except StopIteration:
+                    replace_ids = iter([])
+                else:
+                    raise InvalidOperation(
+                        "--replace-ids requires an import source with a primary key"
+                    )
 
             replace_existing = True
 

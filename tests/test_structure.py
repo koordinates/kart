@@ -737,6 +737,72 @@ def test_postgis_import_from_view_no_pk(
         ]
 
 
+def test_postgis_import_replace_no_ids(
+    postgis_db,
+    postgis_layer,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
+    chdir,
+):
+    repo_path = tmp_path / "repo"
+    with postgis_layer(
+        "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
+    ):
+        with postgis_db.connect() as conn:
+            conn.execute(
+                """
+                CREATE VIEW nz_waca_adjustments_view AS (
+                    SELECT date_adjusted, survey_reference, adjusted_nodes, geom
+                    FROM nz_waca_adjustments
+                    WHERE id %% 3 != 0
+                );
+                """
+            )
+        _test_postgis_import(
+            repo_path,
+            cli_runner,
+            chdir,
+            table_name="nz_waca_adjustments_view",
+            pk_name="auto_pk",
+        )
+
+        r = cli_runner.invoke(
+            [
+                "--repo",
+                str(repo_path.resolve()),
+                "import",
+                os.environ["SNO_POSTGRES_URL"],
+                "nz_waca_adjustments_view",
+                "--replace-ids=",
+            ]
+        )
+        assert r.exit_code == 44, r.stderr
+        r = cli_runner.invoke(
+            [
+                "--repo",
+                str(repo_path.resolve()),
+                "import",
+                os.environ["SNO_POSTGRES_URL"],
+                "nz_waca_adjustments_view",
+                "--replace-ids=",
+                # add some meta info so it's not a complete noop
+                '--table-info={"nz_waca_adjustments_view": {"title": "New title"}}',
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["--repo", str(repo_path.resolve()), "show"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-4:] == [
+            "--- nz_waca_adjustments_view:meta:title",
+            "+++ nz_waca_adjustments_view:meta:title",
+            "- ",
+            "+ New title",
+        ]
+
+
 def test_pk_encoding():
     ds = Dataset2(None, "mytable")
 
