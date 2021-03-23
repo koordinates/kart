@@ -256,6 +256,19 @@ class PkGeneratingImportSource(ImportSource):
             # Just assign new PKs to those we couldn't find a match for.
             yield from self._assign_pk_range(buffered_inserts, next_new_pk)
 
+    def get_features(self, row_pks, *, ignore_missing=False):
+        # we implement this so you can specifically call it with an empty
+        # list of PKs.
+        # this means you can use `sno import --replace-ids=` to import
+        # a meta-only change with no actual feature changes, efficiently.
+        # Calling it with a non-empty list of PKs raises an error.
+        for pk in row_pks:
+            raise NotImplementedError(
+                f"{self.__class__.__name__} doesn't support retrieving features by PK"
+            )
+            # make this a generator, even though it's never non-empty
+            yield None
+
     def _assign_pk_range(self, features, pk):
         for feature in features:
             yield self._assign_pk(feature, pk)
