@@ -162,7 +162,7 @@ class GenerateIDsFromFile(StringFromFile):
     "--similarity-detection-limit",
     hidden=True,
     type=click.INT,
-    default=50,
+    default=10000,
     help=(
         "When replacing an existing dataset where primary keys are auto-generated: the maximum number of unmatched "
         "features to search through for similar features, so that primary keys can be reassigned for features that "
@@ -310,9 +310,7 @@ def import_table(
                     dest_path=dest_path,
                     similarity_detection_limit=similarity_detection_limit,
                 )
-                import_source.schema = existing_ds.schema.align_to_self(
-                    import_source.schema
-                )
+                import_source.align_schema_to_existing_schema(existing_ds.schema)
         import_source.dest_path = dest_path
         import_sources.append(import_source)
 

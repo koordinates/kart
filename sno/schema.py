@@ -231,8 +231,13 @@ class Schema:
 
     @property
     @functools.lru_cache(maxsize=1)
+    def non_pk_columns(self):
+        return tuple(c for c in self.columns if c.pk_index is None)
+
+    @property
+    @functools.lru_cache(maxsize=1)
     def geometry_columns(self):
-        return [c for c in self.columns if c.data_type == "geometry"]
+        return tuple(c for c in self.columns if c.data_type == "geometry")
 
     @property
     def has_geometry(self):

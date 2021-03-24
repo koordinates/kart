@@ -119,6 +119,14 @@ class ImportSource:
         """
         return Schema.from_column_dicts(self.get_meta_item("schema.json"))
 
+    def align_schema_to_existing_schema(self, existing_schema):
+        """
+        Aligning the schema with an existing schema means that the pre-existing colunms will keep the same ID
+        that they had last time. Failing to align the schema would mean that some features would be re-encoded
+        even if they hadn't actually chaned.
+        """
+        self.schema = existing_schema.align_to_self(self.schema)
+
     @property
     def has_geometry(self):
         return self.schema.has_geometry
