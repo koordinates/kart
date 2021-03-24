@@ -1,4 +1,3 @@
-from itertools import zip_longest
 import pygit2
 
 from .dataset2 import Dataset2

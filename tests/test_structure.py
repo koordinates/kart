@@ -15,6 +15,7 @@ from sno.exceptions import INVALID_OPERATION
 from sno.sqlalchemy.create_engine import gpkg_engine
 from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
+from sno.pk_generation import PkGeneratingImportSource
 from sno.repo import SnoRepo
 from sno.working_copy import gpkg_adapter
 
@@ -732,6 +733,30 @@ def test_postgis_import_from_view_no_pk(
             "+                               macronated = N",
             "+                                     name = baz",
         ]
+
+
+def test_import_no_pk_performance(data_archive_readonly, benchmark):
+    with data_archive_readonly("points") as repo_path:
+        repo = SnoRepo(repo_path)
+        dataset = repo.datasets()["nz_pa_points_topo_150k"]
+        features = list(dataset.features())
+        assert len(features) == 2143
+        old_features = features[0:1000]
+        new_features = features[1000:2143]
+
+        pkis = PkGeneratingImportSource(dataset, repo)
+        pkis.schema = dataset.schema
+        pkis.prev_dest_schema = dataset.schema
+        pkis.primarky_key = dataset.primary_key
+
+        def _match_features_benchmark():
+            # Exhaust generator:
+            for _ in pkis._match_similar_features_and_remove(
+                old_features, new_features
+            ):
+                pass
+
+        benchmark(_match_features_benchmark)
 
 
 def test_postgis_import_replace_no_ids(
