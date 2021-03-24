@@ -4,9 +4,7 @@ import pygit2
 from .dataset2 import Dataset2
 from .import_source import ImportSource
 from .exceptions import NotYetImplemented
-from .serialise_util import (
-    json_pack,
-)
+from .serialise_util import json_pack, msg_pack
 from .schema import ColumnSchema, Schema
 
 
@@ -106,6 +104,8 @@ class PkGeneratingImportSource(ImportSource):
         self.prev_dest_tree = self._prev_import_dest_tree(repo)
 
         if not self.prev_dest_tree:
+            self.prev_dest_dataset = None
+            self.prev_dest_schema = None
             self.pk_col = self.DEFAULT_PK_COL
             self.primary_key = self.pk_col["name"]
             self.pk_to_hash = {}
@@ -116,6 +116,7 @@ class PkGeneratingImportSource(ImportSource):
             return
 
         self.prev_dest_dataset = Dataset2(self.prev_dest_tree, self.dest_path)
+        self.prev_dest_schema = self.prev_dest_dataset.schema
 
         data = self.prev_dest_dataset.get_meta_item(self.GENERATED_PKS_ITEM)
         self.pk_col = data["primaryKeySchema"]
@@ -200,6 +201,15 @@ class PkGeneratingImportSource(ImportSource):
         cols = self.delegate.schema.to_column_dicts()
         return Schema.from_column_dicts([self.pk_col] + cols)
 
+    def _schema_is_similar_to_last_import(self):
+        if not self.prev_dest_schema:
+            return False
+        dt = self.prev_dest_schema.diff_type_counts(self.schema)
+        if dt["pk_updates"] > 0 or dt["inserts"] > 1 or dt["deletes"] > 1:
+            return False
+
+        return True
+
     def features(self):
         # Next primary key to use if we can't find a historical but unassigned one in hash_to_unassigned_pks.
         next_new_pk = self.first_new_pk
@@ -214,6 +224,9 @@ class PkGeneratingImportSource(ImportSource):
         # become edits.
         buffered_inserts = []
         buffered_insert_limit = self.similarity_detection_insert_limit
+
+        if not self._schema_is_similar_to_last_import():
+            buffered_insert_limit = 0
 
         for orig_feature in self.delegate.features():
             feature = {self.primary_key: None, **orig_feature}
@@ -287,7 +300,7 @@ class PkGeneratingImportSource(ImportSource):
         orig_new_features_len = len(new_features)
         similar_count = 0
 
-        for old_feature, new_feature in self._pop_similar_pairs(
+        for old_feature, new_feature in self._fast_pop_similar_pairs(
             old_features, new_features
         ):
             pk = old_feature[self.primary_key]
@@ -297,7 +310,50 @@ class PkGeneratingImportSource(ImportSource):
         assert len(old_features) == orig_old_features_len - similar_count
         assert len(new_features) == orig_new_features_len - similar_count
 
+    def _fast_pop_similar_pairs(self, orig_old_features, orig_new_features):
+        # This is a faster implementation of _pop_similar_pairs.
+        # However, it hard-codes that a certain similarity metric is used -
+        # where features are considered similar if they differ by no more than one (non-pk) field.
+        # If a different metric is to be used, you must use _pop_similar_pairs instead, and
+        # implement the metric in _is_similar.
+
+        OLD, NEW = 0, 1
+        hashes = {}
+
+        old_features = [
+            FeaturePlusHashes(f, self.prev_dest_schema) for f in orig_old_features
+        ]
+        new_features = [FeaturePlusHashes(f, self.schema) for f in orig_new_features]
+
+        for f in old_features:
+            for h in f.all_related_hashes():
+                entry = hashes.setdefault(h, [[], []])
+                entry[OLD].append(f)
+
+        for f in new_features:
+            for h in f.all_related_hashes():
+                entry = hashes.get(h)
+                if entry:
+                    entry[NEW].append(f)
+
+        for entry in hashes.values():
+            if len(entry[OLD]) == 1 and len(entry[NEW]) == 1:
+                old_feature = entry[OLD][0]
+                new_feature = entry[NEW][0]
+                old_feature.try_add_match(new_feature)
+                new_feature.try_add_match(old_feature)
+
+        for f in old_features:
+            if f.is_uniquely_matched():
+                yield f.feature, f.match.feature
+                orig_old_features.remove(f.feature)
+                orig_new_features.remove(f.match.feature)
+
     def _pop_similar_pairs(self, old_features, new_features):
+        # This is just a slower version of _fast_pop_similar_pairs.
+        # However, this version would work for any arbitrary implementation of _is_similar.
+        # The other implementation requires a particular implementation as part of the search algorithm.
+
         # Copy old_features so we can remove from it while iterating over it:
         for old_feature in old_features.copy():
             new_feature = self._find_sole_similar(old_feature, new_features)
@@ -321,20 +377,11 @@ class PkGeneratingImportSource(ImportSource):
         return match if match_count == 1 else None
 
     def _is_similar(self, lhs, rhs):
-        # NOTE: This is one of several possible similarity metrics.
-        # TODO: Add more and make them configurable, if this proves useful.
-
-        dissimilar_count = 0
-
-        for l, r in zip_longest(lhs.values(), rhs.values()):
-            if l != r:
-                dissimilar_count += 1
-                if dissimilar_count > 2:
-                    # Different primary key + two other different fields -> dissimilar.
-                    return False
-
-        # Different primary key + one other different field (or fewer) -> similar.
-        return True
+        # TODO - make the similarity metric configurable, if this is useful,
+        # and use this slower implementation when the user has configured it.
+        raise NotImplementedError(
+            "Generic similarity metric not yet implemented - see _fast_pop_similar_pairs"
+        )
 
     def _find_deleted_features(self, hash_to_unassigned_pks):
         unassigned_pks = set()
@@ -406,3 +453,45 @@ class FilteredDataset(Dataset2):
             pk = self.decode_path_to_1pk(blob.name)
             if self.pk_filter(pk):
                 yield blob
+
+
+class FeaturePlusHashes:
+    _MORE_THAN_ONE_MATCH = object()
+
+    def __init__(self, feature, schema):
+        self.feature = feature
+        self.schema = schema
+        self.match = None
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return other is self
+
+    def all_related_hashes(self):
+        value_hashes = []
+        feature_hash = 0
+        # Generate the overall hash of the feature, but in separate pieces.
+        for col in self.schema.non_pk_columns:
+            value = self.feature[col.name]
+            value_hash = hash(msg_pack([col.id, value]))
+            feature_hash ^= value_hash
+            value_hashes.append(value_hash)
+
+        # Add the feature at its overall hash.
+        yield feature_hash
+        # Remove each piece one at a time to make a hash for each variation of the feature missing exactly one field.
+        for value_hash in value_hashes:
+            yield feature_hash ^ value_hash
+
+    def try_add_match(self, other):
+        if self.match is None:
+            self.match = other
+        elif self.match == other:
+            pass
+        else:
+            self.match = self._MORE_THAN_ONE_MATCH
+
+    def is_uniquely_matched(self):
+        return self.match is not None and self.match.match is self
