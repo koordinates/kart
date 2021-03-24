@@ -648,7 +648,6 @@ def test_postgis_import_from_view_no_pk(
                 os.environ["SNO_POSTGRES_URL"],
                 "nz_pa_points_view",
                 "--replace-existing",
-                "--similarity-detection-limit=10000",
             ]
         )
         assert r.exit_code == 0, r.stderr
@@ -694,7 +693,6 @@ def test_postgis_import_from_view_no_pk(
                 os.environ["SNO_POSTGRES_URL"],
                 "nz_pa_points_view",
                 "--replace-existing",
-                "--similarity-detection-limit=10000",
             ]
         )
         assert r.exit_code == 0, r.stderr

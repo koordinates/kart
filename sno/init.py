@@ -162,7 +162,7 @@ class GenerateIDsFromFile(StringFromFile):
     "--similarity-detection-limit",
     hidden=True,
     type=click.INT,
-    default=500,
+    default=10000,
     help=(
         "When replacing an existing dataset where primary keys are auto-generated: the maximum number of unmatched "
         "features to search through for similar features, so that primary keys can be reassigned for features that "
