@@ -503,34 +503,12 @@ def _test_postgis_import(
     dataset = repo.datasets()[table_name]
 
     meta_items = dict(dataset.meta_items())
-    assert set(meta_items.keys()) == {
-        "description",
-        "schema.json",
-        "title",
-        "crs/EPSG:4167.wkt",
-    }
-    schema = without_ids(dataset.get_meta_item("schema.json"))
-    assert schema == [
-        {
-            "name": pk_name,
-            "dataType": "integer",
-            "primaryKeyIndex": 0,
-            "size": pk_size,
-        },
-        {
-            "name": "geom",
-            "dataType": "geometry",
-            "geometryType": "MULTIPOLYGON",
-            "geometryCRS": "EPSG:4167",
-        },
-        {"name": "date_adjusted", "dataType": "timestamp"},
-        {"name": "survey_reference", "dataType": "text", "length": 50},
-        {
-            "name": "adjusted_nodes",
-            "dataType": "integer",
-            "size": 32,
-        },
-    ]
+    meta_item_keys = set(meta_items.keys())
+    assert {"title", "description", "schema.json"}.issubset(meta_item_keys)
+    crs_keys = meta_item_keys - {"title", "description", "schema.json"}
+    assert len(crs_keys) == 1
+    crs_key = next(iter(crs_keys))
+    assert crs_key.startswith("crs/EPSG:") and crs_key.endswith(".wkt")
 
 
 def test_postgis_import(
@@ -622,15 +600,15 @@ def test_postgis_import_from_view_no_pk(
 ):
     repo_path = tmp_path / "repo"
     with postgis_layer(
-        "gpkg-polygons", "nz-waca-adjustments.gpkg", "nz_waca_adjustments"
+        "gpkg-points", "nz-pa-points-topo-150k.gpkg", "nz_pa_points_topo_150k"
     ):
         with postgis_db.connect() as conn:
             conn.execute(
                 """
-                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
-                    SELECT date_adjusted, survey_reference, adjusted_nodes, geom
-                    FROM nz_waca_adjustments
-                    WHERE id %% 3 != 0
+                CREATE OR REPLACE VIEW nz_pa_points_view AS (
+                    SELECT geom, t50_fid, name_ascii, macronated, name
+                    FROM nz_pa_points_topo_150k
+                    WHERE fid %% 3 != 0
                 );
                 """
             )
@@ -638,25 +616,25 @@ def test_postgis_import_from_view_no_pk(
             repo_path,
             cli_runner,
             chdir,
-            table_name="nz_waca_adjustments_view",
+            table_name="nz_pa_points_view",
             pk_name="auto_pk",
         )
 
         repo = SnoRepo(repo_path)
-        dataset = repo.datasets()["nz_waca_adjustments_view"]
+        dataset = repo.datasets()["nz_pa_points_view"]
         initial_pks = [f["auto_pk"] for f in dataset.features()]
-        assert len(initial_pks) == 161
-        assert max(initial_pks) == 161
-        assert sorted(initial_pks) == list(range(1, 161 + 1))
+        assert len(initial_pks) == 1429
+        assert max(initial_pks) == 1429
+        assert sorted(initial_pks) == list(range(1, 1429 + 1))
 
         with postgis_db.connect() as conn:
-            conn.execute("DROP VIEW IF EXISTS nz_waca_adjustments_view;")
+            conn.execute("DROP VIEW IF EXISTS nz_pa_points_view;")
             conn.execute(
                 """
-                CREATE OR REPLACE VIEW nz_waca_adjustments_view AS (
-                    SELECT date_adjusted, survey_reference, adjusted_nodes, geom
-                    FROM nz_waca_adjustments
-                    WHERE id %% 3 != 1
+                CREATE OR REPLACE VIEW nz_pa_points_view AS (
+                    SELECT geom, t50_fid, name_ascii, macronated, name
+                    FROM nz_pa_points_topo_150k
+                    WHERE fid %% 3 != 1
                 );
                 """
             )
@@ -667,36 +645,44 @@ def test_postgis_import_from_view_no_pk(
                 str(repo_path.resolve()),
                 "import",
                 os.environ["SNO_POSTGRES_URL"],
-                "nz_waca_adjustments_view",
+                "nz_pa_points_view",
                 "--replace-existing",
-                "--similarity-detection-limit=10",
+                "--similarity-detection-limit=10000",
             ]
         )
         assert r.exit_code == 0, r.stderr
         repo = SnoRepo(repo_path)
-        dataset = repo.datasets()["nz_waca_adjustments_view"]
+        dataset = repo.datasets()["nz_pa_points_view"]
         new_pks = [f["auto_pk"] for f in dataset.features()]
 
-        assert len(new_pks) == 159
-        assert max(new_pks) == 228
-        assert len(set(initial_pks) & set(new_pks)) == 92
-        # 228 features total - but 161 are in the first group and 159 are in the second group
-        # Means 92 features are in both, and should be imported with the same PK both times
-        # 159 + 161 is 320, which is 92 more features than the actual total of 228
+        assert len(new_pks) == 1428
+        assert max(new_pks) == 2143
+        assert len(set(initial_pks) & set(new_pks)) == 714
+        # 2143 features total - but 1429 are in the first group and 1428 are in the second group
+        # Means 714 features are in both, and should be imported with the same PK both times
+        # 1429 + 1428 is 2857, which is 714 more features than the actual total of 2143
 
         with postgis_db.connect() as conn:
             # This is similar enough to be detected as an edit - only one field is different.
             conn.execute(
-                "UPDATE nz_waca_adjustments SET survey_reference='foo' WHERE id=1424927;"
+                "UPDATE nz_pa_points_topo_150k SET name_ascii='foo' WHERE fid=3;"
             )
             # This is similar enough to be detected as an edit - only one field is different.
-            conn.execute(
-                "UPDATE nz_waca_adjustments SET adjusted_nodes=12345678 WHERE id=1443053;"
-            )
+            conn.execute("UPDATE nz_pa_points_topo_150k SET name='qux' WHERE fid=6;")
             # This will not be detected as an edit - two fields are different,
             # so it looks like one feature is deleted and a different one is inserted.
             conn.execute(
-                "UPDATE nz_waca_adjustments SET survey_reference='bar', adjusted_nodes=87654321 WHERE id=1452332;"
+                "UPDATE nz_pa_points_topo_150k SET name_ascii='bar', name='baz' WHERE fid=9;"
+            )
+            conn.execute("DROP VIEW IF EXISTS nz_pa_points_view;")
+            conn.execute(
+                """
+                CREATE OR REPLACE VIEW nz_pa_points_view AS (
+                    SELECT geom, t50_fid, name_ascii, macronated, name
+                    FROM nz_pa_points_topo_150k
+                    WHERE fid %% 3 != 2
+                );
+                """
             )
 
         r = cli_runner.invoke(
@@ -705,35 +691,46 @@ def test_postgis_import_from_view_no_pk(
                 str(repo_path.resolve()),
                 "import",
                 os.environ["SNO_POSTGRES_URL"],
-                "nz_waca_adjustments_view",
+                "nz_pa_points_view",
                 "--replace-existing",
-                "--similarity-detection-limit=10",
+                "--similarity-detection-limit=10000",
             ]
         )
         assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["--repo", str(repo_path.resolve()), "show"])
         assert r.exit_code == 0, r.stderr
-        # Two edits and one insert + delete:
-        assert r.stdout.splitlines()[-19:] == [
-            "",
-            "--- nz_waca_adjustments_view:feature:1",
-            "+++ nz_waca_adjustments_view:feature:1",
-            "-                         survey_reference = ␀",
-            "+                         survey_reference = foo",
-            "--- nz_waca_adjustments_view:feature:2",
-            "+++ nz_waca_adjustments_view:feature:2",
-            "-                           adjusted_nodes = 1238",
-            "+                           adjusted_nodes = 12345678",
-            "--- nz_waca_adjustments_view:feature:3",
-            "-                                     geom = MULTIPOLYGON(...)",
-            "-                            date_adjusted = 2011-06-07T15:22:58Z",
-            "-                         survey_reference = ␀",
-            "-                           adjusted_nodes = 558",
-            "+++ nz_waca_adjustments_view:feature:229",
-            "+                                     geom = MULTIPOLYGON(...)",
-            "+                            date_adjusted = 2011-06-07T15:22:58Z",
-            "+                         survey_reference = bar",
-            "+                           adjusted_nodes = 87654321",
+
+        output = r.stdout.splitlines()
+        # Huge amount of adds and deletes caused by changing which features are included in the view again:
+        assert len(output) == 8600
+
+        # But, we still are able to recognise the edits we made as edits.
+        # (For happy mathematical reasons, these diffs end up at the end of the output)
+        assert output[-20:] == [
+            # Edit: name_ascii changed to foo
+            "--- nz_pa_points_view:feature:1430",
+            "+++ nz_pa_points_view:feature:1430",
+            "-                               name_ascii = Tauwhare Pa",
+            "+                               name_ascii = foo",
+            # Edit: name changed to qux
+            "--- nz_pa_points_view:feature:1431",
+            "+++ nz_pa_points_view:feature:1431",
+            "-                                     name = ␀",
+            "+                                     name = qux",
+            # Not considered an edit - both name_ascii and name changed
+            # So, left as a delete + insert, and assigned a new PK
+            "--- nz_pa_points_view:feature:1432",
+            "-                                     geom = POINT(...)",
+            "-                                  t50_fid = 2426279",
+            "-                               name_ascii = ␀",
+            "-                               macronated = N",
+            "-                                     name = ␀",
+            "+++ nz_pa_points_view:feature:2144",
+            "+                                     geom = POINT(...)",
+            "+                                  t50_fid = 2426279",
+            "+                               name_ascii = bar",
+            "+                               macronated = N",
+            "+                                     name = baz",
         ]
 
 
