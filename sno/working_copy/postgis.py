@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 
 from sqlalchemy import Index
-from sqlalchemy.sql.compiler import IdentifierPreparer
+from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
 
@@ -48,7 +48,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         self.engine = postgis_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
-        self.preparer = IdentifierPreparer(self.engine.dialect)
+        self.preparer = PGIdentifierPreparer(self.engine.dialect)
 
         self.sno_tables = PostgisSnoTables(self.db_schema)
 

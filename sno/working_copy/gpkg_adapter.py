@@ -7,8 +7,7 @@ from sno.meta_items import META_ITEM_NAMES as V2_META_ITEM_NAMES
 from sno.schema import Schema, ColumnSchema
 from sno.timestamps import datetime_to_iso8601_utc
 
-from sqlalchemy.sql.compiler import IdentifierPreparer
-from sqlalchemy.dialects.sqlite.base import SQLiteDialect
+from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer, SQLiteDialect
 
 # Given a dict of all "gpkg_meta_items", generates some or all v2 meta items.
 # See generate_v2_meta_item, all_v2_meta_items.
@@ -16,7 +15,7 @@ from sqlalchemy.dialects.sqlite.base import SQLiteDialect
 # See generate_gpkg_meta_item, all_gpkg_meta_items.
 
 
-_PREPARER = IdentifierPreparer(SQLiteDialect())
+_PREPARER = SQLiteIdentifierPreparer(SQLiteDialect())
 
 
 def quote(ident):

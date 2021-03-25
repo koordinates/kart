@@ -4,11 +4,10 @@ from osgeo.osr import SpatialReference
 from sno import crs_util
 from sno.schema import Schema, ColumnSchema
 
-from sqlalchemy.sql.compiler import IdentifierPreparer
-from sqlalchemy.dialects.postgresql.base import PGDialect
+from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer, PGDialect
 
 
-_PREPARER = IdentifierPreparer(PGDialect())
+_PREPARER = PGIdentifierPreparer(PGDialect())
 
 
 def quote(ident):

@@ -8,8 +8,8 @@ from pathlib import Path
 import click
 from osgeo import gdal
 import sqlalchemy as sa
+from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.types import UserDefinedType
 
 
@@ -40,7 +40,7 @@ class WorkingCopy_GPKG(WorkingCopy):
         self.path = path
         self.engine = gpkg_engine(self.full_path)
         self.sessionmaker = sessionmaker(bind=self.engine)
-        self.preparer = IdentifierPreparer(self.engine.dialect)
+        self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
 
         self.db_schema = None
         self.sno_tables = GpkgSnoTables

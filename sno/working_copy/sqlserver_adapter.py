@@ -1,11 +1,10 @@
 from sno import crs_util
 from sno.schema import Schema, ColumnSchema
 
-from sqlalchemy.sql.compiler import IdentifierPreparer
-from sqlalchemy.dialects.mssql.base import MSDialect
+from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer, MSDialect
 
 
-_PREPARER = IdentifierPreparer(MSDialect())
+_PREPARER = MSIdentifierPreparer(MSDialect())
 
 
 def quote(ident):

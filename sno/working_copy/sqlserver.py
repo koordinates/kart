@@ -5,11 +5,11 @@ from urllib.parse import urlsplit
 
 import sqlalchemy as sa
 from sqlalchemy import literal_column
+from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function
-from sqlalchemy.sql.compiler import IdentifierPreparer
 from sqlalchemy.types import UserDefinedType
 
 from . import sqlserver_adapter
@@ -51,7 +51,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         self.engine = sqlserver_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
-        self.preparer = IdentifierPreparer(self.engine.dialect)
+        self.preparer = MSIdentifierPreparer(self.engine.dialect)
 
         self.sno_tables = SqlServerSnoTables(self.db_schema)
 
