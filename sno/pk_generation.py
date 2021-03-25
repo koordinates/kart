@@ -200,7 +200,7 @@ class PkGeneratingImportSource(ImportSource):
         cols = self.delegate.schema.to_column_dicts()
         return Schema.from_column_dicts([self.pk_col] + cols)
 
-    def _schema_is_similar_to_last_import(self):
+    def _is_schema_similar_to_last_import(self):
         if not self.prev_dest_schema:
             return False
         dt = self.prev_dest_schema.diff_type_counts(self.schema)
@@ -224,7 +224,7 @@ class PkGeneratingImportSource(ImportSource):
         buffered_inserts = []
         buffered_insert_limit = self.similarity_detection_insert_limit
 
-        if not self._schema_is_similar_to_last_import():
+        if not self._is_schema_similar_to_last_import():
             buffered_insert_limit = 0
 
         for orig_feature in self.delegate.features():
@@ -457,6 +457,8 @@ class FilteredDataset(Dataset2):
 class FeaturePlusHashes:
     _MORE_THAN_ONE_MATCH = object()
 
+    __slots__ = ["feature", "schema", "match"]
+
     def __init__(self, feature, schema):
         self.feature = feature
         self.schema = schema
@@ -474,7 +476,7 @@ class FeaturePlusHashes:
         # Generate the overall hash of the feature, but in separate pieces.
         for col in self.schema.non_pk_columns:
             value = self.feature[col.name]
-            value_hash = hash(msg_pack([col.id, value]))
+            value_hash = hash((col.id, value))
             feature_hash ^= value_hash
             value_hashes.append(value_hash)
 
@@ -493,4 +495,8 @@ class FeaturePlusHashes:
             self.match = self._MORE_THAN_ONE_MATCH
 
     def is_uniquely_matched(self):
-        return self.match is not None and self.match.match is self
+        return (
+            self.match is not None
+            and self.match is not self._MORE_THAN_ONE_MATCH
+            and self.match.match is self
+        )

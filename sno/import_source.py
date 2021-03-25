@@ -123,7 +123,7 @@ class ImportSource:
         """
         Aligning the schema with an existing schema means that the pre-existing colunms will keep the same ID
         that they had last time. Failing to align the schema would mean that some features would be re-encoded
-        even if they hadn't actually chaned.
+        even if they hadn't actually changed.
         """
         self.schema = existing_schema.align_to_self(self.schema)
 
