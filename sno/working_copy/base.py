@@ -132,6 +132,17 @@ class WorkingCopy:
         """The table name of sno_track table, not including the schema."""
         return self.sno_tables.sno_state.name
 
+    @property
+    def clean_path(self):
+        """The path, but with any passwords hidden so we can print it without exposing them."""
+        return self.path
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}: {self.clean_path}>"
+
+    def __str__(self):
+        return self.clean_path
+
     def quote(self, ident):
         """Conditionally quote an identifier - eg if it is a reserved word or contains special characters."""
         return self.preparer.quote(ident)

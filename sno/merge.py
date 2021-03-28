@@ -227,7 +227,7 @@ def complete_merging_state(ctx):
 
     wc = repo.working_copy
     if wc:
-        L.debug(f"Updating {wc.path} ...")
+        L.debug(f"Updating {wc.clean_path} ...")
         merge_commit = repo[merge_commit_id]
         # FIXME - this blows away any WC changes the user has, but unfortunately,
         # we don't have any way of preserving them right now.
@@ -395,7 +395,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
         # TODO - maybe lock the working copy during a merge?
         wc = repo.working_copy
         if wc:
-            L.debug(f"Updating {wc.path} ...")
+            L.debug(f"Updating {wc.clean_path} ...")
             merge_commit = repo[jdict["commit"]]
             wc.reset(merge_commit)
 

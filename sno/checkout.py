@@ -382,7 +382,7 @@ def create_workingcopy(ctx, discard_changes, wc_path):
 
     # Finished sanity checks - start work:
     if old_wc and wc_path != old_wc_path:
-        click.echo(f"Deleting working copy at {old_wc.path} ...")
+        click.echo(f"Deleting working copy at {old_wc.clean_path} ...")
         old_wc.delete()
 
     WorkingCopy.write_config(repo, wc_path)
@@ -391,7 +391,7 @@ def create_workingcopy(ctx, discard_changes, wc_path):
 
     # Delete anything the already exists in the new target location also, and start fresh.
     if new_wc.is_created():
-        click.echo(f"Deleting working copy at {new_wc.path} ...")
+        click.echo(f"Deleting working copy at {new_wc.clean_path} ...")
         # There's a possibility we lack permission to recreate the db schema,
         # so if it already exists, we keep that part.
         new_wc.delete(keep_db_schema_if_possible=True)

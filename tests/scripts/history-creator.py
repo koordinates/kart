@@ -110,7 +110,7 @@ def main():
         return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
 
     with wc.session() as sess:
-        print(f"Connected to {wc.path}")
+        print(f"Connected to {wc.clean_path}")
 
         all_tables = [
             r[0] for r in sess.execute("SELECT table_name FROM gpkg_contents;")

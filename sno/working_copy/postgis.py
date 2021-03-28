@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import time
-from urllib.parse import urlsplit
 
 
 from sqlalchemy import Index
@@ -55,18 +54,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     @classmethod
     def check_valid_path(cls, wc_path, workdir_path=None):
         cls.check_valid_db_uri(wc_path, workdir_path)
-
-    def __str__(self):
-        p = urlsplit(self.uri)
-        if p.password is not None:
-            nl = p.hostname
-            if p.username is not None:
-                nl = f"{p.username}@{nl}"
-            if p.port is not None:
-                nl += f":{p.port}"
-
-            p._replace(netloc=nl)
-        return p.geturl()
 
     def create_and_initialise(self):
         with self.session() as sess:

@@ -96,6 +96,19 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         return schema
 
     @property
+    def clean_path(self):
+        p = urlsplit(self.uri)
+        if p.password is not None:
+            nl = p.hostname
+            if p.username is not None:
+                nl = f"{p.username}@{nl}"
+            if p.port is not None:
+                nl += f":{p.port}"
+            p = p._replace(netloc=nl)
+
+        return p.geturl()
+
+    @property
     @functools.lru_cache(maxsize=1)
     def DB_SCHEMA(self):
         """Escaped, dialect-specific name of the database-schema owned by this working copy (if any)."""
@@ -104,7 +117,7 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         return self.preparer.format_schema(self.db_schema)
 
     def _db_connection_error(self, causal_error):
-        message = f"Error connecting to {self.WORKING_COPY_TYPE_NAME} working copy at {self.path}"
+        message = f"Error connecting to {self.WORKING_COPY_TYPE_NAME} working copy at {self.clean_path}"
         return DbConnectionError(message, causal_error)
 
     def is_created(self):

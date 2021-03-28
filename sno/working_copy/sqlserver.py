@@ -55,18 +55,6 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         self.sno_tables = SqlServerSnoTables(self.db_schema)
 
-    def __str__(self):
-        p = urlsplit(self.uri)
-        if p.password is not None:
-            nl = p.hostname
-            if p.username is not None:
-                nl = f"{p.username}@{nl}"
-            if p.port is not None:
-                nl += f":{p.port}"
-
-            p._replace(netloc=nl)
-        return p.geturl()
-
     def create_and_initialise(self):
         with self.session() as sess:
             # There's no CREATE IF NOT EXISTS, and CREATE SCHEMA has to be run in its own block.

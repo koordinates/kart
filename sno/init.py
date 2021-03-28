@@ -47,10 +47,10 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
 
     commit = repo.head_commit
     if not wc.is_created():
-        click.echo(f"Creating working copy at {wc.path} ...")
+        click.echo(f"Creating working copy at {wc.clean_path} ...")
         wc.create_and_initialise()
     else:
-        click.echo(f"Updating {wc.path} ...")
+        click.echo(f"Updating {wc.clean_path} ...")
 
     if replace_existing:
         wc.drop_table(commit, *datasets)
