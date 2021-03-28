@@ -7,9 +7,7 @@
 apipkg==1.5
     # via execnet
 appnope==0.1.2
-    # via
-    #   -r requirements/dev.in
-    #   ipython
+    # via -r requirements/dev.in
 attrs==20.3.0
     # via
     #   -c requirements/../requirements.txt
@@ -39,7 +37,7 @@ ipdb==0.13.7
     # via -r requirements/dev.in
 ipython-genutils==0.2.0
     # via traitlets
-ipython==7.21.0
+ipython==7.22.0
     # via
     #   -r requirements/dev.in
     #   ipdb
