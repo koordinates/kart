@@ -410,7 +410,6 @@ class SnoRepo(pygit2.Repository):
             )
         return SnoRepoState.MERGING if merge_head else SnoRepoState.NORMAL
 
-    @functools.lru_cache()
     def structure(self, refish="HEAD"):
         """Get the structure of this Sno repository at a particular revision."""
         self.ensure_supported_version()

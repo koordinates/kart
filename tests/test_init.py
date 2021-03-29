@@ -416,10 +416,18 @@ def test_import_replace_ids(
                 [
                     "import",
                     data / "nz-waca-adjustments.gpkg",
+                    # import 5 features
+                    "--replace-ids",
+                    "2501588\n4413497\n4411733\n4408774\n4408145",
                     "nz_waca_adjustments:mytable",
                 ]
             )
             assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["show", "-o", "json"])
+            assert r.exit_code == 0, r.stderr
+            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+            features = diff.get("feature")
+            assert len(features) == 5
 
             # Now change four features; two updates and two inserts
             with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:

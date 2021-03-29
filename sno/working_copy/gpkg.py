@@ -452,7 +452,7 @@ class WorkingCopy_GPKG(WorkingCopy):
         L.debug("Dropping spatial index for %s.%s", dataset.table_name, geom_col)
 
         rtree_table = f"rtree_{dataset.table_name}_{geom_col}"
-        sess.execute(f"DROP TABLE {self.quote(rtree_table)};")
+        sess.execute(f"DROP TABLE IF EXISTS {self.quote(rtree_table)};")
         sess.execute(
             f"DELETE FROM gpkg_extensions WHERE (table_name, column_name, extension_name) = (:table_name, :column_name, 'gpkg_rtree_index')",
             {"table_name": dataset.table_name, "column_name": geom_col},

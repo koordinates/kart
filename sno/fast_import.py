@@ -191,10 +191,9 @@ def fast_import_tables(
                     # As we iterate over IDs, also delete them from the dataset.
                     # This means we don't have to load the whole list into memory.
                     def _ids():
-                        replacing_schema = replacing_dataset.schema
                         for pk in replace_ids:
-                            pk = replacing_schema.sanitise_pks(pk)
-                            path = replacing_dataset.encode_pks_to_path(pk)
+                            pk = source.schema.sanitise_pks(pk)
+                            path = dataset.encode_pks_to_path(pk)
                             p.stdin.write(f"D {path}\n".encode("utf8"))
                             yield pk
 
