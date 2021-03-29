@@ -381,7 +381,7 @@ class SnoRepo(pygit2.Repository):
         """Return the path to the sno working copy, if one exists."""
         repo_cfg = self.config
         path_key = SnoConfigKeys.SNO_WORKINGCOPY_PATH
-        return Path(repo_cfg[path_key]) if path_key in repo_cfg else None
+        return repo_cfg[path_key] if path_key in repo_cfg else None
 
     @property
     def is_bare(self):

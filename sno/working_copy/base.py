@@ -1,4 +1,4 @@
-from enum import Enum, auto
+from enum import Enum, IntEnum, auto
 import contextlib
 import functools
 import logging
@@ -67,6 +67,21 @@ class WorkingCopyType(Enum):
 
             return WorkingCopy_SqlServer
         raise RuntimeError("Invalid WorkingCopyType")
+
+
+class WorkingCopyStatus(IntEnum):
+    DB_SCHEMA_EXISTS = 0x1  # The database schema for this working copy exists.
+    FILE_EXISTS = 0x2  # The file (eg GPKG file) for this working copy exists.
+    NON_EMPTY = 0x4  # At least one table of any sort exists in this working copy.
+    INITIALISED = 0x8  # All required Sno tables exist.
+    HAS_DATA = 0x10  # At least one table that is not a Sno table exists.
+    DIRTY = 0x20  # Working copy has uncommitted changes.
+
+    # A working copy "exists" if it is a file that exists, or it is a non-empty db schema.
+    # An empty db schema is a working copy in a valid state of non-existance.
+    WC_EXISTS = FILE_EXISTS | NON_EMPTY
+
+    UNCONNECTABLE = 0x1000  # Couldn't connect to this working copy.
 
 
 class WorkingCopyDirty(Exception):
@@ -197,7 +212,14 @@ class WorkingCopy:
         return upsert(self._table_def_for_dataset(dataset))
 
     @classmethod
-    def get(cls, repo, *, allow_uncreated=False, allow_invalid_state=False):
+    def get(
+        cls,
+        repo,
+        *,
+        allow_uncreated=False,
+        allow_invalid_state=False,
+        allow_unconnectable=False,
+    ):
         """
         Get the working copy associated with this sno repo, as specified in the repo config.
         Note that the working copy specified in the repo config may or may not exist or be in a valid state.
@@ -207,6 +229,8 @@ class WorkingCopy:
         working copy will be returned, and None will be returned if no working copy is found.
         If allow_invalid_state is True, an invalid-state working copy may be returned - otherwise, only a valid
         working copy will be returned, and a NotFound(NO_WORKING_COPY) will be raised if it is in an invalid state.
+        If allow_unconnectable is True, a working copy that cannot be connected to may be returned - otherwise,
+        only a working copy that can be connected to will be returned, and a DbConnectionError will be raised otherwise.
         """
         repo_cfg = repo.config
         path_key = cls.SNO_WORKINGCOPY_PATH
@@ -219,11 +243,18 @@ class WorkingCopy:
             path,
             allow_uncreated=allow_uncreated,
             allow_invalid_state=allow_invalid_state,
+            allow_unconnectable=allow_unconnectable,
         )
 
     @classmethod
     def get_at_path(
-        cls, repo, path, *, allow_uncreated=False, allow_invalid_state=False
+        cls,
+        repo,
+        path,
+        *,
+        allow_uncreated=False,
+        allow_invalid_state=False,
+        allow_unconnectable=False,
     ):
         if not path:
             return None
@@ -233,10 +264,14 @@ class WorkingCopy:
             return None
         wc = wc_type.class_(repo, path)
 
-        if not allow_invalid_state:
-            wc.check_valid_state()
+        if allow_uncreated and allow_invalid_state and allow_unconnectable:
+            return wc
 
-        if not wc.is_created() and not allow_uncreated:
+        status = wc.status(allow_unconnectable=allow_unconnectable)
+        if not allow_invalid_state:
+            wc.check_valid_state(status)
+
+        if not allow_uncreated and not (status & WorkingCopyStatus.WC_EXISTS):
             wc = None
 
         return wc
@@ -301,18 +336,21 @@ class WorkingCopy:
         """
         cls.subclass_from_path(wc_path).check_valid_path(wc_path, workdir_path)
 
-    def check_valid_state(self):
-        if self.is_created():
-            if not self.is_initialised():
-                message = [
-                    f"Working copy at {self.path} is not yet fully initialised",
-                    "Try `sno create-workingcopy` to delete and recreate working copy if problem persists",
-                ]
-                if self.has_data():
-                    message.append(
-                        f"But beware: {self.path} already seems to contain data, make sure it is backed up"
-                    )
-                raise NotFound("\n".join(message), NO_WORKING_COPY)
+    def check_valid_state(self, status=None):
+        if status is None:
+            status = self.status()
+
+        wc_exists = status & WorkingCopyStatus.WC_EXISTS
+        if wc_exists and not (status & WorkingCopyStatus.INITIALISED):
+            message = [
+                f"Working copy at {self.clean_path} is not yet fully initialised",
+                "Try `sno create-workingcopy --delete-existing` to delete and recreate working copy if problem persists",
+            ]
+            if status & WorkingCopyStatus.HAS_DATA:
+                message.append(
+                    f"But beware: {self.clean_path} already seems to contain data, make sure it is backed up"
+                )
+            raise NotFound("\n".join(message), NO_WORKING_COPY)
 
     @classmethod
     def default_path(cls, workdir_path):
@@ -355,22 +393,10 @@ class WorkingCopy:
             del self._session
             L.debug("session: new/done")
 
-    def is_created(self):
+    def status(self, check_if_dirty=False, allow_unconnectable=False):
         """
-        Returns true if the location specified by self.path alreaddy exists.
-        Note that it might not be initialised as a working copy - see self.is_initialised.
+        Returns a union of WorkingCopyStatus values.
         """
-        raise NotImplementedError()
-
-    def is_initialised(self):
-        """
-        Returns true if the working copy is initialised -
-        it exists and has the necessary sno tables - sno_state and sno_track.
-        """
-        raise NotImplementedError()
-
-    def has_data(self):
-        """Returns true if the working copy seems to have user-created content already."""
         raise NotImplementedError()
 
     def create_and_initialise(self):
@@ -436,7 +462,7 @@ class WorkingCopy:
         Returns True if there are uncommitted changes in the working copy,
         or False otherwise.
         """
-        if not self.is_initialised() or self.get_db_tree() is None:
+        if self.get_db_tree() is None:
             return False
         try:
             self.diff_to_tree(raise_if_dirty=True)

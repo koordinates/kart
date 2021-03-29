@@ -5,7 +5,7 @@ from urllib.parse import urlsplit, urlunsplit
 import click
 from sqlalchemy.exc import DBAPIError
 
-from .base import WorkingCopy
+from .base import WorkingCopy, WorkingCopyStatus
 from sno.exceptions import InvalidOperation, DbConnectionError
 
 
@@ -22,7 +22,8 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         cls.check_valid_path(wc_path, workdir_path)
 
         working_copy = cls(None, wc_path)
-        if working_copy.has_data():
+        status = working_copy.status()
+        if status & WorkingCopyStatus.NON_EMPTY:
             db_schema = working_copy.db_schema
             container_text = f"schema '{db_schema}'" if db_schema else "working copy"
             raise InvalidOperation(
@@ -97,7 +98,11 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
 
     @property
     def clean_path(self):
-        p = urlsplit(self.uri)
+        return self.strip_password(self.uri)
+
+    @classmethod
+    def strip_password(cls, uri):
+        p = urlsplit(uri)
         if p.password is not None:
             nl = p.hostname
             if p.username is not None:
@@ -120,61 +125,53 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         message = f"Error connecting to {self.WORKING_COPY_TYPE_NAME} working copy at {self.clean_path}"
         return DbConnectionError(message, causal_error)
 
-    def is_created(self):
-        """
-        Returns true if the DB schema referred to by this working copy exists and
-        contains at least one table. If it exists but is empty, it is treated as uncreated.
-        This is so the DB schema can be created ahead of time before a repo is created
-        or configured, without it triggering code that checks for corrupted working copies.
-        Note that it might not be initialised as a working copy - see self.is_initialised.
-        """
+    def status(self, check_if_dirty=False, allow_unconnectable=False):
+        result = 0
         try:
             with self.session() as sess:
-                count = sess.scalar(
-                    """
-                    SELECT COUNT(*) FROM information_schema.tables
-                    WHERE table_schema=:table_schema;
-                    """,
-                    {"table_schema": self.db_schema},
-                )
-                return count > 0
-        except DBAPIError as e:
-            raise self._db_connection_error(e)
+                if not sess.scalar(
+                    "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name=:schema_name;",
+                    {"schema_name": self.db_schema},
+                ):
+                    return result
 
-    def is_initialised(self):
-        """
-        Returns true if the working copy is initialised -
-        the db schema exists and has the necessary sno tables, _sno_state and _sno_track.
-        """
-        try:
-            with self.session() as sess:
-                count = sess.scalar(
+                result |= WorkingCopyStatus.DB_SCHEMA_EXISTS
+
+                sno_table_count = sess.scalar(
                     f"""
                     SELECT COUNT(*) FROM information_schema.tables
                     WHERE table_schema=:table_schema AND table_name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
                     """,
                     {"table_schema": self.db_schema},
                 )
-                return count == 2
-        except DBAPIError as e:
-            raise self._db_connection_error(e)
-
-    def has_data(self):
-        """
-        Returns true if the PostGIS working copy seems to have user-created content already.
-        """
-        try:
-            with self.session() as sess:
-                count = sess.scalar(
-                    f"""
+                schema_table_count = sess.scalar(
+                    """
                     SELECT COUNT(*) FROM information_schema.tables
-                    WHERE table_schema=:table_schema AND table_name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
+                    WHERE table_schema=:table_schema;
                     """,
                     {"table_schema": self.db_schema},
                 )
-                return count > 0
+                if schema_table_count:
+                    result |= WorkingCopyStatus.NON_EMPTY
+                if sno_table_count == 2:
+                    result |= WorkingCopyStatus.INITIALISED
+                if schema_table_count > sno_table_count:
+                    result |= WorkingCopyStatus.HAS_DATA
+
+            if (
+                (result & WorkingCopyStatus.INITIALISED)
+                and check_if_dirty
+                and self.is_dirty()
+            ):
+                result |= WorkingCopyStatus.DIRTY
+
         except DBAPIError as e:
-            raise self._db_connection_error(e)
+            if allow_unconnectable:
+                result |= WorkingCopyStatus.UNCONNECTABLE
+            else:
+                raise self._db_connection_error(e)
+
+        return result
 
     def delete(self, keep_db_schema_if_possible=False):
         # We don't use DROP SCHEMA CASCADE since that could possibly delete things outside the schema

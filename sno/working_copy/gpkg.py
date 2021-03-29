@@ -14,7 +14,7 @@ from sqlalchemy.types import UserDefinedType
 
 
 from . import gpkg_adapter
-from .base import WorkingCopy
+from .base import WorkingCopy, WorkingCopyStatus
 from .table_defs import GpkgTables, GpkgSnoTables
 from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
@@ -154,45 +154,42 @@ class WorkingCopy_GPKG(WorkingCopy):
         for f in Path(self.full_path).parent.glob(Path(self.path).name + "-*"):
             f.unlink()
 
-    def is_created(self):
-        """
-        Returns true if the GPKG file referred to by this working copy exists.
-        Note that it might not be initialised as a working copy - see self.is_initialised.
-        """
-        return self.full_path.is_file()
+    def status(self, check_if_dirty=False, allow_unconnectable=False):
+        result = 0
+        if not self.full_path.is_file():
+            return result
 
-    def is_initialised(self):
-        """
-        Returns true if the GPKG working copy is initialised -
-        the GPKG file exists and has the necessary gpkg_sno tables - state and tracking.
-        """
-        if not self.is_created():
-            return False
+        result |= WorkingCopyStatus.FILE_EXISTS
         with self.session() as sess:
-            count = sess.scalar(
+            sno_table_count = sess.scalar(
                 f"""
                 SELECT count(*) FROM sqlite_master
                 WHERE type='table' AND name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
                 """
             )
-            return count == 2
-
-    def has_data(self):
-        """
-        Returns true if the GPKG working copy seems to have user-created content already.
-        """
-        if not self.is_created():
-            return False
-        with self.session() as sess:
-            count = sess.scalar(
+            user_table_count = sess.scalar(
                 f"""
                 SELECT count(*) FROM sqlite_master
                 WHERE type='table'
-                    AND name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}'')
+                    AND name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}')
                     AND NAME NOT LIKE 'gpkg%';
                 """
             )
-            return count > 0
+            if sno_table_count or user_table_count:
+                result |= WorkingCopyStatus.NON_EMPTY
+            if sno_table_count == 2:
+                result |= WorkingCopyStatus.INITIALISED
+            if user_table_count:
+                result |= WorkingCopyStatus.HAS_DATA
+
+        if (
+            (WorkingCopyStatus.INITIALISED & result)
+            and check_if_dirty
+            and self.is_dirty()
+        ):
+            result |= WorkingCopyStatus.DIRTY
+
+        return result
 
     def create_and_initialise(self):
         # GDAL: Create GeoPackage

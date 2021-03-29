@@ -6,6 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sno.repo import SnoRepo
 from sno.sqlalchemy.create_engine import get_odbc_drivers, get_sqlserver_driver
 from sno.working_copy import sqlserver_adapter
+from sno.working_copy.base import WorkingCopyStatus
+from sno.working_copy.db_server import DatabaseServer_WorkingCopy
 from test_working_copy import compute_approximated_types
 
 
@@ -70,7 +72,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {sqlserver_url} ..."
+                == f"Creating working copy at {DatabaseServer_WorkingCopy.strip_password(sqlserver_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])
@@ -82,7 +84,8 @@ def test_checkout_workingcopy(
             ]
 
             wc = repo.working_copy
-            assert wc.is_created()
+            assert wc.status() & WorkingCopyStatus.INITIALISED
+            assert wc.status() & WorkingCopyStatus.HAS_DATA
 
             head_tree_id = repo.head_tree.hex
             assert wc.assert_db_tree_match(head_tree_id)
@@ -125,10 +128,8 @@ def test_init_import(
 
             repo = SnoRepo(repo_path)
             wc = repo.working_copy
-
-            assert wc.is_created()
-            assert wc.is_initialised()
-            assert wc.has_data()
+            assert wc.status() & WorkingCopyStatus.INITIALISED
+            assert wc.status() & WorkingCopyStatus.HAS_DATA
 
             assert wc.path == sqlserver_url
 
@@ -170,7 +171,8 @@ def test_commit_edits(
             ]
 
             wc = repo.working_copy
-            assert wc.is_created()
+            assert wc.status() & WorkingCopyStatus.INITIALISED
+            assert wc.status() & WorkingCopyStatus.HAS_DATA
 
             with wc.session() as sess:
                 if archive == "points":
@@ -226,7 +228,8 @@ def test_edit_schema(data_archive, cli_runner, new_sqlserver_db_schema):
             assert r.exit_code == 0, r.stderr
 
             wc = repo.working_copy
-            assert wc.is_created()
+            assert wc.status() & WorkingCopyStatus.INITIALISED
+            assert wc.status() & WorkingCopyStatus.HAS_DATA
 
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
             assert r.exit_code == 0, r.stderr
@@ -357,7 +360,8 @@ def test_geometry_constraints(
             assert r.exit_code == 0
 
             wc = repo.working_copy
-            assert wc.is_created()
+            assert wc.status() & WorkingCopyStatus.INITIALISED
+            assert wc.status() & WorkingCopyStatus.HAS_DATA
 
             with wc.session() as sess:
                 sess.execute(

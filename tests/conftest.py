@@ -291,7 +291,9 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
                 )
                 incr += 1
                 L.info("Creating working copy at %s", wc_path)
-                r = cli_runner.invoke(["create-workingcopy", wc_path])
+                r = cli_runner.invoke(
+                    ["create-workingcopy", wc_path, "--delete-existing"]
+                )
                 assert r.exit_code == 0, r.stderr
 
             del repo

@@ -648,24 +648,30 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, _):
         repo = SnoRepo(repo_path)
 
-        r = cli_runner.invoke(["create-workingcopy", "."])
+        r = cli_runner.invoke(["create-workingcopy", ".", "--delete-existing"])
         assert r.exit_code == INVALID_ARGUMENT, r.stderr
 
         # relative path 1
         new_thingz = Path("new-thingz.gpkg")
         assert not new_thingz.exists()
-        r = cli_runner.invoke(["create-workingcopy", new_thingz])
+        r = cli_runner.invoke(
+            ["create-workingcopy", str(new_thingz), "--delete-existing"]
+        )
         assert r.exit_code == 0, r.stderr
         assert new_thingz.exists()
         assert repo.config["sno.workingcopy.path"] == str(new_thingz)
 
-        r = cli_runner.invoke(["create-workingcopy", new_thingz])
+        r = cli_runner.invoke(
+            ["create-workingcopy", str(new_thingz), "--delete-existing"]
+        )
         assert r.exit_code == 0, r.stderr
 
         # relative path 2
         other_thingz = Path("other-thingz.gpkg")
         assert not other_thingz.exists()
-        r = cli_runner.invoke(["create-workingcopy", Path("../points") / other_thingz])
+        r = cli_runner.invoke(
+            ["create-workingcopy", "../points/other-thingz.gpkg", "--delete-existing"]
+        )
         assert r.exit_code == 0, r.stderr
         assert not new_thingz.exists()
         assert other_thingz.exists()
@@ -674,7 +680,9 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
         # abs path
         abs_thingz = tmp_path / "abs_thingz.gpkg"
         assert not abs_thingz.exists()
-        r = cli_runner.invoke(["create-workingcopy", abs_thingz])
+        r = cli_runner.invoke(
+            ["create-workingcopy", str(abs_thingz), "--delete-existing"]
+        )
         assert r.exit_code == 0, r.stderr
         assert not other_thingz.exists()
         assert abs_thingz.exists()

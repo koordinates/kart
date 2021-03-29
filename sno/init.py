@@ -21,7 +21,7 @@ from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import SnoRepo
-from .working_copy import WorkingCopy
+from .working_copy import WorkingCopy, WorkingCopyStatus
 
 
 def list_import_formats(ctx, param, value):
@@ -46,7 +46,7 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
         return
 
     commit = repo.head_commit
-    if not wc.is_created():
+    if not (wc.status() & WorkingCopyStatus.INITIALISED):
         click.echo(f"Creating working copy at {wc.clean_path} ...")
         wc.create_and_initialise()
     else:
