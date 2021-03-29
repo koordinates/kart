@@ -26,6 +26,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `init` now accepts a `--initial-branch` option
  * `clone` now accepts a `--filter` option (advanced users only)
  * `show -o json` now includes the commit hash in the output
+ * `import` from Postgres now uses a server-side cursor, which means sno uses less memory
 
 ## 0.7.1
 
