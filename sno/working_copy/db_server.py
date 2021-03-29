@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 import click
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError
 
 from .base import WorkingCopy
 from sno.exceptions import InvalidOperation, DbConnectionError
@@ -138,7 +138,7 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
                     {"table_schema": self.db_schema},
                 )
                 return count > 0
-        except OperationalError as e:
+        except DBAPIError as e:
             raise self._db_connection_error(e)
 
     def is_initialised(self):
@@ -156,7 +156,7 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
                     {"table_schema": self.db_schema},
                 )
                 return count == 2
-        except OperationalError as e:
+        except DBAPIError as e:
             raise self._db_connection_error(e)
 
     def has_data(self):
@@ -173,7 +173,7 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
                     {"table_schema": self.db_schema},
                 )
                 return count > 0
-        except OperationalError as e:
+        except DBAPIError as e:
             raise self._db_connection_error(e)
 
     def delete(self, keep_db_schema_if_possible=False):
