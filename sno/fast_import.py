@@ -201,13 +201,17 @@ def fast_import_tables(
                 else:
                     src_iterator = source.features()
 
+                progress_every = None
+                if verbosity >= 1:
+                    progress_every = max(100, 100_000 // (10 ** (verbosity - 1)))
+
                 for i, blob_path in write_blobs_to_stream(
                     p.stdin,
                     dataset.import_iter_feature_blobs(
                         src_iterator, source, replacing_dataset=replacing_dataset
                     ),
                 ):
-                    if i and i % 100000 == 0 and verbosity >= 1:
+                    if i and progress_every and i % progress_every == 0:
                         click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
 
                     if limit is not None and i == (limit - 1):
