@@ -146,7 +146,7 @@ class PkGeneratingImportSource(ImportSource):
 
     def _prev_import_dest_tree(self, repo):
         """Returns the dataset tree that was created the last time this datasource was imported."""
-        if repo.is_empty:
+        if not repo.head_tree:
             return None
 
         current_pks_tree = self._get_generated_pks_tree(repo.head_tree)
