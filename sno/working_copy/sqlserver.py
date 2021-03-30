@@ -17,6 +17,7 @@ from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import SqlServerSnoTables
 from sno import crs_util
 from sno.geometry import Geometry
+from sno.sqlalchemy import text_with_inlined_params
 from sno.sqlalchemy.create_engine import sqlserver_engine
 
 
@@ -155,18 +156,17 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
         t0 = time.monotonic()
 
-        create_index = sa.text(
-            f"""
-            CREATE SPATIAL INDEX {self.quote(index_name)}
-            ON {self.table_identifier(dataset)} ({self.quote(geom_col)})
-            WITH (BOUNDING_BOX = (:min_x, :min_y, :max_x, :max_y))
-            """
-        ).bindparams(min_x=min_x, min_y=min_y, max_x=max_x, max_y=max_y)
-        # Placeholders not allowed in CREATE SPATIAL INDEX - have to use literal_binds.
-        # See https://docs.sqlalchemy.org/en/13/faq/sqlexpressions.html#faq-sql-expression-string
-        create_index.compile(
-            sess.connection(), compile_kwargs={"literal_binds": True}
-        ).execute()
+        # Placeholders not allowed in CREATE SPATIAL INDEX - have to use text_with_inlined_params.
+        sess.execute(
+            text_with_inlined_params(
+                f"""
+                CREATE SPATIAL INDEX {self.quote(index_name)}
+                ON {self.table_identifier(dataset)} ({self.quote(geom_col)})
+                WITH (BOUNDING_BOX = (:min_x, :min_y, :max_x, :max_y));
+                """,
+                {"min_x": min_x, "min_y": min_y, "max_x": max_x, "max_y": max_y},
+            )
+        )
 
         L.info("Created spatial index in %ss", time.monotonic() - t0)
 
@@ -180,26 +180,26 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
     def _create_triggers(self, sess, dataset):
         pk_name = dataset.primary_key
-        create_trigger = sa.text(
-            f"""
-            CREATE TRIGGER {self._quoted_trigger_name(dataset)} ON {self.table_identifier(dataset)}
-            AFTER INSERT, UPDATE, DELETE AS
-            BEGIN
-                MERGE {self.SNO_TRACK} TRA
-                USING
-                    (SELECT :table_name, {self.quote(pk_name)} FROM inserted
-                    UNION SELECT :table_name, {self.quote(pk_name)} FROM deleted)
-                    AS SRC (table_name, pk)
-                ON SRC.table_name = TRA.table_name AND SRC.pk = TRA.pk
-                WHEN NOT MATCHED THEN INSERT (table_name, pk) VALUES (SRC.table_name, SRC.pk);
-            END;
-            """
-        ).bindparams(table_name=dataset.table_name)
-        # Placeholders not allowed in CREATE TRIGGER - have to use literal_binds.
-        # See https://docs.sqlalchemy.org/en/13/faq/sqlexpressions.html#faq-sql-expression-string
-        create_trigger.compile(
-            sess.connection(), compile_kwargs={"literal_binds": True}
-        ).execute()
+        # Placeholders not allowed in CREATE TRIGGER - have to use text_with_inlined_params.
+        sess.execute(
+            text_with_inlined_params(
+                f"""
+                CREATE TRIGGER {self._quoted_trigger_name(dataset)}
+                ON {self.table_identifier(dataset)}
+                AFTER INSERT, UPDATE, DELETE AS
+                BEGIN
+                    MERGE {self.SNO_TRACK} TRA
+                    USING
+                        (SELECT :table_name1, {self.quote(pk_name)} FROM inserted
+                        UNION SELECT :table_name2, {self.quote(pk_name)} FROM deleted)
+                        AS SRC (table_name, pk)
+                    ON SRC.table_name = TRA.table_name AND SRC.pk = TRA.pk
+                    WHEN NOT MATCHED THEN INSERT (table_name, pk) VALUES (SRC.table_name, SRC.pk);
+                END;
+                """,
+                {"table_name1": dataset.table_name, "table_name2": dataset.table_name},
+            )
+        )
 
     @contextlib.contextmanager
     def _suspend_triggers(self, sess, dataset):

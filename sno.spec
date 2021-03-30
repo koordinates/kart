@@ -10,6 +10,7 @@ import shutil
 import subprocess
 
 from PyInstaller.compat import is_win, is_darwin, is_linux
+from PyInstaller.utils.hooks import collect_submodules
 
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
@@ -19,11 +20,15 @@ if is_win:
     with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
         vr_doc = vr_template.read()
         sno_version_nums = re.match(r'(\d+\.\d+(?:\.\d+)?)', sno_version).group(1)
-        sno_file_version = tuple(([int(_v) for _v in sno_version_nums.split('.')] + [0, 0])[:4])
+        sno_file_version = tuple(
+            ([int(_v) for _v in sno_version_nums.split('.')] + [0, 0])[:4]
+        )
         vr_doc = vr_doc.replace('%VERSION%', sno_version)
         vr_doc = vr_doc.replace('%VERTUPLE%', str(sno_file_version))
 
-        with open(os.path.join(workpath, 'sno_version_info.rc'), 'w', encoding='utf-8') as vr:
+        with open(
+            os.path.join(workpath, 'sno_version_info.rc'), 'w', encoding='utf-8'
+        ) as vr:
             vr.write(vr_doc)
 
 a = Analysis(
@@ -43,6 +48,7 @@ a = Analysis(
         '_cffi_backend',
         # via a cython module ???
         'csv',
+        *collect_submodules('sqlalchemy'),
     ],
     hookspath=[
         'platforms/pyi-hooks',
@@ -60,7 +66,10 @@ a = Analysis(
 if is_win:
     a.datas += Tree('vendor/dist/git', prefix='git')
     # GDAL/osgeo hook doesn't include Proj
-    a.datas += Tree('venv/Lib/site-packages/osgeo/data/proj', prefix=os.path.join('osgeo', 'data', 'proj'))
+    a.datas += Tree(
+        'venv/Lib/site-packages/osgeo/data/proj',
+        prefix=os.path.join('osgeo', 'data', 'proj'),
+    )
 else:
     a.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
     libexec_root = 'vendor/dist/env/libexec'
@@ -122,7 +131,9 @@ if is_darwin:
     dist_libexec_root = os.path.join(dist_resources_root, 'libexec')
 
     shutil.move(os.path.join(dist_bin_root, 'base_library.zip'), dist_resources_root)
-    os.symlink('../Resources/base_library.zip', os.path.join(dist_bin_root, 'base_library.zip'))
+    os.symlink(
+        '../Resources/base_library.zip', os.path.join(dist_bin_root, 'base_library.zip')
+    )
 
     os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
     os.symlink('../Resources/libexec', os.path.join(dist_bin_root, 'libexec'))
@@ -139,30 +150,39 @@ if is_darwin:
                     continue  # we already created it
                 if os.path.split(link_path)[1] == 'git':
                     # this symlinks to git: rewrite it
-                    os.symlink(os.path.split(link_path)[1], os.path.join(dist_libexec_root, relpath))
+                    os.symlink(
+                        os.path.split(link_path)[1],
+                        os.path.join(dist_libexec_root, relpath),
+                    )
                     continue
                 if re.search(r'\.dylib$', f):
                     os.symlink(
                         os.path.join('../../../MacOS', os.path.split(link_path)[1]),
-                        os.path.join(dist_libexec_root, relpath)
+                        os.path.join(dist_libexec_root, relpath),
                     )
                     continue
-                if not os.path.exists(fpath) and not os.path.exists(os.path.join(dist_bin_root, link_path)):
+                if not os.path.exists(fpath) and not os.path.exists(
+                    os.path.join(dist_bin_root, link_path)
+                ):
                     print(f"ignoring broken link {relpath} -> {link_path}")
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
-            elif subprocess.check_output(['file', '-b', fpath], text=True).startswith('Mach-O'):
+            elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
+                'Mach-O'
+            ):
                 print(f"relocating {relpath} to MacOS/")
                 shutil.move(fpath, dist_bin_root)
                 os.symlink(
                     os.path.join('../../../MacOS', f),
-                    os.path.join(dist_libexec_root, relpath)
+                    os.path.join(dist_libexec_root, relpath),
                 )
                 continue
 
             os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
             # copy anything else (keeps symlinks too)
-            shutil.copy(fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False)
+            shutil.copy(
+                fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False
+            )
 
 elif is_linux:
     # fix symlinks/binaries in libexec/git-core/
@@ -180,14 +200,18 @@ elif is_linux:
                 if link_path == "../../bin/git":
                     os.symlink(
                         os.path.join('../../git'),
-                        os.path.join(dist_libexec_root, relpath)
+                        os.path.join(dist_libexec_root, relpath),
                     )
                     continue
-                if not os.path.exists(fpath) and not os.path.exists(os.path.join(dist_bin_root, link_path)):
+                if not os.path.exists(fpath) and not os.path.exists(
+                    os.path.join(dist_bin_root, link_path)
+                ):
                     print(f"ignoring broken link {relpath} -> {link_path}")
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
 
             os.makedirs(os.path.join(dist_libexec_root, reldir), exist_ok=True)
             # copy anything else (keeps symlinks too)
-            shutil.copy(fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False)
+            shutil.copy(
+                fpath, os.path.join(dist_libexec_root, relpath), follow_symlinks=False
+            )

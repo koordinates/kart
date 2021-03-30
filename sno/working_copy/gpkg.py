@@ -19,6 +19,7 @@ from .table_defs import GpkgTables, GpkgSnoTables
 from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
 from sno.schema import Schema
+from sno.sqlalchemy import text_with_inlined_params
 from sno.sqlalchemy.create_engine import gpkg_engine
 
 
@@ -472,42 +473,48 @@ class WorkingCopy_GPKG(WorkingCopy):
         table_identifier = self.table_identifier(dataset)
         pk_column = self.quote(dataset.primary_key)
 
-        insert_trigger = sa.text(
-            f"""
-            CREATE TRIGGER {self._quoted_trigger_name(dataset, 'ins')}
-               AFTER INSERT ON {table_identifier}
-            BEGIN
-                INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
-                VALUES (:table_name, NEW.{pk_column});
-            END;
-            """
+        # Placeholders not allowed in CREATE TRIGGER - have to use text_with_inlined_params.
+        sess.execute(
+            text_with_inlined_params(
+                f"""
+                CREATE TRIGGER {self._quoted_trigger_name(dataset, 'ins')}
+                   AFTER INSERT ON {table_identifier}
+                BEGIN
+                    INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                    VALUES (:table_name, NEW.{pk_column});
+                END;
+                """,
+                {"table_name": dataset.table_name},
+            )
         )
-        update_trigger = sa.text(
-            f"""
-            CREATE TRIGGER {self._quoted_trigger_name(dataset, 'upd')}
-               AFTER UPDATE ON {table_identifier}
-            BEGIN
-                INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
-                VALUES (:table_name, NEW.{pk_column}), (:table_name, OLD.{pk_column});
-            END;
-            """
+
+        sess.execute(
+            text_with_inlined_params(
+                f"""
+                CREATE TRIGGER {self._quoted_trigger_name(dataset, 'upd')}
+                   AFTER UPDATE ON {table_identifier}
+                BEGIN
+                    INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                    VALUES (:table_name1, NEW.{pk_column}), (:table_name2, OLD.{pk_column});
+                END;
+                """,
+                {"table_name1": dataset.table_name, "table_name2": dataset.table_name},
+            )
         )
-        delete_trigger = sa.text(
-            f"""
-            CREATE TRIGGER {self._quoted_trigger_name(dataset, 'del')}
-               AFTER DELETE ON {table_identifier}
-            BEGIN
-                INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
-                VALUES (:table_name, OLD.{pk_column});
-            END;
-            """
+
+        sess.execute(
+            text_with_inlined_params(
+                f"""
+                CREATE TRIGGER {self._quoted_trigger_name(dataset, 'del')}
+                   AFTER DELETE ON {table_identifier}
+                BEGIN
+                    INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                    VALUES (:table_name, OLD.{pk_column});
+                END;
+                """,
+                {"table_name": dataset.table_name},
+            )
         )
-        for trigger in (insert_trigger, update_trigger, delete_trigger):
-            # Placeholders not allowed in CREATE TRIGGER - have to use literal_binds.
-            # See https://docs.sqlalchemy.org/en/13/faq/sqlexpressions.html#faq-sql-expression-string
-            trigger.bindparams(table_name=dataset.table_name).compile(
-                sess.connection(), compile_kwargs={"literal_binds": True}
-            ).execute()
 
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """

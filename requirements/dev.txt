@@ -23,7 +23,7 @@ decorator==4.4.2
     # via ipython
 execnet==1.8.0
     # via pytest-xdist
-importlib-metadata==3.7.2
+importlib-metadata==3.7.3
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/test.txt
@@ -59,7 +59,7 @@ pluggy==0.13.1
     # via
     #   -c requirements/test.txt
     #   pytest
-prompt-toolkit==3.0.17
+prompt-toolkit==3.0.18
     # via ipython
 ptyprocess==0.7.0
     # via pexpect

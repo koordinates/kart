@@ -1,6 +1,6 @@
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql import crud
+from sqlalchemy.sql import elements
 from sqlalchemy.sql.dml import ValuesBase
 
 
@@ -21,9 +21,8 @@ class Upsert(ValuesBase):
 
     def __init__(self, table):
         ValuesBase.__init__(self, table, None, None)
-        self.index_elements = None
-        self.select = self.select_names = None
         self._returning = None
+        self._inline = None
 
     @property
     def columns(self):
@@ -36,6 +35,15 @@ class Upsert(ValuesBase):
     @property
     def non_pk_columns(self):
         return [c for c in self.table.columns if not c.primary_key]
+
+    def values(self, compiler):
+        return [self._create_bind_param(compiler, c) for c in self.table.columns]
+
+    def _create_bind_param(self, compiler, col, process=True):
+        bindparam = elements.BindParameter(col.key, type_=col.type, required=True)
+        bindparam._is_crud = True
+        bindparam = bindparam._compiler_dispatch(compiler)
+        return bindparam
 
 
 @compiles(Upsert, "sqlite")
@@ -67,10 +75,7 @@ def compile_upsert_mssql(upsert_stmt, compiler, **kwargs):
     def list_cols(col_names, prefix=""):
         return ", ".join([prefix + c for c in col_names])
 
-    crud_params = crud._setup_crud_params(
-        compiler, upsert_stmt, crud.ISINSERT, **kwargs
-    )
-    crud_values = ", ".join([c[1] for c in crud_params])
+    values = ", ".join(upsert_stmt.values(compiler))
 
     table = preparer.format_table(upsert_stmt.table)
     all_columns = [preparer.quote(c.name) for c in upsert_stmt.columns]
@@ -78,7 +83,7 @@ def compile_upsert_mssql(upsert_stmt, compiler, **kwargs):
     non_pk_columns = [preparer.quote(c.name) for c in upsert_stmt.non_pk_columns]
 
     result = f"MERGE {table} TARGET"
-    result += f" USING (VALUES ({crud_values})) AS SOURCE ({list_cols(all_columns)})"
+    result += f" USING (VALUES ({values})) AS SOURCE ({list_cols(all_columns)})"
 
     result += " ON "
     result += " AND ".join([f"SOURCE.{c} = TARGET.{c}" for c in pk_columns])
