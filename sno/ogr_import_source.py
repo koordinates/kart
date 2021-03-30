@@ -662,7 +662,7 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
                 f"WHERE {self.quote_ident(pk_field)} IN :pks ;"
             ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
 
-            for batch in chunk(row_pks, 1000):
+            for batch in chunk(self._first_pk_values(row_pks), 1000):
                 r = conn.execute(batch_query, {"pks": batch})
                 yield from self._sqlalchemy_to_sno_features(r)
 
