@@ -16,6 +16,8 @@ from sno import spatialite_path, is_windows
 from sno.geometry import Geometry
 from sno.exceptions import NotFound, NO_DRIVER
 
+GPKG_CACHE_SIZE_MiB = 200
+
 
 def gpkg_engine(path):
     def _on_connect(pysqlite_conn, connection_record):
@@ -27,6 +29,7 @@ def gpkg_engine(path):
         dbcur.execute("SELECT EnableGpkgMode();")
         dbcur.execute("PRAGMA foreign_keys = ON;")
         dbcur.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
+        dbcur.execute(f"PRAGMA cache_size = -{GPKG_CACHE_SIZE_MiB * 1024};")
 
     engine = sqlalchemy.create_engine(f"sqlite:///{path}", module=sqlite)
     sqlalchemy.event.listen(engine, "connect", _on_connect)

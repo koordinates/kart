@@ -9,7 +9,7 @@ from osgeo import gdal, ogr
 import pygit2
 import pytest
 
-from sno import fast_import
+from sno import init, fast_import
 from sno.dataset2 import Dataset2
 from sno.exceptions import INVALID_OPERATION
 from sno.sqlalchemy.create_engine import gpkg_engine
@@ -104,7 +104,9 @@ def col_without_id(column_dict):
         ),
     ],
 )
+@pytest.mark.parametrize("profile", ["fast_import", "checkout"])
 def test_import(
+    profile,
     archive,
     source_gpkg,
     table,
@@ -119,8 +121,9 @@ def test_import(
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     param_ids = H.parameter_ids(request)
 
-    # wrap the fast_import_tables function with benchmarking
+    # wrap the original functions with benchmarking
     orig_import_func = fast_import.fast_import_tables
+    orig_checkout_func = init._add_datasets_to_working_copy
 
     def _benchmark_import(*args, **kwargs):
         # one round/iteration isn't very statistical, but hopefully crude idea
@@ -128,7 +131,15 @@ def test_import(
             orig_import_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
-    monkeypatch.setattr(fast_import, "fast_import_tables", _benchmark_import)
+    def _benchmark_checkout(*args, **kwargs):
+        return benchmark.pedantic(
+            orig_checkout_func, args=args, kwargs=kwargs, rounds=1, iterations=1
+        )
+
+    if profile == "fast_import":
+        monkeypatch.setattr(init, "fast_import_tables", _benchmark_import)
+    else:
+        monkeypatch.setattr(init, "_add_datasets_to_working_copy", _benchmark_checkout)
 
     with data_archive(archive) as data:
         # list tables

@@ -64,6 +64,10 @@ if not is_windows:
     os.environ["GDAL_DATA"] = os.path.join(prefix, "share", "gdal")
     os.environ["PROJ_LIB"] = os.path.join(prefix, "share", "proj")
 
+# GPKG optimisation:
+if "OGR_SQLITE_PRAGMA" not in os.environ:
+    os.environ["OGR_SQLITE_PRAGMA"] = "page_size=65536"
+
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr
 
