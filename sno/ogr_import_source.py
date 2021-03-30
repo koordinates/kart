@@ -627,6 +627,8 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
     instead of via OGR.
     """
 
+    CURSOR_SIZE = 10000
+
     @property
     def engine(self):
         raise NotImplementedError
@@ -649,8 +651,10 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
         (it turns out that OGR feature iterators can be quite slow!)
         """
         with self.engine.connect() as conn:
-            r = conn.execution_options(stream_results=True).execute(
-                f"SELECT * FROM {self.quote_ident(self.table)};"
+            r = (
+                conn.execution_options(stream_results=True)
+                .execute(f"SELECT * FROM {self.quote_ident(self.table)};")
+                .yield_per(self.CURSOR_SIZE)
             )
             yield from self._sqlalchemy_to_sno_features(r)
 
