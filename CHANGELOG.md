@@ -13,6 +13,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `sno init` now sets the head branch to `main` by default, instead of `master`. To override this, add `--initial-branch=master`
  * `reset` now behaves more like `git reset` - specifically, `sno reset COMMIT` stays on the same branch but sets the branch tip to be `COMMIT`. [#60](https://github.com/koordinates/sno/issues/60)
  * `import` now accepts a `--replace-ids` argument for much faster importing of small changesets from large sources. [#378](https://github.com/koordinates/sno/issues/378)
+ * Internally, Sno now stores XML metadata differently. The visible result is that only one XML metadata file can be attached to each dataset, but this is part of a longer term plan to make metadata more accessible. Unfortunately, diffing commits where the XML metadata has been written by Sno 0.8.0 won't work in Sno 0.7.1 or earlier.
 
 ### Other changes
 
@@ -23,7 +24,6 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Optimised GPKG working copies for better performance for large datasets.
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
  * Bugfix - if a database schema already exists, Sno shouldn't try to create it, and it shouldn't matter if Sno lacks permission to do so [#391](https://github.com/koordinates/sno/issues/391)
- * Internally, Sno now stores XML metadata differently. The visible result is that only one XML metadata file can be attached to each dataset, but this is part of a longer term plan to make metadata more accessible.
  * Internal dependency change - Sno no longer depends on [apsw](https://pypi.org/project/apsw/), instead it depends on [SQLAlchemy](https://www.sqlalchemy.org/).
  * `init` now accepts a `--initial-branch` option
  * `clone` now accepts a `--filter` option (advanced users only)
