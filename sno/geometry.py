@@ -29,6 +29,13 @@ class Geometry(bytes):
             return bytes_
         return Geometry(bytes_) if bytes_ else None
 
+    def __init__(self, b):
+        bytes.__init__(b)
+        if not self.startswith(b"GP"):
+            raise ValueError(
+                "Invalid StandardGeoPackageBinary geometry: {}".format(self[:100])
+            )
+
     def __str__(self):
         return "G" + super().__str__()[1:]
 
