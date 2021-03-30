@@ -10,6 +10,7 @@ import shutil
 import subprocess
 
 from PyInstaller.compat import is_win, is_darwin, is_linux
+from PyInstaller.utils.hooks import collect_submodules
 
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
@@ -47,29 +48,7 @@ a = Analysis(
         '_cffi_backend',
         # via a cython module ???
         'csv',
-        'sqlalchemy.sql.annotation',
-        'sqlalchemy.sql.base',
-        'sqlalchemy.sql.coercions',
-        'sqlalchemy.sql.compiler',
-        'sqlalchemy.sql.crud',
-        'sqlalchemy.sql.ddl',
-        'sqlalchemy.sql.default_comparator',
-        'sqlalchemy.sql.dml',
-        'sqlalchemy.sql.elements',
-        'sqlalchemy.sql.events',
-        'sqlalchemy.sql.expression',
-        'sqlalchemy.sql.functions',
-        'sqlalchemy.sql.lambdas',
-        'sqlalchemy.sql.naming',
-        'sqlalchemy.sql.operators',
-        'sqlalchemy.sql.roles',
-        'sqlalchemy.sql.schema',
-        'sqlalchemy.sql.selectable',
-        'sqlalchemy.sql.sqltypes',
-        'sqlalchemy.sql.traversals',
-        'sqlalchemy.sql.type_api',
-        'sqlalchemy.sql.util',
-        'sqlalchemy.sql.visitors',
+        *collect_submodules('sqlalchemy'),
     ],
     hookspath=[
         'platforms/pyi-hooks',
