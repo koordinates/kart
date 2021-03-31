@@ -5,6 +5,7 @@ msgpack~=0.6.1
 Pygments
 Rtree~=0.9.4
 sqlalchemy
+pyodbc ; platform_system!="Linux"
 
 # these are only here for dependencies
 psycopg2==2.8.5

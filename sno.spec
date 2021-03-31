@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 from PyInstaller.compat import is_win, is_darwin, is_linux
 from PyInstaller.utils.hooks import collect_submodules
@@ -31,7 +32,7 @@ if is_win:
         ) as vr:
             vr.write(vr_doc)
 
-a = Analysis(
+pyi_analysis = Analysis(
     ['platforms/sno_cli.py'],
     pathex=[],
     binaries=[
@@ -63,19 +64,31 @@ a = Analysis(
     noarchive=False,
 )
 
+if not is_win:
+    # We don't want to process pyodbc or include unixodbc.
+    # .binaries entries are (lib/module name, absolute path, type) tuples.
+    # Remove libodbc* altogether:
+    pyi_analysis.binaries = [x for x in pyi_analysis.binaries if not (x[0].startswith("libodbc") and x[2] == 'BINARY')]
+    # Move pyodbc to data:
+    pyodbc_mod = next(x for x in pyi_analysis.binaries if x[0] == 'pyodbc')
+    pyi_analysis.binaries -= TOC([('pyodbc', None, None)])
+    # Use the actual filename rather than the Python module name
+    pyi_analysis.datas += TOC([(Path(pyodbc_mod[1]).name, pyodbc_mod[1], 'DATA')])
+
+# Git
 if is_win:
-    a.datas += Tree('vendor/dist/git', prefix='git')
+    pyi_analysis.datas += Tree('vendor/dist/git', prefix='git')
     # GDAL/osgeo hook doesn't include Proj
-    a.datas += Tree(
+    pyi_analysis.datas += Tree(
         'venv/Lib/site-packages/osgeo/data/proj',
         prefix=os.path.join('osgeo', 'data', 'proj'),
     )
 else:
-    a.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
+    pyi_analysis.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
     libexec_root = 'vendor/dist/env/libexec'
-    a.datas += Tree('vendor/dist/env/share', prefix='share')
+    pyi_analysis.datas += Tree('vendor/dist/env/share', prefix='share')
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
     exe_name = 'sno'
@@ -84,9 +97,9 @@ else:
     exe_name = 'sno_cli'
     exe_icon = 'platforms/macos/sno.icns'
 
-exe = EXE(
+pyi_exe = EXE(
     pyz,
-    a.scripts,
+    pyi_analysis.scripts,
     [],
     exclude_binaries=True,
     name=exe_name,
@@ -98,18 +111,18 @@ exe = EXE(
     icon=exe_icon,
     version=os.path.join(workpath, 'sno_version_info.rc'),
 )
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+pyi_coll = COLLECT(
+    pyi_exe,
+    pyi_analysis.binaries,
+    pyi_analysis.zipfiles,
+    pyi_analysis.datas,
     strip=False,
     upx=False,
     upx_exclude=[],
     name='sno',
 )
-app = BUNDLE(
-    coll,
+pyi_app = BUNDLE(
+    pyi_coll,
     name='Sno.app',
     icon='platforms/macos/sno.icns',
     bundle_identifier='com.koordinates.Sno.SnoCore',

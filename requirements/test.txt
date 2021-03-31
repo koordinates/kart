@@ -22,7 +22,7 @@ gprof2dot==2021.2.21
     # via pytest-profiling
 html5lib==1.1
     # via -r requirements/test.in
-importlib-metadata==3.7.3
+importlib-metadata==3.10.0
     # via
     #   -c requirements/../requirements.txt
     #   pluggy

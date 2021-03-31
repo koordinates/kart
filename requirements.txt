@@ -16,7 +16,7 @@ click==7.1.2
     # via -r requirements/requirements.in
 greenlet==1.0.0
     # via sqlalchemy
-importlib-metadata==3.7.3
+importlib-metadata==3.10.0
     # via
     #   jsonschema
     #   sqlalchemy
@@ -32,13 +32,15 @@ pycparser==2.20
     # via -r requirements/requirements.in
 pygments==2.8.1
     # via -r requirements/requirements.in
+pyodbc==4.0.30 ; platform_system != "Linux"
+    # via -r requirements/requirements.in
 pyrsistent==0.17.3
     # via jsonschema
 rtree==0.9.7
     # via -r requirements/requirements.in
 six==1.15.0
     # via jsonschema
-sqlalchemy==1.4.3
+sqlalchemy==1.4.4
     # via -r requirements/requirements.in
 typing-extensions==3.7.4.3
     # via importlib-metadata

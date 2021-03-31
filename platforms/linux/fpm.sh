@@ -17,7 +17,9 @@ ln -sf /opt/sno/sno_cli ${WORKDIR}/usr/bin/sno
 OPTS=
 if [ "$TYPE" = "deb" ]; then
     OPTS+="--depends openssh-client"
+    OPTS+="--deb-recommends libodbc1 odbcinst"
 elif [ "$TYPE" = "rpm" ]; then
+    # Weak dependencies are new in RPM, and not supported by FPM yet.
     OPTS+="--depends openssh-clients"
 fi
 
