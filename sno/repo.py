@@ -1,4 +1,3 @@
-import functools
 import logging
 import os
 import re
@@ -12,6 +11,7 @@ import click
 import pygit2
 
 from . import is_windows
+from .cli_util import git_remote_environment
 from .exceptions import (
     translate_subprocess_exit_code,
     InvalidOperation,
@@ -266,7 +266,7 @@ class SnoRepo(pygit2.Repository):
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):
         try:
-            subprocess.check_call(cmd)
+            subprocess.check_call(cmd, env=git_remote_environment())
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 

@@ -1,8 +1,9 @@
-import json
 import click
+import io
+import json
 import jsonschema
 import os
-import io
+import platform
 
 import pygit2
 
@@ -43,6 +44,21 @@ def startup_load_git_init_config():
         if "GIT_CONFIG_PARAMETERS" in os.environ:
             existing = f" {os.environ['GIT_CONFIG_PARAMETERS']}"
         os.environ["GIT_CONFIG_PARAMETERS"] = f"'init.defaultBranch=main'{existing}"
+
+
+def git_remote_environment():
+    """
+    Returns a dict of environment for launching a git process
+    for interacting with a remote.
+    """
+    env = os.environ.copy()
+    if platform.system() == "Linux":
+        # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
+        if "LD_LIBRARY_PATH_ORIG" in env:
+            env["LD_LIBRARY_PATH"] = env["LD_LIBRARY_PATH_ORIG"]
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    return env
 
 
 def add_help_subcommand(group):

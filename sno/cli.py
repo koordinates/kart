@@ -30,12 +30,13 @@ from . import (
     upgrade,
 )
 from .cli_util import (
-    call_and_exit_flag,
     add_help_subcommand,
+    call_and_exit_flag,
+    git_remote_environment,
     startup_load_git_init_config,
 )
 from .context import Context
-from .exec import execvp
+from .exec import execvp, execvpe
 
 
 def get_version():
@@ -218,7 +219,7 @@ cli.add_command(upgrade.upgrade_to_tidy)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, do_progress, args):
     """ Update remote refs along with associated objects """
-    execvp(
+    execvpe(
         "git",
         [
             "git",
@@ -226,8 +227,9 @@ def push(ctx, do_progress, args):
             ctx.obj.repo.path,
             "push",
             "--progress" if do_progress else "--quiet",
-        ]
-        + list(args),
+            *args,
+        ],
+        git_remote_environment(),
     )
 
 
@@ -243,7 +245,7 @@ def push(ctx, do_progress, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, do_progress, args):
     """ Download objects and refs from another repository """
-    execvp(
+    execvpe(
         "git",
         [
             "git",
@@ -251,8 +253,9 @@ def fetch(ctx, do_progress, args):
             ctx.obj.repo.path,
             "fetch",
             "--progress" if do_progress else "--quiet",
-        ]
-        + list(args),
+            *args,
+        ],
+        git_remote_environment(),
     )
 
 

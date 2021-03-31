@@ -4,6 +4,7 @@ import subprocess
 import click
 
 from . import merge
+from .cli_util import git_remote_environment
 from .exceptions import NotFound, NO_BRANCH
 
 
@@ -81,8 +82,9 @@ def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
             "fetch",
             "--progress" if do_progress else "--quiet",
             repository,
-        ]
-        + list(refspecs)
+            *refspecs,
+        ],
+        env=git_remote_environment(),
     )
 
     # now merge with FETCH_HEAD
