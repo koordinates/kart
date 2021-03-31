@@ -56,19 +56,6 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         self.sno_tables = SqlServerSnoTables(self.db_schema)
 
-    def create_and_initialise(self):
-        with self.session() as sess:
-            # There's no CREATE IF NOT EXISTS, and CREATE SCHEMA has to be run in its own block.
-            r = sess.execute(
-                "SELECT * FROM sys.schemas WHERE name = :schema",
-                {"schema": self.db_schema},
-            )
-            schema_exists = r.fetchone()
-            if not schema_exists:
-                sess.execute(f"CREATE SCHEMA {self.DB_SCHEMA}")
-
-            self.sno_tables.create_all(sess)
-
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = sqlserver_adapter.v2_schema_to_sqlserver_spec(
             dataset.schema, dataset

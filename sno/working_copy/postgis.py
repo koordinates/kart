@@ -55,44 +55,40 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     def check_valid_path(cls, wc_path, workdir_path=None):
         cls.check_valid_db_uri(wc_path, workdir_path)
 
-    def create_and_initialise(self):
-        with self.session() as sess:
-            sess.execute(f"CREATE SCHEMA IF NOT EXISTS {self.DB_SCHEMA};")
-            self.sno_tables.create_all(sess)
+    def create_common_functions(self, sess):
+        sess.execute(
+            f"""
+            CREATE OR REPLACE FUNCTION {self.DB_SCHEMA}._sno_track_trigger() RETURNS TRIGGER AS $body$
+            DECLARE
+                pk_field text := quote_ident(TG_ARGV[0]);
+                pk_old text;
+                pk_new text;
+            BEGIN
+                IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
+                    EXECUTE 'SELECT $1.' || pk_field USING NEW INTO pk_new;
 
-            sess.execute(
-                f"""
-                CREATE OR REPLACE FUNCTION {self.DB_SCHEMA}._sno_track_trigger() RETURNS TRIGGER AS $body$
-                DECLARE
-                    pk_field text := quote_ident(TG_ARGV[0]);
-                    pk_old text;
-                    pk_new text;
-                BEGIN
-                    IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
-                        EXECUTE 'SELECT $1.' || pk_field USING NEW INTO pk_new;
+                    INSERT INTO {self.SNO_TRACK} (table_name,pk) VALUES
+                    (TG_TABLE_NAME::TEXT, pk_new)
+                    ON CONFLICT DO NOTHING;
+                END IF;
+                IF (TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN
+                    EXECUTE 'SELECT $1.' || pk_field USING OLD INTO pk_old;
 
-                        INSERT INTO {self.SNO_TRACK} (table_name,pk) VALUES
-                        (TG_TABLE_NAME::TEXT, pk_new)
-                        ON CONFLICT DO NOTHING;
+                    INSERT INTO {self.SNO_TRACK} (table_name,pk) VALUES
+                    (TG_TABLE_NAME::TEXT, pk_old)
+                    ON CONFLICT DO NOTHING;
+
+                    IF (TG_OP = 'DELETE') THEN
+                        RETURN OLD;
                     END IF;
-                    IF (TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN
-                        EXECUTE 'SELECT $1.' || pk_field USING OLD INTO pk_old;
-
-                        INSERT INTO {self.SNO_TRACK} (table_name,pk) VALUES
-                        (TG_TABLE_NAME::TEXT, pk_old)
-                        ON CONFLICT DO NOTHING;
-
-                        IF (TG_OP = 'DELETE') THEN
-                            RETURN OLD;
-                        END IF;
-                    END IF;
-                    RETURN NEW;
-                END;
-                $body$
-                LANGUAGE plpgsql
-                SECURITY DEFINER
-                """
-            )
+                END IF;
+                RETURN NEW;
+            END;
+            $body$
+            LANGUAGE plpgsql
+            SECURITY DEFINER
+            """
+        )
 
     def delete(self, keep_db_schema_if_possible=False):
         # We don't use DROP SCHEMA CASCADE since that could possibly delete things outside the schema
@@ -170,7 +166,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         t0 = time.monotonic()
 
         spatial_index = Index(
-            index_name, table.columns[geom_col], postgres_using="GIST"
+            index_name, table.columns[geom_col], postgresql_using="GIST"
         )
         spatial_index.create(sess.connection())
         sess.execute(f"""ANALYZE {self.table_identifier(dataset)};""")

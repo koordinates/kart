@@ -22,6 +22,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Support for detecting features which have changed slightly during a re-import from a data source without a primary key, and reimporting them with the same primary key as last time so they show as edits as opposed to inserts. [#212](https://github.com/koordinates/sno/issues/212)
  * Optimised GPKG working copies for better performance for large datasets.
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
+ * Bugfix - if a database schema already exists, Sno shouldn't try to create it, and it shouldn't matter if Sno lacks permission to do so [#391](https://github.com/koordinates/sno/issues/391)
  * Internally, Sno now stores XML metadata differently. The visible result is that only one XML metadata file can be attached to each dataset, but this is part of a longer term plan to make metadata more accessible.
  * Internal dependency change - Sno no longer depends on [apsw](https://pypi.org/project/apsw/), instead it depends on [SQLAlchemy](https://www.sqlalchemy.org/).
  * `init` now accepts a `--initial-branch` option

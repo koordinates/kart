@@ -173,14 +173,40 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
 
         return result
 
+    def create_and_initialise(self):
+        with self.session() as sess:
+            self.create_schema(sess)
+            self.sno_tables.create_all(sess)
+            self.create_common_functions(sess)
+
+    def create_schema(self, sess):
+        """Creates the schema named by self.db_schema, if it doesn't exist."""
+        # We have to check if the schema exists before creating it.
+        # CREATE SCHEMA IF NOT EXISTS may not work at all, or may require CREATE permissions even if the schema exists.
+        schema_exists = sess.scalar(
+            "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name=:schema_name;",
+            {"schema_name": self.db_schema},
+        )
+        if not schema_exists:
+            sess.execute(f"CREATE SCHEMA {self.DB_SCHEMA}")
+
+    def create_common_functions(self, sess):
+        """
+        Create any functions that are not specific to a particular user table, but are common to any/all of them,
+        and so must be created during the initialisation step.
+        """
+        pass
+
     def delete(self, keep_db_schema_if_possible=False):
         # We don't use DROP SCHEMA CASCADE since that could possibly delete things outside the schema
         # if they've been linked to it using foreign keys, and we only want to delete the schema that we manage.
         with self.session() as sess:
             self._drop_all_tables(sess)
             self._drop_all_functions(sess)
-            if not keep_db_schema_if_possible:
-                self._drop_schema(sess)
+
+        if not keep_db_schema_if_possible:
+            with self.session() as sess:
+                self._drop_schema(sess, treat_error_as_warning=True)
 
     def _drop_all_tables(self, sess):
         """Drops all tables in schema self.db_schema"""
@@ -197,6 +223,15 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
         # Subclasses only need to override if they create functions in the working copy.
         pass
 
-    def _drop_schema(self, sess):
+    def _drop_schema(self, sess, treat_error_as_warning=False):
         """Drops the schema self.db_schema"""
-        sess.execute(f"DROP SCHEMA IF EXISTS {self.DB_SCHEMA};")
+        try:
+            sess.execute(f"DROP SCHEMA IF EXISTS {self.DB_SCHEMA};")
+        except DBAPIError as e:
+            if treat_error_as_warning:
+                click.echo(
+                    f"Couldn't delete schema {self.db_schema} at {self.clean_path} due to the following error:\n{e}",
+                    err=True,
+                )
+            else:
+                raise e
