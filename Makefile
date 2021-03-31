@@ -108,7 +108,7 @@ endif
 		$(WHEELTOOL)
 
 	# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x
-	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/PyInstaller/hooks/hooks-pyodbc.py
+	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/PyInstaller/hooks/hook-pyodbc.py
 
 	touch $@
 
