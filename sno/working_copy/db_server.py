@@ -1,5 +1,6 @@
 import functools
 import re
+from pathlib import PurePath
 from urllib.parse import urlsplit, urlunsplit
 
 import click
@@ -13,9 +14,21 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
     """Functionality common to working copies that connect to a database server."""
 
     @property
-    def URI_SCHEME(self):
+    @classmethod
+    def URI_SCHEME(cls):
         """The URI scheme to connect to this type of database, eg "postgresql"."""
         raise NotImplementedError()
+
+    # The expected URI format, not including the scheme, as displayed to the user (not used for parsing URIs).
+    URI_FORMAT = "//HOST[:PORT]/DBNAME/DBSCHEMA"
+
+    # Allowable path lengths for valid URIs.
+    URI_VALID_PATH_LENGTHS = (2,)
+
+    # Message for when the URI path is not a valid length.
+    INVALID_PATH_MESSAGE = (
+        "URI path must have two parts: database name and database schema"
+    )
 
     @classmethod
     def check_valid_creation_path(cls, wc_path, workdir_path=None):
@@ -33,6 +46,8 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
 
     @classmethod
     def check_valid_path(cls, wc_path, workdir_path=None):
+        # The base working copy refers to the working copy location as its `path`.
+        # Therefore, this implementation needs to validate the entire URI, not just the URI's path.
         cls.check_valid_db_uri(wc_path, workdir_path)
 
     @classmethod
@@ -49,43 +64,44 @@ class DatabaseServer_WorkingCopy(WorkingCopy):
 
         if url.scheme != cls.URI_SCHEME:
             raise click.UsageError(
-                f"Invalid {cls.WORKING_COPY_TYPE_NAME} URI - "
-                f"Expecting URI in form: {cls.URI_SCHEME}://[HOST]/DBNAME/DBSCHEMA"
+                f"Invalid {cls.WORKING_COPY_TYPE_NAME} URI - Expecting URI in form: {cls.URI_SCHEME}:{cls.URI_FORMAT}"
             )
 
-        url_path = url.path
-        path_parts = url_path[1:].split("/", 3) if url_path else []
+        url_path = PurePath(url.path)
+        path_length = len(url_path.parents)
 
-        suggestion_message = ""
-        if len(path_parts) == 1 and workdir_path is not None:
-            suggested_path = f"/{path_parts[0]}/{cls.default_db_schema(workdir_path)}"
-            suggested_uri = urlunsplit(
-                [url.scheme, url.netloc, suggested_path, url.query, ""]
-            )
-            suggestion_message = f"\nFor example: {suggested_uri}"
+        if path_length not in cls.URI_VALID_PATH_LENGTHS:
+            if (path_length + 1) in cls.URI_VALID_PATH_LENGTHS and workdir_path:
+                suggested_path = url_path / cls.default_db_schema(workdir_path)
+                suggested_uri = urlunsplit(
+                    [url.scheme, url.netloc, str(suggested_path), url.query, ""]
+                )
+                suggestion_message = f"\nFor example: {suggested_uri}"
+            else:
+                suggestion_message = ""
 
-        if len(path_parts) != 2:
             raise click.UsageError(
-                f"Invalid {cls.WORKING_COPY_TYPE_NAME} URI - URI requires both database name and database schema:\n"
-                f"Expecting URI in form: {cls.URI_SCHEME}://[HOST]/DBNAME/DBSCHEMA"
+                f"Invalid {cls.WORKING_COPY_TYPE_NAME} URI - {cls.INVALID_PATH_MESSAGE}:\n"
+                f"Expecting URI in form: {cls.URI_SCHEME}:{cls.URI_FORMAT}"
                 + suggestion_message
             )
 
     @classmethod
-    def _separate_db_schema(cls, db_uri):
+    def _separate_db_schema(cls, db_uri, expected_path_length=2):
         """
-        Removes the DBSCHEMA part off the end of a uri in the form URI_SCHEME::[HOST]/DBNAME/DBSCHEMA -
-        and returns the URI and the DBSCHEMA separately.
-        Useful since generally, URI_SCHEME::[HOST]/DBNAME is what is needed to connect to the database,
-        and then DBSCHEMA must be specified in each query.
+        Removes the DBSCHEMA part off the end of a URI's path, and returns the URI and the DBSCHEMA separately.
+        Useful since generally, it is not necessary (or even possible) to connect to a particular DBSCHEMA directly,
+        instead, the rest of the URI is used to connect, then the DBSCHEMA is sped
         """
         url = urlsplit(db_uri)
-        url_path = url.path
-        path_parts = url_path[1:].split("/", 3) if url_path else []
-        assert len(path_parts) == 2
-        url_path = "/" + path_parts[0]
-        db_schema = path_parts[1]
-        return urlunsplit([url.scheme, url.netloc, url_path, url.query, ""]), db_schema
+        url_path = PurePath(url.path)
+        assert len(url_path.parents) in cls.URI_VALID_PATH_LENGTHS
+        db_schema = url_path.name
+        new_url_path = str(url_path.parent)
+        return (
+            urlunsplit([url.scheme, url.netloc, new_url_path, url.query, ""]),
+            db_schema,
+        )
 
     @classmethod
     def default_db_schema(cls, workdir_path):

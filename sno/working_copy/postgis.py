@@ -51,10 +51,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         self.sno_tables = PostgisSnoTables(self.db_schema)
 
-    @classmethod
-    def check_valid_path(cls, wc_path, workdir_path=None):
-        cls.check_valid_db_uri(wc_path, workdir_path)
-
     def create_common_functions(self, sess):
         sess.execute(
             f"""

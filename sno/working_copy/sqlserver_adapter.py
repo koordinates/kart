@@ -127,9 +127,7 @@ def v2_column_schema_to_sqlserver_spec(column_schema, v2_obj):
                 constraints.append(_geometry_type_constraint(name, geometry_type))
 
         crs_name = extra_type_info.get("geometryCRS")
-        crs_id = None
-        if crs_name is not None:
-            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
+        crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
         if crs_id is not None:
             constraints.append(_geometry_crs_constraint(name, crs_id))
 
@@ -137,7 +135,7 @@ def v2_column_schema_to_sqlserver_spec(column_schema, v2_obj):
         constraint = f"CHECK({' AND '.join(constraints)})"
         return " ".join([quote(column_schema.name), ms_type, constraint])
 
-    return " ".join([quote(column_schema.name), ms_type])
+    return " ".join([quote(name), ms_type])
 
 
 def _geometry_type_constraint(col_name, geometry_type):
@@ -222,9 +220,6 @@ def _ms_type_to_v2_type(ms_col_info):
     else:
         v2_type = v2_type_info
         extra_type_info = {}
-
-    if v2_type == "geometry":
-        return v2_type, extra_type_info
 
     if v2_type in ("text", "blob"):
         length = ms_col_info["character_maximum_length"] or None

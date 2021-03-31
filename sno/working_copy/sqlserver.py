@@ -1,7 +1,6 @@
 import contextlib
 import logging
 import time
-from urllib.parse import urlsplit
 
 import sqlalchemy as sa
 from sqlalchemy import literal_column
@@ -66,7 +65,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
     def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
-            crs_name = col.extra_type_info.get("geometryCRS", None)
+            crs_name = col.extra_type_info.get("geometryCRS")
             crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
             # This user-defined GeometryType adapts Sno's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
@@ -223,13 +222,6 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             schema = sqlserver_adapter.sqlserver_to_v2_schema(ms_table_info, id_salt)
             yield "schema.json", schema.to_column_dicts()
 
-    _UNSUPPORTED_META_ITEMS = (
-        "title",
-        "description",
-        "metadata/dataset.json",
-        "metadata.xml",
-    )
-
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):
         old_type = old_col_dict["dataType"]
@@ -247,6 +239,13 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             new_col_dict["geometryCRS"] = old_col_dict.get("geometryCRS")
 
         return new_type == old_type
+
+    _UNSUPPORTED_META_ITEMS = (
+        "title",
+        "description",
+        "metadata/dataset.json",
+        "metadata.xml",
+    )
 
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
@@ -329,7 +328,3 @@ class BaseDateOrTimeType(UserDefinedType):
             literal_column("127"),
             type_=self,
         )
-
-
-def sqlserver_upsert(*args, **kwargs):
-    return Upsert(*args, **kwargs)
