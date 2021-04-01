@@ -5,10 +5,11 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
 
-## 0.8.0 (UNRELEASED)
+## 0.8.0
 
 ### Breaking changes
 
+ * Internally, Sno now stores XML metadata as an XML file, instead of a JSON file. This is part of a longer term plan to make XML metadata and other attachments easier to use. However, diffs containing changes to the XML file cannot be read by Sno 0.7.1 or earlier - this will fail with a `binascii.Error`.
  * Backwards compatibility with Datasets V1 ends at Sno 0.8.0 - all Sno commands except `sno upgrade` will no longer work in a V1 repository. Since Datasets V2 has been the default since Sno 0.5.0, most users will be unaffected. Remaining V1 repositories can be upgraded to V2 using `sno upgrade EXISTING_REPO NEW_REPO`, and the ability to upgrade from V1 to V2 continues to be supported indefinitely. [#342](https://github.com/koordinates/sno/pull/342)
  * `sno init` now sets the head branch to `main` by default, instead of `master`. To override this, add `--initial-branch=master`
  * `reset` now behaves more like `git reset` - specifically, `sno reset COMMIT` stays on the same branch but sets the branch tip to be `COMMIT`. [#60](https://github.com/koordinates/sno/issues/60)
@@ -17,7 +18,6 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * Support for detecting features which have changed slightly during a re-import from a data source without a primary key, and reimporting them with the same primary key as last time so they show as edits as opposed to inserts. [#212](https://github.com/koordinates/sno/issues/212)
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
- * Internally, Sno now stores XML metadata differently. The visible result is that only one XML metadata file can be attached to each dataset, but this is part of a longer term plan to make metadata more accessible.
  * Internal dependency change - Sno no longer depends on [apsw](https://pypi.org/project/apsw/), instead it depends on [SQLAlchemy](https://www.sqlalchemy.org/).
  * `init` now accepts a `--initial-branch` option
  * `clone` now accepts a `--filter` option (advanced users only)
