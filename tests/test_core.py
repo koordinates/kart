@@ -287,5 +287,5 @@ def test_gdal_proj_data():
     assert "PROJ_LIB" in os.environ
     osr = osr.SpatialReference()
     osr.ImportFromEPSG(4167)
-    assert osr.ExportToWkt()
-    assert (Path(os.environ["PROJ_LIB"]) / "nzgd2kgrid0005.gsb").exists()
+    assert "NZGD2000" in osr.ExportToWkt()
+    assert (Path(os.environ["PROJ_LIB"]) / "proj.db").exists()
