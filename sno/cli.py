@@ -32,11 +32,11 @@ from . import (
 from .cli_util import (
     add_help_subcommand,
     call_and_exit_flag,
-    git_remote_environment,
     startup_load_git_init_config,
+    tool_environment,
 )
 from .context import Context
-from .exec import execvp, execvpe
+from .exec import execvp
 
 
 def get_version():
@@ -58,7 +58,7 @@ def print_version(ctx):
     click.echo(f"Sno v{get_version()}, Copyright (c) Sno Contributors")
 
     git_version = (
-        subprocess.check_output(["git", "--version"])
+        subprocess.check_output(["git", "--version"], env=tool_environment())
         .decode("ascii")
         .strip()
         .split()[-1]
@@ -219,7 +219,7 @@ cli.add_command(upgrade.upgrade_to_tidy)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, do_progress, args):
     """ Update remote refs along with associated objects """
-    execvpe(
+    execvp(
         "git",
         [
             "git",
@@ -229,7 +229,6 @@ def push(ctx, do_progress, args):
             "--progress" if do_progress else "--quiet",
             *args,
         ],
-        git_remote_environment(),
     )
 
 
@@ -245,7 +244,7 @@ def push(ctx, do_progress, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, do_progress, args):
     """ Download objects and refs from another repository """
-    execvpe(
+    execvp(
         "git",
         [
             "git",
@@ -255,7 +254,6 @@ def fetch(ctx, do_progress, args):
             "--progress" if do_progress else "--quiet",
             *args,
         ],
-        git_remote_environment(),
     )
 
 

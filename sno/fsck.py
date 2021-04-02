@@ -3,9 +3,10 @@ import subprocess
 
 import click
 
-from .working_copy import gpkg_adapter
+from .cli_util import tool_environment
 from .exceptions import NotFound, NO_WORKING_COPY
 from .geometry import normalise_gpkg_geom
+from .working_copy import gpkg_adapter
 
 
 def _fsck_reset(repo, working_copy, dataset_paths):
@@ -30,7 +31,9 @@ def fsck(ctx, reset_datasets, fsck_args):
     repo = ctx.obj.repo
 
     click.echo("Checking repository integrity...")
-    r = subprocess.call(["git", "-C", repo.path, "fsck"] + list(fsck_args))
+    r = subprocess.call(
+        ["git", "-C", repo.path, "fsck"] + list(fsck_args), env=tool_environment()
+    )
     if r:
         click.Abort()
 

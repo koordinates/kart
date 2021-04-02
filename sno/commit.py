@@ -10,7 +10,7 @@ import click
 import pygit2
 
 from . import is_windows
-from .cli_util import StringFromFile
+from .cli_util import StringFromFile, tool_environment
 from .core import check_git_user
 from .exceptions import (
     NotFound,
@@ -188,7 +188,7 @@ def user_edit_file(path):
 
 
 def run_editor_cmd(editor_cmd):
-    subprocess.check_call(editor_cmd, shell=True)
+    subprocess.check_call(editor_cmd, shell=True, env=tool_environment())
 
 
 def commit_obj_to_json(commit, repo, wc_diff):

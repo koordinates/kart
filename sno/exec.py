@@ -3,9 +3,12 @@ import subprocess
 import sys
 
 from . import is_windows
+from .cli_util import tool_environment
 
 
 def execvpe(cmd, args, env):
+    env = tool_environment(env)
+
     if "_SNO_NO_EXEC" in os.environ:
         # used in testing. This is pretty hackzy
         p = subprocess.run(

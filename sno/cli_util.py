@@ -46,12 +46,11 @@ def startup_load_git_init_config():
         os.environ["GIT_CONFIG_PARAMETERS"] = f"'init.defaultBranch=main'{existing}"
 
 
-def git_remote_environment():
+def tool_environment(env=None):
     """
-    Returns a dict of environment for launching a git process
-    for interacting with a remote.
+    Returns a dict of environment for launching an external process
     """
-    env = os.environ.copy()
+    env = (env or os.environ).copy()
     if platform.system() == "Linux":
         # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations
         if "LD_LIBRARY_PATH_ORIG" in env:
