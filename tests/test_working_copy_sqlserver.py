@@ -19,10 +19,10 @@ def test_no_odbc():
     # if unixODBC is installed or we're on Windows we can't test the not-installed message
     try:
         import pyodbc
-
-        pytest.skip("ODBC is installed")
-    except:
+    except ImportError:
         pass
+    else:
+        pytest.skip("ODBC is installed")
 
     with pytest.raises(
         NotFound, match=r"^ODBC support for SQL Server is required but was not found."
