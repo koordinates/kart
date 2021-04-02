@@ -3,6 +3,7 @@ import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
 
+from sno.exceptions import NotFound
 from sno.repo import SnoRepo
 from sno.sqlalchemy.create_engine import get_odbc_drivers, get_sqlserver_driver
 from sno.working_copy import sqlserver_adapter
@@ -14,7 +15,29 @@ from test_working_copy import compute_approximated_types
 H = pytest.helpers.helpers()
 
 
-def test_pyodbc_drivers():
+def test_no_odbc():
+    # if unixODBC is installed or we're on Windows we can't test the not-installed message
+    try:
+        import pyodbc
+
+        pytest.skip("ODBC is installed")
+    except:
+        pass
+
+    with pytest.raises(
+        NotFound, match=r"^ODBC support for SQL Server is required but was not found."
+    ) as e:
+        get_odbc_drivers()
+
+
+def test_odbc_drivers():
+    # if unixODBC isn't installed we can't test this
+    # use a try/except so we get a better message than via pytest.importorskip
+    try:
+        import pyodbc
+    except ImportError:
+        pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
+
     num_drivers = len(get_odbc_drivers())
     # Eventually we should assert that we have useful drivers - eg MSSQL.
     # But for now, we are asserting that we were able to load pyodbc and it seems to be working.
