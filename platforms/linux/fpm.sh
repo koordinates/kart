@@ -16,10 +16,16 @@ ln -sf /opt/sno/sno_cli ${WORKDIR}/usr/bin/sno
 
 OPTS=
 if [ "$TYPE" = "deb" ]; then
-    OPTS="--depends openssh-client --deb-recommends libodbc1 --deb-recommends odbcinst"
+    OPTS+="--depends openssh-client "
+    OPTS+="--depends libstdc++6 "
+    OPTS+="--depends libgcc1 "
+    OPTS+="--deb-recommends libodbc1 "
+    OPTS+="--deb-recommends odbcinst "
 elif [ "$TYPE" = "rpm" ]; then
     # Weak dependencies are new in RPM, and not supported by FPM yet.
-    OPTS="--depends openssh-clients"
+    OPTS+="--depends openssh-clients "
+    OPTS+="--depends libstdc++ "
+    OPTS+="--depends libgcc "
 fi
 
 # build package

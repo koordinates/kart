@@ -8,10 +8,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 from PyInstaller.compat import is_win, is_darwin, is_linux
 from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.depend import dylib
 
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
@@ -31,6 +33,40 @@ if is_win:
             os.path.join(workpath, 'sno_version_info.rc'), 'w', encoding='utf-8'
         ) as vr:
             vr.write(vr_doc)
+
+if is_linux:
+    # This needs to match the OS dependencies in platforms/linux/fpm.sh
+    # We want to treat libstdc++ as a system dependency
+    dylib._excludes |= {r'libstdc\+\+\.so(\..*)?'}
+    # We want to treat libgcc1 as a system dependency
+    dylib._excludes |= {r'libgcc_s\.so(\..*)?'}
+
+    dylib.exclude_list = dylib.ExcludeList()
+
+    print(
+        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1:",
+        file=sys.stderr,
+    )
+    assert dylib.exclude_list.search('libstdc++.so.6.0.20')
+    assert dylib.exclude_list.search('libgcc_s.so.1')
+
+if is_linux or is_darwin:
+    # We want to treat unixODBC (libodbc) as a system dependency, since the MSSQL
+    # drivers depend on it, and we don't want two different versions imported
+    # in the same process.
+    dylib._excludes |= {r'libodbc(\..*)?\.(dylib|so)(\..*)?'}
+
+    dylib.exclude_list = dylib.ExcludeList()
+    if is_darwin:
+        dylib.exclude_list = dylib.MacExcludeList(dylib.exclude_list)
+
+    print(
+        "❄️  Configured binary exclude-list overrides for libodbc:",
+        file=sys.stderr,
+    )
+    assert dylib.exclude_list.search('libodbc.2.dylib')
+    assert dylib.exclude_list.search('libodbc.so.1')
+
 
 pyi_analysis = Analysis(
     ['platforms/sno_cli.py'],
@@ -64,17 +100,6 @@ pyi_analysis = Analysis(
     noarchive=False,
 )
 
-if not is_win:
-    # We don't want to process pyodbc or include unixodbc.
-    # .binaries entries are (lib/module name, absolute path, type) tuples.
-    # Remove libodbc* altogether:
-    pyi_analysis.binaries = [x for x in pyi_analysis.binaries if not (x[0].startswith("libodbc") and x[2] == 'BINARY')]
-    # Move pyodbc to data:
-    pyodbc_mod = next(x for x in pyi_analysis.binaries if x[0] == 'pyodbc')
-    pyi_analysis.binaries -= TOC([('pyodbc', None, None)])
-    # Use the actual filename rather than the Python module name
-    pyi_analysis.datas += TOC([(Path(pyodbc_mod[1]).name, pyodbc_mod[1], 'DATA')])
-
 # Git
 if is_win:
     pyi_analysis.datas += Tree('vendor/dist/git', prefix='git')
@@ -88,7 +113,7 @@ else:
     libexec_root = 'vendor/dist/env/libexec'
     pyi_analysis.datas += Tree('vendor/dist/env/share', prefix='share')
 
-pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
+pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
     exe_name = 'sno'
@@ -98,7 +123,7 @@ else:
     exe_icon = 'platforms/macos/sno.icns'
 
 pyi_exe = EXE(
-    pyz,
+    pyi_pyz,
     pyi_analysis.scripts,
     [],
     exclude_binaries=True,
@@ -177,13 +202,13 @@ if is_darwin:
                 if not os.path.exists(fpath) and not os.path.exists(
                     os.path.join(dist_bin_root, link_path)
                 ):
-                    print(f"ignoring broken link {relpath} -> {link_path}")
+                    print(f"❄️  ignoring broken link {relpath} -> {link_path}", file=sys.stderr)
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
             elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
                 'Mach-O'
             ):
-                print(f"relocating {relpath} to MacOS/")
+                print(f"❄️  relocating {relpath} to MacOS/", file=sys.stderr)
                 shutil.move(fpath, dist_bin_root)
                 os.symlink(
                     os.path.join('../../../MacOS', f),
@@ -219,7 +244,7 @@ elif is_linux:
                 if not os.path.exists(fpath) and not os.path.exists(
                     os.path.join(dist_bin_root, link_path)
                 ):
-                    print(f"ignoring broken link {relpath} -> {link_path}")
+                    print(f"❄️  ignoring broken link {relpath} -> {link_path}", file=sys.stderr)
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
 
