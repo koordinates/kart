@@ -285,7 +285,15 @@ def test_gdal_proj_data():
 
     # PROJ_LIB
     assert "PROJ_LIB" in os.environ
-    osr = osr.SpatialReference()
-    osr.ImportFromEPSG(4167)
-    assert "NZGD2000" in osr.ExportToWkt()
-    assert (Path(os.environ["PROJ_LIB"]) / "proj.db").exists()
+
+    # Do a test conversion to check the transformation grids are available
+    nzgd49 = osr.SpatialReference()
+    nzgd49.ImportFromEPSG(4272)  # NZGD1949
+    nzgd2k = osr.SpatialReference()
+    nzgd2k.ImportFromEPSG(4167)  # NZGD2000
+    ct = osr.CreateCoordinateTransformation(nzgd49, nzgd2k)
+    # Test point from: https://www.linz.govt.nz/data/geodetic-system/coordinate-conversion/geodetic-datum-conversions/datum-transformation-examples
+    pt = ct.TransformPoint(-36.5, 175.0)
+    # using the 7-parameter transform would result in: (-36.49819267, 175.00018527)
+    # which indicates the transformation grid isn't available
+    assert pt == pytest.approx((-36.49819023, 175.00019297, 0.0), abs=1e-8)
