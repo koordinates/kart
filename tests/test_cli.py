@@ -70,7 +70,7 @@ def test_cli_tool_environment():
         assert env_exec["my"] == "me"
 
         env_in = {"LD_LIBRARY_PATH": "bob", "my": "me"}
-        env_exec = tool_environment(fake_env)
+        env_exec = tool_environment(env_in)
         assert "LD_LIBRARY_PATH" not in env_exec
     else:
         env_in = {"my": "me"}
