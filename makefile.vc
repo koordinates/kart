@@ -62,6 +62,7 @@ test: $(app) venv\.test.installed
 
 ci-test:
 	set CI=true
+	set failed=0
 	FOR /L %%I IN (0, 1, 9) DO \
 		pytest \
 			--num-shards 10 \
@@ -70,7 +71,11 @@ ci-test:
 			--benchmark-enable \
 			--no-cov \
 			-p no:sugar \
-			-p no:xdist
+			-p no:xdist \
+		|| (echo **** SHARDS FAILED SO FAR: & set /A failed+=1 & echo. ) \
+		& set /A success=1/!failed
+
+	echo **** ALL TESTS PASSED ****
 
 # Packaging
 
