@@ -3,6 +3,7 @@ from pathlib import PureWindowsPath
 
 import pytest
 
+from sno import is_windows
 from sno.clone import get_directory_from_url
 from sno.sqlalchemy.create_engine import gpkg_engine
 from sno.repo import SnoRepo
@@ -29,10 +30,31 @@ def test_get_directory_from_url():
     assert get_directory_from_url("def/abc/") == "abc"
     assert get_directory_from_url("/def/abc") == "abc"
     assert get_directory_from_url("/def/abc/") == "abc"
+    assert get_directory_from_url("file:/def/abc") == "abc"
+    assert get_directory_from_url("file:/def/abc/") == "abc"
+    assert get_directory_from_url("file://def/abc") == "abc"
+    assert get_directory_from_url("file://def/abc/") == "abc"
+    assert get_directory_from_url("file:///def/abc") == "abc"
+    assert get_directory_from_url("file:///def/abc/") == "abc"
+
     assert get_directory_from_url(PureWindowsPath("C:/def/abc")) == "abc"
     assert get_directory_from_url(PureWindowsPath("C:\\def\\abc")) == "abc"
     assert get_directory_from_url(PureWindowsPath("C:\\def\\abc\\")) == "abc"
     assert get_directory_from_url(PureWindowsPath("C:\\def\\abc/")) == "abc"
+
+    if is_windows:
+        assert get_directory_from_url("C:/def/abc") == "abc"
+        assert get_directory_from_url("C:/def/abc/") == "abc"
+        assert get_directory_from_url("C:\\def\\abc") == "abc"
+        assert get_directory_from_url("C:\\def\\abc\\") == "abc"
+        assert get_directory_from_url("file:/C:/def/abc") == "abc"
+        assert get_directory_from_url("file:/C:/def/abc/") == "abc"
+        assert get_directory_from_url("file:/C:\\def\\abc") == "abc"
+        assert get_directory_from_url("file:/C:\\def\\abc\\") == "abc"
+        assert get_directory_from_url("file://C:\\def\\abc") == "abc"
+        assert get_directory_from_url("file://C:\\def\\abc\\") == "abc"
+        assert get_directory_from_url("file:///C:\\def\\abc") == "abc"
+        assert get_directory_from_url("file:///C:\\def\\abc\\") == "abc"
 
 
 @pytest.mark.parametrize(
