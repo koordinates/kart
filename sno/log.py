@@ -4,6 +4,7 @@ import sys
 
 import click
 
+from .cli_util import tool_environment
 from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
@@ -51,7 +52,13 @@ def log(ctx, output_format, json_style, do_dataset_changes, args):
                 "log",
                 "--pretty=format:%H,%D",
             ] + list(args)
-            r = subprocess.run(cmd, encoding="utf8", check=True, capture_output=True)
+            r = subprocess.run(
+                cmd,
+                encoding="utf8",
+                check=True,
+                capture_output=True,
+                env=tool_environment(),
+            )
         except subprocess.CalledProcessError as e:
             raise SubprocessError(
                 f"There was a problem with git log: {e}", called_process_error=e

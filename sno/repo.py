@@ -1,4 +1,3 @@
-import functools
 import logging
 import os
 import re
@@ -12,6 +11,7 @@ import click
 import pygit2
 
 from . import is_windows
+from .cli_util import tool_environment
 from .exceptions import (
     translate_subprocess_exit_code,
     InvalidOperation,
@@ -266,7 +266,7 @@ class SnoRepo(pygit2.Repository):
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):
         try:
-            subprocess.check_call(cmd)
+            subprocess.check_call(cmd, env=tool_environment())
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
@@ -341,8 +341,8 @@ class SnoRepo(pygit2.Repository):
         if is_windows:
             # Hide .git and .sno
             # Best effort: if it doesn't work for some reason, continue anyway.
-            subprocess.call(["attrib", "+h", str(dot_git_path)])
-            subprocess.call(["attrib", "+h", str(dot_sno_path)])
+            subprocess.call(["attrib", "+h", str(dot_git_path)], env=tool_environment())
+            subprocess.call(["attrib", "+h", str(dot_sno_path)], env=tool_environment())
 
     def is_bare_style_sno_repo(self):
         """Bare-style sno repos are bare git repos. They are not "tidy": all of the git internals are visible."""
@@ -447,7 +447,7 @@ class SnoRepo(pygit2.Repository):
         """Runs git-gc on the sno repository."""
         try:
             args = ["git", "-C", self.path, "gc", *args]
-            subprocess.check_call(args)
+            subprocess.check_call(args, env=tool_environment())
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
@@ -510,7 +510,7 @@ class SnoRepo(pygit2.Repository):
             ["git", "var", f"GIT_{person_type}_IDENT"],
             cwd=self.path,
             encoding="utf8",
-            env=env,
+            env=tool_environment(env),
         )
         m = self._GIT_VAR_OUTPUT_RE.match(output)
         kwargs = m.groupdict()

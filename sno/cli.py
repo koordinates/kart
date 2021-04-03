@@ -30,9 +30,10 @@ from . import (
     upgrade,
 )
 from .cli_util import (
-    call_and_exit_flag,
     add_help_subcommand,
+    call_and_exit_flag,
     startup_load_git_init_config,
+    tool_environment,
 )
 from .context import Context
 from .exec import execvp
@@ -57,7 +58,7 @@ def print_version(ctx):
     click.echo(f"Sno v{get_version()}, Copyright (c) Sno Contributors")
 
     git_version = (
-        subprocess.check_output(["git", "--version"])
+        subprocess.check_output(["git", "--version"], env=tool_environment())
         .decode("ascii")
         .strip()
         .split()[-1]
@@ -226,8 +227,8 @@ def push(ctx, do_progress, args):
             ctx.obj.repo.path,
             "push",
             "--progress" if do_progress else "--quiet",
-        ]
-        + list(args),
+            *args,
+        ],
     )
 
 
@@ -251,8 +252,8 @@ def fetch(ctx, do_progress, args):
             ctx.obj.repo.path,
             "fetch",
             "--progress" if do_progress else "--quiet",
-        ]
-        + list(args),
+            *args,
+        ],
     )
 
 

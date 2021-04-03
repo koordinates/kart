@@ -7,6 +7,7 @@ from enum import Enum, auto
 import click
 import pygit2
 
+from .cli_util import tool_environment
 from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .repo_version import (
@@ -130,6 +131,7 @@ def fast_import_tables(
         [*cmd, *extra_cmd_args],
         cwd=repo.path,
         stdin=subprocess.PIPE,
+        env=tool_environment(),
     )
     try:
         if replace_existing != ReplaceExisting.ALL:
