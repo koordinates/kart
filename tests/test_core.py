@@ -8,6 +8,7 @@ import pygit2
 
 import pytest
 
+from sno import is_windows
 from sno.core import walk_tree, check_git_user
 from sno.repo import SnoRepo
 
@@ -274,6 +275,9 @@ def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path)
         )
 
 
+@pytest.mark.xfail(
+    condition=is_windows, reason="PROJ transformation grid not working on windows"
+)
 def test_gdal_proj_data():
     import sno  # noqa
     from osgeo import gdal, osr
