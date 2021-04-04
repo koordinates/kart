@@ -10,4 +10,3 @@
 gdal==3.2.2
 rtree==0.9.7
 psycopg2==2.8.6
-pyodbc==4.0.30

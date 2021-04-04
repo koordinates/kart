@@ -117,6 +117,9 @@ def postgis_engine(pgurl):
 
 CANONICAL_SQL_SERVER_SCHEME = "mssql"
 INTERNAL_SQL_SERVER_SCHEME = "mssql+pyodbc"
+SQL_SERVER_INSTALL_DOC_URL = (
+    "https://docs.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
+)
 
 
 def sqlserver_engine(msurl):
@@ -139,34 +142,17 @@ def sqlserver_engine(msurl):
     return engine
 
 
-def _find_odbc_drivers_config():
-    # Locating the odbcinst.ini file (used by SQL Server via pyodbc via unixODBC).
-    # At least on Linux, unixODBC seems not to look in /etc/odbcinst.ini by default -
-    # which is a pity, since that's most likely where it is.
-    # To see where to look, we run `odbcinst -j` - this seems to be the official
-    # way to learn where the drivers should be found.
-
-    # Don't do this on Windows, don't do this is the user already set these variables.
-    if is_windows or "ODBCSYSINI" in os.environ or "ODBCINSTINI" in os.environ:
-        return
-
-    try:
-        output = subprocess.check_output(["odbcinst", "-j"]).decode("ascii")
-        match = re.search(r"^DRIVERS[.]*:\s+(.*)$", output, flags=re.MULTILINE)
-        if match:
-            path = Path(match.group(1))
-            os.environ["ODBCSYSINI"] = str(path.parent)
-            os.environ["ODBCINSTINI"] = str(path.name)
-    except Exception:
-        pass  # Just leave the environment as-is.
-
-
 def get_odbc_drivers():
     """Returns a list of names of all ODBC drivers."""
-
-    _find_odbc_drivers_config()  # This must be called before loading pyodbc drivers.
-
-    import pyodbc
+    try:
+        import pyodbc
+    except ImportError:
+        # this likely means unixODBC isn't installed. But since the MSSQL
+        # drivers on macOS/Linux depend on it then it'll be installed with them.
+        raise NotFound(
+            f"ODBC support for SQL Server is required but was not found.\nSee {SQL_SERVER_INSTALL_DOC_URL}",
+            exit_code=NO_DRIVER,
+        )
 
     return pyodbc.drivers()
 
@@ -178,9 +164,8 @@ def get_sqlserver_driver():
         d for d in drivers if re.search("SQL Server", d, flags=re.IGNORECASE)
     ]
     if not mssql_drivers:
-        URL = "https://docs.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
         raise NotFound(
-            f"ODBC Driver for SQL Server is required but was not found.\nSee {URL}",
+            f"ODBC Driver for SQL Server is required but was not found.\nSee {SQL_SERVER_INSTALL_DOC_URL}",
             exit_code=NO_DRIVER,
         )
     return sorted(mssql_drivers)[-1]  # Latest driver

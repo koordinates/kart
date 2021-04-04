@@ -16,9 +16,16 @@ ln -sf /opt/sno/sno_cli ${WORKDIR}/usr/bin/sno
 
 OPTS=
 if [ "$TYPE" = "deb" ]; then
-    OPTS+="--depends openssh-client"
+    OPTS+="--depends openssh-client "
+    OPTS+="--depends libstdc++6 "
+    OPTS+="--depends libgcc1 "
+    OPTS+="--deb-recommends libodbc1 "
+    OPTS+="--deb-recommends odbcinst "
 elif [ "$TYPE" = "rpm" ]; then
-    OPTS+="--depends openssh-clients"
+    # Weak dependencies are new in RPM, and not supported by FPM yet.
+    OPTS+="--depends openssh-clients "
+    OPTS+="--depends libstdc++ "
+    OPTS+="--depends libgcc "
 fi
 
 # build package
@@ -30,6 +37,7 @@ fpm \
     --name sno \
     --version "${VERSION}" \
     --url "https://sno.earth" \
+    --description "Distributed version-control for geospatial and tabular data" \
     --license "GPLv2" \
     --architecture amd64 \
     --package /src/dist/ \

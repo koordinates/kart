@@ -52,7 +52,6 @@ lib-pq := env/lib/libpq.$(LIBSUFFIX)
 lib-sqlite := env/lib/libsqlite3.$(LIBSUFFIX)
 lib-git := env/bin/git
 lib-curl := env/lib/libcurl.$(LIBSUFFIX)
-lib-unixodbc := env/lib/libodbc.$(LIBSUFFIX)
 
 lib-spatialite := env/lib/mod_spatialite.$(LIBSUFFIX)
 lib-gdal := env/lib/python3.7/site-packages/osgeo/__init__.py
@@ -61,7 +60,8 @@ lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
 lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
 lib-pyodbc := env/lib/python3.7/site-packages/pyodbc.$(LIBINFIX).so
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3) $(lib-pyodbc)
+
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3)
 
 
 # default target
@@ -98,7 +98,7 @@ $(lib-pysqlite3): $(lib-sqlite)
 	$(MAKE) -C pysqlite3 wheel
 	pip3 install --force-reinstall pysqlite3/wheel/pysqlite3-*$(WHEELID).whl
 
-$(lib-pyodbc): $(lib-unixodbc)
+$(lib-pyodbc):
 	$(MAKE) -C pyodbc wheel
 	pip3 install --force-reinstall pyodbc/wheel/pyodbc-*$(WHEELID).whl
 
@@ -107,7 +107,7 @@ ifeq ($(PLATFORM),Darwin)
 #
 # MacOS
 #
-brew-libs = $(lib-sqlite) $(lib-curl) $(lib-git) $(lib-spatialindex) $(lib-geos) $(lib-jsonc) $(lib-unixodbc)
+brew-libs = $(lib-sqlite) $(lib-curl) $(lib-git) $(lib-spatialindex) $(lib-geos) $(lib-jsonc)
 
 $(brew-deps): Brewfile
 	brew bundle
@@ -115,7 +115,7 @@ $(brew-deps): Brewfile
 .PHONY: brew-deps
 brew-deps: $(brew-deps)
 
-.PHONY: brew-libs
+.PHONE: brew-libs
 brew-libs: $(brew-libs)
 
 env: brew-deps
@@ -191,17 +191,12 @@ $(lib-geos): $(brew-deps) | env
 	cp -av /usr/local/opt/geos/lib/libgeos*.dylib .delocate
 	$(MAKE) delocate-deps
 
-$(lib-unixodbc): $(brew-deps) | env
-	$(MAKE) .delocate
-	cp -av /usr/local/opt/unixodbc/lib/libodbc*.dylib .delocate
-	$(MAKE) delocate-deps
-
 else
 #
 # Linux
 #
 
-build-libs += $(lib-spatialindex) $(lib-curl) $(lib-unixodbc)
+build-libs += $(lib-spatialindex) $(lib-curl) $(lib-pyodbc)
 
 $(lib-spatialindex): spatialindex_build
 $(lib-sqlite): sqlite_build
@@ -210,7 +205,7 @@ $(lib-curl): curl_build
 $(lib-geos): geos_build
 $(lib-jsonc): jsonc_build
 $(lib-pq): libpq_build
-$(lib-unixodbc): unixodbc_build
+$(lib-pyodbc): $(shell ls /usr/{,local/}include/sql.h | tail -n 1)
 endif
 
 
@@ -321,7 +316,6 @@ build-Darwin: $(build-libs) $(brew-libs)
 	cp -vf pygit2/wheel/pygit2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
-	cp -vf pyodbc/wheel/pyodbc-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
 

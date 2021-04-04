@@ -8,9 +8,12 @@ import os
 import re
 import shutil
 import subprocess
+import sys
+from pathlib import Path
 
 from PyInstaller.compat import is_win, is_darwin, is_linux
 from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.depend import dylib
 
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
@@ -31,7 +34,41 @@ if is_win:
         ) as vr:
             vr.write(vr_doc)
 
-a = Analysis(
+if is_linux:
+    # This needs to match the OS dependencies in platforms/linux/fpm.sh
+    # We want to treat libstdc++ as a system dependency
+    dylib._excludes |= {r'libstdc\+\+\.so(\..*)?'}
+    # We want to treat libgcc1 as a system dependency
+    dylib._excludes |= {r'libgcc_s\.so(\..*)?'}
+
+    dylib.exclude_list = dylib.ExcludeList()
+
+    print(
+        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1:",
+        file=sys.stderr,
+    )
+    assert dylib.exclude_list.search('libstdc++.so.6.0.20')
+    assert dylib.exclude_list.search('libgcc_s.so.1')
+
+if is_linux or is_darwin:
+    # We want to treat unixODBC (libodbc) as a system dependency, since the MSSQL
+    # drivers depend on it, and we don't want two different versions imported
+    # in the same process.
+    dylib._excludes |= {r'libodbc(\..*)?\.(dylib|so)(\..*)?'}
+
+    dylib.exclude_list = dylib.ExcludeList()
+    if is_darwin:
+        dylib.exclude_list = dylib.MacExcludeList(dylib.exclude_list)
+
+    print(
+        "❄️  Configured binary exclude-list overrides for libodbc:",
+        file=sys.stderr,
+    )
+    assert dylib.exclude_list.search('libodbc.2.dylib')
+    assert dylib.exclude_list.search('libodbc.so.1')
+
+
+pyi_analysis = Analysis(
     ['platforms/sno_cli.py'],
     pathex=[],
     binaries=[
@@ -63,19 +100,20 @@ a = Analysis(
     noarchive=False,
 )
 
+# Git
 if is_win:
-    a.datas += Tree('vendor/dist/git', prefix='git')
+    pyi_analysis.datas += Tree('vendor/dist/git', prefix='git')
     # GDAL/osgeo hook doesn't include Proj
-    a.datas += Tree(
+    pyi_analysis.datas += Tree(
         'venv/Lib/site-packages/osgeo/data/proj',
         prefix=os.path.join('osgeo', 'data', 'proj'),
     )
 else:
-    a.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
+    pyi_analysis.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
     libexec_root = 'vendor/dist/env/libexec'
-    a.datas += Tree('vendor/dist/env/share', prefix='share')
+    pyi_analysis.datas += Tree('vendor/dist/env/share', prefix='share')
 
-pyz = PYZ(a.pure, a.zipped_data, cipher=None)
+pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
     exe_name = 'sno'
@@ -84,9 +122,9 @@ else:
     exe_name = 'sno_cli'
     exe_icon = 'platforms/macos/sno.icns'
 
-exe = EXE(
-    pyz,
-    a.scripts,
+pyi_exe = EXE(
+    pyi_pyz,
+    pyi_analysis.scripts,
     [],
     exclude_binaries=True,
     name=exe_name,
@@ -98,18 +136,18 @@ exe = EXE(
     icon=exe_icon,
     version=os.path.join(workpath, 'sno_version_info.rc'),
 )
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
+pyi_coll = COLLECT(
+    pyi_exe,
+    pyi_analysis.binaries,
+    pyi_analysis.zipfiles,
+    pyi_analysis.datas,
     strip=False,
     upx=False,
     upx_exclude=[],
     name='sno',
 )
-app = BUNDLE(
-    coll,
+pyi_app = BUNDLE(
+    pyi_coll,
     name='Sno.app',
     icon='platforms/macos/sno.icns',
     bundle_identifier='com.koordinates.Sno.SnoCore',
@@ -164,13 +202,13 @@ if is_darwin:
                 if not os.path.exists(fpath) and not os.path.exists(
                     os.path.join(dist_bin_root, link_path)
                 ):
-                    print(f"ignoring broken link {relpath} -> {link_path}")
+                    print(f"❄️  ignoring broken link {relpath} -> {link_path}", file=sys.stderr)
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
             elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
                 'Mach-O'
             ):
-                print(f"relocating {relpath} to MacOS/")
+                print(f"❄️  relocating {relpath} to MacOS/", file=sys.stderr)
                 shutil.move(fpath, dist_bin_root)
                 os.symlink(
                     os.path.join('../../../MacOS', f),
@@ -206,7 +244,7 @@ elif is_linux:
                 if not os.path.exists(fpath) and not os.path.exists(
                     os.path.join(dist_bin_root, link_path)
                 ):
-                    print(f"ignoring broken link {relpath} -> {link_path}")
+                    print(f"❄️  ignoring broken link {relpath} -> {link_path}", file=sys.stderr)
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
 

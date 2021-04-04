@@ -6,7 +6,7 @@ shift
 
 yum install -y epel-release
 
-yum install -y ccache openssl-devel gettext wget
+yum install -y ccache openssl-devel gettext wget unixODBC-devel
 
 export PATH=/opt/python/cp37-cp37m/bin:${PATH}
 export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}

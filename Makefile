@@ -64,7 +64,6 @@ requirement%.txt requirements/%.txt:
 	sed -E -i.~bak -e 's/^(pygit2=)/\#\1/' $@
 	sed -E -i.~bak -e 's/^(psycopg2=)/\#\1/' $@
 	sed -E -i.~bak -e 's/^(pysqlite3=)/\#\1/' $@
-	sed -E -i.~bak -e 's/^(pyodbc=)/\#\1/' $@
 	$(RM) $@.~bak
 
 # Python dependency license checking
@@ -107,6 +106,9 @@ endif
 		pipdeptree \
 		'pyinstaller==3.6.*' \
 		$(WHEELTOOL)
+
+	# disable the pyodbc hook. TODO: We can override it in PyInstaller 4.x
+	rm $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/PyInstaller/hooks/hook-pyodbc.py
 
 	touch $@
 
