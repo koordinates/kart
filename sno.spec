@@ -44,7 +44,7 @@ if is_linux:
     dylib.exclude_list = dylib.ExcludeList()
 
     print(
-        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1:",
+        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1",
         file=sys.stderr,
     )
     assert dylib.exclude_list.search('libstdc++.so.6.0.20')
@@ -61,7 +61,7 @@ if is_linux or is_darwin:
         dylib.exclude_list = dylib.MacExcludeList(dylib.exclude_list)
 
     print(
-        "❄️  Configured binary exclude-list overrides for libodbc:",
+        "❄️  Configured binary exclude-list overrides for libodbc",
         file=sys.stderr,
     )
     assert dylib.exclude_list.search('libodbc.2.dylib')
