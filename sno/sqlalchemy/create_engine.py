@@ -1,22 +1,24 @@
+import logging
 import os
-from pathlib import Path
 import re
 import socket
 import subprocess
+from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
-
 
 import sqlalchemy
 from pysqlite3 import dbapi2 as sqlite
 import psycopg2
 from psycopg2.extensions import Binary, new_type, register_adapter, register_type
 
-
 from sno import spatialite_path, is_windows
 from sno.geometry import Geometry
 from sno.exceptions import NotFound, NO_DRIVER
 
+
 GPKG_CACHE_SIZE_MiB = 200
+
+L = logging.getLogger("sno.sqlalchemy.create_engine")
 
 
 def gpkg_engine(path):
@@ -146,9 +148,10 @@ def get_odbc_drivers():
     """Returns a list of names of all ODBC drivers."""
     try:
         import pyodbc
-    except ImportError:
+    except ImportError as e:
         # this likely means unixODBC isn't installed. But since the MSSQL
         # drivers on macOS/Linux depend on it then it'll be installed with them.
+        L.debug("pyodbc import error: %s", e)
         raise NotFound(
             f"ODBC support for SQL Server is required but was not found.\nSee {SQL_SERVER_INSTALL_DOC_URL}",
             exit_code=NO_DRIVER,
