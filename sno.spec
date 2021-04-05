@@ -44,7 +44,7 @@ if is_linux:
     dylib.exclude_list = dylib.ExcludeList()
 
     print(
-        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1:",
+        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1",
         file=sys.stderr,
     )
     assert dylib.exclude_list.search('libstdc++.so.6.0.20')
@@ -61,11 +61,25 @@ if is_linux or is_darwin:
         dylib.exclude_list = dylib.MacExcludeList(dylib.exclude_list)
 
     print(
-        "❄️  Configured binary exclude-list overrides for libodbc:",
+        "❄️  Configured binary exclude-list overrides for libodbc",
         file=sys.stderr,
     )
     assert dylib.exclude_list.search('libodbc.2.dylib')
     assert dylib.exclude_list.search('libodbc.so.1')
+
+if is_darwin:
+    # on macOS every dylib dependency path gets rewritten to @loader_path/...,
+    # which isn't much use wrt unixODBC. And PyInstaller has no useful hooks.
+    # TODO: when we upgrade PyInstaller this probably needs redoing
+    import macholib.util
+    macholib.util._orig_in_system_path = macholib.util.in_system_path
+    def sno__in_system_path(filename):
+        if re.match(r'/usr/local(/opt/unixodbc)?/lib/libodbc\.\d+\.dylib$', filename):
+            print(f"❄️  Treating {filename} as a system library", file=sys.stderr)
+            return True
+        else:
+            return macholib.util._orig_in_system_path(filename)
+    macholib.util.in_system_path = sno__in_system_path
 
 
 pyi_analysis = Analysis(
