@@ -324,6 +324,15 @@ jobs:
           name: ${{ matrix.platform.name }}-rpm
           path: platforms/linux/dist/*.rpm
 
+      - name: "package: save packaging logs"
+        uses: actions/upload-artifact@v2
+        with:
+          name: packaging-logs-${{ matrix.platform.name }}
+          path: |
+            platforms/*/build/sno/*.toc
+            platforms/*/build/sno/*.txt
+            platforms/*/build/sno/*.html
+
       #
       # Package tests
       #
@@ -515,6 +524,15 @@ jobs:
         with:
           name: Windows-msi
           path: ${{ steps.package.outputs.msi }}
+
+      - name: "package: save packaging logs"
+        uses: actions/upload-artifact@v2
+        with:
+          name: packaging-logs-Windows
+          path: |
+            platforms/windows/build/sno/*.toc
+            platforms/windows/build/sno/*.txt
+            platforms/windows/build/sno/*.html
 
       #
       # Package tests
