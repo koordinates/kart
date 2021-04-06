@@ -177,6 +177,10 @@ def cli(ctx, repo_dir, verbose, post_mortem):
         fmt = "%(asctime)s %(levelname)s %(name)s - %(message)s"
     logging.basicConfig(level=log_level, format=fmt)
 
+    if verbose >= 3:
+        # enable SQLAlchemy query logging
+        logging.getLogger("sqlalchemy.engine").setLevel("INFO")
+
 
 # Commands from modules:
 cli.add_command(apply.apply)
