@@ -171,7 +171,11 @@ def cli(ctx, repo_dir, verbose, post_mortem):
     # default == WARNING; -v == INFO; -vv == DEBUG
     ctx.obj.verbosity = verbose
     log_level = logging.WARNING - min(10 * verbose, 20)
-    logging.basicConfig(level=log_level)
+    if verbose >= 2:
+        fmt = "%(asctime)s T%(thread)d %(levelname)s %(name)s [%(filename)s:%(lineno)d] - %(message)s"
+    else:
+        fmt = "%(asctime)s %(levelname)s %(name)s - %(message)s"
+    logging.basicConfig(level=log_level, format=fmt)
 
 
 # Commands from modules:
