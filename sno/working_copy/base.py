@@ -602,6 +602,14 @@ class WorkingCopy:
 
         return feature_diff
 
+    @property
+    def _tracking_table_requires_cast(self):
+        """
+        True if the tracking table requires a SQL cast from the PK type.
+        In reality only False for GPKG with its loose relationship with types.
+        """
+        return True
+
     def _execute_dirty_rows_query(
         self, sess, dataset, feature_filter=None, meta_diff=None
     ):
@@ -628,10 +636,15 @@ class WorkingCopy:
         pk_column = table.columns[schema.pk_columns[0].name]
         tracking_col_type = sno_track.c.pk.type
 
+        if self._tracking_table_requires_cast:
+            pk_expr = sno_track.c.pk == sa.cast(pk_column, tracking_col_type)
+        else:
+            pk_expr = sno_track.c.pk == pk_column
+
         base_query = sa.select(columns=cols_to_select).select_from(
             sno_track.outerjoin(
                 table,
-                sno_track.c.pk == sa.cast(pk_column, tracking_col_type),
+                pk_expr,
             )
         )
 

@@ -94,6 +94,10 @@ class WorkingCopy_GPKG(WorkingCopy):
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
 
+    @property
+    def _tracking_table_requires_cast(self):
+        return False
+
     @contextlib.contextmanager
     def session(self, bulk=0):
         """
