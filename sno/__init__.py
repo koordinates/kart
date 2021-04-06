@@ -75,10 +75,14 @@ gdal.UseExceptions()
 ogr.UseExceptions()
 osr.UseExceptions()
 
+# Libgit2 options
+import pygit2
+
+pygit2.option(pygit2.GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, 0)
+
 # Libgit2 TLS CA Certificates
 # We build libgit2 to prefer the OS certificate store on Windows/macOS, but Linux doesn't have one.
 if is_linux:
     import certifi
-    import pygit2
 
     pygit2.settings.ssl_cert_file = certifi.where()
