@@ -9,6 +9,7 @@ class WorkingCopyType(Enum):
     GPKG = auto()
     POSTGIS = auto()
     SQL_SERVER = auto()
+    MYSQL = auto()
 
     @classmethod
     def from_location(cls, location, allow_invalid=False):
@@ -17,6 +18,8 @@ class WorkingCopyType(Enum):
             return WorkingCopyType.POSTGIS
         elif location.startswith("mssql:"):
             return WorkingCopyType.SQL_SERVER
+        elif location.startswith("mysql:"):
+            return WorkingCopyType.MYSQL
         elif location.lower().endswith(".gpkg"):
             return WorkingCopyType.GPKG
         elif allow_invalid:
@@ -27,7 +30,8 @@ class WorkingCopyType(Enum):
                 "Try one of:\n"
                 "  PATH.gpkg\n"
                 "  postgresql://[HOST]/DBNAME/DBSCHEMA\n"
-                "  mssql://[HOST]/DBNAME/DBSCHEMA"
+                "  mssql://[HOST]/DBNAME/DBSCHEMA\n"
+                "  mysql://[HOST]/DBNAME"
             )
 
     @property
@@ -44,6 +48,11 @@ class WorkingCopyType(Enum):
             from .sqlserver import WorkingCopy_SqlServer
 
             return WorkingCopy_SqlServer
+        elif self is WorkingCopyType.MYSQL:
+            from .mysql import WorkingCopy_MySql
+
+            return WorkingCopy_MySql
+
         raise RuntimeError("Invalid WorkingCopyType")
 
 

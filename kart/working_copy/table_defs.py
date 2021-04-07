@@ -9,7 +9,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from sqlalchemy.types import NVARCHAR
+from sqlalchemy.types import NVARCHAR, VARCHAR
 
 
 class TinyInt(Integer):
@@ -92,6 +92,37 @@ class GpkgKartTables(AbstractKartTables):
 
 class PostgisKartTables(AbstractKartTables):
     """Tables for Kart-specific metadata - PostGIS variant. Nothing special required."""
+
+
+class MySqlKartTables(AbstractKartTables):
+    """
+    Tables for Kart-specific metadata - MySQL variant.
+    Primary keys have to be VARCHAR of a fixed maximum length -
+    if the total maximum length is too long, MySQL cannot generate an index.
+    """
+
+    def __init__(self, db_schema=None, is_kart_branding=False):
+        # Don't call super since we are redefining self.kart_state and self.kart_track.
+        self.sqlalchemy_metadata = MetaData()
+        self.db_schema = db_schema
+        self.is_kart_branding = is_kart_branding
+
+        self.kart_state = Table(
+            self.kart_table_name(STATE),
+            self.sqlalchemy_metadata,
+            Column("table_name", VARCHAR(256), nullable=False, primary_key=True),
+            Column("key", VARCHAR(256), nullable=False, primary_key=True),
+            Column("value", Text, nullable=False),
+            schema=self.db_schema,
+        )
+
+        self.kart_track = Table(
+            self.kart_table_name(TRACK),
+            self.sqlalchemy_metadata,
+            Column("table_name", VARCHAR(256), nullable=False, primary_key=True),
+            Column("pk", VARCHAR(256), nullable=True, primary_key=True),
+            schema=self.db_schema,
+        )
 
 
 class SqlServerKartTables(AbstractKartTables):

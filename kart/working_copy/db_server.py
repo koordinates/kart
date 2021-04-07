@@ -90,7 +90,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         """
         Removes the DBSCHEMA part off the end of a URI's path, and returns the URI and the DBSCHEMA separately.
         Useful since generally, it is not necessary (or even possible) to connect to a particular DBSCHEMA directly,
-        instead, the rest of the URI is used to connect, then the DBSCHEMA is sped
+        instead, the rest of the URI is used to connect, then the DBSCHEMA is specified in every query / command.
         """
         url = urlsplit(db_uri)
         url_path = PurePath(url.path)
