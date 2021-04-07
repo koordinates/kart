@@ -9,7 +9,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 
-from sqlalchemy.types import NVARCHAR
+from sqlalchemy.types import NVARCHAR, VARCHAR
 
 
 class TinyInt(Integer):
@@ -95,6 +95,36 @@ class PostgisSnoTables(TableSet):
             "_sno_track",
             self._SQLALCHEMY_METADATA,
             *_copy_columns(SnoTables.sno_track.columns),
+            schema=schema,
+        )
+
+    def create_all(self, session):
+        return self._SQLALCHEMY_METADATA.create_all(session.connection())
+
+
+class MySqlSnoTables(TableSet):
+    """
+    Tables for sno-specific metadata - MySQL variant.
+    Table names have a user-defined schema, and so unlike other table sets,
+    we need to construct an instance with the appropriate schema.
+    """
+
+    def __init__(self, schema=None):
+        self._SQLALCHEMY_METADATA = MetaData()
+
+        self.sno_state = Table(
+            "_sno_state",
+            self._SQLALCHEMY_METADATA,
+            Column("table_name", VARCHAR(256), nullable=False, primary_key=True),
+            Column("key", VARCHAR(256), nullable=False, primary_key=True),
+            Column("value", Text, nullable=False),
+            schema=schema,
+        )
+        self.sno_track = Table(
+            "_sno_track",
+            self._SQLALCHEMY_METADATA,
+            Column("table_name", VARCHAR(256), nullable=False, primary_key=True),
+            Column("pk", VARCHAR(256), nullable=True, primary_key=True),
             schema=schema,
         )
 

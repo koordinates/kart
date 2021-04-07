@@ -24,7 +24,12 @@ import sqlalchemy
 
 from sno.geometry import Geometry
 from sno.repo import SnoRepo
-from sno.sqlalchemy.create_engine import gpkg_engine, postgis_engine, sqlserver_engine
+from sno.sqlalchemy.create_engine import (
+    gpkg_engine,
+    postgis_engine,
+    sqlserver_engine,
+    mysql_engine,
+)
 from sno.working_copy import WorkingCopy
 
 
@@ -988,3 +993,49 @@ def _sqlserver_drop_schema_cascade(conn, db_schema):
         conn.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
 
     conn.execute(f"DROP SCHEMA IF EXISTS {db_schema};")
+
+
+@pytest.fixture()
+def mysql_db():
+    """
+    Using docker, you can run a MySQL test - such as those in test_working_copy_mysql - as follows:
+        docker run -it --rm -d -p 13306:3306 -e MYSQL_ROOT_PASSWORD=PassWord1 mysql
+        SNO_MYSQL_URL='mysql://root:PassWord1@localhost:13306' pytest -k mysql --pdb -vvs
+    """
+    if "SNO_MYSQL_URL" not in os.environ:
+        raise pytest.skip("Requires MySQL - read docstring at conftest.mysql_db")
+    engine = mysql_engine(os.environ["SNO_MYSQL_URL"])
+    with engine.connect() as conn:
+        # test connection:
+        try:
+            conn.execute("SELECT @@version;")
+        except sqlalchemy.exc.DBAPIError:
+            raise pytest.skip("Requires MySQL")
+    yield engine
+
+
+@pytest.fixture()
+def new_mysql_db_schema(request, mysql_db):
+    @contextlib.contextmanager
+    def ctx(create=False):
+        sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
+        schema = f"sno_test_{sha}"
+        with mysql_db.connect() as conn:
+            # Start by deleting in case it is left over from last test-run...
+            conn.execute(f"""DROP SCHEMA IF EXISTS `{schema}`;""")
+            # Actually create only if create=True, otherwise the test will create it
+            if create:
+                conn.execute(f"""CREATE SCHEMA `{schema}`;""")
+        try:
+            url = urlsplit(os.environ["SNO_MYSQL_URL"])
+            url_path = url.path.rstrip("/") + "/" + schema
+            new_schema_url = urlunsplit(
+                [url.scheme, url.netloc, url_path, url.query, ""]
+            )
+            yield new_schema_url, schema
+        finally:
+            # Clean up - delete it again if it exists.
+            with mysql_db.connect() as conn:
+                conn.execute(f"""DROP SCHEMA IF EXISTS `{schema}`;""")
+
+    return ctx

@@ -67,6 +67,39 @@ def compile_upsert_postgresql(upsert_stmt, compiler, **kwargs):
     return compiler.process(insert_stmt)
 
 
+@compiles(Upsert, "mysql")
+def compile_upsert_mysql(upsert_stmt, compiler, **kwargs):
+    # See https://dev.mysql.com/doc/refman/8.0/en/insert-on-duplicate.html
+    preparer = compiler.preparer
+
+    def list_cols(col_names, prefix=""):
+        return ", ".join([prefix + c for c in col_names])
+
+    values = ", ".join(upsert_stmt.values(compiler))
+    table = preparer.format_table(upsert_stmt.table)
+    all_columns = [preparer.quote(c.name) for c in upsert_stmt.columns]
+    non_pk_columns = [preparer.quote(c.name) for c in upsert_stmt.non_pk_columns]
+
+    is_gte_version_8 = compiler.dialect.server_version_info[0] >= 8
+
+    if is_gte_version_8:
+        # Post 8.0 - don't use VALUES() again to refer to earlier VALUES.
+        # Instead, alias them. See https://dev.mysql.com/worklog/task/?id=13325
+        result = f"INSERT INTO {table} ({list_cols(all_columns)}) "
+        result += f" VALUES ({values}) AS SOURCE ({list_cols(all_columns)})"
+        result += " ON DUPLICATE KEY UPDATE "
+        result += ", ".join([f"{c} = SOURCE.{c}" for c in non_pk_columns])
+
+    else:
+        # Pre 8.0 - reuse VALUES to refer to earlier VALUES.
+        result = f"INSERT INTO {table} ({list_cols(all_columns)}) "
+        result += f" VALUES ({values})"
+        result += " ON DUPLICATE KEY UPDATE "
+        result += ", ".join([f"{c} = VALUES({c})" for c in non_pk_columns])  # 5.7
+
+    return result
+
+
 @compiles(Upsert, "mssql")
 def compile_upsert_mssql(upsert_stmt, compiler, **kwargs):
     # See https://docs.microsoft.com/sql/t-sql/statements/merge-transact-sql
