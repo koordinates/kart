@@ -29,6 +29,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * `clone` now accepts a `--filter` option (advanced users only)
  * `show -o json` now includes the commit hash in the output
  * `import` from Postgres now uses a server-side cursor, which means sno uses less memory
+ * Improved log formatting at higher verbosity levels
+ * `sno -vvv` will log SQL queries to the console for debugging
 
 ## 0.7.1
 
