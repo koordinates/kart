@@ -222,7 +222,6 @@ def generate_postgis_spatial_ref_sys(v2_obj):
     The result is a list containing a dict per table row.
     Each dict has the format {column-name: value}.
     """
-    # TODO - this is not yet written anywhere.
     result = []
     for crs_name, definition in v2_obj.crs_definitions():
         spatial_ref = SpatialReference(definition)

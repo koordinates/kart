@@ -129,21 +129,30 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         if not spatial_refs:
             return
 
-        # We do not automatically overwrite a CRS if it seems likely to be one
-        # of the Postgis builtin definitions - Postgis has lots of EPSG and ESRI
-        # definitions built-in, plus the 900913 (GOOGLE) definition.
-        # See POSTGIS_WC.md for help on working with CRS definitions in a Postgis WC.
-        sess.execute(
-            """
-            INSERT INTO spatial_ref_sys AS SRS (srid, auth_name, auth_srid, srtext, proj4text)
-            VALUES (:srid, :auth_name, :auth_srid, :srtext, :proj4text)
-            ON CONFLICT (srid) DO UPDATE
-                SET (auth_name, auth_srid, srtext, proj4text)
-                = (EXCLUDED.auth_name, EXCLUDED.auth_srid, EXCLUDED.srtext, EXCLUDED.proj4text)
-                WHERE SRS.auth_name NOT IN ('EPSG', 'ESRI') AND SRS.srid <> 900913;
-            """,
-            spatial_refs,
-        )
+        for sr in spatial_refs:
+            # We do not automatically overwrite a CRS if it seems likely to be one
+            # of the Postgis builtin definitions - Postgis has lots of EPSG and ESRI
+            # definitions built-in, plus the 900913 (GOOGLE) definition.
+            # See POSTGIS_WC.md for help on working with CRS definitions in a Postgis WC.
+            is_postgis_builtin = sess.scalar(
+                """
+                SELECT 1 FROM spatial_ref_sys
+                WHERE srid = :srid AND (auth_name IN ('EPSG', 'ESRI') OR srid = 900913)
+                LIMIT 1
+                """,
+                sr,
+            )
+            if not is_postgis_builtin:
+                sess.execute(
+                    """
+                    INSERT INTO spatial_ref_sys AS SRS (srid, auth_name, auth_srid, srtext, proj4text)
+                    VALUES (:srid, :auth_name, :auth_srid, :srtext, :proj4text)
+                    ON CONFLICT (srid) DO UPDATE
+                        SET (auth_name, auth_srid, srtext, proj4text)
+                        = (EXCLUDED.auth_name, EXCLUDED.auth_srid, EXCLUDED.srtext, EXCLUDED.proj4text)
+                    """,
+                    sr,
+                )
 
     def delete_meta(self, dataset):
         """Delete any metadata that is only needed by this dataset."""
