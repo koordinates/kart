@@ -886,8 +886,8 @@ def disable_editor():
 def postgis_db():
     """
     Using docker, you can run a PostGIS test - such as test_postgis_import - as follows:
-        docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust kartoza/postgis
-        SNO_POSTGRES_URL='postgresql://docker:docker@localhost:15432/gis' pytest -k postgis --pdb -vvs
+        docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgis/postgis
+        SNO_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k postgis --pdb -vvs -n 0
     """
     if "SNO_POSTGRES_URL" not in os.environ:
         raise pytest.skip("Requires PostGIS - read docstring at conftest.postgis_db")
