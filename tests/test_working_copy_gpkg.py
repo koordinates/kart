@@ -644,6 +644,22 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
             assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
 
+def test_qgis_simultaneous_connection(data_working_copy, cli_runner):
+    with data_working_copy("points") as (repo_path, wc_path):
+        engine = sqlalchemy.create_engine(f"sqlite:///{wc_path}")
+        with engine.connect() as conn:
+            # QGIS sets journal mode to WAL for as long as it has the layer open.
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute(
+                "UPDATE gpkg_contents SET last_change = '2020-01-01T01:02:03.456Z';"
+            )
+
+            r = cli_runner.invoke(["status"])
+            assert r.exit_code == 0, r.stderr
+
+            conn.execute("PRAGMA journal_mode = DELETE;")
+
+
 def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, _):
         repo = SnoRepo(repo_path)

@@ -1,9 +1,6 @@
 import logging
-import os
 import re
 import socket
-import subprocess
-from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 
 import sqlalchemy
@@ -11,7 +8,7 @@ from pysqlite3 import dbapi2 as sqlite
 import psycopg2
 from psycopg2.extensions import Binary, new_type, register_adapter, register_type
 
-from sno import spatialite_path, is_windows
+from sno import spatialite_path
 from sno.geometry import Geometry
 from sno.exceptions import NotFound, NO_DRIVER
 
@@ -30,7 +27,9 @@ def gpkg_engine(path):
         dbcur = pysqlite_conn.cursor()
         dbcur.execute("SELECT EnableGpkgMode();")
         dbcur.execute("PRAGMA foreign_keys = ON;")
-        dbcur.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
+        current_journal = dbcur.execute("PRAGMA journal_mode").fetchone()[0]
+        if current_journal.lower() == "delete":
+            dbcur.execute("PRAGMA journal_mode = TRUNCATE;")  # faster
         dbcur.execute(f"PRAGMA cache_size = -{GPKG_CACHE_SIZE_MiB * 1024};")
 
     engine = sqlalchemy.create_engine(f"sqlite:///{path}", module=sqlite)
