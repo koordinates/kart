@@ -4,6 +4,7 @@ import click
 import pygit2
 
 from .conflicts import list_conflicts
+from .filter_util import UNFILTERED
 from .output_util import dump_json_output
 from .merge import merge_status_to_text
 from .merge_util import MergeContext, MergeIndex
@@ -77,9 +78,29 @@ def get_working_copy_status_json(repo):
 
     output = {"path": working_copy.clean_path, "changes": None}
 
-    wc_diff = working_copy.diff_to_tree()
+    # build a filter that avoids diffing features at all
+    datasets = repo.datasets(working_copy.get_db_tree())
+    repo_filter = {}
+    for dataset in datasets:
+        repo_filter[dataset.path] = {"meta": UNFILTERED}
+
+    wc_diff = working_copy.diff_to_tree(repo_filter=repo_filter)
     if wc_diff:
         output["changes"] = get_diff_status_json(wc_diff)
+
+    # now add feature counts. saves a bit of time computing diffs for features,
+    # when we really only need the counts here.
+    for dataset in datasets:
+        meta_diff = working_copy.diff_db_to_tree_meta(dataset)
+        feature_counts = working_copy.diff_db_to_tree_feature_counts(
+            dataset, UNFILTERED, meta_diff
+        )
+        feature_counts = {k: v for (k, v) in feature_counts.items() if v > 0}
+        if feature_counts:
+            if output["changes"] is None:
+                output["changes"] = {}
+            dataset_changes = output["changes"].setdefault(dataset.path, {})
+            dataset_changes["feature"] = feature_counts
 
     return output
 

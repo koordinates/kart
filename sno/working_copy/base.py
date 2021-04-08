@@ -553,17 +553,18 @@ class WorkingCopy:
         """Returns all the meta items for the given dataset from the working copy DB."""
         raise NotImplementedError()
 
-    def diff_db_to_tree_feature(
-        self, dataset, feature_filter, meta_diff, raise_if_dirty=False
-    ):
+    def _diff_db_to_tree_feature(self, dataset, feature_filter, meta_diff):
+        """
+        Generator. Yields a (repo_obj, db_obj) pair for each feature that
+        differs between the working copy and the repo structure.
+
+        Either db_obj or repo_obj may be None (inserts/deletes),
+        or neither might be None (updates)
+        """
         pk_field = dataset.schema.pk_columns[0].name
-        find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as sess:
             r = self._execute_dirty_rows_query(sess, dataset, feature_filter, meta_diff)
-
-            feature_diff = DeltaDiff()
-            insert_count = delete_count = 0
 
             for row in r:
                 track_pk = row[0]  # This is always a str
@@ -582,25 +583,71 @@ class WorkingCopy:
                     # TODO - maybe delete track_pk from tracking table?
                     continue
 
-                if raise_if_dirty:
-                    raise WorkingCopyDirty()
+                yield repo_obj, db_obj
 
-                if db_obj and not repo_obj:  # INSERT
-                    insert_count += 1
-                    feature_diff.add_delta(Delta.insert((db_obj[pk_field], db_obj)))
+    def diff_db_to_tree_feature(
+        self, dataset, feature_filter, meta_diff, raise_if_dirty=False
+    ):
+        """
+        Returns a DeltaDiff containing the feature changes between the repo structure
+        and this working copy.
+        """
+        feature_diff = DeltaDiff()
+        if not feature_filter:
+            return feature_diff
+        pk_field = dataset.schema.pk_columns[0].name
+        find_renames = self.can_find_renames(meta_diff)
+        insert_count = delete_count = 0
 
-                elif repo_obj and not db_obj:  # DELETE
-                    delete_count += 1
-                    feature_diff.add_delta(Delta.delete((repo_obj[pk_field], repo_obj)))
+        for repo_obj, db_obj in self._diff_db_to_tree_feature(
+            dataset, feature_filter, meta_diff
+        ):
+            if raise_if_dirty:
+                raise WorkingCopyDirty()
 
-                else:  # UPDATE
-                    pk = db_obj[pk_field]
-                    feature_diff.add_delta(Delta.update((pk, repo_obj), (pk, db_obj)))
+            if db_obj and not repo_obj:  # INSERT
+                insert_count += 1
+                feature_diff.add_delta(Delta.insert((db_obj[pk_field], db_obj)))
+
+            elif repo_obj and not db_obj:  # DELETE
+                delete_count += 1
+                feature_diff.add_delta(Delta.delete((repo_obj[pk_field], repo_obj)))
+
+            else:  # UPDATE
+                pk = db_obj[pk_field]
+                feature_diff.add_delta(Delta.update((pk, repo_obj), (pk, db_obj)))
 
         if find_renames and (insert_count + delete_count) <= 400:
             self.find_renames(feature_diff, dataset)
 
         return feature_diff
+
+    def diff_db_to_tree_feature_counts(self, dataset, feature_filter, meta_diff):
+        """
+        Returns a dict which counts feature changes between the repo structure and this working copy.
+        The returned dict contains keys 'update', 'delete' and 'insert', and values are integers.
+
+        This is similar to `diff_db_to_tree_feature` but:
+            * doesn't produce a DeltaDiff, only a dict of counts.
+            * doesn't do any rename detection.
+        """
+        counts = {
+            "inserts": 0,
+            "deletes": 0,
+            "updates": 0,
+        }
+        for repo_obj, db_obj in self._diff_db_to_tree_feature(
+            dataset, feature_filter, meta_diff
+        ):
+
+            if db_obj and not repo_obj:
+                counts["inserts"] += 1
+            elif repo_obj and not db_obj:
+                counts["deletes"] += 1
+            else:
+                counts["updates"] += 1
+
+        return counts
 
     @property
     def _tracking_table_requires_cast(self):

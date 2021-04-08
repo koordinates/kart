@@ -916,14 +916,19 @@ def test_edit_string_pks(data_working_copy, cli_runner):
         with repo.working_copy.session() as sess:
             _edit_string_pk_polygons(sess)
 
-        r = cli_runner.invoke(["status", "--output-format=json"])
+        r = cli_runner.invoke(["diff", "--output-format=json"])
         assert r.exit_code == 0, r
-        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
-        assert changes == {
-            "nz_waca_adjustments": {
-                "feature": {"inserts": 1, "updates": 2, "deletes": 5}
-            }
-        }
+        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_waca_adjustments"][
+            "feature"
+        ]
+
+        def is_pk_changed(feature):
+            if not ("+" in feature and "-" in feature):
+                return False
+            return feature["+"]["id"] != feature["-"]["id"]
+
+        pk_changed_features = [f for f in features if is_pk_changed(f)]
+        assert len(pk_changed_features) == 1
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 1, r.stderr
 
@@ -953,7 +958,7 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         assert r.exit_code == 0, r
         changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
         assert changes == {
-            H.POINTS.LAYER: {"feature": {"inserts": 1, "updates": 2, "deletes": 5}}
+            H.POINTS.LAYER: {"feature": {"inserts": 2, "updates": 1, "deletes": 6}}
         }
 
         with wc.session() as sess:
@@ -991,5 +996,5 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         assert r.exit_code == 0, r.stderr
         changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
         assert changes == {
-            H.POINTS.LAYER: {"feature": {"inserts": 1, "updates": 2, "deletes": 5}}
+            H.POINTS.LAYER: {"feature": {"inserts": 2, "updates": 1, "deletes": 6}}
         }
