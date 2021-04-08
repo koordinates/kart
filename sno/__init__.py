@@ -80,6 +80,13 @@ import pygit2
 
 pygit2.option(pygit2.GIT_OPT_ENABLE_STRICT_HASH_VERIFICATION, 0)
 
+# By default, libgit2 caches tree object reads (up to 4K trees).
+# However, since sno stores features in a 256x256 tree structure,
+# large repos will have (65536+256) trees.
+# Increasing this limit above that number increases import performance dramatically.
+# (2 here is the value of `GIT_OBJECT_TREE` constant, pygit2 doesn't expose it)
+pygit2.option(pygit2.GIT_OPT_SET_CACHE_OBJECT_LIMIT, 2, 100000)
+
 # Libgit2 TLS CA Certificates
 # We build libgit2 to prefer the OS certificate store on Windows/macOS, but Linux doesn't have one.
 if is_linux:
