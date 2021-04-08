@@ -282,40 +282,51 @@ class Dataset2(RichBaseDataset):
                 blob.data,
             )
 
-    def import_iter_feature_blobs(self, resultset, source, replacing_dataset=None):
+    def import_iter_feature_blobs(
+        self, repo, resultset, source, replacing_dataset=None
+    ):
         schema = source.schema
-        if replacing_dataset is not None and replacing_dataset.schema != source.schema:
+        if replacing_dataset:
             # Optimisation: Try to avoid rewriting features for compatible schema changes.
-            change_types = replacing_dataset.schema.diff_type_counts(source.schema)
-            if not change_types["pk_updates"]:
-                # We can probably avoid rewriting all features.
-                for feature in resultset:
-                    try:
-                        pk_values = (feature[replacing_dataset.primary_key],)
-                        rel_path = self.encode_pks_to_path(pk_values, relative=True)
-                        existing_data = replacing_dataset.get_data_at(
-                            rel_path, as_memoryview=True
-                        )
-                    except KeyError:
-                        # this feature isn't in the dataset we're replacing
-                        yield self.encode_feature(feature, schema)
-                        continue
+            # this can take some time, but often results in much fewer git objects produced.
+            # For example, consider revision A with this feature:
+            #   {"x": 1, "y": 2}
+            # Now at revision B we add a nullable column, so the new version of the feature is:
+            #   {"x": 1, "y": 2, "z": NULL}
+            # In this situation, during the import of revision B, we can avoid writing the
+            # new blob, because the existing feature blob from revision A can be 'upgraded'
+            # to the new schema without changing anything.
+            #
+            # This optimisation is useful in the following situations:
+            #  * a column was added but some values remain NULL (example above)
+            #  * a column was dropped, and some rows have no other values changed
+            for feature in resultset:
+                try:
+                    pk_values = (feature[replacing_dataset.primary_key],)
+                    rel_path = self.encode_pks_to_path(pk_values, relative=True)
+                    existing_data = replacing_dataset.get_data_at(
+                        rel_path, as_memoryview=True
+                    )
+                except KeyError:
+                    # this feature isn't in the dataset we're replacing
+                    yield self.encode_feature(feature, schema)
+                    continue
 
-                    existing_feature_raw_dict = replacing_dataset.get_raw_feature_dict(
-                        pk_values, data=existing_data
-                    )
-                    # This adapts the existing feature to the new schema
-                    existing_feature = schema.feature_from_raw_dict(
-                        existing_feature_raw_dict
-                    )
-                    if existing_feature == feature:
-                        # Nothing changed? No need to rewrite the feature blob
-                        yield self.encode_pks_to_path(pk_values), existing_data
-                    else:
-                        yield self.encode_feature(feature, schema)
-                return
-        for feature in resultset:
-            yield self.encode_feature(feature, schema)
+                existing_feature_raw_dict = replacing_dataset.get_raw_feature_dict(
+                    pk_values, data=existing_data
+                )
+                # This adapts the existing feature to the new schema
+                existing_feature = schema.feature_from_raw_dict(
+                    existing_feature_raw_dict
+                )
+                if existing_feature == feature:
+                    # Nothing changed? No need to rewrite the feature blob
+                    yield self.encode_pks_to_path(pk_values), existing_data
+                else:
+                    yield self.encode_feature(feature, schema)
+        else:
+            for feature in resultset:
+                yield self.encode_feature(feature, schema)
 
     def apply_meta_diff(
         self, meta_diff, tree_builder, *, allow_missing_old_values=False

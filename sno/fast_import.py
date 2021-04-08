@@ -35,6 +35,52 @@ class ReplaceExisting(Enum):
     ALL = auto()
 
 
+def should_compare_imported_features_against_old_features(
+    repo, source, replacing_dataset
+):
+    """
+    Returns True iff we should compare feature blobs to the previous feature blobs
+    when importing.
+
+    This prevents repo bloat after columns are added or removed from the dataset,
+    by only creating new blobs when the old blob cannot be upgraded to the new
+    schema.
+    """
+    if replacing_dataset is None:
+        return False
+    old_schema = replacing_dataset.schema
+    if old_schema != source.schema:
+        types = replacing_dataset.schema.diff_type_counts(source.schema)
+        if types["pk_updates"]:
+            # when the PK changes, we won't be able to match old features to new features.
+            # so not much point trying.
+            return False
+        elif types["inserts"] or types["deletes"]:
+            # however, after column adds/deletes, we want to check features against
+            # old features, to avoid unnecessarily duplicating 'identical' features.
+            return True
+
+    # Walk the log until we encounter a relevant schema change
+    for commit in repo.walk(repo.head.target):
+        datasets = repo.datasets(commit.oid)
+        try:
+            old_dataset = datasets[replacing_dataset.path]
+        except KeyError:
+            # no schema changes since this dataset was added.
+            return False
+        if old_dataset.schema != source.schema:
+            # this revision had a schema change
+            types = old_dataset.schema.diff_type_counts(source.schema)
+            if types["pk_updates"]:
+                # if the schema change was a PK update, all features were rewritten in that
+                # revision, and since no schema changes have occurred since then, we don't
+                # have to check all features against old features.
+                return False
+            elif types["inserts"] or types["deletes"]:
+                return True
+    return False
+
+
 def fast_import_tables(
     repo,
     sources,
@@ -207,12 +253,17 @@ def fast_import_tables(
                 if verbosity >= 1:
                     progress_every = max(100, 100_000 // (10 ** (verbosity - 1)))
 
-                for i, blob_path in write_blobs_to_stream(
-                    p.stdin,
-                    dataset.import_iter_feature_blobs(
-                        src_iterator, source, replacing_dataset=replacing_dataset
-                    ),
+                if should_compare_imported_features_against_old_features(
+                    repo, source, replacing_dataset
                 ):
+                    feature_blob_iter = dataset.import_iter_feature_blobs(
+                        repo, src_iterator, source, replacing_dataset=replacing_dataset
+                    )
+                else:
+                    feature_blob_iter = dataset.import_iter_feature_blobs(
+                        repo, src_iterator, source
+                    )
+                for i, blob_path in write_blobs_to_stream(p.stdin, feature_blob_iter):
                     if i and progress_every and i % progress_every == 0:
                         click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
 
