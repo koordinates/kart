@@ -99,43 +99,28 @@ class WorkingCopy_GPKG(WorkingCopy):
         return False
 
     @contextlib.contextmanager
-    def session(self, bulk=0):
+    def session(
+        self,
+    ):
         """
         Context manager for GeoPackage DB sessions, yields a connection object inside a transaction
 
         Calling again yields the _same_ connection, the transaction/etc only happen in the outer one.
-
-        @bulk controls bulk-loading operating mode:
-            0: default, no bulk operations (normal)
-            1: synchronous, larger cache (bulk changes)
-            2: exclusive locking, memory journal (bulk load)
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.session")
 
-        # TODO - look into bulk, locking_mode, journal_mode, synchronous, cache_size.
-        # Plan is to simplify this to the following:
-        # - do whatever is fastest to originally create the GPKG
-        # - do something consistent and safe from then on.
-
         if hasattr(self, "_session"):
             # Inner call - reuse existing session.
-            L.debug(f"session(bulk={bulk}): existing...")
+            L.debug("session: existing...")
             yield self._session
-            L.debug(f"session(bulk={bulk}): existing/done")
+            L.debug("session: existing/done")
             return
 
         # Outer call - create new session:
-        L.debug(f"session(bulk={bulk}): new...")
+        L.debug("session: new...")
         self._session = self.sessionmaker()
 
         try:
-            if bulk:
-                self._session.execute("PRAGMA synchronous = OFF;")
-                self._session.execute("PRAGMA cache_size = -1048576;")  # -KiB => 1GiB
-            if bulk >= 2:
-                self._session.execute("PRAGMA journal_mode = MEMORY;")
-                self._session.execute("PRAGMA locking_mode = EXCLUSIVE;")
-
             # TODO - use tidier syntax for opening transactions from sqlalchemy.
             self._session.execute("BEGIN TRANSACTION;")
             yield self._session
@@ -147,7 +132,7 @@ class WorkingCopy_GPKG(WorkingCopy):
         finally:
             self._session.close()
             del self._session
-            L.debug(f"session(bulk={bulk}): new/done")
+            L.debug("session: new/done")
 
     def delete(self, keep_db_schema_if_possible=False):
         """Delete the working copy files."""

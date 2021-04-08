@@ -364,9 +364,9 @@ class WorkingCopy:
         return cls.subclass_from_path(wc_path).normalise_path(repo, wc_path)
 
     @contextlib.contextmanager
-    def session(self, bulk=0):
+    def session(self):
         """
-        Context manager for GeoPackage DB sessions, yields a connection object inside a transaction
+        Context manager for database sessions, yields a connection object inside a transaction
 
         Calling again yields the _same_ session, the transaction/etc only happen in the outer one.
         """
@@ -763,7 +763,7 @@ class WorkingCopy:
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
-        with self.session(bulk=2) as sess:
+        with self.session() as sess:
 
             for dataset in datasets:
                 # Create the table
@@ -1008,7 +1008,7 @@ class WorkingCopy:
                 f"Structural changes are affecting:\n{structural_changes_text}"
             )
 
-        with self.session(bulk=1) as sess:
+        with self.session() as sess:
             # Delete old tables
             if table_deletes:
                 self.drop_table(

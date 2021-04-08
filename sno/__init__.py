@@ -66,7 +66,7 @@ if not is_windows:
 
 # GPKG optimisation:
 if "OGR_SQLITE_PRAGMA" not in os.environ:
-    os.environ["OGR_SQLITE_PRAGMA"] = "page_size=65536"
+    os.environ["OGR_SQLITE_PRAGMA"] = "journal_mode=WAL,page_size=65536"
 
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr
