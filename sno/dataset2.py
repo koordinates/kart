@@ -290,9 +290,9 @@ class Dataset2(RichBaseDataset):
             # Optimisation: Try to avoid rewriting features for compatible schema changes.
             # this can take some time, but often results in much fewer git objects produced.
             # For example, consider revision A with this feature:
-            #   {"a": 1, "b": 2}
+            #   {"x": 1, "y": 2}
             # Now at revision B we add a nullable column, so the new version of the feature is:
-            #   {"a": 1, "b": 2, "c": NULL}
+            #   {"x": 1, "y": 2, "z": NULL}
             # In this situation, during the import of revision B, we can avoid writing the
             # new blob, because the existing feature blob from revision A can be 'upgraded'
             # to the new schema without changing anything.
