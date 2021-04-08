@@ -21,12 +21,13 @@ jobs:
             package-formats: deb rpm
             services:
               postgis:
-                image: kartoza/postgis
+                image: postgis/postgis
                 options: >-
                   --health-cmd pg_isready
                   --health-interval 2s
                   --health-timeout 2s
                   --health-retries 5
+                  -e POSTGRES_HOST_AUTH_METHOD=trust
                 ports:
                   - 5432:5432
               sqlserver:
