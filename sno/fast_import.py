@@ -35,6 +35,32 @@ class ReplaceExisting(Enum):
     ALL = auto()
 
 
+class _CommitMissing(Exception):
+    pass
+
+
+def _safe_walk_repo(repo):
+    """
+    Contextmanager. Walk the repo log, yielding each commit.
+    If a commit isn't present, raises _CommitMissing.
+    Avoids catching any other KeyErrors raised by pygit2 or the contextmanager body
+    """
+    do_raise = False
+    try:
+        for commit in repo.walk(repo.head.target):
+            try:
+                yield commit
+            except KeyError:
+                # we only want to catch from the `repo.walk` call,
+                # not from the contextmanager body
+                do_raise = True
+                raise
+    except KeyError:
+        if do_raise:
+            raise
+        raise _CommitMissing
+
+
 def should_compare_imported_features_against_old_features(
     repo, source, replacing_dataset
 ):
@@ -61,23 +87,29 @@ def should_compare_imported_features_against_old_features(
             return True
 
     # Walk the log until we encounter a relevant schema change
-    for commit in repo.walk(repo.head.target):
-        datasets = repo.datasets(commit.oid)
-        try:
-            old_dataset = datasets[replacing_dataset.path]
-        except KeyError:
-            # no schema changes since this dataset was added.
-            return False
-        if old_dataset.schema != source.schema:
-            # this revision had a schema change
-            types = old_dataset.schema.diff_type_counts(source.schema)
-            if types["pk_updates"]:
-                # if the schema change was a PK update, all features were rewritten in that
-                # revision, and since no schema changes have occurred since then, we don't
-                # have to check all features against old features.
+    try:
+        for commit in _safe_walk_repo(repo):
+            datasets = repo.datasets(commit.oid)
+            try:
+                old_dataset = datasets[replacing_dataset.path]
+            except KeyError:
+                # no schema changes since this dataset was added.
                 return False
-            elif types["inserts"] or types["deletes"]:
-                return True
+            if old_dataset.schema != source.schema:
+                # this revision had a schema change
+                types = old_dataset.schema.diff_type_counts(source.schema)
+                if types["pk_updates"]:
+                    # if the schema change was a PK update, all features were rewritten in that
+                    # revision, and since no schema changes have occurred since then, we don't
+                    # have to check all features against old features.
+                    return False
+                elif types["inserts"] or types["deletes"]:
+                    return True
+    except _CommitMissing:
+        # probably this was because we're in a shallow clone,
+        # and the commit just isn't present.
+        # Just run the feature blob comparison; worst case it's a bit slow.
+        return True
     return False
 
 
