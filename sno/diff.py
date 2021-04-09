@@ -1,6 +1,9 @@
 import logging
 import re
+import statistics
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -21,6 +24,7 @@ from .exceptions import (
     UNCATEGORIZED_ERROR,
 )
 from .filter_util import build_feature_filter, UNFILTERED
+from .output_util import dump_json_output
 from .repo import SnoRepoState
 
 
@@ -95,6 +99,35 @@ def get_common_ancestor(repo, rs1, rs2):
     return repo.structure(ancestor_id)
 
 
+def _parse_diff_commit_spec(repo, commit_spec):
+    # Parse <commit> or <commit>...<commit>
+    commit_spec = commit_spec or "HEAD"
+    commit_parts = re.split(r"(\.{2,3})", commit_spec)
+
+    if len(commit_parts) == 3:
+        # Two commits specified - base and target. We diff base<>target.
+        base_rs = repo.structure(commit_parts[0] or "HEAD")
+        target_rs = repo.structure(commit_parts[2] or "HEAD")
+        if commit_parts[1] == "..":
+            # A   C    A...C is A<>C
+            #  \ /     A..C  is B<>C
+            #   B      (git log semantics)
+            base_rs = get_common_ancestor(repo, base_rs, target_rs)
+        working_copy = None
+    else:
+        # When one commit is specified, it is base, and we diff base<>working_copy.
+        # When no commits are specified, base is HEAD, and we do the same.
+        # We diff base<>working_copy by diffing base<>target + target<>working_copy,
+        # and target is set to HEAD.
+        base_rs = repo.structure(commit_parts[0])
+        target_rs = repo.structure("HEAD")
+        working_copy = repo.working_copy
+        if not working_copy:
+            raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
+        working_copy.assert_db_tree_match(target_rs.tree)
+    return base_rs, target_rs, working_copy
+
+
 def diff_with_writer(
     ctx,
     diff_writer,
@@ -127,31 +160,7 @@ def diff_with_writer(
 
         repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
 
-        # Parse <commit> or <commit>...<commit>
-        commit_spec = commit_spec or "HEAD"
-        commit_parts = re.split(r"(\.{2,3})", commit_spec)
-
-        if len(commit_parts) == 3:
-            # Two commits specified - base and target. We diff base<>target.
-            base_rs = repo.structure(commit_parts[0] or "HEAD")
-            target_rs = repo.structure(commit_parts[2] or "HEAD")
-            if commit_parts[1] == "..":
-                # A   C    A...C is A<>C
-                #  \ /     A..C  is B<>C
-                #   B      (git log semantics)
-                base_rs = get_common_ancestor(repo, base_rs, target_rs)
-            working_copy = None
-        else:
-            # When one commit is specified, it is base, and we diff base<>working_copy.
-            # When no commits are specified, base is HEAD, and we do the same.
-            # We diff base<>working_copy by diffing base<>target + target<>working_copy,
-            # and target is set to HEAD.
-            base_rs = repo.structure(commit_parts[0])
-            target_rs = repo.structure("HEAD")
-            working_copy = repo.working_copy
-            if not working_copy:
-                raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
-            working_copy.assert_db_tree_match(target_rs.tree)
+        base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
 
         # Parse [<dataset>[:pk]...]
         feature_filter = build_feature_filter(filters)
@@ -224,12 +233,212 @@ def diff_with_writer(
             sys.exit(1)
 
 
+FEATURE_SUBTREES_PER_TREE = 256
+FEATURE_TREE_NESTING = 2
+MAX_TREES = FEATURE_SUBTREES_PER_TREE ** FEATURE_TREE_NESTING
+
+
+def _feature_count_sample_trees(rev_spec, feature_path, num_trees):
+    num_full_subtrees = num_trees // 256
+    paths = [f"{feature_path}{n:02x}" for n in range(num_full_subtrees)]
+    paths.extend(
+        [
+            f"{feature_path}{num_full_subtrees:02x}/{n:02x}"
+            for n in range(num_trees % 256)
+        ]
+    )
+
+    p = subprocess.Popen(
+        [
+            "git",
+            "diff",
+            "--name-only",
+            "--no-renames",
+            rev_spec,
+            "--",
+            *paths,
+        ],
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    tree_samples = {}
+    for line in p.stdout:
+        # path/to/dataset/.sno-dataset/feature/ab/cd/abcdef123
+        # --> ab/cd
+        root, tree, subtree, basename = line.rsplit("/", 3)
+        k = f"{tree}/{subtree}"
+        tree_samples.setdefault(k, 0)
+        tree_samples[k] += 1
+    p.wait()
+    r = list(tree_samples.values())
+    r.extend([0] * (num_trees - len(r)))
+    return r
+
+
+Z_SCORES = {
+    0.50: 0.0,
+    0.60: 0.26,
+    0.70: 0.53,
+    0.75: 0.68,
+    0.80: 0.85,
+    0.85: 1.04,
+    0.90: 1.29,
+    0.95: 1.65,
+    0.99: 2.33,
+}
+
+
+def feature_count_diff(
+    ctx,
+    output_format,
+    commit_spec,
+    output_path,
+    exit_code,
+    json_style,
+    accuracy,
+):
+    if output_format not in ("text", "json"):
+        raise click.UsageError("--only-feature-count requires text or json output")
+
+    repo = ctx.obj.repo
+    base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
+    if working_copy:
+        raise NotImplementedError(
+            "--only-feature-count isn't supported for working-copy diffs yet"
+        )
+
+    if base_rs == target_rs:
+        return {}
+
+    base_ds_paths = {ds.path for ds in base_rs.datasets}
+    target_ds_paths = {ds.path for ds in target_rs.datasets}
+    all_ds_paths = base_ds_paths | target_ds_paths
+    rev_spec = f"{base_rs.tree.id}..{target_rs.tree.id}"
+
+    dataset_change_counts = {}
+    for dataset_path in all_ds_paths:
+        base_ds = base_rs.datasets.get(dataset_path)
+        target_ds = target_rs.datasets.get(dataset_path)
+
+        if not base_ds:
+            base_ds, target_ds = target_ds, base_ds
+        elif target_ds:
+            if base_ds.feature_tree == target_ds.feature_tree:
+                continue
+
+        # Come up with a list of trees to diff.
+        # TODO: decouple this stuff from dataset2 a bit (?)
+        feature_path = f"{base_ds.path}/{base_ds.FEATURE_PATH}"
+        if accuracy == "exact":
+            ds_total = sum(
+                _feature_count_sample_trees(rev_spec, feature_path, MAX_TREES)
+            )
+        else:
+            if accuracy == "veryfast":
+                # only ever sample two trees
+                sample_size = 2
+                required_confidence = 0.00001
+                z_score = 0.0
+            else:
+                if accuracy == "fast":
+                    sample_size = 2
+                    required_confidence = 0.60
+                elif accuracy == "medium":
+                    sample_size = 8
+                    required_confidence = 0.80
+                elif accuracy == "good":
+                    sample_size = 16
+                    required_confidence = 0.95
+                z_score = Z_SCORES[required_confidence]
+
+            confidence_interval = (-1, -1)
+            sample_mean = 0
+            while sample_size <= MAX_TREES and (
+                sample_mean < confidence_interval[0]
+                or sample_mean > confidence_interval[1]
+            ):
+                L.debug(f"sampling %d trees for dataset %s", sample_size, dataset_path)
+                t1 = time.monotonic()
+                samples = _feature_count_sample_trees(
+                    rev_spec, feature_path, sample_size
+                )
+                sample_mean = statistics.mean(samples)
+                sample_stdev = statistics.stdev(samples)
+
+                t2 = time.monotonic()
+                if accuracy == "veryfast":
+                    # even if no features were found in the two trees, call it done.
+                    # this will be Good Enough if all you need to know is something like
+                    # "is the diff size probably less than 100K features?"
+                    break
+                if sample_mean == 0:
+                    # no features were encountered in the sample.
+                    # this is likely a very small diff.
+                    # let's just sample a lot more trees.
+                    new_sample_size = sample_size * 1024
+                    if new_sample_size > MAX_TREES:
+                        L.debug(
+                            "sampled %s trees in %.3fs, found 0 features; stopping",
+                            sample_size,
+                            t2 - t1,
+                        )
+                    else:
+                        L.debug(
+                            "sampled %s trees in %.3fs, found 0 features; increased sample size to %d",
+                            sample_size,
+                            t2 - t1,
+                            new_sample_size,
+                        )
+                    sample_size = new_sample_size
+                    continue
+
+                # try and get within 10% of the real mean.
+                margin_of_error = 0.10 * sample_mean
+                required_sample_size = min(
+                    MAX_TREES, (z_score * sample_stdev / margin_of_error) ** 2
+                )
+                L.debug(
+                    "sampled %s trees in %.3fs (ƛ=%.3f, s=%.3f). required: %.1f (margin: %.1f; confidence: %d%%)",
+                    sample_size,
+                    t2 - t1,
+                    sample_mean,
+                    sample_stdev,
+                    required_sample_size,
+                    margin_of_error * MAX_TREES,
+                    required_confidence * 100,
+                )
+                if sample_size >= required_sample_size:
+                    break
+
+                if sample_size == MAX_TREES:
+                    break
+                while sample_size < required_sample_size:
+                    sample_size *= 2
+                sample_size = min(MAX_TREES, sample_size)
+            ds_total = int(round(sample_mean * MAX_TREES))
+
+        if ds_total:
+            dataset_change_counts[dataset_path] = ds_total
+
+    if output_format == "text":
+        if dataset_change_counts:
+            for dataset_name, count in sorted(dataset_change_counts.items()):
+                click.secho(f"{dataset_name}:", bold=True)
+                click.echo(f"\t{count} features changed")
+        else:
+            click.echo("0 features changed")
+    elif output_format == "json":
+        dump_json_output(dataset_change_counts, output_path, json_style=json_style)
+    if dataset_change_counts and exit_code:
+        sys.exit(1)
+
+
 @click.command()
 @click.pass_context
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json", "geojson", "quiet", "html"]),
+    type=click.Choice(["text", "json", "geojson", "quiet", "feature-count", "html"]),
     default="text",
     help=(
         "Output format. 'quiet' disables all output and implies --exit-code.\n"
@@ -258,10 +467,28 @@ def diff_with_writer(
     default="pretty",
     help="How to format the output. Only used with -o json or -o geojson",
 )
+@click.option(
+    "--only-feature-count",
+    default=None,
+    type=click.Choice(["veryfast", "fast", "medium", "good", "exact"]),
+    help=(
+        "Returns only a feature count (the number of features modified in this diff). "
+        "If the value is 'exact', the feature count is exact (this may be slow.) "
+        "Otherwise, the feature count will be approximated with varying levels of accuracy."
+    ),
+)
 @click.argument("commit_spec", required=False, nargs=1)
 @click.argument("filters", nargs=-1)
 def diff(
-    ctx, output_format, crs, output_path, exit_code, json_style, commit_spec, filters
+    ctx,
+    output_format,
+    crs,
+    output_path,
+    exit_code,
+    json_style,
+    only_feature_count,
+    commit_spec,
+    filters,
 ):
     """
     Show changes between two commits, or between a commit and the working copy.
@@ -279,6 +506,16 @@ def diff(
 
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
+    if only_feature_count:
+        return feature_count_diff(
+            ctx,
+            output_format,
+            commit_spec,
+            output_path,
+            exit_code,
+            json_style,
+            only_feature_count,
+        )
 
     diff_writer = globals()[f"diff_output_{output_format}"]
     if output_format == "quiet":
