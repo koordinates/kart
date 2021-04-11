@@ -181,12 +181,30 @@ class WorkingCopy_GPKG(WorkingCopy):
 
         return result
 
+    @contextlib.contextmanager
+    def _ogr_sqlite_pragma(self, pragma_statement):
+        pragma_name = pragma_statement.split("=")[0]
+        if pragma_name in os.environ.get("OGR_SQLITE_PRAGMA"):
+            yield
+            return
+
+        if "OGR_SQLITE_PRAGMA" in os.environ:
+            orig_pragma = os.environ["OGR_SQLITE_PRAGMA"]
+            os.environ["OGR_SQLITE_PRAGMA"] = f"{orig_pragma},{pragma_statement}"
+            yield
+            os.environ["OGR_SQLITE_PRAGMA"] = orig_pragma
+        else:
+            os.environ["OGR_SQLITE_PRAGMA"] = pragma_statement
+            yield
+            del os.environ["OGR_SQLITE_PRAGMA"]
+
     def create_and_initialise(self):
         # GDAL: Create GeoPackage
         # GDAL: Add metadata/etc
-        gdal_driver = gdal.GetDriverByName("GPKG")
-        gdal_ds = gdal_driver.Create(str(self.full_path), 0, 0, 0, gdal.GDT_Unknown)
-        del gdal_ds
+        with self._ogr_sqlite_pragma("journal_mode=WAL"):
+            gdal_driver = gdal.GetDriverByName("GPKG")
+            gdal_ds = gdal_driver.Create(str(self.full_path), 0, 0, 0, gdal.GDT_Unknown)
+            del gdal_ds
 
         with self.session() as sess:
             # Remove placeholder stuff GDAL creates
