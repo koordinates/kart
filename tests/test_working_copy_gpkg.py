@@ -8,7 +8,7 @@ import sqlalchemy
 from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from sno.repo import SnoRepo
 from sno.working_copy import gpkg_adapter
-from sno.working_copy.base import WorkingCopy
+from sno.working_copy.base import BaseWorkingCopy
 from test_working_copy import compute_approximated_types
 
 
@@ -620,7 +620,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
         wc = SnoRepo(repo_path).working_copy
 
         is_checked = False
-        orig_func = WorkingCopy._write_features
+        orig_func = BaseWorkingCopy._write_features
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -634,7 +634,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(WorkingCopy, "_write_features", _wrap)
+        monkeypatch.setattr(BaseWorkingCopy, "_write_features", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r

@@ -25,7 +25,6 @@ import sqlalchemy
 from sno.geometry import Geometry
 from sno.repo import SnoRepo
 from sno.sqlalchemy.create_engine import gpkg_engine, postgis_engine, sqlserver_engine
-from sno.working_copy import WorkingCopy
 
 
 pytest_plugins = ["helpers_namespace"]
@@ -557,7 +556,7 @@ class TestHelpers:
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
         repo = SnoRepo(repo_path)
-        wc = WorkingCopy.get(repo, allow_invalid_state=True)
+        wc = repo.get_working_copy(allow_invalid_state=True)
         if wc:
             print(
                 f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}"

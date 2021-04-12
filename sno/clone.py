@@ -9,7 +9,6 @@ from . import checkout
 from .cli_util import startup_load_git_init_config
 from .exceptions import InvalidOperation
 from .repo import SnoRepo
-from .working_copy.base import WorkingCopy
 
 
 def get_directory_from_url(url):
@@ -114,7 +113,10 @@ def clone(
 
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
-    WorkingCopy.check_valid_creation_path(wc_path, repo_path)
+
+    from sno.working_copy.base import BaseWorkingCopy
+
+    BaseWorkingCopy.check_valid_creation_path(wc_path, repo_path)
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)

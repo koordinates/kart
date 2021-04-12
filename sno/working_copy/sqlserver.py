@@ -2,7 +2,6 @@ import contextlib
 import logging
 import time
 
-import sqlalchemy as sa
 from sqlalchemy import literal_column
 from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer
 from sqlalchemy.ext.compiler import compiles

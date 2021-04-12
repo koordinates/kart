@@ -11,7 +11,7 @@ from .exceptions import (
 
 from .exceptions import DbConnectionError
 from .structs import CommitWithReference
-from .working_copy import WorkingCopy, WorkingCopyStatus
+from .working_copy import WorkingCopyStatus
 from .output_util import InputMode, get_input_mode
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
@@ -25,7 +25,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if repo.is_bare:
         return
 
-    working_copy = WorkingCopy.get(repo, allow_uncreated=True, allow_invalid_state=True)
+    working_copy = repo.get_working_copy(allow_uncreated=True, allow_invalid_state=True)
     if working_copy is None:
         click.echo(
             "(Working copy isn't created yet. To create a working copy, use `sno create-workingcopy`)"
@@ -125,7 +125,9 @@ def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
 
         head_ref = new_branch.name
 
-    WorkingCopy.ensure_config_exists(repo)
+    from sno.working_copy.base import BaseWorkingCopy
+
+    BaseWorkingCopy.ensure_config_exists(repo)
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
@@ -371,6 +373,8 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
     If no path is supplied, the path from the repo config at "sno.workingcopy.path" will be used.
     If no path is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
+    from sno.working_copy.base import BaseWorkingCopy
+
     repo = ctx.obj.repo
     if repo.head_is_unborn:
         raise InvalidOperation(
@@ -381,13 +385,13 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
     if not new_wc_path and old_wc_path is not None:
         new_wc_path = old_wc_path
     elif not new_wc_path:
-        new_wc_path = WorkingCopy.default_path(repo.workdir_path)
+        new_wc_path = BaseWorkingCopy.default_path(repo.workdir_path)
 
     if new_wc_path != old_wc_path:
-        WorkingCopy.check_valid_creation_path(new_wc_path, repo.workdir_path)
+        BaseWorkingCopy.check_valid_creation_path(new_wc_path, repo.workdir_path)
 
     if old_wc_path:
-        old_wc = WorkingCopy.get_at_path(
+        old_wc = BaseWorkingCopy.get_at_path(
             repo,
             old_wc_path,
             allow_uncreated=True,
@@ -452,5 +456,5 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
                 keep_db_schema_if_possible = old_wc_path == new_wc_path
                 old_wc.delete(keep_db_schema_if_possible=keep_db_schema_if_possible)
 
-    WorkingCopy.write_config(repo, new_wc_path)
+    BaseWorkingCopy.write_config(repo, new_wc_path)
     reset_wc_if_needed(repo, repo.head_commit)

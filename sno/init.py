@@ -21,7 +21,7 @@ from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import SnoRepo
-from .working_copy import WorkingCopy, WorkingCopyStatus
+from .working_copy import WorkingCopyStatus
 
 
 def list_import_formats(ctx, param, value):
@@ -41,7 +41,7 @@ def list_import_formats(ctx, param, value):
 
 
 def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
-    wc = WorkingCopy.get(repo, allow_uncreated=True)
+    wc = repo.get_working_copy(allow_uncreated=True)
     if not wc:
         return
 
@@ -411,7 +411,10 @@ def init(
 
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
-    WorkingCopy.check_valid_creation_path(wc_path, repo_path)
+
+    from sno.working_copy.base import BaseWorkingCopy
+
+    BaseWorkingCopy.check_valid_creation_path(wc_path, repo_path)
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)

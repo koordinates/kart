@@ -26,7 +26,6 @@ from .repo_version import (
 )
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
-from .working_copy import WorkingCopy
 
 L = logging.getLogger("sno.repo")
 
@@ -173,11 +172,12 @@ class SnoRepo(pygit2.Repository):
         - there are extra properties in the repo config about where / how the working copy is written.
         - the .sno/index file has been extended to stop git messing things up - see LOCKED_EMPTY_GIT_INDEX.
         """
-
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
         if not bare:
-            WorkingCopy.check_valid_creation_path(wc_path, repo_root_path)
+            from sno.working_copy.base import BaseWorkingCopy
+
+            BaseWorkingCopy.check_valid_creation_path(wc_path, repo_root_path)
 
         extra_args = []
         if initial_branch is not None:
@@ -224,7 +224,9 @@ class SnoRepo(pygit2.Repository):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
         if not bare:
-            WorkingCopy.check_valid_creation_path(wc_path, repo_root_path)
+            from sno.working_copy.base import BaseWorkingCopy
+
+            BaseWorkingCopy.check_valid_creation_path(wc_path, repo_root_path)
 
         if bare:
             sno_repo = cls._create_with_git_command(
@@ -293,7 +295,9 @@ class SnoRepo(pygit2.Repository):
         # Write sno repo version to config:
         self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(SUPPORTED_REPO_VERSION)
         # Write working copy config:
-        WorkingCopy.write_config(self, wc_path, bare)
+        from sno.working_copy.base import BaseWorkingCopy
+
+        BaseWorkingCopy.write_config(self, wc_path, bare)
 
     def ensure_supported_version(self):
         from .cli import get_version
@@ -425,18 +429,31 @@ class SnoRepo(pygit2.Repository):
     @property
     def working_copy(self):
         """Return the working copy of this Sno repository, or None if it it does not exist."""
-        try:
-            return self._working_copy
-        except AttributeError:
-            self._working_copy = WorkingCopy.get(self)
-            return self._working_copy
+        if not hasattr(self, "_working_copy"):
+            self._working_copy = self.get_working_copy()
+        return self._working_copy
 
     @working_copy.deleter
     def working_copy(self):
-        wc = WorkingCopy.get(self, allow_invalid_state=True)
+        wc = self.get_working_copy(allow_invalid_state=True)
         if wc:
             wc.delete()
         del self._working_copy
+
+    def get_working_copy(
+        self,
+        allow_uncreated=False,
+        allow_invalid_state=False,
+        allow_unconnectable=False,
+    ):
+        from sno.working_copy.base import BaseWorkingCopy
+
+        return BaseWorkingCopy.get(
+            self,
+            allow_uncreated=allow_uncreated,
+            allow_invalid_state=allow_invalid_state,
+            allow_unconnectable=allow_unconnectable,
+        )
 
     def del_config(self, key):
         config = self.config

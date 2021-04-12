@@ -13,8 +13,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import UserDefinedType
 
 
-from . import gpkg_adapter
-from .base import WorkingCopy, WorkingCopyStatus
+from . import gpkg_adapter, WorkingCopyStatus
+from .base import BaseWorkingCopy
 from .table_defs import GpkgTables, GpkgSnoTables
 from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
@@ -26,7 +26,7 @@ from sno.sqlalchemy.create_engine import gpkg_engine
 L = logging.getLogger("sno.working_copy.gpkg")
 
 
-class WorkingCopy_GPKG(WorkingCopy):
+class WorkingCopy_GPKG(BaseWorkingCopy):
     """
     GPKG working copy implementation.
 

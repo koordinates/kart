@@ -6,11 +6,12 @@ from urllib.parse import urlsplit, urlunsplit
 import click
 from sqlalchemy.exc import DBAPIError
 
-from .base import WorkingCopy, WorkingCopyStatus
+from . import WorkingCopyStatus
+from .base import BaseWorkingCopy
 from sno.exceptions import InvalidOperation, DbConnectionError
 
 
-class DatabaseServer_WorkingCopy(WorkingCopy):
+class DatabaseServer_WorkingCopy(BaseWorkingCopy):
     """Functionality common to working copies that connect to a database server."""
 
     @property
