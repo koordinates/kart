@@ -9,6 +9,7 @@ from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
+from . import diff_estimation
 
 
 @click.command(
@@ -36,8 +37,18 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
     help="Shows which datasets were changed at each commit. Only works with --output-format-json",
     hidden=True,
 )
+@click.option(
+    "--with-feature-counts",
+    default=None,
+    type=click.Choice(diff_estimation.ACCURACY_CHOICES),
+    help=(
+        "Adds a 'feature_count' (the number of features modified in this diff) to JSON output."
+        "If the value is 'exact', the feature count is exact (this may be slow.) "
+        "Otherwise, the feature count will be approximated with varying levels of accuracy."
+    ),
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def log(ctx, output_format, json_style, do_dataset_changes, args):
+def log(ctx, output_format, json_style, do_dataset_changes, with_feature_counts, args):
     """ Show commit logs """
     if output_format == "text":
         execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
@@ -69,7 +80,12 @@ def log(ctx, output_format, json_style, do_dataset_changes, args):
 
         commit_log = [
             commit_obj_to_json(
-                repo[commit_id], repo, refs, do_dataset_changes, dataset_change_cache
+                repo[commit_id],
+                repo,
+                refs,
+                do_dataset_changes,
+                dataset_change_cache,
+                with_feature_counts,
             )
             for (commit_id, refs) in commit_ids_and_refs_log
         ]
@@ -84,8 +100,16 @@ def _parse_git_log_output(lines):
         yield commit_id, [r.strip() for r in refs]
 
 
+EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
 def commit_obj_to_json(
-    commit, repo=None, refs=None, do_dataset_changes=False, dataset_change_cache={}
+    commit,
+    repo=None,
+    refs=None,
+    do_dataset_changes=False,
+    dataset_change_cache={},
+    with_feature_counts=None,
 ):
     """Given a commit object, returns a dict ready for dumping as JSON."""
     author = commit.author
@@ -123,6 +147,22 @@ def commit_obj_to_json(
         result["datasetChanges"] = get_dataset_changes(
             repo, commit, dataset_change_cache
         )
+    if with_feature_counts:
+        if (not do_dataset_changes) or result["datasetChanges"]:
+            try:
+                parent_commit = commit.parents[0]
+            except (KeyError, IndexError):
+                # shallow clone (parent not present) or initial commit (no parents)
+                base_rs = repo.structure(EMPTY_TREE_SHA)
+            else:
+                base_rs = repo.structure(parent_commit)
+
+            target_rs = repo.structure(commit)
+            result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
+                base_rs, target_rs, accuracy=with_feature_counts
+            )
+        else:
+            result["featureChanges"] = {}
     return result
 
 
