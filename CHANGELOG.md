@@ -5,6 +5,11 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
 
+## 0.9.0 (UNRELEASED)
+
+* `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
+* `log` now accepts `--with-feature-count` which adds a feature count to each commit when used with `-o json`. The feature count can be exact or a fast estimate.
+
 ## 0.8.0
 
 ### Breaking changes

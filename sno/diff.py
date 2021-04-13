@@ -21,7 +21,9 @@ from .exceptions import (
     UNCATEGORIZED_ERROR,
 )
 from .filter_util import build_feature_filter, UNFILTERED
+from .output_util import dump_json_output
 from .repo import SnoRepoState
+from . import diff_estimation
 
 
 L = logging.getLogger("sno.diff")
@@ -95,6 +97,35 @@ def get_common_ancestor(repo, rs1, rs2):
     return repo.structure(ancestor_id)
 
 
+def _parse_diff_commit_spec(repo, commit_spec):
+    # Parse <commit> or <commit>...<commit>
+    commit_spec = commit_spec or "HEAD"
+    commit_parts = re.split(r"(\.{2,3})", commit_spec)
+
+    if len(commit_parts) == 3:
+        # Two commits specified - base and target. We diff base<>target.
+        base_rs = repo.structure(commit_parts[0] or "HEAD")
+        target_rs = repo.structure(commit_parts[2] or "HEAD")
+        if commit_parts[1] == "..":
+            # A   C    A...C is A<>C
+            #  \ /     A..C  is B<>C
+            #   B      (git log semantics)
+            base_rs = get_common_ancestor(repo, base_rs, target_rs)
+        working_copy = None
+    else:
+        # When one commit is specified, it is base, and we diff base<>working_copy.
+        # When no commits are specified, base is HEAD, and we do the same.
+        # We diff base<>working_copy by diffing base<>target + target<>working_copy,
+        # and target is set to HEAD.
+        base_rs = repo.structure(commit_parts[0])
+        target_rs = repo.structure("HEAD")
+        working_copy = repo.working_copy
+        if not working_copy:
+            raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
+        working_copy.assert_db_tree_match(target_rs.tree)
+    return base_rs, target_rs, working_copy
+
+
 def diff_with_writer(
     ctx,
     diff_writer,
@@ -127,31 +158,7 @@ def diff_with_writer(
 
         repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
 
-        # Parse <commit> or <commit>...<commit>
-        commit_spec = commit_spec or "HEAD"
-        commit_parts = re.split(r"(\.{2,3})", commit_spec)
-
-        if len(commit_parts) == 3:
-            # Two commits specified - base and target. We diff base<>target.
-            base_rs = repo.structure(commit_parts[0] or "HEAD")
-            target_rs = repo.structure(commit_parts[2] or "HEAD")
-            if commit_parts[1] == "..":
-                # A   C    A...C is A<>C
-                #  \ /     A..C  is B<>C
-                #   B      (git log semantics)
-                base_rs = get_common_ancestor(repo, base_rs, target_rs)
-            working_copy = None
-        else:
-            # When one commit is specified, it is base, and we diff base<>working_copy.
-            # When no commits are specified, base is HEAD, and we do the same.
-            # We diff base<>working_copy by diffing base<>target + target<>working_copy,
-            # and target is set to HEAD.
-            base_rs = repo.structure(commit_parts[0])
-            target_rs = repo.structure("HEAD")
-            working_copy = repo.working_copy
-            if not working_copy:
-                raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
-            working_copy.assert_db_tree_match(target_rs.tree)
+        base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
 
         # Parse [<dataset>[:pk]...]
         feature_filter = build_feature_filter(filters)
@@ -224,12 +231,44 @@ def diff_with_writer(
             sys.exit(1)
 
 
+def feature_count_diff(
+    ctx,
+    output_format,
+    commit_spec,
+    output_path,
+    exit_code,
+    json_style,
+    accuracy,
+):
+    if output_format not in ("text", "json"):
+        raise click.UsageError("--only-feature-count requires text or json output")
+
+    repo = ctx.obj.repo
+    base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
+
+    dataset_change_counts = diff_estimation.estimate_diff_feature_counts(
+        base_rs, target_rs, working_copy, accuracy
+    )
+
+    if output_format == "text":
+        if dataset_change_counts:
+            for dataset_name, count in sorted(dataset_change_counts.items()):
+                click.secho(f"{dataset_name}:", bold=True)
+                click.echo(f"\t{count} features changed")
+        else:
+            click.echo("0 features changed")
+    elif output_format == "json":
+        dump_json_output(dataset_change_counts, output_path, json_style=json_style)
+    if dataset_change_counts and exit_code:
+        sys.exit(1)
+
+
 @click.command()
 @click.pass_context
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json", "geojson", "quiet", "html"]),
+    type=click.Choice(["text", "json", "geojson", "quiet", "feature-count", "html"]),
     default="text",
     help=(
         "Output format. 'quiet' disables all output and implies --exit-code.\n"
@@ -258,10 +297,28 @@ def diff_with_writer(
     default="pretty",
     help="How to format the output. Only used with -o json or -o geojson",
 )
+@click.option(
+    "--only-feature-count",
+    default=None,
+    type=click.Choice(diff_estimation.ACCURACY_CHOICES),
+    help=(
+        "Returns only a feature count (the number of features modified in this diff). "
+        "If the value is 'exact', the feature count is exact (this may be slow.) "
+        "Otherwise, the feature count will be approximated with varying levels of accuracy."
+    ),
+)
 @click.argument("commit_spec", required=False, nargs=1)
 @click.argument("filters", nargs=-1)
 def diff(
-    ctx, output_format, crs, output_path, exit_code, json_style, commit_spec, filters
+    ctx,
+    output_format,
+    crs,
+    output_path,
+    exit_code,
+    json_style,
+    only_feature_count,
+    commit_spec,
+    filters,
 ):
     """
     Show changes between two commits, or between a commit and the working copy.
@@ -279,6 +336,16 @@ def diff(
 
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
+    if only_feature_count:
+        return feature_count_diff(
+            ctx,
+            output_format,
+            commit_spec,
+            output_path,
+            exit_code,
+            json_style,
+            only_feature_count,
+        )
 
     diff_writer = globals()[f"diff_output_{output_format}"]
     if output_format == "quiet":
