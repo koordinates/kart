@@ -159,7 +159,7 @@ def commit_obj_to_json(
 
             target_rs = repo.structure(commit)
             result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
-                base_rs, target_rs, accuracy=with_feature_counts
+                base_rs, target_rs, working_copy=None, accuracy=with_feature_counts
             )
         else:
             result["featureChanges"] = {}

@@ -95,7 +95,10 @@ def estimate_diff_feature_counts(
                 working_copy,
                 dataset_path,
             )
-            ds_total = len(ds_diff["feature"])
+            if "feature" not in ds_diff:
+                ds_total = 0
+            else:
+                ds_total = len(ds_diff["feature"])
         else:
             base_ds = base_rs.datasets.get(dataset_path)
             target_ds = target_rs.datasets.get(dataset_path)
