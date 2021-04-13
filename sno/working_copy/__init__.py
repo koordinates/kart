@@ -11,19 +11,19 @@ class WorkingCopyType(Enum):
     SQL_SERVER = auto()
 
     @classmethod
-    def from_path(cls, path, allow_invalid=False):
-        path = str(path)
-        if path.startswith("postgresql:"):
+    def from_location(cls, location, allow_invalid=False):
+        location = str(location)
+        if location.startswith("postgresql:"):
             return WorkingCopyType.POSTGIS
-        elif path.startswith("mssql:"):
+        elif location.startswith("mssql:"):
             return WorkingCopyType.SQL_SERVER
-        elif path.lower().endswith(".gpkg"):
+        elif location.lower().endswith(".gpkg"):
             return WorkingCopyType.GPKG
         elif allow_invalid:
             return None
         else:
             raise click.UsageError(
-                f"Unrecognised working copy type: {path}\n"
+                f"Unrecognised working copy type: {location}\n"
                 "Try one of:\n"
                 "  PATH.gpkg\n"
                 "  postgresql://[HOST]/DBNAME/DBSCHEMA\n"

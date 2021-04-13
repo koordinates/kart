@@ -154,7 +154,7 @@ def test_init_import(
             assert wc.status() & WorkingCopyStatus.INITIALISED
             assert wc.status() & WorkingCopyStatus.HAS_DATA
 
-            assert wc.path == sqlserver_url
+            assert wc.location == sqlserver_url
 
 
 @pytest.mark.parametrize(

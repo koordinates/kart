@@ -116,7 +116,7 @@ def clone(
 
     from sno.working_copy.base import BaseWorkingCopy
 
-    BaseWorkingCopy.check_valid_creation_path(wc_path, repo_path)
+    BaseWorkingCopy.check_valid_creation_location(wc_path, repo_path)
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)

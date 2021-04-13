@@ -108,7 +108,7 @@ def test_init_import(
             assert wc.status() & WorkingCopyStatus.INITIALISED
             assert wc.status() & WorkingCopyStatus.HAS_DATA
 
-            assert wc.path == postgres_url
+            assert wc.location == postgres_url
 
 
 @pytest.mark.parametrize(

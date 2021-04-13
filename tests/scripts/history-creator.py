@@ -86,7 +86,7 @@ def main():
         db_path = options.gpkg
         if not Path(db_path).exists():
             parser.error(f"GeoPackage {db_path} not found")
-        wc = WorkingCopy.get_at_path(repo, db_path)
+        wc = WorkingCopy.get_at_location(repo, db_path)
     elif repo:
         wc = repo.working_copy
         if not wc:
@@ -110,7 +110,7 @@ def main():
         return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
 
     with wc.session() as sess:
-        print(f"Connected to {wc.clean_path}")
+        print(f"Connected to {wc}")
 
         all_tables = [
             r[0] for r in sess.execute("SELECT table_name FROM gpkg_contents;")

@@ -32,28 +32,26 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
     )
 
     @classmethod
-    def check_valid_creation_path(cls, wc_path, workdir_path=None):
-        cls.check_valid_path(wc_path, workdir_path)
+    def check_valid_creation_location(cls, wc_location, workdir_path=None):
+        cls.check_valid_location(wc_location, workdir_path)
 
-        working_copy = cls(None, wc_path)
+        working_copy = cls(None, wc_location)
         status = working_copy.status()
         if status & WorkingCopyStatus.NON_EMPTY:
             db_schema = working_copy.db_schema
             container_text = f"schema '{db_schema}'" if db_schema else "working copy"
             raise InvalidOperation(
-                f"Error creating {cls.WORKING_COPY_TYPE_NAME} working copy at {wc_path} - "
+                f"Error creating {cls.WORKING_COPY_TYPE_NAME} working copy at {wc_location} - "
                 f"non-empty {container_text} already exists"
             )
 
     @classmethod
-    def check_valid_path(cls, wc_path, workdir_path=None):
-        # The base working copy refers to the working copy location as its `path`.
-        # Therefore, this implementation needs to validate the entire URI, not just the URI's path.
-        cls.check_valid_db_uri(wc_path, workdir_path)
+    def check_valid_location(cls, wc_location, workdir_path=None):
+        cls.check_valid_db_uri(wc_location, workdir_path)
 
     @classmethod
-    def normalise_path(cls, repo, wc_path):
-        return wc_path
+    def normalise_location(cls, repo, wc_location):
+        return wc_location
 
     @classmethod
     def check_valid_db_uri(cls, db_uri, workdir_path=None):
@@ -114,7 +112,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         return schema
 
     @property
-    def clean_path(self):
+    def clean_location(self):
         return self.strip_password(self.uri)
 
     @classmethod
@@ -139,7 +137,9 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         return self.preparer.format_schema(self.db_schema)
 
     def _db_connection_error(self, causal_error):
-        message = f"Error connecting to {self.WORKING_COPY_TYPE_NAME} working copy at {self.clean_path}"
+        message = (
+            f"Error connecting to {self.WORKING_COPY_TYPE_NAME} working copy at {self}"
+        )
         return DbConnectionError(message, causal_error)
 
     def status(self, check_if_dirty=False, allow_unconnectable=False):
@@ -247,7 +247,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         except DBAPIError as e:
             if treat_error_as_warning:
                 click.echo(
-                    f"Couldn't delete schema {self.db_schema} at {self.clean_path} due to the following error:\n{e}",
+                    f"Couldn't delete schema {self.db_schema} at {self} due to the following error:\n{e}",
                     err=True,
                 )
             else:

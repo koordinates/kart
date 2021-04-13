@@ -36,9 +36,9 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
     WORKING_COPY_TYPE_NAME = "GPKG"
 
-    def __init__(self, repo, path):
+    def __init__(self, repo, location):
         self.repo = repo
-        self.path = path
+        self.path = self.location = location
         self.engine = gpkg_engine(self.full_path)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
@@ -47,34 +47,34 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         self.sno_tables = GpkgSnoTables
 
     @classmethod
-    def check_valid_creation_path(cls, wc_path, workdir_path=None):
-        cls.check_valid_path(wc_path, workdir_path)
+    def check_valid_creation_location(cls, wc_location, workdir_path=None):
+        cls.check_valid_location(wc_location, workdir_path)
 
-        gpkg_path = (workdir_path / wc_path).resolve()
+        gpkg_path = (workdir_path / wc_location).resolve()
         if gpkg_path.exists():
             desc = "path" if gpkg_path.is_dir() else "GPKG file"
             raise InvalidOperation(
-                f"Error creating GPKG working copy at {wc_path} - {desc} already exists"
+                f"Error creating GPKG working copy at {wc_location} - {desc} already exists"
             )
 
     @classmethod
-    def check_valid_path(cls, wc_path, workdir_path=None):
-        if not str(wc_path).endswith(".gpkg"):
-            suggested_path = f"{os.path.splitext(str(wc_path))[0]}.gpkg"
+    def check_valid_location(cls, wc_location, workdir_path=None):
+        if not str(wc_location).endswith(".gpkg"):
+            suggested_path = f"{os.path.splitext(str(wc_location))[0]}.gpkg"
             raise click.UsageError(
                 f"Invalid GPKG path - expected .gpkg suffix, eg {suggested_path}"
             )
 
     @classmethod
-    def normalise_path(cls, repo, wc_path):
+    def normalise_location(cls, repo, wc_location):
         """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
-        wc_path = Path(wc_path)
-        if not wc_path.is_absolute():
+        gpkg_path = Path(wc_location)
+        if not gpkg_path.is_absolute():
             try:
-                return str(wc_path.resolve().relative_to(repo.workdir_path.resolve()))
+                return str(gpkg_path.resolve().relative_to(repo.workdir_path.resolve()))
             except ValueError:
                 pass
-        return str(wc_path)
+        return str(gpkg_path)
 
     @property
     def full_path(self):

@@ -47,10 +47,10 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
 
     commit = repo.head_commit
     if not (wc.status() & WorkingCopyStatus.INITIALISED):
-        click.echo(f"Creating working copy at {wc.clean_path} ...")
+        click.echo(f"Creating working copy at {wc} ...")
         wc.create_and_initialise()
     else:
-        click.echo(f"Updating {wc.clean_path} ...")
+        click.echo(f"Updating {wc} ...")
 
     if replace_existing:
         wc.drop_table(commit, *datasets)
@@ -414,7 +414,7 @@ def init(
 
     from sno.working_copy.base import BaseWorkingCopy
 
-    BaseWorkingCopy.check_valid_creation_path(wc_path, repo_path)
+    BaseWorkingCopy.check_valid_creation_location(wc_path, repo_path)
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)

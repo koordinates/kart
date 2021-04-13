@@ -47,7 +47,7 @@ class BaseWorkingCopy:
     Subclasses to override any unimplemented methods below, and also to set the following fields:
 
     self.repo - SnoRepo containing this WorkingCopy
-    self.path - string describing the location of this WorkingCopy
+    self.location - string describing the location of this WorkingCopy
     self.engine - sqlalchemy engine for connecting to the database
     self.sessionmaker - sqlalchemy sessionmaker bound to the engine
     self.preparer - sqlalchemy IdentifierPreparer for quoting SQL in the appropriate dialect
@@ -88,15 +88,15 @@ class BaseWorkingCopy:
         return self.sno_tables.sno_state.name
 
     @property
-    def clean_path(self):
-        """The path, but with any passwords hidden so we can print it without exposing them."""
-        return self.path
+    def clean_location(self):
+        """The location, but with any passwords hidden so we can print it without exposing them."""
+        return self.location
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}: {self.clean_path}>"
+        return f"<{self.__class__.__name__}: {self.clean_location}>"
 
     def __str__(self):
-        return self.clean_path
+        return self.clean_location
 
     def quote(self, ident):
         """Conditionally quote an identifier - eg if it is a reserved word or contains special characters."""
@@ -173,36 +173,38 @@ class BaseWorkingCopy:
         only a working copy that can be connected to will be returned, and a DbConnectionError will be raised otherwise.
         """
         repo_cfg = repo.config
-        path_key = cls.SNO_WORKINGCOPY_PATH
-        if path_key not in repo_cfg:
+        location_key = cls.SNO_WORKINGCOPY_PATH
+        if location_key not in repo_cfg:
             return None
 
-        path = repo_cfg[path_key]
-        return cls.get_at_path(
+        location = repo_cfg[location_key]
+        return cls.get_at_location(
             repo,
-            path,
+            location,
             allow_uncreated=allow_uncreated,
             allow_invalid_state=allow_invalid_state,
             allow_unconnectable=allow_unconnectable,
         )
 
     @classmethod
-    def get_at_path(
+    def get_at_location(
         cls,
         repo,
-        path,
+        location,
         *,
         allow_uncreated=False,
         allow_invalid_state=False,
         allow_unconnectable=False,
     ):
-        if not path:
+        if not location:
             return None
 
-        wc_type = WorkingCopyType.from_path(path, allow_invalid=allow_invalid_state)
+        wc_type = WorkingCopyType.from_location(
+            location, allow_invalid=allow_invalid_state
+        )
         if not wc_type:
             return None
-        wc = wc_type.class_(repo, path)
+        wc = wc_type.class_(repo, location)
 
         if allow_uncreated and allow_invalid_state and allow_unconnectable:
             return wc
@@ -224,57 +226,61 @@ class BaseWorkingCopy:
         if is_bare:
             return
 
-        path_key = cls.SNO_WORKINGCOPY_PATH
-        path = repo_cfg[path_key] if path_key in repo_cfg else None
-        if path is None:
+        location_key = cls.SNO_WORKINGCOPY_PATH
+        location = repo_cfg[location_key] if location_key in repo_cfg else None
+        if location is None:
             cls.write_config(repo, None, False)
 
     @classmethod
-    def write_config(cls, repo, path=None, bare=False):
+    def write_config(cls, repo, location=None, bare=False):
         repo_cfg = repo.config
         bare_key = repo.BARE_CONFIG_KEY
-        path_key = cls.SNO_WORKINGCOPY_PATH
+        location_key = cls.SNO_WORKINGCOPY_PATH
 
         if bare:
             repo_cfg[bare_key] = True
-            repo.del_config(path_key)
+            repo.del_config(location_key)
         else:
-            if path is None:
-                path = cls.default_path(repo.workdir_path)
+            if location is None:
+                location = cls.default_location(repo.workdir_path)
             else:
-                path = cls.normalise_path(repo, path)
+                location = cls.normalise_location(repo, location)
 
             repo_cfg[bare_key] = False
-            repo_cfg[path_key] = str(path)
+            repo_cfg[location_key] = str(location)
 
     @classmethod
-    def subclass_from_path(cls, wc_path):
-        wct = WorkingCopyType.from_path(wc_path)
+    def subclass_from_location(cls, wc_location):
+        wct = WorkingCopyType.from_location(wc_location)
         if wct.class_ is cls:
             raise RuntimeError(
-                f"No subclass found - don't call subclass_from_path on concrete implementation {cls}."
+                f"No subclass found - don't call subclass_from_location on concrete implementation {cls}."
             )
         return wct.class_
 
     @classmethod
-    def check_valid_creation_path(cls, wc_path, workdir_path=None):
+    def check_valid_creation_location(cls, wc_location, workdir_path=None):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
         and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
         Doesn't check if we have permissions to create a working copy there.
         """
-        if not wc_path:
-            wc_path = cls.default_path(workdir_path)
-        cls.subclass_from_path(wc_path).check_valid_creation_path(wc_path, workdir_path)
+        if not wc_location:
+            wc_location = cls.default_location(workdir_path)
+        cls.subclass_from_location(wc_location).check_valid_creation_location(
+            wc_location, workdir_path
+        )
 
     @classmethod
-    def check_valid_path(cls, wc_path, workdir_path=None):
+    def check_valid_location(cls, wc_location, workdir_path=None):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
         and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
         Doesn't check if we have permissions to create a working copy there.
         """
-        cls.subclass_from_path(wc_path).check_valid_path(wc_path, workdir_path)
+        cls.subclass_from_location(wc_location).check_valid_location(
+            wc_location, workdir_path
+        )
 
     def check_valid_state(self, status=None):
         if status is None:
@@ -283,25 +289,27 @@ class BaseWorkingCopy:
         wc_exists = status & WorkingCopyStatus.WC_EXISTS
         if wc_exists and not (status & WorkingCopyStatus.INITIALISED):
             message = [
-                f"Working copy at {self.clean_path} is not yet fully initialised",
+                f"Working copy at {self} is not yet fully initialised",
                 "Try `sno create-workingcopy --delete-existing` to delete and recreate working copy if problem persists",
             ]
             if status & WorkingCopyStatus.HAS_DATA:
                 message.append(
-                    f"But beware: {self.clean_path} already seems to contain data, make sure it is backed up"
+                    f"But beware: {self} already seems to contain data, make sure it is backed up"
                 )
             raise NotFound("\n".join(message), NO_WORKING_COPY)
 
     @classmethod
-    def default_path(cls, workdir_path):
+    def default_location(cls, workdir_path):
         """Returns `example.gpkg` for a sno repo in a directory named `example`."""
         stem = workdir_path.stem
         return f"{stem}.gpkg"
 
     @classmethod
-    def normalise_path(cls, repo, wc_path):
+    def normalise_location(cls, repo, wc_location):
         """If the path is in a non-standard form, normalise it to the equivalent standard form."""
-        return cls.subclass_from_path(wc_path).normalise_path(repo, wc_path)
+        return cls.subclass_from_location(wc_location).normalise_location(
+            repo, wc_location
+        )
 
     @contextlib.contextmanager
     def session(self):

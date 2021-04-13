@@ -33,7 +33,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
         return
 
     if not (working_copy.status() & WorkingCopyStatus.INITIALISED):
-        click.echo(f"Creating working copy at {working_copy.clean_path} ...")
+        click.echo(f"Creating working copy at {working_copy} ...")
         working_copy.create_and_initialise()
         datasets = list(repo.datasets())
         working_copy.write_full(target_tree_or_commit, *datasets, safe=False)
@@ -43,7 +43,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     )
 
     if discard_changes or not db_tree_matches:
-        click.echo(f"Updating {working_copy.clean_path} ...")
+        click.echo(f"Updating {working_copy} ...")
         working_copy.reset(target_tree_or_commit, force=discard_changes)
 
 
@@ -364,14 +364,17 @@ def reset(ctx, discard_changes, refish):
     required=False,
     default=None,
 )
-@click.argument("new_wc_path", nargs=1, required=False)
-def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
+@click.argument("new_wc_loc", nargs=1, required=False)
+def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     """
     Create a new working copy - if one already exists it will be deleted.
-    Usage: sno create-workingcopy [PATH]
-    PATH should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA
-    If no path is supplied, the path from the repo config at "sno.workingcopy.path" will be used.
-    If no path is configured, a GPKG working copy will be created with a default name based on the repository name.
+    Usage: sno create-workingcopy [LOCATION]
+    LOCATION should be one of the following:
+    - PATH.gpkg for a GPKG file.
+    - postgresql://[HOST]/DBNAME/DBSCHEMA for a PostGIS database.
+    - mssql://[HOST]/DBNAME/DBSCHEMA for a SQL Server database.
+    If no location is supplied, the location from the repo config at "sno.workingcopy.path" will be used.
+    If no location is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
     from sno.working_copy.base import BaseWorkingCopy
 
@@ -381,19 +384,19 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
             "Can't create a working copy for an empty repository — first import some data with `sno import`"
         )
 
-    old_wc_path = repo.workingcopy_path
-    if not new_wc_path and old_wc_path is not None:
-        new_wc_path = old_wc_path
-    elif not new_wc_path:
-        new_wc_path = BaseWorkingCopy.default_path(repo.workdir_path)
+    old_wc_loc = repo.workingcopy_path
+    if not new_wc_loc and old_wc_loc is not None:
+        new_wc_loc = old_wc_loc
+    elif not new_wc_loc:
+        new_wc_loc = BaseWorkingCopy.default_location(repo.workdir_path)
 
-    if new_wc_path != old_wc_path:
-        BaseWorkingCopy.check_valid_creation_path(new_wc_path, repo.workdir_path)
+    if new_wc_loc != old_wc_loc:
+        BaseWorkingCopy.check_valid_creation_location(new_wc_loc, repo.workdir_path)
 
-    if old_wc_path:
-        old_wc = BaseWorkingCopy.get_at_path(
+    if old_wc_loc:
+        old_wc = BaseWorkingCopy.get_at_location(
             repo,
-            old_wc_path,
+            old_wc_loc,
             allow_uncreated=True,
             allow_invalid_state=True,
             allow_unconnectable=True,
@@ -401,35 +404,35 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
 
         if delete_existing is None:
             if get_input_mode() is not InputMode.INTERACTIVE:
-                if old_wc_path == new_wc_path:
+                if old_wc_loc == new_wc_loc:
                     help_message = (
                         "Specify --delete-existing to delete and recreate it."
                     )
                 else:
                     help_message = "Either delete it with --delete-existing, or just abandon it with --no-delete-existing."
                 raise click.UsageError(
-                    f"A working copy is already configured at {old_wc.clean_path}\n{help_message}"
+                    f"A working copy is already configured at {old_wc}\n{help_message}"
                 )
 
-            click.echo(f"A working copy is already configured at {old_wc.clean_path}")
+            click.echo(f"A working copy is already configured at {old_wc}")
             delete_existing = click.confirm(
                 "Delete the existing working copy before creating a new one?",
                 default=True,
             )
 
         if delete_existing is False:
-            allow_unconnectable = old_wc_path != new_wc_path
+            allow_unconnectable = old_wc_loc != new_wc_loc
             status = old_wc.status(
                 allow_unconnectable=allow_unconnectable, check_if_dirty=True
             )
-            if old_wc_path == new_wc_path and status & WorkingCopyStatus.WC_EXISTS:
+            if old_wc_loc == new_wc_loc and status & WorkingCopyStatus.WC_EXISTS:
                 raise InvalidOperation(
-                    f"Cannot recreate working copy at same location {old_wc.clean_path} if --no-delete-existing is set."
+                    f"Cannot recreate working copy at same location {old_wc} if --no-delete-existing is set."
                 )
 
             if not discard_changes and (status & WorkingCopyStatus.DIRTY):
                 raise InvalidOperation(
-                    f"You have uncommitted changes at {old_wc.clean_path}.\n"
+                    f"You have uncommitted changes at {old_wc}.\n"
                     + _DISCARD_CHANGES_HELP_MESSAGE
                 )
 
@@ -438,7 +441,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
                 status = old_wc.status(check_if_dirty=True)
             except DbConnectionError as e:
                 click.echo(
-                    f"Encountered an error while trying to delete existing working copy at {old_wc.clean_path}"
+                    f"Encountered an error while trying to delete existing working copy at {old_wc}"
                 )
                 click.echo(
                     "To simply abandon the existing working copy, use --no-delete-existing."
@@ -447,14 +450,14 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_path):
 
             if not discard_changes and (status & WorkingCopyStatus.DIRTY):
                 raise InvalidOperation(
-                    f"You have uncommitted changes at {old_wc.clean_path}.\n"
+                    f"You have uncommitted changes at {old_wc}.\n"
                     + _DISCARD_CHANGES_HELP_MESSAGE
                 )
 
             if status & WorkingCopyStatus.WC_EXISTS:
-                click.echo(f"Deleting existing working copy at {old_wc.clean_path}")
-                keep_db_schema_if_possible = old_wc_path == new_wc_path
+                click.echo(f"Deleting existing working copy at {old_wc}")
+                keep_db_schema_if_possible = old_wc_loc == new_wc_loc
                 old_wc.delete(keep_db_schema_if_possible=keep_db_schema_if_possible)
 
-    BaseWorkingCopy.write_config(repo, new_wc_path)
+    BaseWorkingCopy.write_config(repo, new_wc_loc)
     reset_wc_if_needed(repo, repo.head_commit)

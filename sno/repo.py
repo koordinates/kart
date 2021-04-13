@@ -177,7 +177,7 @@ class SnoRepo(pygit2.Repository):
         if not bare:
             from sno.working_copy.base import BaseWorkingCopy
 
-            BaseWorkingCopy.check_valid_creation_path(wc_path, repo_root_path)
+            BaseWorkingCopy.check_valid_creation_location(wc_path, repo_root_path)
 
         extra_args = []
         if initial_branch is not None:
@@ -226,7 +226,7 @@ class SnoRepo(pygit2.Repository):
         if not bare:
             from sno.working_copy.base import BaseWorkingCopy
 
-            BaseWorkingCopy.check_valid_creation_path(wc_path, repo_root_path)
+            BaseWorkingCopy.check_valid_creation_location(wc_path, repo_root_path)
 
         if bare:
             sno_repo = cls._create_with_git_command(

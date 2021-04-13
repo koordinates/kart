@@ -222,7 +222,7 @@ def apply_patch(
 
     if wc and new_wc_target:
         # oid refers to either a commit or tree
-        click.echo(f"Updating {wc.clean_path} ...")
+        click.echo(f"Updating {wc} ...")
         wc.reset(new_wc_target, track_changes_as_dirty=not do_commit)
 
 

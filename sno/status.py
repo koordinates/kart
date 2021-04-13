@@ -75,7 +75,7 @@ def get_working_copy_status_json(repo):
     if not working_copy:
         return None
 
-    output = {"path": working_copy.clean_path, "changes": None}
+    output = {"path": working_copy.clean_location, "changes": None}
 
     wc_diff = working_copy.diff_to_tree()
     if wc_diff:

@@ -32,18 +32,17 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     WORKING_COPY_TYPE_NAME = "PostGIS"
     URI_SCHEME = "postgresql"
 
-    def __init__(self, repo, uri):
+    def __init__(self, repo, location):
         """
         uri: connection string of the form postgresql://[user[:password]@][netloc][:port][/dbname/schema][?param1=value1&...]
         """
         self.L = logging.getLogger(self.__class__.__qualname__)
 
         self.repo = repo
-        self.uri = uri
-        self.path = uri
+        self.uri = self.location = location
 
-        self.check_valid_db_uri(uri)
-        self.db_uri, self.db_schema = self._separate_db_schema(uri)
+        self.check_valid_db_uri(self.uri)
+        self.db_uri, self.db_schema = self._separate_db_schema(self.uri)
 
         self.engine = postgis_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
