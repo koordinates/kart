@@ -38,7 +38,7 @@ from . import diff_estimation
     hidden=True,
 )
 @click.option(
-    "--with-feature-counts",
+    "--with-feature-count",
     default=None,
     type=click.Choice(diff_estimation.ACCURACY_CHOICES),
     help=(
@@ -48,7 +48,7 @@ from . import diff_estimation
     ),
 )
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def log(ctx, output_format, json_style, do_dataset_changes, with_feature_counts, args):
+def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, args):
     """ Show commit logs """
     if output_format == "text":
         execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
@@ -85,7 +85,7 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_counts,
                 refs,
                 do_dataset_changes,
                 dataset_change_cache,
-                with_feature_counts,
+                with_feature_count,
             )
             for (commit_id, refs) in commit_ids_and_refs_log
         ]
@@ -109,7 +109,7 @@ def commit_obj_to_json(
     refs=None,
     do_dataset_changes=False,
     dataset_change_cache={},
-    with_feature_counts=None,
+    with_feature_count=None,
 ):
     """Given a commit object, returns a dict ready for dumping as JSON."""
     author = commit.author
@@ -147,7 +147,7 @@ def commit_obj_to_json(
         result["datasetChanges"] = get_dataset_changes(
             repo, commit, dataset_change_cache
         )
-    if with_feature_counts:
+    if with_feature_count:
         if (not do_dataset_changes) or result["datasetChanges"]:
             try:
                 parent_commit = commit.parents[0]
@@ -159,7 +159,7 @@ def commit_obj_to_json(
 
             target_rs = repo.structure(commit)
             result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
-                base_rs, target_rs, working_copy=None, accuracy=with_feature_counts
+                base_rs, target_rs, working_copy=None, accuracy=with_feature_count
             )
         else:
             result["featureChanges"] = {}

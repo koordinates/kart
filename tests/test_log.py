@@ -115,7 +115,7 @@ def test_log_with_feature_count(data_archive_readonly, cli_runner):
     """ review commit history """
     with data_archive_readonly("points"):
         r = cli_runner.invoke(
-            ["log", "--output-format=json", "--with-feature-counts=exact"]
+            ["log", "--output-format=json", "--with-feature-count=exact"]
         )
         assert r.exit_code == 0, r
         result = json.loads(r.stdout)
@@ -125,7 +125,7 @@ def test_log_with_feature_count(data_archive_readonly, cli_runner):
             {"nz_pa_points_topo_150k": 2143},
         ]
         r = cli_runner.invoke(
-            ["log", "--output-format=json", "--with-feature-counts=good"]
+            ["log", "--output-format=json", "--with-feature-count=good"]
         )
         assert r.exit_code == 0, r
         result = json.loads(r.stdout)
