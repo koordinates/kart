@@ -245,13 +245,9 @@ def feature_count_diff(
 
     repo = ctx.obj.repo
     base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
-    if working_copy:
-        raise NotImplementedError(
-            "--only-feature-count isn't supported for working-copy diffs yet"
-        )
 
     dataset_change_counts = diff_estimation.estimate_diff_feature_counts(
-        base_rs, target_rs, accuracy
+        base_rs, target_rs, working_copy, accuracy
     )
 
     if output_format == "text":
