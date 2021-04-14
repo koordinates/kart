@@ -105,7 +105,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                 )
 
             track_count = sess.scalar(
-                f"SELECT COUNT(*) FROM {working_copy.SNO_TRACK} WHERE table_name=:table_name;",
+                f"SELECT COUNT(*) FROM {working_copy.KART_TRACK} WHERE table_name=:table_name;",
                 {"table_name": table},
             )
             click.echo(f"{track_count} rows marked as changed in working-copy")

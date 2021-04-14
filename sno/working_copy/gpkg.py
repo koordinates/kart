@@ -15,7 +15,7 @@ from sqlalchemy.types import UserDefinedType
 
 from . import gpkg_adapter, WorkingCopyStatus
 from .base import BaseWorkingCopy
-from .table_defs import GpkgTables, GpkgSnoTables
+from .table_defs import GpkgTables, GpkgKartTables
 from sno.exceptions import InvalidOperation
 from sno.geometry import normalise_gpkg_geom
 from sno.schema import Schema
@@ -44,7 +44,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
 
         self.db_schema = None
-        self.sno_tables = GpkgSnoTables
+        self.kart_tables = GpkgKartTables()
 
     @classmethod
     def check_valid_creation_location(cls, wc_location, workdir_path=None):
@@ -152,18 +152,17 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         result |= WorkingCopyStatus.FILE_EXISTS
         with self.session() as sess:
             sno_table_count = sess.scalar(
-                f"""
-                SELECT count(*) FROM sqlite_master
-                WHERE type='table' AND name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
                 """
+                SELECT count(*) FROM sqlite_master
+                WHERE type='table' AND name IN (:kart_state_name, :kart_track_name);
+                """,
+                {
+                    "kart_state_name": self.KART_STATE_NAME,
+                    "kart_track_name": self.KART_TRACK_NAME,
+                },
             )
             user_table_count = sess.scalar(
-                f"""
-                SELECT count(*) FROM sqlite_master
-                WHERE type='table'
-                    AND name NOT IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}')
-                    AND NAME NOT LIKE 'gpkg%';
-                """
+                """SELECT count(*) FROM sqlite_master WHERE type='table' AND NAME NOT LIKE 'gpkg%';"""
             )
             if sno_table_count or user_table_count:
                 result |= WorkingCopyStatus.NON_EMPTY
@@ -217,8 +216,8 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             sess.execute("DROP TABLE IF EXISTS ogr_empty_table;")
 
             # Create metadata tables
-            GpkgTables.create_all(sess)
-            GpkgSnoTables.create_all(sess)
+            GpkgTables().create_all(sess)
+            GpkgKartTables().create_all(sess)
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
@@ -487,7 +486,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
                 CREATE TRIGGER {self._quoted_trigger_name(dataset, 'ins')}
                    AFTER INSERT ON {table_identifier}
                 BEGIN
-                    INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                    INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
                     VALUES (:table_name, NEW.{pk_column});
                 END;
                 """,
@@ -501,7 +500,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
                 CREATE TRIGGER {self._quoted_trigger_name(dataset, 'upd')}
                    AFTER UPDATE ON {table_identifier}
                 BEGIN
-                    INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                    INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
                     VALUES (:table_name1, NEW.{pk_column}), (:table_name2, OLD.{pk_column});
                 END;
                 """,
@@ -515,7 +514,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
                 CREATE TRIGGER {self._quoted_trigger_name(dataset, 'del')}
                    AFTER DELETE ON {table_identifier}
                 BEGIN
-                    INSERT OR REPLACE INTO {self.SNO_TRACK} (table_name, pk)
+                    INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
                     VALUES (:table_name, OLD.{pk_column});
                 END;
                 """,

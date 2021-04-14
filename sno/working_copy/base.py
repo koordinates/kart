@@ -53,7 +53,7 @@ class BaseWorkingCopy:
     self.preparer - sqlalchemy IdentifierPreparer for quoting SQL in the appropriate dialect
 
     self.db_schema - database-schema that this working copy controls, if any.
-    self.sno_tables - sqlalchemy Table definitions for sno_track and sno_state tables.
+    self.kart_tables - sqlalchemy Table definitions for kart_state and kart_track tables.
     """
 
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
@@ -65,27 +65,27 @@ class BaseWorkingCopy:
 
     @property
     @functools.lru_cache(maxsize=1)
-    def SNO_TRACK(self):
-        """Escaped, dialect-specific fully-qualified name of sno_track table."""
-        return self.table_identifier(self.sno_tables.sno_track)
+    def KART_STATE(self):
+        """Escaped, dialect-specific fully-qualified name of kart_state table."""
+        return self.table_identifier(self.kart_tables.kart_state)
 
     @property
     @functools.lru_cache(maxsize=1)
-    def SNO_STATE(self):
-        """Escaped, dialect-specific fully-qualified name of sno_state table."""
-        return self.table_identifier(self.sno_tables.sno_state)
+    def KART_TRACK(self):
+        """Escaped, dialect-specific fully-qualified name of kart_track table."""
+        return self.table_identifier(self.kart_tables.kart_track)
 
     @property
     @functools.lru_cache(maxsize=1)
-    def SNO_TRACK_NAME(self):
-        """The table name of sno_track table, not including the schema."""
-        return self.sno_tables.sno_track.name
+    def KART_STATE_NAME(self):
+        """The table name of kart_state table, not including the schema."""
+        return self.kart_tables.kart_state.name
 
     @property
     @functools.lru_cache(maxsize=1)
-    def SNO_STATE_NAME(self):
-        """The table name of sno_track table, not including the schema."""
-        return self.sno_tables.sno_state.name
+    def KART_TRACK_NAME(self):
+        """The table name of kart_track table, not including the schema."""
+        return self.kart_tables.kart_track.name
 
     @property
     def clean_location(self):
@@ -363,16 +363,16 @@ class BaseWorkingCopy:
 
     def get_db_tree(self):
         """Returns the hex tree ID from the state table."""
-        sno_state = self.sno_tables.sno_state
+        kart_state = self.kart_tables.kart_state
         with self.session() as sess:
             return sess.scalar(
-                sa.select([sno_state.c.value]).where(
-                    sa.and_(sno_state.c.table_name == "*", sno_state.c.key == "tree")
+                sa.select([kart_state.c.value]).where(
+                    sa.and_(kart_state.c.table_name == "*", kart_state.c.key == "tree")
                 )
             )
 
     def assert_db_tree_match(self, tree):
-        """Raises a Mismatch if sno_state refers to a different tree and not the given tree."""
+        """Raises a Mismatch if kart_state refers to a different tree and not the given tree."""
         wc_tree_id = self.get_db_tree()
         expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
 
@@ -382,19 +382,19 @@ class BaseWorkingCopy:
 
     def tracking_changes_count(self, dataset=None):
         """
-        Returns the total number of changes tracked in sno_track,
+        Returns the total number of changes tracked in kart_track,
         or the number of changes tracked for the given dataset.
         """
-        sno_track = self.sno_tables.sno_track
+        kart_track = self.kart_tables.kart_track
         with self.session() as sess:
             if dataset is not None:
                 return sess.scalar(
                     sa.select([sa.func.count()])
-                    .select_from(sno_track)
-                    .where(sno_track.c.table_name == dataset.table_name)
+                    .select_from(kart_track)
+                    .where(kart_track.c.table_name == dataset.table_name)
                 )
             else:
-                return sess.scalar(sa.select([sa.func.count()]).select_from(sno_track))
+                return sess.scalar(sa.select([sa.func.count()]).select_from(kart_track))
 
     def check_not_dirty(self, help_message=None):
         """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
@@ -577,33 +577,33 @@ class BaseWorkingCopy:
         else:
             schema = dataset.schema
 
-        sno_track = self.sno_tables.sno_track
+        kart_track = self.kart_tables.kart_track
         table = self._table_def_for_dataset(dataset, schema=schema)
 
-        cols_to_select = [sno_track.c.pk.label(".__track_pk"), *table.columns]
+        cols_to_select = [kart_track.c.pk.label(".__track_pk"), *table.columns]
         pk_column = table.columns[schema.pk_columns[0].name]
-        tracking_col_type = sno_track.c.pk.type
+        tracking_col_type = kart_track.c.pk.type
 
         if self._tracking_table_requires_cast:
-            pk_expr = sno_track.c.pk == sa.cast(pk_column, tracking_col_type)
+            pk_expr = kart_track.c.pk == sa.cast(pk_column, tracking_col_type)
         else:
-            pk_expr = sno_track.c.pk == pk_column
+            pk_expr = kart_track.c.pk == pk_column
 
         base_query = sa.select(columns=cols_to_select).select_from(
-            sno_track.outerjoin(
+            kart_track.outerjoin(
                 table,
                 pk_expr,
             )
         )
 
         if feature_filter is UNFILTERED:
-            query = base_query.where(sno_track.c.table_name == dataset.table_name)
+            query = base_query.where(kart_track.c.table_name == dataset.table_name)
         else:
             pks = list(feature_filter)
             query = base_query.where(
                 sa.and_(
-                    sno_track.c.table_name == dataset.table_name,
-                    sno_track.c.pk.in_(pks),
+                    kart_track.c.table_name == dataset.table_name,
+                    kart_track.c.pk.in_(pks),
                 )
             )
 
@@ -613,10 +613,10 @@ class BaseWorkingCopy:
         """Delete the rows from the tracking table that match the given filter."""
         reset_filter = reset_filter or UNFILTERED
 
-        sno_track = self.sno_tables.sno_track
+        kart_track = self.kart_tables.kart_track
         with self.session() as sess:
             if reset_filter == UNFILTERED:
-                sess.execute(sa.delete(sno_track))
+                sess.execute(sa.delete(kart_track))
                 return
 
             for dataset_path, dataset_filter in reset_filter.items():
@@ -626,15 +626,17 @@ class BaseWorkingCopy:
                     or dataset_filter.get("feature") == UNFILTERED
                 ):
                     sess.execute(
-                        sa.delete(sno_track).where(sno_track.c.table_name == table_name)
+                        sa.delete(kart_track).where(
+                            kart_track.c.table_name == table_name
+                        )
                     )
                 else:
                     pks = list(dataset_filter.get("feature", []))
                     sess.execute(
-                        sa.delete(sno_track).where(
+                        sa.delete(kart_track).where(
                             sa.and_(
-                                sno_track.c.table_name == table_name,
-                                sno_track.c.pk.in_(pks),
+                                kart_track.c.table_name == table_name,
+                                kart_track.c.pk.in_(pks),
                             )
                         )
                     )
@@ -698,7 +700,7 @@ class BaseWorkingCopy:
         tree_id - str, the hex SHA of the tree at HEAD.
         """
         r = sess.execute(
-            upsert(self.sno_tables.sno_state),
+            upsert(self.kart_tables.kart_state),
             {"table_name": "*", "key": "tree", "value": tree_id},
         )
         return r.rowcount
@@ -843,10 +845,10 @@ class BaseWorkingCopy:
                 sess.execute(f"DROP TABLE IF EXISTS {self.table_identifier(dataset)};")
                 self.delete_meta(dataset)
 
-                sno_track = self.sno_tables.sno_track
+                kart_track = self.kart_tables.kart_track
                 sess.execute(
-                    sa.delete(sno_track).where(
-                        sno_track.c.table_name == dataset.table_name
+                    sa.delete(kart_track).where(
+                        kart_track.c.table_name == dataset.table_name
                     )
                 )
 
@@ -1102,10 +1104,10 @@ class BaseWorkingCopy:
         sess - sqlalchemy session.
         base_ds - the dataset this WC table is based on.
         """
-        sno_track = self.sno_tables.sno_track
+        kart_track = self.kart_tables.kart_track
         r = sess.execute(
-            sa.select([sno_track.c.pk]).where(
-                sno_track.c.table_name == base_ds.table_name
+            sa.select([kart_track.c.pk]).where(
+                kart_track.c.table_name == base_ds.table_name
             )
         )
         dirty_pk_list = [row[0] for row in r]
@@ -1130,5 +1132,7 @@ class BaseWorkingCopy:
             )
 
             sess.execute(
-                sa.delete(sno_track).where(sno_track.c.table_name == base_ds.table_name)
+                sa.delete(kart_track).where(
+                    kart_track.c.table_name == base_ds.table_name
+                )
             )

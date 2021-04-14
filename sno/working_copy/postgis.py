@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 
 from . import postgis_adapter
 from .db_server import DatabaseServer_WorkingCopy
-from .table_defs import PostgisSnoTables
+from .table_defs import PostgisKartTables
 from sno import crs_util
 from sno.schema import Schema
 from sno.sqlalchemy.create_engine import postgis_engine
@@ -48,7 +48,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = PGIdentifierPreparer(self.engine.dialect)
 
-        self.sno_tables = PostgisSnoTables(self.db_schema)
+        self.kart_tables = PostgisKartTables(self.db_schema)
 
     def create_common_functions(self, sess):
         sess.execute(
@@ -62,14 +62,14 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                 IF (TG_OP = 'INSERT' OR TG_OP = 'UPDATE') THEN
                     EXECUTE 'SELECT $1.' || pk_field USING NEW INTO pk_new;
 
-                    INSERT INTO {self.SNO_TRACK} (table_name,pk) VALUES
+                    INSERT INTO {self.KART_TRACK} (table_name,pk) VALUES
                     (TG_TABLE_NAME::TEXT, pk_new)
                     ON CONFLICT DO NOTHING;
                 END IF;
                 IF (TG_OP = 'UPDATE' OR TG_OP = 'DELETE') THEN
                     EXECUTE 'SELECT $1.' || pk_field USING OLD INTO pk_old;
 
-                    INSERT INTO {self.SNO_TRACK} (table_name,pk) VALUES
+                    INSERT INTO {self.KART_TRACK} (table_name,pk) VALUES
                     (TG_TABLE_NAME::TEXT, pk_old)
                     ON CONFLICT DO NOTHING;
 

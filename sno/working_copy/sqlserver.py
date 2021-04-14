@@ -12,7 +12,7 @@ from sqlalchemy.types import UserDefinedType
 
 from . import sqlserver_adapter
 from .db_server import DatabaseServer_WorkingCopy
-from .table_defs import SqlServerSnoTables
+from .table_defs import SqlServerKartTables
 from sno import crs_util
 from sno.geometry import Geometry
 from sno.sqlalchemy import text_with_inlined_params
@@ -51,7 +51,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MSIdentifierPreparer(self.engine.dialect)
 
-        self.sno_tables = SqlServerSnoTables(self.db_schema)
+        self.kart_tables = SqlServerKartTables(self.db_schema)
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = sqlserver_adapter.v2_schema_to_sqlserver_spec(
@@ -172,7 +172,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
                 ON {self.table_identifier(dataset)}
                 AFTER INSERT, UPDATE, DELETE AS
                 BEGIN
-                    MERGE {self.SNO_TRACK} TRA
+                    MERGE {self.KART_TRACK} TRA
                     USING
                         (SELECT :table_name1, {self.quote(pk_name)} FROM inserted
                         UNION SELECT :table_name2, {self.quote(pk_name)} FROM deleted)

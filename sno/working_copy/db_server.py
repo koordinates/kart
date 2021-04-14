@@ -155,11 +155,15 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
                 result |= WorkingCopyStatus.DB_SCHEMA_EXISTS
 
                 sno_table_count = sess.scalar(
-                    f"""
+                    """
                     SELECT COUNT(*) FROM information_schema.tables
-                    WHERE table_schema=:table_schema AND table_name IN ('{self.SNO_STATE_NAME}', '{self.SNO_TRACK_NAME}');
+                    WHERE table_schema=:table_schema AND table_name IN (:kart_state_name, :kart_track_name);
                     """,
-                    {"table_schema": self.db_schema},
+                    {
+                        "table_schema": self.db_schema,
+                        "kart_state_name": self.KART_STATE_NAME,
+                        "kart_track_name": self.KART_TRACK_NAME,
+                    },
                 )
                 schema_table_count = sess.scalar(
                     """
@@ -193,7 +197,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
     def create_and_initialise(self):
         with self.session() as sess:
             self.create_schema(sess)
-            self.sno_tables.create_all(sess)
+            self.kart_tables.create_all(sess)
             self.create_common_functions(sess)
 
     def create_schema(self, sess):
