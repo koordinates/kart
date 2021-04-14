@@ -363,7 +363,7 @@ class SnoCliRunner(CliRunner):
         super().__init__(*args, mix_stderr=mix_stderr, **kwargs)
 
     def invoke(self, args=None, **kwargs):
-        from sno.cli import cli
+        from sno.cli import load_commands_from_args, cli
 
         if args:
             # force everything to strings (eg. PathLike objects, numbers)
@@ -374,6 +374,7 @@ class SnoCliRunner(CliRunner):
         params = {"catch_exceptions": not self._in_pdb}
         params.update(kwargs)
 
+        load_commands_from_args(args)
         r = super().invoke(cli, args=args, **params)
 
         L.debug("Command result: %s (%s)", r.exit_code, repr(r))
