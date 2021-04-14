@@ -53,7 +53,8 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     def create_common_functions(self, sess):
         sess.execute(
             f"""
-            CREATE OR REPLACE FUNCTION {self.DB_SCHEMA}._sno_track_trigger() RETURNS TRIGGER AS $body$
+            CREATE OR REPLACE FUNCTION {self._quoted_tracking_name("proc")}()
+                RETURNS TRIGGER AS $body$
             DECLARE
                 pk_field text := quote_ident(TG_ARGV[0]);
                 pk_old text;
@@ -181,11 +182,26 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         # PostGIS deletes the spatial index automatically when the table is deleted.
         pass
 
+    def _quoted_sno_tracking_name(self, trigger_type, dataset):
+        assert trigger_type in ("trigger", "proc")
+        assert dataset is None
+        # This is how the triggers are named in Sno 0.8.0 and earlier.
+        # Newer repos that use kart branding use _quoted_tracking_name.
+        # The existing names are kind of backwards...
+        if trigger_type == "trigger":
+            # This name doesn't include db_schema since triggers are namespaced within the
+            # table they are attached to anyway, they don't need a db_schema.
+            return self.quote("sno_track")
+        elif trigger_type == "proc":
+            # table_identifier includes self.db_schema so this ends up in the right place.
+            return self.table_identifier("_sno_track_trigger")
+
     def _create_triggers(self, sess, dataset):
         sess.execute(
             f"""
-            CREATE TRIGGER "sno_track" AFTER INSERT OR UPDATE OR DELETE ON {self.table_identifier(dataset)}
-            FOR EACH ROW EXECUTE PROCEDURE {self.DB_SCHEMA}._sno_track_trigger(:pk_field)
+            CREATE TRIGGER {self._quoted_tracking_name("trigger")}
+                AFTER INSERT OR UPDATE OR DELETE ON {self.table_identifier(dataset)}
+            FOR EACH ROW EXECUTE PROCEDURE {self._quoted_tracking_name("proc")}(:pk_field)
             """,
             {"pk_field": dataset.primary_key},
         )
@@ -193,11 +209,17 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     @contextlib.contextmanager
     def _suspend_triggers(self, sess, dataset):
         sess.execute(
-            f"""ALTER TABLE {self.table_identifier(dataset)} DISABLE TRIGGER "sno_track";"""
+            f"""
+            ALTER TABLE {self.table_identifier(dataset)}
+            DISABLE TRIGGER {self._quoted_tracking_name("trigger")};
+            """
         )
         yield
         sess.execute(
-            f"""ALTER TABLE {self.table_identifier(dataset)} ENABLE TRIGGER "sno_track";"""
+            f"""
+            ALTER TABLE {self.table_identifier(dataset)}
+            ENABLE TRIGGER {self._quoted_tracking_name("trigger")};
+            """
         )
 
     def meta_items(self, dataset):

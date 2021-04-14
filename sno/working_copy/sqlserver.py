@@ -158,7 +158,11 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         # SQL server deletes the spatial index automatically when the table is deleted.
         pass
 
-    def _quoted_trigger_name(self, dataset):
+    def _quoted_sno_tracking_name(self, trigger_type, dataset):
+        assert trigger_type == "trigger"
+        assert dataset is not None
+        # This is how the trigger is named in Sno 0.8.0 and earlier.
+        # Newer repos that use kart branding use _quoted_kart_tracking_name.
         trigger_name = f"{dataset.table_name}_sno_track"
         return f"{self.DB_SCHEMA}.{self.quote(trigger_name)}"
 
@@ -168,7 +172,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_trigger_name(dataset)}
+                CREATE TRIGGER {self._quoted_tracking_name("trigger", dataset)}
                 ON {self.table_identifier(dataset)}
                 AFTER INSERT, UPDATE, DELETE AS
                 BEGIN
@@ -187,12 +191,13 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
     @contextlib.contextmanager
     def _suspend_triggers(self, sess, dataset):
+        trigger_name = self._quoted_tracking_name("trigger", dataset)
         sess.execute(
-            f"""DISABLE TRIGGER {self._quoted_trigger_name(dataset)} ON {self.table_identifier(dataset)};"""
+            f"""DISABLE TRIGGER {trigger_name} ON {self.table_identifier(dataset)};"""
         )
         yield
         sess.execute(
-            f"""ENABLE TRIGGER {self._quoted_trigger_name(dataset)} ON {self.table_identifier(dataset)};"""
+            f"""ENABLE TRIGGER {trigger_name} ON {self.table_identifier(dataset)};"""
         )
 
     def meta_items(self, dataset):

@@ -81,11 +81,6 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         """ Return a full absolute path to the working copy """
         return (self.repo.workdir_path / self.path).resolve()
 
-    def _quoted_trigger_name(self, dataset, trigger_type):
-        # We don't actually need to prefix this with gpkg_sno - just _sno would be okay -
-        # but changing it means migrating working copies, unfortunately.
-        return self.quote(f"gpkg_sno_{dataset.table_name}_{trigger_type}")
-
     def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
             # This user-defined GeometryType normalises GPKG geometry to the Sno V2 GPKG geometry.
@@ -464,16 +459,12 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
 
-    def _drop_triggers(self, sess, dataset):
-        sess.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'ins')}")
-        sess.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'upd')}")
-        sess.execute(f"DROP TRIGGER {self._quoted_trigger_name(dataset, 'del')}")
-
-    @contextlib.contextmanager
-    def _suspend_triggers(self, sess, dataset):
-        self._drop_triggers(sess, dataset)
-        yield
-        self._create_triggers(sess, dataset)
+    def _quoted_sno_tracking_name(self, trigger_type, dataset):
+        assert trigger_type in ("ins", "upd", "del")
+        assert dataset is not None
+        # This is how the triggers are named in Sno 0.8.0 and earlier.
+        # Newer repos that use kart branding use _quoted_kart_tracking_name.
+        return self.quote(f"gpkg_sno_{dataset.table_name}_{trigger_type}")
 
     def _create_triggers(self, sess, dataset):
         table_identifier = self.table_identifier(dataset)
@@ -483,7 +474,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_trigger_name(dataset, 'ins')}
+                CREATE TRIGGER {self._quoted_tracking_name('ins', dataset)}
                    AFTER INSERT ON {table_identifier}
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
@@ -497,7 +488,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_trigger_name(dataset, 'upd')}
+                CREATE TRIGGER {self._quoted_tracking_name('upd', dataset)}
                    AFTER UPDATE ON {table_identifier}
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
@@ -511,7 +502,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         sess.execute(
             text_with_inlined_params(
                 f"""
-                CREATE TRIGGER {self._quoted_trigger_name(dataset, 'del')}
+                CREATE TRIGGER {self._quoted_tracking_name('del', dataset)}
                    AFTER DELETE ON {table_identifier}
                 BEGIN
                     INSERT OR REPLACE INTO {self.KART_TRACK} (table_name, pk)
@@ -521,6 +512,17 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
                 {"table_name": dataset.table_name},
             )
         )
+
+    def _drop_triggers(self, sess, dataset):
+        sess.execute(f"DROP TRIGGER {self._quoted_tracking_name('ins', dataset)}")
+        sess.execute(f"DROP TRIGGER {self._quoted_tracking_name('upd', dataset)}")
+        sess.execute(f"DROP TRIGGER {self._quoted_tracking_name('del', dataset)}")
+
+    @contextlib.contextmanager
+    def _suspend_triggers(self, sess, dataset):
+        self._drop_triggers(sess, dataset)
+        yield
+        self._create_triggers(sess, dataset)
 
     def _is_meta_update_supported(self, dataset_version, meta_diff):
         """

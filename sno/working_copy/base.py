@@ -115,6 +115,32 @@ class BaseWorkingCopy:
         )
         return self.preparer.format_table(sqlalchemy_table)
 
+    def _quoted_tracking_name(self, trigger_type, dataset=None):
+        """
+        Returns the name of the trigger responsible for populating the kart_track table.
+        There are a few different name variants for naming the trigger itself, a stored procedure
+        that the trigger uses, or three triggers that handle inserts, updates, and deletes separately.
+        If dataset is supplied, the name will include dataset.table_name so that multiple triggers,
+        one per dataset, can be created.
+        """
+        assert trigger_type in ("trigger", "proc", "ins", "upd", "del")
+        # TODO - check if it is appropriate to use Kart branding, and if so delegate to _quoted_kart_tracking_name
+        return self._quoted_sno_tracking_name(trigger_type, dataset)
+
+    def _quoted_kart_tracking_name(self, trigger_type, dataset=None):
+        if dataset is not None:
+            name = f"_kart_track_{dataset.table_name}_{trigger_type}"
+        else:
+            name = f"_kart_track_{trigger_type}"
+        return self.table_identifier(name)
+
+    def _quoted_sno_tracking_name(self, trigger_type, dataset=None):
+        """
+        Returns the name of the trigger responsible for populating the sno_track table.
+        These names are older and are not as consistent - each WorkingClass type must override to provide its own logic.
+        """
+        raise NotImplementedError()
+
     @functools.lru_cache()
     def _table_def_for_dataset(self, dataset, schema=None):
         """Returns a sqlalchemy table definition which can be inserted, updated, or selected from."""
