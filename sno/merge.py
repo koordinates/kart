@@ -5,13 +5,16 @@ import click
 
 from . import commit
 from .cli_util import call_and_exit_flag, StringFromFile
-from .conflicts import (
-    list_conflicts,
-    conflicts_json_as_text,
-)
+from .conflicts import list_conflicts
 from .diff import get_repo_diff
 from .exceptions import InvalidOperation
-from .merge_util import AncestorOursTheirs, MergeIndex, MergeContext, ALL_MERGE_FILES
+from .merge_util import (
+    AncestorOursTheirs,
+    MergeIndex,
+    MergeContext,
+    ALL_MERGE_FILES,
+    merge_status_to_text,
+)
 from .output_util import dump_json_output
 from .repo import SnoRepoFiles, SnoRepoState
 from .structs import CommitWithReference
@@ -241,89 +244,6 @@ def complete_merging_state(ctx):
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
     repo.gc("--auto")
-
-
-def merge_context_to_text(jdict):
-    theirs = jdict["theirs"]
-    ours = jdict["ours"]
-    theirs_branch = theirs.get("branch", None)
-    theirs_desc = (
-        f'branch "{theirs_branch}"' if theirs_branch else theirs["abbrevCommit"]
-    )
-    ours_desc = ours.get("branch", None) or ours["abbrevCommit"]
-    return f"Merging {theirs_desc} into {ours_desc}"
-
-
-def merge_status_to_text(jdict, fresh):
-    """
-    Converts the json output of sno merge (or of sno status, which uses
-    the same format during a merge) to text output.
-
-    jdict - the dictionary of json output.
-    fresh - True if we just arrived in this state due to a merge command,
-            False if the user is just checking the current state.
-    """
-    merging_text = merge_context_to_text(jdict["merging"])
-
-    if jdict.get("noOp", False):
-        return merging_text + "\nAlready up to date"
-
-    dry_run = jdict.get("dryRun", False)
-    commit = jdict.get("commit", None)
-
-    if jdict.get("fastForward", False):
-        if dry_run:
-            ff_text = (
-                f"Can fast-forward to {commit}\n"
-                "(Not actually fast-forwarding due to --dry-run)",
-            )
-        else:
-            ff_text = f"Fast-forwarded to {commit}"
-        return "\n".join([merging_text, ff_text])
-
-    conflicts = jdict.get("conflicts", None)
-    if not conflicts:
-        if dry_run:
-            no_conflicts_text = (
-                "No conflicts: merge will succeed!\n"
-                "(Not actually merging due to --dry-run)"
-            )
-        else:
-            if fresh:
-                no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
-            else:
-                no_conflicts_text = (
-                    f"No conflicts!\nUse `sno merge --continue` to complete the merge"
-                )
-        return "\n".join([merging_text, no_conflicts_text])
-
-    conflicts_header = "Conflicts found:" if fresh else "Conflicts:"
-    conflicts_text = "\n\n".join([conflicts_header, conflicts_json_as_text(conflicts)])
-
-    if dry_run:
-        dry_run_text = "(Not actually merging due to --dry-run)"
-        return "\n".join([merging_text, conflicts_text, dry_run_text])
-
-    conflicts_help_text = (
-        "View conflicts with `sno conflicts` and resolve them with `sno resolve`.\n"
-        "Once no conflicts remain, complete this merge with `sno merge --continue`.\n"
-        "Or use `sno merge --abort` to return to the previous state."
-    )
-    is_in = "is now in" if fresh else "is in"
-    repo_state_text = f'Repository {is_in} "merging" state.'
-
-    if fresh:
-        # When the user performs a merge, we format the output as follows:
-        # 1. Merging X and Y. 2. Conflicts found: XYZ. 3. Repo is now in merging state.
-        return "\n".join(
-            [merging_text, conflicts_text, repo_state_text, conflicts_help_text]
-        )
-    else:
-        # When the user requests the current status, we format the output as follows:
-        # 1. Repo is in merging state. 2. Merging X and Y. 3. Conflicts: XYZ.
-        return "\n".join(
-            [repo_state_text, merging_text, conflicts_text, conflicts_help_text]
-        )
 
 
 @click.command()
