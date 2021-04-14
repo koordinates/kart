@@ -1,34 +1,15 @@
 #!/usr/bin/env python3
+import importlib
 import logging
 import os
 import re
+import sys
 import subprocess
 
 import click
 import pygit2
 
 from . import core  # noqa
-from . import (
-    apply,
-    branch,
-    checkout,
-    clone,
-    conflicts,
-    commit,
-    data,
-    diff,
-    fsck,
-    init,
-    log,
-    merge,
-    meta,
-    pull,
-    resolve,
-    show,
-    status,
-    query,
-    upgrade,
-)
 from .cli_util import (
     add_help_subcommand,
     call_and_exit_flag,
@@ -37,6 +18,44 @@ from .cli_util import (
 )
 from .context import Context
 from .exec import execvp
+
+MODULE_COMMANDS = {
+    "apply": {"apply"},
+    "branch": {"branch"},
+    "checkout": {"checkout", "create-workingcopy", "reset", "restore", "switch"},
+    "clone": {"clone"},
+    "conflicts": {"conflicts"},
+    "commit": {"commit"},
+    "data": {"data"},
+    "diff": {"diff"},
+    "fsck": {"fsck"},
+    "init": {"import", "init"},
+    "log": {"log"},
+    "merge": {"merge"},
+    "meta": {"commit-files", "meta"},
+    "pull": {"pull"},
+    "resolve": {"resolve"},
+    "show": {"create-patch", "show"},
+    "status": {"status"},
+    "query": {"query"},
+    "upgrade": {"upgrade", "upgrade-to-tidy"},
+}
+
+
+def _load_commands_from_module(mod_name):
+    mod = importlib.import_module(f".{mod_name}", "sno")
+    for k in MODULE_COMMANDS[mod_name]:
+        k = k.replace("-", "_")
+        if k == "import":
+            # a special case
+            k = "import_"
+        command = getattr(mod, k)
+        cli.add_command(command)
+
+
+def _load_all_commands():
+    for mod in MODULE_COMMANDS:
+        _load_commands_from_module(mod)
 
 
 def get_version():
@@ -182,36 +201,6 @@ def cli(ctx, repo_dir, verbose, post_mortem):
         logging.getLogger("sqlalchemy.engine").setLevel("INFO")
 
 
-# Commands from modules:
-cli.add_command(apply.apply)
-cli.add_command(branch.branch)
-cli.add_command(checkout.checkout)
-cli.add_command(checkout.create_workingcopy)
-cli.add_command(checkout.reset)
-cli.add_command(checkout.restore)
-cli.add_command(checkout.switch)
-cli.add_command(clone.clone)
-cli.add_command(conflicts.conflicts)
-cli.add_command(commit.commit)
-cli.add_command(data.data)
-cli.add_command(diff.diff)
-cli.add_command(fsck.fsck)
-cli.add_command(init.import_table)
-cli.add_command(init.init)
-cli.add_command(log.log)
-cli.add_command(merge.merge)
-cli.add_command(meta.commit_files)
-cli.add_command(meta.meta)
-cli.add_command(pull.pull)
-cli.add_command(resolve.resolve)
-cli.add_command(show.create_patch)
-cli.add_command(show.show)
-cli.add_command(status.status)
-cli.add_command(query.query)
-cli.add_command(upgrade.upgrade)
-cli.add_command(upgrade.upgrade_to_tidy)
-
-
 # straight process-replace commands
 
 
@@ -312,5 +301,39 @@ def gc(ctx, args):
     execvp("git", params + list(args))
 
 
-if __name__ == "__main__":
+def _hackily_parse_command(args):
+    ignore_next = False
+    for arg in args[1:]:
+        if ignore_next:
+            ignore_next = False
+            continue
+        if arg == "--help":
+            return "help"
+        elif arg.startswith("-"):
+            if arg in ("--repo", "-C"):
+                ignore_next = True
+                continue
+        else:
+            return arg
+
+
+def load_commands_from_args(args):
+    command = _hackily_parse_command(args)
+    if command == "help":
+        _load_all_commands()
+    elif command not in cli.commands:
+        for mod, commands in MODULE_COMMANDS.items():
+            if command in commands:
+                _load_commands_from_module(mod)
+                break
+        else:
+            _load_all_commands()
+
+
+def entrypoint():
+    load_commands_from_args(sys.argv)
     cli()
+
+
+if __name__ == "__main__":
+    entrypoint()

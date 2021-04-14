@@ -72,13 +72,16 @@ if is_darwin:
     # which isn't much use wrt unixODBC. And PyInstaller has no useful hooks.
     # TODO: when we upgrade PyInstaller this probably needs redoing
     import macholib.util
+
     macholib.util._orig_in_system_path = macholib.util.in_system_path
+
     def sno__in_system_path(filename):
         if re.match(r'/usr/local(/opt/unixodbc)?/lib/libodbc\.\d+\.dylib$', filename):
             print(f"❄️  Treating {filename} as a system library", file=sys.stderr)
             return True
         else:
             return macholib.util._orig_in_system_path(filename)
+
     macholib.util.in_system_path = sno__in_system_path
 
 
@@ -99,6 +102,7 @@ pyi_analysis = Analysis(
         '_cffi_backend',
         # via a cython module ???
         'csv',
+        *collect_submodules('sno'),
         *collect_submodules('sqlalchemy'),
     ],
     hookspath=[
@@ -216,7 +220,10 @@ if is_darwin:
                 if not os.path.exists(fpath) and not os.path.exists(
                     os.path.join(dist_bin_root, link_path)
                 ):
-                    print(f"❄️  ignoring broken link {relpath} -> {link_path}", file=sys.stderr)
+                    print(
+                        f"❄️  ignoring broken link {relpath} -> {link_path}",
+                        file=sys.stderr,
+                    )
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
             elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
@@ -258,7 +265,10 @@ elif is_linux:
                 if not os.path.exists(fpath) and not os.path.exists(
                     os.path.join(dist_bin_root, link_path)
                 ):
-                    print(f"❄️  ignoring broken link {relpath} -> {link_path}", file=sys.stderr)
+                    print(
+                        f"❄️  ignoring broken link {relpath} -> {link_path}",
+                        file=sys.stderr,
+                    )
                     # ignore broken symlinks (git-csvserver/git-shell)
                     continue
 

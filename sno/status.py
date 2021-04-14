@@ -5,8 +5,7 @@ import pygit2
 
 from .conflicts import list_conflicts
 from .output_util import dump_json_output
-from .merge import merge_status_to_text
-from .merge_util import MergeContext, MergeIndex
+from .merge_util import MergeContext, MergeIndex, merge_status_to_text
 from .repo import SnoRepoState
 
 

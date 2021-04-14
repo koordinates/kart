@@ -193,7 +193,7 @@ class GenerateIDsFromFile(StringFromFile):
     default=True,
     help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
 )
-def import_table(
+def import_(
     ctx,
     all_tables,
     message,
