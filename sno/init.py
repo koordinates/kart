@@ -193,6 +193,12 @@ class GenerateIDsFromFile(StringFromFile):
     default=True,
     help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
 )
+@click.option(
+    "--num-processes",
+    default=4,
+    type=click.INT,
+    help="How many git-fast-import processes to use",
+)
 def import_(
     ctx,
     all_tables,
@@ -209,6 +215,7 @@ def import_(
     allow_empty,
     max_delta_depth,
     do_checkout,
+    num_processes,
 ):
     """
     Import data into a repository.
@@ -327,6 +334,7 @@ def import_(
         else ReplaceExisting.DONT_REPLACE,
         replace_ids=replace_ids,
         allow_empty=allow_empty,
+        num_processes=num_processes,
     )
 
     if do_checkout:
