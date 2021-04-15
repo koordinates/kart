@@ -6,7 +6,6 @@ from .core import walk_tree
 from .dataset2 import Dataset2
 
 REPO_VERSION_BLOB_PATH = ".sno.repository.version"
-REPO_VERSION_CONFIG_PATH = "sno.repository.version"
 
 ALL_REPO_VERSIONS = (0, 1, 2)
 
@@ -49,10 +48,15 @@ def get_repo_version(repo, tree=None):
 
 
 def _get_repo_version_from_config(repo):
+    from sno.repo import KartConfigKeys
+
     repo_cfg = repo.config
-    if REPO_VERSION_CONFIG_PATH in repo_cfg:
-        return repo_cfg.get_int(REPO_VERSION_CONFIG_PATH)
-    return SUPPORTED_REPO_VERSION
+    if KartConfigKeys.KART_REPOSTRUCTURE_VERSION in repo_cfg:
+        return repo_cfg.get_int(KartConfigKeys.KART_REPOSTRUCTURE_VERSION)
+    elif KartConfigKeys.SNO_REPOSITORY_VERSION in repo_cfg:
+        return repo_cfg.get_int(KartConfigKeys.SNO_REPOSITORY_VERSION)
+    else:
+        return SUPPORTED_REPO_VERSION
 
 
 def _distinguish_v0_v1(tree):

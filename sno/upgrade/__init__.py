@@ -73,7 +73,7 @@ def upgrade(ctx, source, dest):
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
-    dest_repo = SnoRepo.init_repository(dest, wc_path=None, bare=True)
+    dest_repo = SnoRepo.init_repository(dest, wc_location=None, bare=True)
 
     # walk _all_ references
     source_walker = source_repo.walk(
@@ -129,7 +129,7 @@ def upgrade(ctx, source, dest):
     click.secho("\nCompacting repository ...", bold=True)
     dest_repo.gc()
 
-    if "sno.workingcopy.path" in source_repo.config:
+    if source_repo.workingcopy_location:
         click.secho("\nCreating working copy ...", bold=True)
         subctx = click.Context(ctx.command, parent=ctx)
         subctx.ensure_object(context.Context)
@@ -213,12 +213,12 @@ def upgrade_to_tidy(source):
         )
 
     source_repo.ensure_supported_version()
-    if source_repo.is_tidy_style_sno_repo():
+    if source_repo.is_tidy_style:
         raise InvalidOperation(
             "Cannot upgrade in-place - source repo is already tidy-style"
         )
 
-    wc_path = source_repo.workingcopy_path
+    wc_loc = source_repo.workingcopy_location
     is_bare = source_repo.is_bare
 
     source_repo.free()
@@ -241,7 +241,103 @@ def upgrade_to_tidy(source):
     tidy_repo.lock_git_index()
     tidy_repo.config["core.bare"] = False
     tidy_repo.config["sno.workingcopy.bare"] = False
-    tidy_repo.write_config(wc_path, is_bare)
+    tidy_repo.write_config(wc_loc, is_bare)
     tidy_repo.activate()
 
     click.secho("In-place upgrade complete: repo is now tidy", fg="green", bold=True)
+
+
+@click.command()
+@click.pass_context
+@click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
+def upgrade_to_kart(ctx, source):
+    """
+    Upgrade in-place a Sno repository to be a Kart repository.
+    Changes the following:
+     - config variables:
+       * sno.repository.version -> kart.repostructure.version
+       * sno.workingcopy.path -> kart.workingcopy.location
+     - hidden directory name from .sno to .kart (if repo is tidy-style)
+     - rewrites .sno/index / .kart/index to contain "kart" extension
+     - recreates the working copy, if one exists:
+       * _sno_state table (or similar) -> _kart_state
+       * _sno_track table (or similar) -> _kart_track
+       * triggers related to _sno_track also have new names
+
+    Usage:
+    sno upgrade-to-kart SOURCE
+    """
+    source = Path(source).resolve()
+
+    try:
+        source_repo = SnoRepo(source)
+    except NotFound:
+        raise click.BadParameter(
+            f"'{source}': not an existing sno repository", param_hint="SOURCE"
+        )
+
+    source_repo.ensure_supported_version()
+    if source_repo.branding == "kart":
+        raise InvalidOperation(
+            "Cannot upgrade in-place - source repo is already a Kart repo"
+        )
+
+    working_copy = source_repo.working_copy
+    is_bare_style = source_repo.is_bare_style
+
+    if working_copy:
+        working_copy.check_not_dirty()
+
+    if not is_bare_style:
+        assert source == source_repo.workdir_path
+        dot_sno_path = source / ".sno"
+        assert dot_sno_path.is_dir()
+        assert source_repo.gitdir_path == dot_sno_path
+
+        dot_kart_path = source / ".kart"
+        if dot_kart_path.exists():
+            raise InvalidOperation(".kart already exists")
+
+    from sno.repo import KartConfigKeys, LOCKED_GIT_INDEX_CONTENTS
+
+    # Config variables:
+    click.echo("Moving config variables")
+    config = source_repo.config
+    assert KartConfigKeys.SNO_REPOSITORY_VERSION in config
+    config[KartConfigKeys.KART_REPOSTRUCTURE_VERSION] = config[
+        KartConfigKeys.SNO_REPOSITORY_VERSION
+    ]
+    del config[KartConfigKeys.SNO_REPOSITORY_VERSION]
+
+    if KartConfigKeys.SNO_WORKINGCOPY_PATH in config:
+        config[KartConfigKeys.KART_WORKINGCOPY_LOCATION] = config[
+            KartConfigKeys.SNO_WORKINGCOPY_PATH
+        ]
+        del config[KartConfigKeys.SNO_WORKINGCOPY_PATH]
+
+    source_repo.free()
+    del source_repo
+
+    # Directory name, .git file, index file:
+    if not is_bare_style:
+        click.echo("Moving .sno to .kart")
+        dot_sno_path.rename(dot_kart_path)
+        (source / ".git").write_text("gitdir: .kart\n", encoding="utf-8")
+        (dot_kart_path / "index").write_bytes(LOCKED_GIT_INDEX_CONTENTS["kart"])
+
+    # README file:
+    if (source / "SNO_README.txt").exists():
+        (source / "SNO_README.txt").unlink()
+    readme_text = SnoRepo.get_readme_text(is_bare_style, "kart")
+    (source / "KART_README.txt").write_text(readme_text)
+
+    # Working copy:
+    if working_copy:
+        subctx = click.Context(ctx.command, parent=ctx)
+        subctx.ensure_object(context.Context)
+        subctx.obj.user_repo_path = str(source)
+        subctx.invoke(checkout.create_workingcopy, delete_existing=True)
+
+    click.secho(
+        f"\nIn-place upgrade complete: Sno repo is now Kart repo", fg="green", bold=True
+    )

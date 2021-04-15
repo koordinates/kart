@@ -39,19 +39,18 @@ def fsck(ctx, reset_datasets, fsck_args):
 
     # now check our stuff:
     # 1. working copy
-    if "sno.workingcopy.path" not in repo.config:
-        click.echo("No working-copy configured")
+    if not repo.workingcopy_location:
+        click.echo("No working copy configured")
         return
 
-    working_copy_path = repo.config["sno.workingcopy.path"]
     working_copy = repo.working_copy
     if not working_copy:
         raise NotFound(
-            click.style(f"Working copy missing: {working_copy_path}", fg="red"),
+            click.style(f"Working copy missing: {working_copy}", fg="red"),
             exit_code=NO_WORKING_COPY,
         )
 
-    click.secho(f"✔︎ Working copy: {working_copy_path}", fg="green")
+    click.secho(f"✔︎ Working copy: {working_copy}", fg="green")
 
     if reset_datasets:
         click.secho(

@@ -38,7 +38,7 @@ MODULE_COMMANDS = {
     "show": {"create-patch", "show"},
     "status": {"status"},
     "query": {"query"},
-    "upgrade": {"upgrade", "upgrade-to-tidy"},
+    "upgrade": {"upgrade", "upgrade-to-tidy", "upgrade-to-kart"},
 }
 
 

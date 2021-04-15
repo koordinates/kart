@@ -44,14 +44,14 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         self.repo = repo
         self.uri = self.location = location
 
-        self.check_valid_db_uri(self.uri)
+        self.check_valid_db_uri(self.uri, repo)
         self.db_uri, self.db_schema = self._separate_db_schema(self.uri)
 
         self.engine = sqlserver_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MSIdentifierPreparer(self.engine.dialect)
 
-        self.kart_tables = SqlServerKartTables(self.db_schema)
+        self.kart_tables = SqlServerKartTables(self.db_schema, repo.is_kart_branded)
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = sqlserver_adapter.v2_schema_to_sqlserver_spec(
@@ -158,13 +158,12 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         # SQL server deletes the spatial index automatically when the table is deleted.
         pass
 
-    def _quoted_sno_tracking_name(self, trigger_type, dataset):
+    def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type == "trigger"
         assert dataset is not None
         # This is how the trigger is named in Sno 0.8.0 and earlier.
-        # Newer repos that use kart branding use _quoted_kart_tracking_name.
-        trigger_name = f"{dataset.table_name}_sno_track"
-        return f"{self.DB_SCHEMA}.{self.quote(trigger_name)}"
+        # Newer repos that use kart branding use _kart_tracking_name.
+        return f"{dataset.table_name}_sno_track"
 
     def _create_triggers(self, sess, dataset):
         pk_name = dataset.primary_key

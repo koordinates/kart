@@ -56,8 +56,6 @@ class BaseWorkingCopy:
     self.kart_tables - sqlalchemy Table definitions for kart_state and kart_track tables.
     """
 
-    SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
-
     @property
     def WORKING_COPY_TYPE_NAME(self):
         """Human readable name of this type of working copy, eg "PostGIS"."""
@@ -124,15 +122,31 @@ class BaseWorkingCopy:
         one per dataset, can be created.
         """
         assert trigger_type in ("trigger", "proc", "ins", "upd", "del")
-        # TODO - check if it is appropriate to use Kart branding, and if so delegate to _quoted_kart_tracking_name
-        return self._quoted_sno_tracking_name(trigger_type, dataset)
-
-    def _quoted_kart_tracking_name(self, trigger_type, dataset=None):
-        if dataset is not None:
-            name = f"_kart_track_{dataset.table_name}_{trigger_type}"
+        if self.repo.is_kart_branded:
+            trigger_name = self._kart_tracking_name(trigger_type, dataset)
         else:
-            name = f"_kart_track_{trigger_type}"
-        return self.table_identifier(name)
+            trigger_name = self._sno_tracking_name(trigger_type, dataset)
+
+        if self.db_schema and self._trigger_type_requires_db_schema(trigger_type):
+            # self.table_identifier fully-qualifies the trigger_name with self.db_schema:
+            return self.table_identifier(trigger_name)
+        else:
+            # self.quote just quotes the name without adding any db_schema.
+            return self.quote(trigger_name)
+
+    def _kart_tracking_name(self, trigger_type, dataset=None):
+        """Returns the kart-branded name of the trigger reponsible for populating the kart_track table."""
+        if dataset is not None:
+            return f"_kart_track_{dataset.table_name}_{trigger_type}"
+        else:
+            return f"_kart_track_{trigger_type}"
+
+    def _trigger_type_requires_db_schema(self, trigger_type):
+        # Subclasses should return True if the given trigger_type would be put in a database-wide namespace,
+        # and so the db_schema should be included in the trigger's fully qualified name.
+        # Return False if the given trigger_type exists in some smaller namespace - eg if it is already
+        # namespaced within the table it is attached to - and so including the db_schema would be an error.
+        return True
 
     def _quoted_sno_tracking_name(self, trigger_type, dataset=None):
         """
@@ -198,12 +212,10 @@ class BaseWorkingCopy:
         If allow_unconnectable is True, a working copy that cannot be connected to may be returned - otherwise,
         only a working copy that can be connected to will be returned, and a DbConnectionError will be raised otherwise.
         """
-        repo_cfg = repo.config
-        location_key = cls.SNO_WORKINGCOPY_PATH
-        if location_key not in repo_cfg:
+        location = repo.workingcopy_location
+        if not location:
             return None
 
-        location = repo_cfg[location_key]
         return cls.get_at_location(
             repo,
             location,
@@ -246,31 +258,23 @@ class BaseWorkingCopy:
 
     @classmethod
     def ensure_config_exists(cls, repo):
-        repo_cfg = repo.config
-        bare_key = repo.BARE_CONFIG_KEY
-        is_bare = bare_key in repo_cfg and repo_cfg.get_bool(bare_key)
-        if is_bare:
-            return
-
-        location_key = cls.SNO_WORKINGCOPY_PATH
-        location = repo_cfg[location_key] if location_key in repo_cfg else None
-        if location is None:
+        if repo.workingcopy_location is None and not repo.is_bare:
             cls.write_config(repo, None, False)
 
     @classmethod
     def write_config(cls, repo, location=None, bare=False):
         repo_cfg = repo.config
         bare_key = repo.BARE_CONFIG_KEY
-        location_key = cls.SNO_WORKINGCOPY_PATH
+        location_key = repo.WORKINGCOPY_LOCATION_KEY
 
         if bare:
             repo_cfg[bare_key] = True
             repo.del_config(location_key)
         else:
             if location is None:
-                location = cls.default_location(repo.workdir_path)
+                location = cls.default_location(repo)
             else:
-                location = cls.normalise_location(repo, location)
+                location = cls.normalise_location(location, repo)
 
             repo_cfg[bare_key] = False
             repo_cfg[location_key] = str(location)
@@ -285,28 +289,26 @@ class BaseWorkingCopy:
         return wct.class_
 
     @classmethod
-    def check_valid_creation_location(cls, wc_location, workdir_path=None):
+    def check_valid_creation_location(cls, wc_location, repo):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
         and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
         Doesn't check if we have permissions to create a working copy there.
         """
         if not wc_location:
-            wc_location = cls.default_location(workdir_path)
+            wc_location = cls.default_location(repo)
         cls.subclass_from_location(wc_location).check_valid_creation_location(
-            wc_location, workdir_path
+            wc_location, repo
         )
 
     @classmethod
-    def check_valid_location(cls, wc_location, workdir_path=None):
+    def check_valid_location(cls, wc_location, repo):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,
         and nothing already exists there that prevents us from creating it. Raises InvalidOperation if it is not.
         Doesn't check if we have permissions to create a working copy there.
         """
-        cls.subclass_from_location(wc_location).check_valid_location(
-            wc_location, workdir_path
-        )
+        cls.subclass_from_location(wc_location).check_valid_location(wc_location, repo)
 
     def check_valid_state(self, status=None):
         if status is None:
@@ -325,16 +327,16 @@ class BaseWorkingCopy:
             raise NotFound("\n".join(message), NO_WORKING_COPY)
 
     @classmethod
-    def default_location(cls, workdir_path):
+    def default_location(cls, repo):
         """Returns `example.gpkg` for a sno repo in a directory named `example`."""
-        stem = workdir_path.stem
+        stem = repo.workdir_path.stem
         return f"{stem}.gpkg"
 
     @classmethod
-    def normalise_location(cls, repo, wc_location):
+    def normalise_location(cls, wc_location, repo):
         """If the path is in a non-standard form, normalise it to the equivalent standard form."""
         return cls.subclass_from_location(wc_location).normalise_location(
-            repo, wc_location
+            wc_location, repo
         )
 
     @contextlib.contextmanager

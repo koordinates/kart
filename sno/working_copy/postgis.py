@@ -41,14 +41,14 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         self.repo = repo
         self.uri = self.location = location
 
-        self.check_valid_db_uri(self.uri)
+        self.check_valid_db_uri(self.uri, repo)
         self.db_uri, self.db_schema = self._separate_db_schema(self.uri)
 
         self.engine = postgis_engine(self.db_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = PGIdentifierPreparer(self.engine.dialect)
 
-        self.kart_tables = PostgisKartTables(self.db_schema)
+        self.kart_tables = PostgisKartTables(self.db_schema, repo.is_kart_branded)
 
     def create_common_functions(self, sess):
         sess.execute(
@@ -182,19 +182,21 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         # PostGIS deletes the spatial index automatically when the table is deleted.
         pass
 
-    def _quoted_sno_tracking_name(self, trigger_type, dataset):
+    def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type in ("trigger", "proc")
         assert dataset is None
         # This is how the triggers are named in Sno 0.8.0 and earlier.
-        # Newer repos that use kart branding use _quoted_tracking_name.
-        # The existing names are kind of backwards...
+        # Newer repos that use kart branding use _kart_tracking_name.
+        # The existing names are kind of backwards:
         if trigger_type == "trigger":
-            # This name doesn't include db_schema since triggers are namespaced within the
-            # table they are attached to anyway, they don't need a db_schema.
-            return self.quote("sno_track")
+            return "sno_track"
         elif trigger_type == "proc":
-            # table_identifier includes self.db_schema so this ends up in the right place.
-            return self.table_identifier("_sno_track_trigger")
+            return "_sno_track_trigger"
+
+    def _trigger_type_requires_db_schema(self, trigger_type):
+        # Actual triggers (so, anything that's not "proc", a procedure that a trigger calls) -
+        # are namespaced within the table they are attached to, so they don't require a db_schema.
+        return trigger_type == "proc"
 
     def _create_triggers(self, sess, dataset):
         sess.execute(

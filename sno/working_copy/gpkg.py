@@ -44,13 +44,13 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
 
         self.db_schema = None
-        self.kart_tables = GpkgKartTables()
+        self.kart_tables = GpkgKartTables(repo.is_kart_branded)
 
     @classmethod
-    def check_valid_creation_location(cls, wc_location, workdir_path=None):
-        cls.check_valid_location(wc_location, workdir_path)
+    def check_valid_creation_location(cls, wc_location, repo):
+        cls.check_valid_location(wc_location, repo)
 
-        gpkg_path = (workdir_path / wc_location).resolve()
+        gpkg_path = (repo.workdir_path / wc_location).resolve()
         if gpkg_path.exists():
             desc = "path" if gpkg_path.is_dir() else "GPKG file"
             raise InvalidOperation(
@@ -58,7 +58,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             )
 
     @classmethod
-    def check_valid_location(cls, wc_location, workdir_path=None):
+    def check_valid_location(cls, wc_location, repo):
         if not str(wc_location).endswith(".gpkg"):
             suggested_path = f"{os.path.splitext(str(wc_location))[0]}.gpkg"
             raise click.UsageError(
@@ -66,7 +66,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             )
 
     @classmethod
-    def normalise_location(cls, repo, wc_location):
+    def normalise_location(cls, wc_location, repo):
         """Rewrites a relative path (relative to the current directory) as relative to the repo.workdir_path."""
         gpkg_path = Path(wc_location)
         if not gpkg_path.is_absolute():
@@ -212,7 +212,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
             # Create metadata tables
             GpkgTables().create_all(sess)
-            GpkgKartTables().create_all(sess)
+            self.kart_tables.create_all(sess)
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
@@ -459,12 +459,12 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
         L.info("Dropped spatial index in %ss", time.monotonic() - t0)
 
-    def _quoted_sno_tracking_name(self, trigger_type, dataset):
+    def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type in ("ins", "upd", "del")
         assert dataset is not None
         # This is how the triggers are named in Sno 0.8.0 and earlier.
-        # Newer repos that use kart branding use _quoted_kart_tracking_name.
-        return self.quote(f"gpkg_sno_{dataset.table_name}_{trigger_type}")
+        # Newer repos that use kart branding use _kart_tracking_name.
+        return f"gpkg_sno_{dataset.table_name}_{trigger_type}"
 
     def _create_triggers(self, sess, dataset):
         table_identifier = self.table_identifier(dataset)

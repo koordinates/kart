@@ -1,6 +1,6 @@
 import subprocess
 
-from sno.repo import SnoRepo, LockedGitIndex
+from sno.repo import SnoRepo, LOCKED_GIT_INDEX_CONTENTS
 
 
 def test_init_repository(tmp_path):
@@ -14,9 +14,9 @@ def test_init_repository(tmp_path):
     assert (repo_path / ".sno").is_dir()
     assert (repo_path / ".sno" / "HEAD").exists()
 
-    assert (
-        repo_path / ".sno" / "index"
-    ).read_bytes() == LockedGitIndex.LOCKED_EMPTY_GIT_INDEX
+    assert (repo_path / ".sno" / "index").read_bytes() == LOCKED_GIT_INDEX_CONTENTS[
+        "sno"
+    ]
 
     assert sno_repo.config.get_int("sno.repository.version") == 2
     assert sno_repo.config["sno.workingcopy.path"] == "test_repo.gpkg"

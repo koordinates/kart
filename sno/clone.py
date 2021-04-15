@@ -8,7 +8,7 @@ import click
 from . import checkout
 from .cli_util import startup_load_git_init_config
 from .exceptions import InvalidOperation
-from .repo import SnoRepo
+from .repo import SnoRepo, PotentialRepo
 
 
 def get_directory_from_url(url):
@@ -51,11 +51,14 @@ def get_directory_from_url(url):
     help="Whether the new repository should immediately check out a working copy (only effects non-bare repos)",
 )
 @click.option(
+    "--workingcopy-location",
     "--workingcopy-path",
     "--workingcopy",
-    "wc_path",
-    help="Path where the working copy should be created. "
-    "This should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA",
+    "wc_location",
+    help="Location where the working copy should be created. This should be in one of the following formats:\n"
+    "- PATH.gpkg\n"
+    "- postgresql://[HOST]/DBNAME/SCHEMA\n"
+    "- mssql://[HOST]/DBNAME/SHEMA\n",
 )
 @click.option(
     "--progress/--quiet",
@@ -99,7 +102,7 @@ def clone(
     ctx,
     bare,
     do_checkout,
-    wc_path,
+    wc_location,
     do_progress,
     depth,
     filterspec,
@@ -116,7 +119,7 @@ def clone(
 
     from sno.working_copy.base import BaseWorkingCopy
 
-    BaseWorkingCopy.check_valid_creation_location(wc_path, repo_path)
+    BaseWorkingCopy.check_valid_creation_location(wc_location, PotentialRepo(repo_path))
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)
@@ -133,7 +136,7 @@ def clone(
         # https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---filterltfilter-specgt
         args.append(f"--filter={filterspec}")
 
-    repo = SnoRepo.clone_repository(url, repo_path, args, wc_path, bare)
+    repo = SnoRepo.clone_repository(url, repo_path, args, wc_location, bare)
 
     # Create working copy, if needed.
     head_commit = repo.head_commit
