@@ -41,28 +41,25 @@ def status(ctx, output_format):
 
 def get_branch_status_json(repo):
     output = {"commit": None, "abbrevCommit": None, "branch": None, "upstream": None}
-    if repo.is_empty:
-        return output
 
     commit = repo.head_commit
-    output["commit"] = commit.id.hex
-    output["abbrevCommit"] = commit.short_id
+    if commit:
+        output["commit"] = commit.id.hex
+        output["abbrevCommit"] = commit.short_id
 
-    if repo.head_is_detached:
-        return output
+    output["branch"] = repo.head_branch_shorthand
+    if not repo.head_is_unborn and not repo.head_is_detached:
+        branch = repo.branches[repo.head_branch_shorthand]
+        upstream = branch.upstream
 
-    branch = repo.branches[repo.head.shorthand]
-    output["branch"] = branch.shorthand
-
-    upstream = branch.upstream
-    if upstream:
-        upstream_head = upstream.peel(pygit2.Commit)
-        n_ahead, n_behind = repo.ahead_behind(commit.id, upstream_head.id)
-        output["upstream"] = {
-            "branch": upstream.shorthand,
-            "ahead": n_ahead,
-            "behind": n_behind,
-        }
+        if upstream:
+            upstream_head = upstream.peel(pygit2.Commit)
+            n_ahead, n_behind = repo.ahead_behind(commit.id, upstream_head.id)
+            output["upstream"] = {
+                "branch": upstream.shorthand,
+                "ahead": n_ahead,
+                "behind": n_behind,
+            }
     return output
 
 

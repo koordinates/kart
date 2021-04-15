@@ -9,6 +9,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 * `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
 * `log` now accepts `--with-feature-count` which adds a feature count to each commit when used with `-o json`. The feature count can be exact or a fast estimate.
+* `status -o json` now shows which branch you are on, even if that branch doesn't yet have any commits yet.
 
 ## 0.8.0
 

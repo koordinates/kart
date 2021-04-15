@@ -268,7 +268,7 @@ def test_status_empty(tmp_path, cli_runner, chdir):
             "sno.status/v1": {
                 "commit": None,
                 "abbrevCommit": None,
-                "branch": None,
+                "branch": "main",
                 "upstream": None,
                 "workingCopy": None,
             }
