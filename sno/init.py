@@ -1,3 +1,4 @@
+import math
 import os
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import SnoRepo, PotentialRepo
+from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 
 
@@ -195,9 +197,8 @@ class GenerateIDsFromFile(StringFromFile):
 )
 @click.option(
     "--num-processes",
-    default=4,
     type=click.INT,
-    help="How many git-fast-import processes to use",
+    help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
 )
 def import_(
     ctx,
@@ -323,6 +324,10 @@ def import_(
 
     ImportSource.check_valid(import_sources, param_hint="tables")
 
+    if num_processes is None:
+        num_processes = get_num_available_cores()
+        # that's a float, but we need an int
+        num_processes = max(1, int(math.ceil(num_processes)))
     fast_import_tables(
         repo,
         import_sources,
