@@ -49,10 +49,9 @@ def get_num_available_cores():
     The result is a float which may or may not be a round number, and may be less than 1.
     """
     if platform.system() == "Linux":
-        quota_f = Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us")
         try:
-            quota = quota_f.read_text()
-            period = Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text()
+            quota = float(Path("/sys/fs/cgroup/cpu/cpu.cfs_quota_us").read_text())
+            period = float(Path("/sys/fs/cgroup/cpu/cpu.cfs_period_us").read_text())
         except FileNotFoundError:
             pass
         else:
@@ -62,7 +61,7 @@ def get_num_available_cores():
             else:
                 # note: this is a float, and may not be a round number
                 # (it's possible to allocate half-cores)
-                return float(quota / period)
+                return quota / period
     try:
         return float(len(os.sched_getaffinity(0)))
     except AttributeError:
