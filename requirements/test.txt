@@ -43,7 +43,7 @@ py==1.10.0
     # via pytest
 pyparsing==2.4.7
     # via packaging
-pytest-benchmark[aspect]==3.2.3
+pytest-benchmark[aspect]==3.4.1
     # via -r requirements/test.in
 pytest-cov==2.11.1
     # via -r requirements/test.in
