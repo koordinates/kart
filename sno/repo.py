@@ -31,7 +31,7 @@ L = logging.getLogger("sno.repo")
 
 
 class SnoRepoFiles:
-    """Useful files that are found in `sno_repo.gitdir_path`"""
+    """Useful files that are found in `repo.gitdir_path`"""
 
     # Standard git files:
     HEAD = "HEAD"
@@ -68,43 +68,66 @@ class SnoRepoState(Enum):
 SnoRepoState.ALL_STATES = (SnoRepoState.NORMAL, SnoRepoState.MERGING)
 
 
-class SnoConfigKeys:
+class KartConfigKeys:
     """
-    Sno specifig config variables found in sno_repo.config
-    (which is read from the file at `sno_repo.gitdir_path / "config"`)
+    Kart specifig config variables found in repo.config
+    (which is read from the file at `repo.gitdir_path / "config"`)
     """
 
+    # Whichever of these two variables is written, controls whether the repo is kart branded or not.
+    KART_REPOSTRUCTURE_VERSION = "kart.repostructure.version"
     SNO_REPOSITORY_VERSION = "sno.repository.version"
+
+    KART_WORKINGCOPY_LOCATION = "kart.workingcopy.location"
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
-    SNO_WORKINGCOPY_BARE = "sno.workingcopy.bare"  # Older sno repos use this custom variable instead of core.bare
+
+    # This variable was also renamed, but when tidy-style repos were added - not during rebranding.
     CORE_BARE = "core.bare"  # Newer sno repos use the standard "core.bare" variable.
+    SNO_WORKINGCOPY_BARE = (
+        "sno.workingcopy.bare"  # Older sno repos use this custom variable instead.
+    )
+
+    BRANDED_REPOSTRUCTURE_VERSION_KEYS = {
+        "kart": KART_REPOSTRUCTURE_VERSION,
+        "sno": SNO_REPOSITORY_VERSION,
+    }
+
+    BRANDED_WORKINGCOPY_LOCATION_KEYS = {
+        "kart": KART_WORKINGCOPY_LOCATION,
+        "sno": SNO_WORKINGCOPY_PATH,
+    }
 
 
-def _append_checksum(data):
-    """Appends the 160-bit git-hash to the end of data"""
-    return data + pygit2.hash(data).raw
-
-
-class LockedGitIndex:
+def locked_git_index(extension_name):
     """
-    An empty index file, but extended with a required ".sno" extension in the extensions section of the index binary
+    Returns an empty index file, but extended with a required extension in the extensions section of the index binary
     format. (Not the file extension - the filename is simply "index", it has no file extension.)
-    Causes all git commands that would involve the index or working copy to fail with "unsupported extension: .sno" -
+    Causes all git commands that would involve the index or working copy to fail with "unsupported extension: NAME" -
+    where name is "kart" or ".sno", giving the user a clue as to which command they *should* be using.
     in that sense it is "locked" to git. Various techniques can be used to unlock it if certain git functionality is
     needed - eg marking the repository as bare so it is ignored, or removing the unsupported extension.
     """
+    assert isinstance(extension_name, bytes)
+    assert len(extension_name) == 4
+    first_char = extension_name[0]
+    assert not (first_char >= ord("A") and first_char <= ord("Z"))
 
     GIT_INDEX_VERSION = 2
     BASE_EMPTY_GIT_INDEX = struct.pack(">4sII", b"DIRC", GIT_INDEX_VERSION, 0)
 
-    # Extension name does not start with A-Z, therefore is a required extension.
-    LOCKED_SNO_EXTENSION = struct.pack(">4sI", b".sno", 0)
-
+    # Extension name must not start with A-Z, therefore is a required extension.
     # See https://git-scm.com/docs/index-format
 
-    LOCKED_EMPTY_GIT_INDEX = _append_checksum(
-        BASE_EMPTY_GIT_INDEX + LOCKED_SNO_EXTENSION
-    )
+    extension = struct.pack(">4sI", extension_name, 0)
+    data = BASE_EMPTY_GIT_INDEX + extension
+    # Append checksum to the end.
+    return data + pygit2.hash(data).raw
+
+
+LOCKED_GIT_INDEX_CONTENTS = {
+    "kart": locked_git_index(b"kart"),  # These extension names must be 4 bytes long
+    "sno": locked_git_index(b".sno"),  # and they must not start with a capital letter
+}
 
 
 class SnoRepo(pygit2.Repository):
@@ -131,10 +154,20 @@ class SnoRepo(pygit2.Repository):
     Note: this is not enforced, especially since all legacy "bare-style" sno repos violate this assumption.
     """
 
+    # There is an ongoing rename from Sno -> Kart. Kart branding is supported, but new repos are still Sno branded.
+    BRANDING_FOR_NEW_REPOS = "sno"
+    DIRNAME_FOR_NEW_REPOS = f".{BRANDING_FOR_NEW_REPOS}"
+
+    # Directory names that we look in for a Kart / Sno repo - both continue to be supported.
+    KART_DIR_NAMES = (".kart", ".sno")
+
     def __init__(self, path, *, validate=True):
         path = Path(path).resolve()
-        if (path / ".sno").exists():
-            path = path / ".sno"
+
+        for d in self.KART_DIR_NAMES:
+            if (path / d).exists():
+                path = path / d
+                break
 
         try:
             super().__init__(
@@ -147,17 +180,17 @@ class SnoRepo(pygit2.Repository):
 
         self.gitdir_path = Path(self.path).resolve()
 
-        if self.is_tidy_style_sno_repo():
+        if self.is_tidy_style:
             self.workdir_path = self.gitdir_path.parent.resolve()
         else:
             self.workdir_path = self.gitdir_path
 
         if validate:
-            self.validate_sno_repo_style()
+            self.validate_bare_or_tidy_style()
 
     @classmethod
     def init_repository(
-        cls, repo_root_path, wc_path=None, bare=False, initial_branch=None
+        cls, repo_root_path, wc_location=None, bare=False, initial_branch=None
     ):
         """
         Initialise a new sno repo. A sno repo is basically a git repo, except -
@@ -177,7 +210,9 @@ class SnoRepo(pygit2.Repository):
         if not bare:
             from sno.working_copy.base import BaseWorkingCopy
 
-            BaseWorkingCopy.check_valid_creation_location(wc_path, repo_root_path)
+            BaseWorkingCopy.check_valid_creation_location(
+                wc_location, PotentialRepo(repo_root_path)
+            )
 
         extra_args = []
         if initial_branch is not None:
@@ -196,37 +231,39 @@ class SnoRepo(pygit2.Repository):
             )
         else:
             # Create tidy-style repo:
-            dot_sno_path = repo_root_path / ".sno"
+            dot_kart_path = repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
             dot_init_path = repo_root_path / ".init"
 
             sno_repo = cls._create_with_git_command(
                 [
                     "git",
                     "init",
-                    f"--separate-git-dir={dot_sno_path}",
+                    f"--separate-git-dir={dot_kart_path}",
                     *extra_args,
                     str(dot_init_path),
                 ],
-                gitdir_path=dot_sno_path,
+                gitdir_path=dot_kart_path,
                 temp_workdir_path=dot_init_path,
             )
             sno_repo.lock_git_index()
 
-        sno_repo.write_config(wc_path, bare)
+        sno_repo.write_config(wc_location, bare)
         sno_repo.write_readme()
         sno_repo.activate()
         return sno_repo
 
     @classmethod
     def clone_repository(
-        cls, clone_url, repo_root_path, clone_args, wc_path=None, bare=False
+        cls, clone_url, repo_root_path, clone_args, wc_location=None, bare=False
     ):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
         if not bare:
             from sno.working_copy.base import BaseWorkingCopy
 
-            BaseWorkingCopy.check_valid_creation_location(wc_path, repo_root_path)
+            BaseWorkingCopy.check_valid_creation_location(
+                wc_location, PotentialRepo(repo_root_path)
+            )
 
         if bare:
             sno_repo = cls._create_with_git_command(
@@ -242,7 +279,9 @@ class SnoRepo(pygit2.Repository):
             )
 
         else:
-            dot_sno_path = repo_root_path if bare else repo_root_path / ".sno"
+            dot_kart_path = (
+                repo_root_path if bare else repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
+            )
             dot_clone_path = repo_root_path / ".clone"
 
             sno_repo = cls._create_with_git_command(
@@ -250,17 +289,17 @@ class SnoRepo(pygit2.Repository):
                     "git",
                     "clone",
                     "--no-checkout",
-                    f"--separate-git-dir={dot_sno_path}",
+                    f"--separate-git-dir={dot_kart_path}",
                     *clone_args,
                     clone_url,
                     str(dot_clone_path),
                 ],
-                gitdir_path=dot_sno_path,
+                gitdir_path=dot_kart_path,
                 temp_workdir_path=dot_clone_path,
             )
             sno_repo.lock_git_index()
 
-        sno_repo.write_config(wc_path, bare)
+        sno_repo.write_config(wc_location, bare)
         sno_repo.write_readme()
         sno_repo.activate()
         return sno_repo
@@ -284,20 +323,25 @@ class SnoRepo(pygit2.Repository):
 
     def write_config(
         self,
-        wc_path=None,
+        wc_location=None,
         bare=False,
     ):
+        # Whichever of these variable is written, controls whether this repo is kart branded or not.
+        version_key = KartConfigKeys.BRANDED_REPOSTRUCTURE_VERSION_KEYS[
+            self.BRANDING_FOR_NEW_REPOS
+        ]
+        self.config[version_key] = str(SUPPORTED_REPO_VERSION)
+
         # Bare-style sno repos are always implemented as bare git repos:
-        if self.is_bare_style_sno_repo():
+        if self.is_bare_style:
             self.config["core.bare"] = True
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
-        # Write sno repo version to config:
-        self.config[SnoConfigKeys.SNO_REPOSITORY_VERSION] = str(SUPPORTED_REPO_VERSION)
+
         # Write working copy config:
         from sno.working_copy.base import BaseWorkingCopy
 
-        BaseWorkingCopy.write_config(self, wc_path, bare)
+        BaseWorkingCopy.write_config(self, wc_location, bare)
 
     def ensure_supported_version(self):
         from .cli import get_version
@@ -314,54 +358,98 @@ class SnoRepo(pygit2.Repository):
             raise InvalidOperation(message, exit_code=UNSUPPORTED_VERSION)
 
     def write_readme(self):
+        readme_filename = f"{self.branding.upper()}_README.txt"
+        readme_text = self.get_readme_text(self.is_bare_style, self.branding)
         try:
-            text = "\n".join(
-                self.SNO_BARE_STYLE_README
-                if self.is_bare_style_sno_repo()
-                else self.SNO_TIDY_STYLE_README
-            )
-            self.workdir_file("SNO_README.txt").write_text(text)
+            self.workdir_file(readme_filename).write_text(readme_text)
         except Exception as e:
             L.warn(e)
 
+    @classmethod
+    def get_readme_text(cls, is_bare_style, branding):
+        text = (
+            cls.KART_BARE_STYLE_README if is_bare_style else cls.KART_TIDY_STYLE_README
+        )
+        text = "\n".join(text)
+        if branding == "sno":
+            text = (
+                text.replace(
+                    KartConfigKeys.KART_WORKINGCOPY_LOCATION,
+                    KartConfigKeys.SNO_WORKINGCOPY_PATH,
+                )
+                .replace("kart.global", "sno.earth")
+                .replace("Kart", "Sno")
+                .replace("kart", "sno")
+            )
+        return text
+
     def activate(self):
         """
-        We create new+tidy repos in .sno/ but we don't write the .git file pointing to .sno/ until everything
+        We create new+tidy repos in .kart/ but we don't write the .git file pointing to .kart/ until everything
         else is ready, and until that file is written, git or sno commands won't find the repo.
         So, if creation fails, the result will be something that doesn't work at all, not something that half
         works but is also half corrupted.
         """
-        if self.is_bare_style_sno_repo():
+        if self.is_bare_style:
             # Bare-style repos are always activated - since all the files are right there in the root directory,
             # we can't reveal them by writing the .git file. So, no action is required here.
             return
 
         dot_git_path = self.workdir_path / ".git"
-        dot_sno_path = self.gitdir_path
-        # .sno is linked from .git at this point, which means git (or sno) can find it
+        dot_kart_path = self.gitdir_path
+        dot_kart_name = dot_kart_path.stem
+        # .kart is linked from .git at this point, which means git (or kart) can find it
         # and so the repository is activated (ie, sno or git commands will work):
-        dot_git_path.write_text("gitdir: .sno\n", encoding="utf-8")
+        dot_git_path.write_text(f"gitdir: {dot_kart_name}\n", encoding="utf-8")
 
         if is_windows:
-            # Hide .git and .sno
+            # Hide .git and .kart
             # Best effort: if it doesn't work for some reason, continue anyway.
             subprocess.call(["attrib", "+h", str(dot_git_path)], env=tool_environment())
-            subprocess.call(["attrib", "+h", str(dot_sno_path)], env=tool_environment())
+            subprocess.call(
+                ["attrib", "+h", str(dot_kart_path)], env=tool_environment()
+            )
 
-    def is_bare_style_sno_repo(self):
-        """Bare-style sno repos are bare git repos. They are not "tidy": all of the git internals are visible."""
-        return self.gitdir_path.stem != ".sno"
+    @property
+    def branding(self):
+        if KartConfigKeys.KART_REPOSTRUCTURE_VERSION in self.config:
+            return "kart"
+        elif KartConfigKeys.SNO_REPOSITORY_VERSION in self.config:
+            return "sno"
+        # Pre V2 repos (no longer fully supported - need to be upgraded) are always Sno branded.
+        if self.BRANDING_FOR_NEW_REPOS != "sno" and self.version < 2:
+            return "sno"
+        # New repo, config is not yet written. Refer to BRANDING_FOR_NEW_REPOS
+        return self.BRANDING_FOR_NEW_REPOS
 
-    def is_tidy_style_sno_repo(self):
-        """Tidy-style sno repos are "tidy": they hide the git internals in a ".sno" directory."""
-        return self.gitdir_path.stem == ".sno"
+    @property
+    def is_kart_branded(self):
+        return self.branding == "kart"
 
-    def validate_sno_repo_style(self):
-        if self.is_bare_style_sno_repo() and not super().is_bare:
+    @property
+    def is_bare_style(self):
+        """Bare-style Kart repos are bare git repos. They are not "tidy": all of the git internals are visible."""
+        return self.gitdir_path.stem not in self.KART_DIR_NAMES
+
+    @property
+    def is_tidy_style(self):
+        """Tidy-style Kart repos are "tidy": they hide the git internals in a ".kart" directory."""
+        return self.gitdir_path.stem in self.KART_DIR_NAMES
+
+    def validate_bare_or_tidy_style(self):
+        if self.is_bare_style and not super().is_bare:
             raise NotFound(
                 "Selected repo isn't a bare-style or tidy-style sno repo. Perhaps a git repo?",
                 exit_code=NO_REPOSITORY,
             )
+
+    @property
+    def REPOSTRUCTURE_VERSION_KEY(self):
+        return KartConfigKeys.BRANDED_REPOSTRUCTURE_VERSION_KEYS[self.branding]
+
+    @property
+    def WORKINGCOPY_LOCATION_KEY(self):
+        return KartConfigKeys.BRANDED_WORKINGCOPY_LOCATION_KEYS[self.branding]
 
     @property
     def BARE_CONFIG_KEY(self):
@@ -370,9 +458,9 @@ class SnoRepo(pygit2.Repository):
         given that all bare-style Sno repos have core.bare = True regardless of whether they have a working copy.
         """
         return (
-            SnoConfigKeys.SNO_WORKINGCOPY_BARE
-            if self.is_bare_style_sno_repo()
-            else SnoConfigKeys.CORE_BARE
+            KartConfigKeys.SNO_WORKINGCOPY_BARE
+            if self.is_bare_style
+            else KartConfigKeys.CORE_BARE
         )
 
     @property
@@ -381,11 +469,11 @@ class SnoRepo(pygit2.Repository):
         return get_repo_version(self)
 
     @property
-    def workingcopy_path(self):
+    def workingcopy_location(self):
         """Return the path to the sno working copy, if one exists."""
         repo_cfg = self.config
-        path_key = SnoConfigKeys.SNO_WORKINGCOPY_PATH
-        return repo_cfg[path_key] if path_key in repo_cfg else None
+        location_key = self.WORKINGCOPY_LOCATION_KEY
+        return repo_cfg[location_key] if location_key in repo_cfg else None
 
     @property
     def is_bare(self):
@@ -399,9 +487,8 @@ class SnoRepo(pygit2.Repository):
         return repo_cfg.get_bool(bare_key) if bare_key in repo_cfg else False
 
     def lock_git_index(self):
-        (self.gitdir_path / SnoRepoFiles.INDEX).write_bytes(
-            LockedGitIndex.LOCKED_EMPTY_GIT_INDEX
-        )
+        index_contents = LOCKED_GIT_INDEX_CONTENTS[self.branding]
+        (self.gitdir_path / SnoRepoFiles.INDEX).write_bytes(index_contents)
 
     @property
     def state(self):
@@ -569,42 +656,55 @@ class SnoRepo(pygit2.Repository):
             return
         path.unlink()
 
-    SNO_COMMON_README = [
+    KART_COMMON_README = [
         "",
-        "sno status",
+        "kart status",
         "",
-        'It may simply output "Empty repository. Use sno import to add some data".',
-        "Follow the tutorial at http://sno.earth/ for help getting started with Sno.",
+        'It may simply output "Empty repository. Use kart import to add some data".',
+        "Follow the tutorial at http://kart.global/ for help getting started with Kart.",
         "",
-        "Some more helpful commands for getting a broad view of what a Sno repository",
+        "Some more helpful commands for getting a broad view of what a Kart repository",
         "contains are:",
         "",
-        "sno log      - show the history of what has been committed to this repository.",
-        "sno data ls  - show the names of every dataset in this repository.",
+        "kart log      - show the history of what has been committed to this repository.",
+        "kart data ls  - show the names of every dataset in this repository.",
         "",
-        "This directory is the default location where Sno puts the repository's working",
+        "This directory is the default location where Kart puts the repository's working",
         "copy, which is created as soon as there is some data to put in it. However",
         "the working copy can also be configured to be somewhere else, and may not be",
         "a file at all. To see the working copy's location, run this command:",
         "",
-        "sno config sno.workingcopy.path",
+        "kart config kart.workingcopy.location",
         "",
         "",
     ]
 
-    SNO_TIDY_STYLE_README = [
-        "This directory is a Sno repository.",
+    KART_TIDY_STYLE_README = [
+        "This directory is a Kart repository.",
         "",
         "It may look empty, but every version of every datasets that this repository",
-        'contains is stored in Sno\'s internal format in the ".sno" hidden subdirectory.',
-        "To check if a directory is a Sno repository and see what is stored, run:",
-    ] + SNO_COMMON_README
+        'contains is stored in Kart\'s internal format in the ".kart" hidden subdirectory.',
+        "To check if a directory is a Kart repository and see what is stored, run:",
+    ] + KART_COMMON_README
 
-    SNO_BARE_STYLE_README = [
-        "This directory is a Sno repository.",
+    KART_BARE_STYLE_README = [
+        "This directory is a Kart repository.",
         "",
         "In this repository, the internals are visible - in files and in subdirectories",
         'like "HEAD", "objects" and "refs". These are best left untouched. Instead, use',
-        "Sno commands to interact with the repository. To check if a directory is a Sno",
+        "Kart commands to interact with the repository. To check if a directory is a Kart",
         "repository and see what is stored, run:",
-    ] + SNO_COMMON_README
+    ] + KART_COMMON_README
+
+
+class PotentialRepo:
+    """
+    A repo that doesn't yet exist, but which we are considering whether to create.
+    Used for calling code that needs a repo as context, for example:
+    >>> WorkingCopy.check_valid_creation_location(location, repo)
+    """
+
+    def __init__(self, workdir_path):
+        self.workdir_path = workdir_path
+        self.branding = SnoRepo.BRANDING_FOR_NEW_REPOS
+        self.is_kart_branded = self.branding == "kart"

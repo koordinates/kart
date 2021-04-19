@@ -32,10 +32,10 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
     )
 
     @classmethod
-    def check_valid_creation_location(cls, wc_location, workdir_path=None):
-        cls.check_valid_location(wc_location, workdir_path)
+    def check_valid_creation_location(cls, wc_location, repo):
+        cls.check_valid_location(wc_location, repo)
 
-        working_copy = cls(None, wc_location)
+        working_copy = cls(repo, wc_location)
         status = working_copy.status()
         if status & WorkingCopyStatus.NON_EMPTY:
             db_schema = working_copy.db_schema
@@ -46,15 +46,15 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
             )
 
     @classmethod
-    def check_valid_location(cls, wc_location, workdir_path=None):
-        cls.check_valid_db_uri(wc_location, workdir_path)
+    def check_valid_location(cls, wc_location, repo):
+        cls.check_valid_db_uri(wc_location, repo)
 
     @classmethod
-    def normalise_location(cls, repo, wc_location):
+    def normalise_location(cls, wc_location, repo):
         return wc_location
 
     @classmethod
-    def check_valid_db_uri(cls, db_uri, workdir_path=None):
+    def check_valid_db_uri(cls, db_uri, repo):
         """
         For working copies that connect to a database - checks the given URI is in the required form:
         >>> URI_SCHEME::[HOST]/DBNAME/DBSCHEMA
@@ -70,8 +70,8 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         path_length = len(url_path.parents)
 
         if path_length not in cls.URI_VALID_PATH_LENGTHS:
-            if (path_length + 1) in cls.URI_VALID_PATH_LENGTHS and workdir_path:
-                suggested_path = url_path / cls.default_db_schema(workdir_path)
+            if (path_length + 1) in cls.URI_VALID_PATH_LENGTHS:
+                suggested_path = url_path / cls.default_db_schema(repo)
                 suggested_uri = urlunsplit(
                     [url.scheme, url.netloc, str(suggested_path), url.query, ""]
                 )
@@ -103,10 +103,11 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         )
 
     @classmethod
-    def default_db_schema(cls, workdir_path):
-        """Returns a suitable default database schema - named after the folder this Sno repo is in."""
-        stem = workdir_path.stem
-        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + "_sno"
+    def default_db_schema(cls, repo):
+        """Returns a suitable default database schema - named after the folder this repo is in."""
+        stem = repo.workdir_path.stem
+        suffix = "_kart" if repo.is_kart_branded else "_sno"
+        schema = re.sub("[^a-z0-9]+", "_", stem.lower()) + suffix
         if schema[0].isdigit():
             schema = "_" + schema
         return schema

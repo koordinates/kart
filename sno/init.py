@@ -20,7 +20,7 @@ from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
-from .repo import SnoRepo
+from .repo import SnoRepo, PotentialRepo
 from .working_copy import WorkingCopyStatus
 
 
@@ -376,11 +376,14 @@ def import_(
     ),
 )
 @click.option(
+    "--workingcopy-location",
     "--workingcopy-path",
     "--workingcopy",
-    "wc_path",
-    help="Path where the working copy should be created. "
-    "This should be a GPKG file eg example.gpkg or a postgres URI including schema eg postgresql://[HOST]/DBNAME/SCHEMA",
+    "wc_location",
+    help="Location where the working copy should be created. This should be in one of the following formats:\n"
+    "- PATH.gpkg\n"
+    "- postgresql://[HOST]/DBNAME/SCHEMA\n"
+    "- mssql://[HOST]/DBNAME/SHEMA\n",
 )
 @click.option(
     "--max-delta-depth",
@@ -397,7 +400,7 @@ def init(
     do_checkout,
     bare,
     initial_branch,
-    wc_path,
+    wc_location,
     max_delta_depth,
 ):
     """
@@ -414,7 +417,7 @@ def init(
 
     from sno.working_copy.base import BaseWorkingCopy
 
-    BaseWorkingCopy.check_valid_creation_location(wc_path, repo_path)
+    BaseWorkingCopy.check_valid_creation_location(wc_location, PotentialRepo(repo_path))
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)
@@ -431,7 +434,7 @@ def init(
 
     # Create the repository
     repo = SnoRepo.init_repository(
-        repo_path, wc_path, bare, initial_branch=initial_branch
+        repo_path, wc_location, bare, initial_branch=initial_branch
     )
 
     if import_from:

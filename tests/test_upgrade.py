@@ -112,7 +112,7 @@ def test_upgrade_to_tidy(data_archive, cli_runner, chdir):
         )
 
         repo = SnoRepo(source_path)
-        assert repo.is_tidy_style_sno_repo()
+        assert repo.is_tidy_style
 
         with chdir(source_path):
             r = cli_runner.invoke(["log"])
@@ -138,3 +138,60 @@ def test_upgrade_to_tidy(data_archive, cli_runner, chdir):
         assert (source_path / ".git").is_file()
         assert (source_path / ".sno").is_dir()
         assert (source_path / ".sno" / "HEAD").is_file()
+
+
+def test_upgrade_to_kart(data_working_copy, cli_runner, chdir):
+    with data_working_copy("polygons") as (source_path, wc_path):
+        r = cli_runner.invoke(["upgrade-to-kart", source_path])
+        assert r.exit_code == 0, r.stderr
+        assert (
+            r.stdout.splitlines()[-1]
+            == "In-place upgrade complete: Sno repo is now Kart repo"
+        )
+
+        repo = SnoRepo(source_path)
+        assert repo.is_kart_branded
+        assert repo.config["kart.repostructure.version"] == "2"
+
+        with chdir(source_path):
+            r = cli_runner.invoke(["status"])
+            assert r.exit_code == 0, r
+            assert r.stdout.splitlines() == [
+                "On branch main",
+                "",
+                "Nothing to commit, working copy clean",
+            ]
+
+            r = cli_runner.invoke(["log"])
+            assert r.exit_code == 0, r
+
+            assert r.stdout.splitlines() == [
+                "commit 5bb25a2da966b15ae7743db4666c1599001e2443",
+                "Author: Robert Coup <robert@coup.net.nz>",
+                "Date:   Mon Jul 22 12:05:39 2019 +0100",
+                "",
+                "    Import from nz-waca-adjustments.gpkg",
+            ]
+
+        children = set(child.name for child in source_path.iterdir())
+        assert children == {"KART_README.txt", ".git", ".kart"}
+
+        assert (source_path / ".git").is_file()
+        assert (source_path / ".kart").is_dir()
+        assert (source_path / ".kart" / "HEAD").is_file()
+        assert (source_path / "KART_README.txt").is_file()
+
+        with repo.working_copy.session() as sess:
+            assert (
+                sess.scalar(
+                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE ('gpkg_kart%');",
+                )
+                == 2
+            )
+
+            assert (
+                sess.scalar(
+                    "SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE ('gpkg_sno%');",
+                )
+                == 0
+            )

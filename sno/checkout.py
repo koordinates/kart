@@ -384,14 +384,14 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
             "Can't create a working copy for an empty repository — first import some data with `sno import`"
         )
 
-    old_wc_loc = repo.workingcopy_path
+    old_wc_loc = repo.workingcopy_location
     if not new_wc_loc and old_wc_loc is not None:
         new_wc_loc = old_wc_loc
     elif not new_wc_loc:
-        new_wc_loc = BaseWorkingCopy.default_location(repo.workdir_path)
+        new_wc_loc = BaseWorkingCopy.default_location(repo)
 
     if new_wc_loc != old_wc_loc:
-        BaseWorkingCopy.check_valid_creation_location(new_wc_loc, repo.workdir_path)
+        BaseWorkingCopy.check_valid_creation_location(new_wc_loc, repo)
 
     if old_wc_loc:
         old_wc = BaseWorkingCopy.get_at_location(
@@ -461,3 +461,8 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
 
     BaseWorkingCopy.write_config(repo, new_wc_loc)
     reset_wc_if_needed(repo, repo.head_commit)
+
+    # This command is used in tests and by other commands, so we have to be extra careful to
+    # tidy up properly - otherwise, tests can fail (on Windows especially) due to PermissionError.
+    repo.free()
+    del repo

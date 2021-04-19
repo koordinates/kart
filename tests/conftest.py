@@ -559,15 +559,11 @@ class TestHelpers:
         repo = SnoRepo(repo_path)
         wc = repo.get_working_copy(allow_invalid_state=True)
         if wc:
-            print(
-                f"Deleting existing working copy: {repo.config['sno.workingcopy.path']}"
-            )
+            print(f"Deleting existing working copy: {repo.workingcopy_location}")
             wc.delete()
 
-        if "sno.workingcopy.path" in repo.config:
-            del repo.config["sno.workingcopy.path"]
-        if "sno.workingcopy.version" in repo.config:
-            del repo.config["sno.workingcopy.version"]
+        if repo.WORKINGCOPY_LOCATION_KEY in repo.config:
+            del repo.config[repo.WORKINGCOPY_LOCATION_KEY]
 
     @classmethod
     def db_table_hash(cls, conn, table, pk=None):
