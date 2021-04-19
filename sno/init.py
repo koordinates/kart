@@ -73,6 +73,12 @@ class GenerateIDsFromFile(StringFromFile):
         return (line.rstrip("\n") for line in fp)
 
 
+def get_default_num_processes():
+    num_processes = get_num_available_cores()
+    # that's a float, but we need an int
+    return max(1, int(math.ceil(num_processes)))
+
+
 @click.command("import")
 @click.pass_context
 @click.argument("source")
@@ -323,11 +329,6 @@ def import_(
         import_sources.append(import_source)
 
     ImportSource.check_valid(import_sources, param_hint="tables")
-
-    if num_processes is None:
-        num_processes = get_num_available_cores()
-        # that's a float, but we need an int
-        num_processes = max(1, int(math.ceil(num_processes)))
     fast_import_tables(
         repo,
         import_sources,
@@ -339,7 +340,7 @@ def import_(
         else ReplaceExisting.DONT_REPLACE,
         replace_ids=replace_ids,
         allow_empty=allow_empty,
-        num_processes=num_processes,
+        num_processes=num_processes or get_default_num_processes(),
     )
 
     if do_checkout:
@@ -405,6 +406,11 @@ def import_(
     type=click.INT,
     help="--depth option to git-fast-import (advanced users only)",
 )
+@click.option(
+    "--num-processes",
+    type=click.INT,
+    help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
+)
 def init(
     ctx,
     message,
@@ -415,6 +421,7 @@ def init(
     initial_branch,
     wc_location,
     max_delta_depth,
+    num_processes,
 ):
     """
     Initialise a new repository and optionally import data.
@@ -456,6 +463,7 @@ def init(
             sources,
             message=message,
             max_delta_depth=max_delta_depth,
+            num_processes=num_processes or get_default_num_processes(),
         )
         head_commit = repo.head_commit
         if do_checkout and not bare:
