@@ -490,6 +490,8 @@ def postgis_layer(postgis_db, data_archive):
 
 def test_postgres_preserves_float_precision(postgis_db):
     with postgis_db.connect() as conn:
+        val = conn.scalar("SHOW extra_float_digits")
+        assert val == "3"
         val = conn.scalar("SELECT 1060116.12::real")
         assert val == 1060116.1
 

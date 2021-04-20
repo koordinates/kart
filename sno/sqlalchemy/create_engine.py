@@ -94,23 +94,27 @@ register_adapter(Geometry, _adapt_geometry_to_pg)
 
 def postgis_engine(pgurl):
     def _on_connect(psycopg2_conn, connection_record):
-        dbcur = psycopg2_conn.cursor()
-        dbcur.execute("SET timezone='UTC';")
-        dbcur.execute("SET intervalstyle='iso_8601';")
-        # don't drop precision from floats near the edge of their supported range
-        dbcur.execute("SET extra_float_digits = 3;")
-        dbcur.execute("SELECT oid FROM pg_type WHERE typname='geometry';")
-        # Unlike the other set-up, this must be done with an actual connection open -
-        # otherwise we don't know the geometry_oid (or if the geometry type exists at all).
-        r = dbcur.fetchone()
-        if r:
-            geometry_type = new_type((r[0],), "GEOMETRY", _adapt_geometry_from_pg)
-            register_type(geometry_type, psycopg2_conn)
+        with psycopg2_conn.cursor() as dbcur:
+            dbcur.execute("SELECT oid FROM pg_type WHERE typname='geometry';")
+            # Unlike the other set-up, this must be done with an actual connection open -
+            # otherwise we don't know the geometry_oid (or if the geometry type exists at all).
+            r = dbcur.fetchone()
+            if r:
+                geometry_type = new_type((r[0],), "GEOMETRY", _adapt_geometry_from_pg)
+                register_type(geometry_type, psycopg2_conn)
+
+    def _on_checkout(dbapi_connection, connection_record, connection_proxy):
+        with dbapi_connection.cursor() as dbcur:
+            dbcur.execute("SET timezone='UTC';")
+            dbcur.execute("SET intervalstyle='iso_8601';")
+            # don't drop precision from floats near the edge of their supported range
+            dbcur.execute("SET extra_float_digits = 3;")
 
     pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "sno"})
 
     engine = sqlalchemy.create_engine(pgurl, module=psycopg2)
     sqlalchemy.event.listen(engine, "connect", _on_connect)
+    sqlalchemy.event.listen(engine, "checkout", _on_checkout)
 
     return engine
 
