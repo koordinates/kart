@@ -184,11 +184,11 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
-                len(odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"])
+                len(odata["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"])
                 == 4
             )
             assert odata == {
-                "sno.diff/v1+hexwkb": {
+                "kart.diff/v1+hexwkb": {
                     "nz_pa_points_topo_150k": {
                         "feature": [
                             {
@@ -301,7 +301,7 @@ def test_diff_reprojection(output_format, data_working_copy, cli_runner):
         elif output_format == "json":
             assert r.exit_code == 0, r.stderr
             odata = json.loads(r.stdout)
-            features = odata["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+            features = odata["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
             assert len(features) == 1
             expected_wkt = "POINT (1958227.06219578 5787640.54030465)"
             assert (
@@ -599,10 +599,10 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
             assert (
-                len(odata["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["feature"]) == 4
+                len(odata["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["feature"]) == 4
             )
             assert odata == {
-                "sno.diff/v1+hexwkb": {
+                "kart.diff/v1+hexwkb": {
                     "nz_waca_adjustments": {
                         "feature": [
                             {
@@ -860,9 +860,9 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
         elif output_format == "json":
             assert r.exit_code == 0, r
             odata = json.loads(r.stdout)
-            assert len(odata["sno.diff/v1+hexwkb"]["countiestbl"]["feature"]) == 4
+            assert len(odata["kart.diff/v1+hexwkb"]["countiestbl"]["feature"]) == 4
             assert odata == {
-                "sno.diff/v1+hexwkb": {
+                "kart.diff/v1+hexwkb": {
                     "countiestbl": {
                         "feature": [
                             {
@@ -1027,7 +1027,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             print(f"fwd: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
             assert r.exit_code == 1, r
-            odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
+            odata = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["feature"]) == 5
 
             change_ids = {
@@ -1050,7 +1050,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
             print(f"rev: {spec}")
             r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", spec])
             assert r.exit_code == 1, r
-            odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
+            odata = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
             assert len(odata[H.POINTS.LAYER]["feature"]) == 5
             change_ids = {
                 (
@@ -1136,7 +1136,7 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         # changes from HEAD (R1 -> WC)
         r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", R1])
         assert r.exit_code == 1, r
-        odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
+        odata = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
         ddata = _extract(odata)
         assert ddata == {
             1: ("a1", "a"),
@@ -1153,7 +1153,7 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         # changes from HEAD^1 (R0 -> WC)
         r = cli_runner.invoke(["diff", "--exit-code", "-o", "json", R0])
         assert r.exit_code == 1, r
-        odata = json.loads(r.stdout)["sno.diff/v1+hexwkb"]
+        odata = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
         ddata = _extract(odata)
         assert ddata == {
             2: ("b", "b1"),
@@ -1314,31 +1314,31 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
         # Three dots diff should show both sets of changes.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}...{b_commit_id}"])
         assert r.exit_code == 0, r.stderr
-        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
-            "feature"
-        ]
+        features = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["feature"]
         assert len(features) == 4
 
         r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}...{m_commit_id}"])
         assert r.exit_code == 0, r.stderr
-        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
-            "feature"
-        ]
+        features = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["feature"]
         assert len(features) == 4
 
         # Two dots diff should show only one set of changes - the changes on the target branch.
         r = cli_runner.invoke(["diff", "-o", "json", f"{m_commit_id}..{b_commit_id}"])
         assert r.exit_code == 0, r.stderr
-        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
-            "feature"
-        ]
+        features = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["feature"]
         assert len(features) == 3
 
         r = cli_runner.invoke(["diff", "-o", "json", f"{b_commit_id}..{m_commit_id}"])
         assert r.exit_code == 0, r.stderr
-        features = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"][
-            "feature"
-        ]
+        features = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+            "nz_pa_points_topo_150k"
+        ]["feature"]
         assert len(features) == 1
 
 
@@ -1404,8 +1404,8 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
             j = json.loads(r.stdout)
             # check the diff's present, but this test doesn't need to have hundreds of lines
             # to know exactly what it is (we have diff tests above)
-            assert "sno.diff/v1+hexwkb" in j
-            assert j["sno.show/v1"] == {
+            assert "kart.diff/v1+hexwkb" in j
+            assert j["kart.show/v1"] == {
                 "authorEmail": "robert@coup.net.nz",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -1482,8 +1482,8 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
 
         elif output_format == "json":
             j = json.loads(r.stdout)
-            assert "sno.diff/v1+hexwkb" in j
-            assert j["sno.show/v1"] == {
+            assert "kart.diff/v1+hexwkb" in j
+            assert j["kart.show/v1"] == {
                 "authorEmail": "robert@coup.net.nz",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-07-22T11:05:39Z",
@@ -1506,7 +1506,7 @@ def test_show_json_format(data_archive_readonly, cli_runner):
 
         assert r.exit_code == 0, r.stderr
         # output is compact, no indentation
-        assert '"sno.diff/v1+hexwkb": {"' in r.stdout
+        assert '"kart.diff/v1+hexwkb": {"' in r.stdout
 
 
 def test_show_json_coloured(data_archive_readonly, cli_runner, monkeypatch):
@@ -1517,7 +1517,7 @@ def test_show_json_coloured(data_archive_readonly, cli_runner, monkeypatch):
         r = cli_runner.invoke(["show", f"-o", "json", "--json-style=pretty", "HEAD"])
         assert r.exit_code == 0, r.stderr
         # No asserts about colour codes - that would be system specific. Just a basic check:
-        assert '"sno.diff/v1+hexwkb"' in r.stdout
+        assert '"kart.diff/v1+hexwkb"' in r.stdout
 
 
 def test_create_patch(data_archive_readonly, cli_runner):
@@ -1533,8 +1533,8 @@ def test_create_patch(data_archive_readonly, cli_runner):
         j = json.loads(r.stdout)
         # check the diff's present, but this test doesn't need to have hundreds of lines
         # to know exactly what it is (we have diff tests above)
-        assert "sno.diff/v1+hexwkb" in j
-        assert j["sno.patch/v1"] == {
+        assert "kart.diff/v1+hexwkb" in j
+        assert j["kart.patch/v1"] == {
             "authorEmail": "robert@coup.net.nz",
             "authorName": "Robert Coup",
             "authorTime": "2019-06-20T14:28:33Z",

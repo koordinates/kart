@@ -918,7 +918,7 @@ def test_edit_string_pks(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r
-        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
+        changes = json.loads(r.stdout)["kart.status/v1"]["workingCopy"]["changes"]
         assert changes == {
             "nz_waca_adjustments": {
                 "feature": {"inserts": 1, "updates": 2, "deletes": 5}
@@ -951,7 +951,7 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r
-        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
+        changes = json.loads(r.stdout)["kart.status/v1"]["workingCopy"]["changes"]
         assert changes == {
             H.POINTS.LAYER: {"feature": {"inserts": 1, "updates": 2, "deletes": 5}}
         }
@@ -989,7 +989,7 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r.stderr
-        changes = json.loads(r.stdout)["sno.status/v1"]["workingCopy"]["changes"]
+        changes = json.loads(r.stdout)["kart.status/v1"]["workingCopy"]["changes"]
         assert changes == {
             H.POINTS.LAYER: {"feature": {"inserts": 1, "updates": 2, "deletes": 5}}
         }

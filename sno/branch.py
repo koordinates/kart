@@ -53,7 +53,7 @@ def list_branches_json(repo):
         branches[branch_name] = branch_obj_to_json(repo, repo.branches[branch_name])
     output["branches"] = branches
 
-    return {"sno.branch/v1": output}
+    return {"kart.branch/v1": output}
 
 
 def branch_obj_to_json(repo, branch):

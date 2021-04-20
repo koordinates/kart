@@ -15,7 +15,7 @@ def test_data_ls(output_format, data_archive_readonly, cli_runner):
             assert r.stdout.splitlines() == ["nz_pa_points_topo_150k"]
         else:
             output = json.loads(r.stdout)
-            assert output == {"sno.data.ls/v1": ["nz_pa_points_topo_150k"]}
+            assert output == {"kart.data.ls/v1": ["nz_pa_points_topo_150k"]}
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
@@ -33,7 +33,7 @@ def test_data_ls_empty(output_format, tmp_path, cli_runner, chdir):
             ]
         else:
             output = json.loads(r.stdout)
-            assert output == {"sno.data.ls/v1": []}
+            assert output == {"kart.data.ls/v1": []}
 
 
 def test_data_ls_with_ref(data_archive_readonly, cli_runner):
@@ -42,7 +42,7 @@ def test_data_ls_with_ref(data_archive_readonly, cli_runner):
         assert r.exit_code == 0, r
 
         output = json.loads(r.stdout)
-        assert output == {"sno.data.ls/v1": ["nz_pa_points_topo_150k"]}
+        assert output == {"kart.data.ls/v1": ["nz_pa_points_topo_150k"]}
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
@@ -61,4 +61,4 @@ def test_data_version(version, output_format, data_archive_readonly, cli_runner)
             assert r.stdout.splitlines()[0].endswith(str(version))
         else:
             output = json.loads(r.stdout)
-            assert output == {"sno.data.version": version}
+            assert output == {"kart.data.version": version}

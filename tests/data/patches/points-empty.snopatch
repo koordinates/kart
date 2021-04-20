@@ -1,6 +1,6 @@
 {
-  "sno.diff/v1+hexwkb": {},
-  "sno.patch/v1": {
+  "kart.diff/v1+hexwkb": {},
+  "kart.patch/v1": {
     "authorEmail": "robert@example.com",
     "authorName": "Robert Coup",
     "authorTime": "2019-06-20T14:28:33Z",

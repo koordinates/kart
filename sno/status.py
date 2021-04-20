@@ -34,7 +34,7 @@ def status(ctx, output_format):
         jdict["workingCopy"] = get_working_copy_status_json(repo)
 
     if output_format == "json":
-        dump_json_output({"sno.status/v1": jdict}, sys.stdout)
+        dump_json_output({"kart.status/v1": jdict}, sys.stdout)
     else:
         click.echo(status_to_text(jdict))
 

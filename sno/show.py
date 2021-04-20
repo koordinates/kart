@@ -155,8 +155,8 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
     the json is prettified first.
 
     The patch JSON contains two top-level keys:
-        "sno.diff/v1+hexwkb": contains a JSON diff. See `sno.diff.diff_output_json` docstring.
-        "sno.show/v1": contains metadata about the commit:
+        "kart.diff/v1+hexwkb": contains a JSON diff. See `kart.diff.diff_output_json` docstring.
+        "kart.show/v1": contains metadata about the commit:
           {
             "authorEmail": "joe@example.com",
             "authorName": "Joe Bloggs",
@@ -171,7 +171,7 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
     commit = target.commit
 
     def dump_function(data, *args, **kwargs):
-        data["sno.show/v1"] = commit_obj_to_json(commit)
+        data["kart.show/v1"] = commit_obj_to_json(commit)
         dump_json_output(data, *args, **kwargs)
 
     with diff.diff_output_json(
@@ -186,7 +186,7 @@ def show_output_json(*, target, output_path, json_style, **kwargs):
 @contextlib.contextmanager
 def patch_output(*, target, output_path, json_style, **kwargs):
     """
-    Almost the same as show_output_json but uses the `sno.patch/v1` key instead of `sno.show/v1`
+    Almost the same as show_output_json but uses the `kart.patch/v1` key instead of `kart.show/v1`
 
     This is duplicated for clarity, because all this diff callback stuff is complex enough.
     """
@@ -197,7 +197,7 @@ def patch_output(*, target, output_path, json_style, **kwargs):
     author_time_offset = timedelta(minutes=author.offset)
 
     def dump_function(data, *args, **kwargs):
-        data["sno.patch/v1"] = {
+        data["kart.patch/v1"] = {
             "authorName": author.name,
             "authorEmail": author.email,
             "authorTime": datetime_to_iso8601_utc(author_time),

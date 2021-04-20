@@ -115,7 +115,7 @@ def test_merge_fastforward_noff(
 
         H.git_graph(request, "post-merge")
 
-        merge_commit_id = json.loads(r.stdout)["sno.merge/v1"]["commit"]
+        merge_commit_id = json.loads(r.stdout)["kart.merge/v1"]["commit"]
 
         assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == merge_commit_id
@@ -184,7 +184,7 @@ def test_merge_true(
         assert r.exit_code == 0, r
         H.git_graph(request, "post-merge")
 
-        merge_commit_id = json.loads(r.stdout)["sno.merge/v1"]["commit"]
+        merge_commit_id = json.loads(r.stdout)["kart.merge/v1"]["commit"]
 
         assert repo.head.name == "refs/heads/main"
         assert repo.head.target.hex == merge_commit_id
@@ -278,7 +278,7 @@ def test_merge_conflicts(
         else:
             jdict = json.loads(r.stdout)
             assert jdict == {
-                "sno.merge/v1": {
+                "kart.merge/v1": {
                     "branch": "ours_branch",
                     "commit": ours.id.hex,
                     "merging": {

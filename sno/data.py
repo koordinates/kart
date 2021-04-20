@@ -6,7 +6,6 @@ from . import status
 from .cli_util import add_help_subcommand
 from .output_util import dump_json_output
 from .repo import SnoRepoState
-from .repo_version import get_repo_version
 
 
 # Changing these items would generally break the repo;
@@ -45,7 +44,7 @@ def data_ls(ctx, output_format, refish):
             ctx.invoke(status.status)
 
     elif output_format == "json":
-        dump_json_output({"sno.data.ls/v1": ds_paths}, sys.stdout)
+        dump_json_output({"kart.data.ls/v1": ds_paths}, sys.stdout)
 
 
 @data.command(name="version")
@@ -69,4 +68,4 @@ def data_version(ctx, output_format):
                 f"(See https://github.com/koordinates/sno/blob/master/docs/DATASETS_v{version}.md)"
             )
     elif output_format == "json":
-        dump_json_output({"sno.data.version": version}, sys.stdout)
+        dump_json_output({"kart.data.version": version}, sys.stdout)

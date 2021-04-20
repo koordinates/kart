@@ -23,8 +23,8 @@ def json_branches(cli_runner):
 
 
 def get_commit_ids(jdict):
-    commit = jdict["sno.branch/v1"]["branches"]["main"]["commit"]
-    abbrev_commit = jdict["sno.branch/v1"]["branches"]["main"]["abbrevCommit"]
+    commit = jdict["kart.branch/v1"]["branches"]["main"]["commit"]
+    abbrev_commit = jdict["kart.branch/v1"]["branches"]["main"]["abbrevCommit"]
     assert commit and abbrev_commit
     assert commit.startswith(abbrev_commit)
     return commit, abbrev_commit
@@ -36,7 +36,7 @@ def test_branches(
     with data_working_copy("points") as (path1, wc):
         assert text_branches(cli_runner) == ["* main"]
         assert json_branches(cli_runner) == {
-            "sno.branch/v1": {
+            "kart.branch/v1": {
                 "current": "main",
                 "branches": {
                     "main": {
@@ -54,7 +54,7 @@ def test_branches(
 
         assert text_branches(cli_runner) == ["* (HEAD detached at 7bc3b56)", "  main"]
         assert json_branches(cli_runner) == {
-            "sno.branch/v1": {
+            "kart.branch/v1": {
                 "current": None,
                 "branches": {
                     "main": {
@@ -86,7 +86,7 @@ def test_branches(
         jdict = json_branches(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert json_branches(cli_runner) == {
-            "sno.branch/v1": {
+            "kart.branch/v1": {
                 "current": "main",
                 "branches": {
                     "main": {
@@ -110,7 +110,7 @@ def test_branches(
         jdict = json_branches(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert json_branches(cli_runner) == {
-            "sno.branch/v1": {
+            "kart.branch/v1": {
                 "current": "newbie",
                 "branches": {
                     "main": {
@@ -143,7 +143,7 @@ def test_branches_empty(tmp_path, cli_runner, chdir):
         assert text_branches(cli_runner) == []
 
         assert json_branches(cli_runner) == {
-            "sno.branch/v1": {"current": None, "branches": {}}
+            "kart.branch/v1": {"current": None, "branches": {}}
         }
 
 

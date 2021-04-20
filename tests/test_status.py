@@ -24,8 +24,8 @@ def json_status(cli_runner):
 
 
 def get_commit_ids(jdict):
-    commit = jdict["sno.status/v1"]["commit"]
-    abbrev_commit = jdict["sno.status/v1"]["abbrevCommit"]
+    commit = jdict["kart.status/v1"]["commit"]
+    abbrev_commit = jdict["kart.status/v1"]["abbrevCommit"]
     assert commit and abbrev_commit
     assert commit.startswith(abbrev_commit)
     return commit, abbrev_commit
@@ -47,7 +47,7 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         assert json_status(cli_runner) == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
                 "abbrevCommit": "0c64d82",
                 "branch": "main",
@@ -65,7 +65,7 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         assert json_status(cli_runner) == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": "7bc3b56f20d1559208bcf5bb56860dda6e190b70",
                 "abbrevCommit": "7bc3b56",
                 "branch": None,
@@ -97,7 +97,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -132,7 +132,7 @@ def test_status(
             "Nothing to commit, working copy clean",
         ]
         assert json_status(cli_runner) == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
                 "abbrevCommit": "0c64d82",
                 "branch": "main",
@@ -162,7 +162,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -190,7 +190,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -228,7 +228,7 @@ def test_status(
         jdict = json_status(cli_runner)
         commit, abbrev_commit = get_commit_ids(jdict)  # This varies from run to run.
         assert jdict == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": commit,
                 "abbrevCommit": abbrev_commit,
                 "branch": "main",
@@ -265,7 +265,7 @@ def test_status_empty(tmp_path, cli_runner, chdir):
         ]
 
         assert json_status(cli_runner) == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "commit": None,
                 "abbrevCommit": None,
                 "branch": "main",
@@ -318,7 +318,7 @@ def test_status_merging(create_conflicts, cli_runner):
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
         assert json_status(cli_runner) == {
-            "sno.status/v1": {
+            "kart.status/v1": {
                 "abbrevCommit": ours.short_id,
                 "commit": ours.id.hex,
                 "branch": "ours_branch",

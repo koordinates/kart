@@ -214,7 +214,7 @@ def test_import_replace_existing(
             r = cli_runner.invoke(["show", "-o", "json"])
             assert r.exit_code == 0, r.stderr
             output = json.loads(r.stdout)
-            assert output["sno.diff/v1+hexwkb"] == {
+            assert output["kart.diff/v1+hexwkb"] == {
                 "mytable": {
                     "feature": [
                         {
@@ -328,7 +328,7 @@ def test_import_replace_existing_with_compatible_schema_changes(
             assert r.exit_code == 0, r.stderr
             r = cli_runner.invoke(["show", "-o", "json"])
             assert r.exit_code == 0, r.stderr
-            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+            diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]["mytable"]
 
             # The schema changed, but the features didn't.
             assert diff["meta"]["schema.json"]
@@ -385,7 +385,7 @@ def test_import_replace_existing_with_column_renames(
             assert r.exit_code == 0, r.stderr
             r = cli_runner.invoke(["show", "-o", "json"])
             assert r.exit_code == 0, r.stderr
-            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+            diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]["mytable"]
 
             # The schema changed, but the features didn't.
             assert diff["meta"]["schema.json"]
@@ -425,7 +425,7 @@ def test_import_replace_ids(
             assert r.exit_code == 0, r.stderr
             r = cli_runner.invoke(["show", "-o", "json"])
             assert r.exit_code == 0, r.stderr
-            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+            diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]["mytable"]
             features = diff.get("feature")
             assert len(features) == 5
 
@@ -456,7 +456,7 @@ def test_import_replace_ids(
             assert r.exit_code == 0, r.stderr
             r = cli_runner.invoke(["show", "-o", "json"])
             assert r.exit_code == 0, r.stderr
-            diff = json.loads(r.stdout)["sno.diff/v1+hexwkb"]["mytable"]
+            diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]["mytable"]
             features = diff.get("feature")
 
             # one insert and one update were performed, and the other two changes ignored.

@@ -1,5 +1,5 @@
 {
-  "sno.diff/v1+hexwkb": {
+  "kart.diff/v1+hexwkb": {
     "nz_pa_points_topo_150k": {
       "feature": [
         {
@@ -23,7 +23,7 @@
       ]
     }
   },
-  "sno.patch/v1": {
+  "kart.patch/v1": {
     "authorEmail": "someone@example.com",
     "authorName": "Someone",
     "authorTime": "2019-06-20T14:28:33Z",

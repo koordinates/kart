@@ -99,7 +99,7 @@ def apply_patch(
 ):
     try:
         patch = json.load(patch_file)
-        json_diff = patch["sno.diff/v1+hexwkb"]
+        json_diff = patch["kart.diff/v1+hexwkb"]
     except (KeyError, json.JSONDecodeError) as e:
         raise click.FileError("Failed to parse JSON patch file") from e
 
@@ -172,7 +172,7 @@ def apply_patch(
 
     if do_commit:
         try:
-            metadata = patch["sno.patch/v1"]
+            metadata = patch["kart.patch/v1"]
         except KeyError:
             # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
             raise click.UsageError(

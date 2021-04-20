@@ -261,7 +261,7 @@ class OgrImportSource(ImportSource):
                 pretty_name = table_name
             names[table_name] = pretty_name
         if do_json:
-            dump_json_output({"sno.tables/v1": names}, sys.stdout)
+            dump_json_output({"kart.tables/v1": names}, sys.stdout)
         else:
             click.secho(f"Tables found:", bold=True)
             for table_name, pretty_name in names.items():

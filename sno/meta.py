@@ -173,12 +173,12 @@ def meta_set(ctx, message, dataset, items):
             return value
 
     patch = {
-        "sno.diff/v1+hexwkb": {
+        "kart.diff/v1+hexwkb": {
             dataset: {
                 "meta": {key: {"+": _parse(key, value)} for (key, value) in items}
             }
         },
-        "sno.patch/v1": {"message": message},
+        "kart.patch/v1": {"message": message},
     }
     patch_file = io.StringIO()
     json.dump(patch, patch_file)

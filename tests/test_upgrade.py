@@ -24,7 +24,7 @@ def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir)
     with data_archive_readonly(archive_path) as source_path:
         r = cli_runner.invoke(["data", "version", "--output-format=json"])
         assert r.exit_code == 0, r.stderr
-        assert json.loads(r.stdout) == {"sno.data.version": 0}
+        assert json.loads(r.stdout) == {"kart.data.version": 0}
 
         r = cli_runner.invoke(["log"])
         assert r.exit_code == UNSUPPORTED_VERSION
@@ -69,7 +69,7 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
     with data_archive_readonly(archive_path) as source_path:
         r = cli_runner.invoke(["data", "version", "--output-format=json"])
         assert r.exit_code == 0, r.stderr
-        assert json.loads(r.stdout) == {"sno.data.version": 1}
+        assert json.loads(r.stdout) == {"kart.data.version": 1}
 
         r = cli_runner.invoke(["log"])
         assert r.exit_code == UNSUPPORTED_VERSION

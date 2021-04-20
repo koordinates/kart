@@ -707,7 +707,7 @@ def insert(request, cli_runner):
             )
             assert r.exit_code == 0, r.stderr
 
-            commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
+            commit_id = json.loads(r.stdout)["kart.commit/v1"]["commit"]
             return commit_id
         else:
             return new_pk
@@ -740,7 +740,7 @@ def update(request, cli_runner):
             r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
             assert r.exit_code == 0, r.stderr
 
-            commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
+            commit_id = json.loads(r.stdout)["kart.commit/v1"]["commit"]
             return commit_id
         else:
             return pk

@@ -1,5 +1,5 @@
 {
-  "sno.diff/v1+hexwkb": {
+  "kart.diff/v1+hexwkb": {
     "nz_waca_adjustments": {
       "meta": {
         "crs/EPSG:4167.wkt": {
@@ -144,7 +144,7 @@
       ]
     }
   },
-  "sno.patch/v1": {
+  "kart.patch/v1": {
     "authorName": "Robert Coup",
     "authorEmail": "robert@coup.net.nz",
     "authorTime": "2019-07-22T11:05:39Z",

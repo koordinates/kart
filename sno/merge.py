@@ -320,7 +320,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
             wc.reset(merge_commit)
 
     if do_json:
-        dump_json_output({"sno.merge/v1": jdict}, sys.stdout)
+        dump_json_output({"kart.merge/v1": jdict}, sys.stdout)
     else:
         click.echo(merge_status_to_text(jdict, fresh=True))
     if not no_op and not conflicts:

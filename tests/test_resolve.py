@@ -13,7 +13,7 @@ H = pytest.helpers.helpers()
 def get_conflict_ids(cli_runner):
     r = cli_runner.invoke(["conflicts", "-s", "--flat", "-o", "json"])
     assert r.exit_code == 0, r.stderr
-    return json.loads(r.stdout)["sno.conflicts/v1"]
+    return json.loads(r.stdout)["kart.conflicts/v1"]
 
 
 def delete_remaining_conflicts(cli_runner):
@@ -37,7 +37,7 @@ def test_resolve_with_version(create_conflicts, cli_runner):
     with create_conflicts(H.POLYGONS) as repo:
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
+        assert json.loads(r.stdout)["kart.merge/v1"]["conflicts"]
         assert repo.state == SnoRepoState.MERGING
 
         # Can't just complete the merge until we resolve the conflicts.
@@ -121,12 +121,12 @@ def test_resolve_with_file(create_conflicts, cli_runner):
 
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        assert json.loads(r.stdout)["sno.merge/v1"]["conflicts"]
+        assert json.loads(r.stdout)["kart.merge/v1"]["conflicts"]
 
         r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
         assert r.exit_code == 0, r.stderr
 
-        conflicts = json.loads(r.stdout)["sno.conflicts/v1"]
+        conflicts = json.loads(r.stdout)["kart.conflicts/v1"]
         add_add_conflict_pk = conflicts[H.POLYGONS.LAYER]["feature"][0]
         assert add_add_conflict_pk == 98001
 

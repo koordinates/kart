@@ -545,7 +545,7 @@ def diff_output_json(
     yield _out
 
     dump_function(
-        {"sno.diff/v1+hexwkb": repo_result}, output_path, json_style=json_style
+        {"kart.diff/v1+hexwkb": repo_result}, output_path, json_style=json_style
     )
 
 

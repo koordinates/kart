@@ -395,7 +395,7 @@ def check_points_diff_output(r, output_format):
     elif output_format == "json":
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "schema.json": {
@@ -706,7 +706,7 @@ def check_polygons_diff_output(r, output_format):
         # New column "colour" has an ID is deterministically generated from the commit hash,
         # but we don't care exactly what it is.
         try:
-            schema_json = json.loads(r.stdout)["sno.diff/v1+hexwkb"][
+            schema_json = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
                 "nz_waca_adjustments"
             ]["meta"]["schema.json"]
             colour_id = schema_json["+"][-1]["id"]
@@ -714,7 +714,7 @@ def check_polygons_diff_output(r, output_format):
             colour_id = None
 
         assert json.loads(r.stdout) == {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_waca_adjustments": {
                     "meta": {
                         "schema.json": {

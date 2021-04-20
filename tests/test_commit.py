@@ -80,7 +80,7 @@ def test_commit(
             r = cli_runner.invoke(["commit", "-m", "test-commit-1", "-o", "json"])
 
         assert r.exit_code == 0, r
-        commit_id = json.loads(r.stdout)["sno.commit/v1"]["commit"]
+        commit_id = json.loads(r.stdout)["kart.commit/v1"]["commit"]
         print("commit:", commit_id)
 
         assert str(repo.head.target) == commit_id

@@ -198,7 +198,7 @@ def commit_obj_to_json(commit, repo, wc_diff):
     commit_time = datetime.fromtimestamp(commit.commit_time, timezone.utc)
     commit_time_offset = timedelta(minutes=commit.commit_time_offset)
     return {
-        "sno.commit/v1": {
+        "kart.commit/v1": {
             "commit": commit.id.hex,
             "abbrevCommit": commit.short_id,
             "author": commit.author.email,
@@ -213,7 +213,7 @@ def commit_obj_to_json(commit, repo, wc_diff):
 
 
 def commit_json_to_text(jdict):
-    jdict = jdict["sno.commit/v1"]
+    jdict = jdict["kart.commit/v1"]
     branch = jdict["branch"]
     commit = jdict["abbrevCommit"]
     message = jdict["message"].replace("\n", " ")

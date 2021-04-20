@@ -37,7 +37,7 @@ def test_apply_nonempty_patch_which_makes_no_changes(data_archive_readonly, cli_
 def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
     patch_data = json.dumps(
         {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "wrong-name": {
                     "featureChanges": [],
                     "metaChanges": [],
@@ -107,14 +107,14 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open("r", encoding="utf-8"))
 
-        assert patch["sno.patch/v1"] == original_patch["sno.patch/v1"]
-        assert patch["sno.diff/v1+hexwkb"] == original_patch["sno.diff/v1+hexwkb"]
+        assert patch["kart.patch/v1"] == original_patch["kart.patch/v1"]
+        assert patch["kart.diff/v1+hexwkb"] == original_patch["kart.diff/v1+hexwkb"]
 
 
 def test_apply_meta_changes(data_archive, cli_runner):
     patch_file = json.dumps(
         {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "title": {
@@ -124,7 +124,7 @@ def test_apply_meta_changes(data_archive, cli_runner):
                     }
                 },
             },
-            "sno.patch/v1": {
+            "kart.patch/v1": {
                 "authorEmail": "robert@example.com",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -145,14 +145,14 @@ def test_apply_meta_changes(data_archive, cli_runner):
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
-        meta = patch["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        meta = patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
         assert meta == {"title": {"+": "new title:", "-": "NZ Pa Points (Topo, 1:50k)"}}
 
 
 def test_apply_user_info(data_archive, cli_runner):
     patch_file = json.dumps(
         {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "title": {
@@ -161,7 +161,7 @@ def test_apply_user_info(data_archive, cli_runner):
                     }
                 },
             },
-            "sno.patch/v1": {
+            "kart.patch/v1": {
                 "authorEmail": "craig@example.com",
                 "authorName": "Craig de Stigter",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -181,7 +181,7 @@ def test_apply_user_info(data_archive, cli_runner):
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
-        header = patch["sno.patch/v1"]
+        header = patch["kart.patch/v1"]
         assert header["authorEmail"] == "craig@example.com"
         assert header["authorName"] == "Craig de Stigter"
 
@@ -189,7 +189,7 @@ def test_apply_user_info(data_archive, cli_runner):
 def test_apply_onto_other_ref(data_working_copy, cli_runner):
     patch_file = json.dumps(
         {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "title": {
@@ -198,7 +198,7 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
                     }
                 },
             },
-            "sno.patch/v1": {
+            "kart.patch/v1": {
                 "authorEmail": "craig@example.com",
                 "authorName": "Craig de Stigter",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -224,14 +224,14 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
         r = cli_runner.invoke(["create-patch", "otherbranch"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
-        assert patch["sno.patch/v1"]["message"] == "Change the title"
+        assert patch["kart.patch/v1"]["message"] == "Change the title"
 
         # But not to HEAD
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         assert (
-            patch["sno.patch/v1"]["message"]
+            patch["kart.patch/v1"]["message"]
             == "Improve naming on Coromandel East coast"
         )
 
@@ -239,7 +239,7 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
 def test_apply_allow_missing_old_values(data_archive, cli_runner):
     patch_file = json.dumps(
         {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "title": {
@@ -248,7 +248,7 @@ def test_apply_allow_missing_old_values(data_archive, cli_runner):
                     }
                 },
             },
-            "sno.patch/v1": {
+            "kart.patch/v1": {
                 "authorEmail": "robert@example.com",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -277,7 +277,7 @@ def test_apply_allow_missing_old_values(data_archive, cli_runner):
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
-        meta = patch["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        meta = patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
         assert meta == {"title": {"+": "new title:", "-": "NZ Pa Points (Topo, 1:50k)"}}
 
 
@@ -286,14 +286,14 @@ def test_apply_create_dataset(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(["data", "ls", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        assert json.loads(r.stdout)["sno.data.ls/v1"] == ["nz_pa_points_topo_150k"]
+        assert json.loads(r.stdout)["kart.data.ls/v1"] == ["nz_pa_points_topo_150k"]
 
         r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["data", "ls", "-o", "json"])
         assert r.exit_code == 0, r.stderr
-        assert json.loads(r.stdout)["sno.data.ls/v1"] == [
+        assert json.loads(r.stdout)["kart.data.ls/v1"] == [
             "nz_pa_points_topo_150k",
             "nz_waca_adjustments",
         ]
@@ -304,7 +304,7 @@ def test_apply_create_dataset(data_archive, cli_runner):
         patch = json.loads(r.stdout)
 
         original_patch = json.load(patch_path.open("r", encoding="utf-8"))
-        a, b = "sno.diff/v1+hexwkb", "nz_waca_adjustments"
+        a, b = "kart.diff/v1+hexwkb", "nz_waca_adjustments"
         assert patch[a][b] == original_patch[a][b]
 
 
@@ -321,7 +321,7 @@ def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
         metadata_json = o["nz_pa_points_topo_150k"]["metadata/dataset.json"]
         xml_content = metadata_json["http://www.isotc211.org/2005/gmd"]["text/xml"]
         orig_patch = {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "metadata/dataset.json": {
@@ -334,7 +334,7 @@ def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
                     }
                 }
             },
-            "sno.patch/v1": {
+            "kart.patch/v1": {
                 "authorEmail": "robert@example.com",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -355,12 +355,12 @@ def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         assert (
-            patch["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
-            == orig_patch["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+            patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+            == orig_patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
         )
 
         # check we can add it again too
-        m = orig_patch["sno.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"][
+        m = orig_patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"][
             "metadata/dataset.json"
         ]
         m["+"] = m.pop("-")
@@ -385,10 +385,10 @@ def test_add_and_remove_xml_metadata_as_xml(data_archive, cli_runner):
         xml_content = o["nz_waca_adjustments"]["metadata.xml"]
 
         orig_patch = {
-            "sno.diff/v1+hexwkb": {
+            "kart.diff/v1+hexwkb": {
                 "nz_waca_adjustments": {"meta": {"metadata.xml": {"-": xml_content}}}
             },
-            "sno.patch/v1": {
+            "kart.patch/v1": {
                 "authorEmail": "robert@example.com",
                 "authorName": "Robert Coup",
                 "authorTime": "2019-06-20T14:28:33Z",
@@ -409,12 +409,12 @@ def test_add_and_remove_xml_metadata_as_xml(data_archive, cli_runner):
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
         assert (
-            patch["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"]
-            == orig_patch["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"]
+            patch["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"]
+            == orig_patch["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"]
         )
 
         # check we can add it again too
-        m = orig_patch["sno.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"][
+        m = orig_patch["kart.diff/v1+hexwkb"]["nz_waca_adjustments"]["meta"][
             "metadata.xml"
         ]
         m["+"] = m.pop("-")
@@ -465,8 +465,8 @@ def test_apply_with_working_copy(
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open("r", encoding="utf-8"))
 
-        assert patch["sno.patch/v1"] == original_patch["sno.patch/v1"]
-        assert patch["sno.diff/v1+hexwkb"] == original_patch["sno.diff/v1+hexwkb"]
+        assert patch["kart.patch/v1"] == original_patch["kart.patch/v1"]
+        assert patch["kart.diff/v1+hexwkb"] == original_patch["kart.diff/v1+hexwkb"]
 
 
 def test_apply_with_no_working_copy_with_no_commit(data_archive_readonly, cli_runner):
@@ -501,7 +501,7 @@ def test_apply_with_working_copy_with_no_commit(data_working_copy, cli_runner):
         patch = json.loads(r.stdout)
         original_patch = json.load(patch_path.open("r", encoding="utf-8"))
 
-        assert patch["sno.diff/v1+hexwkb"] == original_patch["sno.diff/v1+hexwkb"]
+        assert patch["kart.diff/v1+hexwkb"] == original_patch["kart.diff/v1+hexwkb"]
 
 
 def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
@@ -510,7 +510,7 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
         assert r.exit_code == 0, r.stderr
         patch_text = r.stdout
         patch_json = json.loads(patch_text)
-        assert set(patch_json["sno.diff/v1+hexwkb"].keys()) == {
+        assert set(patch_json["kart.diff/v1+hexwkb"].keys()) == {
             "census2016_sdhca_ot_ra_short",
             "census2016_sdhca_ot_sos_short",
         }
@@ -551,7 +551,7 @@ def test_apply_benchmark(data_working_copy, benchmark, cli_runner, monkeypatch):
         assert r.exit_code == 0, r.stderr
         patch_text = r.stdout
         patch_json = json.loads(patch_text)
-        assert patch_json["sno.patch/v1"]["message"] == "rename everything"
+        assert patch_json["kart.patch/v1"]["message"] == "rename everything"
 
         # Now switch to our savepoint branch and apply the patch
         r = cli_runner.invoke(["checkout", "savepoint"])

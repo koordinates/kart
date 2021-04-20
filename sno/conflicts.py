@@ -298,7 +298,7 @@ def conflicts(
     if output_format == "text":
         click.echo(result)
     elif output_format == "json":
-        dump_json_output({"sno.conflicts/v1": result}, sys.stdout, json_style)
+        dump_json_output({"kart.conflicts/v1": result}, sys.stdout, json_style)
     elif output_format == "geojson":
         dump_json_output(result, sys.stdout, json_style)
 

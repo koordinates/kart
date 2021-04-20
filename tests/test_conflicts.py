@@ -73,7 +73,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
-            "sno.conflicts/v1": {
+            "kart.conflicts/v1": {
                 "nz_waca_adjustments": {"feature": [98001, 1452332, 1456853, 1456912]}
             }
         }
@@ -89,7 +89,7 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         r = cli_runner.invoke(["conflicts", "-ss", "-o", "json"])
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
-            "sno.conflicts/v1": {"nz_waca_adjustments": {"feature": 4}},
+            "kart.conflicts/v1": {"nz_waca_adjustments": {"feature": 4}},
         }
 
 
@@ -132,7 +132,7 @@ def test_list_conflicts(create_conflicts, cli_runner):
         assert r.stdout.splitlines()[: len(expected_text)] == expected_text
 
         expected_json = {
-            "sno.conflicts/v1": {
+            "kart.conflicts/v1": {
                 "nz_pa_points_topo_150k": {
                     "feature": {
                         "4": {
@@ -173,11 +173,11 @@ def test_list_conflicts(create_conflicts, cli_runner):
         r = cli_runner.invoke(["conflicts", "-o", "json"])
         assert r.exit_code == 0, r
         full_json = json.loads(r.stdout)
-        features_json = full_json["sno.conflicts/v1"][H.POINTS.LAYER]["feature"]
+        features_json = full_json["kart.conflicts/v1"][H.POINTS.LAYER]["feature"]
         assert len(features_json) == 4
         assert (
             features_json["4"]
-            == expected_json["sno.conflicts/v1"][H.POINTS.LAYER]["feature"]["4"]
+            == expected_json["kart.conflicts/v1"][H.POINTS.LAYER]["feature"]["4"]
         )
 
         expected_geojson = {
@@ -252,7 +252,7 @@ def test_list_conflicts_transform_crs(create_conflicts, cli_runner):
             ["conflicts", "-o", "json", "nz_pa_points_topo_150k:feature:4"]
         )
         assert r.exit_code == 0, r
-        json_layer = json.loads(r.stdout)["sno.conflicts/v1"][H.POINTS.LAYER]
+        json_layer = json.loads(r.stdout)["kart.conflicts/v1"][H.POINTS.LAYER]
         assert (
             json_layer["feature"]["4"]["ancestor"]["geom"]
             == "0101000000E699C7FE092966404E7743C1B50B43C0"
@@ -269,7 +269,7 @@ def test_list_conflicts_transform_crs(create_conflicts, cli_runner):
             ]
         )
         assert r.exit_code == 0, r
-        json_layer = json.loads(r.stdout)["sno.conflicts/v1"][H.POINTS.LAYER]
+        json_layer = json.loads(r.stdout)["kart.conflicts/v1"][H.POINTS.LAYER]
         assert (
             json_layer["feature"]["4"]["ancestor"]["geom"]
             == "01010000006B88290F36253E41B8AD226F01085641"
