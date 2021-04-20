@@ -168,7 +168,7 @@ pyi_app = BUNDLE(
     pyi_coll,
     name='Kart.app',
     icon='platforms/macos/sno.icns',
-    bundle_identifier='com.koordinates.Kart.KartCore',
+    bundle_identifier='com.koordinates.Sno.SnoCore',
     version=kart_version,
     info_plist={
         'NSPrincipalClass': 'NSApplication',

@@ -147,7 +147,7 @@ endif
 pkg-notarize: $(pkg)
 	pkgutil --check-signature $(pkg)
 	xcrun altool --notarize-app \
-		--primary-bundle-id "com.koordinates.Kart.KartCore" \
+		--primary-bundle-id "com.koordinates.Sno.SnoCore" \
 		--username "$(NOTARIZE_USER)" \
 		--password "$(NOTARIZE_PASSWORD)" \
 		--file $(pkg) \

@@ -825,7 +825,7 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>com.koordinates.Kart.KartCore</string>
+				<string>com.koordinates.Sno.SnoCore</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>
