@@ -66,6 +66,7 @@ for DIST in ${TARGETS[*]}; do
 
 			$DO_INSTALL
 			command -v kart
+			command -v sno
 
 			kart --version
 			/src/tests/scripts/distcheck.sh

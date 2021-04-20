@@ -61,6 +61,8 @@ try {
         }
     }
 
+    Copy-Item "platforms\windows\sno.cmd" -Destination "platforms\windows\dist\kart"
+
     platforms\windows\dist\kart\kart.exe --version
     if (!$?) {
         exit $LastExitCode

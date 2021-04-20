@@ -173,6 +173,7 @@ all: dev
 .PHONY: install
 install: | $(kart-app-any)
 	ln -sf $(realpath $(VIRTUAL_ENV)/bin/kart) $(PREFIX)/bin/kart
+	ln -sf $(realpath $(VIRTUAL_ENV)/bin/sno) $(PREFIX)/bin/sno
 
 # Testing
 
@@ -204,7 +205,7 @@ ci-test:
 
 .PHONY: clean
 clean:
-	$(RM) $(PREFIX)/bin/kart
+	$(RM) $(PREFIX)/bin/kart $(PREFIX)/bin/sno
 	$(RM) -r $(VIRTUAL_ENV)
 
 .PHONY: cleaner

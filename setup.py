@@ -18,6 +18,7 @@ setup(
     entry_points={
         "console_scripts": [
             "kart = sno.cli:entrypoint",
+            "sno = sno.cli:entrypoint",
         ],
     },
 )

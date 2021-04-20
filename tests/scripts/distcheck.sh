@@ -8,17 +8,20 @@ if ! command -v realpath >/dev/null; then
     }
 fi
 
-SNO_PATH=$(dirname "$(realpath "$(command -v sno)")")
-if [ "$(uname)" = "Darwin" ] && [[ "$SNO_PATH" =~ ^/Applications ]]; then
-    SNO_PATH="$(realpath "$SNO_PATH/../..")"
+KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
+if [ "$(uname)" = "Darwin" ] && [[ "$KART_PATH" =~ ^/Applications ]]; then
+    KART_PATH="$(realpath "$KART_PATH/../..")"
 fi
-echo "Sno is at: ${SNO_PATH}"
+echo "Kart is at: ${KART_PATH}"
+
+SNO_PATH=$(realpath "$(command -v sno)")
+echo "Found Sno at: ${SNO_PATH}"
 
 if ! command -v find >/dev/null; then
     echo "⚠️ Skipping symlink checks, find isn't available"
 else
     echo "Checking for any broken symlinks..."
-    BROKEN_LINKS=($(find "$SNO_PATH" -type l ! -exec test -e {} \; -print))
+    BROKEN_LINKS=($(find "$KART_PATH" -type l ! -exec test -e {} \; -print))
     if (( ${#BROKEN_LINKS[@]} )); then
         ls -l "${BROKEN_LINKS[@]}"
         exit 1
