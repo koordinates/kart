@@ -97,6 +97,8 @@ def postgis_engine(pgurl):
         dbcur = psycopg2_conn.cursor()
         dbcur.execute("SET timezone='UTC';")
         dbcur.execute("SET intervalstyle='iso_8601';")
+        # don't drop precision from floats near the edge of their supported range
+        dbcur.execute("SET extra_float_digits = 3;")
         dbcur.execute("SELECT oid FROM pg_type WHERE typname='geometry';")
         # Unlike the other set-up, this must be done with an actual connection open -
         # otherwise we don't know the geometry_oid (or if the geometry type exists at all).

@@ -488,6 +488,12 @@ def postgis_layer(postgis_db, data_archive):
     return _postgis_layer
 
 
+def test_postgres_preserves_float_precision(postgis_db):
+    with postgis_db.connect() as conn:
+        val = conn.scalar("SELECT 1060116.12::real")
+        assert val == 1060116.1
+
+
 def _test_postgis_import(
     repo_path,
     cli_runner,
