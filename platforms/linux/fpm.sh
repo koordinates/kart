@@ -41,6 +41,8 @@ fpm \
     --url "https://www.kartproject.org" \
     --description "Distributed version-control for geospatial and tabular data" \
     --license "GPLv2" \
+    --conflicts "sno" \
+    --replaces "sno" \
     --architecture amd64 \
     --package /src/dist/ \
     --force \
