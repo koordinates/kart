@@ -57,7 +57,7 @@ else:
         prefix, "share", "git-core", "templates"
     )
 # See locked_git_index in.repo.py:
-os.environ["GIT_INDEX_FILE"] = os.path.join(".sno", "unlocked_index")
+os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
 # GDAL Data
 if not is_windows:

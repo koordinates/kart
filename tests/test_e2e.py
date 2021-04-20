@@ -39,10 +39,10 @@ def test_e2e(
     table = metadata.LAYER
     row_count = metadata.ROWCOUNT
 
-    repo_path = tmp_path / "myproject.sno"
+    repo_path = tmp_path / "myproject"
     repo_path.mkdir()
 
-    remote_path = tmp_path / "myremote.sno"
+    remote_path = tmp_path / "myremote"
     remote_path.mkdir()
     with chdir(remote_path):
         # initialise empty repo for remote
@@ -53,6 +53,10 @@ def test_e2e(
             # initialise empty repo
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0
+
+            assert not (repo_path / ".sno").exists()
+            assert (repo_path / ".kart").is_dir()
+            assert (repo_path / "KART_README.txt").is_file()
 
             # import data
             r = cli_runner.invoke(["import", f"GPKG:{data / gpkg}", table])
@@ -74,6 +78,8 @@ def test_e2e(
             # check we have the right data in the WC
             with gpkg_engine(working_copy).connect() as conn:
                 assert H.row_count(conn, table) == row_count
+                assert H.table_pattern_count(conn, "gpkg_kart_%") == 2
+                assert H.table_pattern_count(conn, "gpkg_sno_%") == 0
 
             # create & switch to a new branch
             r = cli_runner.invoke(["switch", "-c", "edit-1"])

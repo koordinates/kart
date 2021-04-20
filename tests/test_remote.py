@@ -126,15 +126,15 @@ def test_clone(
             assert wc.exists() and wc.is_file()
 
             table = H.POINTS.LAYER
-            assert repo.config["sno.repository.version"] == "2"
-            assert repo.config["sno.workingcopy.path"] == wc.name
+            assert repo.config["kart.repostructure.version"] == "2"
+            assert repo.config["kart.workingcopy.location"] == wc.name
 
             with gpkg_engine(wc).connect() as conn:
                 nrows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
                 assert nrows > 0
 
                 wc_tree_id = conn.execute(
-                    """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';""",
+                    """SELECT value FROM "gpkg_kart_state" WHERE table_name='*' AND key='tree';""",
                 ).fetchone()[0]
                 assert wc_tree_id == repo.head_tree.hex
         else:

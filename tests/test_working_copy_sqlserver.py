@@ -129,7 +129,7 @@ def test_init_import(
     cli_runner,
 ):
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    repo_path = tmp_path / "data.sno"
+    repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     with data_archive("gpkg-points") as data:
@@ -147,7 +147,7 @@ def test_init_import(
                 ]
             )
             assert r.exit_code == 0, r.stderr
-            assert (repo_path / ".sno" / "HEAD").exists()
+            assert (repo_path / ".kart" / "HEAD").exists()
 
             repo = SnoRepo(repo_path)
             wc = repo.working_copy

@@ -557,6 +557,14 @@ class TestHelpers:
         return conn.execute(f'SELECT COUNT(*) FROM "{table}";').scalar()
 
     @classmethod
+    def table_pattern_count(cls, conn, pattern):
+        # Only works for sqlite / GPKG.
+        return conn.scalar(
+            f"SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE (:pattern);",
+            {"pattern": pattern},
+        )
+
+    @classmethod
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
         repo = SnoRepo(repo_path)

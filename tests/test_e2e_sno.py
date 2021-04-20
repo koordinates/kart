@@ -24,7 +24,7 @@ GPKG_IMPORTS = (
 @pytest.mark.slow
 @pytest.mark.e2e
 @pytest.mark.parametrize(*GPKG_IMPORTS)
-def test_kart(
+def test_e2e_sno(
     archive,
     gpkg,
     table_ref,
@@ -36,15 +36,15 @@ def test_kart(
     request,
     monkeypatch,
 ):
-    # Like test_e2e.py, but, uses a Kart branded repo instead of a Sno one.
+    # Like test_e2e.py, but, uses the older Sno branded repo instead of the newer Kart branded repo.
     metadata = H.metadata(table_ref)
     table = metadata.LAYER
     row_count = metadata.ROWCOUNT
 
-    repo_path = tmp_path / "myproject.kart"
+    repo_path = tmp_path / "myproject"
     repo_path.mkdir()
 
-    remote_path = tmp_path / "myremote.kart"
+    remote_path = tmp_path / "myremote"
     remote_path.mkdir()
     with chdir(remote_path):
         # initialise empty repo for remote
@@ -52,19 +52,19 @@ def test_kart(
 
     with data_archive(archive) as data:
         with chdir(repo_path):
-            # initialise empty Kart repo
+            # initialise empty Sno repo
 
             from sno.repo import SnoRepo
 
-            monkeypatch.setattr(SnoRepo, "BRANDING_FOR_NEW_REPOS", "kart")
-            monkeypatch.setattr(SnoRepo, "DIRNAME_FOR_NEW_REPOS", ".kart")
+            monkeypatch.setattr(SnoRepo, "BRANDING_FOR_NEW_REPOS", "sno")
+            monkeypatch.setattr(SnoRepo, "DIRNAME_FOR_NEW_REPOS", ".sno")
 
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0
 
-            assert not (repo_path / ".sno").exists()
-            assert (repo_path / ".kart").is_dir()
-            assert (repo_path / "KART_README.txt").is_file()
+            assert not (repo_path / ".kart").exists()
+            assert (repo_path / ".sno").is_dir()
+            assert (repo_path / "SNO_README.txt").is_file()
 
             # import data
             r = cli_runner.invoke(["import", f"GPKG:{data / gpkg}", table])
@@ -86,19 +86,8 @@ def test_kart(
             # check we have the right data in the WC
             with gpkg_engine(working_copy).connect() as conn:
                 assert H.row_count(conn, table) == row_count
-                assert (
-                    conn.scalar(
-                        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE ('gpkg_kart%');",
-                    )
-                    == 2
-                )
-
-                assert (
-                    conn.scalar(
-                        "SELECT count(*) FROM sqlite_master WHERE type='table' AND name LIKE ('gpkg_sno%');",
-                    )
-                    == 0
-                )
+                assert H.table_pattern_count(conn, "gpkg_sno_%") == 2
+                assert H.table_pattern_count(conn, "gpkg_kart_%") == 0
 
             # create & switch to a new branch
             r = cli_runner.invoke(["switch", "-c", "edit-1"])

@@ -154,8 +154,8 @@ class SnoRepo(pygit2.Repository):
     Note: this is not enforced, especially since all legacy "bare-style" sno repos violate this assumption.
     """
 
-    # There is an ongoing rename from Sno -> Kart. Kart branding is supported, but new repos are still Sno branded.
-    BRANDING_FOR_NEW_REPOS = "sno"
+    # Kart was previously named Sno. Kart branding is not the default, but repos with Sno branding are still supported.
+    BRANDING_FOR_NEW_REPOS = "kart"
     DIRNAME_FOR_NEW_REPOS = f".{BRANDING_FOR_NEW_REPOS}"
 
     # Directory names that we look in for a Kart / Sno repo - both continue to be supported.

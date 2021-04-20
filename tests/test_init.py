@@ -624,7 +624,7 @@ def test_init_import(
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.sno"
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
         r = cli_runner.invoke(
@@ -636,7 +636,7 @@ def test_init_import(
             ]
         )
         assert r.exit_code == 0, r
-        assert (repo_path / ".sno" / "HEAD").exists()
+        assert (repo_path / ".kart" / "HEAD").exists()
 
         repo = SnoRepo(repo_path)
         assert not repo.is_bare
@@ -653,14 +653,14 @@ def test_init_import(
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.repository.version"] == "2"
-        assert repo.config["sno.workingcopy.path"] == f"{wc.name}"
+        assert repo.config["kart.repostructure.version"] == "2"
+        assert repo.config["kart.workingcopy.location"] == f"{wc.name}"
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, table) > 0
 
             wc_tree_id = sess.execute(
-                """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
+                """SELECT value FROM "gpkg_kart_state" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head_tree.hex
 
@@ -709,7 +709,7 @@ def test_init_import_commit_headers(
     chdir,
 ):
     with data_archive("gpkg-points") as data:
-        repo_path = tmp_path / "data.sno"
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
         r = cli_runner.invoke(
@@ -729,7 +729,7 @@ def test_init_import_commit_headers(
             },
         )
         assert r.exit_code == 0, r.stderr
-        assert (repo_path / ".sno" / "HEAD").exists()
+        assert (repo_path / ".kart" / "HEAD").exists()
         r = cli_runner.invoke(["-C", str(repo_path), "log", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         log_entry = json.loads(r.stdout)[0]
@@ -758,7 +758,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
         repo_path = data / "editing"
 
         assert r.exit_code == 0, r
-        assert (repo_path / ".sno" / "HEAD").exists()
+        assert (repo_path / ".kart" / "HEAD").exists()
 
         repo = SnoRepo(repo_path)
         assert not repo.is_bare
@@ -769,15 +769,15 @@ def test_init_import_name_clash(data_archive, cli_runner):
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["sno.repository.version"] == "2"
-        assert repo.config["sno.workingcopy.path"] == "editing.gpkg"
+        assert repo.config["kart.repostructure.version"] == "2"
+        assert repo.config["kart.workingcopy.location"] == "editing.gpkg"
 
         with gpkg_engine(wc).connect() as db:
             wc_rowcount = H.row_count(db, "editing")
             assert wc_rowcount > 0
 
             wc_tree_id = db.execute(
-                """SELECT value FROM "gpkg_sno_state" WHERE table_name='*' AND key='tree';"""
+                """SELECT value FROM "gpkg_kart_state" WHERE table_name='*' AND key='tree';"""
             ).fetchone()[0]
             assert wc_tree_id == repo.head_tree.hex
 
@@ -794,7 +794,7 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
     gpkg = "census2016_sdhca_ot_short.gpkg"
 
     with data_archive("gpkg-au-census") as data:
-        repo_path = tmp_path / "data.sno"
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
         with chdir(repo_path):
             r = cli_runner.invoke(["init", "--import", f"fred:thingz"])
@@ -815,28 +815,28 @@ def test_init_import_errors(data_archive, tmp_path, chdir, cli_runner):
 
 
 def test_init_empty(tmp_path, cli_runner, chdir):
-    """ Create an empty Sno repository. """
-    repo_path = tmp_path / "data.sno"
+    """ Create an empty Kart repository. """
+    repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     # empty dir
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
-    assert (repo_path / ".sno" / "HEAD").exists()
+    assert (repo_path / ".kart" / "HEAD").exists()
 
     # makes dir tree
-    repo_path = tmp_path / "foo" / "bar" / "wiz.sno"
+    repo_path = tmp_path / "foo" / "bar" / "wiz"
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
-    assert (repo_path / ".sno" / "HEAD").exists()
+    assert (repo_path / ".kart" / "HEAD").exists()
 
     # current dir
-    repo_path = tmp_path / "planet.sno"
+    repo_path = tmp_path / "planet"
     repo_path.mkdir()
     with chdir(repo_path):
         r = cli_runner.invoke(["init"])
         assert r.exit_code == 0, r
-        assert (repo_path / ".sno" / "HEAD").exists()
+        assert (repo_path / ".kart" / "HEAD").exists()
 
     # dir isn't empty
     repo_path = tmp_path / "tree"
@@ -844,19 +844,19 @@ def test_init_empty(tmp_path, cli_runner, chdir):
     (repo_path / "a.file").touch()
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == INVALID_OPERATION, r
-    assert not (repo_path / ".sno" / "HEAD").exists()
+    assert not (repo_path / ".kart" / "HEAD").exists()
 
     # current dir isn't empty
     with chdir(repo_path):
         r = cli_runner.invoke(["init"])
         assert r.exit_code == INVALID_OPERATION, r
-        assert not (repo_path / ".sno" / "HEAD").exists()
+        assert not (repo_path / ".kart" / "HEAD").exists()
 
 
 @pytest.mark.slow
 def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
-    repo_path = tmp_path / "data.sno"
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
+    repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     r = cli_runner.invoke(["init", str(repo_path), "--workingcopy-path=wc.gpkg"])
@@ -923,7 +923,7 @@ def test_init_import_home_resolve(
     data_archive, tmp_path, cli_runner, chdir, monkeypatch, git_user_config
 ):
     """ Import from a ~-specified gpkg path """
-    repo_path = tmp_path / "data.sno"
+    repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     r = cli_runner.invoke(["init", str(repo_path)])
@@ -934,7 +934,7 @@ def test_init_import_home_resolve(
             monkeypatch.setenv("HOME", str(source_path))
 
             # make sure we have a .gitconfig file in HOME,
-            # otherwise sno can't find the user information for the commit
+            # otherwise kart can't find the user information for the commit
             orig_home = git_user_config[2]
             shutil.copy2(orig_home / ".gitconfig", source_path)
 
