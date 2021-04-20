@@ -284,8 +284,8 @@ jobs:
           else
             make -C platforms pkg
           fi
-          ls -la platforms/macos/dist/Sno-${{ steps.version.outputs.value }}.pkg
-          echo "::set-output name=file::platforms/macos/dist/Sno-${{ steps.version.outputs.value }}.pkg"
+          ls -la platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg
+          echo "::set-output name=file::platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg"
 
       - name: "🐧 package: assemble"
         id: package-Linux
@@ -330,9 +330,9 @@ jobs:
         with:
           name: packaging-logs-${{ matrix.platform.name }}
           path: |
-            platforms/*/build/sno/*.toc
-            platforms/*/build/sno/*.txt
-            platforms/*/build/sno/*.html
+            platforms/*/build/kart/*.toc
+            platforms/*/build/kart/*.txt
+            platforms/*/build/kart/*.html
 
       #
       # Package tests
@@ -342,7 +342,7 @@ jobs:
         if: matrix.platform.id == 'Darwin'
         run: |
           sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
-          readlink $(which sno)
+          readlink $(which kart)
           tests/scripts/distcheck.sh
           PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
 
@@ -363,7 +363,7 @@ jobs:
         with:
           draft: true
           files: |
-            platforms/macos/dist/Sno-*.pkg
+            platforms/macos/dist/Kart-*.pkg
             platforms/linux/dist/*.deb
             platforms/linux/dist/*.rpm
 
@@ -500,8 +500,8 @@ jobs:
       - name: "package: assemble"
         id: package
         env:
-          SNO_VERSION: ${{ steps.version.outputs.value }}
-          SNO_INSTALLER_VERSION: ${{ steps.version.outputs.installer }}
+          KART_VERSION: ${{ steps.version.outputs.value }}
+          KART_INSTALLER_VERSION: ${{ steps.version.outputs.installer }}
           WIN_SIGN_AZURE_CERTIFICATE: ${{ secrets.WIN_SIGN_AZURE_CERTIFICATE }}
           SIGN_AZURE_VAULT: ${{ secrets.WIN_SIGN_AZURE_VAULT }}
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
@@ -514,7 +514,7 @@ jobs:
           }
 
           nmake /D /NoLogo /F makefile.vc package
-          echo "::set-output name=msi::platforms\windows\dist\Sno-${{ steps.version.outputs.value }}.msi"
+          echo "::set-output name=msi::platforms\windows\dist\Kart-${{ steps.version.outputs.value }}.msi"
 
       #
       # Uploading package
@@ -531,9 +531,9 @@ jobs:
         with:
           name: packaging-logs-Windows
           path: |
-            platforms/windows/build/sno/*.toc
-            platforms/windows/build/sno/*.txt
-            platforms/windows/build/sno/*.html
+            platforms/windows/build/kart/*.toc
+            platforms/windows/build/kart/*.txt
+            platforms/windows/build/kart/*.html
 
       #
       # Package tests
@@ -544,7 +544,7 @@ jobs:
           Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\${{ steps.package.outputs.msi }} /quiet /norestart /l* install.log'
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
-          & sno --version
+          & kart --version
           & tests\scripts\distcheck.ps1
           & tests\scripts\e2e-1.ps1
 
