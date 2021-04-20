@@ -6,13 +6,15 @@ VERSION=$2
 WORKDIR=/tmp/root
 
 mkdir -p ${WORKDIR}/{opt,usr/bin}
-cp -r dist/sno ${WORKDIR}/opt
+cp -r dist/kart ${WORKDIR}/opt
 
 # reset file permissions, PyInstaller gets over-excited
-find ${WORKDIR} -maxdepth 1 -type f -not -name sno_cli -exec chmod -x {} \;
+find ${WORKDIR} -maxdepth 1 -type f -not -name kart_cli -exec chmod -x {} \;
 
 # symlink executable
-ln -sf /opt/sno/sno_cli ${WORKDIR}/usr/bin/sno
+ln -sf /opt/kart/kart_cli ${WORKDIR}/usr/bin/kart
+ln -sf /opt/kart/kart_cli ${WORKDIR}/usr/bin/sno  # Previous name
+
 
 OPTS=
 if [ "$TYPE" = "deb" ]; then
@@ -34,9 +36,9 @@ fpm \
     --input-type dir \
     --chdir ${WORKDIR} \
     --output-type "${TYPE}" \
-    --name sno \
+    --name kart \
     --version "${VERSION}" \
-    --url "https://sno.earth" \
+    --url "https://kart.global" \
     --description "Distributed version-control for geospatial and tabular data" \
     --license "GPLv2" \
     --architecture amd64 \

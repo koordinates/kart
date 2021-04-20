@@ -13,39 +13,39 @@ if ($Env:SIGN_AZURE_CERTIFICATE) {
     Write-Output ">>> Checking for AzureSignTool: " (Get-Command azuresigntool).Path
 }
 
-if ($Env:SNO_INSTALLER_VERSION) {
-    $INSTALLVER=$Env:SNO_INSTALLER_VERSION
+if ($Env:KART_INSTALLER_VERSION) {
+    $INSTALLVER=$Env:KART_INSTALLER_VERSION
 
-    if ($Env:SNO_VERSION) {
-        $MSINAME="Sno-${Env:SNO_VERSION}.msi"
+    if ($Env:KART_VERSION) {
+        $MSINAME="Kart-${Env:KART_VERSION}.msi"
     } else {
-        $MSINAME="Sno-${INSTALLVER}.msi"
+        $MSINAME="Kart-${INSTALLVER}.msi"
     }
 } else {
     $INSTALLVER='0.0.0'
-    $MSINAME='Sno.msi'
+    $MSINAME='Kart.msi'
 }
 Write-Output ">>> Installer version: $INSTALLVER"
 
 Push-Location -Path $PSScriptRoot
 try {
-    Write-Output '>>> Wix: Collecting files from dist\sno ...'
-    & "${WIXBIN}heat" dir .\dist\sno -o .\build\AppFiles.wxs -nologo -scom -frag -srd -sreg -gg -cg CG_AppFiles -dr APPDIR
+    Write-Output '>>> Wix: Collecting files from dist\kart ...'
+    & "${WIXBIN}heat" dir .\dist\kart -o .\build\AppFiles.wxs -nologo -scom -frag -srd -sreg -gg -cg CG_AppFiles -dr APPDIR
     if (!$?) {
         Write-Output "heat $LastExitCode"
         exit $LastExitCode
     }
 
     Write-Output '>>> Wix: Compiling ...'
-    & "${WIXBIN}candle" -nologo -v -arch x64 -dVersion="$INSTALLVER" sno.wxs .\build\AppFiles.wxs -o .\build\
+    & "${WIXBIN}candle" -nologo -v -arch x64 -dVersion="$INSTALLVER" kart.wxs .\build\AppFiles.wxs -o .\build\
     if (!$?) {
         exit $LastExitCode
     }
 
     Write-Output '>>> Wix: Building Installer ...'
-    & "${WIXBIN}light" -nologo -v -b .\dist\sno `
+    & "${WIXBIN}light" -nologo -v -b .\dist\kart `
         -o ".\dist\${MSINAME}" `
-        .\build\sno.wixobj .\build\AppFiles.wixobj `
+        .\build\kart.wixobj .\build\AppFiles.wixobj `
         -ext WixUIExtension -cultures:en-us `
         -ext WixUtilExtension
     if (!$?) {
@@ -67,8 +67,8 @@ try {
             --azure-key-vault-client-id="$Env:SIGN_AZURE_CLIENTID" `
             --azure-key-vault-client-secret="$Env:SIGN_AZURE_CLIENTSECRET" `
             --azure-key-vault-certificate="$Env:SIGN_AZURE_CERTIFICATE" `
-            --description-url="https://sno.earth" `
-            --description="Sno Installer" `
+            --description-url="https://kart.global" `
+            --description="Kart Installer" `
             --timestamp-rfc3161="$TS" `
             --verbose `
             (Join-Path '.\dist' $MSINAME)

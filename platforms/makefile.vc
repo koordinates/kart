@@ -1,11 +1,11 @@
-!IFDEF SNO_INSTALLER_VERSION
-!IFDEF SNO_VERSION
-MSI=Sno-$(SNO_VERSION).msi
+!IFDEF KART_INSTALLER_VERSION
+!IFDEF KART_VERSION
+MSI=Kart-$(KART_VERSION).msi
 !ELSE
-MSI=Sno-$(SNO_INSTALLER_VERSION).msi
+MSI=Kart-$(KART_INSTALLER_VERSION).msi
 !ENDIF
 !ELSE
-MSI=Sno.msi
+MSI=Kart.msi
 !ENDIF
 
 all: windows\dist\$(MSI)
@@ -13,8 +13,8 @@ all: windows\dist\$(MSI)
 clean:
 	-rmdir /Q /S windows\build windows\dist
 
-windows\dist\sno: ..\sno.spec
+windows\dist\kart: ..\kart.spec
 	powershell -NoLogo windows\BuildPyApp.ps1
 
-windows\dist\$(MSI): windows\dist\sno windows\sno*.wxs windows\*.ps1 windows\*.bmp windows\*.ico
+windows\dist\$(MSI): windows\dist\kart windows\kart*.wxs windows\*.ps1 windows\*.bmp windows\*.ico
 	powershell -NoLogo windows\BuildInstaller.ps1

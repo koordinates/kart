@@ -29,13 +29,13 @@ VSVersionInfo(
       [
       StringTable(
         '040904B0',
-        [StringStruct('CompanyName', 'The Sno Development Community'),
-        StringStruct('FileDescription', 'Sno Command Line Interface'),
+        [StringStruct('CompanyName', 'The Kart Development Community'),
+        StringStruct('FileDescription', 'Kart Command Line Interface'),
         StringStruct('FileVersion', '%VERSION%'),
-        StringStruct('InternalName', 'sno'),
-        StringStruct('LegalCopyright', '(c) Sno Contributors. Licensed under the GNU Public License (GPL).'),
-        StringStruct('OriginalFilename', 'sno.exe'),
-        StringStruct('ProductName', 'Sno CLI'),
+        StringStruct('InternalName', 'kart'),
+        StringStruct('LegalCopyright', '(c) Kart Contributors. Licensed under the GNU Public License (GPL).'),
+        StringStruct('OriginalFilename', 'kart.exe'),
+        StringStruct('ProductName', 'Kart CLI'),
         StringStruct('ProductVersion', '%VERSION%')])
       ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

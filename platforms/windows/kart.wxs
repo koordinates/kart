@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-    <Product Id="*" Name="Sno" Language="1033" Version="$(var.Version)" Manufacturer="Sno" UpgradeCode="{53b2434b-7cba-4e79-b63d-2adde1478de9}">
-        <Package Compressed="yes" Manufacturer="Koordinates" Description="Installer for Sno command line tools."
-            Comments="(c) The Sno Development Community" InstallerVersion="301" />
+    <Product Id="*" Name="Kart" Language="1033" Version="$(var.Version)" Manufacturer="Kart" UpgradeCode="{53b2434b-7cba-4e79-b63d-2adde1478de9}">
+        <Package Compressed="yes" Manufacturer="Koordinates" Description="Installer for Kart command line tools."
+            Comments="(c) The Kart Development Community" InstallerVersion="301" />
 
         <MediaTemplate EmbedCab="yes" />
 
-        <SetProperty Id="URL" Value="https://sno.earth/" Sequence="execute"  Before="CreateShortcuts" />
-        <Icon Id="ICON_Sno" SourceFile="sno.ico" />
+        <SetProperty Id="URL" Value="https://kart.global/" Sequence="execute"  Before="CreateShortcuts" />
+        <Icon Id="ICON_Kart" SourceFile="sno.ico" />
 
         <!--Components-->
         <CustomActionRef Id="WixBroadcastEnvironmentChange" />
@@ -15,10 +15,10 @@
         <!--Directory structure-->
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
-                <Directory Id="APPDIR" Name="Sno" />
+                <Directory Id="APPDIR" Name="Kart" />
             </Directory>
             <Directory Id="ProgramMenuFolder">
-                <Directory Id="DIR_Shortcuts" Name="Sno" />
+                <Directory Id="DIR_Shortcuts" Name="Kart" />
             </Directory>
             <Component Id="ProductInformation" Guid="{70118EC7-3341-4039-9FA6-33B1F46CD908}">
                 <RegistryValue Id="Version" Root="HKMU" Key="Software\[Manufacturer]\[ProductName]" Name="Version" Value="[ProductVersion]" Type="string" KeyPath="yes" />
@@ -37,23 +37,23 @@
         <!--Start Menu Shortcuts-->
         <DirectoryRef Id="DIR_Shortcuts">
             <Component Id="CMP_Shortcuts" Guid="{11949267-bc68-4997-be76-3554c1154e12}">
-                <Shortcut Id="OnlineDocumentationShortcut" Name="Sno Documentation" Target="[URL]" Icon="ICON_Sno" />
+                <Shortcut Id="OnlineDocumentationShortcut" Name="Kart Documentation" Target="[URL]" Icon="ICON_Kart" />
 
-                <Shortcut Id="UninstallShortcut" Name="Uninstall Sno" Description="Uninstalls the Sno command line tools" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]" />
+                <Shortcut Id="UninstallShortcut" Name="Uninstall Kart" Description="Uninstalls the Kart command line tools" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]" />
 
                 <RemoveFolder Id="DIR_Shortcuts" On="uninstall" />
-                <RegistryValue Root="HKCU" Key="Software\Sno\SnoCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKCU" Key="Software\Kart\KartCore" Name="installed" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </DirectoryRef>
 
         <!--Features-->
-        <Feature Id="SnoCoreFeature" Absent="disallow" ConfigurableDirectory="APPDIR" Description="Command line tools" InstallDefault="source" Level="1" Title="Sno CLI">
+        <Feature Id="KartCoreFeature" Absent="disallow" ConfigurableDirectory="APPDIR" Description="Command line tools" InstallDefault="source" Level="1" Title="Kart CLI">
             <ComponentGroupRef Id="CG_AppFiles" />
             <MergeRef Id="VCRedist" />
             <ComponentRef Id="ProductInformation" />
         </Feature>
 
-        <Feature Id="AddPathFeature" Title="Add to PATH" Level="1" Description="Add Sno to the PATH so you can run it easily from the command prompt.">
+        <Feature Id="AddPathFeature" Title="Add to PATH" Level="1" Description="Add Kart to the PATH so you can run it easily from the command prompt.">
             <ComponentRef Id="CMP_EnvAddPath" />
         </Feature>
 
@@ -65,12 +65,12 @@
         <MajorUpgrade DowngradeErrorMessage="A later version of [ProductName] is already installed. Setup will now exit." />
 
         <!-- Uninstall/System -->
-        <Property Id="ARPPRODUCTICON" Value="ICON_Sno" />
+        <Property Id="ARPPRODUCTICON" Value="ICON_Kart" />
 
         <!-- UI -->
         <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
         <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
-        <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="To get started, run `sno` from your command prompt. An introductory tutorial is available at https://sno.earth" />
+        <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="To get started, run `kart` from your command prompt. An introductory tutorial is available at https://kart.global" />
         <UI Id="FeatureTree">
             <UIRef Id="WixUI_FeatureTree" />
             <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg"  Order="3">1</Publish>

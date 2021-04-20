@@ -212,7 +212,7 @@ jobs:
       - name: "app: build"
         run: |
           make release
-          venv/bin/sno --version
+          venv/bin/kart --version
 
       #
       # App tests & checks
@@ -473,7 +473,7 @@ jobs:
       - name: "app: build"
         run: |
           nmake /D /NoLogo /F makefile.vc
-          venv\Scripts\sno.exe --version
+          venv\Scripts\kart.exe --version
 
       #
       # App tests & checks

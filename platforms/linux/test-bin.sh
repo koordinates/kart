@@ -27,6 +27,6 @@ for DIST in ${TARGETS[*]}; do
         --rm \
         -v "${HERE}/dist/:/mnt/:ro" \
         "$DIST" \
-        /mnt/sno/sno_cli --version \
+        /mnt/kart/kart_cli --version \
     2>&1 | (while read -r; do echo "  $REPLY"; done)
 done

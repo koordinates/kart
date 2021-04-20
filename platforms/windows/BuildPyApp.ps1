@@ -18,13 +18,13 @@ try {
         --clean -y `
         --workpath platforms\windows\build `
         --distpath platforms\windows\dist `
-        sno.spec
+        kart.spec
     if (!$?) {
         exit $LastExitCode
     }
 
     if ($Env:SIGN_AZURE_CERTIFICATE) {
-        $BINARIES=@('sno.exe', 'git2.dll')
+        $BINARIES=@('kart.exe', 'git2.dll')
         $TS_SERVERS=@(
             'http://timestamp.globalsign.com/scripts/timstamp.dll',
             'http://timestamp.digicert.com',
@@ -40,11 +40,11 @@ try {
                 --azure-key-vault-client-id="$Env:SIGN_AZURE_CLIENTID" `
                 --azure-key-vault-client-secret="$Env:SIGN_AZURE_CLIENTSECRET" `
                 --azure-key-vault-certificate="$Env:SIGN_AZURE_CERTIFICATE" `
-                --description-url="https://sno.earth" `
-                --description="Sno CLI" `
+                --description-url="https://kart.global" `
+                --description="Kart CLI" `
                 --timestamp-rfc3161="$TS" `
                 --verbose `
-                (Join-Path '.\platforms\windows\dist\sno' $BIN)
+                (Join-Path '.\platforms\windows\dist\kart' $BIN)
                 if ($?) {
                     break
                 }
@@ -54,14 +54,14 @@ try {
                 exit $LastExitCode
             }
 
-            & signtool verify /pa (Join-Path '.\platforms\windows\dist\sno' $BIN)
+            & signtool verify /pa (Join-Path '.\platforms\windows\dist\kart' $BIN)
             if (!$?) {
                 exit $LastExitCode
             }
         }
     }
 
-    platforms\windows\dist\sno\sno.exe --version
+    platforms\windows\dist\kart\kart.exe --version
     if (!$?) {
         exit $LastExitCode
     }
@@ -70,5 +70,5 @@ finally {
     Pop-Location
 }
 
-$DISTPATH=(Join-Path $PSScriptRoot "dist\sno")
+$DISTPATH=(Join-Path $PSScriptRoot "dist\kart")
 Write-Output ">>> Success! Created app in: $DISTPATH"

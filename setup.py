@@ -5,11 +5,11 @@ with open(os.path.join("sno", "VERSION")) as version_file:
     version = version_file.read().strip()
 
 setup(
-    name="sno",
+    name="kart",
     version=version,
     description="Distributed version-control for datasets",
-    url="http://github.com/koordinates/sno",
-    author="Koordinates Limited & Sno Contributors",
+    url="http://github.com/koordinates/kart",
+    author="Koordinates Limited & Kart Contributors",
     author_email="support@koordinates.com",
     license="GPLv2 with linking exception",
     packages=find_packages(),
@@ -17,7 +17,7 @@ setup(
     zip_safe=False,
     entry_points={
         "console_scripts": [
-            "sno = sno.cli:entrypoint",
+            "kart = sno.cli:entrypoint",
         ],
     },
 )

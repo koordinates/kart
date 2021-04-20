@@ -145,34 +145,34 @@ py-deps: $(vendor-install) $(py-install-main) | $(VIRTUAL_ENV)
 py-deps-dev: py-deps $(py-install-dev) $(py-install-tools)
 
 # App code
-sno-app-release = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/sno
-sno-app-dev = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/sno.egg-link
-sno-app-any = $(VIRTUAL_ENV)/bin/sno
+kart-app-release = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart
+kart-app-dev = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart.egg-link
+kart-app-any = $(VIRTUAL_ENV)/bin/kart
 
-$(sno-app-release): py-deps setup.py sno | $(VIRTUAL_ENV)
+$(kart-app-release): py-deps setup.py sno | $(VIRTUAL_ENV)
 	-$(RM) dist/*
 	python3 setup.py sdist
 	pip install --force-reinstall --no-deps dist/*.tar.gz
 
-$(sno-app-dev): py-deps-dev setup.py | $(VIRTUAL_ENV)
+$(kart-app-dev): py-deps-dev setup.py | $(VIRTUAL_ENV)
 	pip install --force-reinstall --no-deps -e .
 
-$(sno-app-any):
-	$(MAKE) $(sno-app-release)
+$(kart-app-any):
+	$(MAKE) $(kart-app-release)
 
 .PHONY: release
-release: $(sno-app-release)
+release: $(kart-app-release)
 
 .PHONY: dev
-dev: $(sno-app-dev)
+dev: $(kart-app-dev)
 
 # Top-level targets
 .PHONY: all
 all: dev
 
 .PHONY: install
-install: | $(sno-app-any)
-	ln -sf $(realpath $(VIRTUAL_ENV)/bin/sno) $(PREFIX)/bin/sno
+install: | $(kart-app-any)
+	ln -sf $(realpath $(VIRTUAL_ENV)/bin/kart) $(PREFIX)/bin/kart
 
 # Testing
 
@@ -204,7 +204,7 @@ ci-test:
 
 .PHONY: clean
 clean:
-	$(RM) $(PREFIX)/bin/sno
+	$(RM) $(PREFIX)/bin/kart
 	$(RM) -r $(VIRTUAL_ENV)
 
 .PHONY: cleaner

@@ -24,14 +24,14 @@ pip install "pyinstaller==3.5.*"
 python setup.py install
 
 { echo ">> Pre-bundle Smoke Test ..."; } 2> /dev/null
-pyenv exec sno --version
+pyenv exec kart --version
 
 { echo ">> Running PyInstaller ..."; } 2> /dev/null
 pyinstaller \
     --clean -y \
     --workpath platforms/linux/build/ \
     --distpath platforms/linux/dist/ \
-    sno.spec
+    kart.spec
 
 { echo ">> Post-bundle Smoke Test ..."; } 2> /dev/null
-platforms/linux/dist/sno/sno_cli --version
+platforms/linux/dist/kart/kart_cli --version

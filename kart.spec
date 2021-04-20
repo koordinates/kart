@@ -17,20 +17,20 @@ from PyInstaller.depend import dylib
 
 
 with open(os.path.join('sno', 'VERSION')) as version_file:
-    sno_version = version_file.read().strip()
+    kart_version = version_file.read().strip()
 
 if is_win:
     with open(os.path.join('platforms', 'windows', 'version_info.rc')) as vr_template:
         vr_doc = vr_template.read()
-        sno_version_nums = re.match(r'(\d+\.\d+(?:\.\d+)?)', sno_version).group(1)
-        sno_file_version = tuple(
-            ([int(_v) for _v in sno_version_nums.split('.')] + [0, 0])[:4]
+        kart_version_nums = re.match(r'(\d+\.\d+(?:\.\d+)?)', kart_version).group(1)
+        kart_file_version = tuple(
+            ([int(_v) for _v in kart_version_nums.split('.')] + [0, 0])[:4]
         )
-        vr_doc = vr_doc.replace('%VERSION%', sno_version)
-        vr_doc = vr_doc.replace('%VERTUPLE%', str(sno_file_version))
+        vr_doc = vr_doc.replace('%VERSION%', kart_version)
+        vr_doc = vr_doc.replace('%VERTUPLE%', str(kart_file_version))
 
         with open(
-            os.path.join(workpath, 'sno_version_info.rc'), 'w', encoding='utf-8'
+            os.path.join(workpath, 'kart_version_info.rc'), 'w', encoding='utf-8'
         ) as vr:
             vr.write(vr_doc)
 
@@ -44,7 +44,7 @@ if is_linux:
     dylib.exclude_list = dylib.ExcludeList()
 
     print(
-        "❄️  Configured binary exclude-list overrides for libstdc++ & libgcc1",
+        "🏎️  Configured binary exclude-list overrides for libstdc++ & libgcc1",
         file=sys.stderr,
     )
     assert dylib.exclude_list.search('libstdc++.so.6.0.20')
@@ -61,7 +61,7 @@ if is_linux or is_darwin:
         dylib.exclude_list = dylib.MacExcludeList(dylib.exclude_list)
 
     print(
-        "❄️  Configured binary exclude-list overrides for libodbc",
+        "🏎️  Configured binary exclude-list overrides for libodbc",
         file=sys.stderr,
     )
     assert dylib.exclude_list.search('libodbc.2.dylib')
@@ -75,18 +75,18 @@ if is_darwin:
 
     macholib.util._orig_in_system_path = macholib.util.in_system_path
 
-    def sno__in_system_path(filename):
+    def kart__in_system_path(filename):
         if re.match(r'/usr/local(/opt/unixodbc)?/lib/libodbc\.\d+\.dylib$', filename):
-            print(f"❄️  Treating {filename} as a system library", file=sys.stderr)
+            print(f"🏎️  Treating {filename} as a system library", file=sys.stderr)
             return True
         else:
             return macholib.util._orig_in_system_path(filename)
 
-    macholib.util.in_system_path = sno__in_system_path
+    macholib.util.in_system_path = kart__in_system_path
 
 
 pyi_analysis = Analysis(
-    ['platforms/sno_cli.py'],
+    ['platforms/kart_cli.py'],
     pathex=[],
     binaries=[
         ('vendor/dist/env/lib/*', '.'),
@@ -134,10 +134,10 @@ else:
 pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
-    exe_name = 'sno'
+    exe_name = 'kart'
     exe_icon = 'platforms/windows/sno.ico'
 else:
-    exe_name = 'sno_cli'
+    exe_name = 'kart_cli'
     exe_icon = 'platforms/macos/sno.icns'
 
 pyi_exe = EXE(
@@ -152,7 +152,7 @@ pyi_exe = EXE(
     upx=False,
     console=True,
     icon=exe_icon,
-    version=os.path.join(workpath, 'sno_version_info.rc'),
+    version=os.path.join(workpath, 'kart_version_info.rc'),
 )
 pyi_coll = COLLECT(
     pyi_exe,
@@ -162,14 +162,14 @@ pyi_coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name='sno',
+    name='kart',
 )
 pyi_app = BUNDLE(
     pyi_coll,
-    name='Sno.app',
+    name='Kart.app',
     icon='platforms/macos/sno.icns',
-    bundle_identifier='com.koordinates.Sno.SnoCore',
-    version=sno_version,
+    bundle_identifier='com.koordinates.Kart.KartCore',
+    version=kart_version,
     info_plist={
         'NSPrincipalClass': 'NSApplication',
         'NSAppleScriptEnabled': False,
@@ -182,8 +182,8 @@ pyi_app = BUNDLE(
 if is_darwin:
 
     # fix symlinks/binaries in libexec/git-core/
-    dist_bin_root = os.path.join(DISTPATH, 'Sno.app', 'Contents', 'MacOS')
-    dist_resources_root = os.path.join(DISTPATH, 'Sno.app', 'Contents', 'Resources')
+    dist_bin_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'MacOS')
+    dist_resources_root = os.path.join(DISTPATH, 'Kart.app', 'Contents', 'Resources')
     dist_libexec_root = os.path.join(dist_resources_root, 'libexec')
 
     shutil.move(os.path.join(dist_bin_root, 'base_library.zip'), dist_resources_root)
@@ -221,7 +221,7 @@ if is_darwin:
                     os.path.join(dist_bin_root, link_path)
                 ):
                     print(
-                        f"❄️  ignoring broken link {relpath} -> {link_path}",
+                        f"🏎️  ignoring broken link {relpath} -> {link_path}",
                         file=sys.stderr,
                     )
                     # ignore broken symlinks (git-csvserver/git-shell)
@@ -229,7 +229,7 @@ if is_darwin:
             elif subprocess.check_output(['file', '-b', fpath], text=True).startswith(
                 'Mach-O'
             ):
-                print(f"❄️  relocating {relpath} to MacOS/", file=sys.stderr)
+                print(f"🏎️  relocating {relpath} to MacOS/", file=sys.stderr)
                 shutil.move(fpath, dist_bin_root)
                 os.symlink(
                     os.path.join('../../../MacOS', f),
@@ -245,9 +245,9 @@ if is_darwin:
 
 elif is_linux:
     # fix symlinks/binaries in libexec/git-core/
-    dist_libexec_root = os.path.join(DISTPATH, 'sno', 'libexec')
+    dist_libexec_root = os.path.join(DISTPATH, 'kart', 'libexec')
 
-    dist_bin_root = os.path.join(DISTPATH, 'sno')
+    dist_bin_root = os.path.join(DISTPATH, 'kart')
     os.makedirs(os.path.join(dist_libexec_root, 'git-core'))
     for (dir_, dirs, files) in os.walk(libexec_root):
         reldir = os.path.relpath(dir_, libexec_root)
@@ -266,7 +266,7 @@ elif is_linux:
                     os.path.join(dist_bin_root, link_path)
                 ):
                     print(
-                        f"❄️  ignoring broken link {relpath} -> {link_path}",
+                        f"🏎️  ignoring broken link {relpath} -> {link_path}",
                         file=sys.stderr,
                     )
                     # ignore broken symlinks (git-csvserver/git-shell)

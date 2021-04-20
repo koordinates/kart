@@ -65,9 +65,9 @@ for DIST in ${TARGETS[*]}; do
 			ln -sf /src/platforms/linux/sqlite3 /usr/bin/
 
 			$DO_INSTALL
-			command -v sno
+			command -v kart
 
-			sno --version
+			kart --version
 			/src/tests/scripts/distcheck.sh
 			/src/tests/scripts/e2e-1.sh
 		EOF

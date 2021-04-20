@@ -13,12 +13,12 @@ pyinstaller := $(abspath ../venv/bin/pyinstaller)
 
 export PATH := $(abspath ../venv/bin):$(PATH)
 
-pyapp-Linux = linux/dist/sno/sno_cli
-pyapp-Darwin = macos/dist/Sno.app
-deb = linux/dist/sno_$(VERSION)-1_amd64.deb
-rpm = linux/dist/sno-$(VERSION)-1.x86_64.rpm
-docker-fpm = linux/.docker-sno-fpm
-pkg = macos/dist/Sno-$(VERSION).pkg
+pyapp-Linux = linux/dist/kart/kart_cli
+pyapp-Darwin = macos/dist/Kart.app
+deb = linux/dist/kart_$(VERSION)-1_amd64.deb
+rpm = linux/dist/kart-$(VERSION)-1.x86_64.rpm
+docker-fpm = linux/.docker-kart-fpm
+pkg = macos/dist/Kart-$(VERSION).pkg
 
 .PHONY: all
 all: $(deb) $(rpm)
@@ -33,7 +33,7 @@ clean:
 	-$(RM) -r macos/dist macos/build
 
 $(docker-fpm): linux/fpm.Dockerfile
-	docker build -t sno-fpm - < linux/fpm.Dockerfile
+	docker build -t kart-fpm - < linux/fpm.Dockerfile
 	touch $@
 
 .PHONY: docker-fpm
@@ -68,9 +68,9 @@ $(pyapp-Darwin):
 app-sign:
 # App Code Signing
 # CODESIGN should start with "Developer ID Application: ..."
-	codesign -vvv --deep --timestamp --strict -s "$(CODESIGN)" --entitlements macos/entitlements.plist -o runtime macos/dist/Sno.app
-	codesign --verify --verbose macos/dist/Sno.app
-#	spctl -vvv --assess --type exec macos/dist/Sno.app
+	codesign -vvv --deep --timestamp --strict -s "$(CODESIGN)" --entitlements macos/entitlements.plist -o runtime macos/dist/Kart.app
+	codesign --verify --verbose macos/dist/Kart.app
+#	spctl -vvv --assess --type exec macos/dist/Kart.app
 
 .PHONY: pyapp-Darwin
 pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
@@ -84,7 +84,7 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 		--clean -y \
 		--workpath platforms/macos/build/ \
 		--distpath platforms/macos/dist/ \
-		sno.spec
+		kart.spec
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 
@@ -92,7 +92,7 @@ ifdef CODESIGN
 	$(MAKE) app-sign
 endif
 
-	macos/dist/Sno.app/Contents/MacOS/sno_cli --version
+	macos/dist/Kart.app/Contents/MacOS/kart_cli --version
 
 .PHONY: pyapp
 pyapp:
@@ -112,7 +112,7 @@ $(deb) $(rpm): $(pyapp-Linux) | $(docker-fpm)
 	docker run \
 		--rm \
 		-v $(abspath linux):/src \
-		sno-fpm \
+		kart-fpm \
 		./fpm.sh $(PKGTYPE) $(VERSION)
 
 macos/build/%.rtf: macos/%.md
@@ -122,19 +122,19 @@ macos/build/%.rtf: macos/%.md
 pkg-sign:
 	# Installer Signing
 	# PKGSIGN should start with "Developer ID Installer: ..."
-	productsign --sign "$(PKGSIGN)" macos/dist/Sno.pkg $(pkg)
+	productsign --sign "$(PKGSIGN)" macos/dist/Kart.pkg $(pkg)
 	pkgutil --check-signature $(pkg)
 
 $(pkg): $(pyapp-Darwin) macos/build/intro.rtf macos/build/summary.rtf
 	packagesbuild \
 		--verbose \
 		--package-version $(VERSION) \
-		macos/Sno.pkgproj
+		macos/Kart.pkgproj
 
 ifdef PKGSIGN
 	$(MAKE) pkg-sign
 else
-	mv macos/dist/Sno.pkg $@
+	mv macos/dist/Kart.pkg $@
 endif
 
 # Notarization
@@ -147,7 +147,7 @@ endif
 pkg-notarize: $(pkg)
 	pkgutil --check-signature $(pkg)
 	xcrun altool --notarize-app \
-		--primary-bundle-id "com.koordinates.Sno.SnoCore" \
+		--primary-bundle-id "com.koordinates.Kart.KartCore" \
 		--username "$(NOTARIZE_USER)" \
 		--password "$(NOTARIZE_PASSWORD)" \
 		--file $(pkg) \
