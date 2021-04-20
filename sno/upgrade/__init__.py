@@ -179,6 +179,7 @@ def _upgrade_commit(
         # We import every commit onto refs/heads/main, even though not all commits are related - this means
         # the main branch head will jump all over the place. git-fast-import only allows this with --force.
         extra_cmd_args=["--force"],
+        num_processes=1,
     )
 
     dest_commit = dest_repo.head_commit

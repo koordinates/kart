@@ -1,3 +1,4 @@
+import math
 import os
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import SnoRepo, PotentialRepo
+from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 
 
@@ -69,6 +71,12 @@ class GenerateIDsFromFile(StringFromFile):
             as_file=True,
         )
         return (line.rstrip("\n") for line in fp)
+
+
+def get_default_num_processes():
+    num_processes = get_num_available_cores()
+    # that's a float, but we need an int
+    return max(1, int(math.ceil(num_processes)))
 
 
 @click.command("import")
@@ -193,6 +201,11 @@ class GenerateIDsFromFile(StringFromFile):
     default=True,
     help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
 )
+@click.option(
+    "--num-processes",
+    type=click.INT,
+    help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
+)
 def import_(
     ctx,
     all_tables,
@@ -209,6 +222,7 @@ def import_(
     allow_empty,
     max_delta_depth,
     do_checkout,
+    num_processes,
 ):
     """
     Import data into a repository.
@@ -315,7 +329,6 @@ def import_(
         import_sources.append(import_source)
 
     ImportSource.check_valid(import_sources, param_hint="tables")
-
     fast_import_tables(
         repo,
         import_sources,
@@ -327,6 +340,7 @@ def import_(
         else ReplaceExisting.DONT_REPLACE,
         replace_ids=replace_ids,
         allow_empty=allow_empty,
+        num_processes=num_processes or get_default_num_processes(),
     )
 
     if do_checkout:
@@ -392,6 +406,11 @@ def import_(
     type=click.INT,
     help="--depth option to git-fast-import (advanced users only)",
 )
+@click.option(
+    "--num-processes",
+    type=click.INT,
+    help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
+)
 def init(
     ctx,
     message,
@@ -402,6 +421,7 @@ def init(
     initial_branch,
     wc_location,
     max_delta_depth,
+    num_processes,
 ):
     """
     Initialise a new repository and optionally import data.
@@ -443,6 +463,7 @@ def init(
             sources,
             message=message,
             max_delta_depth=max_delta_depth,
+            num_processes=num_processes or get_default_num_processes(),
         )
         head_commit = repo.head_commit
         if do_checkout and not bare:
