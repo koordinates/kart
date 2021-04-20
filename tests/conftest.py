@@ -364,6 +364,9 @@ class SnoCliRunner(CliRunner):
 
     def invoke(self, args=None, **kwargs):
         from sno.cli import load_commands_from_args, cli
+        from sno.cli_util import init_git_config
+
+        init_git_config.cache_clear()
 
         if args:
             # force everything to strings (eg. PathLike objects, numbers)

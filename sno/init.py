@@ -11,7 +11,6 @@ from . import checkout
 from .core import check_git_user
 from .cli_util import (
     call_and_exit_flag,
-    startup_load_git_init_config,
     MutexOption,
     StringFromFile,
     JsonFromFile,
@@ -427,7 +426,6 @@ def init(
     Initialise a new repository and optionally import data.
     DIRECTORY must be empty. Defaults to the current directory.
     """
-    startup_load_git_init_config()
     if directory is None:
         directory = os.curdir
     repo_path = Path(directory).resolve()
