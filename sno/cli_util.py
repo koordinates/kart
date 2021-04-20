@@ -1,4 +1,5 @@
 import click
+import functools
 import io
 import json
 import jsonschema
@@ -31,25 +32,47 @@ def _pygit2_configs():
             pass
 
 
-def startup_load_git_init_config():
+# These are all the sno defaults that differ from git's defaults.
+# (all of these can still be overridden by setting them in a git config file.)
+GIT_CONFIG_DEFAULT_OVERRIDES = {
+    # git will change to this branch sooner or later, but hasn't yet.
+    "init.defaultBranch": "main",
+    # deltified objects seem to affect clone and diff performance really badly
+    # for sno repos. So we disable them by default.
+    "pack.depth": 0,
+    "pack.window": 0,
+}
+
+
+@functools.lru_cache()
+def init_git_config():
     """
-    Initialises the default value for the `init.defaultBranch` config variable.
-    Call this before calling git init, clone, or config.
+    Initialises default config values that differ from git's defaults.
     """
-    for config in _pygit2_configs():
-        if "init.defaultBranch" in config:
-            break
-    else:
+    configs = list(_pygit2_configs())
+    new_config_params = []
+    for k, v in GIT_CONFIG_DEFAULT_OVERRIDES.items():
+        v = str(v)
+        # not sure *exactly* how this quoting works; for now let's just check it's safe
+        assert "'" not in k
+        assert "'" not in v
+        for config in configs:
+            if k in config:
+                break
+        else:
+            new_config_params.append(f"'{k}={v}'")
+    if new_config_params:
         existing = ""
         if "GIT_CONFIG_PARAMETERS" in os.environ:
             existing = f" {os.environ['GIT_CONFIG_PARAMETERS']}"
-        os.environ["GIT_CONFIG_PARAMETERS"] = f"'init.defaultBranch=main'{existing}"
+        os.environ["GIT_CONFIG_PARAMETERS"] = f'{" ".join(new_config_params)}{existing}'
 
 
 def tool_environment(env=None):
     """
     Returns a dict of environment for launching an external process
     """
+    init_git_config()
     env = (env or os.environ).copy()
     if platform.system() == "Linux":
         # https://pyinstaller.readthedocs.io/en/stable/runtime-information.html#ld-library-path-libpath-considerations

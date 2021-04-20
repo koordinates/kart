@@ -13,7 +13,6 @@ from . import core  # noqa
 from .cli_util import (
     add_help_subcommand,
     call_and_exit_flag,
-    startup_load_git_init_config,
     tool_environment,
 )
 from .context import Context
@@ -283,7 +282,6 @@ def reflog(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """ Get and set repository or global options """
-    startup_load_git_init_config()
     params = ["git", "config"]
     if ctx.obj.user_repo_path:
         params[1:1] = ["-C", ctx.obj.user_repo_path]
