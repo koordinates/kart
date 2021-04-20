@@ -17,7 +17,7 @@ HERE=$(dirname "$(realpath "$0")")
 TEST_GPKG=${1-${HERE}/../data/e2e.gpkg}
 echo "Test data is at: ${TEST_GPKG}"
 
-TMP_PATH=$(mktemp -q -d -t "sno-e2e.XXXXXX")
+TMP_PATH=$(mktemp -q -d -t "kart-e2e.XXXXXX")
 echo "Using temp folder: ${TMP_PATH}"
 
 function do_cleanup {
@@ -25,32 +25,32 @@ function do_cleanup {
 }
 trap do_cleanup EXIT
 
-SNO_PATH=$(dirname "$(realpath "$(command -v sno)")")
-echo "Sno is at: ${SNO_PATH}"
+KART_PATH=$(dirname "$(realpath "$(command -v kart)")")
+echo "Kart is at: ${KART_PATH}"
 
 mkdir "${TMP_PATH}/test"
 cd "${TMP_PATH}/test"
 set -x
 
-sno init --initial-branch=main .
-sno config user.name "Sno E2E Test 1"
-sno config user.email "sno-e2e-test-1@email.invalid"
-sno import "GPKG:${TEST_GPKG}" mylayer
+kart init --initial-branch=main .
+kart config user.name "Kart E2E Test 1"
+kart config user.email "kart-e2e-test-1@email.invalid"
+kart import "GPKG:${TEST_GPKG}" mylayer
 
-sno log
-sno checkout
-sno switch -c edit-1
+kart log
+kart checkout
+kart switch -c edit-1
 sqlite3 --bail test.gpkg "
-  SELECT load_extension('${SNO_PATH}/mod_spatialite');
+  SELECT load_extension('${KART_PATH}/mod_spatialite');
   SELECT EnableGpkgMode();
   INSERT INTO mylayer (fid, geom) VALUES (999, GeomFromEWKT('POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))'));
 "
-sno status
-sno diff --crs=EPSG:3857
-sno commit -m my-commit
-sno switch main
-sno status
-sno merge edit-1 --no-ff -m merge-1
-sno log
+kart status
+kart diff --crs=EPSG:3857
+kart commit -m my-commit
+kart switch main
+kart status
+kart merge edit-1 --no-ff -m merge-1
+kart log
 
 { echo -e "\n✅ E2E: Success"; } 2>/dev/null

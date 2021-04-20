@@ -33,32 +33,32 @@ $TMP_GUID=([string] [System.Guid]::NewGuid())
 $TMP_PATH=(New-Item -ItemType Directory -Path (Join-Path ([System.IO.Path]::GetTempPath()) "sno-e2e.${TMP_GUID}"))
 Write-Output "Using temp folder: ${TMP_PATH}"
 
-$SNO_PATH=(Get-Command sno).source
-If ((Get-Item $SNO_PATH).Directory.Name -eq 'Scripts') {
+$KART_PATH=(Get-Command kart).source
+If ((Get-Item $KART_PATH).Directory.Name -eq 'Scripts') {
     # Virtualenv
-    $SNO_PREFIX=(Get-Item (Get-Command sno).source).Directory.Parent.FullName
+    $KART_PREFIX=(Get-Item (Get-Command kart).source).Directory.Parent.FullName
 } Else {
     # Installation
-    $SNO_PREFIX=(Get-Item (Get-Command sno).source).DirectoryName
+    $KART_PREFIX=(Get-Item (Get-Command kart).source).DirectoryName
 }
-Write-Output "Sno is at: ${SNO_PATH} (Prefix: ${SNO_PREFIX})"
+Write-Output "Kart is at: ${KART_PATH} (Prefix: ${KART_PREFIX})"
 
 # Spatialite / SQLite
-$SPATIALITE=("${SNO_PREFIX}\mod_spatialite" -replace '\\', '/').ToLower()
-$SQLITE=(Join-Path $SNO_PREFIX 'sqlite3.exe')
+$SPATIALITE=("${KART_PREFIX}\mod_spatialite" -replace '\\', '/').ToLower()
+$SQLITE=(Join-Path $KART_PREFIX 'sqlite3.exe')
 
 New-Item -ItemType Directory -Path "${TMP_PATH}\test"
 Push-Location "${TMP_PATH}\test"
 try {
-    Exec { sno init --initial-branch=main . }
-    Exec { sno -v config --local 'user.name' 'Sno E2E Test 1' }
-    Exec { sno -v config --local 'user.email' 'sno-e2e-test-1@email.invalid' }
-    Exec { sno -v config --local 'core.pager' false }
-    Exec { sno import "GPKG:${TEST_GPKG}" "mylayer" }
+    Exec { kart init --initial-branch=main . }
+    Exec { kart -v config --local 'user.name' 'Kart E2E Test 1' }
+    Exec { kart -v config --local 'user.email' 'kart-e2e-test-1@email.invalid' }
+    Exec { kart -v config --local 'core.pager' false }
+    Exec { kart import "GPKG:${TEST_GPKG}" "mylayer" }
 
-    Exec { sno log }
-    Exec { sno checkout }
-    Exec { sno switch -c 'edit-1' }
+    Exec { kart log }
+    Exec { kart checkout }
+    Exec { kart switch -c 'edit-1' }
     Write-Output "$  <updating working copy> sqlite3"
     & $SQLITE -bail -echo test.gpkg "
       SELECT load_extension('$SPATIALITE');
@@ -70,13 +70,13 @@ try {
         throw ("sqlite3: $LastExitCode")
     }
 
-    Exec { sno status }
-    Exec { sno diff --crs=EPSG:3857 }
-    Exec { sno commit -m 'my-commit' }
-    Exec { sno switch 'main' }
-    Exec { sno status }
-    Exec { sno merge 'edit-1' --no-ff -m 'my-merge'}
-    Exec { sno log }
+    Exec { kart status }
+    Exec { kart diff --crs=EPSG:3857 }
+    Exec { kart commit -m 'my-commit' }
+    Exec { kart switch 'main' }
+    Exec { kart status }
+    Exec { kart merge 'edit-1' --no-ff -m 'my-merge'}
+    Exec { kart log }
 }
 catch {
     Write-Output ">>> E2E Error: $($PSItem.ToString())"
