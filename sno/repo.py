@@ -377,7 +377,7 @@ class SnoRepo(pygit2.Repository):
                     KartConfigKeys.KART_WORKINGCOPY_LOCATION,
                     KartConfigKeys.SNO_WORKINGCOPY_PATH,
                 )
-                .replace("kart.global", "sno.earth")
+                .replace("kartproject.org", "sno.earth")
                 .replace("Kart", "Sno")
                 .replace("kart", "sno")
             )
@@ -661,7 +661,7 @@ class SnoRepo(pygit2.Repository):
         "kart status",
         "",
         'It may simply output "Empty repository. Use kart import to add some data".',
-        "Follow the tutorial at http://kart.global/ for help getting started with Kart.",
+        "Follow the tutorial at http://kartproject.org/ for help getting started with Kart.",
         "",
         "Some more helpful commands for getting a broad view of what a Kart repository",
         "contains are:",

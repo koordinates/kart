@@ -254,12 +254,17 @@ def upgrade_to_tidy(source):
 def upgrade_to_kart(ctx, source):
     """
     Upgrade in-place a Sno repository to be a Kart repository.
+    This only affects objects that are not version controlled, but are just part of the local context -
+    so, local branches that are tracking remote branches will not be affected. The local changes
+    that you can push before upgrading, are the same as the local changes you have after upgrading.
+
     Changes the following:
      - config variables:
        * sno.repository.version -> kart.repostructure.version
        * sno.workingcopy.path -> kart.workingcopy.location
      - hidden directory name from .sno to .kart (if repo is tidy-style)
      - rewrites .sno/index / .kart/index to contain "kart" extension
+     - SNO_README.txt -> KART_README.txt
      - recreates the working copy, if one exists:
        * _sno_state table (or similar) -> _kart_state
        * _sno_track table (or similar) -> _kart_track
