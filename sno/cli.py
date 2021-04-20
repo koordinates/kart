@@ -73,7 +73,7 @@ def print_version(ctx):
 
     from sno.sqlalchemy.create_engine import gpkg_engine
 
-    click.echo(f"Sno v{get_version()}, Copyright (c) Sno Contributors")
+    click.echo(f"Kart v{get_version()}, Copyright (c) Kart Contributors")
 
     git_version = (
         subprocess.check_output(["git", "--version"], env=tool_environment())

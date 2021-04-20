@@ -38,7 +38,7 @@ fpm \
     --output-type "${TYPE}" \
     --name kart \
     --version "${VERSION}" \
-    --url "https://kart.global" \
+    --url "https://www.kartproject.org" \
     --description "Distributed version-control for geospatial and tabular data" \
     --license "GPLv2" \
     --architecture amd64 \

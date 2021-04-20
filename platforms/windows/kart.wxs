@@ -6,7 +6,7 @@
 
         <MediaTemplate EmbedCab="yes" />
 
-        <SetProperty Id="URL" Value="https://kart.global/" Sequence="execute"  Before="CreateShortcuts" />
+        <SetProperty Id="URL" Value="https://www.kartproject.org" Sequence="execute"  Before="CreateShortcuts" />
         <Icon Id="ICON_Kart" SourceFile="sno.ico" />
 
         <!--Components-->
@@ -70,7 +70,7 @@
         <!-- UI -->
         <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
         <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
-        <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="To get started, run `kart` from your command prompt. An introductory tutorial is available at https://kart.global" />
+        <Property Id="WIXUI_EXITDIALOGOPTIONALTEXT" Value="To get started, run `kart` from your command prompt. An introductory tutorial is available at https://www.kartproject.org" />
         <UI Id="FeatureTree">
             <UIRef Id="WixUI_FeatureTree" />
             <Publish Dialog="WelcomeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg"  Order="3">1</Publish>
