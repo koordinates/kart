@@ -135,10 +135,10 @@ pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
 if is_win:
     exe_name = 'kart'
-    exe_icon = 'platforms/windows/sno.ico'
+    exe_icon = 'platforms/windows/kart.ico'
 else:
     exe_name = 'kart_cli'
-    exe_icon = 'platforms/macos/sno.icns'
+    exe_icon = 'platforms/macos/kart.icns'
 
 pyi_exe = EXE(
     pyi_pyz,
@@ -167,7 +167,7 @@ pyi_coll = COLLECT(
 pyi_app = BUNDLE(
     pyi_coll,
     name='Kart.app',
-    icon='platforms/macos/sno.icns',
+    icon='platforms/macos/kart.icns',
     bundle_identifier='com.koordinates.Sno.SnoCore',
     version=kart_version,
     info_plist={

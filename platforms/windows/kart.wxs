@@ -7,7 +7,7 @@
         <MediaTemplate EmbedCab="yes" />
 
         <SetProperty Id="URL" Value="https://www.kartproject.org" Sequence="execute"  Before="CreateShortcuts" />
-        <Icon Id="ICON_Kart" SourceFile="sno.ico" />
+        <Icon Id="ICON_Kart" SourceFile="kart.ico" />
 
         <!--Components-->
         <CustomActionRef Id="WixBroadcastEnvironmentChange" />
