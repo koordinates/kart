@@ -38,7 +38,7 @@ fpm \
     --output-type "${TYPE}" \
     --name kart \
     --version "${VERSION}" \
-    --url "https://www.kartproject.org" \
+    --url "https://kartproject.org" \
     --description "Distributed version-control for geospatial and tabular data" \
     --license "GPLv2" \
     --conflicts "sno" \

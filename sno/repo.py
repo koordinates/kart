@@ -661,7 +661,7 @@ class SnoRepo(pygit2.Repository):
         "kart status",
         "",
         'It may simply output "Empty repository. Use kart import to add some data".',
-        "Follow the tutorial at http://kartproject.org/ for help getting started with Kart.",
+        "Follow the tutorial at https://kartproject.org for help getting started with Kart.",
         "",
         "Some more helpful commands for getting a broad view of what a Kart repository",
         "contains are:",
