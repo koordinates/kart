@@ -109,28 +109,3 @@ def test_log_shallow_clone(
                     "abbrevParents": ["7bc3b56f20d1559208bcf5bb56860dda6e190b70"],
                 },
             ]
-
-
-def test_log_with_feature_count(data_archive_readonly, cli_runner):
-    """ review commit history """
-    with data_archive_readonly("points"):
-        r = cli_runner.invoke(
-            ["log", "--output-format=json", "--with-feature-count=exact"]
-        )
-        assert r.exit_code == 0, r
-        result = json.loads(r.stdout)
-        result = [c["featureChanges"] for c in result]
-        assert result == [
-            {"nz_pa_points_topo_150k": 5},
-            {"nz_pa_points_topo_150k": 2143},
-        ]
-        r = cli_runner.invoke(
-            ["log", "--output-format=json", "--with-feature-count=good"]
-        )
-        assert r.exit_code == 0, r
-        result = json.loads(r.stdout)
-        result = [c["featureChanges"] for c in result]
-        assert result == [
-            {"nz_pa_points_topo_150k": 5},
-            {"nz_pa_points_topo_150k": 2480},
-        ]
