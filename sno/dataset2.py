@@ -42,7 +42,7 @@ class Dataset2(RichBaseDataset):
     """
     - Uses messagePack to serialise features.
     - Stores each feature in a blob with path dependent on primary key values.
-    - Add at any location: `sno import GPKG:my.gpkg:mytable path/to/mylayer`
+    - Add at any location: `kart import GPKG:my.gpkg:mytable path/to/mylayer`
 
     any/structure/mylayer/
       .sno-dataset/
@@ -59,7 +59,7 @@ class Dataset2(RichBaseDataset):
 
     Dataset2 is initialised pointing at a particular directory tree, and uses that
     to read features and schemas. However, it never writes to the tree, since this
-    is not straight-forward in git/sno and involves batching writes into a commit.
+    is not straight-forward in git/kart and involves batching writes into a commit.
     Therefore, there are no methods which write, only methods which return things
     which *should be written*. The caller must write these to a commit.
     """

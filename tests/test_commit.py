@@ -281,7 +281,7 @@ def test_empty(tmp_path, cli_runner, chdir):
     with chdir(empty_path):
         r = cli_runner.invoke(["commit", "--allow-empty"])
         assert r.exit_code == NO_REPOSITORY, r
-        assert "not an existing sno repository" in r.stderr
+        assert "not an existing Kart repository" in r.stderr
 
 
 def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):

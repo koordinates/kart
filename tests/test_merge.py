@@ -255,9 +255,9 @@ def test_merge_conflicts(
                 if dry_run
                 else [
                     'Repository is now in "merging" state.',
-                    "View conflicts with `sno conflicts` and resolve them with `sno resolve`.",
-                    "Once no conflicts remain, complete this merge with `sno merge --continue`.",
-                    "Or use `sno merge --abort` to return to the previous state.",
+                    "View conflicts with `kart conflicts` and resolve them with `kart resolve`.",
+                    "Once no conflicts remain, complete this merge with `kart merge --continue`.",
+                    "Or use `kart merge --abort` to return to the previous state.",
                     "",
                 ]
             )
@@ -323,7 +323,7 @@ def test_merge_conflicts(
 def test_merge_state_lock(create_conflicts, cli_runner):
     with create_conflicts(H.POINTS) as repo:
         # Repo state: normal
-        # sno checkout works, but sno conflicts and sno resolve do not.
+        # kart checkout works, but kart conflicts and kart resolve do not.
         assert repo.state == SnoRepoState.NORMAL
 
         r = cli_runner.invoke(["checkout", "ours_branch"])
@@ -339,7 +339,7 @@ def test_merge_state_lock(create_conflicts, cli_runner):
         # Repo state: merging
         assert repo.state == SnoRepoState.MERGING
 
-        # sno checkout is locked, but sno conflicts and sno resolve work.
+        # kart checkout is locked, but kart conflicts and kart resolve work.
         r = cli_runner.invoke(["checkout", "ours_branch"])
         assert r.exit_code == INVALID_OPERATION
         r = cli_runner.invoke(["conflicts"])

@@ -621,7 +621,7 @@ def test_init_import(
     cli_runner,
     chdir,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
     with data_archive(archive) as data:
         # list tables
         repo_path = tmp_path / "repo"
@@ -752,7 +752,7 @@ def test_init_import_commit_headers(
 
 
 def test_init_import_name_clash(data_archive, cli_runner):
-    """ Import the GeoPackage into a Sno repository of the same name, and checkout a working copy of the same name. """
+    """ Import the GeoPackage into a Kart repository of the same name, and checkout a working copy of the same name. """
     with data_archive("gpkg-editing") as data:
         r = cli_runner.invoke(["init", "--import", f"GPKG:editing.gpkg", "editing"])
         repo_path = data / "editing"

@@ -308,7 +308,7 @@ def test_working_copy_discard_changes(
     """
     Check that we reset any working-copy changes correctly before doing any new checkout
 
-    We can do this via `sno restore` or `sno checkout --discard-changes HEAD`
+    We can do this via `kart restore` or `kart checkout --discard-changes HEAD`
     """
     if layer == H.POINTS.LAYER:
         pk_field = H.POINTS.LAYER_PK
@@ -370,19 +370,19 @@ def test_working_copy_discard_changes(
             assert change_count == (1 + 4 + 5 + 2)
 
         if via == "restore":
-            # using `sno restore`
+            # using `kart restore`
             r = cli_runner.invoke(["restore"])
             assert r.exit_code == 0, r
 
         elif via == "reset":
-            # using `sno reset HEAD --discard-changes`
+            # using `kart reset HEAD --discard-changes`
             r = cli_runner.invoke(["reset", "HEAD", "--discard-changes"])
             assert r.exit_code == 0, r
 
         elif via == "checkout":
-            # using `sno checkout HEAD --discard-changes`
+            # using `kart checkout HEAD --discard-changes`
 
-            # sno checkout HEAD does nothing if you don't --discard-changes:
+            # kart checkout HEAD does nothing if you don't --discard-changes:
             r = cli_runner.invoke(["checkout", "HEAD"])
             assert r.exit_code == 0, r.stderr
             assert wc.tracking_changes_count() == (1 + 4 + 5 + 2)
@@ -773,7 +773,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
                 "9999",
             ]
 
-        # using `sno restore
+        # using `kart restore
         r = cli_runner.invoke(["restore"] + source + pathspec)
         assert r.exit_code == 0, r
 

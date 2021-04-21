@@ -135,7 +135,7 @@ def test_branches(
 
 
 def test_branches_empty(tmp_path, cli_runner, chdir):
-    repo_path = tmp_path / "wiz.sno"
+    repo_path = tmp_path / "wiz"
     r = cli_runner.invoke(["init", repo_path])
     assert r.exit_code == 0, r
 
@@ -153,12 +153,12 @@ def test_branches_none(tmp_path, cli_runner, chdir):
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Current directory is not an existing sno repository"
+            == "Error: Current directory is not an existing Kart repository"
         )
 
         r = cli_runner.invoke(["branch", "-o", "json"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Current directory is not an existing sno repository"
+            == "Error: Current directory is not an existing Kart repository"
         )

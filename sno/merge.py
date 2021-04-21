@@ -144,7 +144,7 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
 
 def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     """
-    Move the sno repository into a "merging" state in which conflicts
+    Move the Kart repository into a "merging" state in which conflicts
     can be resolved one by one.
     repo - the SnoRepo
     merge_index - the MergeIndex containing the conflicts found.
@@ -193,7 +193,7 @@ def complete_merging_state(ctx):
     merge_index = MergeIndex.read_from_repo(repo)
     if merge_index.unresolved_conflicts:
         raise InvalidOperation(
-            "Merge cannot be completed until all conflicts are resolved - see `sno conflicts`."
+            "Merge cannot be completed until all conflicts are resolved - see `kart conflicts`."
         )
 
     merge_context = MergeContext.read_from_repo(repo)
@@ -300,7 +300,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
 
     repo = ctx.obj.get_repo(
         allowed_states=SnoRepoState.NORMAL,
-        bad_state_message="A merge is already ongoing - see `sno merge --abort` or `sno merge --continue`",
+        bad_state_message="A merge is already ongoing - see `kart merge --abort` or `kart merge --continue`",
     )
     ctx.obj.check_not_dirty()
 

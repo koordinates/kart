@@ -127,7 +127,7 @@ def test_status(
         assert text_status(cli_runner) == [
             "On branch main",
             "Your branch is behind 'myremote/main' by 1 commit, and can be fast-forwarded.",
-            '  (use "sno pull" to update your local branch)',
+            '  (use "kart pull" to update your local branch)',
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -155,7 +155,7 @@ def test_status(
             "On branch main",
             "Your branch and 'myremote/main' have diverged,",
             "and have 1 and 1 different commits each, respectively.",
-            '  (use "sno pull" to merge the remote branch into yours)',
+            '  (use "kart pull" to merge the remote branch into yours)',
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -183,7 +183,7 @@ def test_status(
         assert text_status(cli_runner) == [
             "On branch main",
             "Your branch is ahead of 'myremote/main' by 2 commits.",
-            '  (use "sno push" to publish your local commits)',
+            '  (use "kart push" to publish your local commits)',
             "",
             "Nothing to commit, working copy clean",
         ]
@@ -212,11 +212,11 @@ def test_status(
         assert text_status(cli_runner) == [
             "On branch main",
             "Your branch is ahead of 'myremote/main' by 2 commits.",
-            '  (use "sno push" to publish your local commits)',
+            '  (use "kart push" to publish your local commits)',
             "",
             "Changes in working copy:",
-            '  (use "sno commit" to commit)',
-            '  (use "sno reset" to discard changes)',
+            '  (use "kart commit" to commit)',
+            '  (use "kart reset" to discard changes)',
             "",
             f"  {H.POINTS.LAYER}:",
             "    feature:",
@@ -254,14 +254,14 @@ def test_status(
 
 
 def test_status_empty(tmp_path, cli_runner, chdir):
-    repo_path = tmp_path / "wiz.sno"
+    repo_path = tmp_path / "wiz"
     r = cli_runner.invoke(["init", str(repo_path)])
     assert r.exit_code == 0, r
 
     with chdir(repo_path):
         assert text_status(cli_runner) == [
             "Empty repository.",
-            '  (use "sno import" to add some data)',
+            '  (use "kart import" to add some data)',
         ]
 
         assert json_status(cli_runner) == {
@@ -281,14 +281,14 @@ def test_status_none(tmp_path, cli_runner, chdir):
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Current directory is not an existing sno repository"
+            == "Error: Current directory is not an existing Kart repository"
         )
 
         r = cli_runner.invoke(["status", "-o", "json"])
         assert r.exit_code == NO_REPOSITORY, r
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Current directory is not an existing sno repository"
+            == "Error: Current directory is not an existing Kart repository"
         )
 
 
@@ -309,9 +309,9 @@ def test_status_merging(create_conflicts, cli_runner):
             "    nz_pa_points_topo_150k:feature: 4 conflicts",
             "",
             "",
-            "View conflicts with `sno conflicts` and resolve them with `sno resolve`.",
-            "Once no conflicts remain, complete this merge with `sno merge --continue`.",
-            "Or use `sno merge --abort` to return to the previous state.",
+            "View conflicts with `kart conflicts` and resolve them with `kart resolve`.",
+            "Once no conflicts remain, complete this merge with `kart merge --continue`.",
+            "Or use `kart merge --abort` to return to the previous state.",
         ]
 
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")

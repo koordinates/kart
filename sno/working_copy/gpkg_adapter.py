@@ -576,7 +576,7 @@ def gpkg_metadata_to_xml(gpkg_metadata, gpkg_metadata_reference):
 
     # We can't actually commit a whole list of XML, but we need to return something that makes sense.
     # Simply throwing an error here stops dirty-detection working, and stops commands that would fix the situation
-    # from working, like `sno reset HEAD --discard-changes` or `sno create-workingcopy --discard-changes`.
+    # from working, like `kart reset HEAD --discard-changes` or `kart create-workingcopy --discard-changes`.
     return xml_list
 
 

@@ -74,7 +74,7 @@ class MergeIndex:
     Conflicts are easier to modify than in a pygit2.Index (where they are backed by C iterators).
     When serialised to an index file, conflicts will be added in a special .conflicts/ directory,
     and resolutions will be added in a special .resolves/ directory (resolutions are called
-    "resolves" here for brevity and with consistency with the verb, ie "sno resolve").
+    "resolves" here for brevity and with consistency with the verb, ie "kart resolve").
     """
 
     # We could use pygit2.IndexEntry everywhere but it has unhelpful __eq__ and __repr__ behaviour.
@@ -356,7 +356,7 @@ class VersionContext:
     """
 
     def __init__(self, repo, version_name, commit_id, short_id, branch=None):
-        # The sno repository
+        # The Kart repository
         self.repo = repo
         # The name of the version - one of "ancestor", "ours" or "theirs".
         self.version_name = version_name
@@ -682,7 +682,7 @@ def merge_context_to_text(jdict):
 
 def merge_status_to_text(jdict, fresh):
     """
-    Converts the json output of sno merge (or of sno status, which uses
+    Converts the json output of kart merge (or of kart status, which uses
     the same format during a merge) to text output.
 
     jdict - the dictionary of json output.
@@ -722,7 +722,7 @@ def merge_status_to_text(jdict, fresh):
                 no_conflicts_text = f"No conflicts!\nMerge commited as {commit}"
             else:
                 no_conflicts_text = (
-                    f"No conflicts!\nUse `sno merge --continue` to complete the merge"
+                    f"No conflicts!\nUse `kart merge --continue` to complete the merge"
                 )
         return "\n".join([merging_text, no_conflicts_text])
 
@@ -734,9 +734,9 @@ def merge_status_to_text(jdict, fresh):
         return "\n".join([merging_text, conflicts_text, dry_run_text])
 
     conflicts_help_text = (
-        "View conflicts with `sno conflicts` and resolve them with `sno resolve`.\n"
-        "Once no conflicts remain, complete this merge with `sno merge --continue`.\n"
-        "Or use `sno merge --abort` to return to the previous state."
+        "View conflicts with `kart conflicts` and resolve them with `kart resolve`.\n"
+        "Once no conflicts remain, complete this merge with `kart merge --continue`.\n"
+        "Or use `kart merge --abort` to return to the previous state."
     )
     is_in = "is now in" if fresh else "is in"
     repo_state_text = f'Repository {is_in} "merging" state.'

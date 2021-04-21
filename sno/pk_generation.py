@@ -271,7 +271,7 @@ class PkGeneratingImportSource(ImportSource):
     def get_features(self, row_pks, *, ignore_missing=False):
         # we implement this so you can specifically call it with an empty
         # list of PKs.
-        # this means you can use `sno import --replace-ids=` to import
+        # this means you can use `kart import --replace-ids=` to import
         # a meta-only change with no actual feature changes, efficiently.
         # Calling it with a non-empty list of PKs raises an error.
         for pk in row_pks:

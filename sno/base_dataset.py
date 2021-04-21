@@ -8,7 +8,7 @@ from .serialise_util import json_unpack
 class BaseDataset(ImportSource):
     """
     Common interface for all datasets - mainly Dataset2, but
-    there is also Dataset0 and Dataset1 used by `sno upgrade`.
+    there is also Dataset0 and Dataset1 used by `kart upgrade`.
 
     A Dataset instance is immutable since it is a view of a particular git tree.
     To get a new version of a dataset, commit the desired changes,
@@ -163,7 +163,7 @@ class BaseDataset(ImportSource):
     def decode_path(self, rel_path):
         """
         Given a relative path to something inside this dataset
-        eg ".sno-dataset/feature/49/3e/Bg==", or simply "feature/49/3e/Bg==""
+        eg "[DATASET_DIRNAME]/feature/49/3e/Bg==", or simply "feature/49/3e/Bg==""
         returns a tuple in either of the following forms:
         1. ("feature", primary_key)
         2. ("meta", metadata_file_path)

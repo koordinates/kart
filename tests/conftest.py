@@ -110,7 +110,7 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
     monkeypatch_session.setenv("GIT_ATTR_NOSYSTEM", "1")
     monkeypatch_session.setenv("GIT_CONFIG_NOSYSTEM", "1")
 
-    USER_NAME = "Sno Tester"
+    USER_NAME = "Kart Tester"
     USER_EMAIL = "sno-tester@example.com"
 
     with open(home / ".gitconfig", "w") as f:
@@ -262,7 +262,7 @@ def data_archive_readonly(request, pytestconfig):
 def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
     """
     Extract a repo archive with a working copy geopackage
-    If the geopackage isn't in the archive, create it via `sno checkout`
+    If the geopackage isn't in the archive, create it via `kart create-workingcopy`
 
     Context-manager produces a 2-tuple: (repository_path, working_copy_path)
     """

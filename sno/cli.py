@@ -130,7 +130,7 @@ class SnoGroup(click.Group):
             cmd_name, list(self.list_commands(ctx)), n=3
         )
 
-        fail_message = f"sno: '{cmd_name}' is not a sno command. See 'sno --help'.\n"
+        fail_message = f"kart: '{cmd_name}' is not a kart command. See 'kart --help'.\n"
         if matches:
             if len(matches) == 1:
                 fail_message += "\nThe most similar command is\n"

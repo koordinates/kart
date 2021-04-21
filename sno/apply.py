@@ -19,11 +19,11 @@ from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 
 V1_NO_META_UPDATE = (
     "Sorry, patches that make meta changes are not supported until Datasets V2\n"
-    "Use `sno upgrade`"
+    "Use `kart upgrade`"
 )
 V1_NO_DATASET_CREATE_DELETE = (
     "Sorry, patches that create or delete datasets are not supported until Datasets V2\n"
-    "Use `sno upgrade`"
+    "Use `kart upgrade`"
 )
 NO_COMMIT_NO_DATASET_CREATE_DELETE = (
     "Sorry, patches that create or delete datasets cannot be applied with --no-commit"
@@ -261,7 +261,7 @@ def apply_patch(
 @click.argument("patch_file", type=click.File("r", encoding="utf-8"))
 def apply(ctx, **kwargs):
     """
-    Applies and commits the given JSON patch (as created by `sno show -o json`)
+    Applies and commits the given JSON patch (as created by `kart show -o json`)
     """
     repo = ctx.obj.repo
     apply_patch(repo=repo, **kwargs)

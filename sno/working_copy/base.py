@@ -201,7 +201,7 @@ class BaseWorkingCopy:
         allow_unconnectable=False,
     ):
         """
-        Get the working copy associated with this sno repo, as specified in the repo config.
+        Get the working copy associated with this Kart repo, as specified in the repo config.
         Note that the working copy specified in the repo config may or may not exist or be in a valid state.
         An instance of this class can represent a working copy that doesn't exist or is in an invalid state,
         (similar to how pathlib.Path can point to files that may or may not exist).
@@ -318,7 +318,7 @@ class BaseWorkingCopy:
         if wc_exists and not (status & WorkingCopyStatus.INITIALISED):
             message = [
                 f"Working copy at {self} is not yet fully initialised",
-                "Try `sno create-workingcopy --delete-existing` to delete and recreate working copy if problem persists",
+                "Try `kart create-workingcopy --delete-existing` to delete and recreate working copy if problem persists",
             ]
             if status & WorkingCopyStatus.HAS_DATA:
                 message.append(
@@ -328,7 +328,7 @@ class BaseWorkingCopy:
 
     @classmethod
     def default_location(cls, repo):
-        """Returns `example.gpkg` for a sno repo in a directory named `example`."""
+        """Returns `example.gpkg` for a Kart repo in a directory named `example`."""
         stem = repo.workdir_path.stem
         return f"{stem}.gpkg"
 
@@ -376,7 +376,7 @@ class BaseWorkingCopy:
         raise NotImplementedError()
 
     def create_and_initialise(self):
-        """Create the database container or database schema if required, and the sno tables."""
+        """Create the database container or database schema if required, and the Kart tables."""
         raise NotImplementedError()
 
     def delete(self, keep_db_schema_if_possible=False):
@@ -427,7 +427,7 @@ class BaseWorkingCopy:
     def check_not_dirty(self, help_message=None):
         """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
         if not help_message:
-            help_message = "Commit these changes (`sno commit`) or discard these changes (`sno reset`) first."
+            help_message = "Commit these changes (`kart commit`) or discard these changes (`kart reset`) first."
         if self.is_dirty():
             raise InvalidOperation(
                 f"You have uncommitted changes in your working copy.\n{help_message}"

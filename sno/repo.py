@@ -41,7 +41,7 @@ class SnoRepoFiles:
     MERGE_HEAD = "MERGE_HEAD"
     MERGE_MSG = "MERGE_MSG"
 
-    # Sno-specific files:
+    # Kart-specific files:
     MERGE_INDEX = "MERGE_INDEX"
     MERGE_BRANCH = "MERGE_BRANCH"
 
@@ -59,10 +59,10 @@ class SnoRepoState(Enum):
             cmd = f"{cmd} {command_extra}"
         if bad_state == SnoRepoState.MERGING:
             return (
-                f'`{cmd}` does not work while the sno repo is in "merging" state.\n'
-                "Use `sno merge --abort` to abandon the merge and get back to the previous state."
+                f'`{cmd}` does not work while the Kart repo is in "merging" state.\n'
+                "Use `kart merge --abort` to abandon the merge and get back to the previous state."
             )
-        return f'`{cmd}` only works when the sno repo is in "merging" state, but it is in "normal" state.'
+        return f'`{cmd}` only works when the Kart repo is in "merging" state, but it is in "normal" state.'
 
 
 SnoRepoState.ALL_STATES = (SnoRepoState.NORMAL, SnoRepoState.MERGING)
@@ -82,9 +82,9 @@ class KartConfigKeys:
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
     # This variable was also renamed, but when tidy-style repos were added - not during rebranding.
-    CORE_BARE = "core.bare"  # Newer sno repos use the standard "core.bare" variable.
+    CORE_BARE = "core.bare"  # Newer repos use the standard "core.bare" variable.
     SNO_WORKINGCOPY_BARE = (
-        "sno.workingcopy.bare"  # Older sno repos use this custom variable instead.
+        "sno.workingcopy.bare"  # Older repos use this custom variable instead.
     )
 
     BRANDED_REPOSTRUCTURE_VERSION_KEYS = {
@@ -132,29 +132,29 @@ LOCKED_GIT_INDEX_CONTENTS = {
 
 class SnoRepo(pygit2.Repository):
     """
-    A valid pygit2.Repository, since all sno repos are also git repos - but with some added functionality.
-    Ensures the git directory structure is one of the two styles supported by sno - "bare-style" or "tidy-style".
+    A valid pygit2.Repository, since all Kart repos are also git repos - but with some added functionality.
+    Ensures the git directory structure is one of the two styles supported by Kart - "bare-style" or "tidy-style".
     For tidy-style, prevents worktree-related git commands from working by using a "locked git index".
-    Helps set up sno specific config, and adds support for pathlib Paths.
+    Helps set up Kart specific config, and adds support for pathlib Paths.
 
-    The two styles of Sno repos:
-    Originally, all Sno repos were implemented as bare git repositorys. Some had GPKG working copies, some did not.
+    The two styles of Kart repos:
+    Originally, all Kart repos were implemented as bare git repositorys. Some had GPKG working copies, some did not.
     Since they were bare git repositories, all the git internals were immediately visible inside the root directory -
     right alongside the GPKG. For this reason, they were kind of "untidy".
 
-    Eventually, this style of repo was named a "bare-style" Sno repo. "Bare-style" Sno repo's are always implemented
+    Eventually, this style of repo was named a "bare-style" Kart repo. "Bare-style" Kart repo's are always implemented
     as bare git repositories, but they may or may not have a working copy, so they may or may not be actually "bare".
 
-    A new style of sno repo was added - a "tidy-style" Sno repo. This type of Sno repo is implemented as a non-bare
-    git repository, so the git internals are hidden in a ".sno" subfolder, leaving the root folder mostly empty as
-    a place to put a GPKG file or similar. If a "tidy-style" Sno repo were to be reconfigured, it *could* have its
-    working copy emoved and so be made bare. But going forward, "bare-style" Sno repos are supposed to be used for
-    actual bare Sno repos, and "tidy-style" are supposed to be used for Sno repos with a working copy.
+    A new style of Kart repo was added - a "tidy-style" Kart repo. This type of Kart repo is implemented as a non-bare
+    git repository, so the git internals are hidden in a ".kart" subfolder, leaving the root folder mostly empty as
+    a place to put a GPKG file or similar. If a "tidy-style" Kart repo were to be reconfigured, it *could* have its
+    working copy emoved and so be made bare. But going forward, "bare-style" Kart repos are supposed to be used for
+    actual bare Kart repos, and "tidy-style" are supposed to be used for Kart repos with a working copy.
 
-    Note: this is not enforced, especially since all legacy "bare-style" sno repos violate this assumption.
+    Note: this is not enforced, especially since all legacy "bare-style" Kart repos violate this assumption.
     """
 
-    # Kart was previously named Sno. Kart branding is not the default, but repos with Sno branding are still supported.
+    # Kart was previously named Sno. Kart branding is now the default, but repos with Sno branding are still supported.
     BRANDING_FOR_NEW_REPOS = "kart"
     DIRNAME_FOR_NEW_REPOS = f".{BRANDING_FOR_NEW_REPOS}"
 
@@ -176,7 +176,7 @@ class SnoRepo(pygit2.Repository):
                 pygit2.GIT_REPOSITORY_OPEN_BARE | pygit2.GIT_REPOSITORY_OPEN_FROM_ENV,
             )
         except pygit2.GitError:
-            raise NotFound("Not an existing sno repository", exit_code=NO_REPOSITORY)
+            raise NotFound("Not an existing Kart repository", exit_code=NO_REPOSITORY)
 
         self.gitdir_path = Path(self.path).resolve()
 
@@ -193,17 +193,17 @@ class SnoRepo(pygit2.Repository):
         cls, repo_root_path, wc_location=None, bare=False, initial_branch=None
     ):
         """
-        Initialise a new sno repo. A sno repo is basically a git repo, except -
-        - git internals are stored in .sno instead of .git
-          (.git is a file that contains a reference to .sno, this is allowed by git)
+        Initialise a new Kart repo. A Kart repo is basically a git repo, except -
+        - git internals are stored in .kart instead of .git
+          (.git is a file that contains a reference to .kart, this is allowed by git)
         - datasets are stored in /.sno-dataset/ trees according to a particular dataset format version -
           see DATASETS_v2.md. But, this only matters when there are commits. At this stage they are not yet present.
-        - there is a blob called sno.repository.version that contains the dataset format version number - but, this
+        - there is a blob called .sno.repository.version that contains the dataset format version number - but, this
           written in the first commit. At this stage it is not yet present.
-        - there is property in the repo config called sno.repository.version that contains the dataset format version
+        - there is property in the repo config called kart.repostructure.version that contains the dataset format version
           number, which is used until the sno.repository.version blob is written.
         - there are extra properties in the repo config about where / how the working copy is written.
-        - the .sno/index file has been extended to stop git messing things up - see LOCKED_EMPTY_GIT_INDEX.
+        - the .kart/index file has been extended to stop git messing things up - see LOCKED_EMPTY_GIT_INDEX.
         """
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
@@ -332,7 +332,7 @@ class SnoRepo(pygit2.Repository):
         ]
         self.config[version_key] = str(SUPPORTED_REPO_VERSION)
 
-        # Bare-style sno repos are always implemented as bare git repos:
+        # Bare-style Kart repos are always implemented as bare git repos:
         if self.is_bare_style:
             self.config["core.bare"] = True
         # Force writing to reflogs:
@@ -348,13 +348,13 @@ class SnoRepo(pygit2.Repository):
 
         if self.version != SUPPORTED_REPO_VERSION:
             message = (
-                f"This Sno repo uses Datasets v{self.version}, "
-                f"but Sno {get_version()} only supports Datasets v{SUPPORTED_REPO_VERSION}.\n"
+                f"This Kart repo uses Datasets v{self.version}, "
+                f"but Kart {get_version()} only supports Datasets v{SUPPORTED_REPO_VERSION}.\n"
             )
             if self.version < SUPPORTED_REPO_VERSION:
-                message += "Use `sno upgrade SOURCE DEST` to upgrade this repo to the supported version."
+                message += "Use `kart upgrade SOURCE DEST` to upgrade this repo to the supported version."
             else:
-                message += "Get the latest version of Sno to work with this repo."
+                message += "Get the latest version of Kart to work with this repo."
             raise InvalidOperation(message, exit_code=UNSUPPORTED_VERSION)
 
     def write_readme(self):
@@ -386,7 +386,7 @@ class SnoRepo(pygit2.Repository):
     def activate(self):
         """
         We create new+tidy repos in .kart/ but we don't write the .git file pointing to .kart/ until everything
-        else is ready, and until that file is written, git or sno commands won't find the repo.
+        else is ready, and until that file is written, git or kart commands won't find the repo.
         So, if creation fails, the result will be something that doesn't work at all, not something that half
         works but is also half corrupted.
         """
@@ -399,7 +399,7 @@ class SnoRepo(pygit2.Repository):
         dot_kart_path = self.gitdir_path
         dot_kart_name = dot_kart_path.stem
         # .kart is linked from .git at this point, which means git (or kart) can find it
-        # and so the repository is activated (ie, sno or git commands will work):
+        # and so the repository is activated (ie, git or kart commands will work):
         dot_git_path.write_text(f"gitdir: {dot_kart_name}\n", encoding="utf-8")
 
         if is_windows:
@@ -439,7 +439,7 @@ class SnoRepo(pygit2.Repository):
     def validate_bare_or_tidy_style(self):
         if self.is_bare_style and not super().is_bare:
             raise NotFound(
-                "Selected repo isn't a bare-style or tidy-style sno repo. Perhaps a git repo?",
+                "Selected repo isn't a bare-style or tidy-style Kart repo. Perhaps a git repo?",
                 exit_code=NO_REPOSITORY,
             )
 
@@ -455,7 +455,7 @@ class SnoRepo(pygit2.Repository):
     def BARE_CONFIG_KEY(self):
         """
         Return the config key we can check to see if the repo is actually bare,
-        given that all bare-style Sno repos have core.bare = True regardless of whether they have a working copy.
+        given that all bare-style Kart repos have core.bare = True regardless of whether they have a working copy.
         """
         return (
             KartConfigKeys.SNO_WORKINGCOPY_BARE
@@ -465,12 +465,12 @@ class SnoRepo(pygit2.Repository):
 
     @property
     def version(self):
-        """Returns the sno repository version - eg 2 for 'Datasets V2' See DATASETS_v2.md"""
+        """Returns the Kart repository version - eg 2 for 'Datasets V2' See DATASETS_v2.md"""
         return get_repo_version(self)
 
     @property
     def workingcopy_location(self):
-        """Return the path to the sno working copy, if one exists."""
+        """Return the path to the Kart working copy, if one exists."""
         repo_cfg = self.config
         location_key = self.WORKINGCOPY_LOCATION_KEY
         return repo_cfg[location_key] if location_key in repo_cfg else None
@@ -478,7 +478,7 @@ class SnoRepo(pygit2.Repository):
     @property
     def is_bare(self):
         """
-        True if this sno repo is genuinely bare - it has no sno working copy.
+        True if this Kart repo is genuinely bare - it has no Kart working copy.
         The repo may or may not also be a bare git repository - this is an implementation detail.
         That information can be found super().is_bare
         """
@@ -496,26 +496,26 @@ class SnoRepo(pygit2.Repository):
         merge_index = self.gitdir_file(SnoRepoFiles.MERGE_INDEX).exists()
         if merge_head and not merge_index:
             raise NotFound(
-                'sno repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
-                "Try `sno merge --abort` to return to a good state."
+                'Kart repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
+                "Try `kart merge --abort` to return to a good state."
             )
         return SnoRepoState.MERGING if merge_head else SnoRepoState.NORMAL
 
     def structure(self, refish="HEAD"):
-        """Get the structure of this Sno repository at a particular revision."""
+        """Get the structure of this Kart repository at a particular revision."""
         self.ensure_supported_version()
         return RepoStructure(self, refish, dataset_class=SUPPORTED_DATASET_CLASS)
 
     def datasets(self, refish="HEAD"):
         """
-        Get the datasets of this Sno repository at a particular revision.
+        Get the datasets of this Kart repository at a particular revision.
         Equivalent to: self.structure(refish).datasets
         """
         return self.structure(refish).datasets
 
     @property
     def working_copy(self):
-        """Return the working copy of this Sno repository, or None if it it does not exist."""
+        """Return the working copy of this Kart repository, or None if it it does not exist."""
         if not hasattr(self, "_working_copy"):
             self._working_copy = self.get_working_copy()
         return self._working_copy
@@ -548,7 +548,7 @@ class SnoRepo(pygit2.Repository):
             del config[key]
 
     def gc(self, *args):
-        """Runs git-gc on the sno repository."""
+        """Runs git-gc on the Kart repository."""
         try:
             args = ["git", "-C", self.path, "gc", *args]
             subprocess.check_call(args, env=tool_environment())

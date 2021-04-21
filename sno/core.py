@@ -95,6 +95,6 @@ def check_git_user(repo=None):
     if repo:
         msg.append("Omit --global to set the identity only in this repository.")
 
-    msg.append("\n(sno uses the same credentials and configuration as git)")
+    msg.append("\n(Kart uses the same credentials and configuration as git)")
 
     raise NotFound("\n".join(msg), exit_code=NO_USER)

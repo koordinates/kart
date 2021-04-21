@@ -82,7 +82,7 @@ def test_init_import(
     tmp_path,
     cli_runner,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -165,8 +165,8 @@ def test_commit_edits(
                 "On branch main",
                 "",
                 "Changes in working copy:",
-                '  (use "sno commit" to commit)',
-                '  (use "sno reset" to discard changes)',
+                '  (use "kart commit" to commit)',
+                '  (use "kart reset" to discard changes)',
                 "",
                 f"  {table}:",
                 "    feature:",
@@ -355,7 +355,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                         {"srtext": crs},
                     )
 
-                    # sno diff hides differences between dataset CRS and WC CRS if they are both supposed to be EPSG:4326
+                    # kart diff hides differences between dataset CRS and WC CRS if they are both supposed to be EPSG:4326
                     # (or any other standard CRS). See POSTGIS_WC.md
                     assert not wc.is_dirty()
 
@@ -369,7 +369,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                         {"srtext": crs},
                     )
 
-                    # Now sno diff should show the change, and it is possible to commit the change.
+                    # Now kart diff should show the change, and it is possible to commit the change.
                     assert wc.is_dirty()
 
                     commit_id = repo.structure().commit_diff(

@@ -19,7 +19,7 @@ class Dataset1(BaseDataset):
     - messagePack
     - primary key values
     - blob per feature
-    - add at any location: `sno import GPKG:my.gpkg:mytable path/to/mylayer`
+    - add at any location: `kart import GPKG:my.gpkg:mytable path/to/mylayer`
 
     any/structure/mylayer/
       .sno-table/

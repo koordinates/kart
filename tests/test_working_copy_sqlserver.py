@@ -128,7 +128,7 @@ def test_init_import(
     tmp_path,
     cli_runner,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
@@ -211,8 +211,8 @@ def test_commit_edits(
                 "On branch main",
                 "",
                 "Changes in working copy:",
-                '  (use "sno commit" to commit)',
-                '  (use "sno reset" to discard changes)',
+                '  (use "kart commit" to commit)',
+                '  (use "kart reset" to discard changes)',
                 "",
                 f"  {table}:",
                 "    feature:",

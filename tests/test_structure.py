@@ -118,7 +118,7 @@ def test_import(
     request,
     monkeypatch,
 ):
-    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Sno repository. """
+    """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
     param_ids = H.parameter_ids(request)
 
     # wrap the original functions with benchmarking
@@ -299,7 +299,7 @@ def test_import_from_non_gpkg(
     source_ogr_driver,
 ):
     """
-    Import something else into a Sno repository.
+    Import something else into a Kart repository.
     """
     param_ids = H.parameter_ids(request)
 

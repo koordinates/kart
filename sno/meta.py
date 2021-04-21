@@ -156,7 +156,7 @@ def meta_set(ctx, message, dataset, items):
 
     if repo.version < 2:
         raise InvalidOperation(
-            "This repo doesn't support meta changes, use `sno upgrade`"
+            "This repo doesn't support meta changes, use `kart upgrade`"
         )
 
     if message is None:
@@ -232,7 +232,7 @@ def meta_set(ctx, message, dataset, items):
 )
 @click.pass_context
 def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, items):
-    """Usage: sno commit-files -m MESSAGE KEY=VALUE [KEY=VALUE...]"""
+    """Usage: kart commit-files -m MESSAGE KEY=VALUE [KEY=VALUE...]"""
     repo = ctx.obj.repo
     ctx.obj.check_not_dirty()
 
@@ -246,7 +246,7 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
 
     if not parent_commit:
         raise NotYetImplemented(
-            "Sorry, using `sno commit-files` to create the initial commit is not yet supported"
+            "Sorry, using `kart commit-files` to create the initial commit is not yet supported"
         )
 
     if amend and not message:

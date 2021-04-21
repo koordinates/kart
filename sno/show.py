@@ -86,7 +86,7 @@ def show(ctx, *, refish, output_format, crs, json_style, **kwargs):
 def create_patch(ctx, *, refish, json_style, **kwargs):
     """
     Creates a JSON patch from the given ref.
-    The patch can be applied with `sno apply`.
+    The patch can be applied with `kart apply`.
     """
     parent = _get_parent(ctx, refish)
     return diff.diff_with_writer(

@@ -74,7 +74,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
 
     if repo.is_empty:
         raise NotFound(
-            'Empty repository.\n  (use "sno import" to add some data)',
+            'Empty repository.\n  (use "kart import" to add some data)',
             exit_code=NO_DATA,
         )
 

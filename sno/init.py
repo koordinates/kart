@@ -226,18 +226,18 @@ def import_(
     """
     Import data into a repository.
 
-    $ sno import SOURCE [TABLE_SPEC] [TABLE_SPEC]
+    $ kart import SOURCE [TABLE_SPEC] [TABLE_SPEC]
 
     SOURCE: Import from dataset: "FORMAT:PATH" eg. "GPKG:my.gpkg"
 
     TABLE_SPEC: Import a particular table, optionally with a new name: "TABLE[:AS_NAME]"
     eg. "2019_08_06_median_waterlevel:waterlevel"
 
-    $ sno import GPKG:my.gpkg [table1[:new_name1] [table2[:new_name2]]
+    $ kart import GPKG:my.gpkg [table1[:new_name1] [table2[:new_name2]]
 
     To show available tables in the import data, use
 
-    $ sno import --list GPKG:my.gpkg
+    $ kart import --list GPKG:my.gpkg
     """
 
     if output_format == "json" and not do_list:
@@ -446,7 +446,7 @@ def init(
 
         # Import all tables.
         # If you need finer grained control than this,
-        # use `sno init` and *then* `sno import` as a separate command.
+        # use `kart init` and *then* `kart import` as a separate command.
         tables = base_source.get_tables().keys()
         sources = [base_source.clone_for_table(t) for t in tables]
 
@@ -469,5 +469,5 @@ def init(
 
     else:
         click.echo(
-            f"Created an empty repository at {repo_path} — import some data with `sno import`"
+            f"Created an empty repository at {repo_path} — import some data with `kart import`"
         )

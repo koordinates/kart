@@ -43,7 +43,7 @@ def query(ctx, path, command, params):
     try:
         dataset.get_spatial_index(dataset.table_name)
     except OSError:
-        raise NotFound("No spatial index found. Run `sno query {path} index`")
+        raise NotFound("No spatial index found. Run `kart query {path} index`")
 
     if command == "get":
         USAGE = "get PK"

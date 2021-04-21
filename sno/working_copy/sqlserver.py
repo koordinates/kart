@@ -65,7 +65,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         if col.data_type == "geometry":
             crs_name = col.extra_type_info.get("geometryCRS")
             crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
-            # This user-defined GeometryType adapts Sno's GPKG geometry to SQL Server's native geometry type.
+            # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
         elif col.data_type in ("date", "time", "timestamp"):
             return BaseDateOrTimeType
@@ -293,7 +293,7 @@ class GeometryType(UserDefinedType):
         self.crs_id = crs_id
 
     def bind_processor(self, dialect):
-        # 1. Writing - Python layer - convert sno geometry to WKB
+        # 1. Writing - Python layer - convert Kart geometry to WKB
         return lambda geom: geom.to_wkb()
 
     def bind_expression(self, bindvalue):
@@ -310,7 +310,7 @@ class GeometryType(UserDefinedType):
         return InstanceFunction("STAsBinary", col, type_=self)
 
     def result_processor(self, dialect, coltype):
-        # 4. Reading - Python layer - convert WKB to sno geometry.
+        # 4. Reading - Python layer - convert WKB to Kart geometry.
         return lambda wkb: Geometry.from_wkb(wkb)
 
 

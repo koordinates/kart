@@ -194,7 +194,7 @@ def fast_import_tables(
     """
     Imports all of the given sources as new datasets, and commit the result.
 
-    repo - the sno repo to import into.
+    repo - the Kart repo to import into.
     sources - an iterable of ImportSource objects. Each source is to be imported to source.dest_path.
     verbosity - integer:
         0: no progress information is printed to stdout.
@@ -273,7 +273,7 @@ def fast_import_tables(
 
             # PARALLEL IMPORTING
             # To do an import in parallel:
-            #   * we only have one sno process, and one connection to the source.
+            #   * we only have one Kart process, and one connection to the source.
             #   * we have multiple git-fast-import backend processes
             #   * we send all 'meta' blobs (anything that isn't a feature) to process 0
             #   * we assign feature blobs to a process based on it's first subtree.

@@ -15,7 +15,7 @@ from .working_copy import WorkingCopyStatus
 from .output_util import InputMode, get_input_mode
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
-    "Commit these changes first (`sno commit`) or"
+    "Commit these changes first (`kart commit`) or"
     " just discard them by adding the option `--discard-changes`."
 )
 
@@ -28,7 +28,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     working_copy = repo.get_working_copy(allow_uncreated=True, allow_invalid_state=True)
     if working_copy is None:
         click.echo(
-            "(Working copy isn't created yet. To create a working copy, use `sno create-workingcopy`)"
+            "(Working copy isn't created yet. To create a working copy, use `kart create-workingcopy`)"
         )
         return
 
@@ -368,12 +368,12 @@ def reset(ctx, discard_changes, refish):
 def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     """
     Create a new working copy - if one already exists it will be deleted.
-    Usage: sno create-workingcopy [LOCATION]
+    Usage: kart create-workingcopy [LOCATION]
     LOCATION should be one of the following:
     - PATH.gpkg for a GPKG file.
     - postgresql://[HOST]/DBNAME/DBSCHEMA for a PostGIS database.
     - mssql://[HOST]/DBNAME/DBSCHEMA for a SQL Server database.
-    If no location is supplied, the location from the repo config at "sno.workingcopy.path" will be used.
+    If no location is supplied, the location from the repo config at "kart.workingcopy.location" will be used.
     If no location is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
     from sno.working_copy.base import BaseWorkingCopy
@@ -381,7 +381,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     repo = ctx.obj.repo
     if repo.head_is_unborn:
         raise InvalidOperation(
-            "Can't create a working copy for an empty repository — first import some data with `sno import`"
+            "Can't create a working copy for an empty repository — first import some data with `kart import`"
         )
 
     old_wc_loc = repo.workingcopy_location

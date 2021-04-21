@@ -23,11 +23,11 @@ def branch(ctx, output_format, args):
 
     sargs = set(args)
     if output_format == "json":
-        valid_args = {"--list"}  # "sno branch -o json" or "sno branch --list -o json"
+        valid_args = {"--list"}  # "kart branch -o json" or "kart branch --list -o json"
         invalid_args = sargs - valid_args
         if invalid_args:
             raise click.UsageError(
-                "Illegal usage: 'sno branch --output-format=json' only supports listing branches."
+                "Illegal usage: 'kart branch --output-format=json' only supports listing branches."
             )
         dump_json_output(list_branches_json(repo), sys.stdout)
         return

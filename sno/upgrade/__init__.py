@@ -33,11 +33,11 @@ def dataset_class_for_legacy_version(version):
 @click.argument("dest", type=click.Path(exists=False, writable=True), required=True)
 def upgrade(ctx, source, dest):
     """
-    Upgrade a repository for an earlier version of Sno to be compatible with the latest version.
-    The current repository structure of Sno is known as Datasets V2, which is used from Sno 0.5 onwards.
+    Upgrade a repository for an earlier version of Kart to be compatible with the latest version.
+    The current repository structure of Kart is known as Datasets V2, which is used from Sno/Kart 0.5 onwards.
 
     Usage:
-    sno upgrade SOURCE DEST
+    kart upgrade SOURCE DEST
     """
     source = Path(source)
     dest = Path(dest)
@@ -49,7 +49,7 @@ def upgrade(ctx, source, dest):
         source_repo = SnoRepo(source)
     except NotFound:
         raise click.BadParameter(
-            f"'{source}': not an existing sno repository", param_hint="SOURCE"
+            f"'{source}': not an existing Kart repository", param_hint="SOURCE"
         )
 
     source_version = source_repo.version
@@ -59,7 +59,7 @@ def upgrade(ctx, source, dest):
         )
 
     if source_version > SUPPORTED_REPO_VERSION:
-        # Repo is too advanced for this version of Sno to understand, we can't upgrade it.
+        # Repo is too advanced for this version of Kart to understand, we can't upgrade it.
         # This prints a good error messsage explaining the whole situation.
         source_repo.ensure_supported_version()
 
@@ -196,13 +196,13 @@ def _upgrade_commit(
 @click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
 def upgrade_to_tidy(source):
     """
-    Upgrade in-place a sno repository that is bare-style to be tidy-style. See.repo.py
-    To be used on sno-repo's that are not actually intended to be bare, but are "bare-style"
-    because they were created using Sno 0.5 or less, and that was all Sno supported.
+    Upgrade in-place a Kart repository that is bare-style to be tidy-style. See.repo.py
+    To be used on Kart repos that are not actually intended to be bare, but are "bare-style"
+    because they were created using Sno/Kart 0.5 or less, and that was all Kart supported.
     Doesn't upgrade the repository version, or change the contents at all.
 
     Usage:
-    sno upgrade-to-tidy SOURCE
+    kart upgrade-to-tidy SOURCE
     """
     source = Path(source).resolve()
 
@@ -210,7 +210,7 @@ def upgrade_to_tidy(source):
         source_repo = SnoRepo(source)
     except NotFound:
         raise click.BadParameter(
-            f"'{source}': not an existing sno repository", param_hint="SOURCE"
+            f"'{source}': not an existing Kart repository", param_hint="SOURCE"
         )
 
     source_repo.ensure_supported_version()
@@ -271,7 +271,7 @@ def upgrade_to_kart(ctx, source):
        * triggers related to _sno_track also have new names
 
     Usage:
-    sno upgrade-to-kart SOURCE
+    kart upgrade-to-kart SOURCE
     """
     source = Path(source).resolve()
 
@@ -279,7 +279,7 @@ def upgrade_to_kart(ctx, source):
         source_repo = SnoRepo(source)
     except NotFound:
         raise click.BadParameter(
-            f"'{source}': not an existing sno repository", param_hint="SOURCE"
+            f"'{source}': not an existing Sno repository", param_hint="SOURCE"
         )
 
     source_repo.ensure_supported_version()

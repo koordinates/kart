@@ -134,7 +134,7 @@ def fsck(ctx, reset_datasets, fsck_args):
 
                 # has feature changes
                 # Note that pygit has its own names and letters for these operations - Add, Delete, Modify, Rename.
-                # But, we call them insert, update and delete elsewhere in sno - so we should be consistent here.
+                # But, we call them insert, update and delete elsewhere in Kart - so we should be consistent here.
                 for delta in feature_diff.values():
                     if delta.type == "insert":
                         click.echo(f" I   {nul:>10} → {delta.key}")

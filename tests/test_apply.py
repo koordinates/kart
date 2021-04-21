@@ -101,7 +101,7 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         bits = r.stdout.split()
         assert bits[0] == "Commit"
 
-        # Check that the `sno create-patch` output is the same as our original patch file had.
+        # Check that the `kart create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0, r.stderr
         patch = json.loads(r.stdout)
@@ -141,7 +141,7 @@ def test_apply_meta_changes(data_archive, cli_runner):
         )
         assert r.exit_code == 0, r.stderr
 
-        # Check that the `sno create-patch` output is the same as our original patch file had.
+        # Check that the `kart create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
@@ -298,7 +298,7 @@ def test_apply_create_dataset(data_archive, cli_runner):
             "nz_waca_adjustments",
         ]
 
-        # Check that the `sno create-patch` output is the same as our original patch file had.
+        # Check that the `kart create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
@@ -350,7 +350,7 @@ def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
         )
         assert r.exit_code == 0, r.stderr
 
-        # Check that the `sno create-patch` output is the same as our original patch file had.
+        # Check that the `kart create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
@@ -404,7 +404,7 @@ def test_add_and_remove_xml_metadata_as_xml(data_archive, cli_runner):
         )
         assert r.exit_code == 0, r.stderr
 
-        # Check that the `sno create-patch` output is the same as our original patch file had.
+        # Check that the `kart create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0
         patch = json.loads(r.stdout)
@@ -459,7 +459,7 @@ def test_apply_with_working_copy(
             )
             assert name is None
 
-        # Check that the `sno create-patch` output is the same as our original patch file had.
+        # Check that the `kart create-patch` output is the same as our original patch file had.
         r = cli_runner.invoke(["create-patch", "HEAD"])
         assert r.exit_code == 0, r.stderr
         patch = json.loads(r.stdout)

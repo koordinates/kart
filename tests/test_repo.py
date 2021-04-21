@@ -24,7 +24,7 @@ def test_init_repository(tmp_path):
 
 
 def test_git_disabled(tmp_path, cli_runner, chdir):
-    """ Create an empty Sno repository. """
+    """ Create an empty Kart repository. """
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
 

@@ -29,7 +29,7 @@ def test_data_ls_empty(output_format, tmp_path, cli_runner, chdir):
         if output_format == "text":
             assert r.stdout.splitlines() == [
                 "Empty repository.",
-                '  (use "sno import" to add some data)',
+                '  (use "kart import" to add some data)',
             ]
         else:
             output = json.loads(r.stdout)

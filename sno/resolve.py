@@ -31,7 +31,7 @@ def ungeojson_file(file_path, dataset):
 
 def write_feature_to_dataset_entry(feature, dataset, repo):
     """
-    Adds the given feature to the given dataset by writing a blob to the sno repo.
+    Adds the given feature to the given dataset by writing a blob to the Kart repo.
     Returns the IndexEntry that refers to that blob - this IndexEntry still needs
     to be written to the repo to complete the write.
     """

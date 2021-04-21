@@ -35,11 +35,11 @@ class Context(object):
     @property
     def repo(self):
         """
-        Returns the sno repository at self.repo_path
-        Raises an error if there isn't a sno repository there.
+        Returns the Kart repository at self.repo_path
+        Raises an error if there isn't a Kart repository there.
         Ensures that the repository is in state NORMAL, since this is generally required.
 
-        Accessing Context.repo.path ensures you have the path to an existing sno repository.
+        Accessing Context.repo.path ensures you have the path to an existing Kart repository.
         """
         return self.get_repo()
 
@@ -51,8 +51,8 @@ class Context(object):
         command_extra=None,
     ):
         """
-        Returns the sno repository at self.repo_path
-        Raises an error if there isn't a sno repository there, or if the repository is
+        Returns the Kart repository at self.repo_path
+        Raises an error if there isn't a Kart repository there, or if the repository is
         not in one of the allowed states.
         """
         if not hasattr(self, "_repo"):
@@ -60,10 +60,10 @@ class Context(object):
                 self._repo = SnoRepo(self.repo_path)
             except NotFound:
                 if self.user_repo_path:
-                    message = "Not an existing sno repository"
+                    message = "Not an existing Kart repository"
                     param_hint = "--repo"
                 else:
-                    message = "Current directory is not an existing sno repository"
+                    message = "Current directory is not an existing Kart repository"
                     param_hint = None
 
                 raise NotFound(message, exit_code=NO_REPOSITORY, param_hint=param_hint)

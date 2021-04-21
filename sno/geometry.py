@@ -19,7 +19,7 @@ GPKG_ENVELOPE_XYZM = 4
 
 class Geometry(bytes):
     """
-    Contains a geometry in Sno's chosen format - StandardGeoPackageBinary.
+    Contains a geometry in Kart's chosen format - StandardGeoPackageBinary.
     See "Geometry encoding" section in DATASETS_v2.md for more information.
     """
 

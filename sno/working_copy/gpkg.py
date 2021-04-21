@@ -83,7 +83,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
     def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
-            # This user-defined GeometryType normalises GPKG geometry to the Sno V2 GPKG geometry.
+            # This user-defined GeometryType normalises GPKG geometry to the Kart V2 GPKG geometry.
             return GeometryType
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.

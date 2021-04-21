@@ -25,7 +25,7 @@ def main():
         "commits",
         metavar="COMMITS",
         type=int,
-        help="how many Sno commits to create. 0 will make changes without committing",
+        help="how many Kart commits to create. 0 will make changes without committing",
     )
     parser.add_argument(
         "tables",
@@ -285,12 +285,12 @@ def main():
                     raise RuntimeError("ROLLBACK")
 
             if not options.commits:
-                print("GeoPackage changes made, skipping sno commit.")
+                print("GeoPackage changes made, skipping kart commit.")
                 return
             else:
                 subprocess.check_call(
                     [
-                        "sno",
+                        "kart",
                         "commit",
                         "-m",
                         f"history-creator changed things at {datetime.now():%H:%M:%S.%f}",

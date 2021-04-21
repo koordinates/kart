@@ -43,7 +43,7 @@ def get_repo_version(repo, tree=None):
         return json.loads((tree / REPO_VERSION_BLOB_PATH).data)
 
     # Versions less than 2 don't have ".sno.repository.version" files, so must be 0 or 1.
-    # We don't support v0 except when performing a `sno upgrade`.
+    # We don't support v0 except when performing a `kart upgrade`.
     return _distinguish_v0_v1(tree)
 
 
@@ -70,5 +70,5 @@ def _distinguish_v0_v1(tree):
             return 0
         elif dir_name == ".sno-table":
             return 1
-    # Maybe this isn't even a sno repo?
+    # Maybe this isn't even a Kart repo?
     return 1

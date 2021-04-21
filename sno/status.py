@@ -104,7 +104,7 @@ def status_to_text(jdict):
 def branch_status_to_text(jdict):
     commit = jdict["abbrevCommit"]
     if not commit:
-        return 'Empty repository.\n  (use "sno import" to add some data)'
+        return 'Empty repository.\n  (use "kart import" to add some data)'
     branch = jdict["branch"]
     if not branch:
         return f"{click.style('HEAD detached at', fg='red')} {commit}"
@@ -127,32 +127,32 @@ def upstream_status_to_text(jdict):
         return (
             f"Your branch and '{upstream_branch}' have diverged,\n"
             f"and have {n_ahead} and {n_behind} different commits each, respectively.\n"
-            '  (use "sno pull" to merge the remote branch into yours)'
+            '  (use "kart pull" to merge the remote branch into yours)'
         )
     elif n_ahead > 0:
         return (
             f"Your branch is ahead of '{upstream_branch}' by {n_ahead} {_pc(n_ahead)}.\n"
-            '  (use "sno push" to publish your local commits)'
+            '  (use "kart push" to publish your local commits)'
         )
     elif n_behind > 0:
         return (
             f"Your branch is behind '{upstream_branch}' by {n_behind} {_pc(n_behind)}, "
             "and can be fast-forwarded.\n"
-            '  (use "sno pull" to update your local branch)'
+            '  (use "kart pull" to update your local branch)'
         )
 
 
 def working_copy_status_to_text(jdict):
     if jdict is None:
-        return 'No working copy\n  (use "sno checkout" to create a working copy)\n'
+        return 'No working copy\n  (use "kart checkout" to create a working copy)\n'
 
     if jdict["changes"] is None:
         return "Nothing to commit, working copy clean"
 
     return (
         "Changes in working copy:\n"
-        '  (use "sno commit" to commit)\n'
-        '  (use "sno reset" to discard changes)\n\n'
+        '  (use "kart commit" to commit)\n'
+        '  (use "kart reset" to discard changes)\n\n'
         + diff_status_to_text(jdict["changes"])
     )
 

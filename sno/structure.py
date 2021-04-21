@@ -23,8 +23,8 @@ L = logging.getLogger("sno.structure")
 
 class RepoStructure:
     """
-    The internal structure of a Sno repository, at a particular revision.
-    The sno revision's structure is almost entirely comprised of its datasets, but this may change.
+    The internal structure of a Kart repository, at a particular revision.
+    The Kart revision's structure is almost entirely comprised of its datasets, but this may change.
     The datasets can be accessed at self.datasets, but there is also a shortcut that skips this class - instead of:
 
     >>> sno_repo.structure(commit_hash).datasets
@@ -109,7 +109,7 @@ class RepoStructure:
 
     def decode_path(self, full_path):
         """
-        Given a path in the sno repository - eg "path/to/dataset/.sno-dataset/49/3e/Bg==" -
+        Given a path in the Kart repository - eg "path/to/dataset/.sno-dataset/49/3e/Bg==" -
         returns a tuple in either of the following forms:
         1. (dataset_path, "feature", primary_key)
         2. (dataset_path, "meta", meta_item_path)

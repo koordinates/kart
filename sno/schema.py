@@ -390,7 +390,7 @@ class Schema:
         are the "same" as columns in the previous schema. Uses a heuristic - columns are the same if they have the
         same name + type (handles reordering), or, if they have the same position and type (handles renames).
 
-        roundtrip_ctx - if the new_schema has been roundtripped through a database that doesn't support all Sno
+        roundtrip_ctx - if the new_schema has been roundtripped through a database that doesn't support all Kart
             types, then some of them will have had to be approximated. If a roundtrip context is supplied,
             this function also removes changes in new_schema - restores new_schema to be more like `self` -
             for changes that were not requested by the user, but instead are simply side-effects of the roundtrip.
@@ -633,7 +633,7 @@ class DefaultRoundtripContext:
         These must be different columns, since geometry data cannot become integer data.
 
         This is the default strategy - it needs to be redefined in the case where the new column has been roundtripped
-        through a format that doesn't support every Sno type. For instance, GPKG doesn't have a numeric type. So, when
+        through a format that doesn't support every Kart type. For instance, GPKG doesn't have a numeric type. So, when
         new_col has been roundtripped through a GPKG, the following logic would be added:
 
         If old_col is numeric and new_col is text -> return True.

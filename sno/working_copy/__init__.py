@@ -4,7 +4,7 @@ import click
 
 
 class WorkingCopyType(Enum):
-    """Different types of working copy currently supported by Sno."""
+    """Different types of working copy currently supported by Kart."""
 
     GPKG = auto()
     POSTGIS = auto()
@@ -57,8 +57,8 @@ class WorkingCopyStatus(IntEnum):
     DB_SCHEMA_EXISTS = 0x1  # The database schema for this working copy exists.
     FILE_EXISTS = 0x2  # The file (eg GPKG file) for this working copy exists.
     NON_EMPTY = 0x4  # At least one table of any sort exists in this working copy.
-    INITIALISED = 0x8  # All required Sno tables exist.
-    HAS_DATA = 0x10  # At least one table that is not a Sno table exists.
+    INITIALISED = 0x8  # All required Kart tables exist.
+    HAS_DATA = 0x10  # At least one table that is not a Kart table exists.
     DIRTY = 0x20  # Working copy has uncommitted changes.
 
     # A working copy "exists" if it is a file that exists, or it is a non-empty db schema.

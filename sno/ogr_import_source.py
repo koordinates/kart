@@ -29,7 +29,7 @@ from .working_copy import gpkg_adapter
 
 
 # This defines what formats are allowed, as well as mapping
-# sno prefixes onto an OGR format shortname.
+# Kart prefixes onto an OGR format shortname.
 FORMAT_TO_OGR_MAP = {
     "GPKG": "GPKG",
     "SHP": "ESRI Shapefile",
