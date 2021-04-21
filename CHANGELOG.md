@@ -9,6 +9,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 * Change to `kart data ls` JSON output, now includes whether repo is Kart or Sno branded.
 * Bugfix: Creating a working copy while switching branch now creates a working copy with the post-switch branch checked out, not the pre-switch branch.
+* `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
+* `log` now accepts `--with-feature-count` which adds a feature count to each commit when used with `-o json`. The feature count can be exact or a fast estimate.
 
 ## 0.9.0 (First "Kart" release)
 
