@@ -29,7 +29,7 @@ This process only supports a single release branch (master). It'll need to be ex
    $ git push origin v1.2.3
    ```
 
-9. CI will build and sign the installers and packages, and create a [new draft release in github](https://github.com/koordinates/sno/releases). Check CI passes and the RPM/DEB/MSI/PKG archives are all attached.
+9. CI will build and sign the installers and packages, and create a [new draft release in github](https://github.com/koordinates/kart/releases). Check CI passes and the RPM/DEB/MSI/PKG archives are all attached.
 
 10. Write the release notes. Use `CHANGELOG.md` as a starting point. Topic/section suggestions:
     * Overview
@@ -43,8 +43,8 @@ This process only supports a single release branch (master). It'll need to be ex
 12. If it's _not_ an alpha/beta/candidate release, update the Homebrew Tap:
 
     1. Get the SHA256 hash of the macOS PKG installer: `sha256 Kart-1.2.3.pkg`
-    2. Pull [homebrew-sno](https://github.com/koordinates/homebrew-sno/)
-    3. Edit `Casks/sno.rb` and update the `version` and `sha256` fields
+    2. Pull [homebrew-kart](https://github.com/koordinates/homebrew-kart/)
+    3. Edit `Casks/kart.rb` and update the `version` and `sha256` fields
     4. Commit with a message like "Update to release v1.2.3"
     5. Push
 
