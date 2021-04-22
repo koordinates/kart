@@ -37,13 +37,12 @@ class Dataset1(BaseDataset):
     VERSION = 1
 
     DATASET_DIRNAME = ".sno-table"
-    DATASET_PATH = ".sno-table/"
-    FEATURE_PATH = DATASET_PATH
-    VERSION_PATH = ".sno-table/meta/version"
+
+    META_PATH = "meta/"
+    VERSION_PATH = "meta/version"
     VERSION_CONTENTS = {"version": "1.0"}
 
     MSGPACK_EXT_GEOM = 71  # 'G'
-    META_PATH = ".sno-table/meta/"
 
     def _msgpack_unpack_ext(self, code, data):
         if code == self.MSGPACK_EXT_GEOM:
@@ -123,10 +122,8 @@ class Dataset1(BaseDataset):
         """
         Yields all the blobs in self.tree that match the expected pattern for a feature.
         """
-        if self.FEATURE_PATH not in self.tree:
-            return
 
-        feature_tree = self.tree / self.FEATURE_PATH
+        feature_tree = self.inner_tree
 
         # .sno-table/
         #   [hex(pk-hash):2]/

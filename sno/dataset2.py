@@ -67,10 +67,10 @@ class Dataset2(RichBaseDataset):
     VERSION = 2
 
     DATASET_DIRNAME = ".sno-dataset"
-    DATASET_PATH = ".sno-dataset/"
 
-    FEATURE_PATH = DATASET_PATH + "feature/"
-    META_PATH = DATASET_PATH + "meta/"
+    # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
+    FEATURE_PATH = "feature/"
+    META_PATH = "meta/"
 
     LEGEND_DIRNAME = "legend"
     LEGEND_PATH = META_PATH + "legend/"
@@ -81,8 +81,8 @@ class Dataset2(RichBaseDataset):
 
     CRS_PATH = META_PATH + "crs/"
 
-    ATTACHMENT_PATH = ""
-    METADATA_XML_PATH = ATTACHMENT_PATH + "metadata.xml"
+    # Attachments
+    METADATA_XML = "metadata.xml"
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -90,11 +90,15 @@ class Dataset2(RichBaseDataset):
             return 2
 
         if name in ATTACHMENT_META_ITEMS:
-            rel_path = self.ATTACHMENT_PATH + name
+            rel_path = name
+            meta_item_tree = self.attachment_tree
         else:
             rel_path = self.META_PATH + name
+            meta_item_tree = self.inner_tree
 
-        data = self.get_data_at(rel_path, missing_ok=name in META_ITEM_NAMES)
+        data = self.get_data_at(
+            rel_path, missing_ok=name in META_ITEM_NAMES, tree=meta_item_tree
+        )
         if data is None:
             return data
 
@@ -114,9 +118,9 @@ class Dataset2(RichBaseDataset):
 
     def crs_definitions(self):
         """Yields (identifier, definition) for all CRS definitions in this dataset."""
-        if not self.tree or self.CRS_PATH not in self.tree:
+        if not self.inner_tree or self.CRS_PATH not in self.inner_tree:
             return
-        for blob in find_blobs_in_tree(self.tree / self.CRS_PATH):
+        for blob in find_blobs_in_tree(self.inner_tree / self.CRS_PATH):
             # -4 -> Remove ".wkt"
             yield blob.name[:-4], crs_util.normalise_wkt(ensure_text(blob.data))
 
@@ -188,9 +192,9 @@ class Dataset2(RichBaseDataset):
         Returns a generator that calls get_feature once per feature.
         Each entry in the generator is the path of the feature and then the feature itself.
         """
-        if self.FEATURE_PATH not in self.tree:
+        if self.FEATURE_PATH not in self.inner_tree:
             return
-        yield from find_blobs_in_tree(self.tree / self.FEATURE_PATH)
+        yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
 
     @classmethod
     def decode_path_to_pks(cls, path):
@@ -249,19 +253,19 @@ class Dataset2(RichBaseDataset):
         yield self.encode_schema(schema)
         yield self.encode_legend(schema.legend)
 
-        rel_meta_blobs = [
+        meta_blobs = [
             (self.TITLE_PATH, source.get_meta_item("title")),
             (self.DESCRIPTION_PATH, source.get_meta_item("description")),
-            (self.METADATA_XML_PATH, source.get_meta_item("metadata.xml")),
+            (self.METADATA_XML, source.get_meta_item("metadata.xml")),
         ]
 
         for path, definition in source.crs_definitions():
-            rel_meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))
+            meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))
 
         if hasattr(source, "encode_generated_pk_data"):
-            rel_meta_blobs.append(source.encode_generated_pk_data(relative=True))
+            meta_blobs.append(source.encode_generated_pk_data(relative=True))
 
-        for rel_path, content in rel_meta_blobs:
+        for rel_path, content in meta_blobs:
             if content is None:
                 continue
             if not isinstance(content, bytes):
@@ -269,7 +273,13 @@ class Dataset2(RichBaseDataset):
                     content = json_pack(content)
                 else:
                     content = ensure_bytes(content)
-            yield self.full_path(rel_path), content
+
+            full_path = (
+                self.full_attachment_path(rel_path)
+                if rel_path in ATTACHMENT_META_ITEMS
+                else self.full_path(rel_path)
+            )
+            yield full_path, content
 
     def iter_legend_blob_data(self):
         """
@@ -337,22 +347,24 @@ class Dataset2(RichBaseDataset):
         self._check_meta_diff_is_commitable(meta_diff)
 
         has_conflicts = False
+
         # Apply diff to hidden meta items folder: <dataset>/.sno-dataset/meta/<item-name>
-        with tree_builder.chdir(self.META_PATH):
+        with tree_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
             has_conflicts |= self._apply_meta_deltas_to_tree(
                 (d for d in meta_diff.values() if d.key not in ATTACHMENT_META_ITEMS),
                 tree_builder,
-                self.meta_tree if self.tree is not None else None,
+                self.meta_tree if self.inner_tree is not None else None,
                 allow_missing_old_values=allow_missing_old_values,
             )
 
         # Apply diff to visible attachment meta items: <dataset>/<item-name>
-        has_conflicts |= self._apply_meta_deltas_to_tree(
-            (d for d in meta_diff.values() if d.key in ATTACHMENT_META_ITEMS),
-            tree_builder,
-            self.attachment_tree,
-            allow_missing_old_values=allow_missing_old_values,
-        )
+        with tree_builder.chdir(self.path):
+            has_conflicts |= self._apply_meta_deltas_to_tree(
+                (d for d in meta_diff.values() if d.key in ATTACHMENT_META_ITEMS),
+                tree_builder,
+                self.attachment_tree,
+                allow_missing_old_values=allow_missing_old_values,
+            )
 
         if has_conflicts:
             raise InvalidOperation(

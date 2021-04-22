@@ -447,7 +447,7 @@ def fast_import_tables(
                         else:
                             for subtree in feature_tree:
                                 builder.insert(
-                                    f"{ds.path}/{ds.FEATURE_PATH}{subtree.name}",
+                                    f"{ds.inner_path}/{ds.FEATURE_PATH}{subtree.name}",
                                     subtree,
                                 )
                 new_tree = builder.flush()

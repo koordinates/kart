@@ -3,7 +3,7 @@ import pygit2
 from .dataset2 import Dataset2
 from .import_source import ImportSource
 from .exceptions import NotYetImplemented
-from .serialise_util import json_pack, msg_pack
+from .serialise_util import json_pack
 from .schema import ColumnSchema, Schema
 
 
@@ -61,7 +61,7 @@ class PkGeneratingImportSource(ImportSource):
     """
 
     GENERATED_PKS_ITEM = "generated-pks.json"
-    GENERATED_PKS_PATH = ".sno-dataset/meta/" + GENERATED_PKS_ITEM
+    GENERATED_PKS_PATH = "meta/" + GENERATED_PKS_ITEM
 
     DEFAULT_PK_COL = {
         "id": ColumnSchema.new_id(),
@@ -149,14 +149,14 @@ class PkGeneratingImportSource(ImportSource):
         if not repo.head_tree:
             return None
 
-        current_pks_tree = self._get_generated_pks_tree(repo.head_tree)
-        if current_pks_tree is None:
+        current_pks_blob = self._get_generated_pks_blob(repo.head_tree)
+        if current_pks_blob is None:
             return None
 
         prev_import_commit = None
         try:
             for commit in repo.walk(repo.head_commit.id):
-                if self._get_generated_pks_tree(commit) == current_pks_tree:
+                if self._get_generated_pks_blob(commit) == current_pks_blob:
                     prev_import_commit = commit
                 else:
                     # We've reached the commit before the previous import
@@ -170,23 +170,23 @@ class PkGeneratingImportSource(ImportSource):
             # This means similarity detection works subtly differently.
             return repo.head_tree / self.dest_path
 
-    def _get_generated_pks_tree(self, commit_or_tree):
+    def _get_generated_pks_blob(self, commit_or_tree):
         root_tree = commit_or_tree.peel(pygit2.Tree)
         try:
-            return root_tree / self.dest_path / self.GENERATED_PKS_PATH
+            dataset = Dataset2(root_tree / self.dest_path, self.dest_path)
+            return dataset.inner_tree / self.GENERATED_PKS_PATH
         except KeyError:
             return None
 
     def encode_generated_pk_data(self, relative=False):
-        path = self.GENERATED_PKS_PATH
         if not relative:
-            path = "/".join(self.dest_path, self.GENERATED_PKS_PATH)
+            raise NotYetImplemented("Only relative paths are supported here")
 
+        path = self.GENERATED_PKS_PATH
         data = {
             "primaryKeySchema": self.pk_col,
             "generatedPrimaryKeys": self.pk_to_hash,
         }
-
         return path, json_pack(data)
 
     def _invert_pk_map(self, pk_to_hash):

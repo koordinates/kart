@@ -887,8 +887,8 @@ def test_feature_find_decode_performance(
 
     repo_path = data_imported(archive, source_gpkg, table)
     repo = SnoRepo(repo_path)
-    tree = repo.head_tree / "mytable"
     dataset = repo.datasets()["mytable"]
+    inner_tree = dataset.inner_tree
 
     with data_archive(archive) as data:
         with gpkg_engine(data / source_gpkg).connect() as conn:
@@ -903,7 +903,7 @@ def test_feature_find_decode_performance(
 
     elif profile == "get_feature_from_data":
         feature_path = dataset.encode_1pk_to_path(pk, relative=True)
-        feature_data = memoryview(tree / feature_path)
+        feature_data = memoryview(inner_tree / feature_path)
 
         benchmark(dataset.get_feature, path=feature_path, data=feature_data)
     else:

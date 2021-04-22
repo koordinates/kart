@@ -207,19 +207,19 @@ class RichBaseDataset(BaseDataset):
             params = {"swap": True}
 
         if other is None:
-            diff_index = self.tree.diff_to_tree(**params)
+            diff_index = self.inner_tree.diff_to_tree(**params)
             self.L.debug(
                 "diff (%s -> None / %s): %s changes",
-                self.tree.id,
+                self.inner_tree.id,
                 "R" if reverse else "F",
                 len(diff_index),
             )
         else:
-            diff_index = self.tree.diff_to_tree(other.tree, **params)
+            diff_index = self.inner_tree.diff_to_tree(other.inner_tree, **params)
             self.L.debug(
                 "diff (%s -> %s / %s): %s changes",
-                self.tree.id,
-                other.tree.id,
+                self.inner_tree.id,
+                other.inner_tree.id,
                 "R" if reverse else "F",
                 len(diff_index),
             )
@@ -314,29 +314,26 @@ class RichBaseDataset(BaseDataset):
         no commit is created - this is the responsibility of the caller.
         """
         # TODO - support multiple primary keys.
-        with tree_builder.chdir(self.path):
-            meta_diff = dataset_diff.get("meta")
-            schema = None
-            if meta_diff:
-                self.apply_meta_diff(
-                    meta_diff,
-                    tree_builder,
-                    allow_missing_old_values=allow_missing_old_values,
-                )
+        meta_diff = dataset_diff.get("meta")
+        schema = None
+        if meta_diff:
+            self.apply_meta_diff(
+                meta_diff,
+                tree_builder,
+                allow_missing_old_values=allow_missing_old_values,
+            )
 
-                if "schema.json" in meta_diff and meta_diff["schema.json"].new_value:
-                    schema = Schema.from_column_dicts(
-                        meta_diff["schema.json"].new_value
-                    )
+            if "schema.json" in meta_diff and meta_diff["schema.json"].new_value:
+                schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
 
-            feature_diff = dataset_diff.get("feature")
-            if feature_diff:
-                self.apply_feature_diff(
-                    feature_diff,
-                    tree_builder,
-                    schema=schema,
-                    allow_missing_old_values=allow_missing_old_values,
-                )
+        feature_diff = dataset_diff.get("feature")
+        if feature_diff:
+            self.apply_feature_diff(
+                feature_diff,
+                tree_builder,
+                schema=schema,
+                allow_missing_old_values=allow_missing_old_values,
+            )
 
     def apply_meta_diff(
         self, meta_diff, tree_builder, *, allow_missing_old_values=False
@@ -353,89 +350,89 @@ class RichBaseDataset(BaseDataset):
         self, feature_diff, tree_builder, *, schema=None, allow_missing_old_values=False
     ):
         """Applies a feature diff."""
-
         if not feature_diff:
             return
 
-        encode_kwargs = {}
-        if schema is not None:
-            encode_kwargs = {"schema": schema}
+        with tree_builder.chdir(self.inner_path):
+            # Applying diffs works even if there is no tree yet created for the dataset,
+            # as is the case when the dataset is first being created right now.
+            tree = self.inner_tree or ()
 
-        geom_columns = (schema or self.schema).geometry_columns
-        geom_column_name = geom_columns[0].name if geom_columns else None
+            encode_kwargs = {}
+            if schema is not None:
+                encode_kwargs = {"schema": schema}
 
-        # Applying diffs works even if there is no tree yet created for the dataset,
-        # as is the case when the dataset is first being created right now.
-        tree = self.tree or ()
+            geom_columns = (schema or self.schema).geometry_columns
+            geom_column_name = geom_columns[0].name if geom_columns else None
 
-        has_conflicts = False
-        for delta in feature_diff.values():
-            old_key = delta.old_key
-            new_key = delta.new_key
-            old_path = (
-                self.encode_1pk_to_path(old_key, relative=True)
-                if old_key is not None
-                else None
-            )
-            new_path = (
-                self.encode_1pk_to_path(new_key, relative=True)
-                if new_key is not None
-                else None
-            )
-
-            # Conflict detection
-            if delta.type == "delete" and old_path not in tree:
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to delete nonexistent feature: {old_key}",
-                    err=True,
+            has_conflicts = False
+            for delta in feature_diff.values():
+                old_key = delta.old_key
+                new_key = delta.new_key
+                old_path = (
+                    self.encode_1pk_to_path(old_key, relative=True)
+                    if old_key is not None
+                    else None
                 )
-                continue
-
-            if (
-                delta.type == "insert"
-                and (not allow_missing_old_values)
-                and new_path in tree
-            ):
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to create feature that already exists: {new_key}",
-                    err=True,
+                new_path = (
+                    self.encode_1pk_to_path(new_key, relative=True)
+                    if new_key is not None
+                    else None
                 )
-                continue
 
-            if delta.type == "update" and old_path not in tree:
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update nonexistent feature: {old_key}",
-                    err=True,
+                # Conflict detection
+                if delta.type == "delete" and old_path not in tree:
+                    has_conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to delete nonexistent feature: {old_key}",
+                        err=True,
+                    )
+                    continue
+
+                if (
+                    delta.type == "insert"
+                    and (not allow_missing_old_values)
+                    and new_path in tree
+                ):
+                    has_conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to create feature that already exists: {new_key}",
+                        err=True,
+                    )
+                    continue
+
+                if delta.type == "update" and old_path not in tree:
+                    has_conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update nonexistent feature: {old_key}",
+                        err=True,
+                    )
+                    continue
+
+                if delta.type == "update" and not self._features_equal(
+                    self.get_feature(old_key), delta.old_value, geom_column_name
+                ):
+                    has_conflicts = True
+                    click.echo(
+                        f"{self.path}: Trying to update already-changed feature: {old_key}",
+                        err=True,
+                    )
+                    continue
+
+                # Actually write the feature diff:
+                if old_path and old_path != new_path:
+                    tree_builder.remove(old_path)
+                if delta.new_value:
+                    path, data = self.encode_feature(
+                        delta.new.value, relative=True, **encode_kwargs
+                    )
+                    tree_builder.insert(path, data)
+
+            if has_conflicts:
+                raise InvalidOperation(
+                    "Patch does not apply",
+                    exit_code=PATCH_DOES_NOT_APPLY,
                 )
-                continue
-
-            if delta.type == "update" and not self._features_equal(
-                self.get_feature(old_key), delta.old_value, geom_column_name
-            ):
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to update already-changed feature: {old_key}",
-                    err=True,
-                )
-                continue
-
-            # Actually write the feature diff:
-            if old_path and old_path != new_path:
-                tree_builder.remove(old_path)
-            if delta.new_value:
-                path, data = self.encode_feature(
-                    delta.new.value, relative=True, **encode_kwargs
-                )
-                tree_builder.insert(path, data)
-
-        if has_conflicts:
-            raise InvalidOperation(
-                "Patch does not apply",
-                exit_code=PATCH_DOES_NOT_APPLY,
-            )
 
     def _features_equal(self, lhs, rhs, geom_column_name):
         # FIXME: actually compare the geometries here.

@@ -13,28 +13,48 @@ class BaseDataset(ImportSource):
     A Dataset instance is immutable since it is a view of a particular git tree.
     To get a new version of a dataset, commit the desired changes,
     then instantiate a new Dataset instance that references the new git tree.
+
+    A dataset has a user-defined path eg `path/to/dataset`, and inside that it
+    has a  hidden folder with a special name - cls.DATASET_DIRNAME.
+    The path to this folder is the inner_path: `path/to/dataset/DATASET_DIRNAME`.
+    Similarly, a dataset's tree is the tree at `path/to/dataset`,
+    and its inner_tree is the tree at `path/to/dataset/DATASET_DIRNAME`.
+
+    All relative paths are defined as being relative to the inner_path / inner_tree.
     """
 
     # Constants that subclasses should generally define.
 
     VERSION = None  # Version eg 1
     DATASET_DIRNAME = None  # Eg ".sno-dataset"
-    DATASET_PATH = None  # Eg ".sno-dataset/"
 
-    META_PATH = None  # Eg ".sno-dataset/meta/"
-    FEATURE_PATH = None  # Eg ".sno-dataset/feature/"
+    # Paths are all defined relative to the inner path -
+
+    META_PATH = None  # Eg "meta/"
+    FEATURE_PATH = None  # Eg "feature/"
 
     def __init__(self, tree, path):
         """
         Create a dataset at the given tree, which has the given path.
-        The tree should contain a sno directory eg ".sno-table" or ".sno-dataset".
+        The tree should contain a child tree with the name DATASET_DIRNAME.
         The tree can be None if this dataset hasn't yet been written to the repo.
         """
         if self.__class__ is BaseDataset:
             raise TypeError("Cannot construct a BaseDataset - you may want Dataset2")
 
-        self.tree = tree
+        if tree is not None:
+            self.tree = tree
+            self.inner_tree = (
+                tree / self.DATASET_DIRNAME if self.DATASET_DIRNAME else self.tree
+            )
+        else:
+            self.inner_tree = self.tree = None
+
         self.path = path.strip("/")
+        self.inner_path = (
+            f"{path}/{self.DATASET_DIRNAME}" if self.DATASET_DIRNAME else self.path
+        )
+
         self.table_name = self.path.replace("/", "__")
         self.L = logging.getLogger(self.__class__.__qualname__)
 
@@ -61,7 +81,7 @@ class BaseDataset(ImportSource):
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
         """Returns the root of the meta tree. Caller take care: will fail if no meta tree exists."""
-        return self.tree / self.META_PATH
+        return self.inner_tree / self.META_PATH
 
     @property
     def attachment_tree(self):
@@ -71,9 +91,13 @@ class BaseDataset(ImportSource):
     @functools.lru_cache(maxsize=1)
     def feature_tree(self):
         """Returns the root of the feature tree. Caller take care: fails if no feature tree exists."""
-        return self.tree / self.FEATURE_PATH
+        return (
+            self.inner_tree / self.FEATURE_PATH
+            if self.FEATURE_PATH
+            else self.inner_tree
+        )
 
-    def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False):
+    def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False, tree=None):
         """
         Return the data at the given relative path from within this dataset.
 
@@ -83,10 +107,13 @@ class BaseDataset(ImportSource):
 
         If missing_ok is true, we return None instead of raising a KeyError for
         missing data.
+
+        If tree is set, the caller can override the tree in which to look for the data.
         """
         leaf = None
+        tree = tree or self.inner_tree
         try:
-            leaf = self.tree / str(rel_path)
+            leaf = tree / str(rel_path)
         except KeyError:
             pass
 
@@ -115,29 +142,34 @@ class BaseDataset(ImportSource):
 
     def full_path(self, rel_path):
         """Given a path relative to this dataset, returns its full path from the repo root."""
+        return f"{self.inner_path}/{rel_path}"
+
+    def full_attachment_path(self, rel_path):
+        """Given the path of an attachment relative to this dataset's attachment path, returns its full path from the repo root."""
         return f"{self.path}/{rel_path}"
 
     def rel_path(self, full_path):
         """Given a full path to something in this dataset, returns its path relative to the dataset."""
-        if not full_path.startswith(f"{self.path}/"):
-            raise ValueError(f"{full_path} is not a descendant of {self.path}")
-        return full_path[len(self.path) + 1 :]
+        if not full_path.startswith(f"{self.inner_path}/"):
+            raise ValueError(f"{full_path} is not a descendant of {self.inner_path}")
+        return full_path[len(self.inner_path) + 1 :]
 
     def ensure_rel_path(self, path):
         """Given either a relative path or a full path, return the equivalent relative path."""
-        if path.startswith(self.DATASET_PATH):
-            return path
-        return self.rel_path(path)
+        if path.startswith(self.inner_path):
+            return self.rel_path(path)
+        return path
 
     def decode_path(self, rel_path):
         """
-        Given a path in this layer of the sno repository - eg ".sno-dataset/49/3e/Bg==" -
+        Given a relative path to something inside this dataset
+        eg ".sno-dataset/feature/49/3e/Bg==", or simply "feature/49/3e/Bg==""
         returns a tuple in either of the following forms:
         1. ("feature", primary_key)
         2. ("meta", metadata_file_path)
         """
-        if rel_path.startswith(self.DATASET_PATH):
-            rel_path = rel_path[len(self.DATASET_PATH) :]
+        if self.DATASET_DIRNAME and rel_path.startswith(f"{self.DATASET_DIRNAME}/"):
+            rel_path = rel_path[len(self.DATASET_DIRNAME) + 1 :]
         if rel_path.startswith("meta/"):
             return ("meta", rel_path[len("meta/") :])
         pk = self.decode_path_to_1pk(rel_path)
