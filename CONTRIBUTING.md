@@ -19,8 +19,8 @@ $ cd sno
 $ make
 
 # check it's working
-$ venv/bin/sno --version
-Sno v0.3.1.dev0, Copyright (c) Sno Contributors
+$ venv/bin/kart --version
+Kart v0.9.1.dev0, Copyright (c) Sno Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
@@ -39,8 +39,8 @@ $ cd sno
 $ make
 
 # check it's working
-$ venv/bin/sno --version
-Sno v0.3.1.dev0, Copyright (c) Sno Contributors
+$ venv/bin/kart --version
+Kart v0.9.1.dev0, Copyright (c) Sno Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
@@ -65,8 +65,8 @@ Run the following from the "x64 Native Tools Command Prompt for VS 2019":
 > nmake /F makefile.vc
 
 # check it's working
-> venv\Scripts\sno --version
-Sno v0.3.1.dev0, Copyright (c) Sno Contributors
+> venv\Scripts\kart --version
+Kart v0.9.1.dev0, Copyright (c) Sno Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0

@@ -1,16 +1,21 @@
-# sno changelog
+# Kart changelog
 
-Please note that compatibility for 0.x releases (software or repositories) isn't guaranteed. Sno is evolving quickly and things will change. However, we aim to provide the means to upgrade existing repositories between 0.x versions and to 1.0.
+Please note that compatibility for 0.x releases (software or repositories) isn't guaranteed. Kart is evolving quickly and things will change. However, we aim to provide the means to upgrade existing repositories between 0.x versions and to 1.0.
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
 
-## 0.9.0 (UNRELEASED)
+## 0.9.0 (First "Kart" release)
 
+### Major changes in this release
+* First and foremost, the name — we're now called Kart!
+
+### Other changes
+* Various local config and structure which was named after `sno` is now named after `kart` - for instance, a Kart repo's objects are now hidden inside a `.kart` folder. Sno repos with the older names will continue to be supported going forward. To modify a repo in place to use the `kart` based names instead of the `sno` ones, use `kart upgrade-to-kart PATH`.
 * `import` & `init` are often much faster now because they do imports in parallel subprocesses. Use `--num-processes` to control this behaviour. [#408](https://github.com/koordinates/sno/pull/408)
 * `status -o json` now shows which branch you are on, even if that branch doesn't yet have any commits yet.
 
-## 0.8.0
+## 0.8.0 (Last "Sno" release)
 
 ### Breaking changes
 

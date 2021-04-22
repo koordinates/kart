@@ -1,4 +1,4 @@
-Sno: Distributed version-control for datasets
+Kart: Distributed version-control for datasets
 ---------------------------------------------
 
 ![Build](https://github.com/koordinates/sno/workflows/Build/badge.svg?event=push)
@@ -23,55 +23,55 @@ Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/sn
 
 ### Linux
 
-For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.8.0) and install via `dpkg -i sno_*.deb`.
+For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.8.0) and install via `dpkg -i kart_*.deb`.
 
-For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.8.0) and install via `rpm -i sno-*.rpm`.
+For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.8.0) and install via `rpm -i kart-*.rpm`.
 
 ### Source
 
-For Sno development see the [Contributing Notes](CONTRIBUTING.md).
+For Kart development see the [Contributing Notes](CONTRIBUTING.md).
 
 ## Usage
 
 See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials and reference.
 
 > ##### 💡 If you're new to git
-> Configure the identity you will use for Sno commits with:
+> Configure the identity you will use for Kart commits with:
 > ```console
-> $ sno config --global user.email "you@example.com"
-> $ sno config --global user.name "Your Name"
+> $ kart config --global user.email "you@example.com"
+> $ kart config --global user.name "Your Name"
 > ```
 
 #### Quick Start
 
 1. Export a GeoPackage from [Koordinates](https://koordinates.com/) with any combination of vector layers and tables.
-2. Create a new Sno repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
+2. Create a new Kart repository and import the GeoPackage (eg. `kx-foo-layer.gpkg`).
    ```console
-   $ sno init myproject --import GPKG:kx-foo-layer.gpkg
+   $ kart init myproject --import GPKG:kx-foo-layer.gpkg
    $ cd myproject
    ```
    Use this repository as the directory to run all the other commands in.
    This will also create a working copy as `myproject/myproject.gpkg` to edit.
 4. Editing the working copy in QGIS/etc:
-   * will track changes in the internal `.sno-*` tables
+   * will track changes in the internal `kart` tables
    * additions/edits/deletes of features are supported
    * changing feature PKs is supported
    * schema changes should be detected, but aren't supported yet (will error).
-   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `sno`.
-5. With your working copy, `sno` commands should work if run from the `myproject/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
-    * `sno diff` diff the working copy against the repository (no index!)
-    * `sno commit -m {message}` commit outstanding changes from the working copy
-    * `sno log` review commit history
-    * `sno branch` & `sno checkout -b` branch management
-    * `sno fetch` fetch upstream changes.
-    * `sno status` show working copy state.
-    * `sno merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
-    * `sno switch` switch to existing or new branches.
-    * `sno reset` & `sno restore` discard changes in the working copy.
-    * `sno tag ...`
-    * `sno remote ...`. Remember simple remotes can just be another local directory.
-    * `sno push` / `sno pull`
-    * `sno clone` initialise a new repository from a remote URL,
+   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `kart`.
+5. With your working copy, `kart` commands should work if run from the `myproject/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
+    * `kart diff` diff the working copy against the repository (no index!)
+    * `kart commit -m {message}` commit outstanding changes from the working copy
+    * `kart log` review commit history
+    * `kart branch` & `kart checkout -b` branch management
+    * `kart fetch` fetch upstream changes.
+    * `kart status` show working copy state.
+    * `kart merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
+    * `kart switch` switch to existing or new branches.
+    * `kart reset` & `kart restore` discard changes in the working copy.
+    * `kart tag ...`
+    * `kart remote ...`. Remember simple remotes can just be another local directory.
+    * `kart push` / `kart pull`
+    * `kart clone` initialise a new repository from a remote URL,
 
 ## License
 

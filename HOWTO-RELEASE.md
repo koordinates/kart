@@ -1,4 +1,4 @@
-Notes on Preparing a Sno Release
+Notes on Preparing a Kart Release
 ================================
 
 This process only supports a single release branch (master). It'll need to be expanded over time.
@@ -42,7 +42,7 @@ This process only supports a single release branch (master). It'll need to be ex
 
 12. If it's _not_ an alpha/beta/candidate release, update the Homebrew Tap:
 
-    1. Get the SHA256 hash of the macOS PKG installer: `sha256 Sno-1.2.3.pkg`
+    1. Get the SHA256 hash of the macOS PKG installer: `sha256 Kart-1.2.3.pkg`
     2. Pull [homebrew-sno](https://github.com/koordinates/homebrew-sno/)
     3. Edit `Casks/sno.rb` and update the `version` and `sha256` fields
     4. Commit with a message like "Update to release v1.2.3"
