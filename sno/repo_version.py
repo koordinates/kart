@@ -5,7 +5,14 @@ import json
 from .core import walk_tree
 from .dataset2 import Dataset2
 
-REPO_VERSION_BLOB_PATH = ".sno.repository.version"
+REPOSTRUCTURE_VERSION_BLOB_PATH = (
+    ".sno.repository.version"  # Default path for new repos
+)
+# We look for the repostructure version blob in either of these two places:
+REPOSTRUCTURE_VERSION_BLOB_PATHS = (
+    ".sno.repository.version",
+    ".kart.repostructure.version",
+)
 
 ALL_REPO_VERSIONS = (0, 1, 2)
 
@@ -15,7 +22,7 @@ SUPPORTED_DATASET_CLASS = Dataset2
 
 
 def encode_repo_version(version):
-    return REPO_VERSION_BLOB_PATH, f"{version}\n".encode("utf8")
+    return REPOSTRUCTURE_VERSION_BLOB_PATH, f"{version}\n".encode("utf8")
 
 
 def extra_blobs_for_version(version):
@@ -25,13 +32,13 @@ def extra_blobs_for_version(version):
         # Version 1 never had a repo-wide version blob. We'll leave it that way, no need to change it.
         return []
 
-    # Versions 2 and up have their version number stored in REPO_VERSION_BLOB_PATH
+    # Versions 2 and up have their version number stored at REPOSTRUCTURE_VERSION_BLOB_PATH
     return [encode_repo_version(version)]
 
 
 def get_repo_version(repo, tree=None):
     """
-    Returns the repo version from the blob at <repo-root>/REPO_VERSION_BLOB_PATH -
+    Returns the repo version from the blob at <repo-root>/REPOSTRUCTURE_VERSION_BLOB_PATH -
     (note that this is not user-visible in the file-system since we keep it hidden via sparse / bare checkouts).
     """
     if tree is None:
@@ -39,11 +46,12 @@ def get_repo_version(repo, tree=None):
         if tree is None:  # Empty repo / empty branch.
             return _get_repo_version_from_config(repo)
 
-    if REPO_VERSION_BLOB_PATH in tree:
-        return json.loads((tree / REPO_VERSION_BLOB_PATH).data)
+    for r in REPOSTRUCTURE_VERSION_BLOB_PATHS:
+        if r in tree:
+            return json.loads((tree / r).data)
 
-    # Versions less than 2 don't have ".sno.repository.version" files, so must be 0 or 1.
-    # We don't support v0 except when performing a `kart upgrade`.
+    # Versions less than 2 don't have a REPOSTRUCTURE_VERSION_BLOB, so must be 0 or 1.
+    # We don't support these versions except when performing a `kart upgrade`.
     return _distinguish_v0_v1(tree)
 
 
