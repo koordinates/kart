@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from sno.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.create_engine import gpkg_engine
 
 
 H = pytest.helpers.helpers()
@@ -54,7 +54,7 @@ def test_e2e_sno(
         with chdir(repo_path):
             # initialise empty Sno repo
 
-            from sno.repo import SnoRepo
+            from kart.repo import SnoRepo
 
             monkeypatch.setattr(SnoRepo, "BRANDING_FOR_NEW_REPOS", "sno")
             monkeypatch.setattr(SnoRepo, "DIRNAME_FOR_NEW_REPOS", ".sno")

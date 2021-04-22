@@ -3,9 +3,9 @@ import shutil
 
 import pytest
 
-from sno.sqlalchemy.create_engine import gpkg_engine
-from sno.repo import SnoRepo
-from sno.exceptions import (
+from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.repo import SnoRepo
+from kart.exceptions import (
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
     NO_TABLE,

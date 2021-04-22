@@ -3,12 +3,12 @@ import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
 
-from sno.exceptions import NotFound
-from sno.repo import SnoRepo
-from sno.sqlalchemy.create_engine import get_odbc_drivers, get_sqlserver_driver
-from sno.working_copy import sqlserver_adapter
-from sno.working_copy.base import WorkingCopyStatus
-from sno.working_copy.db_server import DatabaseServer_WorkingCopy
+from kart.exceptions import NotFound
+from kart.repo import SnoRepo
+from kart.sqlalchemy.create_engine import get_odbc_drivers, get_sqlserver_driver
+from kart.working_copy import sqlserver_adapter
+from kart.working_copy.base import WorkingCopyStatus
+from kart.working_copy.db_server import DatabaseServer_WorkingCopy
 from test_working_copy import compute_approximated_types
 
 

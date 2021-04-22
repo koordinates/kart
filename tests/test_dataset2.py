@@ -1,5 +1,5 @@
-from sno.dataset2 import Dataset2
-from sno.schema import Legend, ColumnSchema, Schema
+from kart.dataset2 import Dataset2
+from kart.schema import Legend, ColumnSchema, Schema
 
 
 DATASET_PATH = "path/to/dataset"

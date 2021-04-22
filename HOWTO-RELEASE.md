@@ -15,7 +15,7 @@ This process only supports a single release branch (master). It'll need to be ex
 
 ### Release
 
-4. Update `sno/VERSION` to the new version number.
+4. Update `kart/VERSION` to the new version number.
 
 5. Update any version numbers in `README.md` to point to the new version.
 
@@ -50,6 +50,6 @@ This process only supports a single release branch (master). It'll need to be ex
 
 ### Cleanup
 
-13. Update `sno/VERSION` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. If it's an alpha/beta/rc release, then it should be set to the next _release version_ with `.dev0` appended.
+13. Update `kart/VERSION` to the next [development Python version](https://www.python.org/dev/peps/pep-0440/#developmental-releases) eg: `1.2.4.dev0`. If it's an alpha/beta/rc release, then it should be set to the next _release version_ with `.dev0` appended.
 
 14. Commit with a message like "Set development version as v1.2.4.dev0" and push

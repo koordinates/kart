@@ -5,8 +5,8 @@ import re
 import pygit2
 import pytest
 
-from sno import cli
-from sno.cli_util import tool_environment
+from kart import cli
+from kart.cli_util import tool_environment
 
 
 H = pytest.helpers.helpers()

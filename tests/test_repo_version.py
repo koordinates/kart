@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
 
-from sno.repo import SnoRepo
+from kart.repo import SnoRepo
 
 
 @pytest.mark.parametrize("archive", ["points", "polygons", "table"])

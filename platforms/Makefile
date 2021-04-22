@@ -7,7 +7,7 @@ else
 endif
 
 SRC := $(realpath ..)
-VERSION := $(strip $(shell cat ../sno/VERSION))
+VERSION := $(strip $(shell cat ../kart/VERSION))
 
 pyinstaller := $(abspath ../venv/bin/pyinstaller)
 

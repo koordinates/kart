@@ -5,10 +5,10 @@ import re
 import html5lib
 import pytest
 
-import sno
-from sno.diff_structs import Delta, DeltaDiff
-from sno.geometry import hex_wkb_to_ogr
-from sno.repo import SnoRepo
+import kart
+from kart.diff_structs import Delta, DeltaDiff
+from kart.geometry import hex_wkb_to_ogr
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -1511,7 +1511,7 @@ def test_show_json_format(data_archive_readonly, cli_runner):
 
 def test_show_json_coloured(data_archive_readonly, cli_runner, monkeypatch):
     always_output_colour = lambda x: True
-    monkeypatch.setattr(sno.output_util, "can_output_colour", always_output_colour)
+    monkeypatch.setattr(kart.output_util, "can_output_colour", always_output_colour)
 
     with data_archive_readonly("points"):
         r = cli_runner.invoke(["show", f"-o", "json", "--json-style=pretty", "HEAD"])

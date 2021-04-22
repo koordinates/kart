@@ -1,10 +1,10 @@
 import json
 import pytest
 
-from sno.diff_output import json_row
-from sno.exceptions import INVALID_OPERATION
-from sno.merge_util import MergeIndex
-from sno.repo import SnoRepoState
+from kart.diff_output import json_row
+from kart.exceptions import INVALID_OPERATION
+from kart.merge_util import MergeIndex
+from kart.repo import SnoRepoState
 
 
 H = pytest.helpers.helpers()

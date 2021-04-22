@@ -1,6 +1,6 @@
 from osgeo.osr import SpatialReference
 
-from sno import crs_util
+from kart import crs_util
 
 # This is EPSG:4326 but with explicit axes in the order EAST, NORTH.
 # It exists in the wild and it doesn't work well with SpatialReference.

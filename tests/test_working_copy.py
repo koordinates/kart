@@ -1,4 +1,4 @@
-from sno.schema import ALL_DATA_TYPES
+from kart.schema import ALL_DATA_TYPES
 
 _ALL_SIZE_VARIANTS = {
     "integer": (8, 16, 32, 64),

@@ -3,8 +3,8 @@ import subprocess
 
 import pytest
 
-from sno.exceptions import NO_REPOSITORY
-from sno.repo import SnoRepo
+from kart.exceptions import NO_REPOSITORY
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

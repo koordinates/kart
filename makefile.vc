@@ -4,7 +4,7 @@ PATH=$(MAKEDIR)\venv\Scripts;$(PATH);C:\Program Files\7-zip;
 PY3=%LOCALAPPDATA%\Programs\Python\Python37\python.exe
 !ENDIF
 
-app=venv\Lib\site-packages\sno.egg-link
+app=venv\Lib\site-packages\kart.egg-link
 
 # default target
 all: $(app)

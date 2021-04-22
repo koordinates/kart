@@ -1,8 +1,8 @@
 import json
 import pytest
 
-from sno.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
-from sno.merge_util import (
+from kart.exceptions import SUCCESS, INVALID_OPERATION, NO_CONFLICT
+from kart.merge_util import (
     MergeIndex,
     CommitWithReference,
     MERGE_HEAD,
@@ -10,7 +10,7 @@ from sno.merge_util import (
     MERGE_MSG,
     ALL_MERGE_FILES,
 )
-from sno.repo import SnoRepo, SnoRepoState
+from kart.repo import SnoRepo, SnoRepoState
 
 
 H = pytest.helpers.helpers()

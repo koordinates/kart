@@ -2,10 +2,10 @@ import pytest
 
 import pygit2
 
-from sno.repo import SnoRepo
-from sno.working_copy import postgis_adapter
-from sno.working_copy.base import WorkingCopyStatus
-from sno.working_copy.db_server import DatabaseServer_WorkingCopy
+from kart.repo import SnoRepo
+from kart.working_copy import postgis_adapter
+from kart.working_copy.base import WorkingCopyStatus
+from kart.working_copy.db_server import DatabaseServer_WorkingCopy
 from test_working_copy import compute_approximated_types
 
 

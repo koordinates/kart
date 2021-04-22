@@ -1,4 +1,4 @@
-import sno.cli
+import kart.cli
 
 if __name__ == "__main__":
-    sno.cli.entrypoint()
+    kart.cli.entrypoint()

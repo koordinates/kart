@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from sno.geometry import hex_wkb_to_ogr
+from kart.geometry import hex_wkb_to_ogr
 
 
 H = pytest.helpers.helpers()

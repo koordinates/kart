@@ -9,15 +9,15 @@ from osgeo import gdal, ogr
 import pygit2
 import pytest
 
-from sno import init, fast_import
-from sno.dataset2 import Dataset2
-from sno.exceptions import INVALID_OPERATION
-from sno.sqlalchemy.create_engine import gpkg_engine
-from sno.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
-from sno.ogr_import_source import OgrImportSource, PostgreSQLImportSource
-from sno.pk_generation import PkGeneratingImportSource
-from sno.repo import SnoRepo
-from sno.working_copy import gpkg_adapter
+from kart import init, fast_import
+from kart.dataset2 import Dataset2
+from kart.exceptions import INVALID_OPERATION
+from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
+from kart.ogr_import_source import OgrImportSource, PostgreSQLImportSource
+from kart.pk_generation import PkGeneratingImportSource
+from kart.repo import SnoRepo
+from kart.working_copy import gpkg_adapter
 
 
 H = pytest.helpers.helpers()
@@ -143,7 +143,7 @@ def test_import(
 
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.sno"
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
         with gpkg_engine(data / source_gpkg).connect() as conn:
@@ -912,7 +912,7 @@ def test_feature_find_decode_performance(
 
 @pytest.mark.slow
 def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
-    repo_path = tmp_path / "data.sno"
+    repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     with chdir(repo_path):
@@ -964,7 +964,7 @@ def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
 
 
 def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
-    repo_path = tmp_path / "data.sno"
+    repo_path = tmp_path / "repo"
     repo_path.mkdir()
 
     r = cli_runner.invoke(["init", "--bare", repo_path])
@@ -1008,7 +1008,7 @@ def test_write_feature_performance(
 
     with data_archive(archive) as data:
         # list tables
-        repo_path = tmp_path / "data.sno"
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
         benchmark.group = f"test_write_feature_performance - {param_ids[-1]}"
@@ -1047,7 +1047,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
     table = H.POINTS.LAYER
     with data_archive("gpkg-points") as data:
         # list tables
-        repo_path = tmp_path / "data.sno"
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
         with chdir(repo_path):

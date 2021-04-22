@@ -16,7 +16,7 @@ from PyInstaller.utils.hooks import collect_submodules
 from PyInstaller.depend import dylib
 
 
-with open(os.path.join('sno', 'VERSION')) as version_file:
+with open(os.path.join('kart', 'VERSION')) as version_file:
     kart_version = version_file.read().strip()
 
 if is_win:
@@ -92,8 +92,8 @@ pyi_analysis = Analysis(
         ('vendor/dist/env/lib/*', '.'),
     ],
     datas=[
-        ('sno/VERSION', 'sno'),
-        ('sno/diff-view.html', 'sno'),
+        ('kart/VERSION', 'kart'),
+        ('kart/diff-view.html', 'kart'),
         ('README.md', '.'),
         ('COPYING', '.'),
     ],
@@ -102,7 +102,7 @@ pyi_analysis = Analysis(
         '_cffi_backend',
         # via a cython module ???
         'csv',
-        *collect_submodules('sno'),
+        *collect_submodules('kart'),
         *collect_submodules('sqlalchemy'),
     ],
     hookspath=[

@@ -149,7 +149,7 @@ kart-app-release = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart
 kart-app-dev = $(VIRTUAL_ENV)/$(PY_SITEPACKAGES)/kart.egg-link
 kart-app-any = $(VIRTUAL_ENV)/bin/kart
 
-$(kart-app-release): py-deps setup.py sno | $(VIRTUAL_ENV)
+$(kart-app-release): py-deps setup.py kart | $(VIRTUAL_ENV)
 	-$(RM) dist/*
 	python3 setup.py sdist
 	pip install --force-reinstall --no-deps dist/*.tar.gz

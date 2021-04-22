@@ -3,10 +3,10 @@ import json
 import click
 import pytest
 
-from sno.diff_output import schema_diff_as_text
-from sno.geometry import Geometry
-from sno.repo import SnoRepo
-from sno.schema import Schema, ColumnSchema
+from kart.diff_output import schema_diff_as_text
+from kart.geometry import Geometry
+from kart.repo import SnoRepo
+from kart.schema import Schema, ColumnSchema
 
 
 H = pytest.helpers.helpers()

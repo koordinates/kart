@@ -22,15 +22,15 @@ import pygit2
 import sqlalchemy
 
 
-from sno.geometry import Geometry
-from sno.repo import SnoRepo
-from sno.sqlalchemy.create_engine import gpkg_engine, postgis_engine, sqlserver_engine
+from kart.geometry import Geometry
+from kart.repo import SnoRepo
+from kart.sqlalchemy.create_engine import gpkg_engine, postgis_engine, sqlserver_engine
 
 
 pytest_plugins = ["helpers_namespace"]
 
 
-L = logging.getLogger("sno.tests")
+L = logging.getLogger("kart.tests")
 
 
 def pytest_addoption(parser):
@@ -111,7 +111,7 @@ def git_user_config(monkeypatch_session, tmp_path_factory, request):
     monkeypatch_session.setenv("GIT_CONFIG_NOSYSTEM", "1")
 
     USER_NAME = "Kart Tester"
-    USER_EMAIL = "sno-tester@example.com"
+    USER_EMAIL = "kart-tester@example.com"
 
     with open(home / ".gitconfig", "w") as f:
         f.write(
@@ -321,7 +321,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
         params = [archive, source_gpkg, table]
         cache_key = f"data_imported~{'~'.join(params)}"
 
-        repo_path = Path(request.config.cache.makedir(cache_key)) / "data.sno"
+        repo_path = Path(request.config.cache.makedir(cache_key)) / "repo"
         if repo_path.exists():
             L.info("Found cache at %s", repo_path)
             return str(repo_path)
@@ -363,8 +363,8 @@ class SnoCliRunner(CliRunner):
         super().__init__(*args, mix_stderr=mix_stderr, **kwargs)
 
     def invoke(self, args=None, **kwargs):
-        from sno.cli import load_commands_from_args, cli
-        from sno.cli_util import init_git_config
+        from kart.cli import load_commands_from_args, cli
+        from kart.cli_util import init_git_config
 
         init_git_config.cache_clear()
 
@@ -429,7 +429,7 @@ class SnoCliRunner(CliRunner):
 def cli_runner(request):
     """ A wrapper round Click's test CliRunner to improve usefulness """
     return SnoCliRunner(
-        # sno.cli._execvp() looks for this env var to prevent fork/exec in tests.
+        # kart.cli._execvp() looks for this env var to prevent fork/exec in tests.
         env={"_SNO_NO_EXEC": "1"},
         # workaround Click's environment isolation so debugging works.
         in_pdb=request.config.getoption("--pdb-trace"),

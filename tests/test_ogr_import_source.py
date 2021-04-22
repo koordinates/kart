@@ -3,8 +3,8 @@ import pytest
 
 from osgeo import gdal
 
-from sno.ogr_import_source import PostgreSQLImportSource
-from sno.repo import SnoRepo
+from kart.ogr_import_source import PostgreSQLImportSource
+from kart.repo import SnoRepo
 
 
 def test_postgres_url_parsing():

@@ -1,4 +1,4 @@
-from sno.output_util import format_wkt_for_output
+from kart.output_util import format_wkt_for_output
 
 NZGD_2000 = """
 PROJCS["NZGD2000 / New Zealand Transverse Mercator 2000",

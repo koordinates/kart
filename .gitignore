@@ -49,7 +49,7 @@ vendor/Brewfile.lock.json
 /platforms/*/build/
 /platforms/*/dist/
 /platforms/linux/.cache/
-/platforms/linux/.docker-sno-fpm
+/platforms/linux/.docker-*
 /platforms/linux/sqlite3
 
 /tests/data/*/

@@ -1,9 +1,9 @@
 import json
 import pytest
 
-from sno.merge_util import MergeIndex
-from sno.repo import SnoRepo
-from sno.structs import CommitWithReference
+from kart.merge_util import MergeIndex
+from kart.repo import SnoRepo
+from kart.structs import CommitWithReference
 
 H = pytest.helpers.helpers()
 

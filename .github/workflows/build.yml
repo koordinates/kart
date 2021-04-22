@@ -194,13 +194,13 @@ jobs:
             VER="${BASH_REMATCH[1]}"
             IS_RELEASE=1
           else
-            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" sno/VERSION)
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
             IS_RELEASE=0
           fi
           echo "App Version: $VER"
           echo "Is Release? $IS_RELEASE"
           echo "Is Fork PR? $IS_FORK"
-          echo "$VER" > sno/VERSION
+          echo "$VER" > kart/VERSION
           echo "::set-output name=value::$VER"
           echo "::set-output name=is_release::$IS_RELEASE"
           echo "::set-output name=is_fork::$IS_FORK"
@@ -450,7 +450,7 @@ jobs:
             $VER='${{ github.ref }}'.Substring(11)
             $IS_RELEASE=1
           } Else {
-            $VER="$(Get-Content .\sno\VERSION)+ci.$($Env:GITHUB_SHA.Substring(0,8))"
+            $VER="$(Get-Content .\kart\VERSION)+ci.$($Env:GITHUB_SHA.Substring(0,8))"
             $IS_RELEASE=0
           }
           $VER -match '\d+\.\d+(\.\d+)?'
@@ -460,7 +460,7 @@ jobs:
           echo "Installer Version: $IVER"
           echo "Is Release? $IS_RELEASE"
           echo "Is Fork PR? $IS_FORK"
-          echo "$VER" > .\sno\VERSION
+          echo "$VER" > .\kart\VERSION
           echo "::set-output name=value::$VER"
           echo "::set-output name=installer::$IVER"
           echo "::set-output name=is_release::$IS_RELEASE"

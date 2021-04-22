@@ -2,7 +2,7 @@ import json
 import pytest
 import subprocess
 
-import sno
+import kart
 
 EXPECTED_TITLE = """NZ Pa Points (Topo, 1:50k)"""
 
@@ -123,7 +123,7 @@ def test_meta_get_ref(data_archive, cli_runner):
 
 def test_meta_get_coloured(data_archive, cli_runner, monkeypatch):
     always_output_colour = lambda x: True
-    monkeypatch.setattr(sno.output_util, "can_output_colour", always_output_colour)
+    monkeypatch.setattr(kart.output_util, "can_output_colour", always_output_colour)
 
     with data_archive("points"):
         r = cli_runner.invoke(

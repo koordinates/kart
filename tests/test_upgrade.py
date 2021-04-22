@@ -2,9 +2,9 @@ import json
 import pytest
 from pathlib import Path
 
-from sno.cli import get_version
-from sno.exceptions import UNSUPPORTED_VERSION
-from sno.repo import SnoRepo
+from kart.cli import get_version
+from kart.exceptions import UNSUPPORTED_VERSION
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

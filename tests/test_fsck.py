@@ -1,5 +1,5 @@
 import pytest
-from sno.repo import SnoRepo
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()

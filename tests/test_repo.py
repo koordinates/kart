@@ -1,6 +1,6 @@
 import subprocess
 
-from sno.repo import SnoRepo, LOCKED_GIT_INDEX_CONTENTS
+from kart.repo import SnoRepo, LOCKED_GIT_INDEX_CONTENTS
 
 
 def test_init_repository(tmp_path):

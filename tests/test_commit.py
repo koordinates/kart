@@ -5,16 +5,16 @@ import time
 
 import pytest
 
-import sno
-from sno.exceptions import (
+import kart
+from kart.exceptions import (
     INVALID_ARGUMENT,
     NO_CHANGES,
     NO_DATA,
     NO_REPOSITORY,
     SCHEMA_VIOLATION,
 )
-from sno.commit import fallback_editor
-from sno.repo import SnoRepo
+from kart.commit import fallback_editor
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -149,7 +149,7 @@ def test_commit_message(
             else:
                 assert False, "Didn't expect editor to launch"
 
-    monkeypatch.setattr(sno.commit, "run_editor_cmd", monkey_editor)
+    monkeypatch.setattr(kart.commit, "run_editor_cmd", monkey_editor)
     monkeypatch.delenv("EDITOR", raising=False)
     monkeypatch.delenv("VISUAL", raising=False)
     monkeypatch.delenv("GIT_EDITOR", raising=False)
@@ -265,7 +265,7 @@ def test_commit_message(
 
 
 def test_empty(tmp_path, cli_runner, chdir):
-    repo_path = tmp_path / "one.sno"
+    repo_path = tmp_path / "one"
 
     # empty repo
     r = cli_runner.invoke(["init", str(repo_path)])

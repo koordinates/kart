@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 
 import pytest
-from sno.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
-from sno.repo import SnoRepo
+from kart.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -529,7 +529,7 @@ def test_apply_multiple_dataset_patch_roundtrip(data_archive, cli_runner):
 
 @pytest.mark.slow
 def test_apply_benchmark(data_working_copy, benchmark, cli_runner, monkeypatch):
-    from sno import apply
+    from kart import apply
 
     with data_working_copy("points") as (repo_dir, wc_path):
         # Create a branch we can use later; don't switch to it

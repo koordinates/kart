@@ -1,4 +1,4 @@
 include README.md
 include COPYING
-include sno/diff-view.html
-include sno/VERSION
+include kart/diff-view.html
+include kart/VERSION

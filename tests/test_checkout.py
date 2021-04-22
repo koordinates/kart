@@ -1,9 +1,9 @@
 import pytest
 
 
-from sno.exceptions import INVALID_OPERATION, NO_BRANCH, NO_COMMIT
-from sno.repo import SnoRepo
-from sno.structs import CommitWithReference
+from kart.exceptions import INVALID_OPERATION, NO_BRANCH, NO_COMMIT
+from kart.repo import SnoRepo
+from kart.structs import CommitWithReference
 
 
 @pytest.mark.parametrize(

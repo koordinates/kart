@@ -9,8 +9,8 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sno.repo import SnoRepo
-from sno.working_copy.base import WorkingCopy
+from kart.repo import SnoRepo
+from kart.working_copy.base import WorkingCopy
 
 
 QMARK = "?"

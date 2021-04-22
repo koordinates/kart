@@ -1,7 +1,7 @@
 import os
 from setuptools import setup, find_packages
 
-with open(os.path.join("sno", "VERSION")) as version_file:
+with open(os.path.join("kart", "VERSION")) as version_file:
     version = version_file.read().strip()
 
 setup(
@@ -17,8 +17,8 @@ setup(
     zip_safe=False,
     entry_points={
         "console_scripts": [
-            "kart = sno.cli:entrypoint",
-            "sno = sno.cli:entrypoint",
+            "kart = kart.cli:entrypoint",
+            "sno = kart.cli:entrypoint",
         ],
     },
 )

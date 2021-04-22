@@ -3,10 +3,10 @@ from pathlib import PureWindowsPath
 
 import pytest
 
-from sno import is_windows
-from sno.clone import get_directory_from_url
-from sno.sqlalchemy.create_engine import gpkg_engine
-from sno.repo import SnoRepo
+from kart import is_windows
+from kart.clone import get_directory_from_url
+from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.repo import SnoRepo
 
 
 H = pytest.helpers.helpers()
@@ -20,8 +20,8 @@ def test_clone_empty_repo(tmp_path, cli_runner, chdir):
 
 
 def test_get_directory_from_url():
-    assert get_directory_from_url("sno@example.com:def/abc") == "abc"
-    assert get_directory_from_url("sno@example.com:abc") == "abc"
+    assert get_directory_from_url("kart@example.com:def/abc") == "abc"
+    assert get_directory_from_url("kart@example.com:abc") == "abc"
     assert get_directory_from_url("https://example.com/def/abc") == "abc"
     assert get_directory_from_url("https://example.com/abc") == "abc"
     assert get_directory_from_url("abc") == "abc"

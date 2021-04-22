@@ -5,10 +5,10 @@ import pytest
 
 import sqlalchemy
 
-from sno.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
-from sno.repo import SnoRepo
-from sno.working_copy import gpkg_adapter
-from sno.working_copy.base import BaseWorkingCopy
+from kart.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
+from kart.repo import SnoRepo
+from kart.working_copy import gpkg_adapter
+from kart.working_copy.base import BaseWorkingCopy
 from test_working_copy import compute_approximated_types
 
 
