@@ -3,34 +3,34 @@ Datasets V2
 
 ### Background
 
-Sno 0.2 introduced Datasets V1, and Sno 0.5 introduced Datasets V2.
+Kart was previously known as Sno. Sno 0.2 introduced Datasets V1, and Sno 0.5 introduced Datasets V2.
 Datasets V1 and V2 are storage formats for database tables where each table row is stored in a separate file.
 This means table rows can be stored using git-style version control, resulting in a storage format for a database-table which has version history.
 
 Datasets V2 is very similar to Datasets V1 - the main difference is that the schema of a Datasets V2 table can be changed in isolation without having
 to rewrite every row in the table. Rows that were written with a previous schema are adapted to fit the current schema when read.
 
-In Sno 0.4, only Datasets V1 is supported. In Sno 0.5, both Datasets V1 and Datasets V2 are supported, but a particular Sno repository must be entirely one or the other. This can be selected by specifying either `sno init --repo-version=1` or `sno init --repo-version=2`. If this is not specified, the default is V1 from Sno 0.2 onwards, but the default is V2 starting at Sno 0.5.
+In Sno 0.4, only Datasets V1 is supported. In Sno 0.5, both Datasets V1 and Datasets V2 are supported, but a particular Sno repository must be entirely one or the other. From Sno/Kart 0.8 onwards, only Datasets V2 is supported - V1 and earlier must be upgraded first using `kart upgrade SOURCE DEST`.
 
 The following is a technical description of Datasets V2.
 
 ### Overall structure
 
-A V2 dataset is a folder named `.sno-dataset` that contains two folders. These are `meta` which contains information about the database table itself - its title, description, and schema - and 'feature' which contains the table rows. The schema file contains the structure of the table rows, ie the names and type of each column. The "name" of the V2 Dataset is the path to the `.sno-dataset` folder.
+A V2 dataset is a folder named `.table-dataset` (or, alternatively, `.sno-dataset`) that contains two folders. These are `meta` which contains information about the database table itself - its title, description, and schema - and 'feature' which contains the table rows. The schema file contains the structure of the table rows, ie the names and type of each column. The "name" of the V2 Dataset is the path to the `.table-dataset` folder.
 
 For example, here is the basic folder structure of a dataset named contours/500m:
 
 ```
 contours/
 contours/500m/
-contours/500m/.sno-dataset/
-contours/500m/.sno-dataset/meta/
-contours/500m/.sno-dataset/meta/title              # Title of the dataset
-contours/500m/.sno-dataset/meta/description        # Description of the dataset
-contours/500m/.sno-dataset/meta/schema.json        # Schema of the dataset
-contours/500m/.sno-dataset/meta/...                # Other dataset metadata
+contours/500m/.table-dataset/
+contours/500m/.table-dataset/meta/
+contours/500m/.table-dataset/meta/title              # Title of the dataset
+contours/500m/.table-dataset/meta/description        # Description of the dataset
+contours/500m/.table-dataset/meta/schema.json        # Schema of the dataset
+contours/500m/.table-dataset/meta/...                # Other dataset metadata
 
-contours/500m/.sno-dataset/feature/...             # Database table rows
+contours/500m/.table-dataset/feature/...             # Database table rows
 ```
 
 ### Meta items
@@ -102,7 +102,7 @@ Those are all of the fields that apply to any column. Certain dataTypes can have
 
 ##### Data types
 
-The following data types are supported by sno. When a versioned sno dataset is converted to a database table (ie, when `sno checkout` updates the working copy) then these sno data types will be converted to equivalent data types in the database table, depending on what is supported by the database in question.
+The following data types are supported by Kart. When a versioned Kart dataset is converted to a database table (ie, when `kart checkout` updates the working copy) then these Kart data types will be converted to equivalent data types in the database table, depending on what is supported by the database in question.
 
 * `boolean`
   - stores `true` or `false`.
@@ -129,7 +129,7 @@ The following data types are supported by sno. When a versioned sno dataset is c
 
 ##### Extra type info
 
-Certain types have extra attributes that help specify how the type should be stored in a database. They don't affect how sno stores the data - and they don't necessarily affect all database types - for instance, setting a maximum length of 10 characters in a column with `"dataType": "text"` won't be enforced in a SQLite since it doesn't enforce maximum lengths.
+Certain types have extra attributes that help specify how the type should be stored in a database. They don't affect how Kart stores the data - and they don't necessarily affect all database types - for instance, setting a maximum length of 10 characters in a column with `"dataType": "text"` won't be enforced in a SQLite since it doesn't enforce maximum lengths.
 
 If any of these attributes are not present, that has the same effect as if that attribute was present but was set to `null`.
 
@@ -236,7 +236,7 @@ Features are stored at a filename that contains a Base64 encoding of their prima
 
 ### Messagepack encoding
 
-[MessagePack](https://msgpack.org/) can serialise everything that JSON can serialise, plus byte strings. For MessagePack to be able to serialise features containing any of the sno-supported data types, sometimes the values to be serialised are converted to a more generic type first. The following serialisation logic is used:
+[MessagePack](https://msgpack.org/) can serialise everything that JSON can serialise, plus byte strings. For MessagePack to be able to serialise features containing any of the Kart-supported data types, sometimes the values to be serialised are converted to a more generic type first. The following serialisation logic is used:
 
 * `boolean` - serialised as a boolean.
 * `blob` - serialised as a byte string.
