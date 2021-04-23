@@ -183,7 +183,7 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          if [[ '${{ github.repository }}' != 'koordinates/sno' ]]; then
+          if [[ '${{ github.repository }}' != 'koordinates/kart' ]]; then
             IS_FORK=1  # some other repo
           elif [[ -n '${{ github.event.pull_request.id }}' ]] && [[ '${{ github.event.pull_request.head.repo.full_name }}' != '${{ github.repository }}' ]]; then
             IS_FORK=1  # pr not on main repo
@@ -444,7 +444,7 @@ jobs:
       - name: "app: version"
         id: version
         run: |
-          $IS_FORK = ( ('${{ github.repository }}' -ne 'koordinates/sno') -or ( '${{ github.event.pull_request.id }}' -and ( '${{ github.event.pull_request.head.repo.full_name }}' -ne '${{ github.repository }}') ) ) ? 1 : 0
+          $IS_FORK = ( ('${{ github.repository }}' -ne 'koordinates/kart') -or ( '${{ github.event.pull_request.id }}' -and ( '${{ github.event.pull_request.head.repo.full_name }}' -ne '${{ github.repository }}') ) ) ? 1 : 0
 
           If ( (-not $IS_FORK) -and ('${{ github.ref }}'.StartsWith('refs/tags/v')) ) {
             $VER='${{ github.ref }}'.Substring(11)
