@@ -1,3 +1,7 @@
+<img title="Kart logo" width="50%" src="https://kartproject.org/images/kart-github.png">
+
+
+
 Kart: Distributed version-control for datasets
 ---------------------------------------------
 
