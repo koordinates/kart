@@ -9,7 +9,7 @@ if ! command -v jq >/dev/null; then
     exit 2
 fi
 
-REPO=koordinates/sno
+REPO=koordinates/kart
 WORKFLOW=build.yml
 
 if [ -n "${1-}" ]; then
