@@ -1,31 +1,31 @@
 Kart: Distributed version-control for datasets
 ---------------------------------------------
 
-![Build](https://github.com/koordinates/sno/workflows/Build/badge.svg?event=push)
+![Build](https://github.com/koordinates/kart/workflows/Build/badge.svg?event=push)
 
 ## Installing
 
 ### Upgrading to v0.9.0
 
-See the [v0.9.0 release notes](https://github.com/koordinates/sno/releases/tag/v0.9.0) for changes, upgrading, and compatibility notes.
+See the [v0.9.0 release notes](https://github.com/koordinates/kart/releases/tag/v0.9.0) for changes, upgrading, and compatibility notes.
 
 ### Windows
 
-Download the .msi installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.9.0).
+Download the .msi installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.9.0).
 
 > 💡 If Windows Defender SmartScreen says "it prevented an unrecognized app from starting" after downloading, you'll need to click "Run anyway".
 
 ### macOS
 
-Download the .pkg installer from the [release page](https://github.com/koordinates/sno/releases/tag/v0.9.0);
+Download the .pkg installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.9.0);
 
-Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/sno/sno`
+Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/kart/kart`
 
 ### Linux
 
-For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.9.0) and install via `dpkg -i kart_*.deb`.
+For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/kart/releases/tag/v0.9.0) and install via `dpkg -i kart_*.deb`.
 
-For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/sno/releases/tag/v0.9.0) and install via `rpm -i kart-*.rpm`.
+For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/kart/releases/tag/v0.9.0) and install via `rpm -i kart-*.rpm`.
 
 ### Source
 
@@ -33,7 +33,7 @@ For Kart development see the [Contributing Notes](CONTRIBUTING.md).
 
 ## Usage
 
-See the [documentation](https://github.com/koordinates/sno/wiki) for tutorials and reference.
+See the [documentation](https://github.com/koordinates/kart/wiki) for tutorials and reference.
 
 > ##### 💡 If you're new to git
 > Configure the identity you will use for Kart commits with:

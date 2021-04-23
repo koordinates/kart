@@ -14,13 +14,13 @@ Requirements (install via Homebrew/somehow):
 * jq
 
 ```console
-$ git clone git@github.com:koordinates/sno.git
-$ cd sno
+$ git clone git@github.com:koordinates/kart.git
+$ cd kart
 $ make
 
 # check it's working
 $ venv/bin/kart --version
-Kart v0.9.1.dev0, Copyright (c) Sno Contributors
+Kart v0.9.1.dev0, Copyright (c) Kart Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
@@ -34,13 +34,13 @@ Requirements:
 * wget
 
 ```console
-$ git clone git@github.com:koordinates/sno.git
-$ cd sno
+$ git clone git@github.com:koordinates/kart.git
+$ cd kart
 $ make
 
 # check it's working
 $ venv/bin/kart --version
-Kart v0.9.1.dev0, Copyright (c) Sno Contributors
+Kart v0.9.1.dev0, Copyright (c) Kart Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0
@@ -60,13 +60,13 @@ Requirements:
 Run the following from the "x64 Native Tools Command Prompt for VS 2019":
 
 ```console
-> git clone git@github.com:koordinates/sno.git
-> cd sno
+> git clone git@github.com:koordinates/kart.git
+> cd kart
 > nmake /F makefile.vc
 
 # check it's working
 > venv\Scripts\kart --version
-Kart v0.9.1.dev0, Copyright (c) Sno Contributors
+Kart v0.9.1.dev0, Copyright (c) Kart Contributors
 » GDAL v3.0.4
 » PyGit2 v1.1.0; Libgit2 v0.99.0; Git v2.25.1.windows.1
 » APSW v3.30.1-r3; SQLite v3.30.1; SpatiaLite v5.0.0-beta0

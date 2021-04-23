@@ -276,7 +276,7 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     "source_format,source_ogr_driver",
     [
         ("SHP", "ESRI Shapefile"),
-        # https://github.com/koordinates/sno/issues/86
+        # https://github.com/koordinates/kart/issues/86
         # This test starts by converting a GPKG into a TAB, and then imports then TAB.
         # But the TAB ended up with very broken SRS info, and then during import GDAL
         # failed to find an EPSG code for the projection.

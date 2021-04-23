@@ -33,7 +33,7 @@ from .working_copy import gpkg_adapter
 FORMAT_TO_OGR_MAP = {
     "GPKG": "GPKG",
     "SHP": "ESRI Shapefile",
-    # https://github.com/koordinates/sno/issues/86
+    # https://github.com/koordinates/kart/issues/86
     # 'TAB': 'MapInfo File',
     "PG": "PostgreSQL",
 }

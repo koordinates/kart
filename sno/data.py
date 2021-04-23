@@ -65,7 +65,7 @@ def data_version(ctx, output_format):
         click.echo(f"This Kart repo uses Datasets v{version}")
         if version >= 1:
             click.echo(
-                f"(See https://github.com/koordinates/sno/blob/master/docs/DATASETS_v{version}.md)"
+                f"(See https://github.com/koordinates/kart/blob/master/docs/DATASETS_v{version}.md)"
             )
     elif output_format == "json":
         dump_json_output({"kart.data.version": version}, sys.stdout)
