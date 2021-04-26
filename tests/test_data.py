@@ -61,4 +61,7 @@ def test_data_version(version, output_format, data_archive_readonly, cli_runner)
             assert r.stdout.splitlines()[0].endswith(str(version))
         else:
             output = json.loads(r.stdout)
-            assert output == {"kart.data.version": version}
+            assert output == {
+                "repostructure.version": version,
+                "localconfig.branding": "sno",
+            }

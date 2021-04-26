@@ -68,4 +68,14 @@ def data_version(ctx, output_format):
                 f"(See https://github.com/koordinates/kart/blob/master/docs/DATASETS_v{version}.md)"
             )
     elif output_format == "json":
-        dump_json_output({"kart.data.version": version}, sys.stdout)
+        from .repo import KartConfigKeys
+
+        branding = (
+            "kart"
+            if KartConfigKeys.KART_REPOSTRUCTURE_VERSION in repo.config
+            else "sno"
+        )
+        dump_json_output(
+            {"repostructure.version": version, "localconfig.branding": branding},
+            sys.stdout,
+        )

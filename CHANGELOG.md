@@ -5,6 +5,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
 
+## 0.10.0 (UNRELEASED)
+
+* Change to `sno data ls` JSON output, now includes whether repo is Kart or Sno branded.
+
 ## 0.9.0 (First "Kart" release)
 
 ### Major changes in this release
