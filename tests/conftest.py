@@ -430,7 +430,7 @@ def cli_runner(request):
     """ A wrapper round Click's test CliRunner to improve usefulness """
     return KartCliRunner(
         # kart.cli._execvp() looks for this env var to prevent fork/exec in tests.
-        env={"_SNO_NO_EXEC": "1"},
+        env={"_KART_NO_EXEC": "1"},
         # workaround Click's environment isolation so debugging works.
         in_pdb=request.config.getoption("--pdb-trace"),
     )
@@ -894,11 +894,11 @@ def postgis_db():
     """
     Using docker, you can run a PostGIS test - such as test_postgis_import - as follows:
         docker run -it --rm -d -p 15432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgis/postgis
-        SNO_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k postgis --pdb -vvs -n 0
+        KART_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k postgis --pdb -vvs -n 0
     """
-    if "SNO_POSTGRES_URL" not in os.environ:
+    if "KART_POSTGRES_URL" not in os.environ:
         raise pytest.skip("Requires PostGIS - read docstring at conftest.postgis_db")
-    engine = postgis_engine(os.environ["SNO_POSTGRES_URL"])
+    engine = postgis_engine(os.environ["KART_POSTGRES_URL"])
     with engine.connect() as conn:
         # test connection and postgis support
         try:
@@ -921,7 +921,7 @@ def new_postgis_db_schema(request, postgis_db):
             if create:
                 conn.execute(f"""CREATE SCHEMA "{schema}";""")
         try:
-            url = urlsplit(os.environ["SNO_POSTGRES_URL"])
+            url = urlsplit(os.environ["KART_POSTGRES_URL"])
             url_path = url.path.rstrip("/") + "/" + schema
             new_schema_url = urlunsplit(
                 [url.scheme, url.netloc, url_path, url.query, ""]
@@ -940,13 +940,13 @@ def sqlserver_db():
     """
     Using docker, you can run a SQL Server test - such as those in test_working_copy_sqlserver - as follows:
         docker run -it --rm -d -p 11433:1433 -e ACCEPT_EULA=Y -e 'SA_PASSWORD=PassWord1' mcr.microsoft.com/mssql/server
-        SNO_SQLSERVER_URL='mssql://sa:PassWord1@127.0.0.1:11433/master' pytest -k sqlserver --pdb -vvs
+        KART_SQLSERVER_URL='mssql://sa:PassWord1@127.0.0.1:11433/master' pytest -k sqlserver --pdb -vvs
     """
-    if "SNO_SQLSERVER_URL" not in os.environ:
+    if "KART_SQLSERVER_URL" not in os.environ:
         raise pytest.skip(
             "Requires SQL Server - read docstring at conftest.sqlserver_db"
         )
-    engine = sqlserver_engine(os.environ["SNO_SQLSERVER_URL"])
+    engine = sqlserver_engine(os.environ["KART_SQLSERVER_URL"])
     with engine.connect() as conn:
         # Test connection
         try:
@@ -969,7 +969,7 @@ def new_sqlserver_db_schema(request, sqlserver_db):
             if create:
                 conn.execute(f"""CREATE SCHEMA "{schema}";""")
         try:
-            url = urlsplit(os.environ["SNO_SQLSERVER_URL"])
+            url = urlsplit(os.environ["KART_SQLSERVER_URL"])
             url_path = url.path.rstrip("/") + "/" + schema
             new_schema_url = urlunsplit(
                 [url.scheme, url.netloc, url_path, url.query, ""]

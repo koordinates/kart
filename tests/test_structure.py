@@ -460,7 +460,7 @@ def quote_ident(part):
 @pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
     postgres_conn_str = PostgreSQLImportSource.postgres_url_to_ogr_conn_str(
-        os.environ["SNO_POSTGRES_URL"]
+        os.environ["KART_POSTGRES_URL"]
     )
 
     @contextlib.contextmanager
@@ -512,7 +512,7 @@ def _test_postgis_import(
         r = cli_runner.invoke(
             [
                 "import",
-                os.environ["SNO_POSTGRES_URL"],
+                os.environ["KART_POSTGRES_URL"],
                 table_name,
                 *import_args,
             ]
@@ -664,7 +664,7 @@ def test_postgis_import_from_view_no_pk(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["SNO_POSTGRES_URL"],
+                os.environ["KART_POSTGRES_URL"],
                 "nz_pa_points_view",
                 "--replace-existing",
             ]
@@ -709,7 +709,7 @@ def test_postgis_import_from_view_no_pk(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["SNO_POSTGRES_URL"],
+                os.environ["KART_POSTGRES_URL"],
                 "nz_pa_points_view",
                 "--replace-existing",
             ]
@@ -812,7 +812,7 @@ def test_postgis_import_replace_no_ids(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["SNO_POSTGRES_URL"],
+                os.environ["KART_POSTGRES_URL"],
                 "nz_waca_adjustments_view",
                 "--replace-ids=",
             ]
@@ -823,7 +823,7 @@ def test_postgis_import_replace_no_ids(
                 "--repo",
                 str(repo_path.resolve()),
                 "import",
-                os.environ["SNO_POSTGRES_URL"],
+                os.environ["KART_POSTGRES_URL"],
                 "nz_waca_adjustments_view",
                 "--replace-ids=",
                 # add some meta info so it's not a complete noop

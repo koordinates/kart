@@ -53,7 +53,7 @@ def test_sqlserver_driver():
 
 
 # All of the following tests will also fail unless a MSSQL driver has been installed manually.
-# However, they are not marked as xfail, since they do not run unless SNO_SQLSERVER_URL is set
+# However, they are not marked as xfail, since they do not run unless KART_SQLSERVER_URL is set
 # (the tests require a running SQL Server instance). This URL should not be set unless the driver
 # has also been installed, otherwise the tests will all fail.
 

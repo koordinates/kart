@@ -91,7 +91,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
             "-C",
             str(tmp_path / "repo1"),
             "import",
-            os.environ["SNO_POSTGRES_URL"],
+            os.environ["KART_POSTGRES_URL"],
             "typoes",
         ],
     )
@@ -123,7 +123,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
 
     # Now generate a DBF file, and try again from there.
     ogr_conn_str = PostgreSQLImportSource.postgres_url_to_ogr_conn_str(
-        os.environ["SNO_POSTGRES_URL"]
+        os.environ["KART_POSTGRES_URL"]
     )
     gdal.VectorTranslate(
         str(tmp_path / "typoes.dbf"),

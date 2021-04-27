@@ -9,7 +9,7 @@ from .cli_util import tool_environment
 def execvpe(cmd, args, env):
     env = tool_environment(env)
 
-    if "_SNO_NO_EXEC" in os.environ:
+    if "_KART_NO_EXEC" in os.environ:
         # used in testing. This is pretty hackzy
         p = subprocess.run(
             [cmd] + args[1:], capture_output=True, encoding="utf-8", env=env
