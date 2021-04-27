@@ -7,7 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.10.0 (UNRELEASED)
 
-* Change to `sno data ls` JSON output, now includes whether repo is Kart or Sno branded.
+* Change to `kart data ls` JSON output, now includes whether repo is Kart or Sno branded.
 
 ## 0.9.0 (First "Kart" release)
 

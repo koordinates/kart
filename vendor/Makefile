@@ -340,7 +340,7 @@ build-Linux:
 	-$(RM) -r $(VENDOR) $(vendor-Linux-archive)
 	mkdir -p $(VENDOR) dist
 	time docker run \
-		--name sno-vendor-build-linux \
+		--name kart-vendor-build-linux \
 		--rm \
 		`[[ -t 0 ]] && echo '-it'` \
 		-v $(abspath .):/src \

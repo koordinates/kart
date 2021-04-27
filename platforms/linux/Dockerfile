@@ -27,7 +27,7 @@ COPY vendor/wheelhouse/*-linux_x86_64.whl /src
 RUN pip install --no-deps /src/*.whl
 
 COPY setup.py /src/
-COPY sno/ /src/sno/
+COPY kart/ /src/kart/
 RUN --mount=type=cache,target=/root/.cache \
     pip install --no-deps . \
     && kart --version
