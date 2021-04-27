@@ -20,7 +20,7 @@ def test_apply_invalid_patch(input, data_archive_readonly, cli_runner):
 
 def test_apply_empty_patch(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["apply", patches / "points-empty.snopatch"])
+        r = cli_runner.invoke(["apply", patches / "points-empty.kartpatch"])
         assert r.exit_code == 44, r
         assert "No changes to commit" in r.stderr
 
@@ -29,7 +29,7 @@ def test_apply_nonempty_patch_which_makes_no_changes(data_archive_readonly, cli_
     with data_archive_readonly("points"):
         # Despite appearances, this patch is empty because it makes a change
         # which has no actual effect.
-        r = cli_runner.invoke(["apply", patches / "points-empty-2.snopatch"])
+        r = cli_runner.invoke(["apply", patches / "points-empty-2.kartpatch"])
         assert r.exit_code == 44, r
         assert "No changes to commit" in r.stderr
 
@@ -55,7 +55,7 @@ def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
 
 
 def test_apply_twice(data_archive, cli_runner):
-    patch_path = patches / "points-1U-1D-1I.snopatch"
+    patch_path = patches / "points-1U-1D-1I.kartpatch"
     with data_archive("points"):
         r = cli_runner.invoke(["apply", str(patch_path)])
         assert r.exit_code == 0, r.stderr
@@ -79,7 +79,7 @@ def test_apply_twice(data_archive, cli_runner):
 
 
 def test_apply_with_no_working_copy(data_archive, cli_runner):
-    patch_filename = "updates-only.snopatch"
+    patch_filename = "updates-only.kartpatch"
     message = "Change the Coromandel"
     author = {"name": "Someone", "time": 1561040913, "offset": 60}
     with data_archive("points") as repo_dir:
@@ -282,7 +282,7 @@ def test_apply_allow_missing_old_values(data_archive, cli_runner):
 
 
 def test_apply_create_dataset(data_archive, cli_runner):
-    patch_path = patches / "polygons.snopatch"
+    patch_path = patches / "polygons.kartpatch"
     with data_archive("points"):
         r = cli_runner.invoke(["data", "ls", "-o", "json"])
         assert r.exit_code == 0, r.stderr
@@ -430,7 +430,7 @@ def test_apply_with_working_copy(
     data_working_copy,
     cli_runner,
 ):
-    patch_filename = "updates-only.snopatch"
+    patch_filename = "updates-only.kartpatch"
     message = "Change the Coromandel"
     author = {"name": "Someone", "time": 1561040913, "offset": 60}
     with data_working_copy("points") as (repo_dir, wc_path):
@@ -472,14 +472,14 @@ def test_apply_with_working_copy(
 def test_apply_with_no_working_copy_with_no_commit(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
         r = cli_runner.invoke(
-            ["apply", "--no-commit", patches / "updates-only.snopatch"]
+            ["apply", "--no-commit", patches / "updates-only.kartpatch"]
         )
         assert r.exit_code == 45
         assert "--no-commit requires a working copy" in r.stderr
 
 
 def test_apply_with_working_copy_with_no_commit(data_working_copy, cli_runner):
-    patch_filename = "updates-only.snopatch"
+    patch_filename = "updates-only.kartpatch"
     message = "Change the Coromandel"
     with data_working_copy("points") as (repo_dir, wc_path):
         patch_path = patches / patch_filename
