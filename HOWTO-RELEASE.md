@@ -44,7 +44,7 @@ This process only supports a single release branch (master). It'll need to be ex
 
     1. Get the SHA256 hash of the macOS PKG installer: `sha256 Kart-1.2.3.pkg`
     2. Pull [homebrew-kart](https://github.com/koordinates/homebrew-kart/)
-    3. Edit `Casks/kart.rb` and update the `version` and `sha256` fields
+    3. Edit both `Casks/kart.rb` and `Casks/sno.rb`, updating the `version` and `sha256` fields
     4. Commit with a message like "Update to release v1.2.3"
     5. Push
 
