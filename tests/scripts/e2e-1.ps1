@@ -30,7 +30,7 @@ $TEST_GPKG=(Join-Path $PSScriptRoot '..\data\e2e.gpkg')
 Write-Output "Test data is at: ${TEST_GPKG}"
 
 $TMP_GUID=([string] [System.Guid]::NewGuid())
-$TMP_PATH=(New-Item -ItemType Directory -Path (Join-Path ([System.IO.Path]::GetTempPath()) "sno-e2e.${TMP_GUID}"))
+$TMP_PATH=(New-Item -ItemType Directory -Path (Join-Path ([System.IO.Path]::GetTempPath()) "kart-e2e.${TMP_GUID}"))
 Write-Output "Using temp folder: ${TMP_PATH}"
 
 $KART_PATH=(Get-Command kart).source

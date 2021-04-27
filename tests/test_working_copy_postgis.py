@@ -401,7 +401,7 @@ def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
-            repo.config["sno.workingcopy.path"] = postgres_url
+            repo.config["kart.workingcopy.location"] = postgres_url
             r = cli_runner.invoke(["checkout"])
 
             # If type-approximation roundtrip code isn't working,

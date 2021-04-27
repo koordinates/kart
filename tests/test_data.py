@@ -53,6 +53,7 @@ def test_data_version(version, output_format, data_archive_readonly, cli_runner)
         1: Path("upgrade") / "v1" / "points.tgz",
         2: Path("points.tgz"),
     }
+    branding = {0: "sno", 1: "sno", 2: "kart"}[version]
 
     with data_archive_readonly(archive_paths[version]):
         r = cli_runner.invoke(["data", "version", "-o", output_format])
@@ -63,5 +64,5 @@ def test_data_version(version, output_format, data_archive_readonly, cli_runner)
             output = json.loads(r.stdout)
             assert output == {
                 "repostructure.version": version,
-                "localconfig.branding": "sno",
+                "localconfig.branding": branding,
             }

@@ -343,7 +343,7 @@ def test_import_from_non_gpkg(
             repo = KartRepo(repo_path)
             assert repo.is_empty
 
-            # Import from SHP/TAB/something into sno
+            # Import from SHP/TAB/something into Kart
             r = cli_runner.invoke(
                 [
                     "import",

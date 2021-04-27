@@ -35,7 +35,7 @@ def test_checkout_workingcopy(
         geom_cols = dataset.schema.geometry_columns
 
         r = cli_runner.invoke(["checkout"])
-        wc_path = Path(repo.config["sno.workingcopy.path"])
+        wc_path = Path(repo.config["kart.workingcopy.location"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [f"Creating working copy at {wc_path} ..."]
         assert wc_path.exists()
@@ -366,7 +366,7 @@ def test_working_copy_discard_changes(
             )
             assert r.rowcount == 1
 
-            change_count = sess.scalar("""SELECT COUNT(*) FROM "gpkg_sno_track";""")
+            change_count = sess.scalar("""SELECT COUNT(*) FROM "gpkg_kart_track";""")
             assert change_count == (1 + 4 + 5 + 2)
 
         if via == "restore":
@@ -659,7 +659,7 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
         )
         assert r.exit_code == 0, r.stderr
         assert new_thingz.exists()
-        assert repo.config["sno.workingcopy.path"] == str(new_thingz)
+        assert repo.config["kart.workingcopy.location"] == str(new_thingz)
 
         r = cli_runner.invoke(
             ["create-workingcopy", str(new_thingz), "--delete-existing"]
@@ -675,7 +675,7 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r.stderr
         assert not new_thingz.exists()
         assert other_thingz.exists()
-        assert repo.config["sno.workingcopy.path"] == str(other_thingz)
+        assert repo.config["kart.workingcopy.location"] == str(other_thingz)
 
         # abs path
         abs_thingz = tmp_path / "abs_thingz.gpkg"
@@ -687,7 +687,7 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
         assert not other_thingz.exists()
         assert abs_thingz.exists()
 
-        assert repo.config["sno.workingcopy.path"] == str(abs_thingz)
+        assert repo.config["kart.workingcopy.location"] == str(abs_thingz)
 
 
 @pytest.mark.parametrize(
@@ -754,10 +754,10 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
             changes_pre = [
                 r[0]
                 for r in sess.execute(
-                    'SELECT pk FROM "gpkg_sno_track" ORDER BY CAST(pk AS INTEGER);'
+                    'SELECT pk FROM "gpkg_kart_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
-            # gpkg_sno_track stores pk as strings
+            # gpkg_kart_track stores pk as strings
             assert changes_pre == [
                 "1",
                 "2",
@@ -781,7 +781,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
             changes_post = [
                 r[0]
                 for r in sess.execute(
-                    'SELECT pk FROM "gpkg_sno_track" ORDER BY CAST(pk AS INTEGER);'
+                    'SELECT pk FROM "gpkg_kart_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
             head_sha = wc.get_db_tree()
@@ -814,7 +814,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
                 print(f"E: Bad Tree? {head_sha}")
 
             head_sha = sess.scalar(
-                """SELECT value FROM "gpkg_sno_state" WHERE key = 'tree' AND table_name='*';"""
+                """SELECT value FROM "gpkg_kart_state" WHERE key = 'tree' AND table_name='*';"""
             )
             if head_sha != new_commit:
                 print(f"E: Bad Tree? {head_sha}")
@@ -957,34 +957,34 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         }
 
         with wc.session() as sess:
-            # This modification makes the gpkg_sno_state table work like normal for reading,
+            # This modification makes the gpkg_kart_state table work like normal for reading,
             # but writing to it will fail due to the CHECK.
             sess.execute(
-                """ALTER TABLE "gpkg_sno_state" RENAME TO "gpkg_sno_state_backup";"""
+                """ALTER TABLE "gpkg_kart_state" RENAME TO "gpkg_kart_state_backup";"""
             )
-            value = sess.scalar("SELECT value FROM gpkg_sno_state_backup;")
+            value = sess.scalar("SELECT value FROM gpkg_kart_state_backup;")
             sess.execute(
                 f"""
-                CREATE TABLE "gpkg_sno_state"
+                CREATE TABLE "gpkg_kart_state"
                     ("table_name" TEXT NOT NULL, "key" TEXT NOT NULL, "value" TEXT NULL CHECK("value" = '{value}'));
                 """
             )
             sess.execute(
-                """INSERT INTO "gpkg_sno_state" SELECT * FROM "gpkg_sno_state_backup";"""
+                """INSERT INTO "gpkg_kart_state" SELECT * FROM "gpkg_kart_state_backup";"""
             )
 
         # This should fail and so the entire transaction should be rolled back.
         # Therefore, the GPKG should remain unchanged with 6 uncommitted changes -
-        # even though the failed write to gpkg_sno_state happens after the changes
+        # even though the failed write to gpkg_kart_state happens after the changes
         # are discarded and after working copy is reset to the new commit - all of
         # that will be rolled back.
         with pytest.raises(sqlalchemy.exc.IntegrityError):
             r = cli_runner.invoke(["checkout", "HEAD^", "--discard-changes"])
 
         with wc.session() as sess:
-            sess.execute("DROP TABLE IF EXISTS gpkg_sno_state;")
+            sess.execute("DROP TABLE IF EXISTS gpkg_kart_state;")
             sess.execute(
-                """ALTER TABLE "gpkg_sno_state_backup" RENAME TO "gpkg_sno_state";"""
+                """ALTER TABLE "gpkg_kart_state_backup" RENAME TO "gpkg_kart_state";"""
             )
 
         r = cli_runner.invoke(["status", "--output-format=json"])

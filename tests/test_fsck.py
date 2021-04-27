@@ -14,11 +14,11 @@ def test_fsck(data_working_copy, cli_runner):
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
-            assert H.row_count(sess, "gpkg_sno_track") == 0
+            assert H.row_count(sess, "gpkg_kart_track") == 0
 
             # introduce a feature mismatch
             sess.execute(f"UPDATE {H.POINTS.LAYER} SET name='fred' WHERE fid=1;")
-            sess.execute("""DELETE FROM "gpkg_sno_track" WHERE pk='1';""")
+            sess.execute("""DELETE FROM "gpkg_kart_track" WHERE pk='1';""")
 
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 1, r
@@ -28,7 +28,7 @@ def test_fsck(data_working_copy, cli_runner):
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
-            assert H.row_count(sess, "gpkg_sno_track") == 0
+            assert H.row_count(sess, "gpkg_kart_track") == 0
 
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 0, r

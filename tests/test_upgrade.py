@@ -147,7 +147,8 @@ def test_upgrade_to_tidy(data_archive, cli_runner, chdir):
 
 
 def test_upgrade_to_kart(data_working_copy, cli_runner, chdir):
-    with data_working_copy("polygons") as (source_path, wc_path):
+    archive_path = Path("upgrade") / "v2.sno" / "polygons"
+    with data_working_copy(archive_path) as (source_path, wc_path):
         r = cli_runner.invoke(["upgrade-to-kart", source_path])
         assert r.exit_code == 0, r.stderr
         assert (

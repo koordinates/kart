@@ -765,7 +765,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
         assert not repo.is_empty
 
         # working copy exists
-        wc = repo_path / f"editing.gpkg"
+        wc = repo_path / "editing.gpkg"
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
@@ -783,7 +783,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
 
         # make sure we haven't stuffed up the original file
         with gpkg_engine("editing.gpkg").connect() as dbo:
-            r = dbo.execute("SELECT 1 FROM sqlite_master WHERE name='gpkg_sno_state';")
+            r = dbo.execute("SELECT 1 FROM sqlite_master WHERE name='gpkg_kart_state';")
             assert not r.fetchone()
             source_rowcount = dbo.execute("SELECT COUNT(*) FROM editing;").fetchone()[0]
             assert source_rowcount == wc_rowcount

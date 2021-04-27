@@ -913,7 +913,7 @@ def new_postgis_db_schema(request, postgis_db):
     @contextlib.contextmanager
     def ctx(create=False):
         sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
-        schema = f"sno_test_{sha}"
+        schema = f"kart_test_{sha}"
         with postgis_db.connect() as conn:
             # Start by deleting in case it is left over from last test-run...
             conn.execute(f"""DROP SCHEMA IF EXISTS "{schema}" CASCADE;""")
@@ -961,7 +961,7 @@ def new_sqlserver_db_schema(request, sqlserver_db):
     @contextlib.contextmanager
     def ctx(create=False):
         sha = hashlib.sha1(request.node.nodeid.encode("utf8")).hexdigest()[:20]
-        schema = f"sno_test_{sha}"
+        schema = f"kart_test_{sha}"
         with sqlserver_db.connect() as conn:
             # Start by deleting in case it is left over from last test-run...
             _sqlserver_drop_schema_cascade(conn, schema)
