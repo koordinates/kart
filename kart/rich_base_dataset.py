@@ -31,7 +31,7 @@ class RichBaseDataset(BaseDataset):
     For example, see Dataset0.
     """
 
-    RTREE_INDEX_EXTENSIONS = ("sno-idxd", "sno-idxi")
+    RTREE_INDEX_EXTENSIONS = ("kart-idxd", "kart-idxi")
 
     def features_plus_blobs(self):
         for blob in self.feature_blobs():

@@ -31,14 +31,14 @@ def indexed_dataset(data_archive, cli_runner):
 )
 def test_build_spatial_index(archive, table, data_archive, cli_runner):
     with data_archive(archive) as repo_dir:
-        for p in Path(repo_dir).glob(f"{table}.sno-idx*"):
+        for p in Path(repo_dir).glob(f"{table}.kart-idx*"):
             p.unlink()
 
         r = cli_runner.invoke(["query", table, "index"])
         assert r.exit_code == 0
 
-        assert (Path(repo_dir) / f"{table}.sno-idxi").exists()
-        assert (Path(repo_dir) / f"{table}.sno-idxd").exists()
+        assert (Path(repo_dir) / f"{table}.kart-idxi").exists()
+        assert (Path(repo_dir) / f"{table}.kart-idxd").exists()
 
 
 def test_query_cli_get(indexed_dataset, cli_runner):
