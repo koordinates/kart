@@ -16,7 +16,7 @@ from kart.sqlalchemy.create_engine import gpkg_engine
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from kart.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from kart.pk_generation import PkGeneratingImportSource
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.working_copy import gpkg_adapter
 
 
@@ -50,7 +50,7 @@ GPKG_IMPORTS = (
 
 
 def _import_check(repo_path, table, source_gpkg):
-    repo = SnoRepo(repo_path)
+    repo = KartRepo(repo_path)
     dataset = repo.datasets()[table]
     assert dataset.VERSION == 2
 
@@ -161,7 +161,7 @@ def test_import(
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             assert repo.is_empty
 
             r = cli_runner.invoke(["import", str(data / source_gpkg), table])
@@ -323,7 +323,7 @@ def test_import_from_non_gpkg(
             r = cli_runner.invoke(["import", data / source_gpkg, table])
             assert r.exit_code == 0, r
 
-        gpkg_repo = SnoRepo(gpkg_repo_path)
+        gpkg_repo = KartRepo(gpkg_repo_path)
         gpkg_dataset = gpkg_repo.datasets()[table]
 
         # convert to a new format using OGR
@@ -340,7 +340,7 @@ def test_import_from_non_gpkg(
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             assert repo.is_empty
 
             # Import from SHP/TAB/something into sno
@@ -363,7 +363,7 @@ def test_import_from_non_gpkg(
             dataset = _import_check(repo_path, table, f"{data / source_gpkg}")
 
             # Compare the meta items to the GPKG-imported ones
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             dataset = repo.datasets()[table]
 
             _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
@@ -419,7 +419,7 @@ def test_shp_import_meta(
 
         # now check metadata
         path = "nz_waca_adjustments"
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         dataset = repo.datasets()[path]
 
         meta_items = dict(dataset.meta_items())
@@ -519,7 +519,7 @@ def _test_postgis_import(
         )
         assert r.exit_code == 0, r
     # now check metadata
-    repo = SnoRepo(repo_path)
+    repo = KartRepo(repo_path)
     dataset = repo.datasets()[table_name]
 
     meta_items = dict(dataset.meta_items())
@@ -640,7 +640,7 @@ def test_postgis_import_from_view_no_pk(
             pk_name="auto_pk",
         )
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         dataset = repo.datasets()["nz_pa_points_view"]
         initial_pks = [f["auto_pk"] for f in dataset.features()]
         assert len(initial_pks) == 1429
@@ -670,7 +670,7 @@ def test_postgis_import_from_view_no_pk(
             ]
         )
         assert r.exit_code == 0, r.stderr
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         dataset = repo.datasets()["nz_pa_points_view"]
         new_pks = [f["auto_pk"] for f in dataset.features()]
 
@@ -754,7 +754,7 @@ def test_postgis_import_from_view_no_pk(
 
 def test_import_no_pk_performance(data_archive_readonly, benchmark):
     with data_archive_readonly("points") as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         dataset = repo.datasets()["nz_pa_points_topo_150k"]
         features = list(dataset.features())
         assert len(features) == 2143
@@ -886,7 +886,7 @@ def test_feature_find_decode_performance(
     )
 
     repo_path = data_imported(archive, source_gpkg, table)
-    repo = SnoRepo(repo_path)
+    repo = KartRepo(repo_path)
     dataset = repo.datasets()["mytable"]
     inner_tree = dataset.inner_tree
 
@@ -919,7 +919,7 @@ def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
         r = cli_runner.invoke(["init"])
         assert r.exit_code == 0, r
 
-    repo = SnoRepo(repo_path)
+    repo = KartRepo(repo_path)
     assert repo.is_empty
 
     LAYERS = (
@@ -979,14 +979,14 @@ def test_import_into_empty_branch(data_archive, cli_runner, chdir, tmp_path):
             # HEAD still points to it, but that's okay - this just means
             # the branch is empty.
             # We still need to be able to import from this state.
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             repo.references.delete("refs/heads/main")
             assert repo.head_is_unborn
 
             r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
             assert r.exit_code == 0, r
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             assert repo.head_commit
 
 
@@ -1017,7 +1017,7 @@ def test_write_feature_performance(
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
 
             source = OgrImportSource.open(data / source_gpkg, table=table)
             with source:
@@ -1054,7 +1054,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
 
             source = OgrImportSource.open(
                 data / "nz-pa-points-topo-150k.gpkg", table=table

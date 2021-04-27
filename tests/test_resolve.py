@@ -4,7 +4,7 @@ import pytest
 from kart.diff_output import json_row
 from kart.exceptions import INVALID_OPERATION
 from kart.merge_util import MergeIndex
-from kart.repo import SnoRepoState
+from kart.repo import KartRepoState
 
 
 H = pytest.helpers.helpers()
@@ -38,7 +38,7 @@ def test_resolve_with_version(create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["kart.merge/v1"]["conflicts"]
-        assert repo.state == SnoRepoState.MERGING
+        assert repo.state == KartRepoState.MERGING
 
         # Can't just complete the merge until we resolve the conflicts.
         r = cli_runner.invoke(["merge", "--continue"])
@@ -90,7 +90,7 @@ def test_resolve_with_version(create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
         assert repo.head_commit.message == "merge commit"
-        assert repo.state != SnoRepoState.MERGING
+        assert repo.state != KartRepoState.MERGING
 
         merged = repo.structure("HEAD")
         ours = repo.structure("ours_branch")
@@ -163,7 +163,7 @@ def test_resolve_with_file(create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "--continue", "-m", "merge commit"])
         assert r.exit_code == 0, r.stderr
         assert repo.head_commit.message == "merge commit"
-        assert repo.state != SnoRepoState.MERGING
+        assert repo.state != KartRepoState.MERGING
 
         merged = repo.structure("HEAD")
         ours = repo.structure("ours_branch")

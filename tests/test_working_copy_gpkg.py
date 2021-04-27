@@ -6,7 +6,7 @@ import pytest
 import sqlalchemy
 
 from kart.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.working_copy import gpkg_adapter
 from kart.working_copy.base import BaseWorkingCopy
 from test_working_copy import compute_approximated_types
@@ -30,7 +30,7 @@ def test_checkout_workingcopy(
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         dataset = repo.datasets()[table]
         geom_cols = dataset.schema.geometry_columns
 
@@ -60,7 +60,7 @@ def test_checkout_workingcopy(
 def test_checkout_detached(data_working_copy, cli_runner):
     """ Checkout a working copy to edit """
     with data_working_copy("points") as (repo_dir, wc):
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         with repo.working_copy.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
@@ -78,7 +78,7 @@ def test_checkout_detached(data_working_copy, cli_runner):
 
 def test_checkout_references(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_dir, wc_path):
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         wc = repo.working_copy
 
         # create a tag
@@ -172,7 +172,7 @@ def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["checkout", "-b", "foo"])
         assert r.exit_code == 0, r
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
@@ -223,7 +223,7 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "-c", "foo"])
         assert r.exit_code == 0, r.stderr
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.working_copy
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
@@ -341,7 +341,7 @@ def test_working_copy_discard_changes(
         raise NotImplementedError(f"layer={layer}")
 
     with data_working_copy(archive, force_new=True) as (repo_path, wc_path):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.working_copy
 
         with wc.session() as sess:
@@ -437,7 +437,7 @@ def test_working_copy_discard_changes(
 
 def test_switch_with_meta_items(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = SnoRepo(repo_path).working_copy
+        wc = KartRepo(repo_path).working_copy
         with wc.session() as sess:
             sess.execute(
                 """UPDATE gpkg_contents SET identifier = 'new identifier', description='new description'"""
@@ -467,7 +467,7 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
 def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
     # Column renames are one of the only schema changes we can do without having to recreate the whole table.
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = SnoRepo(repo_path).working_copy
+        wc = KartRepo(repo_path).working_copy
         with wc.session() as sess:
             sess.execute(
                 f"""ALTER TABLE "{H.POINTS.LAYER}" RENAME "name_ascii" TO "name_latin1";"""
@@ -494,7 +494,7 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
 
 def test_switch_with_schema_change(data_working_copy, cli_runner):
     with data_working_copy("polygons") as (repo_path, wc_path):
-        wc = SnoRepo(repo_path).working_copy
+        wc = KartRepo(repo_path).working_copy
         with wc.session() as sess:
             sess.execute(
                 f"""ALTER TABLE "{H.POLYGONS.LAYER}" ADD COLUMN "colour" TEXT;"""
@@ -538,7 +538,7 @@ def test_switch_pre_import_post_import(
 ):
     with data_archive_readonly("gpkg-au-census") as data:
         with data_working_copy("polygons") as (repo_path, wc_path):
-            wc = SnoRepo(repo_path).working_copy
+            wc = KartRepo(repo_path).working_copy
 
             r = cli_runner.invoke(
                 [
@@ -569,7 +569,7 @@ def test_switch_pre_import_post_import(
 
 def test_switch_xml_metadata_added(data_working_copy, cli_runner):
     with data_working_copy("table") as (repo_path, wc_path):
-        wc = SnoRepo(repo_path).working_copy
+        wc = KartRepo(repo_path).working_copy
         with wc.session() as sess:
             sess.execute(
                 """
@@ -617,7 +617,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
 
 def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = SnoRepo(repo_path).working_copy
+        wc = KartRepo(repo_path).working_copy
 
         is_checked = False
         orig_func = BaseWorkingCopy._write_features
@@ -646,7 +646,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
 
 def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_path, _):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
 
         r = cli_runner.invoke(["create-workingcopy", ".", "--delete-existing"])
         assert r.exit_code == INVALID_ARGUMENT, r.stderr
@@ -716,7 +716,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
         upd_pk_range = (10, 15)
         id_chg_pk = 20
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.working_copy
 
         with wc.session() as sess:
@@ -912,7 +912,7 @@ def _edit_string_pk_polygons(conn):
 
 def test_edit_string_pks(data_working_copy, cli_runner):
     with data_working_copy("string-pks") as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             _edit_string_pk_polygons(sess)
 
@@ -945,7 +945,7 @@ def test_edit_string_pks(data_working_copy, cli_runner):
 
 def test_reset_transaction(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = SnoRepo(repo_path).working_copy
+        wc = KartRepo(repo_path).working_copy
         with wc.session() as sess:
             edit_points(sess)
 

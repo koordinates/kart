@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from pathlib import Path
 
-from .repo import SnoRepo, SnoRepoState
+from .repo import KartRepo, KartRepoState
 from .exceptions import InvalidOperation, NotFound, NO_REPOSITORY
 
 
@@ -46,7 +46,7 @@ class Context(object):
     def get_repo(
         self,
         allow_unsupported_versions=False,
-        allowed_states=SnoRepoState.NORMAL,
+        allowed_states=KartRepoState.NORMAL,
         bad_state_message=None,
         command_extra=None,
     ):
@@ -57,7 +57,7 @@ class Context(object):
         """
         if not hasattr(self, "_repo"):
             try:
-                self._repo = SnoRepo(self.repo_path)
+                self._repo = KartRepo(self.repo_path)
             except NotFound:
                 if self.user_repo_path:
                     message = "Not an existing Kart repository"
@@ -79,7 +79,7 @@ class Context(object):
         )
         if not state_is_allowed:
             if not bad_state_message:
-                bad_state_message = SnoRepoState.bad_state_message(
+                bad_state_message = KartRepoState.bad_state_message(
                     state, allowed_states, command_extra
                 )
             raise InvalidOperation(bad_state_message)
@@ -87,7 +87,7 @@ class Context(object):
         return self._repo
 
     def check_not_dirty(self, help_message=None):
-        repo = self.get_repo(allowed_states=SnoRepoState.ALL_STATES)
+        repo = self.get_repo(allowed_states=KartRepoState.ALL_STATES)
         working_copy = repo.working_copy
         if working_copy:
             working_copy.check_not_dirty(help_message)

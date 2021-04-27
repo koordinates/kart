@@ -54,10 +54,10 @@ def test_e2e_sno(
         with chdir(repo_path):
             # initialise empty Sno repo
 
-            from kart.repo import SnoRepo
+            from kart.repo import KartRepo
 
-            monkeypatch.setattr(SnoRepo, "BRANDING_FOR_NEW_REPOS", "sno")
-            monkeypatch.setattr(SnoRepo, "DIRNAME_FOR_NEW_REPOS", ".sno")
+            monkeypatch.setattr(KartRepo, "BRANDING_FOR_NEW_REPOS", "sno")
+            monkeypatch.setattr(KartRepo, "DIRNAME_FOR_NEW_REPOS", ".sno")
 
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0

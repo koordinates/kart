@@ -30,7 +30,7 @@ from .timestamps import tz_offset_to_minutes
 L = logging.getLogger("kart.repo")
 
 
-class SnoRepoFiles:
+class KartRepoFiles:
     """Useful files that are found in `repo.gitdir_path`"""
 
     # Standard git files:
@@ -46,7 +46,7 @@ class SnoRepoFiles:
     MERGE_BRANCH = "MERGE_BRANCH"
 
 
-class SnoRepoState(Enum):
+class KartRepoState(Enum):
     NORMAL = "normal"
     MERGING = "merging"
 
@@ -57,7 +57,7 @@ class SnoRepoState(Enum):
         cmd = click.get_current_context().command_path
         if command_extra:
             cmd = f"{cmd} {command_extra}"
-        if bad_state == SnoRepoState.MERGING:
+        if bad_state == KartRepoState.MERGING:
             return (
                 f'`{cmd}` does not work while the Kart repo is in "merging" state.\n'
                 "Use `kart merge --abort` to abandon the merge and get back to the previous state."
@@ -65,7 +65,7 @@ class SnoRepoState(Enum):
         return f'`{cmd}` only works when the Kart repo is in "merging" state, but it is in "normal" state.'
 
 
-SnoRepoState.ALL_STATES = (SnoRepoState.NORMAL, SnoRepoState.MERGING)
+KartRepoState.ALL_STATES = (KartRepoState.NORMAL, KartRepoState.MERGING)
 
 
 class KartConfigKeys:
@@ -130,7 +130,7 @@ LOCKED_GIT_INDEX_CONTENTS = {
 }
 
 
-class SnoRepo(pygit2.Repository):
+class KartRepo(pygit2.Repository):
     """
     A valid pygit2.Repository, since all Kart repos are also git repos - but with some added functionality.
     Ensures the git directory structure is one of the two styles supported by Kart - "bare-style" or "tidy-style".
@@ -311,7 +311,7 @@ class SnoRepo(pygit2.Repository):
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
-        result = SnoRepo(gitdir_path, validate=False)
+        result = KartRepo(gitdir_path, validate=False)
 
         # Tidy up temp workdir - this is created as a side effect of the git command.
         if temp_workdir_path is not None and temp_workdir_path.exists():
@@ -488,18 +488,18 @@ class SnoRepo(pygit2.Repository):
 
     def lock_git_index(self):
         index_contents = LOCKED_GIT_INDEX_CONTENTS[self.branding]
-        (self.gitdir_path / SnoRepoFiles.INDEX).write_bytes(index_contents)
+        (self.gitdir_path / KartRepoFiles.INDEX).write_bytes(index_contents)
 
     @property
     def state(self):
-        merge_head = self.gitdir_file(SnoRepoFiles.MERGE_HEAD).exists()
-        merge_index = self.gitdir_file(SnoRepoFiles.MERGE_INDEX).exists()
+        merge_head = self.gitdir_file(KartRepoFiles.MERGE_HEAD).exists()
+        merge_index = self.gitdir_file(KartRepoFiles.MERGE_INDEX).exists()
         if merge_head and not merge_index:
             raise NotFound(
                 'Kart repo is in "merging" state, but required file MERGE_INDEX is missing.\n'
                 "Try `kart merge --abort` to return to a good state."
             )
-        return SnoRepoState.MERGING if merge_head else SnoRepoState.NORMAL
+        return KartRepoState.MERGING if merge_head else KartRepoState.NORMAL
 
     def structure(self, refish="HEAD"):
         """Get the structure of this Kart repository at a particular revision."""
@@ -706,5 +706,5 @@ class PotentialRepo:
 
     def __init__(self, workdir_path):
         self.workdir_path = workdir_path
-        self.branding = SnoRepo.BRANDING_FOR_NEW_REPOS
+        self.branding = KartRepo.BRANDING_FOR_NEW_REPOS
         self.is_kart_branded = self.branding == "kart"

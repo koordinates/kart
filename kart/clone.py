@@ -7,7 +7,7 @@ import click
 
 from . import checkout
 from .exceptions import InvalidOperation
-from .repo import SnoRepo, PotentialRepo
+from .repo import KartRepo, PotentialRepo
 
 
 def get_directory_from_url(url):
@@ -134,7 +134,7 @@ def clone(
         # https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---filterltfilter-specgt
         args.append(f"--filter={filterspec}")
 
-    repo = SnoRepo.clone_repository(url, repo_path, args, wc_location, bare)
+    repo = KartRepo.clone_repository(url, repo_path, args, wc_location, bare)
 
     # Create working copy, if needed.
     head_commit = repo.head_commit

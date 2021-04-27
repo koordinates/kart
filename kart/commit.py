@@ -32,7 +32,7 @@ from .timestamps import (
     timedelta_to_iso8601_tz,
     commit_time_to_text,
 )
-from .repo import SnoRepoFiles
+from .repo import KartRepoFiles
 
 
 @click.command()
@@ -140,7 +140,7 @@ def get_commit_message(repo, diff, draft_message="", quiet=False):
         "#",
     ]
 
-    commit_editmsg_file = repo.gitdir_file(SnoRepoFiles.COMMIT_EDITMSG)
+    commit_editmsg_file = repo.gitdir_file(KartRepoFiles.COMMIT_EDITMSG)
     commit_editmsg_file.write_text("\n".join(initial_message) + "\n", encoding="utf-8")
     if not quiet:
         click.echo("hint: Waiting for your editor to close the file...")

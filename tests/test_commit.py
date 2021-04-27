@@ -14,7 +14,7 @@ from kart.exceptions import (
     SCHEMA_VIOLATION,
 )
 from kart.commit import fallback_editor
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -56,7 +56,7 @@ def test_commit(
         assert r.exit_code == 0, r
 
         # make some changes
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         with repo.working_copy.session() as sess:
             try:
                 edit_func = locals()[f"edit_{archive}"]
@@ -66,7 +66,7 @@ def test_commit(
 
         print(f"deleted fid={pk_del}")
 
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         dataset = repo.datasets()[layer]
 
         wc = repo.working_copy
@@ -120,7 +120,7 @@ def test_tag(data_working_copy, cli_runner):
         r = cli_runner.invoke(["tag", "version1"])
         assert r.exit_code == 0, r
 
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         assert "refs/tags/version1" in repo.references
         ref = repo.lookup_reference_dwim("version1")
         assert ref.target.hex == H.POINTS.HEAD_SHA
@@ -155,7 +155,7 @@ def test_commit_message(
     monkeypatch.delenv("GIT_EDITOR", raising=False)
 
     with data_working_copy("points") as (repo_dir, wc_path):
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
 
         def last_message():
             return repo.head_commit.message
@@ -209,7 +209,7 @@ def test_commit_message(
         # default editor
 
         # make some changes
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         with repo.working_copy.session() as sess:
             edit_points(sess)
 
@@ -286,7 +286,7 @@ def test_empty(tmp_path, cli_runner, chdir):
 
 def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
 
         # normal
         r = cli_runner.invoke(
@@ -308,7 +308,7 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
 
 def test_commit_schema_violation(cli_runner, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         with repo.working_copy.session() as sess:
             sess.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
             sess.execute(

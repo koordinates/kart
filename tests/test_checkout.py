@@ -2,7 +2,7 @@ import pytest
 
 
 from kart.exceptions import INVALID_OPERATION, NO_BRANCH, NO_COMMIT
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
 
@@ -28,7 +28,7 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
         r = cli_runner.invoke(["switch", "two", "--create", "four"])
         assert r.exit_code == 0, r.stderr
 
-        repo = SnoRepo(remote_path)
+        repo = KartRepo(remote_path)
         one = CommitWithReference.resolve(repo, "one")
         two = CommitWithReference.resolve(repo, "two")
         three = CommitWithReference.resolve(repo, "three")
@@ -41,7 +41,7 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 
         wc_flag = "--checkout" if working_copy else "--no-checkout"
         r = cli_runner.invoke(["clone", remote_path, tmp_path, wc_flag])
-        repo = SnoRepo(tmp_path)
+        repo = KartRepo(tmp_path)
 
         head = CommitWithReference.resolve(repo, "HEAD")
 
@@ -94,7 +94,7 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 
 def test_reset(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             edit_points(sess)
 

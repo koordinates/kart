@@ -2,7 +2,7 @@ import pytest
 
 import pygit2
 
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.working_copy import postgis_adapter
 from kart.working_copy.base import WorkingCopyStatus
 from kart.working_copy.db_server import DatabaseServer_WorkingCopy
@@ -38,7 +38,7 @@ def test_checkout_workingcopy(
 ):
     """ Checkout a working copy """
     with data_archive(archive) as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_postgis_db_schema(create=existing_schema) as (
@@ -103,7 +103,7 @@ def test_init_import(
             assert r.exit_code == 0, r.stderr
             assert (repo_path / ".kart" / "HEAD").exists()
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             wc = repo.working_copy
             assert wc.status() & WorkingCopyStatus.INITIALISED
             assert wc.status() & WorkingCopyStatus.HAS_DATA
@@ -132,7 +132,7 @@ def test_commit_edits(
 ):
     """ Checkout a working copy and make some edits """
     with data_archive(archive) as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
@@ -197,7 +197,7 @@ def test_commit_edits(
 
 def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
     with data_archive("polygons") as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
@@ -323,7 +323,7 @@ class SucceedAndRollback(Exception):
 
 def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
     with data_archive("points") as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
@@ -397,7 +397,7 @@ def test_approximated_types():
 
 def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
     with data_archive("types") as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):

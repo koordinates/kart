@@ -10,7 +10,7 @@ from kart.merge_util import (
     MERGE_MSG,
     ALL_MERGE_FILES,
 )
-from kart.repo import SnoRepo, SnoRepoState
+from kart.repo import KartRepo, KartRepoState
 
 
 H = pytest.helpers.helpers()
@@ -32,7 +32,7 @@ H = pytest.helpers.helpers()
 )
 def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request):
     with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r
@@ -88,7 +88,7 @@ def test_merge_fastforward_noff(
     disable_editor,
 ):
     with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r
@@ -149,7 +149,7 @@ def test_merge_true(
     disable_editor,
 ):
     with data_working_copy(data.ARCHIVE) as (repo_path, wc_path):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.working_copy
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -324,7 +324,7 @@ def test_merge_state_lock(create_conflicts, cli_runner):
     with create_conflicts(H.POINTS) as repo:
         # Repo state: normal
         # kart checkout works, but kart conflicts and kart resolve do not.
-        assert repo.state == SnoRepoState.NORMAL
+        assert repo.state == KartRepoState.NORMAL
 
         r = cli_runner.invoke(["checkout", "ours_branch"])
         assert r.exit_code == SUCCESS
@@ -337,7 +337,7 @@ def test_merge_state_lock(create_conflicts, cli_runner):
         assert r.exit_code == SUCCESS
 
         # Repo state: merging
-        assert repo.state == SnoRepoState.MERGING
+        assert repo.state == KartRepoState.MERGING
 
         # kart checkout is locked, but kart conflicts and kart resolve work.
         r = cli_runner.invoke(["checkout", "ours_branch"])

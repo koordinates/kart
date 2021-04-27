@@ -5,7 +5,7 @@ import pytest
 
 from kart.diff_output import schema_diff_as_text
 from kart.geometry import Geometry
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.schema import Schema, ColumnSchema
 
 
@@ -231,7 +231,7 @@ def test_edit_schema_points(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             edit_points_schema(sess)
 
@@ -261,7 +261,7 @@ def test_edit_schema_polygons(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
         # make some changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             edit_polygons_schema(sess)
 
@@ -291,7 +291,7 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             edit_table_schema(sess)
 

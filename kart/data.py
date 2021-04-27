@@ -5,7 +5,7 @@ import click
 from . import status
 from .cli_util import add_help_subcommand
 from .output_util import dump_json_output
-from .repo import SnoRepoState
+from .repo import KartRepoState
 
 
 # Changing these items would generally break the repo;
@@ -30,7 +30,7 @@ def data(ctx, **kwargs):
 @click.pass_context
 def data_ls(ctx, output_format, refish):
     """List all of the datasets in the Kart repository"""
-    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     if repo.is_empty:
         ds_paths = []
     else:
@@ -58,7 +58,7 @@ def data_ls(ctx, output_format, refish):
 def data_version(ctx, output_format):
     """Show the repository structure version"""
     repo = ctx.obj.get_repo(
-        allowed_states=SnoRepoState.ALL_STATES, allow_unsupported_versions=True
+        allowed_states=KartRepoState.ALL_STATES, allow_unsupported_versions=True
     )
     version = repo.version
     if output_format == "text":

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from kart.cli import get_version
 from kart.exceptions import UNSUPPORTED_VERSION
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -117,7 +117,7 @@ def test_upgrade_to_tidy(data_archive, cli_runner, chdir):
             r.stdout.splitlines()[-1] == "In-place upgrade complete: repo is now tidy"
         )
 
-        repo = SnoRepo(source_path)
+        repo = KartRepo(source_path)
         assert repo.is_tidy_style
 
         with chdir(source_path):
@@ -155,7 +155,7 @@ def test_upgrade_to_kart(data_working_copy, cli_runner, chdir):
             == "In-place upgrade complete: Sno repo is now Kart repo"
         )
 
-        repo = SnoRepo(source_path)
+        repo = KartRepo(source_path)
         assert repo.is_kart_branded
         assert repo.config["kart.repostructure.version"] == "2"
 

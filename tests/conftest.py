@@ -23,7 +23,7 @@ import sqlalchemy
 
 
 from kart.geometry import Geometry
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.sqlalchemy.create_engine import gpkg_engine, postgis_engine, sqlserver_engine
 
 
@@ -274,7 +274,7 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
 
         archive_path = get_archive_path(archive_path)
         with data_archive(archive_path) as repo_dir:
-            repo = SnoRepo(repo_dir)
+            repo = KartRepo(repo_dir)
             if repo.working_copy:
                 wc_path = repo.working_copy.full_path
                 if force_new:
@@ -335,7 +335,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 r = cli_runner.invoke(["init"])
                 assert r.exit_code == 0, r.stderr
 
-                repo = SnoRepo(import_path)
+                repo = KartRepo(import_path)
                 assert repo.is_empty
                 repo.free()
                 del repo
@@ -357,7 +357,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
     return _data_imported
 
 
-class SnoCliRunner(CliRunner):
+class KartCliRunner(CliRunner):
     def __init__(self, *args, in_pdb=False, mix_stderr=False, **kwargs):
         self._in_pdb = in_pdb
         super().__init__(*args, mix_stderr=mix_stderr, **kwargs)
@@ -428,7 +428,7 @@ class SnoCliRunner(CliRunner):
 @pytest.fixture
 def cli_runner(request):
     """ A wrapper round Click's test CliRunner to improve usefulness """
-    return SnoCliRunner(
+    return KartCliRunner(
         # kart.cli._execvp() looks for this env var to prevent fork/exec in tests.
         env={"_SNO_NO_EXEC": "1"},
         # workaround Click's environment isolation so debugging works.
@@ -567,7 +567,7 @@ class TestHelpers:
     @classmethod
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.get_working_copy(allow_invalid_state=True)
         if wc:
             print(f"Deleting existing working copy: {repo.workingcopy_location}")
@@ -851,7 +851,7 @@ def create_conflicts(
     @contextlib.contextmanager
     def ctx(data):
         with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             sample_pks = data.SAMPLE_PKS
 
             cli_runner.invoke(["checkout", "-b", "ancestor_branch"])

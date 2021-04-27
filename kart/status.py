@@ -6,7 +6,7 @@ import pygit2
 from .conflicts import list_conflicts
 from .output_util import dump_json_output
 from .merge_util import MergeContext, MergeIndex, merge_status_to_text
-from .repo import SnoRepoState
+from .repo import KartRepoState
 
 
 @click.command()
@@ -19,10 +19,10 @@ from .repo import SnoRepoState
 )
 def status(ctx, output_format):
     """ Show the working copy status """
-    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
 
-    if repo.state == SnoRepoState.MERGING:
+    if repo.state == KartRepoState.MERGING:
         merge_index = MergeIndex.read_from_repo(repo)
         merge_context = MergeContext.read_from_repo(repo)
         jdict["merging"] = merge_context.as_json()
@@ -88,7 +88,7 @@ def get_diff_status_json(diff):
 def status_to_text(jdict):
     branch_status = branch_status_to_text(jdict)
     is_empty = not jdict["commit"]
-    is_merging = jdict.get("state", None) == SnoRepoState.MERGING.value
+    is_merging = jdict.get("state", None) == KartRepoState.MERGING.value
 
     if is_merging:
         merge_status = merge_status_to_text(jdict, fresh=False)

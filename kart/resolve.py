@@ -9,7 +9,7 @@ from .cli_util import MutexOption
 from .exceptions import InvalidOperation, NotFound, NotYetImplemented, NO_CONFLICT
 from .geometry import geojson_to_gpkg_geom
 from .merge_util import MergeIndex, MergeContext, RichConflict
-from .repo import SnoRepoState
+from .repo import KartRepoState
 
 
 def ungeojson_feature(feature, dataset):
@@ -91,7 +91,7 @@ def ensure_geojson_resolve_supported(rich_conflict):
 def resolve(ctx, with_version, file_path, conflict_label):
     """Resolve a merge conflict. So far only supports resolving to any of the three existing versions."""
 
-    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.MERGING)
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
     if not (with_version or file_path):
         raise click.UsageError("Choose a resolution using --with or --with-file")
 

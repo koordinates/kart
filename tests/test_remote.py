@@ -6,7 +6,7 @@ import pytest
 from kart import is_windows
 from kart.clone import get_directory_from_url
 from kart.sqlalchemy.create_engine import gpkg_engine
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -103,7 +103,7 @@ def test_clone(
         )
         print("git config file:", r.decode("utf-8").splitlines())
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         assert not repo.is_empty
         assert repo.head.name == f"refs/heads/{branch_name}"
 
@@ -194,7 +194,7 @@ def test_fetch(
         assert r.exit_code == 0, r
 
     with data_working_copy("points") as (path2, wc):
-        repo = SnoRepo(path2)
+        repo = KartRepo(path2)
         h = repo.head.target.hex
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
@@ -264,7 +264,7 @@ def test_pull(
             assert r.exit_code == 0, r
 
         with chdir(path2):
-            repo = SnoRepo(path2)
+            repo = KartRepo(path2)
             h = repo.head.target.hex
 
             r = cli_runner.invoke(["pull"])

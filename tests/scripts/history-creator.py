@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.working_copy.base import WorkingCopy
 
 
@@ -76,7 +76,7 @@ def main():
 
     options = parser.parse_args()
 
-    repo = SnoRepo(options.repo)
+    repo = KartRepo(options.repo)
     if options.commits and not repo:
         parser.error(
             f"No repository found at: '{options.repo}'. Specify path via --repo or use COMMITS=0"

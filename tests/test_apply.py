@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from kart.exceptions import NO_TABLE, PATCH_DOES_NOT_APPLY
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -87,7 +87,7 @@ def test_apply_with_no_working_copy(data_archive, cli_runner):
         r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == 0, r.stderr
 
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         commit = repo.head_commit
 
         # the author details all come from the patch, including timestamp
@@ -438,7 +438,7 @@ def test_apply_with_working_copy(
         r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == 0, r.stderr
 
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         commit = repo.head_commit
 
         # the author details all come from the patch, including timestamp
@@ -486,7 +486,7 @@ def test_apply_with_working_copy_with_no_commit(data_working_copy, cli_runner):
         r = cli_runner.invoke(["apply", "--no-commit", patch_path])
         assert r.exit_code == 0, r.stderr
 
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
 
         # no commit was made
         commit = repo.head_commit
@@ -537,7 +537,7 @@ def test_apply_benchmark(data_working_copy, benchmark, cli_runner, monkeypatch):
         assert r.exit_code == 0, r.stderr
 
         # Generate a large change and commit it
-        repo = SnoRepo(repo_dir)
+        repo = KartRepo(repo_dir)
         with repo.working_copy.session() as sess:
             sess.execute(
                 "UPDATE nz_pa_points_topo_150k SET name = 'bulk_' || Coalesce(name, 'null')"

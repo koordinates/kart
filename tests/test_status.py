@@ -5,7 +5,7 @@ import pytest
 
 from kart.sqlalchemy.create_engine import gpkg_engine
 from kart.exceptions import NO_REPOSITORY
-from kart.repo import SnoRepoState
+from kart.repo import KartRepoState
 from kart.structs import CommitWithReference
 
 H = pytest.helpers.helpers()
@@ -297,7 +297,7 @@ def test_status_merging(create_conflicts, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch"])
         assert r.exit_code == 0, r
 
-        assert repo.state == SnoRepoState.MERGING
+        assert repo.state == KartRepoState.MERGING
         assert text_status(cli_runner) == [
             "On branch ours_branch",
             "",

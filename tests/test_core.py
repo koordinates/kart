@@ -10,12 +10,12 @@ import pytest
 
 from kart import is_windows
 from kart.core import walk_tree, check_git_user
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 def test_walk_tree_1(data_archive):
     with data_archive("points"):
-        r = SnoRepo(".")
+        r = KartRepo(".")
         root_tree = r.head_tree
 
         for i, (tree, path, dirs, blobs) in enumerate(walk_tree(root_tree, "root")):
@@ -76,7 +76,7 @@ def test_walk_tree_1(data_archive):
 
 def test_walk_tree_2(data_archive):
     with data_archive("points"):
-        r = SnoRepo(".")
+        r = KartRepo(".")
         root_tree = r.head_tree
 
         path_list = []
@@ -135,7 +135,7 @@ def test_walk_tree_2(data_archive):
 
 def test_walk_tree_3(data_archive):
     with data_archive("points"):
-        r = SnoRepo(".")
+        r = KartRepo(".")
         root_tree = r.head_tree
 
         for i, (tree, path, dirs, blobs) in enumerate(
@@ -256,7 +256,7 @@ def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path)
         )
 
         with data_archive("points"):
-            r = SnoRepo(".")
+            r = KartRepo(".")
             with pytest.raises(click.ClickException) as e:
                 check_git_user(repo=r)
             assert "Please tell me who you are" in str(e)

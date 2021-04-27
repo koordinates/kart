@@ -1,13 +1,13 @@
 import subprocess
 
-from kart.repo import SnoRepo, LOCKED_GIT_INDEX_CONTENTS
+from kart.repo import KartRepo, LOCKED_GIT_INDEX_CONTENTS
 
 
 def test_init_repository(tmp_path):
     repo_path = tmp_path / "test_repo"
     repo_path.mkdir()
 
-    sno_repo = SnoRepo.init_repository(repo_path)
+    sno_repo = KartRepo.init_repository(repo_path)
 
     assert (repo_path / ".git").is_file()
     assert (repo_path / ".git").read_text() == "gitdir: .kart\n"
@@ -33,7 +33,7 @@ def test_git_disabled(tmp_path, cli_runner, chdir):
     assert r.exit_code == 0, r
     assert (repo_path / ".kart" / "HEAD").exists()
 
-    repo = SnoRepo(repo_path)
+    repo = KartRepo(repo_path)
 
     with chdir(repo_path):
         # env={} means we don't inherit the environment of this process,

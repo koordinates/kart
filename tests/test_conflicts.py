@@ -2,7 +2,7 @@ import json
 import pytest
 
 from kart.merge_util import MergeIndex
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
 H = pytest.helpers.helpers()
@@ -299,7 +299,7 @@ def test_list_conflicts_transform_crs(create_conflicts, cli_runner):
 
 def test_find_renames(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
 
         cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
         cli_runner.invoke(["checkout", "-b", "theirs_branch"])

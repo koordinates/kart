@@ -8,7 +8,7 @@ from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .filter_util import build_feature_filter, UNFILTERED
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
-from .repo import SnoRepoState
+from .repo import KartRepoState
 
 
 L = logging.getLogger("kart.conflicts")
@@ -277,7 +277,7 @@ def conflicts(
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
 
-    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.MERGING)
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
     merge_index = MergeIndex.read_from_repo(repo)
 
     if output_format == "quiet":

@@ -8,7 +8,7 @@ from pathlib import Path
 from kart import checkout, context
 from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import fast_import_tables, ReplaceExisting
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.structure import RepoStructure
 from kart.timestamps import minutes_to_tz_offset
 from kart.repo_version import SUPPORTED_REPO_VERSION
@@ -46,7 +46,7 @@ def upgrade(ctx, source, dest):
         raise click.BadParameter(f"'{dest}': already exists", param_hint="DEST")
 
     try:
-        source_repo = SnoRepo(source)
+        source_repo = KartRepo(source)
     except NotFound:
         raise click.BadParameter(
             f"'{source}': not an existing Kart repository", param_hint="SOURCE"
@@ -73,7 +73,7 @@ def upgrade(ctx, source, dest):
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
-    dest_repo = SnoRepo.init_repository(dest, wc_location=None, bare=True)
+    dest_repo = KartRepo.init_repository(dest, wc_location=None, bare=True)
 
     # walk _all_ references
     source_walker = source_repo.walk(
@@ -207,7 +207,7 @@ def upgrade_to_tidy(source):
     source = Path(source).resolve()
 
     try:
-        source_repo = SnoRepo(source)
+        source_repo = KartRepo(source)
     except NotFound:
         raise click.BadParameter(
             f"'{source}': not an existing Kart repository", param_hint="SOURCE"
@@ -238,7 +238,7 @@ def upgrade_to_tidy(source):
             continue
         child.rename(dot_sno_path / child.name)
 
-    tidy_repo = SnoRepo(dot_sno_path)
+    tidy_repo = KartRepo(dot_sno_path)
     tidy_repo.lock_git_index()
     tidy_repo.config["core.bare"] = False
     tidy_repo.config["sno.workingcopy.bare"] = False
@@ -276,7 +276,7 @@ def upgrade_to_kart(ctx, source):
     source = Path(source).resolve()
 
     try:
-        source_repo = SnoRepo(source)
+        source_repo = KartRepo(source)
     except NotFound:
         raise click.BadParameter(
             f"'{source}': not an existing Sno repository", param_hint="SOURCE"
@@ -334,7 +334,7 @@ def upgrade_to_kart(ctx, source):
     # README file:
     if (source / "SNO_README.txt").exists():
         (source / "SNO_README.txt").unlink()
-    readme_text = SnoRepo.get_readme_text(is_bare_style, "kart")
+    readme_text = KartRepo.get_readme_text(is_bare_style, "kart")
     (source / "KART_README.txt").write_text(readme_text)
 
     # Working copy:

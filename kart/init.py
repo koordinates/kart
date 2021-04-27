@@ -20,7 +20,7 @@ from .import_source import ImportSource
 from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
-from .repo import SnoRepo, PotentialRepo
+from .repo import KartRepo, PotentialRepo
 from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 
@@ -451,7 +451,7 @@ def init(
         sources = [base_source.clone_for_table(t) for t in tables]
 
     # Create the repository
-    repo = SnoRepo.init_repository(
+    repo = KartRepo.init_repository(
         repo_path, wc_location, bare, initial_branch=initial_branch
     )
 

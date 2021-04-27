@@ -7,14 +7,14 @@ import pygit2
 
 from .diff_output import text_row, json_row, geojson_row
 from .filter_util import UNFILTERED
-from .repo import SnoRepoFiles
+from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .utils import ungenerator
 
-MERGE_HEAD = SnoRepoFiles.MERGE_HEAD
-MERGE_INDEX = SnoRepoFiles.MERGE_INDEX
-MERGE_BRANCH = SnoRepoFiles.MERGE_BRANCH
-MERGE_MSG = SnoRepoFiles.MERGE_MSG
+MERGE_HEAD = KartRepoFiles.MERGE_HEAD
+MERGE_INDEX = KartRepoFiles.MERGE_INDEX
+MERGE_BRANCH = KartRepoFiles.MERGE_BRANCH
+MERGE_MSG = KartRepoFiles.MERGE_MSG
 
 ALL_MERGE_FILES = (MERGE_HEAD, MERGE_INDEX, MERGE_BRANCH, MERGE_MSG)
 

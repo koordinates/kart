@@ -46,7 +46,7 @@ class BaseWorkingCopy:
     Abstract working copy implementation.
     Subclasses to override any unimplemented methods below, and also to set the following fields:
 
-    self.repo - SnoRepo containing this WorkingCopy
+    self.repo - KartRepo containing this WorkingCopy
     self.location - string describing the location of this WorkingCopy
     self.engine - sqlalchemy engine for connecting to the database
     self.sessionmaker - sqlalchemy sessionmaker bound to the engine

@@ -16,7 +16,7 @@ from .merge_util import (
     merge_status_to_text,
 )
 from .output_util import dump_json_output
-from .repo import SnoRepoFiles, SnoRepoState
+from .repo import KartRepoFiles, KartRepoState
 from .structs import CommitWithReference
 
 
@@ -28,7 +28,7 @@ def get_commit_message(
 ):
     merge_message = None
     if read_msg_file:
-        merge_message = repo.read_gitdir_file(SnoRepoFiles.MERGE_MSG, missing_ok=True)
+        merge_message = repo.read_gitdir_file(KartRepoFiles.MERGE_MSG, missing_ok=True)
     if not merge_message:
         merge_message = merge_context.get_message()
     head = repo.structure("HEAD")
@@ -146,16 +146,16 @@ def move_repo_to_merging_state(repo, merge_index, merge_context, merge_message):
     """
     Move the Kart repository into a "merging" state in which conflicts
     can be resolved one by one.
-    repo - the SnoRepo
+    repo - the KartRepo
     merge_index - the MergeIndex containing the conflicts found.
     merge_context - the MergeContext object for the merge.
     merge_message - the commit message for when the merge is completed.
     """
-    assert repo.state != SnoRepoState.MERGING
+    assert repo.state != KartRepoState.MERGING
     merge_index.write_to_repo(repo)
     merge_context.write_to_repo(repo)
-    repo.write_gitdir_file(SnoRepoFiles.MERGE_MSG, merge_message)
-    assert repo.state == SnoRepoState.MERGING
+    repo.write_gitdir_file(KartRepoFiles.MERGE_MSG, merge_message)
+    assert repo.state == KartRepoState.MERGING
 
 
 def abort_merging_state(ctx):
@@ -163,19 +163,19 @@ def abort_merging_state(ctx):
     Put things back how they were before the merge began.
     Tries to be robust against failure, in case the user has messed up the repo's state.
     """
-    repo = ctx.obj.get_repo(allowed_states=SnoRepoState.ALL_STATES)
-    is_ongoing_merge = repo.gitdir_file(SnoRepoFiles.MERGE_HEAD).exists()
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    is_ongoing_merge = repo.gitdir_file(KartRepoFiles.MERGE_HEAD).exists()
 
     # If we are in a merge, we now need to delete all the MERGE_* files.
     # If we are not in a merge, we should clean them up anyway.
     for filename in ALL_MERGE_FILES:
         repo.remove_gitdir_file(filename)
 
-    assert repo.state != SnoRepoState.MERGING
+    assert repo.state != KartRepoState.MERGING
 
     if not is_ongoing_merge:
-        message = SnoRepoState.bad_state_message(
-            SnoRepoState.NORMAL, [SnoRepoState.MERGING], command_extra="--abort"
+        message = KartRepoState.bad_state_message(
+            KartRepoState.NORMAL, [KartRepoState.MERGING], command_extra="--abort"
         )
         raise InvalidOperation(message)
 
@@ -187,7 +187,7 @@ def complete_merging_state(ctx):
     HEAD now at the merge commit. Only works if all conflicts have been resolved.
     """
     repo = ctx.obj.get_repo(
-        allowed_states=SnoRepoState.MERGING,
+        allowed_states=KartRepoState.MERGING,
         command_extra="--continue",
     )
     merge_index = MergeIndex.read_from_repo(repo)
@@ -239,7 +239,7 @@ def complete_merging_state(ctx):
     for filename in ALL_MERGE_FILES:
         repo.remove_gitdir_file(filename)
 
-    assert repo.state != SnoRepoState.MERGING
+    assert repo.state != KartRepoState.MERGING
 
     # TODO - support json output
     click.echo(merge_status_to_text(merge_jdict, fresh=True))
@@ -299,7 +299,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
 
     repo = ctx.obj.get_repo(
-        allowed_states=SnoRepoState.NORMAL,
+        allowed_states=KartRepoState.NORMAL,
         bad_state_message="A merge is already ongoing - see `kart merge --abort` or `kart merge --continue`",
     )
     ctx.obj.check_not_dirty()

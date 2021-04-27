@@ -4,7 +4,7 @@ import shutil
 import pytest
 
 from kart.sqlalchemy.create_engine import gpkg_engine
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 from kart.exceptions import (
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
@@ -134,7 +134,7 @@ def test_import_table_meta_overrides(
 
             cli_runner.invoke(["checkout"])
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             with repo.working_copy.session() as sess:
                 title, description = sess.execute(
                     """
@@ -334,7 +334,7 @@ def test_import_replace_existing_with_compatible_schema_changes(
             assert diff["meta"]["schema.json"]
             assert not diff.get("feature")
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             head_rs = repo.structure("HEAD")
             old_rs = repo.structure("HEAD^")
             assert head_rs.tree != old_rs.tree
@@ -391,7 +391,7 @@ def test_import_replace_existing_with_column_renames(
             assert diff["meta"]["schema.json"]
             assert not diff.get("feature")
 
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             head_rs = repo.structure("HEAD")
             old_rs = repo.structure("HEAD^")
             assert head_rs.tree != old_rs.tree
@@ -504,7 +504,7 @@ def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner
         assert r.exit_code == 0, r.stderr
 
         # There's a bunch of wacky types in here, let's check them
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.working_copy
         with wc.session() as sess:
             table_info = [
@@ -638,7 +638,7 @@ def test_init_import(
         assert r.exit_code == 0, r
         assert (repo_path / ".kart" / "HEAD").exists()
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         assert not repo.is_bare
         assert not repo.is_empty
 
@@ -760,7 +760,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
         assert r.exit_code == 0, r
         assert (repo_path / ".kart" / "HEAD").exists()
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         assert not repo.is_bare
         assert not repo.is_empty
 
@@ -970,7 +970,7 @@ def test_import_existing_wc(
             )
             assert r.exit_code == 0, r
 
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         wc = repo.working_copy
         with wc.session() as sess:
             assert H.row_count(sess, "nz_waca_adjustments") > 0
@@ -1013,7 +1013,7 @@ def test_init_import_detached_head(data_working_copy, data_archive, chdir, cli_r
     with data_working_copy("points") as (repo_path, wcdb):
         with data_archive("gpkg-polygons") as source_path, chdir(repo_path):
             r = cli_runner.invoke(["checkout", "HEAD^"])
-            repo = SnoRepo(repo_path)
+            repo = KartRepo(repo_path)
             assert repo.head_is_detached
             initial_head = repo.head.target.hex
 

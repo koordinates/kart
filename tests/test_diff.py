@@ -8,7 +8,7 @@ import pytest
 import kart
 from kart.diff_structs import Delta, DeltaDiff
 from kart.geometry import hex_wkb_to_ogr
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -40,7 +40,7 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
@@ -261,7 +261,7 @@ def test_diff_reprojection(output_format, data_working_copy, cli_runner):
     """ diff the working copy against HEAD """
     with data_working_copy("points") as (repo_path, wc):
         # make some changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             r = sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
@@ -342,7 +342,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        repo = SnoRepo(repo)
+        repo = KartRepo(repo)
         with repo.working_copy.session() as sess:
             r = sess.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
             assert r.rowcount == 1
@@ -675,7 +675,7 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         # make some changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             r = sess.execute(H.TABLE.INSERT, H.TABLE.RECORD)
             assert r.rowcount == 1
@@ -1103,7 +1103,7 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         # assert r.exit_code == 0, r
 
         # make the R1 -> WC changes
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
 
             EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
@@ -1288,7 +1288,7 @@ def test_diff_object_eq_reverse():
 
 def test_diff_3way(data_working_copy, cli_runner, insert, request):
     with data_working_copy("points") as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
 
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
@@ -1559,7 +1559,7 @@ def test_diff_streaming(data_archive_readonly):
     # Test that a diff can be created without reading every feature,
     # and that the features in that diff can be read one by one.
     with data_archive_readonly("points") as repo_path:
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
         old = repo.datasets("HEAD^")[H.POINTS.LAYER]
         new = repo.datasets("HEAD")[H.POINTS.LAYER]
 

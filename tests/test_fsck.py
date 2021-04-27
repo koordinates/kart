@@ -1,5 +1,5 @@
 import pytest
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -7,7 +7,7 @@ H = pytest.helpers.helpers()
 
 def test_fsck(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
-        repo = SnoRepo(repo_path)
+        repo = KartRepo(repo_path)
 
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 0, r.stdout

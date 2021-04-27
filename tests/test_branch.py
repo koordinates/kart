@@ -4,7 +4,7 @@ import subprocess
 import pytest
 
 from kart.exceptions import NO_REPOSITORY
-from kart.repo import SnoRepo
+from kart.repo import KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -75,7 +75,7 @@ def test_branches(
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        repo = SnoRepo(path1)
+        repo = KartRepo(path1)
         with repo.working_copy.session() as sess:
             insert(sess)
 
