@@ -621,7 +621,7 @@ def diff_output_html(
     ) as ft:
         template = string.Template(ft.read())
 
-    title = f"{Path(repo.path).name}: {base.short_id} .. {target.short_id if target else 'working-copy'}"
+    title = f"{repo.workdir_path.stem}: {base.short_id} ... {target.short_id if target else 'working-copy'}"
 
     with tempfile.TemporaryDirectory() as tempdir:
         tempdir = Path(tempdir)
