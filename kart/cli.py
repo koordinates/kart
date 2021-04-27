@@ -117,7 +117,7 @@ def print_version(ctx):
     ctx.exit()
 
 
-class SnoGroup(click.Group):
+class KartGroup(click.Group):
     def get_command(self, ctx, cmd_name):
         rv = super().get_command(ctx, cmd_name)
         if rv is not None:
@@ -158,7 +158,7 @@ class SnoGroup(click.Group):
 
 
 @add_help_subcommand
-@click.group(cls=SnoGroup)
+@click.group(cls=KartGroup)
 @click.option(
     "-C",
     "--repo",

@@ -155,7 +155,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
 
                 result |= WorkingCopyStatus.DB_SCHEMA_EXISTS
 
-                sno_table_count = sess.scalar(
+                kart_table_count = sess.scalar(
                     """
                     SELECT COUNT(*) FROM information_schema.tables
                     WHERE table_schema=:table_schema AND table_name IN (:kart_state_name, :kart_track_name);
@@ -175,9 +175,9 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
                 )
                 if schema_table_count:
                     result |= WorkingCopyStatus.NON_EMPTY
-                if sno_table_count == 2:
+                if kart_table_count == 2:
                     result |= WorkingCopyStatus.INITIALISED
-                if schema_table_count > sno_table_count:
+                if schema_table_count > kart_table_count:
                     result |= WorkingCopyStatus.HAS_DATA
 
             if (

@@ -21,7 +21,7 @@ def get_directory_from_url(url):
     else:
         match = re.match(r"^\w+@[^:]+?:(.+)$", str(url))
         if match:
-            # 'sno@example.com:PATH_TO_REPO'
+            # 'kart@example.com:PATH_TO_REPO'
             path = match.group(1)
         else:
             # 'PATH_TO_REPO'

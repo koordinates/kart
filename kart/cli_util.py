@@ -32,13 +32,13 @@ def _pygit2_configs():
             pass
 
 
-# These are all the sno defaults that differ from git's defaults.
+# These are all the Kart defaults that differ from git's defaults.
 # (all of these can still be overridden by setting them in a git config file.)
 GIT_CONFIG_DEFAULT_OVERRIDES = {
     # git will change to this branch sooner or later, but hasn't yet.
     "init.defaultBranch": "main",
-    # deltified objects seem to affect clone and diff performance really badly
-    # for sno repos. So we disable them by default.
+    # Deltified objects seem to affect clone and diff performance really badly
+    # for Kart repos. So we disable them by default.
     "pack.depth": 0,
     "pack.window": 0,
 }

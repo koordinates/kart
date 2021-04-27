@@ -219,7 +219,7 @@ class KartRepo(pygit2.Repository):
             extra_args += [f"--initial-branch={initial_branch}"]
         if bare:
             # Create bare-style repo:
-            sno_repo = cls._create_with_git_command(
+            kart_repo = cls._create_with_git_command(
                 [
                     "git",
                     "init",
@@ -234,7 +234,7 @@ class KartRepo(pygit2.Repository):
             dot_kart_path = repo_root_path / cls.DIRNAME_FOR_NEW_REPOS
             dot_init_path = repo_root_path / ".init"
 
-            sno_repo = cls._create_with_git_command(
+            kart_repo = cls._create_with_git_command(
                 [
                     "git",
                     "init",
@@ -245,12 +245,12 @@ class KartRepo(pygit2.Repository):
                 gitdir_path=dot_kart_path,
                 temp_workdir_path=dot_init_path,
             )
-            sno_repo.lock_git_index()
+            kart_repo.lock_git_index()
 
-        sno_repo.write_config(wc_location, bare)
-        sno_repo.write_readme()
-        sno_repo.activate()
-        return sno_repo
+        kart_repo.write_config(wc_location, bare)
+        kart_repo.write_readme()
+        kart_repo.activate()
+        return kart_repo
 
     @classmethod
     def clone_repository(
@@ -266,7 +266,7 @@ class KartRepo(pygit2.Repository):
             )
 
         if bare:
-            sno_repo = cls._create_with_git_command(
+            kart_repo = cls._create_with_git_command(
                 [
                     "git",
                     "clone",
@@ -284,7 +284,7 @@ class KartRepo(pygit2.Repository):
             )
             dot_clone_path = repo_root_path / ".clone"
 
-            sno_repo = cls._create_with_git_command(
+            kart_repo = cls._create_with_git_command(
                 [
                     "git",
                     "clone",
@@ -297,12 +297,12 @@ class KartRepo(pygit2.Repository):
                 gitdir_path=dot_kart_path,
                 temp_workdir_path=dot_clone_path,
             )
-            sno_repo.lock_git_index()
+            kart_repo.lock_git_index()
 
-        sno_repo.write_config(wc_location, bare)
-        sno_repo.write_readme()
-        sno_repo.activate()
-        return sno_repo
+        kart_repo.write_config(wc_location, bare)
+        kart_repo.write_readme()
+        kart_repo.activate()
+        return kart_repo
 
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):

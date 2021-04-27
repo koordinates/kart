@@ -22,7 +22,7 @@ def _check_html_output(s):
     # throw errors on invalid HTML
     document = parser.parse(s)
     # find the <script> element containing data
-    el = document.find("./head/script[@id='sno-data']")
+    el = document.find("./head/script[@id='kart-data']")
     # find the JSON
     m = re.match(r"\s*const DATA=(.*);\s*$", el.text, flags=re.DOTALL)
     # validate it

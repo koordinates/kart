@@ -146,7 +146,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
         result |= WorkingCopyStatus.FILE_EXISTS
         with self.session() as sess:
-            sno_table_count = sess.scalar(
+            kart_table_count = sess.scalar(
                 """
                 SELECT count(*) FROM sqlite_master
                 WHERE type='table' AND name IN (:kart_state_name, :kart_track_name);
@@ -159,9 +159,9 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             user_table_count = sess.scalar(
                 """SELECT count(*) FROM sqlite_master WHERE type='table' AND NAME NOT LIKE 'gpkg%';"""
             )
-            if sno_table_count or user_table_count:
+            if kart_table_count or user_table_count:
                 result |= WorkingCopyStatus.NON_EMPTY
-            if sno_table_count == 2:
+            if kart_table_count == 2:
                 result |= WorkingCopyStatus.INITIALISED
             if user_table_count:
                 result |= WorkingCopyStatus.HAS_DATA

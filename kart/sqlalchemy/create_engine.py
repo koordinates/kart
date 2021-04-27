@@ -110,7 +110,7 @@ def postgis_engine(pgurl):
             # don't drop precision from floats near the edge of their supported range
             dbcur.execute("SET extra_float_digits = 3;")
 
-    pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "sno"})
+    pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "kart"})
 
     engine = sqlalchemy.create_engine(pgurl, module=psycopg2)
     sqlalchemy.event.listen(engine, "connect", _on_connect)
@@ -135,7 +135,7 @@ def sqlserver_engine(msurl):
     url_netloc = re.sub(r"\blocalhost\b", _replace_with_localhost, url.netloc)
 
     url_query = _append_to_query(
-        url.query, {"driver": get_sqlserver_driver(), "Application Name": "sno"}
+        url.query, {"driver": get_sqlserver_driver(), "Application Name": "kart"}
     )
 
     msurl = urlunsplit(

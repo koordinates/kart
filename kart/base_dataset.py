@@ -26,7 +26,7 @@ class BaseDataset(ImportSource):
     # Constants that subclasses should generally define.
 
     VERSION = None  # Version eg 1
-    DATASET_DIRNAME = None  # Eg ".sno-dataset"
+    DATASET_DIRNAME = None  # Eg ".table-dataset" or ".sno-dataset"
 
     # Paths are all defined relative to the inner path -
 
@@ -203,7 +203,7 @@ class BaseDataset(ImportSource):
     def features(self):
         """
         Yields a dict for every feature. Dicts contain key-value pairs for each feature property,
-        and geometries use sno.geometry.Geometry objects, as in the following example::
+        and geometries use kart.geometry.Geometry objects, as in the following example::
 
         {
             "fid": 123,

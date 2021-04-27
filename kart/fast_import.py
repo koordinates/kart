@@ -283,7 +283,7 @@ def fast_import_tables(
             for i in range(num_processes):
                 if header is None:
                     # import onto a temp branch. then reset the head branch afterwards.
-                    import_ref = f"refs/sno-import/{uuid.uuid4()}"
+                    import_ref = f"refs/kart-import/{uuid.uuid4()}"
                     import_refs.append(import_ref)
 
                     # may be None, if head is detached

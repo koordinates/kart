@@ -148,7 +148,7 @@ class BaseWorkingCopy:
         # namespaced within the table it is attached to - and so including the db_schema would be an error.
         return True
 
-    def _quoted_sno_tracking_name(self, trigger_type, dataset=None):
+    def _sno_tracking_name(self, trigger_type, dataset=None):
         """
         Returns the name of the trigger responsible for populating the sno_track table.
         These names are older and are not as consistent - each WorkingClass type must override to provide its own logic.
@@ -894,7 +894,7 @@ class BaseWorkingCopy:
         If there are uncommitted changes, raises InvalidOperation, unless force=True is given
         (in which case the changes are discarded)
 
-        If track_changes_as_dirty=False (the default) the tree ID in the sno-state table gets set to the
+        If track_changes_as_dirty=False (the default) the tree ID in the kart_state table gets set to the
         new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
         tracking table is used to record all the changes, so that they can be committed later.
         """

@@ -365,7 +365,7 @@ class OgrImportSource(ImportSource):
         return {col.name: get_type_value_adapter(col.data_type) for col in self.schema}
 
     @ungenerator(dict)
-    def _ogr_feature_to_sno_feature(self, ogr_feature):
+    def _ogr_feature_to_kart_feature(self, ogr_feature):
         for name, adapter in self.field_adapter_map.items():
             if name == self.primary_key:
                 value = self._get_primary_key_value(ogr_feature, name)
@@ -389,7 +389,7 @@ class OgrImportSource(ImportSource):
 
     def features(self):
         for ogr_feature in self._iter_ogr_features():
-            yield self._ogr_feature_to_sno_feature(ogr_feature)
+            yield self._ogr_feature_to_kart_feature(ogr_feature)
 
     def _ogr_sql_quote_literal(self, x):
         # OGR follows normal SQL92 string literal quoting rules.
@@ -414,7 +414,7 @@ class OgrImportSource(ImportSource):
             filter_sql = f"{self.quote_ident(pk_field)} IN ({quoted_pks})"
 
             for ogr_feature in self._iter_ogr_features(filter_sql=filter_sql):
-                yield self._ogr_feature_to_sno_feature(ogr_feature)
+                yield self._ogr_feature_to_kart_feature(ogr_feature)
 
     @functools.lru_cache()
     def get_meta_item(self, name):
@@ -634,16 +634,16 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
         raise NotImplementedError
 
     @ungenerator(dict)
-    def _sqlalchemy_row_to_sno_feature(self, sa_row):
+    def _sqlalchemy_row_to_kart_feature(self, sa_row):
         for key, value in sa_row.items():
             if key in self.geometry_column_names:
                 yield (key, Geometry.of(value))
             else:
                 yield key, value
 
-    def _sqlalchemy_to_sno_features(self, resultset):
+    def _sqlalchemy_to_kart_features(self, resultset):
         for sa_row in resultset:
-            yield self._sqlalchemy_row_to_sno_feature(sa_row)
+            yield self._sqlalchemy_row_to_kart_feature(sa_row)
 
     def features(self):
         """
@@ -656,7 +656,7 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
                 .execute(f"SELECT * FROM {self.quote_ident(self.table)};")
                 .yield_per(self.CURSOR_SIZE)
             )
-            yield from self._sqlalchemy_to_sno_features(r)
+            yield from self._sqlalchemy_to_kart_features(r)
 
     def get_features(self, row_pks, *, ignore_missing=False):
         with self.engine.connect() as conn:
@@ -668,7 +668,7 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
 
             for batch in chunk(self._first_pk_values(row_pks), 1000):
                 r = conn.execute(batch_query, {"pks": batch})
-                yield from self._sqlalchemy_to_sno_features(r)
+                yield from self._sqlalchemy_to_kart_features(r)
 
 
 class GPKGImportSource(SQLAlchemyOgrImportSource):
