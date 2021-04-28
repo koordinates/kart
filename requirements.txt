@@ -16,7 +16,7 @@ click==7.1.2
     # via -r requirements/requirements.in
 greenlet==1.0.0
     # via sqlalchemy
-importlib-metadata==3.10.0
+importlib-metadata==4.0.1
     # via
     #   jsonschema
     #   sqlalchemy
@@ -40,7 +40,7 @@ rtree==0.9.7
     # via -r requirements/requirements.in
 six==1.15.0
     # via jsonschema
-sqlalchemy==1.4.4
+sqlalchemy==1.4.11
     # via -r requirements/requirements.in
 typing-extensions==3.7.4.3
     # via importlib-metadata

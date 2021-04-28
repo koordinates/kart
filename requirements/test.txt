@@ -22,7 +22,7 @@ gprof2dot==2021.2.21
     # via pytest-profiling
 html5lib==1.1
     # via -r requirements/test.in
-importlib-metadata==3.10.0
+importlib-metadata==4.0.1
     # via
     #   -c requirements/../requirements.txt
     #   pluggy
@@ -37,7 +37,7 @@ packaging==20.9
     #   pytest-sugar
 pluggy==0.13.1
     # via pytest
-py-cpuinfo==7.0.0
+py-cpuinfo==8.0.0
     # via pytest-benchmark
 py==1.10.0
     # via pytest

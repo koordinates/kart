@@ -7,7 +7,9 @@
 apipkg==1.5
     # via execnet
 appnope==0.1.2
-    # via -r requirements/dev.in
+    # via
+    #   -r requirements/dev.in
+    #   ipython
 attrs==20.3.0
     # via
     #   -c requirements/../requirements.txt
@@ -19,11 +21,11 @@ colorama==0.4.4
     # via
     #   -c requirements/test.txt
     #   -r requirements/dev.in
-decorator==4.4.2
+decorator==5.0.7
     # via ipython
 execnet==1.8.0
     # via pytest-xdist
-importlib-metadata==3.10.0
+importlib-metadata==4.0.1
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/test.txt
