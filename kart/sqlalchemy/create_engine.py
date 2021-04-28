@@ -132,10 +132,9 @@ def mysql_engine(msurl):
     url = urlsplit(msurl)
     if url.scheme != CANONICAL_MYSQL_SCHEME:
         raise ValueError("Expecting mysql://")
-    # url_query = _append_to_query(
-    #    url.query, {"Application Name": "sno"}
-    # )
-    msurl = urlunsplit([INTERNAL_MYSQL_SCHEME, url.netloc, url.path, url.query, ""])
+    url_path = url.path or "/"  # Empty path doesn't work with non-empty query.
+    url_query = _append_to_query(url.query, {"program_name": "kart"})
+    msurl = urlunsplit([INTERNAL_MYSQL_SCHEME, url.netloc, url_path, url_query, ""])
 
     engine = sqlalchemy.create_engine(msurl)
     sqlalchemy.event.listen(engine, "checkout", _on_checkout)

@@ -266,3 +266,5 @@ Geometries are encoded using the Standard GeoPackageBinary format specified in [
    - Geometries with a Z component have an XYZ envelope.
    - Other geometries have an XY envelope.
 5. The `srs_id` is always 0, since this information not stored in the geometry object but is stored on a per-column basis in `meta/schema.json` in the `geometryCRS` field.
+
+**Note on axis-ordering:** As required by the GeoPackageBinary format, which Kart uses internally for geometry storage, Kart's axis-ordering is always `(longitude, latitude)`. This same axis-ordering is also used in Kart's JSON and GeoJSON output.

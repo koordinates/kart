@@ -28,6 +28,8 @@ V2_TYPE_TO_MYSQL_TYPE = {
 }
 
 
+_TEXT_AND_BLOB_PREFIXES = ("tiny", "medium", "long")
+
 MYSQL_TYPE_TO_V2_TYPE = {
     "bit": "boolean",
     "tinyint": ("integer", 8),
@@ -50,11 +52,9 @@ MYSQL_TYPE_TO_V2_TYPE = {
     "timestamp": "timestamp",
     "varchar": "text",
     "varbinary": "blob",
+    **{f"{prefix}text": "text" for prefix in _TEXT_AND_BLOB_PREFIXES},
+    **{f"{prefix}blob": "blob" for prefix in _TEXT_AND_BLOB_PREFIXES},
 }
-
-for prefix in ["tiny", "medium", "long"]:
-    MYSQL_TYPE_TO_V2_TYPE[f"{prefix}blob"] = "blob"
-    MYSQL_TYPE_TO_V2_TYPE[f"{prefix}text"] = "text"
 
 
 # Types that can't be roundtripped perfectly in MySQL, and what they end up as.

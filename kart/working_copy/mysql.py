@@ -20,6 +20,16 @@ from kart.sqlalchemy.create_engine import mysql_engine
 class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
     """
     MySQL working copy implementation.
+    Unlike other database-servers (eg Postgresql, Microsoft SQL Server) - MySQL has no concept of a schema (where
+    "schema" means a type of namespace, that exists within a database, that exists within a database server / cluster).
+    So typically, a Kart manages a working copy by managing every table inside an entire db schema, ie:
+    >>> postgresql://HOST[:PORT]/DBNAME/DBSCHEMA
+    But in the case of a MySQL working copy, where schemas don't exist, Kart manages a working copy by managing
+    every table inside entire database:
+    >>> mysql://HOST[:PORT]/DBNAME
+
+    Note that, for compatibility with other working copy implementations, self.db_schema (and escaped variant
+    self.DB_SCHEMA) actually contain the database name in this implementation.
 
     Requirements:
     1. The MySQL server needs to exist
@@ -228,6 +238,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
                 new_col_dict[key] = old_col_dict.get(key)
 
         # Geometry types don't have to be approximated, except for the Z/M specifiers.
+        # MySQL can't restrict a geometry column so that it is only 2D (or 3D, or 4D).
         if old_type == "geometry" and new_type == "geometry":
             old_gtype = old_col_dict.get("geometryType")
             new_gtype = new_col_dict.get("geometryType")
@@ -270,7 +281,10 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 class GeometryType(UserDefinedType):
     """UserDefinedType so that V2 geometry is adapted to MySQL binary format."""
 
-    # TODO: is "axis-order=long-lat" always the correct behaviour? It makes all the tests pass.
+    # In Kart, all geometries are stored as WKB with axis-order=long-lat - since this is the GPKG
+    # standard, and a Kart geometry is a normalised GPKG geometry. MySQL has to be explicitly told
+    # that this is the ordering we use in WKB, since MySQL would otherwise expect lat-long ordering
+    # as specified by ISO 19128:2005.
     AXIS_ORDER = "axis-order=long-lat"
 
     def __init__(self, crs_id):
