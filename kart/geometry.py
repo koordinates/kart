@@ -227,7 +227,7 @@ def normalise_gpkg_geom(gpkg_geom):
 
     # roundtrip it, the envelope and LE-ness are done by ogr_to_gpkg_geom
     return ogr_to_gpkg_geom(
-        gpkg_geom_to_ogr(gpkg_geom, parse_crs=True),
+        gpkg_geom_to_ogr(gpkg_geom),
         _add_envelope_type=want_envelope_type,
     )
 
