@@ -1,7 +1,9 @@
 certifi
 Click~=7.0
+cryptography
 jsonschema
 msgpack~=0.6.1
+pymysql
 Pygments
 Rtree~=0.9.4
 sqlalchemy
