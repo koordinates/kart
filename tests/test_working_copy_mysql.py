@@ -308,7 +308,7 @@ def test_types_roundtrip(data_archive, cli_runner, new_mysql_db_schema):
 
         with new_mysql_db_schema() as (mysql_url, mysql_schema):
             repo.config["kart.workingcopy.location"] = mysql_url
-            r = cli_runner.invoke(["checkout"])
+            r = cli_runner.invoke(["checkout", "2d-geometry-only"])
 
             # If type-approximation roundtrip code isn't working,
             # we would get spurious diffs on types that SQL server doesn't support.

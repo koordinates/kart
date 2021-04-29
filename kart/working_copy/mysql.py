@@ -237,15 +237,6 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             for key in mysql_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
-        # Geometry types don't have to be approximated, except for the Z/M specifiers.
-        # MySQL can't restrict a geometry column so that it is only 2D (or 3D, or 4D).
-        if old_type == "geometry" and new_type == "geometry":
-            old_gtype = old_col_dict.get("geometryType")
-            new_gtype = new_col_dict.get("geometryType")
-            if old_gtype and new_gtype and old_gtype != new_gtype:
-                if old_gtype.split(" ")[0] == new_gtype:
-                    new_col_dict["geometryType"] = new_gtype = old_gtype
-
         return new_type == old_type
 
     _UNSUPPORTED_META_ITEMS = (

@@ -1,4 +1,5 @@
 from kart import crs_util
+from kart.exceptions import NotYetImplemented
 from kart.schema import Schema, ColumnSchema
 
 from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer, MySQLDialect
@@ -142,7 +143,15 @@ def _v2_type_to_mysql_type(column_schema, v2_obj):
 
 def _v2_geometry_type_to_mysql_type(column_schema, v2_obj):
     extra_type_info = column_schema.extra_type_info
-    mysql_type = extra_type_info.get("geometryType", "geometry").split(" ")[0]
+    geometry_type = extra_type_info.get("geometryType", "geometry")
+    geometry_type_parts = geometry_type.strip().split(" ")
+    if len(geometry_type_parts) > 1:
+        raise NotYetImplemented(
+            "Three or four dimensional geometries are not supported by MySQL working copy: "
+            f'("{column_schema.name}" {geometry_type.upper()})'
+        )
+
+    mysql_type = geometry_type_parts[0]
 
     crs_name = extra_type_info.get("geometryCRS")
     crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
