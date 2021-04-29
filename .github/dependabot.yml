@@ -1,0 +1,32 @@
+version: 2
+registries:
+  python-index-devpi-kx-gd-root-dev-simple:
+    type: python-index
+    url: https://devpi.kx.gd/root/dev/+simple/
+    replaces-base: true
+    username: "${{secrets.PYTHON_INDEX_DEVPI_KX_GD_ROOT_DEV_SIMPLE_USERNAME}}"
+    password: "${{secrets.PYTHON_INDEX_DEVPI_KX_GD_ROOT_DEV_SIMPLE_PASSWORD}}"
+  python-index-devpi-kx-gd-root-wheels-simple:
+    type: python-index
+    url: https://devpi.kx.gd/root/wheels/+simple/
+    username: "${{secrets.PYTHON_INDEX_DEVPI_KX_GD_ROOT_WHEELS_SIMPLE_USERNAME}}"
+    password: "${{secrets.PYTHON_INDEX_DEVPI_KX_GD_ROOT_WHEELS_SIMPLE_PASSWORD}}"
+
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "07:00"
+    timezone: Pacific/Auckland
+  pull-request-branch-name:
+    separator: "-"
+  open-pull-requests-limit: 3
+  versioning-strategy: lockfile-only
+  ignore:
+  - dependency-name: pytest-helpers-namespace
+    versions:
+    - 2021.3.24
+  registries:
+  - python-index-devpi-kx-gd-root-dev-simple
+  - python-index-devpi-kx-gd-root-wheels-simple
