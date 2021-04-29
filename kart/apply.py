@@ -99,9 +99,16 @@ def apply_patch(
 ):
     try:
         patch = json.load(patch_file)
-        json_diff = patch["kart.diff/v1+hexwkb"]
-    except (KeyError, json.JSONDecodeError) as e:
+    except json.JSONDecodeError as e:
         raise click.FileError("Failed to parse JSON patch file") from e
+
+    json_diff = patch.get("kart.diff/v1+hexwkb")
+    if json_diff is None:
+        json_diff = patch.get("sno.diff/v1+hexwkb")
+    if json_diff is None:
+        raise click.FileError(
+            "Failed to parse JSON patch file: patch contains no diff information"
+        )
 
     if ref != "HEAD":
         if not do_commit:
@@ -171,9 +178,10 @@ def apply_patch(
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
     if do_commit:
-        try:
-            metadata = patch["kart.patch/v1"]
-        except KeyError:
+        metadata = patch.get("kart.patch/v1")
+        if metadata is None:
+            metadata = patch.get("sno.patch/v1")
+        if metadata is None:
             # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
             raise click.UsageError(
                 "Patch contains no author information, and --no-commit was not supplied"

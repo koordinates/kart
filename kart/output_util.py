@@ -154,6 +154,8 @@ def dump_json_output(output, output_path, json_style="pretty"):
     """
     Dumps the output to JSON in the output file.
     """
+    output = _maybe_legacy_style_output(output)
+
     fp = resolve_output_path(output_path)
 
     highlit = json_style == "pretty" and can_output_colour(fp)
@@ -173,6 +175,22 @@ def dump_json_output(output, output_path, json_style="pretty"):
         for chunk in json_encoder.iterencode(output):
             fp.write(chunk)
     fp.write("\n")
+
+
+def _maybe_legacy_style_output(output):
+    # If the caller ran "sno status", return output starting with "sno.status/v1"
+    # But if they run "kart status", return the unchanged output ie "kart.status/v1".
+    import os
+
+    if os.path.basename(sys.argv[0]) != "sno":
+        return output
+    if (
+        isinstance(output, dict)
+        and len(output) <= 2
+        and all(key.startswith("kart.") for key in output)
+    ):
+        output = {key.replace("kart.", "sno."): value for key, value in output.items()}
+    return output
 
 
 def resolve_output_path(output_path):
