@@ -47,7 +47,7 @@ pytest-benchmark[aspect]==3.4.1
     # via -r requirements/test.in
 pytest-cov==2.11.1
     # via -r requirements/test.in
-pytest-helpers-namespace==2021.3.24
+pytest-helpers-namespace==2021.4.29
     # via -r requirements/test.in
 pytest-profiling==1.7.0
     # via -r requirements/test.in
