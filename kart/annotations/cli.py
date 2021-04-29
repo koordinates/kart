@@ -1,0 +1,74 @@
+import click
+import pygit2
+
+from .db import annotations_session
+from kart.diff_estimation import estimate_diff_feature_counts
+
+EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
+
+def gen_reachable_commits(repo):
+    """
+    Generator. Yields commits that are reachable from any ref.
+    """
+    refs = repo.references
+    commit_queue = set()
+    commit_shas_seen = set()
+    for k in refs:
+        commit_queue.add(refs[k].peel(pygit2.Commit))
+
+    while commit_queue:
+        commit = commit_queue.pop()
+        if commit.oid.hex in commit_shas_seen:
+            continue
+        try:
+            parents = commit.parents
+        except KeyError:
+            # shallow repo. no big deal
+            parents = []
+        for p in parents:
+            commit_queue.add(p)
+        commit_shas_seen.add(commit.oid.hex)
+        yield commit
+
+
+@click.command(name="build-annotations")
+@click.pass_context
+@click.option(
+    "--all-reachable", is_flag=True, help="Build annotations for all reachable commits"
+)
+@click.argument(
+    "refishes",
+    nargs=-1,
+)
+def build_annotations(ctx, refishes, all_reachable):
+    """
+    Builds annotations against commits; stores the annotations in a sqlite database.
+    """
+    repo = ctx.obj.repo
+    if all_reachable:
+        if refishes:
+            raise click.UsageError(
+                "--all-reachable and refishes are mutually exclusive"
+            )
+        click.echo("Enumerating reachable commits...")
+        commits = list(gen_reachable_commits(repo))
+    else:
+        if not refishes:
+            refishes = ["HEAD"]
+        commits = [repo.revparse_single(r).peel(pygit2.Commit) for r in refishes]
+    if commits:
+        with annotations_session(repo):
+            click.echo("Building feature change counts...")
+            for i, commit in enumerate(commits):
+                click.echo(
+                    f"({i+1}/{len(commits)}): {commit.short_id} {commit.message.splitlines()[0]}"
+                )
+                estimate_diff_feature_counts(
+                    repo.structure(
+                        commit.parent_ids[0] if commit.parent_ids else EMPTY_TREE_SHA
+                    ),
+                    repo.structure(commit),
+                    accuracy="exact",
+                )
+    click.echo("done.")

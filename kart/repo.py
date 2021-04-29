@@ -5,12 +5,14 @@ import struct
 import subprocess
 import sys
 from enum import Enum
+from functools import lru_cache
 from pathlib import Path
 
 import click
 import pygit2
 
 from . import is_windows
+from .annotations import DiffAnnotations
 from .cli_util import tool_environment
 from .exceptions import (
     translate_subprocess_exit_code,
@@ -320,6 +322,11 @@ class KartRepo(pygit2.Repository):
             temp_workdir_path.rmdir()
 
         return result
+
+    @property
+    @lru_cache(maxsize=1)
+    def diff_annotations(self):
+        return DiffAnnotations(self)
 
     def write_config(
         self,
