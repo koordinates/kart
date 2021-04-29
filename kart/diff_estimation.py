@@ -7,7 +7,7 @@ FEATURE_SUBTREES_PER_TREE = 256
 FEATURE_TREE_NESTING = 2
 MAX_TREES = FEATURE_SUBTREES_PER_TREE ** FEATURE_TREE_NESTING
 
-L = logging.getLogger("sno.diff_estimation")
+L = logging.getLogger("kart.diff_estimation")
 Z_SCORES = {
     0.50: 0.0,
     0.60: 0.26,
@@ -94,7 +94,7 @@ def estimate_diff_feature_counts(
     for dataset_path in all_ds_paths:
         if accuracy == "exact" and working_copy:
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
-            from sno.diff import get_dataset_diff
+            from kart.diff import get_dataset_diff
 
             ds_diff = get_dataset_diff(
                 base_rs,
