@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.10.0 (UNRELEASED)
 
 * Change to `kart data ls` JSON output, now includes whether repo is Kart or Sno branded.
+* Bugfix: Creating a working copy while switching branch now creates a working copy with the post-switch branch checked out, not the pre-switch branch.
 
 ## 0.9.0 (First "Kart" release)
 

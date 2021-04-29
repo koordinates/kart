@@ -35,7 +35,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if not (working_copy.status() & WorkingCopyStatus.INITIALISED):
         click.echo(f"Creating working copy at {working_copy} ...")
         working_copy.create_and_initialise()
-        datasets = list(repo.datasets())
+        datasets = list(repo.datasets(target_tree_or_commit))
         working_copy.write_full(target_tree_or_commit, *datasets, safe=False)
 
     db_tree_matches = (
