@@ -7,6 +7,11 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.10.0 (UNRELEASED)
 
+### Major changes in this release
+* The working copy can now be a MySQL database (previously only GPKG, PostGIS and SQL Server working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `mysql://HOST/DBNAME` [#399](https://github.com/koordinates/kart/pull/399)
+  - Read the documentation at [docs/MYSQL_WC.md](docs/MYSQL_WC.md)
+
+### Other changes
 * Change to `kart data ls` JSON output, now includes whether repo is Kart or Sno branded.
 * Bugfix: Creating a working copy while switching branch now creates a working copy with the post-switch branch checked out, not the pre-switch branch.
 * `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
@@ -34,9 +39,9 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Other changes
 
- * The working copy can now be a SQL Server database (previously only GPKG and PostGIS working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `mssql://[HOST]/DBNAME/SCHEMA` [#362](https://github.com/koordinates/kart/issues/362)
+ * The working copy can now be a SQL Server database (previously only GPKG and PostGIS working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `mssql://HOST/DBNAME/DBSCHEMA` [#362](https://github.com/koordinates/kart/issues/362)
      - Currently requires that the ODBC driver for SQL Server is installed.
-     - Read the documentation at `docs/SQL_SERVER_WC.md`
+     - Read the documentation at [docs/SQL_SERVER_WC.md](docs/SQL_SERVER_WC.md)
  * Support for detecting features which have changed slightly during a re-import from a data source without a primary key, and reimporting them with the same primary key as last time so they show as edits as opposed to inserts. [#212](https://github.com/koordinates/kart/issues/212)
  * Optimised GPKG working copies for better performance for large datasets.
  * Bugfix - fixed issues roundtripping certain type metadata in the PostGIS working copy: specifically geometry types with 3 or more dimensions (Z/M values) and numeric types with scale.
@@ -80,8 +85,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ### Major changes in this release
 
  * Newly created Sno repositories no longer have git internals visible in the main folder - they are hidden away in a '.sno' folder. [#147](https://github.com/koordinates/kart/issues/147)
- * The working copy can now be a PostgreSQL / PostGIS database (previously only GPKG working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `postgresql://[HOST]/DBNAME/SCHEMA` [#267](https://github.com/koordinates/kart/issues/267)
-     - Read the documentation at `docs/POSTGIS_WC.md`
+ * The working copy can now be a PostgreSQL / PostGIS database (previously only GPKG working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `postgresql://HOST/DBNAME/DBSCHEMA` [#267](https://github.com/koordinates/kart/issues/267)
+     - Read the documentation at [docs/POSTGIS_WC.md](docs/POSTGIS_WC.md)
  * Patches that create or delete datasets are now supported in Datasets V2 [#239](https://github.com/koordinates/kart/issues/239)
 
 ### Minor features / fixes:
