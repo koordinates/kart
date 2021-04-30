@@ -8,8 +8,11 @@ __all__ = (
 )
 
 import os
+import logging
 import platform
 import sys
+
+L = logging.getLogger("kart.__init__")
 
 is_frozen = getattr(sys, "frozen", None) and hasattr(sys, "_MEIPASS")
 is_darwin = platform.system() == "Darwin"
@@ -93,3 +96,37 @@ if is_linux:
     import certifi
 
     pygit2.settings.ssl_cert_file = certifi.where()
+
+
+# If Kart is aborted, also abort all child processes.
+if is_windows:
+    import ctypes
+
+    # On Windows, the calling process is responsible for giving Kart its own process group ID -
+    # which is recommended - but we can't do anything about if they haven't done it properly.
+    # But, we do need to handle CTRL-C events - the call below "restores normal processing of CTRL-C events"
+    # (ie,  don't ignore them) and this is also inherited by child processes.
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    if not kernel32.SetConsoleCtrlHandler(None, False):
+        L.warn('Error calling SetConsoleCtrlHandler: ', ctypes.get_last_error())
+else:
+    # On non-Windows we can use os.setsid() which Windows lacks,
+    # to attempt to give Kart it's own process group ID (PGID)
+    if "_KART_PGID_SET" not in os.environ and os.getpid() != os.getpgrp():
+        try:
+            os.setsid()
+            # No need to do this again for any Kart subprocess of this Kart process.
+            os.environ["_KART_PGID_SET"] = "1"
+        except OSError as e:
+            L.warn("Error setting Kart PGID - os.setsid() failed.", e)
+
+    # If Kart now has its own PGID, which its children share - we want to SIGTERM that when Kart exits.
+    if os.getpid() == os.getpgrp():
+        import signal
+
+        def _cleanup_process_group(signum, stack_frame):
+            os.killpg(os.getpid(), signum)
+            sys.exit(128 + signum)
+
+        signal.signal(signal.SIGTERM, _cleanup_process_group)
+        signal.signal(signal.SIGINT, _cleanup_process_group)
