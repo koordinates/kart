@@ -11,25 +11,11 @@ def gen_reachable_commits(repo):
     """
     Generator. Yields commits that are reachable from any ref.
     """
+    walker = repo.walk(repo.head.target)
     refs = repo.references
-    commit_queue = set()
-    commit_shas_seen = set()
-    for k in refs:
-        commit_queue.add(refs[k].peel(pygit2.Commit))
-
-    while commit_queue:
-        commit = commit_queue.pop()
-        if commit.oid.hex in commit_shas_seen:
-            continue
-        try:
-            parents = commit.parents
-        except KeyError:
-            # shallow repo. no big deal
-            parents = []
-        for p in parents:
-            commit_queue.add(p)
-        commit_shas_seen.add(commit.oid.hex)
-        yield commit
+    for ref in refs:
+        walker.push(refs[ref].target)
+    yield from walker
 
 
 @click.command(name="build-annotations")

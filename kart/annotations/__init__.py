@@ -11,15 +11,16 @@ class DiffAnnotations:
 
     def _object_id(self, base_rs, target_rs):
         # this is actually symmetric, so we can marginally increase hit rate by sorting first
-        if base_rs.tree.id < target_rs.tree.id:
-            return f"{base_rs.tree.id}...{target_rs.tree.id}"
-        else:
-            return f"{target_rs.tree.id}...{base_rs.tree.id}"
+        tree_ids = sorted(rs.tree.id for rs in (base_rs, target_rs))
+        return f"{tree_ids[0]}...{tree_ids[1]}"
 
     def store(self, *, base_rs, target_rs, annotation_type, data):
         """
         Stores a diff annotation to the repo's sqlite database,
         and returns the annotation itself.
+
+        base_rs: base RepoStructure object for this diff (revA in a 'revA...revB' diff)
+        target_rs: target RepoStructure object for this diff (revB in a 'revA...revB' diff)
         """
         assert isinstance(data, dict)
         with annotations_session(self.repo) as session:
@@ -45,6 +46,9 @@ class DiffAnnotations:
         """
         Returns a diff annotation from the sqlite database.
         Returns None if it isn't found.
+
+        base_rs: base RepoStructure object for this diff (revA in a 'revA...revB' diff)
+        target_rs: target RepoStructure object for this diff (revB in a 'revA...revB' diff)
         """
         with annotations_session(self.repo) as session:
             object_id = self._object_id(base_rs, target_rs)
@@ -63,7 +67,7 @@ class DiffAnnotations:
                 return data
             else:
                 L.debug(
-                    "failed to retrieve: %s for %s",
+                    "missing: %s for %s",
                     annotation_type,
                     object_id,
                 )
