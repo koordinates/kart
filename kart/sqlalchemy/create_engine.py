@@ -119,6 +119,29 @@ def postgis_engine(pgurl):
     return engine
 
 
+CANONICAL_MYSQL_SCHEME = "mysql"
+INTERNAL_MYSQL_SCHEME = "mysql+pymysql"
+
+
+def mysql_engine(msurl):
+    def _on_checkout(mysql_conn, connection_record, connection_proxy):
+        dbcur = mysql_conn.cursor()
+        dbcur.execute("SET time_zone='UTC';")
+        dbcur.execute("SET sql_mode = 'ANSI_QUOTES';")
+
+    url = urlsplit(msurl)
+    if url.scheme != CANONICAL_MYSQL_SCHEME:
+        raise ValueError("Expecting mysql://")
+    url_path = url.path or "/"  # Empty path doesn't work with non-empty query.
+    url_query = _append_to_query(url.query, {"program_name": "kart"})
+    msurl = urlunsplit([INTERNAL_MYSQL_SCHEME, url.netloc, url_path, url_query, ""])
+
+    engine = sqlalchemy.create_engine(msurl)
+    sqlalchemy.event.listen(engine, "checkout", _on_checkout)
+
+    return engine
+
+
 CANONICAL_SQL_SERVER_SCHEME = "mssql"
 INTERNAL_SQL_SERVER_SCHEME = "mssql+pyodbc"
 SQL_SERVER_INSTALL_DOC_URL = (

@@ -37,6 +37,12 @@ jobs:
                   -e SA_PASSWORD=PassWord1
                 ports:
                   - 1433:1433
+              mysql:
+                image: mysql
+                options: >-
+                  -e MYSQL_ROOT_PASSWORD=PassWord1
+                ports:
+                  - 3306:3306
 
           - name: macOS
             id: Darwin
