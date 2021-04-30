@@ -7,24 +7,20 @@ You also need to have the [Microsoft ODBC Driver for SQL Server](https://docs.mi
 
 ### SQL Server partitioning
 
-SQL Server databases are designed so that they can be used for multiple tasks simultaneously without those tasks interfering with each other - they have multiple levels of data separation.
+SQL Server databases are designed so that they can be used for multiple apps simultaneously without those apps interfering with each other - they have multiple levels of data separation.
 
 * A SQL Server contains one or more named databases. When a user connects to the server, they must specify up front which database they need, and then they can only access data in this database.
 * A single database contains one or more named schemas, which in turn contain tables. A user connected to the database can query tables in any schema they have access-rights to without starting a new connection. Two tables can have the same name, as long as they are in different schemas.
 
-So SQL Server has a partition called a "schema" - the name can be confusing as "schema" can also have other meanings, but in this case it means a namespace. A Kart SQL Server working copy is fine to share a server or a database with any other task, but it expects to be given its own schema to manage (just as Kart expects to manage its own GPKG working copy, not share it with other data). Managing the schema means that Kart is responsible for initialising that schema and importing the data in its initial state, then keeping track of any edits made to that data so that they can be committed. Kart expects that the user will use some other application to modify the data in that schema as part of making edits to a Kart working copy.
+So SQL Server has a partition called a "schema" - the name can be confusing as "schema" can also have other meanings, but in this case it means a namespace. A Kart SQL Server working copy can share a server or a database with any other app, but it expects to be given its own schema to manage (just as Kart expects to manage its own GPKG working copy, not share it with data from other apps). Managing the schema means that Kart is responsible for initialising that schema and importing the data in its initial state, then keeping track of any edits made to that data so that they can be committed. Kart expects that the user will use some other application to modify the data in that schema as part of making edits to a Kart working copy.
 
 ### SQL Server Connection URI
 
-A Kart repository with a SQL Server working copy needs to be configured with a `mssql://` connection URI. This URI contains how to connect to the server, the name of the database to connect to (which can be shared with other tasks), and the name of the schema that should be managed as a working copy by this Kart repository.
+A Kart repository with a SQL Server working copy needs to be configured with a `mssql://` connection URI. This URI contains how to connect to the server, the name of the database to connect to (which can be shared with other apps), and the name of the schema that should be managed as a working copy by this Kart repository.
 
-A connection URL would generally have the following format:
+Kart needs a connection URL in the following format:
 
-`mssql://[user[:password]@][host][:port][/dbname]`
-
-Since Kart also requires the schema to be specified up front, Kart needs a connection URL in the following format:
-
-`mssql://[user[:password]@][host][:port]/dbname/dbschema`
+`mssql://[user[:password]@]host[:port]/dbname/dbschema`
 
 For example, a Kart repo called `airport` might have a URL like the following:
 
@@ -78,7 +74,7 @@ If you need decide that a certain dataset should contain more types of geometrie
 
 #### CRS definitions
 
-Kart lets you define arbitrary CRS definitions and attach them to your dataset. By contrast, SQL Server comes pre-installed with hundreds of the standard EPSG & ESRI coordinate reference system definitions. However, these cannot be modified, and custom CRS cannot be added.
+Kart lets you define arbitrary CRS definitions and attach them to your dataset. By contrast, SQL Server comes pre-installed with hundreds of standard EPSG & ESRI coordinate reference system definitions. However, these cannot be modified, and custom CRS cannot be added.
 
 This mismatch has the following consequence: the only part of the CRS that Kart is tracking that can be written to a SQL Server working copy is the numeric part of the CRS authority code (referred to in [SQL Server documentation](https://docs.microsoft.com/sql/relational-databases/system-catalog-views/sys-spatial-reference-systems-transact-sql) as the `spatial_reference_id` or `SRID`). This code will be embedded in each geometry.
 

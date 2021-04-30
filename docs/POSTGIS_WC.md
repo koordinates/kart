@@ -5,25 +5,21 @@ In order to use a [PostGIS](https://postgis.net/) working copy, you need to have
 
 ### PostgreSQL partitioning
 
-PostgreSQL databases are designed so that they can be used for multiple tasks simultaneously without those tasks interfering with each other - they have multiple levels of data separation.
+PostgreSQL databases are designed so that they can be used for multiple apps simultaneously without those apps interfering with each other - they have multiple levels of data separation.
 
 * A single server hosts a PostgreSQL database cluster.
 * A database cluster contains one or more named databases. When a user connects to the server, they must specify up front which database they need, and then they can only access data in this database.
 * A single database contains one or more named schemas, which in turn contain tables. A user connected to the database can query tables in any schema they have access-rights to without starting a new connection. Two tables can have the same name, as long as they are in different schemas.
 
-So PostgreSQL has a partition called a "schema" - the name can be confusing as "schema" can also have other meanings, but in this case it means a namespace. A Kart PostGIS working copy is fine to share a database cluster or a database with any other task, but it expects to be given its own schema to manage (just as Kart expects to manage its own GPKG working copy, not share it with other data). Managing the schema means that Kart is responsible for initialising that schema and importing the data in its initial state, then keeping track of any edits made to that data so that they can be committed. Kart expects that the user will use some other application to modify the data in that schema as part of making edits to a Kart working copy.
+So PostgreSQL has a partition called a "schema" - the name can be confusing as "schema" can also have other meanings, but in this case it means a namespace. A Kart PostGIS working copy can share a database cluster or a database with any other app, but it expects to be given its own schema to manage (just as Kart expects to manage its own GPKG working copy, not share it with data from other apps). Managing the schema means that Kart is responsible for initialising that schema and importing the data in its initial state, then keeping track of any edits made to that data so that they can be committed. Kart expects that the user will use some other application to modify the data in that schema as part of making edits to a Kart working copy.
 
 ### PostgreSQL Connection URI
 
-A Kart repository with a PostGIS working copy needs to be configured with a `postgresql://` connection URI. This URI contains how to connect to the database cluster, the name of the database to connect to (which can be shared with other tasks), and the name of the schema that should be managed as a working copy by this Kart repository.
+A Kart repository with a PostGIS working copy needs to be configured with a `postgresql://` connection URI. This URI contains how to connect to the database cluster, the name of the database to connect to (which can be shared with other apps), and the name of the schema that should be managed as a working copy by this Kart repository.
 
-From the [PostgreSQL documentation](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING), a connection URL has the following format:
+Kart needs a connection URL in the following format:
 
-`postgresql://[user[:password]@][host][:port][/dbname]`
-
-Since Kart also requires the schema to be specified up front, Kart needs a connection URL in the following format:
-
-`postgresql://[user[:password]@][host][:port]/dbname/dbschema`
+`postgresql://[user[:password]@]host[:port]/dbname/dbschema`
 
 For example, a Kart repo called `airport` might have a URL like the following:
 
@@ -47,7 +43,7 @@ There is one type that Kart supports that has no PostGIS equivalent - an 8-bit i
 
 #### CRS definitions
 
-The PostGIS extension comes pre-installed with thousands of the standard EPSG & ESRI coordinate reference system definitions. Although these are generally produced from official sources, unfortunately different vendors or products might have slightly different variations of them with respect to axis ordering, naming, authority codes, or other differences.
+The PostGIS extension comes pre-installed with thousands of standard EPSG & ESRI coordinate reference system definitions. Although these are generally produced from official sources, unfortunately different vendors or products might have slightly different variations of them with respect to axis ordering, naming, authority codes, or other differences.
 
 Kart has some design goals that make CRS management slightly more complicated in a PostGIS working copy:
 

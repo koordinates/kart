@@ -1,7 +1,7 @@
 MySQL Working Copy
 -----------------------
 
-In order to use a [MySQL](https://www.mysql.com/) working copy, you need to have a server running MySQL 8.0 or later. (MySQL 5.6 and later are largely compatible but not officially supported).
+In order to use a [MySQL](https://www.mysql.com/) working copy, you need to have a server running MySQL 8.0 or later.
 
 ### MySQL partitioning
 
@@ -19,7 +19,7 @@ A Kart repository with a MySQL working copy needs to be configured with a `mysql
 
 Kart needs a connection URL in the following format:
 
-`mysql://[user[:password]@][host][:port]/dbname`
+`mysql://[user[:password]@]host[:port]/dbname`
 
 For example, a Kart repo called `airport` might have a URL like the following:
 

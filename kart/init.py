@@ -395,8 +395,9 @@ def import_(
     "wc_location",
     help="Location where the working copy should be created. This should be in one of the following formats:\n"
     "- PATH.gpkg\n"
-    "- postgresql://[HOST]/DBNAME/SCHEMA\n"
-    "- mssql://[HOST]/DBNAME/SHEMA\n",
+    "- postgresql://HOST/DBNAME/DBSCHEMA\n"
+    "- mssql://HOST/DBNAME/DBSCHEMA\n"
+    "- mysql://HOST/DBNAME\n",
 )
 @click.option(
     "--max-delta-depth",

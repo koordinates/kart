@@ -29,9 +29,9 @@ class WorkingCopyType(Enum):
                 f"Unrecognised working copy type: {location}\n"
                 "Try one of:\n"
                 "  PATH.gpkg\n"
-                "  postgresql://[HOST]/DBNAME/DBSCHEMA\n"
-                "  mssql://[HOST]/DBNAME/DBSCHEMA\n"
-                "  mysql://[HOST]/DBNAME"
+                "  postgresql://HOST/DBNAME/DBSCHEMA\n"
+                "  mssql://HOST/DBNAME/DBSCHEMA\n"
+                "  mysql://HOST/DBNAME"
             )
 
     @property

@@ -56,8 +56,8 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
     @classmethod
     def check_valid_db_uri(cls, db_uri, repo):
         """
-        For working copies that connect to a database - checks the given URI is in the required form:
-        >>> URI_SCHEME::[HOST]/DBNAME/DBSCHEMA
+        For working copies that connect to a database - checks the given URI is in the required form -
+        generally URI_SCHEME::HOST/DBNAME/DBSCHEMA but some implementations may have different path formats.
         """
         url = urlsplit(db_uri)
 

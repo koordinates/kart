@@ -371,8 +371,8 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     Usage: kart create-workingcopy [LOCATION]
     LOCATION should be one of the following:
     - PATH.gpkg for a GPKG file.
-    - postgresql://[HOST]/DBNAME/DBSCHEMA for a PostGIS database.
-    - mssql://[HOST]/DBNAME/DBSCHEMA for a SQL Server database.
+    - postgresql://HOST/DBNAME/DBSCHEMA for a PostGIS database.
+    - mssql://HOST/DBNAME/DBSCHEMA for a SQL Server database.
     If no location is supplied, the location from the repo config at "kart.workingcopy.location" will be used.
     If no location is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
