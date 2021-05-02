@@ -27,6 +27,8 @@ updates:
   - dependency-name: pytest-helpers-namespace
     versions:
     - 2021.3.24
+  # github requires this to access private registries (why only private ones?)
+  insecure-external-code-execution: allow
   registries:
   - python-index-devpi-kx-gd-root-dev-simple
   - python-index-devpi-kx-gd-root-wheels-simple
