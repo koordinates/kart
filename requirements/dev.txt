@@ -7,9 +7,7 @@
 apipkg==1.5
     # via execnet
 appnope==0.1.2
-    # via
-    #   -r requirements/dev.in
-    #   ipython
+    # via -r requirements/dev.in
 attrs==20.3.0
     # via
     #   -c requirements/../requirements.txt
@@ -39,11 +37,13 @@ ipdb==0.13.7
     # via -r requirements/dev.in
 ipython-genutils==0.2.0
     # via traitlets
-ipython==7.22.0
+ipython==7.23.0
     # via
     #   -r requirements/dev.in
     #   ipdb
 jedi==0.18.0
+    # via ipython
+matplotlib-inline==0.1.2
     # via ipython
 packaging==20.9
     # via
@@ -93,7 +93,9 @@ toml==0.10.2
     #   ipdb
     #   pytest
 traitlets==5.0.5
-    # via ipython
+    # via
+    #   ipython
+    #   matplotlib-inline
 typing-extensions==3.7.4.3
     # via
     #   -c requirements/../requirements.txt
