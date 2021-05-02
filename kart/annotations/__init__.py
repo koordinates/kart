@@ -1,5 +1,8 @@
 import json
 import logging
+
+from sqlalchemy.exc import OperationalError
+
 from .db import annotations_session, KartAnnotation
 
 L = logging.getLogger(__name__)
@@ -23,24 +26,31 @@ class DiffAnnotations:
         target_rs: target RepoStructure object for this diff (revB in a 'revA...revB' diff)
         """
         assert isinstance(data, dict)
-        with annotations_session(self.repo) as session:
-            object_id = self._object_id(base_rs, target_rs)
-            data = json.dumps(data)
-            L.debug(
-                "storing: %s for %s: %s",
-                annotation_type,
-                object_id,
-                data,
-            )
-            session.add(
-                KartAnnotation(
-                    object_type="diff",
-                    object_id=object_id,
-                    annotation_type=annotation_type,
-                    data=data,
+        object_id = self._object_id(base_rs, target_rs)
+        data = json.dumps(data)
+        try:
+            with annotations_session(self.repo) as session:
+                L.debug(
+                    "storing: %s for %s: %s",
+                    annotation_type,
+                    object_id,
+                    data,
                 )
-            )
-            return data
+                session.add(
+                    KartAnnotation(
+                        object_type="diff",
+                        object_id=object_id,
+                        annotation_type=annotation_type,
+                        data=data,
+                    )
+                )
+        except OperationalError as e:
+            # ignore errors from readonly databases.
+            if "readonly database" in str(e):
+                L.info("Can't store annotation; annotations.db is read-only")
+            else:
+                raise
+        return data
 
     def get(self, *, base_rs, target_rs, annotation_type):
         """

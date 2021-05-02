@@ -2,6 +2,7 @@ import contextlib
 import json
 import threading
 from sqlalchemy import Column, Integer, Text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -49,3 +50,15 @@ def annotations_session(repo):
                 s.commit()
             finally:
                 _local.session = None
+
+
+def is_db_writable(session):
+    try:
+        session.execute("PRAGMA user_version=0;")
+    except OperationalError as e:
+        if "readonly database" in str(e):
+            return False
+        else:
+            raise
+    else:
+        return True

@@ -1,8 +1,10 @@
 import click
 import pygit2
 
-from .db import annotations_session
+from .db import annotations_session, is_db_writable
+
 from kart.diff_estimation import estimate_diff_feature_counts
+from kart.exceptions import InvalidOperation
 
 EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
@@ -44,7 +46,12 @@ def build_annotations(ctx, refishes, all_reachable):
             refishes = ["HEAD"]
         commits = [repo.revparse_single(r).peel(pygit2.Commit) for r in refishes]
     if commits:
-        with annotations_session(repo):
+        with annotations_session(repo) as session:
+            if not is_db_writable(session):
+                # not much point in this command if it can't write to the db
+                raise InvalidOperation(
+                    "Annotations database is readonly; can't continue"
+                )
             click.echo("Building feature change counts...")
             for i, commit in enumerate(commits):
                 click.echo(
