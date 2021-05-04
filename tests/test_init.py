@@ -143,7 +143,7 @@ def test_import_table_meta_overrides(
                     WHERE c.table_name = 'census2016_sdhca_ot_ced_short'
                     """
                 ).fetchone()
-                assert title == "census2016_sdhca_ot_ced_short: test title"
+                assert title == "test title"
                 assert description == "test description"
 
                 xml_metadata = sess.scalar(

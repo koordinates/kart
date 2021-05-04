@@ -227,6 +227,20 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
         )
 
+    def _identifier_already_exists(self, sess, identifier):
+        # Returns truthy value if gpkg_contents already contains this identifier.
+        # Identifiers must be UNIQUE.
+        return sess.scalar(
+            sa.select([sa.func.count()])
+            .select_from(GpkgTables.gpkg_contents)
+            .where(GpkgTables.gpkg_contents.c.identifier == identifier)
+        )
+
+    def _identifier_prefix(self, dataset):
+        # Prefixes an identifier to make sure it is unique - if needed.
+        # User-visible so we return a sensible prefix.
+        return f"{dataset.table_name}: "
+
     def _write_meta(self, sess, dataset):
         """
         Populate the following tables with data from this dataset:
@@ -236,14 +250,6 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         gpkg_meta_items = dict(gpkg_adapter.all_gpkg_meta_items(dataset, table_name))
         gpkg_contents = gpkg_meta_items["gpkg_contents"]
         gpkg_contents["table_name"] = table_name
-
-        # FIXME: find a better way to roundtrip identifiers
-        identifier_prefix = f"{dataset.table_name}: "
-        if not gpkg_contents["identifier"].startswith(identifier_prefix):
-            gpkg_contents["identifier"] = (
-                identifier_prefix + gpkg_contents["identifier"]
-            )
-
         gpkg_geometry_columns = gpkg_meta_items.get("gpkg_geometry_columns")
         gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")
 
@@ -253,6 +259,13 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
                 sess.execute(
                     GpkgTables.gpkg_spatial_ref_sys.insert().prefix_with("OR REPLACE"),
                     gpkg_spatial_ref_sys,
+                )
+
+            new_identifier = gpkg_contents["identifier"]
+            if self._identifier_already_exists(sess, new_identifier):
+                # Prefix the identifier with table_name in case of conflict.
+                gpkg_contents["identifier"] = (
+                    self._identifier_prefix(dataset) + new_identifier
                 )
 
             # Our repo copy doesn't include all fields from gpkg_contents
@@ -350,8 +363,20 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             self._restore_approximated_primary_key(
                 ds_meta_items["schema.json"], wc_meta_items["schema.json"]
             )
+        if "title" in ds_meta_items and "title" in wc_meta_items:
+            wc_meta_items["title"] = self._restore_approximated_title(
+                dataset, ds_meta_items["title"], wc_meta_items["title"]
+            )
 
         super()._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
+
+    def _restore_approximated_title(self, dataset, ds_title, wc_title):
+        # If the identifier column has non-unique values, we have to prefix them in GPKG.
+        # We remove the prefixes in the remove_hidden_meta_diffs step.
+        prefix = self._identifier_prefix(dataset)
+        if wc_title.startswith(prefix) and not ds_title.startswith(prefix):
+            wc_title = wc_title[len(prefix) :]
+        return wc_title
 
     def _restore_approximated_primary_key(self, ds_schema, wc_schema):
         """
@@ -556,10 +581,12 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
         # TODO - find a better way to roundtrip titles while keeping them unique
         table_name = dataset.table_name
-        identifier = f"{table_name}: {dest_value}"
+        if self._identifier_already_exists(sess, dest_value):
+            # Prefix the identifier with the table name in case of conflict:
+            dest_value = self._identifier_prefix(dataset) + dest_value
         sess.execute(
             """UPDATE gpkg_contents SET identifier = :identifier WHERE table_name = :table_name""",
-            {"identifier": identifier, "table_name": table_name},
+            {"identifier": dest_value, "table_name": table_name},
         )
 
     def _apply_meta_description(self, sess, dataset, src_value, dest_value):

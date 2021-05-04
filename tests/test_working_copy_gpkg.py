@@ -451,7 +451,7 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
         with wc.session() as sess:
             r = sess.execute("""SELECT identifier, description FROM gpkg_contents""")
             identifier, description = r.fetchone()
-            assert identifier == "nz_pa_points_topo_150k: NZ Pa Points (Topo, 1:50k)"
+            assert identifier == "NZ Pa Points (Topo, 1:50k)"
             assert description.startswith("Defensive earthworks")
 
         r = cli_runner.invoke(["checkout", "main"])
@@ -460,7 +460,7 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
         with wc.session() as sess:
             r = sess.execute("""SELECT identifier, description FROM gpkg_contents""")
             identifier, description = r.fetchone()
-            assert identifier == "nz_pa_points_topo_150k: new identifier"
+            assert identifier == "new identifier"
             assert description == "new description"
 
 

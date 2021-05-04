@@ -75,7 +75,7 @@ def generate_v2_meta_item(gpkg_meta_items, path, id_salt=None):
         raise KeyError(f"Not a v2 meta_item: {path}")
 
     if path == "title":
-        return extract_title(gpkg_meta_items["gpkg_contents"])
+        return gpkg_meta_items["gpkg_contents"].get("identifier")
 
     elif path == "description":
         description = gpkg_meta_items["gpkg_contents"].get("description")
@@ -133,25 +133,10 @@ def get_table_name(gpkg_contents):
     return gpkg_contents.get("table_name", "")
 
 
-def extract_title(gpkg_contents):
-    """Extract the dataset title from a v1 dataset."""
-    identifier = gpkg_contents.get("identifier", "")
-    table_name = gpkg_contents.get("table_name", "")
-    # FIXME: find a better way of roundtripping identifiers?
-    identifier_prefix = _get_identifier_prefix(table_name)
-    if identifier.startswith(identifier_prefix):
-        identifier = identifier[len(identifier_prefix) :]
-    return identifier
-
-
-def _get_identifier_prefix(table_name):
-    return f"{table_name}: "
-
-
 def generate_gpkg_contents(v2_obj, table_name):
     """Generate a gpkg_contents meta item from a v2 dataset."""
     result = {
-        "identifier": generate_unique_identifier(v2_obj, table_name),
+        "identifier": v2_obj.get_meta_item("title") or "",
         "description": v2_obj.get_meta_item("description"),
         "table_name": table_name,
         "data_type": "features" if v2_obj.has_geometry else "attributes",
@@ -159,15 +144,6 @@ def generate_gpkg_contents(v2_obj, table_name):
     if v2_obj.has_geometry:
         result["srs_id"] = _gpkg_srs_id(v2_obj)
     return result
-
-
-def generate_unique_identifier(v2_obj, table_name):
-    # FIXME: find a better way of roundtripping identifiers?
-    identifier = v2_obj.get_meta_item("title") or ""
-    identifier_prefix = _get_identifier_prefix(table_name)
-    if not identifier.startswith(identifier_prefix):
-        identifier = identifier_prefix + identifier
-    return identifier
 
 
 def generate_gpkg_geometry_columns(v2_obj, table_name):
