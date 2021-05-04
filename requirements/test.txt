@@ -55,7 +55,7 @@ pytest-shard==0.1.2
     # via -r requirements/test.in
 pytest-sugar==0.9.4
     # via -r requirements/test.in
-pytest==6.2.3
+pytest==6.2.4
     # via
     #   -r requirements/test.in
     #   lovely-pytest-docker
