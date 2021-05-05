@@ -190,6 +190,15 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
     def meta_items(self, dataset):
         with self.session() as sess:
+            title = sess.scalar(
+                """
+                SELECT table_comment FROM information_schema.tables
+                WHERE table_schema=:table_schema AND table_name=:table_name;
+                """,
+                {"table_schema": self.db_schema, "table_name": dataset.table_name},
+            )
+            yield "title", title
+
             table_info_sql = """
                 SELECT
                     C.column_name, C.ordinal_position, C.data_type, C.srs_id,
@@ -240,7 +249,6 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         return new_type == old_type
 
     _UNSUPPORTED_META_ITEMS = (
-        "title",
         "description",
         "metadata/dataset.json",
         "metadata.xml",
