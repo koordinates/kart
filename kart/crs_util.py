@@ -25,6 +25,7 @@ class CoordinateReferenceString(StringFromFile):
 class _WktPatterns:
     """Regular expressions for recognizing WKT name and authority."""
 
+    COMMA = ","
     WHITESPACE = r"\s*"
     OPEN_BRACKET = r"[%s]" % re.escape("[(")
     CLOSE_BRACKET = r"[%s]" % re.escape("])")
@@ -41,7 +42,7 @@ class _WktPatterns:
                 "AUTHORITY",
                 OPEN_BRACKET,
                 WKT_STR,
-                ",",
+                COMMA,
                 WKT_STR,
                 CLOSE_BRACKET,
                 CLOSE_BRACKET,
@@ -49,6 +50,21 @@ class _WktPatterns:
             ]
         ),
         re.IGNORECASE,
+    )
+
+    FINAL_AXIS_PATTERN = re.compile(
+        WHITESPACE.join(
+            [
+                "AXIS",
+                OPEN_BRACKET,
+                WKT_STR,
+                COMMA,
+                r"(?:NORTH|SOUTH|EAST|WEST)",
+                CLOSE_BRACKET,
+                COMMA,
+                "$",
+            ]
+        )
     )
 
 
@@ -191,10 +207,16 @@ def normalise_wkt(wkt):
     return "".join(token_value)
 
 
-def has_standard_authority(crs):
-    """
-    Returns True if this CRS appears to be defined by some standard authority - EPSG, ESRI, or Google.
-    Doesn't check if the CRS actually matches (or roughly matches) the definition specified by that authority.
-    """
-    auth_name, auth_code = parse_authority(crs)
-    return auth_name in ("EPSG", "ESRI") or auth_code == 900913  # GOOGLE
+def ensure_axes_specified(crs):
+    # Adds DEFAULT_AXES to a definition if there are no axes present in the definition.
+    # There is a non-standard requirement by MySQL that AXES are specified.
+    DEFAULT_AXES = 'AXIS["X", EAST], AXIS["Y", NORTH], '
+    m = _WktPatterns.ROOT_AUTHORITY_PATTERN.search(crs)
+    if m:
+        start, end = m.span()
+        crs_without_authority = crs[:start]
+        authority = crs[start:end]
+        if not _WktPatterns.FINAL_AXIS_PATTERN.search(crs_without_authority):
+            return crs_without_authority + DEFAULT_AXES + authority
+
+    return crs

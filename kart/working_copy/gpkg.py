@@ -16,6 +16,7 @@ from sqlalchemy.types import UserDefinedType
 from . import gpkg_adapter, WorkingCopyStatus
 from .base import BaseWorkingCopy
 from .table_defs import GpkgTables, GpkgKartTables
+from kart import crs_util
 from kart.exceptions import InvalidOperation
 from kart.geometry import normalise_gpkg_geom
 from kart.schema import Schema
@@ -239,7 +240,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             # Update GeoPackage core tables
             if gpkg_spatial_ref_sys:
                 sess.execute(
-                    GpkgTables.gpkg_spatial_ref_sys.insert().prefix_with("OR REPLACE"),
+                    GpkgTables.gpkg_spatial_ref_sys.insert().prefix_with("OR IGNORE"),
                     gpkg_spatial_ref_sys,
                 )
 
@@ -392,24 +393,40 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
                 # Restore demoted-PK as PK again
                 demoted_pk["primaryKeyIndex"] = 0
 
+    def _is_builtin_crs(self, crs):
+        auth_name, auth_code = crs_util.parse_authority(crs)
+        return auth_name == "EPSG" and auth_code == "4326"
+
     def _find_pk(self, schema_cols):
         return next((c for c in schema_cols if c.get("primaryKeyIndex") == 0), None)
 
     def _find_by_name(self, schema_cols, name):
         return next((c for c in schema_cols if c["name"] == name), None)
 
-    def delete_meta(self, dataset):
+    def _delete_meta(self, sess, dataset):
         table_name = dataset.table_name
         with self.session() as sess:
             self._delete_meta_metadata(sess, table_name)
+
             # FOREIGN KEY constraints are still active, so we delete in a particular order:
+            for table in (GpkgTables.gpkg_geometry_columns, GpkgTables.gpkg_contents):
+                sess.execute(
+                    sa.delete(table).where(table.c.table_name == dataset.table_name)
+                )
+
+            # Delete CRS's that are no longer referenced (and are not built-in to GPKG).
+            table = GpkgTables.gpkg_spatial_ref_sys
             sess.execute(
-                """DELETE FROM gpkg_geometry_columns WHERE table_name = :table_name;""",
-                {"table_name": dataset.table_name},
-            )
-            sess.execute(
-                """DELETE FROM gpkg_contents WHERE table_name = :table_name;""",
-                {"table_name": dataset.table_name},
+                sa.delete(table).where(
+                    sa.not_(
+                        sa.or_(
+                            table.c.srs_id.in_(
+                                sa.select(GpkgTables.gpkg_contents.c.srs_id)
+                            ),
+                            table.c.srs_id.in_([-1, 0, 4326]),
+                        )
+                    )
+                )
             )
 
     def _delete_meta_metadata(self, sess, table_name):
@@ -421,13 +438,10 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         if not ids:
             return
 
-        sqls = (
-            """DELETE FROM gpkg_metadata_reference WHERE md_file_id IN :ids;""",
-            """DELETE FROM gpkg_metadata WHERE id IN :ids;""",
-        )
-        for sql in sqls:
-            stmt = sa.text(sql).bindparams(sa.bindparam("ids", expanding=True))
-            sess.execute(stmt, {"ids": ids})
+        table = GpkgTables.gpkg_metadata_reference
+        sess.execute(sa.delete(table).where(table.c.md_file_id.in_(ids)))
+        table = GpkgTables.gpkg_metadata
+        sess.execute(sa.delete(table).where(table.c.id.in_(ids)))
 
     def _create_spatial_index_pre(self, sess, dataset):
         # Implementing only _create_spatial_index_pre:

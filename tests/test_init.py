@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 
 import pytest
@@ -659,41 +660,41 @@ def test_init_import(
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, table) > 0
 
-            wc_tree_id = sess.execute(
+            wc_tree_id = sess.scalar(
                 """SELECT value FROM "gpkg_kart_state" WHERE table_name='*' AND key='tree';"""
-            ).fetchone()[0]
+            )
             assert wc_tree_id == repo.head_tree.hex
 
-            xml_metadata = sess.execute(
+            xml_metadata = sess.scalar(
                 f"""
                 SELECT m.metadata
                 FROM gpkg_metadata m JOIN gpkg_metadata_reference r
                 ON m.id = r.md_file_id
                 WHERE r.table_name = '{table}'
                 """
-            ).fetchone()
+            )
             if table in ("nz_pa_points_topo_150k", "nz_waca_adjustments"):
-                assert xml_metadata[0].startswith(
+                assert xml_metadata.startswith(
                     '<gmd:MD_Metadata xmlns:gco="http://www.isotc211.org/2005/gco"'
                 )
             else:
                 assert not xml_metadata
 
-            srs_definition = sess.execute(
+            srs_definition = sess.scalar(
                 f"""
                 SELECT srs.definition
                 FROM gpkg_spatial_ref_sys srs JOIN gpkg_geometry_columns geom
                 ON srs.srs_id = geom.srs_id
                 WHERE geom.table_name = '{table}'
                 """
-            ).fetchone()
+            )
+            if srs_definition:
+                srs_definition = re.sub(r',\s*', ', ', srs_definition)
             if table == "nz_pa_points_topo_150k":
-                assert srs_definition[0].startswith(
-                    'GEOGCS["WGS 84",\n    DATUM["WGS_1984"'
-                )
+                assert srs_definition.startswith('GEOGCS["WGS 84", DATUM["WGS_1984"')
             elif table == "nz_waca_adjustments":
-                assert srs_definition[0].startswith(
-                    'GEOGCS["NZGD2000",\n    DATUM["New_Zealand_Geodetic_Datum_2000"'
+                assert srs_definition.startswith(
+                    'GEOGCS["NZGD2000", DATUM["New_Zealand_Geodetic_Datum_2000"'
                 )
 
             H.verify_gpkg_extent(sess, table)
