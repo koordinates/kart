@@ -477,8 +477,13 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
         rtree_table = f"rtree_{dataset.table_name}_{geom_col}"
         sess.execute(f"DROP TABLE IF EXISTS {self.quote(rtree_table)};")
+        # For some reason, gpkg_extensions doesn't accurately preserve the case of these
+        # fields, so we use the LIKE operator to make sure we delete the right entry.
         sess.execute(
-            f"DELETE FROM gpkg_extensions WHERE (table_name, column_name, extension_name) = (:table_name, :column_name, 'gpkg_rtree_index')",
+            """
+            DELETE FROM gpkg_extensions WHERE extension_name = 'gpkg_rtree_index'
+            AND table_name LIKE :table_name AND column_name LIKE :column_name;
+            """,
             {"table_name": dataset.table_name, "column_name": geom_col},
         )
 
