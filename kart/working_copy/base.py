@@ -946,20 +946,17 @@ class BaseWorkingCopy:
 
         for table in table_updates:
             base_ds = base_datasets[table]
-            ds_version = base_ds.VERSION
 
             # Do we support changing the WC metadata to back to base_ds metadata?
             rev_wc_meta_diff = self.diff_db_to_tree_meta(base_ds)
-            update_supported = self._is_meta_update_supported(
-                ds_version, rev_wc_meta_diff
-            )
+            update_supported = self._is_meta_update_supported(rev_wc_meta_diff)
 
             # And, do we support then changing it from base_ds metadata to target_ds metadata?
             target_ds = target_datasets[table]
             if target_ds != base_ds:
                 rev_rev_meta_diff = base_ds.diff_meta(target_ds)
                 update_supported = update_supported and self._is_meta_update_supported(
-                    ds_version, rev_rev_meta_diff
+                    rev_rev_meta_diff
                 )
 
             if not update_supported:
@@ -1094,7 +1091,7 @@ class BaseWorkingCopy:
             self._delete_features(sess, base_ds, delete_pks)
             self._write_features(sess, target_ds, insert_and_update_pks)
 
-    def _is_meta_update_supported(self, dataset_version, meta_diff):
+    def _is_meta_update_supported(self, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
         (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).

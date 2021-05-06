@@ -262,7 +262,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             if key.startswith("crs/"):
                 del ds_meta_items[key]
 
-    def _is_meta_update_supported(self, dataset_version, meta_diff):
+    def _is_meta_update_supported(self, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
         (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).

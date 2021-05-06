@@ -336,7 +336,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                 del wc_meta_items[key]
             # If either definition is custom, we keep the diff, since it could be important.
 
-    def _is_meta_update_supported(self, dataset_version, meta_diff):
+    def _is_meta_update_supported(self, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
         (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).

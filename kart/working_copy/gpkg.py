@@ -536,7 +536,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         yield
         self._create_triggers(sess, dataset)
 
-    def _is_meta_update_supported(self, dataset_version, meta_diff):
+    def _is_meta_update_supported(self, meta_diff):
         """
         Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
         (Any meta change is supported - even in datasets v1 - if we drop and rewrite the table,
@@ -545,10 +545,6 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         """
         if not meta_diff:
             return True
-
-        if dataset_version < 2:
-            # Dataset1 doesn't support meta changes at all - except by rewriting the entire table.
-            return False
 
         if "schema.json" not in meta_diff:
             return True
