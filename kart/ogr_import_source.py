@@ -139,7 +139,7 @@ class OgrImportSource(ImportSource):
         except RuntimeError as e:
             raise NotFound(
                 f"{ogr_source!r} doesn't appear to be valid "
-                f"(tried formats: {','.join(allowed_formats) if allowed_formats else '(all)'})",
+                f"(tried formats: {','.join(allowed_formats) if allowed_formats else '(all)'})\n{e}",
                 exit_code=NO_IMPORT_SOURCE,
             ) from e
 
