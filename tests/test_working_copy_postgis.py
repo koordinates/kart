@@ -2,6 +2,8 @@ import pytest
 
 import pygit2
 
+from sqlalchemy import inspect
+
 from kart.repo import KartRepo
 from kart.working_copy import postgis_adapter
 from kart.working_copy.base import WorkingCopyStatus
@@ -193,6 +195,60 @@ def test_commit_edits(
             r = cli_runner.invoke(["checkout", "HEAD^"])
 
             assert repo.head.peel(pygit2.Commit).hex == orig_head
+
+
+def test_postgis_wc_with_long_index_name(
+    data_archive,
+    tmp_path,
+    cli_runner,
+    chdir,
+    new_postgis_db_schema,
+):
+    with data_archive("gpkg-points") as data:
+        # list tables
+        repo_path = tmp_path / "repo"
+        repo_path.mkdir()
+
+        # create a repo
+        with new_postgis_db_schema() as (
+            postgres_url,
+            postgres_schema,
+        ):
+            r = cli_runner.invoke(
+                ["init", f"--workingcopy-path={postgres_url}", str(repo_path)]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            # import a very long named dataset
+            r = cli_runner.invoke(
+                [
+                    "-C",
+                    str(repo_path),
+                    "import",
+                    f"{data}/nz-pa-points-topo-150k.gpkg",
+                    "nz_pa_points_topo_150k:a_really_long_table_name_that_is_really_actually_quite_long_dont_you_think",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            repo = KartRepo(repo_path)
+            assert not repo.is_bare
+            assert not repo.is_empty
+
+            wc = repo.working_copy
+            insp = inspect(wc.engine)
+            indexes = insp.get_indexes(
+                "a_really_long_table_name_that_is_really_actually_quite_long_dont_you_think",
+                schema=postgres_schema,
+            )
+            assert len(indexes) == 1
+            assert indexes[0] == {
+                "name": "a_really_long_table_na_0ccb228e66871172f030077f3a9974d2b58d1ee5",
+                "unique": False,
+                "column_names": ["geom"],
+                "include_columns": [],
+                "dialect_options": {"postgresql_using": "gist"},
+            }
 
 
 def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):

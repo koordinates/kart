@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import logging
 import time
 
@@ -14,6 +15,9 @@ from .table_defs import PostgisKartTables
 from kart import crs_util
 from kart.schema import Schema
 from kart.sqlalchemy.create_engine import postgis_engine
+
+
+POSTGRES_MAX_IDENTIFIER_LENGTH = 63
 
 
 class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
@@ -165,6 +169,13 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         geom_col = dataset.geom_column_name
         index_name = f"{dataset.table_name}_idx_{geom_col}"
+        if len(index_name) > POSTGRES_MAX_IDENTIFIER_LENGTH:
+            # postgres can't handle identifiers this long.
+            # so make it shorter, but keep it unique
+            sha1 = hashlib.sha1(index_name.encode("utf-8")).hexdigest()
+            keep_chars = POSTGRES_MAX_IDENTIFIER_LENGTH - 40 - 1
+            index_name = f"{dataset.table_name[:keep_chars]}_{sha1}"
+
         table = self._table_def_for_dataset(dataset)
 
         L.debug("Creating spatial index for %s.%s", dataset.table_name, geom_col)
