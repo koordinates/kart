@@ -365,7 +365,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
         sess.execute(
-            f"COMMENT ON TABLE {self._table_identifier(dataset.table_name)} IS :comment",
+            f"COMMENT ON TABLE {self.table_identifier(dataset.table_name)} IS :comment",
             {"comment": dest_value},
         )
 
@@ -398,7 +398,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             src_name = src_schema[col_id].name
             sess.execute(
                 f"""
-                ALTER TABLE {self._table_identifier(table)}
+                ALTER TABLE {self.table_identifier(table)}
                 DROP COLUMN IF EXISTS {self.quote(src_name)};"""
             )
 
@@ -407,7 +407,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             dest_name = dest_schema[col_id].name
             sess.execute(
                 f"""
-                ALTER TABLE {self._table_identifier(table)}
+                ALTER TABLE {self.table_identifier(table)}
                 RENAME COLUMN {self.quote(src_name)} TO {self.quote(dest_name)};
                 """
             )
@@ -426,7 +426,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                         do_write_crs = True
 
             sess.execute(
-                f"""ALTER TABLE {self._table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
+                f"""ALTER TABLE {self.table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
             )
 
         if do_write_crs:
