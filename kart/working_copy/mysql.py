@@ -83,6 +83,16 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
 
+    def _is_dataset_supported(self, dataset):
+        return not any(
+            self._is_unsupported_geometry_column(col)
+            for col in dataset.schema.geometry_columns
+        )
+
+    def _is_unsupported_geometry_column(self, col):
+        geometry_type = col.extra_type_info.get("geometryType", "geometry")
+        return len(geometry_type.strip().split(" ")) > 1
+
     def _write_meta(self, sess, dataset):
         """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
         self._write_meta_title(sess, dataset)

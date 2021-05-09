@@ -3,6 +3,7 @@ import functools
 import logging
 import time
 
+import click
 import pygit2
 import sqlalchemy as sa
 
@@ -458,6 +459,8 @@ class BaseWorkingCopy:
             for dataset in self.repo.datasets(self.get_db_tree()):
                 if dataset.path not in repo_filter:
                     continue
+                if not self._is_dataset_supported(dataset):
+                    continue
                 ds_diff = self.diff_db_to_tree(
                     dataset,
                     ds_filter=repo_filter[dataset.path],
@@ -467,11 +470,20 @@ class BaseWorkingCopy:
             repo_diff.prune()
             return repo_diff
 
+    def _is_dataset_supported(self, dataset):
+        """
+        Returns False if the given dataset cannot be created in this working copy.
+        Generally returns True since we do our best to create all datasets, even if not 100% accurately.
+        """
+        return True
+
     def diff_db_to_tree(self, dataset, ds_filter=None, raise_if_dirty=False):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
         """
+        if not self._is_dataset_supported(dataset):
+            return DatasetDiff()
         ds_filter = ds_filter or UNFILTERED
         with self.session():
             meta_diff = self.diff_db_to_tree_meta(dataset, raise_if_dirty)
@@ -745,8 +757,16 @@ class BaseWorkingCopy:
 
             for dataset in datasets:
                 # Create the table
-                self._create_table_for_dataset(sess, dataset)
-                self._write_meta(sess, dataset)
+                try:
+                    self._create_table_for_dataset(sess, dataset)
+                    self._write_meta(sess, dataset)
+                except NotYetImplemented as e:
+                    click.secho(
+                        f"Couldn't write {dataset.table_name} to working copy:\n{e}",
+                        err=True,
+                        fg="red",
+                    )
+                    continue
 
                 if dataset.has_geometry:
                     self._create_spatial_index_pre(sess, dataset)

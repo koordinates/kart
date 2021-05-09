@@ -39,7 +39,7 @@ Most geospatial data can be converted to MySQL format without losing any fidelit
 
 #### Three and four dimensional geometries
 
-Geometries in MySQL are always two-dimensional (meaning they have an X and a Y co-ordinate, or a longitude and a latitude co-ordinate). Three- or four-dimensional geometries, with Z (altitude) or M (measure) co-ordinates, are not supported in MySQL. As a result, Kart datasets containing three- and four-dimensional geometries cannot currently be checked out as MySQL working copies.
+Geometries in MySQL are always two-dimensional (meaning they have an X and a Y co-ordinate, or a longitude and a latitude co-ordinate). Three- or four-dimensional geometries, with Z (altitude) or M (measure) co-ordinates, are not supported in MySQL. As a result, Kart datasets containing three- and four-dimensional geometries cannot currently be checked out into MySQL working copies.
 
 #### Approximated types
 
