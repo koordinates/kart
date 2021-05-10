@@ -1,7 +1,7 @@
 import contextlib
 import json
 import threading
-from sqlalchemy import Column, Integer, Text
+from sqlalchemy import Column, Index, Integer, Text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -14,11 +14,16 @@ Base = declarative_base()
 class KartAnnotation(Base):
     __tablename__ = "kart_annotations"
     id = Column(Integer, nullable=False, primary_key=True)
-    # TODO: look into what indexes we should have here
-    object_type = Column(Text, nullable=False)
     object_id = Column(Text, nullable=False)
     annotation_type = Column(Text, nullable=False)
     data = Column(Text, nullable=False)
+    __table_args__ = (
+        Index(
+            "kart_annotations_multicol",
+            annotation_type.desc(),
+            object_id.desc(),
+        ),
+    )
 
     def __repr__(self):
         return f"<KartAnnotation({self.annotation_type})>"

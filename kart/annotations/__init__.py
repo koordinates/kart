@@ -38,7 +38,6 @@ class DiffAnnotations:
                 )
                 session.add(
                     KartAnnotation(
-                        object_type="diff",
                         object_id=object_id,
                         annotation_type=annotation_type,
                         data=data,
@@ -63,7 +62,6 @@ class DiffAnnotations:
         with annotations_session(self.repo) as session:
             object_id = self._object_id(base_rs, target_rs)
             for annotation in session.query(KartAnnotation).filter(
-                KartAnnotation.object_type == "diff",
                 KartAnnotation.annotation_type == annotation_type,
                 KartAnnotation.object_id == object_id,
             ):
