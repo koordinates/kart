@@ -60,6 +60,14 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         sess.execute(
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
         )
+        sess.execute(
+            "EXECUTE sys.sp_addextendedproperty 'MS_Description', :title, 'schema', :schema, 'table', :table",
+            {
+                "title": dataset.get_meta_item("title"),
+                "schema": self.db_schema,
+                "table": dataset.table_name,
+            },
+        )
 
     def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
@@ -200,6 +208,15 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
     def meta_items(self, dataset):
         with self.session() as sess:
+            title = sess.scalar(
+                """
+                SELECT CAST(value AS NVARCHAR) FROM::fn_listextendedproperty(
+                    'MS_Description', 'schema', :schema, 'table', :table, null, null);
+                """,
+                {"schema": self.db_schema, "table": dataset.table_name},
+            )
+            yield "title", title
+
             table_info_sql = """
                 SELECT
                     C.column_name, C.ordinal_position, C.data_type,
@@ -242,7 +259,6 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         return new_type == old_type
 
     _UNSUPPORTED_META_ITEMS = (
-        "title",
         "description",
         "metadata/dataset.json",
         "metadata.xml",
