@@ -8,6 +8,7 @@ from sqlalchemy.exc import DBAPIError
 
 from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
+from kart import crs_util
 from kart.exceptions import InvalidOperation, DbConnectionError
 
 

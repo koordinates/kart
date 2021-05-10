@@ -229,3 +229,29 @@ def _mysql_type_to_v2_geometry_type(mysql_col_info, mysql_crs_info):
             geometry_crs = crs_util.get_identifier_str(crs_info["DEFINITION"])
 
     return "geometry", {"geometryType": geometry_type, "geometryCRS": geometry_crs}
+
+
+def generate_mysql_spatial_ref_sys(v2_obj):
+    """
+    Generates the contents of the spatial_referece_system table from the v2 object.
+    The result is a list containing a dict per table row.
+    Each dict has the format {column-name: value}.
+    """
+    result = []
+    for crs_name, definition in v2_obj.crs_definitions():
+        auth_name, auth_code = crs_util.parse_authority(definition)
+        crs_id = crs_util.get_identifier_int(definition)
+        result.append(
+            {
+                "srs_id": crs_id,
+                "name": crs_util.parse_name(definition),
+                "definition": _mysql_crs_definition(definition),
+                "organization": auth_name,
+                "org_id": crs_id,
+            }
+        )
+    return result
+
+
+def _mysql_crs_definition(definition):
+    return crs_util.ensure_axes_specified(definition).replace("\n", " ")

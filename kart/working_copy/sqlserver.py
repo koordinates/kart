@@ -64,7 +64,11 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
     def _type_def_for_column_schema(self, col, dataset):
         if col.data_type == "geometry":
             crs_name = col.extra_type_info.get("geometryCRS")
-            crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
+            crs_id = None
+            if dataset is not None:
+                crs_id = (
+                    crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
+                )
             # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
         elif col.data_type in ("date", "time", "timestamp"):
@@ -74,18 +78,13 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             return None
 
     def _write_meta(self, sess, dataset):
-        """Write the title. Other metadata is not stored in a SQL Server WC."""
-        self._write_meta_title(sess, dataset)
-
-    def _write_meta_title(self, sess, dataset):
-        """Write the dataset title as a comment on the table."""
+        # There is no metadata stored anywhere except the table itself, so nothing to delete.
         # TODO - dataset title is not stored anywhere in SQL server working copy right now.
         # We can probably store it using function sp_addextendedproperty to add property 'MS_Description'
         pass
 
-    def delete_meta(self, dataset):
-        """Delete any metadata that is only needed by this dataset."""
-        # There is no metadata stored anywhere except the table itself.
+    def _delete_meta(self, sess, dataset):
+        # There is no metadata stored anywhere except the table itself, so nothing to delete.
         pass
 
     def _get_geom_extent(self, sess, dataset, default=None):
@@ -257,7 +256,11 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             if key in ds_meta_items:
                 del ds_meta_items[key]
 
-        # Diffing CRS is not yet supported.
+        # We hide all CRS diffs - diffing and committing CRS changes is currently unsupported for two reasons.
+        # 1. SQL Server can't store custom CRS at all, so no way to roundtrip custom CRS through SQL Server WC.
+        # 2. The CRS ID can't be stored in the geometry column, only the geometry objects themselves.
+        # We could extract it out, but it means taking a sample - which gets tricky if there are no geometries,
+        # or there is a mixture of geometries with different CRS IDs. For now, we don't support it.
         for key in list(ds_meta_items.keys()):
             if key.startswith("crs/"):
                 del ds_meta_items[key]

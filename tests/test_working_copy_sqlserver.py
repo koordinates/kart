@@ -415,3 +415,54 @@ def test_geometry_constraints(
                         "SET geom=geometry::STGeomFromText('POINT(0 0)', 4327) WHERE fid=4;"
                     )
                 # Not allowed - wrong CRS ID
+
+
+def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
+    with data_archive("custom_crs") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            repo.config["kart.workingcopy.location"] = sqlserver_url
+            r = cli_runner.invoke(["checkout", "main"])
+
+            # main branch has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly.
+            # In fact we *cannot* roundtrip it properly since MSSQL cannot store custom CRS, but we should at least not
+            # get a spurious diff when the user has not made any edits - the diff should be hidden.
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stderr
+
+            # Even though SQL Server cannot store the custom CRS, it can still store the CRS ID in the geometries:
+            wc = repo.working_copy
+            with wc.session() as sess:
+                srid = sess.scalar(
+                    f"SELECT TOP 1 geom.STSrid FROM {sqlserver_schema}.{H.POINTS.LAYER};"
+                )
+                assert srid == 100002
+
+            # We should be able to checkout the previous revision, which has a different (standard) CRS.
+            r = cli_runner.invoke(["checkout", "main^"])
+            assert r.exit_code == 0, r.stderr
+
+            wc = repo.working_copy
+            with wc.session() as sess:
+                srid = sess.scalar(
+                    f"SELECT TOP 1 geom.STSrid FROM {sqlserver_schema}.{H.POINTS.LAYER};"
+                )
+                assert srid == 4326
+
+            # Checkout main to the WC, then set HEAD back to main^ without updating the WC.
+            # (This is just a way to use Kart to simulate the user manually changing the CRS in the WC.)
+            head_commit = repo.head_commit.hex
+            head_tree = repo.head_tree.hex
+            r = cli_runner.invoke(["checkout", "main"])
+            assert r.exit_code == 0, r.stderr
+            repo.write_gitdir_file("HEAD", head_commit)
+            repo.working_copy.update_state_table_tree(head_tree)
+
+            # MSSQL can't actually store custom CRS, so, there's nothing in the WC that's changed
+            # that we can commit. (The CRS ID has changed, but we don't currently read it from the WC -
+            # that would involve extracting it from some significant sample of the geometries).
+            # (See the limitations in SQL_SERVER_WC.md)
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stderr

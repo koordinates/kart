@@ -70,11 +70,19 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         sess.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
+        sess.execute(
+            f"ALTER TABLE {self.table_identifier(dataset)} COMMENT = :comment",
+            {"comment": dataset.get_meta_item("title")},
+        )
 
-    def _type_def_for_column_schema(self, col, dataset):
+    def _type_def_for_column_schema(self, col, dataset=None):
         if col.data_type == "geometry":
             crs_name = col.extra_type_info.get("geometryCRS")
-            crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
+            crs_id = None
+            if dataset is not None:
+                crs_id = (
+                    crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
+                )
             # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
         elif col.data_type == "timestamp":
@@ -94,25 +102,46 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         return len(geometry_type.strip().split(" ")) > 1
 
     def _write_meta(self, sess, dataset):
-        """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
-        self._write_meta_title(sess, dataset)
-        self._write_meta_crs(sess, dataset)
+        # The only metadata to write that is stored outside the table is custom CRS.
+        for crs in mysql_adapter.generate_mysql_spatial_ref_sys(dataset):
+            existing_crs = sess.execute(
+                """
+                SELECT organization, definition FROM information_schema.st_spatial_reference_systems
+                WHERE srs_id = :srs_id;
+                """,
+                crs,
+            ).fetchone()
 
-    def _write_meta_title(self, sess, dataset):
-        """Write the dataset title as a comment on the table."""
-        sess.execute(
-            f"ALTER TABLE {self.table_identifier(dataset)} COMMENT = :comment",
-            {"comment": dataset.get_meta_item("title")},
-        )
+            if existing_crs:
+                # Don't overwrite existing CRS definitions if they are built-ins. Doing so is an error in MYSQL:
+                if existing_crs['ORGANIZATION'] == "EPSG":
+                    continue
+                # Don't try to replace a CRS if a matching one already exists - overwriting a CRS with an identical
+                # CRS is a no-op, but one which requires certain permissions, so we avoid it if we can.
+                if existing_crs['DEFINITION'] == crs['definition']:
+                    continue
+                # Don't replace a CRS definition if it is currently being referenced. Doing so is an error in MySQL.
+                if sess.scalar(
+                    "SELECT COUNT(*) FROM information_schema.st_geometry_columns WHERE srs_id = :srs_id;",
+                    crs,
+                ):
+                    continue
 
-    def _write_meta_crs(self, sess, dataset):
-        """Populate the spatial_ref_sys table with data from this dataset."""
-        # TODO - MYSQL-PART-2: Actually store CRS, if this is possible.
-        pass
+            sess.execute(
+                """
+                CREATE OR REPLACE SPATIAL REFERENCE SYSTEM :srs_id
+                ORGANIZATION :organization IDENTIFIED BY :org_id
+                NAME :name DEFINITION :definition;
+                """,
+                crs,
+            )
 
-    def delete_meta(self, dataset):
-        """Delete any metadata that is only needed by this dataset."""
-        # TODO - MYSQL-PART-2: Delete any extra metadata that is not stored in the table itself.
+    def _delete_meta(self, sess, dataset):
+        # The only metadata outside the table itself is CRS definitions. We don't delete them however, for 2 reasons:
+        # 1. CRS definitions have global scope and we can't tell if we created them. Even if they're not being used
+        # right now, somebody else might have created them and expect them to stay where they are until they are needed.
+        # 2. We might need that CRS definition again in a minute (eg next time we switch branch) and we might lack
+        # permissions to create or delete CRS definitions. Better to just leave things as-is.
         pass
 
     def _create_spatial_index_post(self, sess, dataset):
@@ -245,6 +274,11 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             )
             yield "schema.json", schema.to_column_dicts()
 
+            for crs_info in mysql_spatial_ref_sys:
+                wkt = crs_info["DEFINITION"]
+                id_str = crs_util.get_identifier_str(wkt)
+                yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
+
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):
         old_type = old_col_dict["dataType"]
@@ -272,10 +306,9 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             if key in ds_meta_items:
                 del ds_meta_items[key]
 
-        # Diffing CRS is not yet supported.
-        for key in list(ds_meta_items.keys()):
-            if key.startswith("crs/"):
-                del ds_meta_items[key]
+    def _is_builtin_crs(self, crs):
+        auth_name, auth_code = crs_util.parse_authority(crs)
+        return auth_name == "EPSG"
 
     def _is_meta_update_supported(self, meta_diff):
         """

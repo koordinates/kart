@@ -114,53 +114,51 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         sess.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
-
-    def _write_meta(self, sess, dataset):
-        """Write the title (as a comment) and the CRS. Other metadata is not stored in a PostGIS WC."""
-        self._write_meta_title(sess, dataset)
-        self._write_meta_crs(sess, dataset)
-
-    def _write_meta_title(self, sess, dataset):
-        """Write the dataset title as a comment on the table."""
         sess.execute(
             f"""COMMENT ON TABLE {self.table_identifier(dataset)} IS :comment""",
             {"comment": dataset.get_meta_item("title")},
         )
 
-    def _write_meta_crs(self, sess, dataset):
-        """Populate the spatial_ref_sys table with data from this dataset."""
-        spatial_refs = postgis_adapter.generate_postgis_spatial_ref_sys(dataset)
-        if not spatial_refs:
-            return
+    def _write_meta(self, sess, dataset):
+        # The only metadata to write that is stored outside the table is custom CRS.
+        for crs in postgis_adapter.generate_postgis_spatial_ref_sys(dataset):
+            existing_crs = sess.execute(
+                "SELECT auth_name, srtext FROM spatial_ref_sys WHERE srid = :srid;",
+                crs,
+            ).fetchone()
 
-        for sr in spatial_refs:
-            # We do not automatically overwrite a CRS if it seems likely to be one
-            # of the Postgis builtin definitions - Postgis has lots of EPSG and ESRI
-            # definitions built-in, plus the 900913 (GOOGLE) definition.
-            # See POSTGIS_WC.md for help on working with CRS definitions in a Postgis WC.
-            is_postgis_builtin = sess.scalar(
+            if existing_crs:
+                # Don't overwrite existing CRS definitions if they are built-ins.
+                if existing_crs['auth_name'] in ("EPSG", "ESRI"):
+                    continue
+                # Don't try to replace a CRS if a matching one already exists - overwriting a CRS with an identical
+                # CRS is a no-op, but one which requires certain permissions, so we avoid it if we can.
+                if existing_crs['srtext'] == crs['srtext']:
+                    continue
+                # Don't replace a CRS definition if it is currently being referenced.
+                if sess.scalar(
+                    "SELECT COUNT(*) FROM geometry_columns WHERE srid = :srid;", crs
+                ):
+                    continue
+
+            sess.execute(
                 """
-                SELECT 1 FROM spatial_ref_sys
-                WHERE srid = :srid AND (auth_name IN ('EPSG', 'ESRI') OR srid = 900913)
-                LIMIT 1
+                INSERT INTO spatial_ref_sys AS SRS (srid, auth_name, auth_srid, srtext, proj4text)
+                VALUES (:srid, :auth_name, :auth_srid, :srtext, :proj4text)
+                ON CONFLICT (srid) DO UPDATE
+                    SET (auth_name, auth_srid, srtext, proj4text)
+                    = (EXCLUDED.auth_name, EXCLUDED.auth_srid, EXCLUDED.srtext, EXCLUDED.proj4text)
                 """,
-                sr,
+                crs,
             )
-            if not is_postgis_builtin:
-                sess.execute(
-                    """
-                    INSERT INTO spatial_ref_sys AS SRS (srid, auth_name, auth_srid, srtext, proj4text)
-                    VALUES (:srid, :auth_name, :auth_srid, :srtext, :proj4text)
-                    ON CONFLICT (srid) DO UPDATE
-                        SET (auth_name, auth_srid, srtext, proj4text)
-                        = (EXCLUDED.auth_name, EXCLUDED.auth_srid, EXCLUDED.srtext, EXCLUDED.proj4text)
-                    """,
-                    sr,
-                )
 
-    def delete_meta(self, dataset):
-        """Delete any metadata that is only needed by this dataset."""
-        pass  # There is no metadata except for the spatial_ref_sys table.
+    def _delete_meta(self, sess, dataset):
+        # The only metadata outside the table itself is CRS definitions. We don't delete them however, for 2 reasons:
+        # 1. CRS definitions have global scope and we can't tell if we created them. Even if they're not being used
+        # right now, somebody else might have created them and expect them to stay where they are until they are needed.
+        # 2. We might need that CRS definition again in a minute (eg next time we switch branch) and we might lack
+        # permissions to create or delete CRS definitions. Better to just leave things as-is.
+        pass
 
     def _create_spatial_index_post(self, sess, dataset):
         # Only implemented as _create_spatial_index_post:
@@ -322,19 +320,9 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             if key in ds_meta_items:
                 del ds_meta_items[key]
 
-        for key in ds_meta_items.keys() & wc_meta_items.keys():
-            if not key.startswith("crs/"):
-                continue
-            old_is_standard = crs_util.has_standard_authority(ds_meta_items[key])
-            new_is_standard = crs_util.has_standard_authority(wc_meta_items[key])
-            if old_is_standard and new_is_standard:
-                # The WC and the dataset have different definitions of a standard eg EPSG:2193.
-                # We hide this diff because - hopefully - they are both EPSG:2193 (which never changes)
-                # but have unimportant minor differences, and we don't want to update the Postgis builtin version
-                # with the dataset version, or update the dataset version from the Postgis builtin.
-                del ds_meta_items[key]
-                del wc_meta_items[key]
-            # If either definition is custom, we keep the diff, since it could be important.
+    def _is_builtin_crs(self, crs):
+        auth_name, auth_code = crs_util.parse_authority(crs)
+        return auth_name in ("EPSG", "ESRI") or auth_code == "900913"  # GOOGLE
 
     def _is_meta_update_supported(self, meta_diff):
         """
@@ -422,7 +410,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                 if crs_name is not None:
                     crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
                     if crs_id is not None:
-                        dest_type += f""" USING ST_SetSRID({self.quote(col.name)}"::GEOMETRY, {crs_id})"""
+                        dest_type += f""" USING ST_SetSRID({self.quote(col.name)}::GEOMETRY, {crs_id})"""
                         do_write_crs = True
 
             sess.execute(
@@ -430,4 +418,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             )
 
         if do_write_crs:
-            self._write_meta_crs(sess, dataset)
+            # Calling _write_meta makes sure we have the new CRS in the spatial_ref_sys table.
+            self._write_meta(sess, dataset)
+            # Calling _delete_meta cleans up the old CRS (if it is no longer used).
+            self._delete_meta(sess, dataset)

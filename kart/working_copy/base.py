@@ -157,24 +157,33 @@ class BaseWorkingCopy:
         raise NotImplementedError()
 
     @functools.lru_cache()
-    def _table_def_for_dataset(self, dataset, schema=None):
-        """Returns a sqlalchemy table definition which can be inserted, updated, or selected from."""
-        schema = schema or dataset.schema
+    def _table_def_for_dataset(self, dataset):
+        """Returns a sqlalchemy table definition with conversion-logic for reading or writing to the dataset table."""
         return sa.Table(
             dataset.table_name,
             sa.MetaData(),
-            *[self._column_def_for_column_schema(c, dataset) for c in schema],
+            *[self._column_def_for_column_schema(c, dataset) for c in dataset.schema],
             schema=self.db_schema,
         )
 
-    def _column_def_for_column_schema(self, col, dataset):
+    @functools.lru_cache()
+    def _table_def_for_schema(self, schema, table_name):
+        """Returns a sqlalchemy table definition with conversion-logic for reading or writing data with the given schema."""
+        return sa.Table(
+            table_name,
+            sa.MetaData(),
+            *[self._column_def_for_column_schema(c, None) for c in schema],
+            schema=self.db_schema,
+        )
+
+    def _column_def_for_column_schema(self, col, dataset=None):
         return sa.Column(
             col.name,
             self._type_def_for_column_schema(col, dataset),
             primary_key=col.pk_index is not None,
         )
 
-    def _type_def_for_column_schema(self, col, dataset):
+    def _type_def_for_column_schema(self, col, dataset=None):
         # Mostly sqlalchemy doesn't need to know the type, so we can return None.
         # We only need to set the type if some automatic conversion needs to happen on read or write.
         # This is currently only used for selects/inserts/update, not for CREATE TABLE.
@@ -532,10 +541,46 @@ class BaseWorkingCopy:
         except KeyError:
             pass
 
+        # Make sure schema IDs are preserved, even though these cannot be roundtripped through the working copy:
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
             ds_schema = ds_meta_items["schema.json"]
             wc_schema = wc_meta_items["schema.json"]
             Schema.align_schema_cols(ds_schema, wc_schema, roundtrip_ctx=self)
+
+        # Remove any spurious diffs caused by the WC having built-in CRS's that we can't / shouldn't modify:
+        self._remove_builtin_crs_diffs(ds_meta_items, wc_meta_items)
+
+    def _remove_builtin_crs_diffs(self, ds_meta_items, wc_meta_items):
+        """
+        All WC implementations that can contain CRS definitions come with one or more built-in CRS definitions
+        (eg EPSG:4326 in GPKG). These definitions - although copied from an official standard - may differ in
+        unimportant ways from the user-supplied version of the same standard. (We assume the differences are
+        unimportant, or they would not both accurately represent the same standard.)
+        For example - one might include more detail about units, or have axes in the opposite order (which
+        is usually unimportant since most software ignores the specified ordering and makes its own choices).
+
+        The user cannot action these diffs - they can't or shouldn't modify the built-in definitions in the WC
+        by overwriting them from the dataset, nor should their choice of WC cause them to commit a new WC
+        definition to the dataset (this would make collaborating between different WC types more difficult).
+        So, we simply hide these diffs. There is no real difference anyway - everyone agrees that the chosen
+        standard (eg EPSG:4326) should be used.
+        """
+        for key in ds_meta_items.keys() & wc_meta_items.keys():
+            if not key.startswith("crs/"):
+                continue
+            old_is_standard = self._is_builtin_crs(ds_meta_items[key])
+            new_is_standard = self._is_builtin_crs(wc_meta_items[key])
+            if old_is_standard and new_is_standard:
+                del ds_meta_items[key]
+                del wc_meta_items[key]
+            # If either definition is custom, we keep the diff, since it could be important.
+
+    def _is_builtin_crs(self, crs):
+        """
+        Returns True if this WC implementation has (some definition of) the given CRS stored as a built-in.
+        For instance, GPKG would return True if given a definition EPSG:4326, which is built into every GPKG.
+        """
+        return False
 
     def meta_items(self, dataset):
         """Returns all the meta items for the given dataset from the working copy DB."""
@@ -618,7 +663,7 @@ class BaseWorkingCopy:
             schema = dataset.schema
 
         kart_track = self.kart_tables.kart_track
-        table = self._table_def_for_dataset(dataset, schema=schema)
+        table = self._table_def_for_schema(schema, dataset.table_name)
 
         cols_to_select = [kart_track.c.pk.label(".__track_pk"), *table.columns]
         pk_column = table.columns[schema.pk_columns[0].name]
@@ -756,10 +801,10 @@ class BaseWorkingCopy:
         with self.session() as sess:
 
             for dataset in datasets:
-                # Create the table
                 try:
-                    self._create_table_for_dataset(sess, dataset)
+                    # Create the table
                     self._write_meta(sess, dataset)
+                    self._create_table_for_dataset(sess, dataset)
                 except NotYetImplemented as e:
                     click.secho(
                         f"Couldn't write {dataset.table_name} to working copy:\n{e}",
@@ -814,13 +859,22 @@ class BaseWorkingCopy:
                 sess, commit.peel(pygit2.Tree).id.hex
             )
 
-    def _create_table_for_dataset(self, sess, dataset):
-        """Create the working-copy table for checking out the given dataset."""
-        raise NotImplementedError
-
     def _write_meta(self, sess, dataset):
-        """Write any non-feature data relating to dataset - title, description, CRS, etc."""
+        """
+        Write any non-feature data relating to dataset that is stored _outside_ the dataset table itself.
+        This could be title, description, CRS definitions, or XML metadata.
+        This is called before the table is created, in case the table needs it to be in place when it is
+        created (for example, custom CRS definitions in MySQL must exist before a table can reference them).
+        Data should not be overwritten if it comes standard with the WC implementation (eg, built-in CRS defitions).
+        """
         raise NotImplementedError()
+
+    def _create_table_for_dataset(self, sess, dataset):
+        """
+        Create the working-copy table for checking out the given dataset.
+        Creates a table in the appropriate place with the appropriate columns, but doesn't write any rows.
+        """
+        raise NotImplementedError
 
     def _create_spatial_index_pre(self, sess, dataset):
         """
@@ -891,7 +945,7 @@ class BaseWorkingCopy:
                     self._drop_spatial_index(sess, dataset)
 
                 sess.execute(f"DROP TABLE IF EXISTS {self.table_identifier(dataset)};")
-                self.delete_meta(dataset)
+                self._delete_meta(sess, dataset)
 
                 kart_track = self.kart_tables.kart_track
                 sess.execute(
@@ -899,6 +953,17 @@ class BaseWorkingCopy:
                         kart_track.c.table_name == dataset.table_name
                     )
                 )
+
+    def _delete_meta(self, sess, dataset):
+        """
+        Delete any non-feature data relating to the dataset that is stored outside the dataset table itself.
+        This is called after the table itself is deleted.
+        Data should not be deleted if it is still being used by another table that still exists,
+        Data should not be deleted if it comes standard with the WC implementation (even if this dataset table was
+        the last table that was actually referencing it).
+        Data should not be deleted if it is not clear if Kart created it or not.
+        """
+        raise NotImplementedError()
 
     def reset(
         self,
