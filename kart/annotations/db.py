@@ -1,7 +1,7 @@
 import contextlib
 import json
 import threading
-from sqlalchemy import Column, Index, Integer, Text
+from sqlalchemy import Column, Integer, Text, UniqueConstraint
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -18,10 +18,11 @@ class KartAnnotation(Base):
     annotation_type = Column(Text, nullable=False)
     data = Column(Text, nullable=False)
     __table_args__ = (
-        Index(
-            "kart_annotations_multicol",
-            annotation_type.desc(),
-            object_id.desc(),
+        UniqueConstraint(
+            "annotation_type",
+            "object_id",
+            name="kart_annotations_multicol",
+            sqlite_on_conflict="REPLACE",
         ),
     )
 
