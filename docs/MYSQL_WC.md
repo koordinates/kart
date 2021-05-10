@@ -47,4 +47,18 @@ There is one type that Kart supports that has no MySQL equivalent - the `interva
 
 #### CRS definitions
 
-MySQL comes pre-installed with thousands of standard EPSG coordinate reference system definitions. Currently, only the CRS definitions that are already in your MySQL installation are supported - Kart will not create definitions in MySQL to match the custom definitions attached to your Kart datasets. More documentation will be added here when this is supported.
+MySQL comes pre-installed with thousands of standard EPSG coordinate reference system definitions. Although these are generally produced from official sources, unfortunately different vendors or products might have slightly different variations of them with respect to axis ordering, naming, authority codes, or other differences.
+
+Kart has some design goals that make CRS management slightly more complicated in a MySQL working copy:
+
+* Kart doesn't want to interfere with the CRS definitions that come pre-installed in MySQL, since these are shared by all database users - it would be unhelpful if they were forever being modified in minor ways by different users, instead software should try and use the standard.
+For this reason, Kart doesn't take the CRS from the dataset and overwrite the pre-installed CRS in MySQL.
+* Kart doesn't want commit changes that only exist due to working copy limitations, as opposed to changes the user has made explicitly. A user might create a MySQL working copy just to change one piece of data - they shouldn't accidentally end up committing the MySQL version of any CRS definitions that the data is using. It would be unhelpful if every type of working copy that was used to make a commit, caused the dataset CRS definitions to be modified to a different version of the standard. For this reason, Kart doesn't take the CRS from the working copy and overwrite the CRS in the dataset.
+
+The end result is that the standard CRS definitions are "approximated" - for instance `EPSG:4326` as it is defined in the dataset, is approximated by `EPSG:4326` however it is defined in the working copy. These may differ slightly, but because it is an officially defined CRS, they shouldn't differ in any meaningful way. The difference between these two definitions is not shown when running `kart status` to see uncommitted changes, and the changed definition will not be committed.
+
+In the case that you want to replace the working copy definition with the one from the dataset, manually delete the appropriate definition from the working copy and then run `kart reset` to rewrite the relevant part of your working copy.
+
+For CRS definitions that are not considered standard, Kart works exactly as it does with a GPKG working copy - checkout of a working copy will write the relevant CRS definitions from the dataset to the working copy, and if those CRS definitions are then changed locally, these changes will show up in `kart status` and can be committed back to the dataset.
+
+CRS definitions are considered standard in MySQL if they have an authority of "EPSG".

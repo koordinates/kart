@@ -57,4 +57,4 @@ In the case that you want to replace the working copy definition with the one fr
 
 For CRS definitions that are not considered standard, Kart works exactly as it does with a GPKG working copy - checkout of a working copy will write the relevant CRS definitions from the dataset to the working copy, and if those CRS definitions are then changed locally, these changes will show up in `kart status` and can be committed back to the dataset.
 
-CRS definitions are considered standard if they have an authority of "EPSG" or "ESRI".
+CRS definitions are considered standard in PostGIS if they have an authority of "EPSG" or "ESRI".
