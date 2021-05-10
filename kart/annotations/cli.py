@@ -1,3 +1,5 @@
+import sys
+
 import click
 import pygit2
 
@@ -23,28 +25,29 @@ def gen_reachable_commits(repo):
 @click.command(name="build-annotations")
 @click.pass_context
 @click.option(
-    "--all-reachable", is_flag=True, help="Build annotations for all reachable commits"
+    "--all-reachable",
+    is_flag=True,
+    help="Build annotations for reachable commits on all refs",
 )
-@click.argument(
-    "refishes",
-    nargs=-1,
-)
-def build_annotations(ctx, refishes, all_reachable):
+def build_annotations(ctx, all_reachable):
     """
     Builds annotations against commits; stores the annotations in a sqlite database.
+
+    If --all-reachable is not specified, commits hashes or refs should be supplied on stdin.
     """
     repo = ctx.obj.repo
     if all_reachable:
-        if refishes:
-            raise click.UsageError(
-                "--all-reachable and refishes are mutually exclusive"
-            )
         click.echo("Enumerating reachable commits...")
         commits = list(gen_reachable_commits(repo))
     else:
-        if not refishes:
-            refishes = ["HEAD"]
-        commits = [repo.revparse_single(r).peel(pygit2.Commit) for r in refishes]
+        if sys.stdin.isatty():
+            # don't just hang silently if a user typed this in an interactive shell without piping stdin
+            click.echo("Reading commit hashes from stdin...")
+        commits = list(
+            repo.revparse_single(line.strip()).peel(pygit2.Commit)
+            for line in sys.stdin
+            if line.strip()
+        )
     if commits:
         with annotations_session(repo) as session:
             if not is_db_writable(session):
