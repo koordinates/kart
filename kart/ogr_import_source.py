@@ -18,7 +18,7 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
-from .geometry import Geometry
+from .geometry import Geometry, ogr_to_gpkg_geom
 from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
@@ -416,6 +416,13 @@ class OgrImportSource(ImportSource):
             for ogr_feature in self._iter_ogr_features(filter_sql=filter_sql):
                 yield self._ogr_feature_to_kart_feature(ogr_feature)
 
+    def sample_geometry(self, geom_col=None):
+        for ogr_feature in self._iter_ogr_features():
+            geom = ogr_feature.GetGeometryRef()
+            if geom:
+                return ogr_to_gpkg_geom(geom)
+        return None
+
     @functools.lru_cache()
     def get_meta_item(self, name):
         if name in self._meta_overrides:
@@ -567,9 +574,19 @@ class OgrImportSource(ImportSource):
         )
 
     def _get_v2_geometry_type(self, geom_fd):
+        name = geom_fd.GetName() or self.DEFAULT_GEOMETRY_COLUMN_NAME
         ogr_geom_type = geom_fd.GetType()
-        z = "Z" if ogr.GT_HasZ(ogr_geom_type) else ""
-        m = "M" if ogr.GT_HasM(ogr_geom_type) else ""
+        z = ogr.GT_HasZ(ogr_geom_type)
+        m = ogr.GT_HasM(ogr_geom_type)
+
+        sampled_geom = self.sample_geometry(name)
+        if sampled_geom:
+            sampled_geom_type = sampled_geom.geometry_type
+            z |= ogr.GT_HasZ(sampled_geom_type)
+            m |= ogr.GT_HasM(sampled_geom_type)
+
+        z = "Z" if z else ""
+        m = "M" if m else ""
 
         ogr_geom_type = ogr.GT_Flatten(ogr_geom_type)
         if ogr_geom_type == ogr.wkbUnknown:
@@ -669,6 +686,16 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
             for batch in chunk(self._first_pk_values(row_pks), 1000):
                 r = conn.execute(batch_query, {"pks": batch})
                 yield from self._sqlalchemy_to_kart_features(r)
+
+    def sample_geometry(self, geom_col):
+        with self.engine.connect() as conn:
+            geom = conn.scalar(
+                f"""
+                SELECT {self.quote_ident(geom_col)} FROM {self.quote_ident(self.table)}
+                WHERE {self.quote_ident(geom_col)} IS NOT NULL LIMIT 1;
+                """
+            )
+            return Geometry.of(geom)
 
 
 class GPKGImportSource(SQLAlchemyOgrImportSource):

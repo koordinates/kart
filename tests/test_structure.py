@@ -1076,3 +1076,38 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
             # has the right number of features
             feature_count = sum(1 for f in dataset.features())
             assert feature_count == source.feature_count
+
+
+def test_postgis_import_with_sampled_geometry_dimension(
+    postgis_db,
+    data_archive,
+    tmp_path,
+    cli_runner,
+    request,
+    chdir,
+):
+    with postgis_db.connect() as conn:
+        conn.execute("""DROP TABLE IF EXISTS points_xyz CASCADE;""")
+        conn.execute(
+            """CREATE TABLE points_xyz (fid BIGINT PRIMARY KEY, shape GEOMETRY);"""
+        )
+        conn.execute(
+            """INSERT INTO points_xyz (fid, shape) VALUES (1, ST_GeomFromText('POINT(1 2 3)', 4326));"""
+        )
+
+        _test_postgis_import(
+            tmp_path / "repo",
+            cli_runner,
+            chdir,
+            table_name="points_xyz",
+            pk_name="fid",
+            pk_size=64,
+            import_args=["--primary-key=fid"],
+        )
+
+        repo = KartRepo(tmp_path / "repo")
+        dataset = repo.datasets()["points_xyz"]
+        [geom_col] = dataset.schema.geometry_columns
+        assert geom_col.extra_type_info["geometryType"] == "GEOMETRY Z"
+
+        conn.execute("""DROP TABLE IF EXISTS points_xyz CASCADE;""")

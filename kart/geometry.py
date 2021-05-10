@@ -74,6 +74,16 @@ class Geometry(bytes):
         wkb_offset, is_le, crs_id = parse_gpkg_geom(self)
         return crs_id
 
+    @property
+    def geometry_type(self):
+        flags = _validate_gpkg_geom(self)
+        envelope_size = gpkg_envelope_size(flags)
+        wkb_offset = 8 + envelope_size
+        wkb_is_le, geom_type = _wkb_endianness_and_geometry_type(
+            self, wkb_offset=wkb_offset
+        )
+        return geom_type
+
     @classmethod
     def from_wkt(cls, wkt):
         return wkt_to_gpkg_geom(wkt)
