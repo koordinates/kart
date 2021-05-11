@@ -16,8 +16,15 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * Importing from a datasource now samples the first geometry to check the number of dimensions - in case the datasource actually has 3 or 4 dimensions but this fact is not stored in the column metadata (which is not necessarily required by all source types). [#337](https://github.com/koordinates/kart/issues/337)
 * Bugfix: Creating a working copy while switching branch now creates a working copy with the post-switch branch checked out, not the pre-switch branch.
 * Bugfix: GPKG spatial indexes are now created and deleted properly regardless of the case (upper-case or lower-case) of the table name and geometry column.
-* `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
-* `log` now accepts `--with-feature-count` which adds a feature count to each commit when used with `-o json`. The feature count can be exact or a fast estimate.
+
+### Calculating feature counts for diffs
+
+Kart now includes ways to calculate or estimate feature counts for diffs. This encompasses the following changes:
+
+* `diff` now accepts `--only-feature-count=<ACCURACY>`, which produces a feature count for the diff.
+* `log` now accepts `--with-feature-count=<ACCURACY>` which adds a feature count to each commit when used with `-o json`.
+* All calculated feature counts are stored in a SQLite database in the repo's `.kart` directory.
+* Feature counts for commit diffs can be populated in bulk with the new `build-annotations` command
 
 ## 0.9.0 (First "Kart" release)
 
