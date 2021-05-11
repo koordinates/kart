@@ -28,27 +28,33 @@ class DiffAnnotations:
         assert isinstance(data, dict)
         object_id = self._object_id(base_rs, target_rs)
         data = json.dumps(data)
-        try:
-            with annotations_session(self.repo) as session:
+        with annotations_session(self.repo) as session:
+            if session.is_readonly:
+                L.info("Can't store annotation; annotations.db is read-only")
+            else:
                 L.debug(
                     "storing: %s for %s: %s",
                     annotation_type,
                     object_id,
                     data,
                 )
-                session.add(
-                    KartAnnotation(
-                        object_id=object_id,
-                        annotation_type=annotation_type,
-                        data=data,
+                try:
+                    session.add(
+                        KartAnnotation(
+                            object_id=object_id,
+                            annotation_type=annotation_type,
+                            data=data,
+                        )
                     )
-                )
-        except OperationalError as e:
-            # ignore errors from readonly databases.
-            if "readonly database" in str(e):
-                L.info("Can't store annotation; annotations.db is read-only")
-            else:
-                raise
+                except OperationalError as e:
+                    # ignore errors from readonly databases.
+                    # this can happen if the db already existed, with tables already created,
+                    # since annotations_session() wouldn't have run any CREATE commands in that
+                    # case (and hence we don't yet know if the session is readonly)
+                    if "readonly database" in str(e):
+                        L.info("Can't store annotation; annotations.db is read-only")
+                    else:
+                        raise
         return data
 
     def get(self, *, base_rs, target_rs, annotation_type):
@@ -61,10 +67,24 @@ class DiffAnnotations:
         """
         with annotations_session(self.repo) as session:
             object_id = self._object_id(base_rs, target_rs)
-            for annotation in session.query(KartAnnotation).filter(
-                KartAnnotation.annotation_type == annotation_type,
-                KartAnnotation.object_id == object_id,
-            ):
+            try:
+                annotations = list(
+                    session.query(KartAnnotation).filter(
+                        KartAnnotation.annotation_type == annotation_type,
+                        KartAnnotation.object_id == object_id,
+                    )
+                )
+            except OperationalError as e:
+                # this can happen if the db exists but is readonly and doesn't
+                # contain the table yet...
+                if "no such table: kart_annotations" in str(e):
+                    # can't add the table to a readonly db
+                    L.warning("no such table: kart_annotations")
+                    return None
+                else:
+                    raise
+
+            for annotation in annotations:
                 data = annotation.json
                 L.debug(
                     "retrieved: %s for %s: %s",
