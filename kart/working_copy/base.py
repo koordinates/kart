@@ -590,6 +590,16 @@ class BaseWorkingCopy:
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False
     ):
         pk_field = dataset.schema.pk_columns[0].name
+        schema_diff = meta_diff.get("schema.json")
+
+        if schema_diff and schema_diff.type == "delete":
+            # The entire table has been deleted - add delete deltas for every feature.
+            feature_diff = DeltaDiff()
+            for feature in dataset.features():
+                if feature[pk_field] in feature_filter:
+                    feature_diff.add_delta(Delta.delete((feature[pk_field], feature)))
+            return feature_diff
+
         find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as sess:
