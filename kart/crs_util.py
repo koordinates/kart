@@ -202,21 +202,36 @@ def get_identifier_int_from_dataset(dataset, crs_name=None):
 
 
 def normalise_wkt(wkt):
+    if not wkt:
+        return wkt
     token_iter = WKTLexer().get_tokens(wkt, pretty_print=True)
     token_value = (value for token_type, value in token_iter)
     return "".join(token_value)
 
 
-def ensure_axes_specified(crs):
+def ensure_axes_specified(wkt):
     # Adds DEFAULT_AXES to a definition if there are no axes present in the definition.
     # There is a non-standard requirement by MySQL that AXES are specified.
+    if not wkt:
+        return wkt
     DEFAULT_AXES = 'AXIS["X", EAST], AXIS["Y", NORTH], '
-    m = _WktPatterns.ROOT_AUTHORITY_PATTERN.search(crs)
+    m = _WktPatterns.ROOT_AUTHORITY_PATTERN.search(wkt)
     if m:
         start, end = m.span()
-        crs_without_authority = crs[:start]
-        authority = crs[start:end]
-        if not _WktPatterns.FINAL_AXIS_PATTERN.search(crs_without_authority):
-            return crs_without_authority + DEFAULT_AXES + authority
+        wkt_without_authority = wkt[:start]
+        authority = wkt[start:end]
+        if not _WktPatterns.FINAL_AXIS_PATTERN.search(wkt_without_authority):
+            return wkt_without_authority + DEFAULT_AXES + authority
 
-    return crs
+    return wkt
+
+
+def ensure_authority_specified(wkt, auth_name, auth_code):
+    if not wkt:
+        return wkt
+
+    m = _WktPatterns.ROOT_AUTHORITY_PATTERN.search(wkt)
+    if not m:
+        index = wkt.rindex(']')
+        return wkt[:index] + f'AUTHORITY["{auth_name}", "{auth_code}"]' + wkt[index:]
+    return wkt

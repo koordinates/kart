@@ -442,7 +442,7 @@ class RichBaseDataset(BaseDataset):
         if geom_column_name:
             # optimisation - don't copy lhs?
             lhs = lhs.copy()
-            lhs.pop(geom_column_name)
+            lhs.pop(geom_column_name, None)
             rhs = rhs.copy()
-            rhs.pop(geom_column_name)
+            rhs.pop(geom_column_name, None)
         return lhs == rhs

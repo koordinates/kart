@@ -430,7 +430,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
             # In fact we *cannot* roundtrip it properly since MSSQL cannot store custom CRS, but we should at least not
             # get a spurious diff when the user has not made any edits - the diff should be hidden.
             r = cli_runner.invoke(["diff", "--exit-code"])
-            assert r.exit_code == 0, r.stderr
+            assert r.exit_code == 0, r.stdout
 
             # Even though SQL Server cannot store the custom CRS, it can still store the CRS ID in the geometries:
             wc = repo.working_copy
@@ -442,7 +442,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
 
             # We should be able to checkout the previous revision, which has a different (standard) CRS.
             r = cli_runner.invoke(["checkout", "main^"])
-            assert r.exit_code == 0, r.stderr
+            assert r.exit_code == 0, r.stdout
 
             wc = repo.working_copy
             with wc.session() as sess:
@@ -460,9 +460,63 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
             repo.write_gitdir_file("HEAD", head_commit)
             repo.working_copy.update_state_table_tree(head_tree)
 
-            # MSSQL can't actually store custom CRS, so, there's nothing in the WC that's changed
-            # that we can commit. (The CRS ID has changed, but we don't currently read it from the WC -
-            # that would involve extracting it from some significant sample of the geometries).
-            # (See the limitations in SQL_SERVER_WC.md)
-            r = cli_runner.invoke(["diff", "--exit-code"])
-            assert r.exit_code == 0, r.stderr
+            # We can detect that the CRS ID has changed to 100002, but SQL server can't actually store
+            # the custom definition, so we don't know what it is.
+            r = cli_runner.invoke(["diff"])
+            assert r.stdout.splitlines() == [
+                '--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt',
+                '- GEOGCS["WGS 84",',
+                '-     DATUM["WGS_1984",',
+                '-         SPHEROID["WGS 84", 6378137, 298.257223563,',
+                '-             AUTHORITY["EPSG", "7030"]],',
+                '-         AUTHORITY["EPSG", "6326"]],',
+                '-     PRIMEM["Greenwich", 0,',
+                '-         AUTHORITY["EPSG", "8901"]],',
+                '-     UNIT["degree", 0.0174532925199433,',
+                '-         AUTHORITY["EPSG", "9122"]],',
+                '-     AUTHORITY["EPSG", "4326"]]',
+                '- ',
+                '--- nz_pa_points_topo_150k:meta:schema.json',
+                '+++ nz_pa_points_topo_150k:meta:schema.json',
+                '  [',
+                '    {',
+                '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
+                '      "name": "fid",',
+                '      "dataType": "integer",',
+                '      "primaryKeyIndex": 0,',
+                '      "size": 64',
+                '    },',
+                '    {',
+                '      "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
+                '      "name": "geom",',
+                '      "dataType": "geometry",',
+                '      "geometryType": "POINT",',
+                '-     "geometryCRS": "EPSG:4326",',
+                '+     "geometryCRS": "CUSTOM:100002",',
+                '    },',
+                '    {',
+                '      "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
+                '      "name": "t50_fid",',
+                '      "dataType": "integer",',
+                '      "size": 32',
+                '    },',
+                '    {',
+                '      "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
+                '      "name": "name_ascii",',
+                '      "dataType": "text",',
+                '      "length": 75',
+                '    },',
+                '    {',
+                '      "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
+                '      "name": "macronated",',
+                '      "dataType": "text",',
+                '      "length": 1',
+                '    },',
+                '    {',
+                '      "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
+                '      "name": "name",',
+                '      "dataType": "text",',
+                '      "length": 75',
+                '    },',
+                '  ]',
+            ]

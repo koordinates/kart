@@ -236,9 +236,41 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             )
             ms_table_info = list(r)
 
+            geom_cols = [
+                row['column_name']
+                for row in ms_table_info
+                if row['data_type'] in ('geometry', 'geography')
+            ]
+            ms_spatial_ref_sys = [
+                sess.execute(
+                    f"""
+                    SELECT TOP 1 :column_name AS column_name, {self.quote(g)}.STSrid AS srid, SRS.*
+                    FROM {self.table_identifier(dataset)}
+                    LEFT OUTER JOIN sys.spatial_reference_systems SRS
+                    ON SRS.spatial_reference_id = {self.quote(g)}.STSrid
+                    WHERE {self.quote(g)} IS NOT NULL;
+                    """,
+                    {"column_name": g},
+                ).fetchone()
+                for g in geom_cols
+            ]
+            ms_spatial_ref_sys = list(filter(None, ms_spatial_ref_sys))  # Remove nulls.
+
             id_salt = f"{self.db_schema} {dataset.table_name} {self.get_db_tree()}"
-            schema = sqlserver_adapter.sqlserver_to_v2_schema(ms_table_info, id_salt)
+            schema = sqlserver_adapter.sqlserver_to_v2_schema(
+                ms_table_info, ms_spatial_ref_sys, id_salt
+            )
             yield "schema.json", schema.to_column_dicts()
+
+            for crs_info in ms_spatial_ref_sys:
+                auth_name = crs_info["authority_name"]
+                auth_code = crs_info["authorized_spatial_reference_id"]
+                if not auth_name and not auth_code:
+                    auth_name, auth_code = "CUSTOM", crs_info["srid"]
+                wkt = crs_info["well_known_text"] or ""
+                yield f"crs/{auth_name}:{auth_code}.wkt", crs_util.normalise_wkt(
+                    crs_util.ensure_authority_specified(wkt, auth_name, auth_code)
+                )
 
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):
@@ -251,10 +283,15 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             for key in sqlserver_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
-        # Geometry type loses its extra type info when roundtripped through SQL Server.
+        # Geometry type loses various extra type info when roundtripped through SQL Server.
         if new_type == "geometry":
             new_col_dict["geometryType"] = old_col_dict.get("geometryType")
-            new_col_dict["geometryCRS"] = old_col_dict.get("geometryCRS")
+            new_geometry_crs = new_col_dict.get("geometryCRS", "")
+            # Custom CRS can't be stored in SQL Server - even the CRS authority can't be roundtripped:
+            if new_geometry_crs.startswith("CUSTOM:"):
+                suffix = new_geometry_crs[new_geometry_crs.index(":") :]
+                if old_col_dict.get("geometryCRS", "").endswith(suffix):
+                    new_col_dict["geometryCRS"] = old_col_dict["geometryCRS"]
 
         return new_type == old_type
 
@@ -272,14 +309,26 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             if key in ds_meta_items:
                 del ds_meta_items[key]
 
-        # We hide all CRS diffs - diffing and committing CRS changes is currently unsupported for two reasons.
-        # 1. SQL Server can't store custom CRS at all, so no way to roundtrip custom CRS through SQL Server WC.
-        # 2. The CRS ID can't be stored in the geometry column, only the geometry objects themselves.
-        # We could extract it out, but it means taking a sample - which gets tricky if there are no geometries,
-        # or there is a mixture of geometries with different CRS IDs. For now, we don't support it.
-        for key in list(ds_meta_items.keys()):
-            if key.startswith("crs/"):
-                del ds_meta_items[key]
+        # Nowhere to put custom CRS in SQL Server, so remove custom CRS diffs.
+        # The working copy doesn't know the true authority name, so refers to them all as CUSTOM.
+        # Their original authority name could be anything.
+        for wc_key in list(wc_meta_items.keys()):
+            if not wc_key.startswith("crs/CUSTOM:"):
+                continue
+            del wc_meta_items[wc_key]
+            suffix = wc_key[wc_key.index(':') :]
+            matching_ds_keys = [
+                d
+                for d in ds_meta_items.keys()
+                if d.startswith("crs/") and d.endswith(suffix)
+            ]
+            if len(matching_ds_keys) == 1:
+                [ds_key] = matching_ds_keys
+                del ds_meta_items[ds_key]
+
+    def _is_builtin_crs(self, crs):
+        auth_name, auth_code = crs_util.parse_authority(crs)
+        return auth_name == "EPSG"
 
     def _is_meta_update_supported(self, meta_diff):
         """
