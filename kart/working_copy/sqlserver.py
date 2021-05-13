@@ -330,14 +330,15 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG"
 
-    def _is_meta_update_supported(self, meta_diff):
-        """
-        Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
-        (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).
-        meta_diff - DeltaDiff object containing the meta changes.
-        """
-        # For now, just always drop and rewrite.
-        return not meta_diff
+    def _apply_meta_title(self, sess, dataset, src_value, dest_value):
+        sess.execute(
+            "EXECUTE sys.sp_addextendedproperty 'MS_Description', :title, 'schema', :schema, 'table', :table",
+            {
+                "title": dest_value,
+                "schema": self.db_schema,
+                "table": dataset.table_name,
+            },
+        )
 
 
 class InstanceFunction(Function):

@@ -550,20 +550,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         yield
         self._create_triggers(sess, dataset)
 
-    def _is_meta_update_supported(self, meta_diff):
-        """
-        Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
-        (Any meta change is supported - even in datasets v1 - if we drop and rewrite the table,
-        but of course it is less efficient).
-        meta_diff - DeltaDiff object containing the meta changes.
-        """
-        if not meta_diff:
-            return True
-
-        if "schema.json" not in meta_diff:
-            return True
-
-        schema_delta = meta_diff["schema.json"]
+    def _is_schema_update_supported(self, schema_delta):
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
@@ -576,7 +563,6 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         return sum(dt.values()) == 0
 
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
-        # TODO - find a better way to roundtrip titles while keeping them unique
         table_name = dataset.table_name
         if self._identifier_already_exists(sess, dest_value):
             # Prefix the identifier with the table name in case of conflict:
