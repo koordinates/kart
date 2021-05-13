@@ -13,6 +13,7 @@ from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import MySqlKartTables
 from kart import crs_util
 from kart.geometry import Geometry
+from kart.schema import Schema
 from kart.sqlalchemy import text_with_inlined_params
 from kart.sqlalchemy.create_engine import mysql_engine
 
@@ -320,11 +321,67 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG"
 
+    def _is_schema_update_supported(self, schema_delta):
+        if not schema_delta.old_value or not schema_delta.new_value:
+            return False
+
+        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        dt = old_schema.diff_type_counts(new_schema)
+
+        # We support deletes, name_updates, and type_updates -
+        # but we don't support any other type of schema update except by rewriting the entire table.
+        dt.pop("deletes")
+        dt.pop("name_updates")
+        dt.pop("type_updates")
+        return sum(dt.values()) == 0
+
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
         sess.execute(
             f"ALTER TABLE {self.table_identifier(dataset)} COMMENT = :comment",
             {"comment": dest_value},
         )
+
+    def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
+        src_schema = Schema.from_column_dicts(src_value)
+        dest_schema = Schema.from_column_dicts(dest_value)
+
+        diff_types = src_schema.diff_types(dest_schema)
+
+        deletes = diff_types.pop("deletes")
+        name_updates = diff_types.pop("name_updates")
+        type_updates = diff_types.pop("type_updates")
+
+        if any(dt for dt in diff_types.values()):
+            raise RuntimeError(
+                f"This schema change not supported by update - should be drop + re-write_full: {diff_types}"
+            )
+
+        table = dataset.table_name
+        for col_id in deletes:
+            src_name = src_schema[col_id].name
+            sess.execute(
+                f"""
+                ALTER TABLE {self.table_identifier(table)}
+                DROP COLUMN {self.quote(src_name)};"""
+            )
+
+        for col_id in name_updates:
+            src_name = src_schema[col_id].name
+            dest_name = dest_schema[col_id].name
+            sess.execute(
+                f"""
+                ALTER TABLE {self.table_identifier(table)}
+                RENAME COLUMN {self.quote(src_name)} TO {self.quote(dest_name)};
+                """
+            )
+
+        for col_id in type_updates:
+            col = dest_schema[col_id]
+            dest_spec = mysql_adapter.v2_column_schema_to_mysql_spec(col, dataset)
+            sess.execute(
+                f"""ALTER TABLE {self.table_identifier(table)} MODIFY {dest_spec};"""
+            )
 
 
 class GeometryType(UserDefinedType):

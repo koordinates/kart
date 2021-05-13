@@ -316,6 +316,30 @@ def test_types_roundtrip(data_archive, cli_runner, new_mysql_db_schema):
             assert r.exit_code == 0, r.stdout
 
 
+def test_meta_updates(data_archive, cli_runner, new_mysql_db_schema):
+    with data_archive("meta-updates"):
+        H.clear_working_copy()
+        with new_mysql_db_schema() as (mysql_url, mysql_schema):
+            r = cli_runner.invoke(["create-workingcopy", mysql_url])
+            assert r.exit_code == 0, r.stderr
+
+            # These commits have minor schema changes.
+            # We try to handle minor schema changes by using ALTER TABLE statements, instead
+            # of dropping and recreating the whole table. Make sure those statements are working:
+
+            r = cli_runner.invoke(["checkout", "main~3"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main~2"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main~1"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main"])
+            assert r.exit_code == 0, r.stderr
+
+
 def test_checkout_custom_crs(data_archive, cli_runner, new_mysql_db_schema):
     with data_archive("custom_crs") as repo_path:
         repo = KartRepo(repo_path)

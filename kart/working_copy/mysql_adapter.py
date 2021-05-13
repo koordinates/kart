@@ -85,7 +85,7 @@ def v2_schema_to_mysql_spec(schema, v2_obj):
     Generate the SQL CREATE TABLE spec from a V2 object eg:
     'fid INTEGER, geom POINT WITH CRSID 2136, desc VARCHAR(128), PRIMARY KEY(fid)'
     """
-    result = [_v2_column_schema_to_mysql_spec(col, v2_obj) for col in schema]
+    result = [v2_column_schema_to_mysql_spec(col, v2_obj) for col in schema]
 
     if schema.pk_columns:
         pk_col_names = ", ".join((quote(col.name) for col in schema.pk_columns))
@@ -94,7 +94,7 @@ def v2_schema_to_mysql_spec(schema, v2_obj):
     return ", ".join(result)
 
 
-def _v2_column_schema_to_mysql_spec(column_schema, v2_obj):
+def v2_column_schema_to_mysql_spec(column_schema, v2_obj):
     name = column_schema.name
     mysql_type = _v2_type_to_mysql_type(column_schema, v2_obj)
 

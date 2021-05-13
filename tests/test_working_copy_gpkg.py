@@ -995,6 +995,25 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         }
 
 
+def test_meta_updates(data_working_copy, cli_runner):
+    with data_working_copy("meta-updates") as (repo_path, wc_path):
+        # These commits have minor schema changes.
+        # We try to handle minor schema changes by using ALTER TABLE statements, instead
+        # of dropping and recreating the whole table. Make sure those statements are working:
+
+        r = cli_runner.invoke(["checkout", "main~3"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "main~2"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "main~1"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+
+
 def test_checkout_custom_crs(data_working_copy, cli_runner):
     with data_working_copy("custom_crs") as (repo_path, wc_path):
         repo = KartRepo(repo_path)
