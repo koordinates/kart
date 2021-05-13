@@ -292,7 +292,8 @@ def _find_remote_branch_by_name(repo, name):
 @click.argument("pathspec", nargs=-1)
 def restore(ctx, source, pathspec):
     """
-    Restore specified paths in the working copy with some contents from a restore source.
+    Restore specified paths in the working copy with some contents from the given restore source.
+    By default, restores the entire working copy to the commit at HEAD (so, discards all uncommitted changes).
     """
     repo = ctx.obj.repo
 
@@ -323,12 +324,19 @@ def restore(ctx, source, pathspec):
     is_flag=True,
     help="Discard local changes in working copy if necessary",
 )
-@click.argument("refish")
+@click.argument("refish", default="HEAD")
 def reset(ctx, discard_changes, refish):
     """
-    Reset the branch head to point to a different commit.
+    Reset the branch head to point to a particular commit.
+    Defaults to HEAD, which has no effect unless --discard-changes is also specified.
     """
     repo = ctx.obj.repo
+
+    if refish == "HEAD" and not discard_changes:
+        raise InvalidOperation(
+            "Resetting the current branch to HEAD has no effect, unless you also discard changes.\n"
+            "Do you mean `kart reset --discard-changes?`"
+        )
 
     try:
         commit_or_tree, ref = repo.resolve_refish(refish)

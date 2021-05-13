@@ -166,7 +166,7 @@ def test_commit_edits(
                 "",
                 "Changes in working copy:",
                 '  (use "kart commit" to commit)',
-                '  (use "kart reset" to discard changes)',
+                '  (use "kart restore" to discard changes)',
                 "",
                 f"  {table}:",
                 "    feature:",

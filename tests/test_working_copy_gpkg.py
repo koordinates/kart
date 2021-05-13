@@ -375,8 +375,8 @@ def test_working_copy_discard_changes(
             assert r.exit_code == 0, r
 
         elif via == "reset":
-            # using `kart reset HEAD --discard-changes`
-            r = cli_runner.invoke(["reset", "HEAD", "--discard-changes"])
+            # using `kart reset --discard-changes`
+            r = cli_runner.invoke(["reset", "--discard-changes"])
             assert r.exit_code == 0, r
 
         elif via == "checkout":

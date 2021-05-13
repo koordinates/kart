@@ -437,7 +437,7 @@ class BaseWorkingCopy:
     def check_not_dirty(self, help_message=None):
         """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
         if not help_message:
-            help_message = "Commit these changes (`kart commit`) or discard these changes (`kart reset`) first."
+            help_message = "Commit these changes (`kart commit`) or discard these changes (`kart restore`) first."
         if self.is_dirty():
             raise InvalidOperation(
                 f"You have uncommitted changes in your working copy.\n{help_message}"

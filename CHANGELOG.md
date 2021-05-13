@@ -18,6 +18,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * Bugfix: GPKG spatial indexes are now created and deleted properly regardless of the case (upper-case or lower-case) of the table name and geometry column.
 * `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
 * `log` now accepts `--with-feature-count` which adds a feature count to each commit when used with `-o json`. The feature count can be exact or a fast estimate.
+* Fix help text for discarding changes to refer to `kart restore` instead of `kart reset`, as `kart restore` is now the simplest way to discard changes. [#426](https://github.com/koordinates/kart/issues/426)
 
 ## 0.9.0 (First "Kart" release)
 
