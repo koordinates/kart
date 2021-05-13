@@ -1012,7 +1012,7 @@ def test_checkout_custom_crs(data_working_copy, cli_runner):
             assert srs_id == 100002
 
         # We should be able to switch to the previous revision, which has a different (standard) CRS.
-        r = cli_runner.invoke(["checkout", "main^"])
+        r = cli_runner.invoke(["checkout", "epsg-4326"])
         assert r.exit_code == 0, r.stderr
 
         with wc.session() as sess:
@@ -1027,7 +1027,7 @@ def test_checkout_custom_crs(data_working_copy, cli_runner):
         # Make sure we can see this rev<>WC change in kart diff.
         head_commit = repo.head_commit.hex
         head_tree = repo.head_tree.hex
-        r = cli_runner.invoke(["checkout", "main"])
+        r = cli_runner.invoke(["checkout", "custom-crs"])
         assert r.exit_code == 0, r.stderr
         repo.write_gitdir_file("HEAD", head_commit)
         repo.working_copy.update_state_table_tree(head_tree)

@@ -473,7 +473,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_postgis_db_schema):
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
             repo.config["kart.workingcopy.location"] = postgres_url
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
             # main has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly:
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stderr
@@ -489,7 +489,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_postgis_db_schema):
                 assert srid == 100002
 
             # We should be able to switch to the previous revision, which has a different (standard) CRS.
-            r = cli_runner.invoke(["checkout", "main^"])
+            r = cli_runner.invoke(["checkout", "epsg-4326"])
             assert r.exit_code == 0, r.stderr
 
             with wc.session() as sess:
@@ -506,7 +506,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_postgis_db_schema):
             # Make sure we can see this rev<>WC change in kart diff.
             head_commit = repo.head_commit.hex
             head_tree = repo.head_tree.hex
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
             assert r.exit_code == 0, r.stderr
             repo.write_gitdir_file("HEAD", head_commit)
             repo.working_copy.update_state_table_tree(head_tree)

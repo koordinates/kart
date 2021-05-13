@@ -245,13 +245,9 @@ def generate_mysql_spatial_ref_sys(v2_obj):
             {
                 "srs_id": crs_id,
                 "name": crs_util.parse_name(definition),
-                "definition": _mysql_crs_definition(definition),
+                "definition": crs_util.mysql_compliant_wkt(definition),
                 "organization": auth_name,
                 "org_id": crs_id,
             }
         )
     return result
-
-
-def _mysql_crs_definition(definition):
-    return crs_util.ensure_axes_specified(definition).replace("\n", " ")

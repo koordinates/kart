@@ -306,6 +306,16 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             if key in ds_meta_items:
                 del ds_meta_items[key]
 
+        for key in ds_meta_items.keys() & wc_meta_items.keys():
+            if not key.startswith("crs/"):
+                continue
+            old_crs = crs_util.mysql_compliant_wkt(ds_meta_items[key])
+            new_crs = crs_util.mysql_compliant_wkt(wc_meta_items[key])
+            if old_crs == new_crs:
+                # Hide any diff caused by making the CRS MySQL compliant.
+                del ds_meta_items[key]
+                del wc_meta_items[key]
+
     def _is_builtin_crs(self, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG"

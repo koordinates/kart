@@ -146,7 +146,7 @@ class WKTLexer(RegexLexer):
     def _matches(self, expected, tokentype, value):
         if isinstance(expected, type(Token)):
             return tokentype in expected
-        return expected == value
+        return expected.upper() == value.upper()
 
     def _extract_strings(self, pattern, result):
         extracted = []

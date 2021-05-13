@@ -424,7 +424,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
 
         with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
             repo.config["kart.workingcopy.location"] = sqlserver_url
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
 
             # main branch has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly.
             # In fact we *cannot* roundtrip it properly since MSSQL cannot store custom CRS, but we should at least not
@@ -441,7 +441,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
                 assert srid == 100002
 
             # We should be able to checkout the previous revision, which has a different (standard) CRS.
-            r = cli_runner.invoke(["checkout", "main^"])
+            r = cli_runner.invoke(["checkout", "epsg-4326"])
             assert r.exit_code == 0, r.stdout
 
             wc = repo.working_copy
@@ -455,7 +455,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
             # (This is just a way to use Kart to simulate the user manually changing the CRS in the WC.)
             head_commit = repo.head_commit.hex
             head_tree = repo.head_tree.hex
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
             assert r.exit_code == 0, r.stderr
             repo.write_gitdir_file("HEAD", head_commit)
             repo.working_copy.update_state_table_tree(head_tree)

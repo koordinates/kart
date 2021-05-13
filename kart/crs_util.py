@@ -1,9 +1,19 @@
+import itertools
+
 from osgeo.osr import SpatialReference
 
 from .cli_util import StringFromFile
 from .geometry import make_crs
 from .serialise_util import uint32hash
-from .wkt_lexer import WKTLexer, CloseBracket, Comma, Keyword, OpenBracket, String
+from .wkt_lexer import (
+    WKTLexer,
+    CloseBracket,
+    Comma,
+    Keyword,
+    OpenBracket,
+    String,
+    Whitespace,
+)
 
 
 class CoordinateReferenceString(StringFromFile):
@@ -177,7 +187,6 @@ def ensure_authority_specified(wkt, auth_name, auth_code):
     Adds the given authority to the CRS definition if no authority is specified.
     (Built-in SQL Server CRS definitions don't contain the authority).
     """
-
     if wkt and not WKTLexer().find_pattern(wkt, AUTHORITY_PATTERN, at_depth=1):
         index = wkt.rindex(']')
         return wkt[:index] + f', AUTHORITY["{auth_name}", "{auth_code}"]' + wkt[index:]
@@ -188,13 +197,61 @@ DEFAULT_AXES = 'AXIS["X", EAST], AXIS["Y", NORTH]'
 AXIS_PATTERN = ("AXIS", OpenBracket, String, Comma, Keyword, CloseBracket)
 
 
-def ensure_axes_specified(wkt):
+def mysql_compliant_wkt(wkt):
     """
-    Adds DEFAULT_AXES to a definition if there are no axes present in the definition.
-    (There is a non-standard requirement by MySQL that AXES are specified.)
+    Makes sure the axes are defined immediately before the authority is defined,
+    and make sure there are no newlines in the definition.
+    This is a non-standard WKT requirement of MySQL.
     """
-    if wkt and not WKTLexer().find_pattern(wkt, AXIS_PATTERN, at_depth=1):
-        index = wkt.rindex(']')
-        return wkt[:index] + ', ' + DEFAULT_AXES + wkt[index:]
+    token_iter = WKTLexer().get_tokens(wkt)
 
-    return wkt
+    depth = 0
+    default_buffer = []
+    authority_buffer = []
+    axis_buffer = []
+    active_buffer = default_buffer
+
+    for tokentype, value in token_iter:
+        # Maintain depth.
+        if tokentype is OpenBracket:
+            depth += 1
+        elif tokentype is CloseBracket:
+            depth -= 1
+            if depth == 0:
+                break  # Don't collect the last bracket.
+
+        if depth == 1 and tokentype is Keyword:
+            if value.upper() == "AUTHORITY":
+                active_buffer = authority_buffer
+            elif value.upper() == "AXIS":
+                active_buffer = axis_buffer
+            else:
+                active_buffer = default_buffer
+
+        # Yield token (values only, tokentype is not needed)
+        if tokentype == Whitespace:
+            # There's no newlines so need for indentation - collapse whitespace to single spaces.
+            active_buffer.append(" ")
+        else:
+            active_buffer.append(value)
+
+    if not axis_buffer:
+        axis_buffer = [DEFAULT_AXES]
+
+    def _stripped(buf):
+        if not buf:
+            return None
+        result = "".join(buf)
+        return result.strip(", ")
+
+    results = list(
+        filter(
+            None,
+            [
+                _stripped(default_buffer),
+                _stripped(axis_buffer),
+                _stripped(authority_buffer),
+            ],
+        )
+    )
+    return ", ".join(results) + "]"

@@ -323,10 +323,10 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_mysql_db_schema):
 
         with new_mysql_db_schema() as (mysql_url, mysql_schema):
             repo.config["kart.workingcopy.location"] = mysql_url
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
             # main has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly:
             r = cli_runner.invoke(["diff", "--exit-code"])
-            assert r.exit_code == 0, r.stderr
+            assert r.exit_code == 0, r.stdout
 
             wc = repo.working_copy
             with wc.session() as sess:
@@ -339,8 +339,17 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_mysql_db_schema):
                 )
                 assert srs_id == 100002
 
+            # Since MySQL has some non-standard CRS requirements, make sure it can also handle these two variants:
+            r = cli_runner.invoke(["checkout", "custom-crs-no-axes"])
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stdout
+
+            r = cli_runner.invoke(["checkout", "custom-crs-axes-last"])
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stdout
+
             # We should be able to switch to the previous revision, which has a different (standard) CRS.
-            r = cli_runner.invoke(["checkout", "main^"])
+            r = cli_runner.invoke(["checkout", "epsg-4326"])
             assert r.exit_code == 0, r.stderr
 
             with wc.session() as sess:
@@ -358,7 +367,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_mysql_db_schema):
             # Make sure we can see this rev<>WC change in kart diff.
             head_commit = repo.head_commit.hex
             head_tree = repo.head_tree.hex
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
             assert r.exit_code == 0, r.stderr
             repo.write_gitdir_file("HEAD", head_commit)
             repo.working_copy.update_state_table_tree(head_tree)
