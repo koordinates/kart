@@ -2,7 +2,12 @@ from collections import deque
 import itertools
 
 from pygments.lexer import RegexLexer, include
-from pygments.token import Keyword, Number, String, Punctuation, Whitespace
+from pygments.token import Keyword, Number, String, Punctuation, Token, Whitespace
+
+
+Comma = Punctuation.Comma
+OpenBracket = Punctuation.OpenBracket
+CloseBracket = Punctuation.CloseBracket
 
 
 class WKTLexer(RegexLexer):
@@ -43,13 +48,13 @@ class WKTLexer(RegexLexer):
         "list": [
             include("whitespace"),
             include("value"),
-            (r",", Punctuation),
-            (r"(\]|\))", Punctuation, "#pop"),
+            (r",", Comma),
+            (r"(\]|\))", CloseBracket, "#pop"),
         ],
         # a list is started by an opening bracket (square or round)
         "liststart": [
             include("whitespace"),
-            (r"(\[|\()", Punctuation, "list"),
+            (r"(\[|\()", OpenBracket, "list"),
         ],
         # a keyword
         "keyword": [
@@ -87,19 +92,68 @@ class WKTLexer(RegexLexer):
 
         indent = 0
         for prev_tok, cur_tok, next_tok in _windowed(token_iter, 3):
-            if prev_tok[1] == ",":
-                if cur_tok[0] == Keyword and next_tok[1] in ("[", "("):
+            if prev_tok[0] is Comma:
+                if cur_tok[0] == Keyword and next_tok[0] is OpenBracket:
                     indent += 1
                     yield Whitespace, "\n" + "    " * indent
                 else:
                     yield Whitespace, " "
 
-            if cur_tok[1] in ("]", ")"):
+            if cur_tok[0] is CloseBracket:
                 indent = max(indent - 1, 0)
 
             yield cur_tok
 
         yield Whitespace, "\n"
+
+    def find_pattern(
+        self, text, pattern, at_depth=None, extract_strings=False, **kwargs
+    ):
+        """
+        Given a pattern to search for eg ("AUTHORITY", "[", String.Double, ",", String.Double, "]") -
+        returns the text that matches the first occurrence of that pattern.
+        Whitespace is skipped and is not included in the result.
+        """
+        token_iter = super().get_tokens(text, **kwargs)
+        token_iter = filter(lambda tok: tok[0] != Whitespace, token_iter)
+
+        depth = 0
+        result = []
+        result_len = 0
+
+        for tokentype, value in token_iter:
+            if tokentype is OpenBracket:
+                depth += 1
+            elif tokentype is CloseBracket:
+                depth -= 1
+            if at_depth is not None and result_len == 0 and depth != at_depth:
+                continue
+            if self._matches(pattern[result_len], tokentype, value):
+                result.append(value)
+                result_len += 1
+                if result_len == len(pattern):
+                    return (
+                        self._extract_strings(pattern, result)
+                        if extract_strings
+                        else tuple(result)
+                    )
+            else:
+                result.clear()
+                result_len = 0
+
+        return None
+
+    def _matches(self, expected, tokentype, value):
+        if isinstance(expected, type(Token)):
+            return tokentype in expected
+        return expected == value
+
+    def _extract_strings(self, pattern, result):
+        extracted = []
+        for p, r in zip(pattern, result):
+            if p in String:
+                extracted.append(r[1:-1].replace('""', '"'))
+        return tuple(extracted)
 
 
 def _windowed(iterable, size):
