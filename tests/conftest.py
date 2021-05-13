@@ -1046,3 +1046,31 @@ def new_mysql_db_schema(request, mysql_db):
                 conn.execute(f"""DROP SCHEMA IF EXISTS `{schema}`;""")
 
     return ctx
+
+
+@pytest.fixture()
+def dodgy_restore(cli_runner):
+    """
+    Basically performs a `kart restore --source RESTORE_COMMIT`.
+    However, this works even when the actual kart restore would fail due to "structural changes" -
+    specifically, there are schema changes that require the table to be deleted and rewritten,
+    which prevents us from tracking feature changes. This version makes no attempt to track feature changes.
+    So, only use this if you know there are *only* structural changes - no feature changes at all -
+     or you just don't care about the tracking table.
+    """
+
+    def _dodgy_restore(repo, restore_commit):
+        if isinstance(restore_commit, pygit2.Commit):
+            restore_commit = restore_commit.hex
+
+        # This works by checking out restore_commit, which likely destroys and recreates WC tables etc -
+        # then forcibly setting HEAD back to its previous value without actually updating the WC.
+
+        head_commit = repo.head_commit.hex
+        head_tree = repo.head_tree.hex
+        r = cli_runner.invoke(["checkout", restore_commit])
+        assert r.exit_code == 0, r.stderr
+        repo.write_gitdir_file("HEAD", head_commit)
+        repo.working_copy.update_state_table_tree(head_tree)
+
+    return _dodgy_restore

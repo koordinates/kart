@@ -441,7 +441,9 @@ def test_geometry_constraints(
                 # Not allowed - wrong CRS ID
 
 
-def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
+def test_checkout_custom_crs(
+    data_archive, cli_runner, new_sqlserver_db_schema, dodgy_restore
+):
     with data_archive("custom_crs") as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()
@@ -475,14 +477,8 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
                 )
                 assert srid == 4326
 
-            # Checkout main to the WC, then set HEAD back to main^ without updating the WC.
-            # (This is just a way to use Kart to simulate the user manually changing the CRS in the WC.)
-            head_commit = repo.head_commit.hex
-            head_tree = repo.head_tree.hex
-            r = cli_runner.invoke(["checkout", "custom-crs"])
-            assert r.exit_code == 0, r.stderr
-            repo.write_gitdir_file("HEAD", head_commit)
-            repo.working_copy.update_state_table_tree(head_tree)
+            # Restore the contents of custom-crs to the WC so we can make sure WC diff is working:
+            dodgy_restore(repo, "custom-crs")
 
             # We can detect that the CRS ID has changed to 100002, but SQL server can't actually store
             # the custom definition, so we don't know what it is.

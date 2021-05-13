@@ -1075,7 +1075,7 @@ class BaseWorkingCopy:
             structural_changes_text = "\n".join(structural_changes)
             raise NotYetImplemented(
                 "Sorry, this operation is not possible when there are structural changes."
-                f"Structural changes are affecting:\n{structural_changes_text}"
+                f" Structural changes are affecting:\n{structural_changes_text}"
             )
 
         with self.session() as sess:
