@@ -64,7 +64,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MySQLIdentifierPreparer(self.engine.dialect)
 
-        self.kart_tables = MySqlKartTables(self.db_schema)
+        self.kart_tables = MySqlKartTables(self.db_schema, repo.is_kart_branded)
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = mysql_adapter.v2_schema_to_mysql_spec(dataset.schema, dataset)
