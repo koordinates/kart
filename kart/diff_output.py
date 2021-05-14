@@ -327,14 +327,16 @@ def text_row(row, prefix="", exclude=None):
 def text_row_field(row, key, prefix):
     val = row[key]
 
-    if isinstance(val, bytes):
-        g = gpkg_geom_to_ogr(val)
+    if isinstance(val, Geometry):
+        g = val.to_ogr()
         geom_typ = g.GetGeometryName()
         if g.IsEmpty():
             val = f"{geom_typ} EMPTY"
         else:
             val = f"{geom_typ}(...)"
         del g
+    elif isinstance(val, bytes):
+        val = "BLOB(...)"
 
     val = "␀" if val is None else val
     return f"{prefix}{key:>40} = {val}"
@@ -472,6 +474,8 @@ def geojson_row(row, pk_value, change=None, geometry_transform=None):
                         f"Can't reproject geometry at '{change_id}' into target CRS"
                     ) from e
             f["geometry"] = json.loads(g.ExportToJson())
+        elif isinstance(v, bytes):
+            f["properties"][k] = bytes.hex(v)
         else:
             f["properties"][k] = v
 
@@ -586,6 +590,8 @@ def json_row(row, pk_value, geometry_transform=None):
                         f"Can't reproject geometry with ID '{pk_value}' into target CRS"
                     ) from e
                 v = ogr_to_hex_wkb(ogr_geom)
+        elif isinstance(v, bytes):
+            v = bytes.hex(v)
         yield k, v
 
 

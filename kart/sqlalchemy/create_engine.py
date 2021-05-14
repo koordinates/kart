@@ -1,5 +1,6 @@
-import os
+from binascii import unhexlify
 import logging
+import os
 import re
 import socket
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
@@ -64,6 +65,17 @@ TIMESTAMPTZ_OID = 1184
 TIMESTAMPTZ = new_type((TIMESTAMPTZ_OID,), "TIMESTAMPTZ", _adapt_timestamp_from_pg)
 psycopg2.extensions.register_type(TIMESTAMPTZ)
 
+# PostGIS set-up - blobs:
+
+
+def _adapt_binary_from_pg(b, dbcur):
+    return unhexlify(b[2:]) if b is not None else None
+
+
+BINARY_OID = 17
+BINARY = new_type((BINARY_OID,), "BINARY", _adapt_binary_from_pg)
+psycopg2.extensions.register_type(BINARY)
+
 
 # PostGIS set-up - strings:
 # We mostly want data out of the DB as strings, just as happens in GPKG.
@@ -120,8 +132,6 @@ def postgis_engine(pgurl):
             dbcur.execute("SET intervalstyle='iso_8601';")
             # don't drop precision from floats near the edge of their supported range
             dbcur.execute("SET extra_float_digits = 3;")
-
-    import os
 
     pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "kart"})
 

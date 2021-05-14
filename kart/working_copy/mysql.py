@@ -2,11 +2,12 @@ import contextlib
 import logging
 import time
 
-
+import sqlalchemy as sa
 from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer
 from sqlalchemy.sql.functions import Function
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import UserDefinedType
+from sqlalchemy.dialects.mysql.types import DOUBLE
 
 from . import mysql_adapter
 from .db_server import DatabaseServer_WorkingCopy
@@ -86,6 +87,14 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
                 )
             # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
+        elif col.data_type == "boolean":
+            return BooleanType
+        elif col.data_type == "float" and col.extra_type_info.get("size") != 64:
+            return FloatType
+        elif col.data_type == "date":
+            return DateType
+        elif col.data_type == "time":
+            return TimeType
         elif col.data_type == "timestamp":
             return TimestampType
         else:
@@ -415,12 +424,32 @@ class GeometryType(UserDefinedType):
         return lambda wkb: Geometry.from_wkb(wkb)
 
 
+class BooleanType(UserDefinedType):
+    # UserDefinedType to read booleans. They are stored in MySQL as Bits but we read them back as bools.
+    def result_processor(self, dialect, coltype):
+        # Reading - Python layer - convert bytes to boolean.
+        def process(b):
+            i = int.from_bytes(b, "big") if b is not None else None
+            return bool(i) if i in (0, 1) else i
+
+        return process
+
+
 class DateType(UserDefinedType):
     # UserDefinedType to read Dates as text. They are stored in MySQL as Dates but we read them back as text.
     def column_expression(self, col):
         # Reading - SQL layer - convert date to string in ISO8601.
         # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
         return Function("DATE_FORMAT", col, "%Y-%m-%d", type_=self)
+
+
+class FloatType(UserDefinedType):
+    # UserDefinedType to read floats as doubles. For some reason, floats they are rounded so they keep
+    # even less than single-float precision if we read them as floats.
+    def column_expression(self, col):
+        # Reading - SQL layer - convert date to string in ISO8601.
+        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
+        return sa.cast(col, DOUBLE)
 
 
 class TimeType(UserDefinedType):

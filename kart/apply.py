@@ -1,3 +1,4 @@
+from binascii import unhexlify
 import json
 from datetime import datetime
 from enum import Enum, auto
@@ -11,7 +12,7 @@ from .exceptions import (
     NotYetImplemented,
     InvalidOperation,
 )
-from .diff_structs import RepoDiff, DeltaDiff, Delta
+from .diff_structs import RepoDiff, DeltaDiff, Delta, KeyValue
 from .geometry import hex_wkb_to_gpkg_geom
 from .schema import Schema
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
@@ -81,10 +82,58 @@ def check_change_supported(repo_version, dataset, ds_path, meta_change_type, com
         raise InvalidOperation(f"{desc}\n{NO_COMMIT_NO_DATASET_CREATE_DELETE}")
 
 
-def unjson_feature(geom_column_name, f):
-    if f is not None and geom_column_name is not None:
-        f[geom_column_name] = hex_wkb_to_gpkg_geom(f[geom_column_name])
-    return f
+class KeyValueParser:
+    """Parses JSON for an individual feature object into a KeyValue object."""
+
+    def __init__(self, schema):
+        self.pk_name = schema.pk_columns[0].name
+        self.geom_names = [c.name for c in schema.geometry_columns]
+        self.bytes_names = [c.name for c in schema.columns if c.data_type == "blob"]
+
+    def parse(self, f):
+        if f is None:
+            return None
+        for g in self.geom_names:
+            f[g] = hex_wkb_to_gpkg_geom(f[g])
+        for b in self.bytes_names:
+            f[b] = unhexlify(f[b]) if f[b] is not None else None
+        pk = f[self.pk_name]
+        return KeyValue.of((pk, f))
+
+
+class NullSchemaParser:
+    """
+    A parser which expects only null values, since there is no schema for parsing actual features.
+    Useful for parsing all the old values in a patch which creates a new dataset - these should all be null.
+    """
+
+    def __init__(self, old_or_new):
+        self.old_or_new = old_or_new
+
+    def parse(self, f):
+        if f is None:
+            return None
+        raise InvalidOperation(
+            f"Can't parse {old_or_new} feature value - {old_or_new} schema is missing"
+        )
+
+
+class DeltaParser:
+    """Parses JSON for a delta - ie {"-": old-value, "+": new-value} - into a Delta object."""
+
+    def __init__(self, old_schema, new_schema):
+        self.old_parser = (
+            KeyValueParser(old_schema) if old_schema else NullSchemaParser("old")
+        )
+        self.new_parser = (
+            KeyValueParser(new_schema) if new_schema else NullSchemaParser("new")
+        )
+
+    def parse(self, change):
+        return Delta(
+            self.old_parser.parse(change.get("-")),
+            self.new_parser.parse(change.get("+")),
+        )
 
 
 def apply_patch(
@@ -148,32 +197,24 @@ def apply_patch(
                 for (k, v) in meta_changes.items()
             )
             repo_diff.recursive_set([ds_path, "meta"], meta_diff)
-
-        if dataset is not None:
-            pk_name = dataset.primary_key
-            geom_column_name = dataset.geom_column_name
         else:
-            schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
-            pk_name = schema.pk_columns[0].name
-            geom_columns = schema.geometry_columns
-            geom_column_name = geom_columns[0].name if geom_columns else None
+            meta_diff = None
 
         feature_changes = ds_diff_dict.get("feature", [])
-
-        def extract_key(feature):
-            if feature is None:
-                return None
-            return feature[pk_name], feature
-
-        def parse_delta(change):
-            return Delta(
-                extract_key(unjson_feature(geom_column_name, change.get("-"))),
-                extract_key(unjson_feature(geom_column_name, change.get("+"))),
-            )
-
         if feature_changes:
+            old_schema = new_schema = None
+            if dataset is not None:
+                old_schema = new_schema = dataset.schema
+
+            schema_delta = meta_diff.get("schema.json") if meta_diff else None
+            if schema_delta and schema_delta.old_value:
+                old_schema = Schema.from_column_dicts(schema_delta.old_value)
+            if schema_delta and schema_delta.new_value:
+                new_schema = Schema.from_column_dicts(schema_delta.new_value)
+
+            delta_parser = DeltaParser(old_schema, new_schema)
             feature_diff = DeltaDiff(
-                (parse_delta(change) for change in feature_changes)
+                (delta_parser.parse(change) for change in feature_changes)
             )
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 

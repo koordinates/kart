@@ -884,7 +884,20 @@ def test_approximated_types():
 def test_types_roundtrip(data_working_copy, cli_runner):
     # If type-approximation roundtrip code isn't working,
     # we would get spurious diffs on types that GPKG doesn't support.
-    with data_working_copy("types") as (repo_path, wc):
+    with data_working_copy("types") as (repo_path, wc_path):
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0, r.stdout
+
+
+def test_values_roundtrip(data_working_copy, cli_runner):
+    # If values roundtripping code isn't working for certain types,
+    # we could get spurious diffs on those values.
+    with data_working_copy("types") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
+            sess.execute('UPDATE manytypes SET "PK"=999;')
+            sess.execute('UPDATE manytypes SET "PK"=1;')
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stdout
 
