@@ -14,7 +14,7 @@ attrs==20.3.0
     #   pytest
 colorama==0.4.4
     # via -r requirements/test.in
-coverage==5.5
+coverage[toml]==5.5
     # via pytest-cov
 fields==5.0.0
     # via aspectlib
@@ -45,7 +45,7 @@ pyparsing==2.4.7
     # via packaging
 pytest-benchmark[aspect]==3.4.1
     # via -r requirements/test.in
-pytest-cov==2.11.1
+pytest-cov==2.12.0
     # via -r requirements/test.in
 pytest-helpers-namespace==2021.4.29
     # via -r requirements/test.in
@@ -73,7 +73,9 @@ six==1.15.0
 termcolor==1.1.0
     # via pytest-sugar
 toml==0.10.2
-    # via pytest
+    # via
+    #   coverage
+    #   pytest
 typing-extensions==3.7.4.3
     # via
     #   -c requirements/../requirements.txt
