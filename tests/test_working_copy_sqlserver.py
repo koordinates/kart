@@ -18,7 +18,7 @@ H = pytest.helpers.helpers()
 def test_no_odbc():
     # if unixODBC is installed or we're on Windows we can't test the not-installed message
     try:
-        import pyodbc
+        import pyodbc  # noqa
     except ImportError:
         pass
     else:
@@ -34,7 +34,7 @@ def test_odbc_drivers():
     # if unixODBC isn't installed we can't test this
     # use a try/except so we get a better message than via pytest.importorskip
     try:
-        import pyodbc
+        import pyodbc  # noqa
     except ImportError:
         pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
 
@@ -354,7 +354,7 @@ def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
 
         with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
             repo.config["kart.workingcopy.location"] = sqlserver_url
-            r = cli_runner.invoke(["checkout", "2d-geometry-only"])
+            r = cli_runner.invoke(["checkout"])
 
             # If type-approximation roundtrip code isn't working,
             # we would get spurious diffs on types that SQL server doesn't support.
@@ -370,7 +370,7 @@ def test_values_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
         with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
             repo.config["kart.workingcopy.location"] = sqlserver_url
             # TODO - fix SQL server to roundtrip 3D and 4D geometries.
-            r = cli_runner.invoke(["checkout", "2d-geometry-only"])
+            r = cli_runner.invoke(["checkout"])
 
             with repo.working_copy.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.

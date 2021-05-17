@@ -434,8 +434,8 @@ class GeometryType(UserDefinedType):
         )
 
     def column_expression(self, col):
-        # 3. Reading - SQL layer - append with call to .STAsBinary() to convert MS binary to WKB.
-        return InstanceFunction("STAsBinary", col, type_=self)
+        # 3. Reading - SQL layer - append with call to .AsBinaryZM() to convert MS binary to WKB.
+        return InstanceFunction("AsBinaryZM", col, type_=self)
 
     def result_processor(self, dialect, coltype):
         # 4. Reading - Python layer - convert WKB to Kart geometry.
