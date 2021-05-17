@@ -5,6 +5,7 @@ from pathlib import Path
 
 import click
 
+from .annotations.db import KartAnnotation, annotations_session
 from .crs_util import CoordinateReferenceString
 from .diff_output import (  # noqa - used from globals()
     diff_output_text,
@@ -200,6 +201,7 @@ def diff_with_writer(
         )
 
         num_changes = 0
+        feature_change_counts = {}
         with diff_writer(**writer_params) as w:
             for ds_path in all_ds_paths:
                 diff = get_dataset_diff(
@@ -211,8 +213,19 @@ def diff_with_writer(
                 )
                 ds = base_rs.datasets.get(ds_path) or target_rs.datasets.get(ds_path)
                 num_changes += len(diff)
+                if "feature" in diff:
+                    feature_change_counts[ds_path] = len(diff["feature"])
                 L.debug("overall diff (%s): %s", ds_path, repr(diff))
                 w(ds, diff)
+
+        if not working_copy:
+            # store this count in case it's needed later
+            repo.diff_annotations.store(
+                base_rs=base_rs,
+                target_rs=target_rs,
+                annotation_type="feature-change-counts-exact",
+                data=feature_change_counts,
+            )
 
     except click.ClickException as e:
         L.debug("Caught ClickException: %s", e)
@@ -247,7 +260,7 @@ def feature_count_diff(
     base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
 
     dataset_change_counts = diff_estimation.estimate_diff_feature_counts(
-        base_rs, target_rs, working_copy, accuracy
+        base_rs, target_rs, working_copy=working_copy, accuracy=accuracy
     )
 
     if output_format == "text":

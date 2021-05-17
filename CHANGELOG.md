@@ -18,9 +18,16 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * Bugfix: GPKG spatial indexes are now created and deleted properly regardless of the case (upper-case or lower-case) of the table name and geometry column.
 * A few bugfixes involving accurately roundtripping boolean and blob types through different working copy types.
 * Bugfix: 3D and 4D geometries are now properly roundtripped through SQL Server working copy.
-* `diff` now accepts `--only-feature-count`, which produces a feature count for the diff. The feature count can be exact or a fast estimate.
-* `log` now accepts `--with-feature-count` which adds a feature count to each commit when used with `-o json`. The feature count can be exact or a fast estimate.
 * Fix help text for discarding changes to refer to `kart restore` instead of `kart reset`, as `kart restore` is now the simplest way to discard changes. [#426](https://github.com/koordinates/kart/issues/426)
+
+### Calculating feature counts for diffs
+
+Kart now includes ways to calculate or estimate feature counts for diffs. This encompasses the following changes:
+
+* `diff` now accepts `--only-feature-count=<ACCURACY>`, which produces a feature count for the diff.
+* `log` now accepts `--with-feature-count=<ACCURACY>` which adds a feature count to each commit when used with `-o json`.
+* All calculated feature counts are stored in a SQLite database in the repo's `.kart` directory.
+* Feature counts for commit diffs can be populated in bulk with the new `build-annotations` command
 
 ## 0.9.0 (First "Kart" release)
 

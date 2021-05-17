@@ -3,6 +3,7 @@ import statistics
 import subprocess
 import time
 
+
 FEATURE_SUBTREES_PER_TREE = 256
 FEATURE_TREE_NESTING = 2
 MAX_TREES = FEATURE_SUBTREES_PER_TREE ** FEATURE_TREE_NESTING
@@ -21,7 +22,7 @@ Z_SCORES = {
 }
 
 
-def _feature_count_sample_trees(repo, rev_spec, feature_path, num_trees):
+def _feature_count_sample_trees(repo, git_rev_spec, feature_path, num_trees):
     if num_trees == MAX_TREES:
         paths = [feature_path]
     else:
@@ -42,7 +43,7 @@ def _feature_count_sample_trees(repo, rev_spec, feature_path, num_trees):
             "diff",
             "--name-only",
             "--no-renames",
-            rev_spec,
+            git_rev_spec,
             "--",
             *paths,
         ],
@@ -69,7 +70,8 @@ ACCURACY_CHOICES = ("veryfast", "fast", "medium", "good", "exact")
 def estimate_diff_feature_counts(
     base_rs,
     target_rs,
-    working_copy,
+    *,
+    working_copy=None,
     accuracy,
 ):
     """
@@ -88,7 +90,16 @@ def estimate_diff_feature_counts(
     base_ds_paths = {ds.path for ds in base_rs.datasets}
     target_ds_paths = {ds.path for ds in target_rs.datasets}
     all_ds_paths = base_ds_paths | target_ds_paths
-    rev_spec = f"{base_rs.tree.id}..{target_rs.tree.id}"
+    git_rev_spec = f"{base_rs.tree.id}..{target_rs.tree.id}"
+
+    annotation_type = f"feature-change-counts-{accuracy}"
+    annotation = repo.diff_annotations.get(
+        base_rs=base_rs,
+        target_rs=target_rs,
+        annotation_type=annotation_type,
+    )
+    if annotation is not None:
+        return annotation
 
     dataset_change_counts = {}
     for dataset_path in all_ds_paths:
@@ -122,7 +133,7 @@ def estimate_diff_feature_counts(
                 if accuracy == "exact":
                     ds_total += sum(
                         _feature_count_sample_trees(
-                            repo, rev_spec, feature_path, MAX_TREES
+                            repo, git_rev_spec, feature_path, MAX_TREES
                         )
                     )
                 else:
@@ -152,7 +163,7 @@ def estimate_diff_feature_counts(
                         )
                         t1 = time.monotonic()
                         samples = _feature_count_sample_trees(
-                            repo, rev_spec, feature_path, sample_size
+                            repo, git_rev_spec, feature_path, sample_size
                         )
                         sample_mean = statistics.mean(samples)
                         sample_stdev = statistics.stdev(samples)
@@ -213,5 +224,13 @@ def estimate_diff_feature_counts(
                 ds_total += working_copy.tracking_changes_count(base_ds)
         if ds_total:
             dataset_change_counts[dataset_path] = ds_total
+
+    if not working_copy:
+        repo.diff_annotations.store(
+            base_rs=base_rs,
+            target_rs=target_rs,
+            annotation_type=annotation_type,
+            data=dataset_change_counts,
+        )
 
     return dataset_change_counts

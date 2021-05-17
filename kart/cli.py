@@ -19,6 +19,7 @@ from .context import Context
 from .exec import execvp
 
 MODULE_COMMANDS = {
+    "annotations.cli": {"build-annotations"},
     "apply": {"apply"},
     "branch": {"branch"},
     "checkout": {"checkout", "create-workingcopy", "reset", "restore", "switch"},
