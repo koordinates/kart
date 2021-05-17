@@ -5,7 +5,6 @@ from pathlib import Path
 
 import click
 
-from .annotations.db import KartAnnotation, annotations_session
 from .crs_util import CoordinateReferenceString
 from .diff_output import (  # noqa - used from globals()
     diff_output_text,

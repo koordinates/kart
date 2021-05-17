@@ -16,6 +16,7 @@ from .exceptions import (
 from .rich_tree_builder import RichTreeBuilder
 from .repo_version import extra_blobs_for_version
 from .schema import Schema
+from .structs import CommitWithReference
 
 
 L = logging.getLogger("kart.structure")
@@ -43,6 +44,23 @@ class RepoStructure:
         if refish is None or refish == "HEAD":
             return "HEAD", repo.head_commit, repo.head_tree
 
+        # We support X^?  - meaning X^ if X^ exists otherwise [EMPTY]
+        if isinstance(refish, str) and refish.endswith("^?"):
+            commit = CommitWithReference.resolve(repo, refish[:-2]).commit
+            try:
+                if commit.parents:
+                    refish = refish[:-1]  # Commit has parents - use X^.
+                else:
+                    refish = "[EMPTY]"  # Commit has no parents - use [EMPTY]
+            except KeyError:
+                # One or more parents doesn't exist.
+                # This is okay if this is the first commit of a shallow clone (how to tell?)
+                refish = "[EMPTY]"
+
+        # We support [EMPTY] meaning the empty tree.
+        if refish == "[EMPTY]":
+            return "[EMPTY]", None, repo.empty_tree
+
         if isinstance(refish, pygit2.Oid):
             refish = refish.hex
 
@@ -64,6 +82,29 @@ class RepoStructure:
             pass
 
         raise NotFound(f"{refish} is not a ref, commit or tree", exit_code=NO_COMMIT)
+
+    @staticmethod
+    def resolve_commit(repo, refish):
+        """
+        Given a string that describes a commit, return the parent of that commit -
+        or, return the empty tree if that commit has no parent.
+        """
+        if refish is None or refish == "HEAD":
+            return repo.head_commit
+
+        try:
+            obj, reference = repo.resolve_refish(refish)
+            return obj.peel(pygit2.Commit)
+        except (pygit2.InvalidSpecError, KeyError):
+            pass
+
+        try:
+            obj = repo.revparse_single(refish)
+            return obj.peel(pygit2.Commit)
+        except (pygit2.InvalidSpecError, KeyError):
+            pass
+
+        raise NotFound(f"{refish} is not a commit", exit_code=NO_COMMIT)
 
     @staticmethod
     def _peel_obj(obj):
@@ -97,15 +138,18 @@ class RepoStructure:
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
 
     def __repr__(self):
-        name = f"RepoStructure"
-        if self.ref is not None:
-            return f"{name}<{self.repo.path}@{self.ref}={self.commit.id}>"
+        if self.ref == "[EMPTY]":
+            at_desc = "@<empty>"
+        elif self.ref is not None:
+            at_desc = f"@{self.ref}={self.commit.id}"
         elif self.commit is not None:
-            return f"{name}<{self.repo.path}@{self.commit.id}>"
+            at_desc = f"@{self.commit.id}"
         elif self.tree is not None:
-            return f"{name}<{self.repo.path}@tree={self.tree.id}>"
+            at_desc = f"@tree:{self.tree.id}"
         else:
-            return f"{name}<{self.repo.path} <empty>>"
+            at_desc = " <empty>"
+
+        return f"RepoStructure<{self.repo.path}{at_desc}>"
 
     def decode_path(self, full_path):
         """
@@ -118,6 +162,10 @@ class RepoStructure:
         dataset_path, rel_path = full_path.split(f"/{dataset_dirname}/", 1)
         rel_path = f"{dataset_dirname}/{rel_path}"
         return (dataset_path, *self.datasets[dataset_path].decode_path(rel_path))
+
+    @property
+    def ref_or_id(self):
+        return self.ref or self.id
 
     @property
     def id(self):

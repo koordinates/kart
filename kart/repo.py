@@ -583,6 +583,11 @@ class KartRepo(pygit2.Repository):
         return None if self.head_is_unborn else self.head.peel(pygit2.Tree)
 
     @property
+    def empty_tree(self):
+        """Returns the empty tree, with SHA 4b825dc642cb6eb9a060e54bf8d69288fbee4904."""
+        return self['4b825dc642cb6eb9a060e54bf8d69288fbee4904']
+
+    @property
     def head_branch(repo):
         """
         Returns the branch that HEAD is currently on. Returns None if head is not on a branch - ie, head_is_detached.
