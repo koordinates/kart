@@ -598,7 +598,7 @@ def diff_output_json_lines(
     *,
     output_path,
     dataset_count,
-    json_style="pretty",
+    json_style="compact",
     dump_function=dump_json_output,
     dataset_geometry_transforms=None,
     **kwargs,
@@ -618,6 +618,10 @@ def diff_output_json_lines(
                 "Directory is not valid for --output with --output-format=json-lines",
                 param_hint="--output",
             )
+
+    if json_style == "pretty":
+        # Pretty-printed JSON is not valid JSONL.
+        json_style = "compact"
 
     def prepare_meta_delta(delta):
         # No lazy streaming of meta deltas.
