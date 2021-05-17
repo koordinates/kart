@@ -18,7 +18,7 @@ H = pytest.helpers.helpers()
 def test_no_odbc():
     # if unixODBC is installed or we're on Windows we can't test the not-installed message
     try:
-        import pyodbc
+        import pyodbc  # noqa
     except ImportError:
         pass
     else:
@@ -34,7 +34,7 @@ def test_odbc_drivers():
     # if unixODBC isn't installed we can't test this
     # use a try/except so we get a better message than via pytest.importorskip
     try:
-        import pyodbc
+        import pyodbc  # noqa
     except ImportError:
         pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
 
@@ -212,7 +212,7 @@ def test_commit_edits(
                 "",
                 "Changes in working copy:",
                 '  (use "kart commit" to commit)',
-                '  (use "kart reset" to discard changes)',
+                '  (use "kart restore" to discard changes)',
                 "",
                 f"  {table}:",
                 "    feature:",
@@ -362,6 +362,51 @@ def test_types_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
             assert r.exit_code == 0, r.stdout
 
 
+def test_values_roundtrip(data_archive, cli_runner, new_sqlserver_db_schema):
+    with data_archive("types") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            repo.config["kart.workingcopy.location"] = sqlserver_url
+            # TODO - fix SQL server to roundtrip 3D and 4D geometries.
+            r = cli_runner.invoke(["checkout"])
+
+            with repo.working_copy.session() as sess:
+                # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
+                sess.execute(f'UPDATE {sqlserver_schema}.manytypes SET "PK"=999;')
+                sess.execute(f'UPDATE {sqlserver_schema}.manytypes SET "PK"=1;')
+
+            # If values roundtripping code isn't working for certain types,
+            # we could get spurious diffs on those values.
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stdout
+
+
+def test_meta_updates(data_archive, cli_runner, new_sqlserver_db_schema):
+    with data_archive("meta-updates"):
+        H.clear_working_copy()
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            r = cli_runner.invoke(["create-workingcopy", sqlserver_url])
+            assert r.exit_code == 0, r.stderr
+
+            # These commits have minor schema changes.
+            # We try to handle minor schema changes by using ALTER TABLE statements, instead
+            # of dropping and recreating the whole table. Make sure those statements are working:
+
+            r = cli_runner.invoke(["checkout", "main~3"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main~2"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main~1"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main"])
+            assert r.exit_code == 0, r.stderr
+
+
 def test_geometry_constraints(
     data_archive,
     cli_runner,
@@ -417,20 +462,22 @@ def test_geometry_constraints(
                 # Not allowed - wrong CRS ID
 
 
-def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
+def test_checkout_custom_crs(
+    data_archive, cli_runner, new_sqlserver_db_schema, dodgy_restore
+):
     with data_archive("custom_crs") as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
             repo.config["kart.workingcopy.location"] = sqlserver_url
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
 
             # main branch has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly.
             # In fact we *cannot* roundtrip it properly since MSSQL cannot store custom CRS, but we should at least not
             # get a spurious diff when the user has not made any edits - the diff should be hidden.
             r = cli_runner.invoke(["diff", "--exit-code"])
-            assert r.exit_code == 0, r.stderr
+            assert r.exit_code == 0, r.stdout
 
             # Even though SQL Server cannot store the custom CRS, it can still store the CRS ID in the geometries:
             wc = repo.working_copy
@@ -441,8 +488,8 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
                 assert srid == 100002
 
             # We should be able to checkout the previous revision, which has a different (standard) CRS.
-            r = cli_runner.invoke(["checkout", "main^"])
-            assert r.exit_code == 0, r.stderr
+            r = cli_runner.invoke(["checkout", "epsg-4326"])
+            assert r.exit_code == 0, r.stdout
 
             wc = repo.working_copy
             with wc.session() as sess:
@@ -451,18 +498,66 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_sqlserver_db_schema):
                 )
                 assert srid == 4326
 
-            # Checkout main to the WC, then set HEAD back to main^ without updating the WC.
-            # (This is just a way to use Kart to simulate the user manually changing the CRS in the WC.)
-            head_commit = repo.head_commit.hex
-            head_tree = repo.head_tree.hex
-            r = cli_runner.invoke(["checkout", "main"])
-            assert r.exit_code == 0, r.stderr
-            repo.write_gitdir_file("HEAD", head_commit)
-            repo.working_copy.update_state_table_tree(head_tree)
+            # Restore the contents of custom-crs to the WC so we can make sure WC diff is working:
+            dodgy_restore(repo, "custom-crs")
 
-            # MSSQL can't actually store custom CRS, so, there's nothing in the WC that's changed
-            # that we can commit. (The CRS ID has changed, but we don't currently read it from the WC -
-            # that would involve extracting it from some significant sample of the geometries).
-            # (See the limitations in SQL_SERVER_WC.md)
-            r = cli_runner.invoke(["diff", "--exit-code"])
-            assert r.exit_code == 0, r.stderr
+            # We can detect that the CRS ID has changed to 100002, but SQL server can't actually store
+            # the custom definition, so we don't know what it is.
+            r = cli_runner.invoke(["diff"])
+            assert r.stdout.splitlines() == [
+                '--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt',
+                '- GEOGCS["WGS 84",',
+                '-     DATUM["WGS_1984",',
+                '-         SPHEROID["WGS 84", 6378137, 298.257223563,',
+                '-             AUTHORITY["EPSG", "7030"]],',
+                '-         AUTHORITY["EPSG", "6326"]],',
+                '-     PRIMEM["Greenwich", 0,',
+                '-         AUTHORITY["EPSG", "8901"]],',
+                '-     UNIT["degree", 0.0174532925199433,',
+                '-         AUTHORITY["EPSG", "9122"]],',
+                '-     AUTHORITY["EPSG", "4326"]]',
+                '- ',
+                '--- nz_pa_points_topo_150k:meta:schema.json',
+                '+++ nz_pa_points_topo_150k:meta:schema.json',
+                '  [',
+                '    {',
+                '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
+                '      "name": "fid",',
+                '      "dataType": "integer",',
+                '      "primaryKeyIndex": 0,',
+                '      "size": 64',
+                '    },',
+                '    {',
+                '      "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
+                '      "name": "geom",',
+                '      "dataType": "geometry",',
+                '      "geometryType": "POINT",',
+                '-     "geometryCRS": "EPSG:4326",',
+                '+     "geometryCRS": "CUSTOM:100002",',
+                '    },',
+                '    {',
+                '      "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
+                '      "name": "t50_fid",',
+                '      "dataType": "integer",',
+                '      "size": 32',
+                '    },',
+                '    {',
+                '      "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
+                '      "name": "name_ascii",',
+                '      "dataType": "text",',
+                '      "length": 75',
+                '    },',
+                '    {',
+                '      "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
+                '      "name": "macronated",',
+                '      "dataType": "text",',
+                '      "length": 1',
+                '    },',
+                '    {',
+                '      "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
+                '      "name": "name",',
+                '      "dataType": "text",',
+                '      "length": 75',
+                '    },',
+                '  ]',
+            ]

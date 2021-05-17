@@ -187,12 +187,17 @@ def v2_type_to_ms_type(column_schema):
     return ms_type
 
 
-def sqlserver_to_v2_schema(ms_table_info, id_salt):
+def sqlserver_to_v2_schema(ms_table_info, ms_crs_info, id_salt):
     """Generate a V2 schema from the given SQL server metadata."""
-    return Schema([_sqlserver_to_column_schema(col, id_salt) for col in ms_table_info])
+    return Schema(
+        [
+            _sqlserver_to_column_schema(col, ms_crs_info, id_salt)
+            for col in ms_table_info
+        ]
+    )
 
 
-def _sqlserver_to_column_schema(ms_col_info, id_salt):
+def _sqlserver_to_column_schema(ms_col_info, ms_crs_info, id_salt):
     """
     Given the MS column info for a particular column, converts it to a ColumnSchema.
 
@@ -205,7 +210,13 @@ def _sqlserver_to_column_schema(ms_col_info, id_salt):
     pk_index = ms_col_info["pk_ordinal_position"]
     if pk_index is not None:
         pk_index -= 1
-    data_type, extra_type_info = _ms_type_to_v2_type(ms_col_info)
+
+    if ms_col_info["data_type"] in ("geometry", "geography"):
+        data_type, extra_type_info = _ms_type_to_v2_geometry_type(
+            ms_col_info, ms_crs_info
+        )
+    else:
+        data_type, extra_type_info = _ms_type_to_v2_type(ms_col_info)
 
     col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
     return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
@@ -231,3 +242,20 @@ def _ms_type_to_v2_type(ms_col_info):
         extra_type_info["scale"] = ms_col_info["numeric_scale"] or None
 
     return v2_type, extra_type_info
+
+
+def _ms_type_to_v2_geometry_type(ms_col_info, ms_crs_info):
+    extra_type_info = {"geometryType": "geometry"}
+
+    crs_row = next(
+        (r for r in ms_crs_info if r["column_name"] == ms_col_info["column_name"]), None
+    )
+    if crs_row:
+        auth_name = crs_row['authority_name']
+        auth_code = crs_row['authorized_spatial_reference_id']
+        if not auth_name and not auth_code:
+            auth_name, auth_code = "CUSTOM", crs_row['srid']
+        geometry_crs = f"{auth_name}:{auth_code}"
+        extra_type_info["geometryCRS"] = geometry_crs
+
+    return "geometry", extra_type_info

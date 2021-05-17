@@ -437,7 +437,7 @@ class BaseWorkingCopy:
     def check_not_dirty(self, help_message=None):
         """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
         if not help_message:
-            help_message = "Commit these changes (`kart commit`) or discard these changes (`kart reset`) first."
+            help_message = "Commit these changes (`kart commit`) or discard these changes (`kart restore`) first."
         if self.is_dirty():
             raise InvalidOperation(
                 f"You have uncommitted changes in your working copy.\n{help_message}"
@@ -590,6 +590,16 @@ class BaseWorkingCopy:
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False
     ):
         pk_field = dataset.schema.pk_columns[0].name
+        schema_diff = meta_diff.get("schema.json")
+
+        if schema_diff and schema_diff.type == "delete":
+            # The entire table has been deleted - add delete deltas for every feature.
+            feature_diff = DeltaDiff()
+            for feature in dataset.features():
+                if feature[pk_field] in feature_filter:
+                    feature_diff.add_delta(Delta.delete((feature[pk_field], feature)))
+            return feature_diff
+
         find_renames = self.can_find_renames(meta_diff)
 
         with self.session() as sess:
@@ -1065,7 +1075,7 @@ class BaseWorkingCopy:
             structural_changes_text = "\n".join(structural_changes)
             raise NotYetImplemented(
                 "Sorry, this operation is not possible when there are structural changes."
-                f"Structural changes are affecting:\n{structural_changes_text}"
+                f" Structural changes are affecting:\n{structural_changes_text}"
             )
 
         with self.session() as sess:
@@ -1183,10 +1193,29 @@ class BaseWorkingCopy:
 
         meta_diff - DeltaDiff object containing the meta changes.
         """
+        if not meta_diff:
+            return True
 
-        # By default, no meta updates are supported (without dropping and rewriting).
-        # Subclasses can override to support various types of meta updates.
-        return not meta_diff
+        # CRS changes complicated enough that we always drop and rewrite for now.
+        if any(key.startswith("crs/") for key in meta_diff.keys()):
+            return False
+
+        # If CRS is not changed and schema is not changed, we can do an update.
+        if "schema.json" not in meta_diff:
+            return True
+
+        # If schema is changed, can we do an update? Sometimes.
+        return self._is_schema_update_supported(meta_diff["schema.json"])
+
+    def _is_schema_update_supported(self, schema_delta):
+        """
+        Returns True if the given change to the schema is supported *without* dropping and rewriting the table.
+        (Any schema change is supported if we drop and rewrite the table, but of course it is less efficient).
+
+        schema_delta - the Delta object containing the change to schema.json
+        """
+        # Always return false -> always drop and rewrite. Subclasses can override for efficiency.
+        return False
 
     def _apply_meta_diff(self, sess, target_ds, meta_diff):
         """
@@ -1200,12 +1229,27 @@ class BaseWorkingCopy:
         L.debug("Meta diff: %s changes", len(meta_diff))
         for key in meta_diff:
             if key.startswith("crs/"):
-                # CRS changes are handled by _apply_meta_schema_json
-                continue
+                raise RuntimeError(
+                    f"CRS changes not supported by update - should be drop + re-write_full: {key}"
+                )
             func_key = key.replace("/", "_").replace(".", "_")
             func = getattr(self, f"_apply_meta_{func_key}")
             delta = meta_diff[key]
             func(sess, target_ds, delta.old_value, delta.new_value)
+
+    def apply_meta_title(self, sess, dataset, src_value, dest_value):
+        raise RuntimeError(
+            f"Title change not supported by update for {self.WORKING_COPY_TYPE_NAME} - should be drop + re-write_full"
+        )
+
+    def _apply_meta_description(self, sess, dataset, src_value, dest_value):
+        pass  # This is a no-op for most WC types, which don't store descriptions.
+
+    def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):
+        pass  # This is a no-op for most WC types, which don't store metadata JSON.
+
+    def _apply_meta_metadata_xml(self, sess, dataset, src_value, dest_value):
+        pass  # This is a no-op for most WC types, which don't store metadata XML.
 
     def _reset_dirty_rows(self, sess, base_ds):
         """

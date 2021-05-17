@@ -71,23 +71,31 @@ def generate_v2_meta_item(gpkg_meta_items, path, id_salt=None):
     Varying the id_salt varies the ids that are generated for the schema.json item.
     """
 
+    def _nested_get(nested_dict, *keys):
+        result = nested_dict
+        for key in keys:
+            result = result.get(key)
+            if result is None:
+                return result
+        return result
+
     if not is_v2_meta_item(path):
         raise KeyError(f"Not a v2 meta_item: {path}")
 
     if path == "title":
-        return gpkg_meta_items["gpkg_contents"].get("identifier")
+        return _nested_get(gpkg_meta_items, "gpkg_contents", "identifier")
 
     elif path == "description":
-        description = gpkg_meta_items["gpkg_contents"].get("description")
-        return description
+        return _nested_get(gpkg_meta_items, "gpkg_contents", "description")
 
     elif path == "schema.json":
-        return gpkg_to_v2_schema(
+        schema = gpkg_to_v2_schema(
             gpkg_meta_items.get("sqlite_table_info"),
             gpkg_meta_items.get("gpkg_geometry_columns"),
             gpkg_meta_items.get("gpkg_spatial_ref_sys"),
             id_salt or get_table_name(gpkg_meta_items["gpkg_contents"]),
-        ).to_column_dicts()
+        )
+        return schema.to_column_dicts() if schema else None
     elif path == "metadata/dataset.json":
         return gpkg_metadata_to_json(
             gpkg_meta_items.get("gpkg_metadata"),
@@ -249,6 +257,8 @@ def gpkg_to_v2_schema(
     sqlite_table_info, gpkg_geometry_columns, gpkg_spatial_ref_sys, id_salt
 ):
     """Generate a v2 Schema from the given gpkg meta items."""
+    if not sqlite_table_info:
+        return None
     return Schema(
         [
             _gpkg_to_column_schema(
@@ -552,7 +562,7 @@ def gpkg_metadata_to_xml(gpkg_metadata, gpkg_metadata_reference):
 
     # We can't actually commit a whole list of XML, but we need to return something that makes sense.
     # Simply throwing an error here stops dirty-detection working, and stops commands that would fix the situation
-    # from working, like `kart reset HEAD --discard-changes` or `kart create-workingcopy --discard-changes`.
+    # from working, like `kart reset --discard-changes` or `kart create-workingcopy --discard-changes`.
     return xml_list
 
 

@@ -375,8 +375,8 @@ def test_working_copy_discard_changes(
             assert r.exit_code == 0, r
 
         elif via == "reset":
-            # using `kart reset HEAD --discard-changes`
-            r = cli_runner.invoke(["reset", "HEAD", "--discard-changes"])
+            # using `kart reset --discard-changes`
+            r = cli_runner.invoke(["reset", "--discard-changes"])
             assert r.exit_code == 0, r
 
         elif via == "checkout":
@@ -884,7 +884,20 @@ def test_approximated_types():
 def test_types_roundtrip(data_working_copy, cli_runner):
     # If type-approximation roundtrip code isn't working,
     # we would get spurious diffs on types that GPKG doesn't support.
-    with data_working_copy("types") as (repo_path, wc):
+    with data_working_copy("types") as (repo_path, wc_path):
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0, r.stdout
+
+
+def test_values_roundtrip(data_working_copy, cli_runner):
+    # If values roundtripping code isn't working for certain types,
+    # we could get spurious diffs on those values.
+    with data_working_copy("types") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
+            sess.execute('UPDATE manytypes SET "PK"=999;')
+            sess.execute('UPDATE manytypes SET "PK"=1;')
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stdout
 
@@ -995,7 +1008,26 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         }
 
 
-def test_checkout_custom_crs(data_working_copy, cli_runner):
+def test_meta_updates(data_working_copy, cli_runner):
+    with data_working_copy("meta-updates") as (repo_path, wc_path):
+        # These commits have minor schema changes.
+        # We try to handle minor schema changes by using ALTER TABLE statements, instead
+        # of dropping and recreating the whole table. Make sure those statements are working:
+
+        r = cli_runner.invoke(["checkout", "main~3"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "main~2"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "main~1"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+
+
+def test_checkout_custom_crs(data_working_copy, cli_runner, dodgy_restore):
     with data_working_copy("custom_crs") as (repo_path, wc_path):
         repo = KartRepo(repo_path)
 
@@ -1012,7 +1044,7 @@ def test_checkout_custom_crs(data_working_copy, cli_runner):
             assert srs_id == 100002
 
         # We should be able to switch to the previous revision, which has a different (standard) CRS.
-        r = cli_runner.invoke(["checkout", "main^"])
+        r = cli_runner.invoke(["checkout", "epsg-4326"])
         assert r.exit_code == 0, r.stderr
 
         with wc.session() as sess:
@@ -1022,15 +1054,8 @@ def test_checkout_custom_crs(data_working_copy, cli_runner):
             )
             assert srs_id == 4326
 
-        # Checkout main to the WC, then set HEAD back to main^ without updating the WC.
-        # (This is just a way to use Kart to simulate the user manually changing the CRS in the WC.)
-        # Make sure we can see this rev<>WC change in kart diff.
-        head_commit = repo.head_commit.hex
-        head_tree = repo.head_tree.hex
-        r = cli_runner.invoke(["checkout", "main"])
-        assert r.exit_code == 0, r.stderr
-        repo.write_gitdir_file("HEAD", head_commit)
-        repo.working_copy.update_state_table_tree(head_tree)
+        # Restore the contents of custom-crs to the WC so we can make sure WC diff is working:
+        dodgy_restore(repo, "custom-crs")
 
         r = cli_runner.invoke(["diff"])
         assert r.stdout.splitlines() == [

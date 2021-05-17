@@ -216,7 +216,7 @@ def test_status(
             "",
             "Changes in working copy:",
             '  (use "kart commit" to commit)',
-            '  (use "kart reset" to discard changes)',
+            '  (use "kart restore" to discard changes)',
             "",
             f"  {H.POINTS.LAYER}:",
             "    feature:",

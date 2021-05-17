@@ -1,11 +1,19 @@
-import re
+import itertools
 
 from osgeo.osr import SpatialReference
 
 from .cli_util import StringFromFile
 from .geometry import make_crs
 from .serialise_util import uint32hash
-from .wkt_lexer import WKTLexer
+from .wkt_lexer import (
+    WKTLexer,
+    CloseBracket,
+    Comma,
+    Keyword,
+    OpenBracket,
+    String,
+    Whitespace,
+)
 
 
 class CoordinateReferenceString(StringFromFile):
@@ -22,57 +30,16 @@ class CoordinateReferenceString(StringFromFile):
             )
 
 
-class _WktPatterns:
-    """Regular expressions for recognizing WKT name and authority."""
-
-    COMMA = ","
-    WHITESPACE = r"\s*"
-    OPEN_BRACKET = r"[%s]" % re.escape("[(")
-    CLOSE_BRACKET = r"[%s]" % re.escape("])")
-
-    WKT_STR = r'"((?:""|[^"])*)"'
-
-    ROOT_NAME_PATTERN = re.compile(
-        WHITESPACE.join(["^", "[A-Z]*", OPEN_BRACKET, WKT_STR]), re.IGNORECASE
-    )
-
-    ROOT_AUTHORITY_PATTERN = re.compile(
-        WHITESPACE.join(
-            [
-                "AUTHORITY",
-                OPEN_BRACKET,
-                WKT_STR,
-                COMMA,
-                WKT_STR,
-                CLOSE_BRACKET,
-                CLOSE_BRACKET,
-                "$",
-            ]
-        ),
-        re.IGNORECASE,
-    )
-
-    FINAL_AXIS_PATTERN = re.compile(
-        WHITESPACE.join(
-            [
-                "AXIS",
-                OPEN_BRACKET,
-                WKT_STR,
-                COMMA,
-                r"(?:NORTH|SOUTH|EAST|WEST)",
-                CLOSE_BRACKET,
-                COMMA,
-                "$",
-            ]
-        )
-    )
+NAME_PATTERN = (Keyword, OpenBracket, String)
 
 
 def parse_name(crs):
     if isinstance(crs, str):
-        m = _WktPatterns.ROOT_NAME_PATTERN.search(crs)
-        if m:
-            return m.group(1)
+        result = WKTLexer().find_pattern(
+            crs, NAME_PATTERN, at_depth=0, extract_strings=True
+        )
+        if result:
+            return result[0]
         else:
             spatial_ref = SpatialReference(crs)
     elif isinstance(crs, SpatialReference):
@@ -82,11 +49,17 @@ def parse_name(crs):
     return spatial_ref.GetName()
 
 
+AUTHORITY_PATTERN = ("AUTHORITY", OpenBracket, String, Comma, String, CloseBracket)
+
+
 def parse_authority(crs):
+
     if isinstance(crs, str):
-        m = _WktPatterns.ROOT_AUTHORITY_PATTERN.search(crs)
-        if m:
-            return m.group(1), m.group(2)
+        result = WKTLexer().find_pattern(
+            crs, AUTHORITY_PATTERN, at_depth=1, extract_strings=True
+        )
+        if result:
+            return result
         spatial_ref = SpatialReference(crs)
     elif isinstance(crs, SpatialReference):
         spatial_ref = crs
@@ -202,21 +175,83 @@ def get_identifier_int_from_dataset(dataset, crs_name=None):
 
 
 def normalise_wkt(wkt):
+    if not wkt:
+        return wkt
     token_iter = WKTLexer().get_tokens(wkt, pretty_print=True)
     token_value = (value for token_type, value in token_iter)
     return "".join(token_value)
 
 
-def ensure_axes_specified(crs):
-    # Adds DEFAULT_AXES to a definition if there are no axes present in the definition.
-    # There is a non-standard requirement by MySQL that AXES are specified.
-    DEFAULT_AXES = 'AXIS["X", EAST], AXIS["Y", NORTH], '
-    m = _WktPatterns.ROOT_AUTHORITY_PATTERN.search(crs)
-    if m:
-        start, end = m.span()
-        crs_without_authority = crs[:start]
-        authority = crs[start:end]
-        if not _WktPatterns.FINAL_AXIS_PATTERN.search(crs_without_authority):
-            return crs_without_authority + DEFAULT_AXES + authority
+def ensure_authority_specified(wkt, auth_name, auth_code):
+    """
+    Adds the given authority to the CRS definition if no authority is specified.
+    (Built-in SQL Server CRS definitions don't contain the authority).
+    """
+    if wkt and not WKTLexer().find_pattern(wkt, AUTHORITY_PATTERN, at_depth=1):
+        index = wkt.rindex(']')
+        return wkt[:index] + f', AUTHORITY["{auth_name}", "{auth_code}"]' + wkt[index:]
+    return wkt
 
-    return crs
+
+DEFAULT_AXES = 'AXIS["X", EAST], AXIS["Y", NORTH]'
+AXIS_PATTERN = ("AXIS", OpenBracket, String, Comma, Keyword, CloseBracket)
+
+
+def mysql_compliant_wkt(wkt):
+    """
+    Makes sure the axes are defined immediately before the authority is defined,
+    and make sure there are no newlines in the definition.
+    This is a non-standard WKT requirement of MySQL.
+    """
+    token_iter = WKTLexer().get_tokens(wkt)
+
+    depth = 0
+    default_buffer = []
+    authority_buffer = []
+    axis_buffer = []
+    active_buffer = default_buffer
+
+    for tokentype, value in token_iter:
+        # Maintain depth.
+        if tokentype is OpenBracket:
+            depth += 1
+        elif tokentype is CloseBracket:
+            depth -= 1
+            if depth == 0:
+                break  # Don't collect the last bracket.
+
+        if depth == 1 and tokentype is Keyword:
+            if value.upper() == "AUTHORITY":
+                active_buffer = authority_buffer
+            elif value.upper() == "AXIS":
+                active_buffer = axis_buffer
+            else:
+                active_buffer = default_buffer
+
+        # Yield token (values only, tokentype is not needed)
+        if tokentype == Whitespace:
+            # There's no newlines so need for indentation - collapse whitespace to single spaces.
+            active_buffer.append(" ")
+        else:
+            active_buffer.append(value)
+
+    if not axis_buffer:
+        axis_buffer = [DEFAULT_AXES]
+
+    def _stripped(buf):
+        if not buf:
+            return None
+        result = "".join(buf)
+        return result.strip(", ")
+
+    results = list(
+        filter(
+            None,
+            [
+                _stripped(default_buffer),
+                _stripped(axis_buffer),
+                _stripped(authority_buffer),
+            ],
+        )
+    )
+    return ", ".join(results) + "]"

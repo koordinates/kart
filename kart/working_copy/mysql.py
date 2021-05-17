@@ -2,17 +2,19 @@ import contextlib
 import logging
 import time
 
-
+import sqlalchemy as sa
 from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer
 from sqlalchemy.sql.functions import Function
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import UserDefinedType
+from sqlalchemy.dialects.mysql.types import DOUBLE
 
 from . import mysql_adapter
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import MySqlKartTables
 from kart import crs_util
 from kart.geometry import Geometry
+from kart.schema import Schema
 from kart.sqlalchemy import text_with_inlined_params
 from kart.sqlalchemy.create_engine import mysql_engine
 
@@ -63,7 +65,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MySQLIdentifierPreparer(self.engine.dialect)
 
-        self.kart_tables = MySqlKartTables(self.db_schema)
+        self.kart_tables = MySqlKartTables(self.db_schema, repo.is_kart_branded)
 
     def _create_table_for_dataset(self, sess, dataset):
         table_spec = mysql_adapter.v2_schema_to_mysql_spec(dataset.schema, dataset)
@@ -85,6 +87,14 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
                 )
             # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
+        elif col.data_type == "boolean":
+            return BooleanType
+        elif col.data_type == "float" and col.extra_type_info.get("size") != 64:
+            return FloatType
+        elif col.data_type == "date":
+            return DateType
+        elif col.data_type == "time":
+            return TimeType
         elif col.data_type == "timestamp":
             return TimestampType
         else:
@@ -306,18 +316,81 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             if key in ds_meta_items:
                 del ds_meta_items[key]
 
+        for key in ds_meta_items.keys() & wc_meta_items.keys():
+            if not key.startswith("crs/"):
+                continue
+            old_crs = crs_util.mysql_compliant_wkt(ds_meta_items[key])
+            new_crs = crs_util.mysql_compliant_wkt(wc_meta_items[key])
+            if old_crs == new_crs:
+                # Hide any diff caused by making the CRS MySQL compliant.
+                del ds_meta_items[key]
+                del wc_meta_items[key]
+
     def _is_builtin_crs(self, crs):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name == "EPSG"
 
-    def _is_meta_update_supported(self, meta_diff):
-        """
-        Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
-        (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).
-        meta_diff - DeltaDiff object containing the meta changes.
-        """
-        # For now, just always drop and rewrite.
-        return not meta_diff
+    def _is_schema_update_supported(self, schema_delta):
+        if not schema_delta.old_value or not schema_delta.new_value:
+            return False
+
+        old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        dt = old_schema.diff_type_counts(new_schema)
+
+        # We support deletes, name_updates, and type_updates -
+        # but we don't support any other type of schema update except by rewriting the entire table.
+        dt.pop("deletes")
+        dt.pop("name_updates")
+        dt.pop("type_updates")
+        return sum(dt.values()) == 0
+
+    def _apply_meta_title(self, sess, dataset, src_value, dest_value):
+        sess.execute(
+            f"ALTER TABLE {self.table_identifier(dataset)} COMMENT = :comment",
+            {"comment": dest_value},
+        )
+
+    def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
+        src_schema = Schema.from_column_dicts(src_value)
+        dest_schema = Schema.from_column_dicts(dest_value)
+
+        diff_types = src_schema.diff_types(dest_schema)
+
+        deletes = diff_types.pop("deletes")
+        name_updates = diff_types.pop("name_updates")
+        type_updates = diff_types.pop("type_updates")
+
+        if any(dt for dt in diff_types.values()):
+            raise RuntimeError(
+                f"This schema change not supported by update - should be drop + re-write_full: {diff_types}"
+            )
+
+        table = dataset.table_name
+        for col_id in deletes:
+            src_name = src_schema[col_id].name
+            sess.execute(
+                f"""
+                ALTER TABLE {self.table_identifier(table)}
+                DROP COLUMN {self.quote(src_name)};"""
+            )
+
+        for col_id in name_updates:
+            src_name = src_schema[col_id].name
+            dest_name = dest_schema[col_id].name
+            sess.execute(
+                f"""
+                ALTER TABLE {self.table_identifier(table)}
+                RENAME COLUMN {self.quote(src_name)} TO {self.quote(dest_name)};
+                """
+            )
+
+        for col_id in type_updates:
+            col = dest_schema[col_id]
+            dest_spec = mysql_adapter.v2_column_schema_to_mysql_spec(col, dataset)
+            sess.execute(
+                f"""ALTER TABLE {self.table_identifier(table)} MODIFY {dest_spec};"""
+            )
 
 
 class GeometryType(UserDefinedType):
@@ -351,12 +424,32 @@ class GeometryType(UserDefinedType):
         return lambda wkb: Geometry.from_wkb(wkb)
 
 
+class BooleanType(UserDefinedType):
+    # UserDefinedType to read booleans. They are stored in MySQL as Bits but we read them back as bools.
+    def result_processor(self, dialect, coltype):
+        # Reading - Python layer - convert bytes to boolean.
+        def process(b):
+            i = int.from_bytes(b, "big") if b is not None else None
+            return bool(i) if i in (0, 1) else i
+
+        return process
+
+
 class DateType(UserDefinedType):
     # UserDefinedType to read Dates as text. They are stored in MySQL as Dates but we read them back as text.
     def column_expression(self, col):
         # Reading - SQL layer - convert date to string in ISO8601.
         # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
         return Function("DATE_FORMAT", col, "%Y-%m-%d", type_=self)
+
+
+class FloatType(UserDefinedType):
+    # UserDefinedType to read floats as doubles. For some reason, floats they are rounded so they keep
+    # even less than single-float precision if we read them as floats.
+    def column_expression(self, col):
+        # Reading - SQL layer - convert date to string in ISO8601.
+        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
+        return sa.cast(col, DOUBLE)
 
 
 class TimeType(UserDefinedType):

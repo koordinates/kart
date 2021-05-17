@@ -1,9 +1,12 @@
+from binascii import unhexlify
 import logging
+import os
 import re
 import socket
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 
 import sqlalchemy
+from sqlalchemy.pool import NullPool
 from pysqlite3 import dbapi2 as sqlite
 import psycopg2
 from psycopg2.extensions import Binary, new_type, register_adapter, register_type
@@ -16,6 +19,15 @@ from kart.exceptions import NotFound, NO_DRIVER
 GPKG_CACHE_SIZE_MiB = 200
 
 L = logging.getLogger("kart.sqlalchemy.create_engine")
+
+
+def _pool_class():
+    # Ordinarily, sqlalchemy engine's maintain a pool of connections ready to go.
+    # When running tests, we run lots of kart commands, and each command creates an engine, and each engine maintains
+    # a pool. This can quickly exhaust the database's allowed connection limit.
+    # One fix would be to share engines between kart commands run during tests that are connecting to the same DB.
+    # But this fix is simpler for now: disable the pool during testing.
+    return NullPool if "PYTEST_CURRENT_TEST" in os.environ else None
 
 
 def sqlite_engine(path):
@@ -68,6 +80,17 @@ psycopg2.extensions.register_type(TIMESTAMP)
 TIMESTAMPTZ_OID = 1184
 TIMESTAMPTZ = new_type((TIMESTAMPTZ_OID,), "TIMESTAMPTZ", _adapt_timestamp_from_pg)
 psycopg2.extensions.register_type(TIMESTAMPTZ)
+
+# PostGIS set-up - blobs:
+
+
+def _adapt_binary_from_pg(b, dbcur):
+    return unhexlify(b[2:]) if b is not None else None
+
+
+BINARY_OID = 17
+BINARY = new_type((BINARY_OID,), "BINARY", _adapt_binary_from_pg)
+psycopg2.extensions.register_type(BINARY)
 
 
 # PostGIS set-up - strings:
@@ -128,7 +151,7 @@ def postgis_engine(pgurl):
 
     pgurl = _append_query_to_url(pgurl, {"fallback_application_name": "kart"})
 
-    engine = sqlalchemy.create_engine(pgurl, module=psycopg2)
+    engine = sqlalchemy.create_engine(pgurl, module=psycopg2, poolclass=_pool_class())
     sqlalchemy.event.listen(engine, "connect", _on_connect)
     sqlalchemy.event.listen(engine, "checkout", _on_checkout)
 
@@ -152,7 +175,7 @@ def mysql_engine(msurl):
     url_query = _append_to_query(url.query, {"program_name": "kart"})
     msurl = urlunsplit([INTERNAL_MYSQL_SCHEME, url.netloc, url_path, url_query, ""])
 
-    engine = sqlalchemy.create_engine(msurl)
+    engine = sqlalchemy.create_engine(msurl, poolclass=_pool_class())
     sqlalchemy.event.listen(engine, "checkout", _on_checkout)
 
     return engine
@@ -181,7 +204,7 @@ def sqlserver_engine(msurl):
         [INTERNAL_SQL_SERVER_SCHEME, url_netloc, url.path, url_query, ""]
     )
 
-    engine = sqlalchemy.create_engine(msurl)
+    engine = sqlalchemy.create_engine(msurl, poolclass=_pool_class())
     return engine
 
 

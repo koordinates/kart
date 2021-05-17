@@ -168,7 +168,7 @@ def test_commit_edits(
                 "",
                 "Changes in working copy:",
                 '  (use "kart commit" to commit)',
-                '  (use "kart reset" to discard changes)',
+                '  (use "kart restore" to discard changes)',
                 "",
                 f"  {table}:",
                 "    feature:",
@@ -466,14 +466,60 @@ def test_types_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
             assert r.exit_code == 0, r.stdout
 
 
-def test_checkout_custom_crs(data_archive, cli_runner, new_postgis_db_schema):
+def test_values_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
+    with data_archive("types") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            repo.config["kart.workingcopy.location"] = postgres_url
+            r = cli_runner.invoke(["checkout"])
+
+            with repo.working_copy.session() as sess:
+                # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
+                sess.execute(f'UPDATE {postgres_schema}.manytypes SET "PK"=999;')
+                sess.execute(f'UPDATE {postgres_schema}.manytypes SET "PK"=1;')
+
+            # If values roundtripping code isn't working for certain types,
+            # we could get spurious diffs on those values.
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stdout
+
+
+def test_meta_updates(data_archive, cli_runner, new_postgis_db_schema):
+    with data_archive("meta-updates"):
+        H.clear_working_copy()
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            assert r.exit_code == 0, r.stderr
+
+            # These commits have minor schema changes.
+            # We try to handle minor schema changes by using ALTER TABLE statements, instead
+            # of dropping and recreating the whole table. Make sure those statements are working:
+
+            r = cli_runner.invoke(["checkout", "main~3"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main~2"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main~1"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main"])
+            assert r.exit_code == 0, r.stderr
+
+
+def test_checkout_custom_crs(
+    data_archive, cli_runner, new_postgis_db_schema, dodgy_restore
+):
     with data_archive("custom_crs") as repo_path:
         repo = KartRepo(repo_path)
         H.clear_working_copy()
 
         with new_postgis_db_schema() as (postgres_url, postgres_schema):
             repo.config["kart.workingcopy.location"] = postgres_url
-            r = cli_runner.invoke(["checkout", "main"])
+            r = cli_runner.invoke(["checkout", "custom-crs"])
             # main has a custom CRS at HEAD. A diff here would mean we are not roundtripping it properly:
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stderr
@@ -489,7 +535,7 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_postgis_db_schema):
                 assert srid == 100002
 
             # We should be able to switch to the previous revision, which has a different (standard) CRS.
-            r = cli_runner.invoke(["checkout", "main^"])
+            r = cli_runner.invoke(["checkout", "epsg-4326"])
             assert r.exit_code == 0, r.stderr
 
             with wc.session() as sess:
@@ -501,15 +547,8 @@ def test_checkout_custom_crs(data_archive, cli_runner, new_postgis_db_schema):
                 )
                 assert srid == 4326
 
-            # Checkout main to the WC, then set HEAD back to main^ without updating the WC.
-            # (This is just a way to use Kart to simulate the user manually changing the CRS in the WC.)
-            # Make sure we can see this rev<>WC change in kart diff.
-            head_commit = repo.head_commit.hex
-            head_tree = repo.head_tree.hex
-            r = cli_runner.invoke(["checkout", "main"])
-            assert r.exit_code == 0, r.stderr
-            repo.write_gitdir_file("HEAD", head_commit)
-            repo.working_copy.update_state_table_tree(head_tree)
+            # Restore the contents of custom-crs to the WC so we can make sure WC diff is working:
+            dodgy_restore(repo, "custom-crs")
 
             r = cli_runner.invoke(["diff"])
             assert r.stdout.splitlines() == [

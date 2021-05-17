@@ -152,7 +152,7 @@ def working_copy_status_to_text(jdict):
     return (
         "Changes in working copy:\n"
         '  (use "kart commit" to commit)\n'
-        '  (use "kart reset" to discard changes)\n\n'
+        '  (use "kart restore" to discard changes)\n\n'
         + diff_status_to_text(jdict["changes"])
     )
 

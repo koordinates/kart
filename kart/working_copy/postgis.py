@@ -324,19 +324,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         auth_name, auth_code = crs_util.parse_authority(crs)
         return auth_name in ("EPSG", "ESRI") or auth_code == "900913"  # GOOGLE
 
-    def _is_meta_update_supported(self, meta_diff):
-        """
-        Returns True if the given meta-diff is supported *without* dropping and rewriting the table.
-        (Any meta change is supported if we drop and rewrite the table, but of course it is less efficient).
-        meta_diff - DeltaDiff object containing the meta changes.
-        """
-        if not meta_diff:
-            return True
-
-        if "schema.json" not in meta_diff:
-            return True
-
-        schema_delta = meta_diff["schema.json"]
+    def _is_schema_update_supported(self, schema_delta):
         if not schema_delta.old_value or not schema_delta.new_value:
             return False
 
@@ -357,15 +345,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             {"comment": dest_value},
         )
 
-    def _apply_meta_description(self, sess, dataset, src_value, dest_value):
-        pass  # This is a no-op for postgis
-
-    def _apply_meta_metadata_dataset_json(self, sess, dataset, src_value, dest_value):
-        pass  # This is a no-op for postgis
-
-    def _apply_meta_metadata_xml(self, sess, dataset, src_value, dest_value):
-        pass  # This is a no-op for postgis
-
     def _apply_meta_schema_json(self, sess, dataset, src_value, dest_value):
         src_schema = Schema.from_column_dicts(src_value)
         dest_schema = Schema.from_column_dicts(dest_value)
@@ -378,7 +357,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         if any(dt for dt in diff_types.values()):
             raise RuntimeError(
-                f"This schema change not supported by update - should be drop + rewrite_full: {diff_types}"
+                f"This schema change not supported by update - should be drop + re-write_full: {diff_types}"
             )
 
         table = dataset.table_name
@@ -400,25 +379,9 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                 """
             )
 
-        do_write_crs = False
         for col_id in type_updates:
             col = dest_schema[col_id]
             dest_type = postgis_adapter.v2_type_to_pg_type(col, dataset)
-
-            if col.data_type == "geometry":
-                crs_name = col.extra_type_info.get("geometryCRS")
-                if crs_name is not None:
-                    crs_id = crs_util.get_identifier_int_from_dataset(dataset, crs_name)
-                    if crs_id is not None:
-                        dest_type += f""" USING ST_SetSRID({self.quote(col.name)}::GEOMETRY, {crs_id})"""
-                        do_write_crs = True
-
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
             )
-
-        if do_write_crs:
-            # Calling _write_meta makes sure we have the new CRS in the spatial_ref_sys table.
-            self._write_meta(sess, dataset)
-            # Calling _delete_meta cleans up the old CRS (if it is no longer used).
-            self._delete_meta(sess, dataset)

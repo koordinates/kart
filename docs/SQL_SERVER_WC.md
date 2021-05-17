@@ -74,10 +74,10 @@ If you need decide that a certain dataset should contain more types of geometrie
 
 #### CRS definitions
 
-Kart lets you define arbitrary CRS definitions and attach them to your dataset. By contrast, SQL Server comes pre-installed with hundreds of standard EPSG & ESRI coordinate reference system definitions. However, these cannot be modified, and custom CRS cannot be added.
+Kart lets you define arbitrary CRS definitions and attach them to your dataset. By contrast, SQL Server comes pre-installed with hundreds of standard EPSG coordinate reference system definitions. However, these cannot be modified, and custom CRS cannot be added.
 
 This mismatch has the following consequence: the only part of the CRS that Kart is tracking that can be written to a SQL Server working copy is the numeric part of the CRS authority code (referred to in [SQL Server documentation](https://docs.microsoft.com/sql/relational-databases/system-catalog-views/sys-spatial-reference-systems-transact-sql) as the `spatial_reference_id` or `SRID`). This code will be embedded in each geometry.
 
 Since SQL Server has support for a limited number of CRS, it is possible that the SRID associated with your geometry will not be one that SQL Server recognizes. However, this is of very little consequence since SQL Server doesn't make much use of the SRID for the Geometry type (as opposed to Geography type), and Kart working copies currently only contain Geometry types. See the [SQL Server documentation](https://docs.microsoft.com/sql/relational-databases/spatial/spatial-data-types-overview). It is much more important to make sure that the application you use to view and edit your SQL Server working copy is able to extract and understand the CRS code and so display the data correctly.
 
-Since the CRS is not stored as part of the geometry column's type information in SQL Server, it is also not possible to change which CRS is applied to a geometry column by editing the SQL Server working copy - instead it must be done using either a different type of working copy, or the Kart command line tool. More documentation will be added here when this change is better supported.
+It is possible to modify the CRS definition attached to a particular geometry column by editing the code embedded in every geometry in that column. This change can be committed as long as the new CRS you have chosen is one that is built into SQL Server.
