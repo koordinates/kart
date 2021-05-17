@@ -948,7 +948,7 @@ def test_edit_string_pks(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["show"])
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[11:15] == [
+        assert r.stdout.splitlines()[12:16] == [
             "--- nz_waca_adjustments:feature:POLY1443053",
             "+++ nz_waca_adjustments:feature:POLY1443053",
             "-                         survey_reference = ␀",

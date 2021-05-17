@@ -13,7 +13,7 @@ from pathlib import Path
 import click
 
 from .exceptions import InvalidOperation
-from .geometry import Geometry, gpkg_geom_to_ogr, ogr_to_hex_wkb
+from .geometry import Geometry, ogr_to_hex_wkb
 from .output_util import dump_json_output, resolve_output_path, format_wkt_for_output
 from .schema import Schema
 from .utils import ungenerator
@@ -100,7 +100,6 @@ def diff_output_text(*, output_path, **kwargs):
                 )
 
         pk_field = dataset.primary_key
-        repr_excl = [pk_field]
         prefix = f"{path}:feature:"
         for key, delta in sorted(diff.get("feature", {}).items()):
             old_pk = delta.old_key
@@ -111,7 +110,7 @@ def diff_output_text(*, output_path, **kwargs):
             if delta.type == "insert":
                 click.secho(f"+++ {prefix}{new_pk}", bold=True, **pecho)
                 click.secho(
-                    text_row(new_feature, prefix="+ ", exclude=repr_excl),
+                    text_row(new_feature, prefix="+ "),
                     fg="green",
                     **pecho,
                 )
@@ -119,7 +118,7 @@ def diff_output_text(*, output_path, **kwargs):
             elif delta.type == "delete":
                 click.secho(f"--- {prefix}{old_pk}", bold=True, **pecho)
                 click.secho(
-                    text_row(old_feature, prefix="- ", exclude=repr_excl),
+                    text_row(old_feature, prefix="- "),
                     fg="red",
                     **pecho,
                 )
@@ -138,7 +137,7 @@ def diff_output_text(*, output_path, **kwargs):
                 )
 
                 for k in all_keys:
-                    if k.startswith("__") or k in repr_excl:
+                    if k.startswith("__"):
                         continue
                     if old_feature.get(k, _NULL) == new_feature.get(k, _NULL):
                         continue
@@ -314,11 +313,10 @@ def prefix_json(jdict, prefix):
     return re.sub("^", prefix, json_str, flags=re.MULTILINE)
 
 
-def text_row(row, prefix="", exclude=None):
+def text_row(row, prefix=""):
     result = []
-    exclude = exclude or set()
     for key in row.keys():
-        if key.startswith("__") or key in exclude:
+        if key.startswith("__"):
             continue
         result.append(text_row_field(row, key, prefix))
     return "\n".join(result)

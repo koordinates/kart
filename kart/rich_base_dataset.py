@@ -362,9 +362,6 @@ class RichBaseDataset(BaseDataset):
             if schema is not None:
                 encode_kwargs = {"schema": schema}
 
-            geom_columns = (schema or self.schema).geometry_columns
-            geom_column_name = geom_columns[0].name if geom_columns else None
-
             has_conflicts = False
             for delta in feature_diff.values():
                 old_key = delta.old_key
@@ -409,8 +406,9 @@ class RichBaseDataset(BaseDataset):
                     )
                     continue
 
-                if delta.type == "update" and not self._features_equal(
-                    self.get_feature(old_key), delta.old_value, geom_column_name
+                if (
+                    delta.type == "update"
+                    and self.get_feature(old_key) != delta.old_value
                 ):
                     has_conflicts = True
                     click.echo(
@@ -433,16 +431,3 @@ class RichBaseDataset(BaseDataset):
                     "Patch does not apply",
                     exit_code=PATCH_DOES_NOT_APPLY,
                 )
-
-    def _features_equal(self, lhs, rhs, geom_column_name):
-        # FIXME: actually compare the geometries here.
-        # Turns out this is quite hard - geometries are hard to compare sanely.
-        # Even if we add hacks to ignore endianness, WKB seems to vary a bit,
-        # and ogr_geometry.Equal(other) can return false for seemingly-identical geometries...
-        if geom_column_name:
-            # optimisation - don't copy lhs?
-            lhs = lhs.copy()
-            lhs.pop(geom_column_name, None)
-            rhs = rhs.copy()
-            rhs.pop(geom_column_name, None)
-        return lhs == rhs
