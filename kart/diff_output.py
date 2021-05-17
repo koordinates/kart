@@ -594,6 +594,78 @@ def json_row(row, pk_value, geometry_transform=None):
 
 
 @contextlib.contextmanager
+def diff_output_json_lines(
+    *,
+    output_path,
+    dataset_count,
+    json_style="pretty",
+    dump_function=dump_json_output,
+    dataset_geometry_transforms=None,
+    **kwargs,
+):
+    """
+    Contextmanager.
+    Yields a callable which can be called with dataset diffs
+    (see `diff_output_text` docstring for more on that)
+
+    On exit, writes the diff as JSON to the given output file.
+    If the output file is stdout and isn't piped anywhere,
+    the json is prettified first.
+    """
+    if isinstance(output_path, Path):
+        if output_path.is_dir():
+            raise click.BadParameter(
+                "Directory is not valid for --output with --output-format=json-lines",
+                param_hint="--output",
+            )
+
+    def prepare_meta_delta(delta):
+        # No lazy streaming of meta deltas.
+        result = {}
+        if delta.old:
+            result["-"] = delta.old.get_lazy_value()
+        if delta.new:
+            result["+"] = delta.new.get_lazy_value()
+        return result
+
+    def prepare_feature_delta(delta, geometry_transform=None):
+        result = {}
+        if delta.old:
+            result["-"] = LazyJsonFeatureOutput(
+                delta.old, geometry_transform=geometry_transform
+            )
+        if delta.new:
+            result["+"] = LazyJsonFeatureOutput(
+                delta.new, geometry_transform=geometry_transform
+            )
+        return result
+
+    def _out(dataset, ds_diff):
+        if "meta" in ds_diff:
+            meta_json = {
+                "dataset": dataset.path,
+                "type": "meta",
+                "key": None,
+                "change": None,
+            }
+            for key, delta in sorted(ds_diff["meta"].items()):
+                meta_json["key"] = key
+                meta_json["change"] = prepare_meta_delta(delta)
+                dump_function(meta_json, output_path, json_style=json_style)
+
+        if "feature" in ds_diff:
+            feature_json = {"dataset": dataset.path, "type": "feature", "change": None}
+            geometry_transform = dataset_geometry_transforms.get(dataset.path)
+            for key, delta in sorted(ds_diff["feature"].items()):
+                feature_json["change"] = prepare_feature_delta(
+                    delta, geometry_transform=geometry_transform
+                )
+                dump_function(feature_json, output_path, json_style=json_style)
+
+    yield _out
+
+
+@contextlib.contextmanager
 def diff_output_html(
     *,
     output_path,

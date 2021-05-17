@@ -10,6 +10,7 @@ from .diff_output import (  # noqa - used from globals()
     diff_output_text,
     diff_output_json,
     diff_output_geojson,
+    diff_output_json_lines,
     diff_output_quiet,
     diff_output_html,
 )
@@ -280,7 +281,9 @@ def feature_count_diff(
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json", "geojson", "quiet", "feature-count", "html"]),
+    type=click.Choice(
+        ["text", "json", "geojson", "quiet", "feature-count", "html", "json-lines"]
+    ),
     default="text",
     help=(
         "Output format. 'quiet' disables all output and implies --exit-code.\n"
@@ -359,6 +362,7 @@ def diff(
             only_feature_count,
         )
 
+    output_format = output_format.replace("-", "_")
     diff_writer = globals()[f"diff_output_{output_format}"]
     if output_format == "quiet":
         exit_code = True
