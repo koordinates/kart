@@ -3,6 +3,7 @@ import os
 import platform
 import shutil
 import stat
+import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -20,14 +21,14 @@ def make_immutable(path: Path):
     Contextmanager. Makes the given Path immutable.
     Skips the test on windows (os.chflags isn't available there)
     """
-    if platform.system() == "Windows":
-        raise pytest.skip("Can't run on Windows due to lack of os.chflags()")
-    orig_flags = path.stat().st_flags
-    os.chflags(path, orig_flags | stat.UF_IMMUTABLE)
+    mode = path.stat().st_mode
+    # remove the 'w' bits
+    path.chmod(mode ^ (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
     try:
         yield
     finally:
-        os.chflags(path, orig_flags)
+        # put it back the way it was
+        path.chmod(mode)
 
 
 def test_build_annotations(data_archive, cli_runner, caplog):
