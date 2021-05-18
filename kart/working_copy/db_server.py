@@ -1,6 +1,6 @@
 import functools
 import re
-from pathlib import PurePath
+from pathlib import PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 import click
@@ -8,7 +8,6 @@ from sqlalchemy.exc import DBAPIError
 
 from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
-from kart import crs_util
 from kart.exceptions import InvalidOperation, DbConnectionError
 
 
@@ -67,7 +66,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
                 f"Invalid {cls.WORKING_COPY_TYPE_NAME} URI - Expecting URI in form: {cls.URI_SCHEME}:{cls.URI_FORMAT}"
             )
 
-        url_path = PurePath(url.path)
+        url_path = PurePosixPath(url.path)
         path_length = len(url_path.parents)
 
         if path_length not in cls.URI_VALID_PATH_LENGTHS:
@@ -94,7 +93,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         instead, the rest of the URI is used to connect, then the DBSCHEMA is specified in every query / command.
         """
         url = urlsplit(db_uri)
-        url_path = PurePath(url.path)
+        url_path = PurePosixPath(url.path)
         assert len(url_path.parents) in cls.URI_VALID_PATH_LENGTHS
         db_schema = url_path.name
         new_url_path = str(url_path.parent)
