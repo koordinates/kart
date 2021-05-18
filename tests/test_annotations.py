@@ -1,9 +1,7 @@
 import logging
-import os
 import platform
 import shutil
 import stat
-import subprocess
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -19,8 +17,10 @@ _ANNOTATIONS_DBS_PATH = Path(__file__).parent / "data" / "annotations-dbs"
 def make_immutable(path: Path):
     """
     Contextmanager. Makes the given Path immutable.
-    Skips the test on windows (os.chflags isn't available there)
+    Skips the test on windows
     """
+    if platform.system() == "Windows":
+        pytest.skip("does not run on windows")
     mode = path.stat().st_mode
     # remove the 'w' bits
     path.chmod(mode ^ (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH))
@@ -44,6 +44,7 @@ def test_build_annotations(data_archive, cli_runner, caplog):
         ]
 
         # Now ensure that the annotation actually gets used by diff command
+        caplog.clear()
         caplog.set_level(logging.DEBUG)
         r = cli_runner.invoke(
             ["-vv", "diff", "--only-feature-count=exact", "HEAD^..HEAD"]
