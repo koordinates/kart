@@ -720,11 +720,11 @@ def test_postgis_import_from_view_no_pk(
 
         output = r.stdout.splitlines()
         # Huge amount of adds and deletes caused by changing which features are included in the view again:
-        assert len(output) == 8600
+        assert len(output) == 10031
 
         # But, we still are able to recognise the edits we made as edits.
         # (For happy mathematical reasons, these diffs end up at the end of the output)
-        assert output[-20:] == [
+        assert output[-22:] == [
             # Edit: name_ascii changed to foo
             "--- nz_pa_points_view:feature:1430",
             "+++ nz_pa_points_view:feature:1430",
@@ -738,12 +738,14 @@ def test_postgis_import_from_view_no_pk(
             # Not considered an edit - both name_ascii and name changed
             # So, left as a delete + insert, and assigned a new PK
             "--- nz_pa_points_view:feature:1432",
+            "-                                  auto_pk = 1432",
             "-                                     geom = POINT(...)",
             "-                                  t50_fid = 2426279",
             "-                               name_ascii = ␀",
             "-                               macronated = N",
             "-                                     name = ␀",
             "+++ nz_pa_points_view:feature:2144",
+            "+                                  auto_pk = 2144",
             "+                                     geom = POINT(...)",
             "+                                  t50_fid = 2426279",
             "+                               name_ascii = bar",
