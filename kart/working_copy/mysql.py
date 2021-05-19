@@ -15,7 +15,7 @@ from .table_defs import MySqlKartTables
 from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
-from kart.sqlalchemy import text_with_inlined_params
+from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
 from kart.sqlalchemy.create_engine import mysql_engine
 
 
@@ -44,7 +44,6 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
     URI_SCHEME = "mysql"
 
     URI_FORMAT = "//HOST[:PORT]/DBNAME"
-    URI_VALID_PATH_LENGTHS = (1,)
     INVALID_PATH_MESSAGE = "URI path must have one part - the database name"
 
     def __init__(self, repo, location):
@@ -56,12 +55,10 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         self.repo = repo
         self.uri = self.location = location
 
-        self.check_valid_db_uri(self.uri, repo)
-        self.db_uri, self.db_schema = self._separate_db_schema(
-            self.uri, expected_path_length=1
-        )
+        self.check_valid_location(self.uri, repo)
+        self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = mysql_engine(self.db_uri)
+        self.engine = mysql_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MySQLIdentifierPreparer(self.engine.dialect)
 

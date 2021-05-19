@@ -16,7 +16,7 @@ from .table_defs import SqlServerKartTables
 from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
-from kart.sqlalchemy import text_with_inlined_params
+from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
 from kart.sqlalchemy.create_engine import sqlserver_engine
 
 
@@ -45,10 +45,10 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         self.repo = repo
         self.uri = self.location = location
 
-        self.check_valid_db_uri(self.uri, repo)
-        self.db_uri, self.db_schema = self._separate_db_schema(self.uri)
+        self.check_valid_location(self.uri, repo)
+        self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = sqlserver_engine(self.db_uri)
+        self.engine = sqlserver_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MSIdentifierPreparer(self.engine.dialect)
 

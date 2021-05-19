@@ -14,6 +14,7 @@ from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import PostgisKartTables
 from kart import crs_util
 from kart.schema import Schema
+from kart.sqlalchemy import separate_last_path_part
 from kart.sqlalchemy.create_engine import postgis_engine
 
 
@@ -45,10 +46,10 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         self.repo = repo
         self.uri = self.location = location
 
-        self.check_valid_db_uri(self.uri, repo)
-        self.db_uri, self.db_schema = self._separate_db_schema(self.uri)
+        self.check_valid_location(self.uri, repo)
+        self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = postgis_engine(self.db_uri)
+        self.engine = postgis_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = PGIdentifierPreparer(self.engine.dialect)
 

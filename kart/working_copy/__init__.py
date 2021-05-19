@@ -13,16 +13,14 @@ class WorkingCopyType(Enum):
 
     @classmethod
     def from_location(cls, location, allow_invalid=False):
+        from kart.sqlalchemy import DbType
+
         location = str(location)
-        if location.startswith("postgresql:"):
-            return WorkingCopyType.POSTGIS
-        elif location.startswith("mssql:"):
-            return WorkingCopyType.SQL_SERVER
-        elif location.startswith("mysql:"):
-            return WorkingCopyType.MYSQL
-        elif location.lower().endswith(".gpkg"):
-            return WorkingCopyType.GPKG
-        elif allow_invalid:
+        db_type = DbType.from_spec(location)
+        if db_type is not None:
+            return WorkingCopyType[db_type.name]
+
+        if allow_invalid:
             return None
         else:
             raise click.UsageError(

@@ -1,6 +1,5 @@
 import functools
 import re
-from pathlib import PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 import click
@@ -8,6 +7,7 @@ from sqlalchemy.exc import DBAPIError
 
 from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
+from kart.sqlalchemy import DbType
 from kart.exceptions import InvalidOperation, DbConnectionError
 
 
@@ -22,10 +22,6 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
 
     # The expected URI format, not including the scheme, as displayed to the user (not used for parsing URIs).
     URI_FORMAT = "//HOST[:PORT]/DBNAME/DBSCHEMA"
-
-    # Allowable path lengths for valid URIs.
-    URI_VALID_PATH_LENGTHS = (2,)
-
     # Message for when the URI path is not a valid length.
     INVALID_PATH_MESSAGE = (
         "URI path must have two parts: database name and database schema"
@@ -46,32 +42,26 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
             )
 
     @classmethod
-    def check_valid_location(cls, wc_location, repo):
-        cls.check_valid_db_uri(wc_location, repo)
-
-    @classmethod
     def normalise_location(cls, wc_location, repo):
         return wc_location
 
     @classmethod
-    def check_valid_db_uri(cls, db_uri, repo):
+    def check_valid_location(cls, wc_location, repo):
         """
         For working copies that connect to a database - checks the given URI is in the required form -
         generally URI_SCHEME::HOST/DBNAME/DBSCHEMA but some implementations may have different path formats.
         """
-        url = urlsplit(db_uri)
+        url = urlsplit(wc_location)
 
-        if url.scheme != cls.URI_SCHEME:
-            raise click.UsageError(
-                f"Invalid {cls.WORKING_COPY_TYPE_NAME} URI - Expecting URI in form: {cls.URI_SCHEME}:{cls.URI_FORMAT}"
-            )
+        assert url.scheme == cls.URI_SCHEME
 
-        url_path = PurePosixPath(url.path)
-        path_length = len(url_path.parents)
+        db_type = DbType.from_spec(wc_location)
+        path_length = db_type.path_length(wc_location)
+        required_path_length = db_type.path_length_for_table_container
 
-        if path_length not in cls.URI_VALID_PATH_LENGTHS:
-            if (path_length + 1) in cls.URI_VALID_PATH_LENGTHS:
-                suggested_path = url_path / cls.default_db_schema(repo)
+        if path_length != required_path_length:
+            if (path_length + 1) == required_path_length:
+                suggested_path = url.path / cls.default_db_schema(repo)
                 suggested_uri = urlunsplit(
                     [url.scheme, url.netloc, str(suggested_path), url.query, ""]
                 )
@@ -84,23 +74,6 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
                 f"Expecting URI in form: {cls.URI_SCHEME}:{cls.URI_FORMAT}"
                 + suggestion_message
             )
-
-    @classmethod
-    def _separate_db_schema(cls, db_uri, expected_path_length=2):
-        """
-        Removes the DBSCHEMA part off the end of a URI's path, and returns the URI and the DBSCHEMA separately.
-        Useful since generally, it is not necessary (or even possible) to connect to a particular DBSCHEMA directly,
-        instead, the rest of the URI is used to connect, then the DBSCHEMA is specified in every query / command.
-        """
-        url = urlsplit(db_uri)
-        url_path = PurePosixPath(url.path)
-        assert len(url_path.parents) in cls.URI_VALID_PATH_LENGTHS
-        db_schema = url_path.name
-        new_url_path = str(url_path.parent)
-        return (
-            urlunsplit([url.scheme, url.netloc, new_url_path, url.query, ""]),
-            db_schema,
-        )
 
     @classmethod
     def default_db_schema(cls, repo):
