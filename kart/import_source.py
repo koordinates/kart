@@ -1,7 +1,9 @@
 import click
 
 from .meta_items import META_ITEM_NAMES
+from .output_util import get_input_mode, InputMode
 from .schema import Schema
+from .exceptions import NotFound, NO_TABLE
 
 
 class ImportSource:
@@ -9,6 +11,28 @@ class ImportSource:
     A dataset-like interface that can be imported as a dataset.
     A read-only interface.
     """
+
+    UNNECESSARY_PREFIXES = ("OGR:", "GPKG:", "PG:")
+
+    @classmethod
+    def open(cls, spec):
+
+        for p in cls.UNNECESSARY_PREFIXES:
+            if spec.startswith(p):
+                spec = spec[len(p) :]
+                break
+
+        from kart.sqlalchemy import DbType
+
+        db_type = DbType.from_spec(spec)
+        if db_type is DbType.GPKG:
+            from .sqlalchemy_import_source import SqlAlchemyImportSource
+
+            return SqlAlchemyImportSource.open(spec)
+        else:
+            from .ogr_import_source import OgrImportSource
+
+            return OgrImportSource.open(spec)
 
     @classmethod
     def check_valid(cls, import_sources, param_hint=None):
@@ -187,3 +211,21 @@ class ImportSource:
         """
         # Subclasses should override this if a more useful aggregate description can be generated.
         return "\n".join(s.import_source_desc() for s in import_sources)
+
+    def prompt_for_table(self, prompt):
+        table_list = list(self.get_tables().keys())
+
+        if len(table_list) == 1:
+            return table_list[0]
+        else:
+            self.print_table_list()
+            if get_input_mode() == InputMode.NO_INPUT:
+                raise NotFound("No table specified", exit_code=NO_TABLE)
+            t_choices = click.Choice(choices=table_list)
+            t_default = table_list[0] if len(table_list) == 1 else None
+            return click.prompt(
+                f"\n{prompt}",
+                type=t_choices,
+                show_choices=False,
+                default=t_default,
+            )

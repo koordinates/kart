@@ -245,9 +245,7 @@ def import_(
             "Illegal usage: '--output-format=json' only supports --list"
         )
     if do_list:
-        OgrImportSource.open(source, None).print_table_list(
-            do_json=output_format == "json"
-        )
+        ImportSource.open(source).print_table_list(do_json=output_format == "json")
         return
 
     repo = ctx.obj.repo
@@ -260,7 +258,7 @@ def import_(
         )
         do_checkout = True
 
-    base_import_source = OgrImportSource.open(source, None)
+    base_import_source = ImportSource.open(source)
     if all_tables:
         tables = base_import_source.get_tables().keys()
     elif not tables:
