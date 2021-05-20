@@ -15,46 +15,46 @@ def quote(ident):
 
 
 V2_TYPE_TO_PG_TYPE = {
-    "boolean": "boolean",
-    "blob": "bytea",
-    "date": "date",
-    "float": {0: "real", 32: "real", 64: "double precision"},
-    "geometry": "geometry",
+    "boolean": "BOOLEAN",
+    "blob": "BYTEA",
+    "date": "DATE",
+    "float": {0: "REAL", 32: "REAL", 64: "DOUBLE PRECISION"},
+    "geometry": "GEOMETRY",
     "integer": {
-        0: "integer",
-        8: "smallint",  # Approximated as smallint (int16)
-        16: "smallint",
-        32: "integer",
-        64: "bigint",
+        0: "INTEGER",
+        8: "SMALLINT",  # Approximated as smallint (int16)
+        16: "SMALLINT",
+        32: "INTEGER",
+        64: "BIGINT",
     },
-    "interval": "interval",
-    "numeric": "numeric",
-    "text": "text",
-    "time": "time",
-    "timestamp": "timestamptz",
+    "interval": "INTERVAL",
+    "numeric": "NUMERIC",
+    "text": "TEXT",
+    "time": "TIME",
+    "timestamp": "TIMESTAMPTZ",
     # TODO - time and timestamp come in two flavours, with and without timezones.
     # Code for preserving these flavours in datasets and working copies needs more work.
 }
 
 PG_TYPE_TO_V2_TYPE = {
-    "boolean": "boolean",
-    "smallint": ("integer", 16),
-    "integer": ("integer", 32),
-    "bigint": ("integer", 64),
-    "real": ("float", 32),
-    "double precision": ("float", 64),
-    "bytea": "blob",
-    "character varying": "text",
-    "date": "date",
-    "geometry": "geometry",
-    "interval": "interval",
-    "numeric": "numeric",
-    "text": "text",
-    "time": "time",
-    "timetz": "time",
-    "timestamp": "timestamp",
-    "timestamptz": "timestamp",
-    "varchar": "text",
+    "BOOLEAN": "boolean",
+    "SMALLINT": ("integer", 16),
+    "INTEGER": ("integer", 32),
+    "BIGINT": ("integer", 64),
+    "REAL": ("float", 32),
+    "DOUBLE PRECISION": ("float", 64),
+    "BYTEA": "blob",
+    "CHARACTER VARYING": "text",
+    "DATE": "date",
+    "GEOMETRY": "geometry",
+    "INTERVAL": "interval",
+    "NUMERIC": "numeric",
+    "TEXT": "text",
+    "TIME": "time",
+    "TIMETZ": "time",
+    "TIMESTAMP": "timestamp",
+    "TIMESTAMPTZ": "timestamp",
+    "VARCHAR": "text",
 }
 
 # Types that can't be roundtripped perfectly in PostGIS, and what they end up as.
@@ -89,7 +89,7 @@ def v2_type_to_pg_type(column_schema, v2_obj):
         return pg_type_info.get(extra_type_info.get("size", 0))
 
     pg_type = pg_type_info
-    if pg_type == "geometry":
+    if pg_type == "GEOMETRY":
         geometry_type = extra_type_info.get("geometryType")
         crs_name = extra_type_info.get("geometryCRS")
         crs_id = None
@@ -97,19 +97,19 @@ def v2_type_to_pg_type(column_schema, v2_obj):
             crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
         return _v2_geometry_type_to_pg_type(geometry_type, crs_id)
 
-    if pg_type == "text":
+    if pg_type == "TEXT":
         length = extra_type_info.get("length", None)
-        return f"varchar({length})" if length is not None else "text"
+        return f"VARCHAR({length})" if length is not None else "TEXT"
 
-    if pg_type == "numeric":
+    if pg_type == "NUMERIC":
         precision = extra_type_info.get("precision", None)
         scale = extra_type_info.get("scale", None)
         if precision is not None and scale is not None:
-            return f"numeric({precision},{scale})"
+            return f"NUMERIC({precision},{scale})"
         elif precision is not None:
-            return f"numeric({precision})"
+            return f"NUMERIC({precision})"
         else:
-            return "numeric"
+            return "NUMERIC"
 
     return pg_type
 
@@ -119,11 +119,11 @@ def _v2_geometry_type_to_pg_type(geometry_type, crs_id):
         geometry_type = geometry_type.replace(" ", "")
 
     if geometry_type is not None and crs_id is not None:
-        return f"geometry({geometry_type},{crs_id})"
+        return f"GEOMETRY({geometry_type},{crs_id})"
     elif geometry_type is not None:
-        return f"geometry({geometry_type})"
+        return f"GEOMETRY({geometry_type})"
     else:
-        return "geometry"
+        return "GEOMETRY"
 
 
 def postgis_to_v2_schema(pg_table_info, pg_spatial_ref_sys, id_salt):
@@ -158,9 +158,10 @@ def _postgis_to_column_schema(pg_col_info, pg_spatial_ref_sys, id_salt):
 
 
 def _pg_type_to_v2_type(pg_col_info, pg_spatial_ref_sys):
-    v2_type_info = PG_TYPE_TO_V2_TYPE.get(pg_col_info["data_type"])
+    pg_type = pg_col_info["data_type"].upper()
+    v2_type_info = PG_TYPE_TO_V2_TYPE.get(pg_type)
     if v2_type_info is None:
-        v2_type_info = PG_TYPE_TO_V2_TYPE.get(pg_col_info["udt_name"])
+        v2_type_info = PG_TYPE_TO_V2_TYPE.get(pg_col_info["udt_name"].upper())
 
     if isinstance(v2_type_info, tuple):
         v2_type = v2_type_info[0]
