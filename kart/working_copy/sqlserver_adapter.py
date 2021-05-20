@@ -118,7 +118,7 @@ def v2_column_schema_to_sqlserver_spec(column_schema, v2_obj):
     ms_type = v2_type_to_ms_type(column_schema)
     constraints = []
 
-    if ms_type == "geometry":
+    if ms_type == "GEOMETRY":
         extra_type_info = column_schema.extra_type_info
         geometry_type = extra_type_info.get("geometryType")
         if geometry_type is not None:
