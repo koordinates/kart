@@ -12,50 +12,50 @@ def quote(ident):
 
 
 V2_TYPE_TO_MS_TYPE = {
-    "boolean": "bit",
-    "blob": "varbinary",
-    "date": "date",
-    "float": {0: "real", 32: "real", 64: "float"},
-    "geometry": "geometry",
+    "boolean": "BIT",
+    "blob": "VARBINARY",
+    "date": "DATE",
+    "float": {0: "REAL", 32: "REAL", 64: "FLOAT"},
+    "geometry": "GEOMETRY",
     "integer": {
-        0: "int",
-        8: "tinyint",
-        16: "smallint",
-        32: "int",
-        64: "bigint",
+        0: "INT",
+        8: "TINYINT",
+        16: "SMALLINT",
+        32: "INT",
+        64: "BIGINT",
     },
-    "interval": "text",  # Approximated
-    "numeric": "numeric",
-    "text": "nvarchar",
-    "time": "time",
-    "timestamp": "datetimeoffset",
+    "interval": "TEXT",  # Approximated
+    "numeric": "NUMERIC",
+    "text": "NVARCHAR",
+    "time": "TIME",
+    "timestamp": "DATETIMEOFFSET",
 }
 
 MS_TYPE_TO_V2_TYPE = {
-    "bit": "boolean",
-    "tinyint": ("integer", 8),
-    "smallint": ("integer", 16),
-    "int": ("integer", 32),
-    "bigint": ("integer", 64),
-    "real": ("float", 32),
-    "float": ("float", 64),
-    "binary": "blob",
-    "char": "text",
-    "date": "date",
-    "datetime": "timestamp",
-    "datetime2": "timestamp",
-    "datetimeoffset": "timestamp",
-    "decimal": "numeric",
-    "geography": "geometry",
-    "geometry": "geometry",
-    "nchar": "text",
-    "numeric": "numeric",
-    "nvarchar": "text",
-    "ntext": "text",
-    "text": "text",
-    "time": "time",
-    "varchar": "text",
-    "varbinary": "blob",
+    "BIT": "boolean",
+    "TINYINT": ("integer", 8),
+    "SMALLINT": ("integer", 16),
+    "INT": ("integer", 32),
+    "BIGINT": ("integer", 64),
+    "REAL": ("float", 32),
+    "FLOAT": ("float", 64),
+    "BINARY": "blob",
+    "CHAR": "text",
+    "DATE": "date",
+    "DATETIME": "timestamp",
+    "DATETIME2": "timestamp",
+    "DATETIMEOFFSET": "timestamp",
+    "DECIMAL": "numeric",
+    "GEOGRAPHY": "geometry",
+    "GEOMETRY": "geometry",
+    "NCHAR": "text",
+    "NUMERIC": "numeric",
+    "NVARCHAR": "text",
+    "NTEXT": "text",
+    "TEXT": "text",
+    "TIME": "time",
+    "VARCHAR": "text",
+    "VARBINARY": "blob",
 }
 
 # Types that can't be roundtripped perfectly in SQL Server, and what they end up as.
@@ -170,19 +170,19 @@ def v2_type_to_ms_type(column_schema):
 
     ms_type = ms_type_info
 
-    if ms_type in ("varchar", "nvarchar", "varbinary"):
+    if ms_type in ("VARCHAR", "NVARCHAR", "VARBINARY"):
         length = extra_type_info.get("length", None)
         return f"{ms_type}({length})" if length is not None else f"{ms_type}(max)"
 
-    if ms_type == "numeric":
+    if ms_type == "NUMERIC":
         precision = extra_type_info.get("precision", None)
         scale = extra_type_info.get("scale", None)
         if precision is not None and scale is not None:
-            return f"numeric({precision},{scale})"
+            return f"NUMERIC({precision},{scale})"
         elif precision is not None:
-            return f"numeric({precision})"
+            return f"NUMERIC({precision})"
         else:
-            return "numeric"
+            return "NUMERIC"
 
     return ms_type
 
@@ -223,7 +223,8 @@ def _sqlserver_to_column_schema(ms_col_info, ms_crs_info, id_salt):
 
 
 def _ms_type_to_v2_type(ms_col_info):
-    v2_type_info = MS_TYPE_TO_V2_TYPE.get(ms_col_info["data_type"])
+    ms_type = ms_col_info["data_type"].upper()
+    v2_type_info = MS_TYPE_TO_V2_TYPE.get(ms_type)
 
     if isinstance(v2_type_info, tuple):
         v2_type = v2_type_info[0]
