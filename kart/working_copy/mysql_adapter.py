@@ -9,52 +9,52 @@ _PREPARER = MySQLIdentifierPreparer(MySQLDialect())
 
 
 V2_TYPE_TO_MYSQL_TYPE = {
-    "boolean": "bit(1)",
-    "blob": "longblob",
-    "date": "date",
-    "float": {0: "float", 32: "float", 64: "double precision"},
-    "geometry": "geometry",
+    "boolean": "BIT(1)",
+    "blob": "LONGBLOB",
+    "date": "DATE",
+    "float": {0: "FLOAT", 32: "FLOAT", 64: "DOUBLE PRECISION"},
+    "geometry": "GEOMETRY",
     "integer": {
-        0: "int",
-        8: "tinyint",
-        16: "smallint",
-        32: "int",
-        64: "bigint",
+        0: "INT",
+        8: "TINYINT",
+        16: "SMALLINT",
+        32: "INT",
+        64: "BIGINT",
     },
-    "interval": "text",
-    "numeric": "numeric",
-    "text": "longtext",
-    "time": "time",
-    "timestamp": "timestamp",
+    "interval": "TEXT",
+    "numeric": "NUMERIC",
+    "text": "LONGTEXT",
+    "time": "TIME",
+    "timestamp": "TIMESTAMP",
 }
 
 
-_TEXT_AND_BLOB_PREFIXES = ("tiny", "medium", "long")
+_TEXT_AND_BLOB_PREFIXES = ("TINY", "MEDIUM", "LONG")
 
 MYSQL_TYPE_TO_V2_TYPE = {
-    "bit": "boolean",
-    "tinyint": ("integer", 8),
-    "smallint": ("integer", 16),
-    "int": ("integer", 32),
-    "bigint": ("integer", 64),
-    "float": ("float", 32),
-    "double": ("float", 64),
-    "double precision": ("float", 64),
-    "binary": "blob",
-    "blob": "blob",
-    "char": "text",
-    "date": "date",
-    "datetime": "timestamp",
-    "decimal": "numeric",
-    "geometry": "geometry",
-    "numeric": "numeric",
-    "text": "text",
-    "time": "time",
-    "timestamp": "timestamp",
-    "varchar": "text",
-    "varbinary": "blob",
-    **{f"{prefix}text": "text" for prefix in _TEXT_AND_BLOB_PREFIXES},
-    **{f"{prefix}blob": "blob" for prefix in _TEXT_AND_BLOB_PREFIXES},
+    "BIT": "boolean",
+    "TINYINT": ("integer", 8),
+    "SMALLINT": ("integer", 16),
+    "INT": ("integer", 32),
+    "BIGINT": ("integer", 64),
+    "FLOAT": ("float", 32),
+    "DOUBLE": ("float", 64),
+    "DOUBLE PRECISION": ("float", 64),
+    "BINARY": "blob",
+    "BLOB": "blob",
+    "CHAR": "text",
+    "DATE": "date",
+    "DATETIME": "timestamp",
+    "DECIMAL": "numeric",
+    "GEOMETRY": "geometry",
+    "NUMERIC": "numeric",
+    "TEXT": "text",
+    "TIME": "time",
+    "TIMESTAMP": "timestamp",
+    "VARCHAR": "text",
+    "VARBINARY": "blob",
+    **{f"{prefix}TEXT": "text" for prefix in _TEXT_AND_BLOB_PREFIXES},
+    **{f"{prefix}BLOB": "blob" for prefix in _TEXT_AND_BLOB_PREFIXES},
 }
 
 
@@ -123,20 +123,20 @@ def _v2_type_to_mysql_type(column_schema, v2_obj):
 
     length = extra_type_info.get("length", None)
     if length and length > 0 and length <= _MAX_SPECIFIABLE_LENGTH:
-        if mysql_type == "longtext":
-            return f"varchar({length})"
+        if mysql_type == "LONGTEXT":
+            return f"VARCHAR({length})"
         elif mysql_type == "longblob":
-            return f"varbinary({length})"
+            return f"VARBINARY({length})"
 
-    if mysql_type == "numeric":
+    if mysql_type == "NUMERIC":
         precision = extra_type_info.get("precision", None)
         scale = extra_type_info.get("scale", None)
         if precision is not None and scale is not None:
-            return f"numeric({precision},{scale})"
+            return f"NUMERIC({precision},{scale})"
         elif precision is not None:
-            return f"numeric({precision})"
+            return f"NUMERIC({precision})"
         else:
-            return "numeric"
+            return "NUMERIC"
 
     return mysql_type
 
@@ -197,7 +197,8 @@ def _mysql_to_column_schema(mysql_col_info, mysql_crs_info, id_salt):
 
 
 def _mysql_type_to_v2_type(mysql_col_info):
-    v2_type_info = MYSQL_TYPE_TO_V2_TYPE.get(mysql_col_info["DATA_TYPE"])
+    mysql_type = mysql_col_info["DATA_TYPE"].upper()
+    v2_type_info = MYSQL_TYPE_TO_V2_TYPE.get(mysql_type)
 
     if isinstance(v2_type_info, tuple):
         v2_type = v2_type_info[0]
