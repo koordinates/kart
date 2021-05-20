@@ -12,7 +12,7 @@ import pytest
 from kart import init, fast_import
 from kart.dataset2 import Dataset2
 from kart.exceptions import INVALID_OPERATION
-from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from kart.ogr_import_source import OgrImportSource, PostgreSQLImportSource
 from kart.pk_generation import PkGeneratingImportSource
@@ -54,7 +54,7 @@ def _import_check(repo_path, table, source_gpkg):
     dataset = repo.datasets()[table]
     assert dataset.VERSION == 2
 
-    with gpkg_engine(source_gpkg).connect() as conn:
+    with Db_GPKG.create_engine(source_gpkg).connect() as conn:
         num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
 
     o = subprocess.check_output(["git", "ls-tree", "-r", "-t", "HEAD", table])
@@ -146,7 +146,7 @@ def test_import(
         repo_path = tmp_path / "repo"
         repo_path.mkdir()
 
-        with gpkg_engine(data / source_gpkg).connect() as conn:
+        with Db_GPKG.create_engine(data / source_gpkg).connect() as conn:
             if param_ids[-1] == "empty":
                 print(f"emptying table {table}...")
                 conn.execute(f"DELETE FROM {table};")
@@ -176,7 +176,7 @@ def test_import(
 
             dataset = _import_check(repo_path, table, f"{data / source_gpkg}")
 
-            with gpkg_engine(data / source_gpkg).connect() as conn:
+            with Db_GPKG.create_engine(data / source_gpkg).connect() as conn:
                 pk_field = gpkg_adapter.pk(conn, table)
 
                 if num_rows > 0:
@@ -304,7 +304,7 @@ def test_import_from_non_gpkg(
     param_ids = H.parameter_ids(request)
 
     with data_archive(archive) as data:
-        with gpkg_engine(data / source_gpkg).connect() as conn:
+        with Db_GPKG.create_engine(data / source_gpkg).connect() as conn:
             if param_ids[-1] == "empty":
                 print(f"emptying table {table}...")
                 conn.execute(f"DELETE FROM {table};")
@@ -893,7 +893,7 @@ def test_feature_find_decode_performance(
     inner_tree = dataset.inner_tree
 
     with data_archive(archive) as data:
-        with gpkg_engine(data / source_gpkg).connect() as conn:
+        with Db_GPKG.create_engine(data / source_gpkg).connect() as conn:
             num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
             pk_field = gpkg_adapter.pk(conn, table)
             pk = conn.execute(

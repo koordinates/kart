@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 
 from kart.exceptions import NotFound
 from kart.repo import KartRepo
-from kart.sqlalchemy.create_engine import get_odbc_drivers, get_sqlserver_driver
+from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.working_copy import sqlserver_adapter
 from kart.working_copy.base import WorkingCopyStatus
 from kart.working_copy.db_server import DatabaseServer_WorkingCopy
@@ -27,7 +27,7 @@ def test_no_odbc():
     with pytest.raises(
         NotFound, match=r"^ODBC support for SQL Server is required but was not found."
     ) as e:
-        get_odbc_drivers()
+        Db_SqlServer.get_odbc_drivers()
 
 
 def test_odbc_drivers():
@@ -38,7 +38,7 @@ def test_odbc_drivers():
     except ImportError:
         pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
 
-    num_drivers = len(get_odbc_drivers())
+    num_drivers = len(Db_SqlServer.get_odbc_drivers())
     # Eventually we should assert that we have useful drivers - eg MSSQL.
     # But for now, we are asserting that we were able to load pyodbc and it seems to be working.
     assert num_drivers >= 0
@@ -49,7 +49,7 @@ def test_odbc_drivers():
     reason="MSSQL driver is not included in the build - SQL Server tests will fail unless it is installed manually."
 )
 def test_sqlserver_driver():
-    assert get_sqlserver_driver() is not None
+    assert Db_SqlServer.get_sqlserver_driver() is not None
 
 
 # All of the following tests will also fail unless a MSSQL driver has been installed manually.

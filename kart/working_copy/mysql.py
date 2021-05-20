@@ -16,7 +16,7 @@ from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.create_engine import mysql_engine
+from kart.sqlalchemy.MySQL import Db_MySql
 
 
 class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
@@ -58,7 +58,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = mysql_engine(self.connect_uri)
+        self.engine = Db_MySql.create_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MySQLIdentifierPreparer(self.engine.dialect)
 

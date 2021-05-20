@@ -5,7 +5,7 @@ import pytest
 
 from kart import is_windows
 from kart.clone import get_directory_from_url
-from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.repo import KartRepo
 
 
@@ -129,7 +129,7 @@ def test_clone(
             assert repo.config["kart.repostructure.version"] == "2"
             assert repo.config["kart.workingcopy.location"] == wc.name
 
-            with gpkg_engine(wc).connect() as conn:
+            with Db_GPKG.create_engine(wc).connect() as conn:
                 nrows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
                 assert nrows > 0
 
@@ -187,7 +187,7 @@ def test_fetch(
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as conn:
+        with Db_GPKG.create_engine(wc).connect() as conn:
             commit_id = insert(conn)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
@@ -257,7 +257,7 @@ def test_pull(
             assert r.exit_code == 0, r
 
         with chdir(path1):
-            with gpkg_engine(wc1).connect() as conn:
+            with Db_GPKG.create_engine(wc1).connect() as conn:
                 commit_id = insert(conn)
 
             r = cli_runner.invoke(["push"])

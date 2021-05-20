@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.gpkg import Db_GPKG
 
 
 H = pytest.helpers.helpers()
@@ -84,7 +84,7 @@ def test_e2e_sno(
             assert working_copy.exists()
 
             # check we have the right data in the WC
-            with gpkg_engine(working_copy).connect() as conn:
+            with Db_GPKG.create_engine(working_copy).connect() as conn:
                 assert H.row_count(conn, table) == row_count
                 assert H.table_pattern_count(conn, "gpkg_sno_%") == 2
                 assert H.table_pattern_count(conn, "gpkg_kart_%") == 0
@@ -99,7 +99,7 @@ def test_e2e_sno(
             assert r.stdout.splitlines()[0] == "On branch edit-1"
 
             # make an edit
-            with gpkg_engine(working_copy).connect() as conn:
+            with Db_GPKG.create_engine(working_copy).connect() as conn:
                 insert(conn, commit=False)
 
             r = cli_runner.invoke(["diff"])

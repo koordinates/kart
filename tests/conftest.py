@@ -24,12 +24,10 @@ import sqlalchemy
 
 from kart.geometry import Geometry
 from kart.repo import KartRepo
-from kart.sqlalchemy.create_engine import (
-    gpkg_engine,
-    postgis_engine,
-    sqlserver_engine,
-    mysql_engine,
-)
+from kart.sqlalchemy.gpkg import Db_GPKG
+from kart.sqlalchemy.postgis import Db_Postgis
+from kart.sqlalchemy.sqlserver import Db_SqlServer
+from kart.sqlalchemy.mysql import Db_MySql
 
 
 pytest_plugins = ["helpers_namespace"]
@@ -862,7 +860,7 @@ def create_conflicts(
             cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
             cli_runner.invoke(["checkout", "-b", "theirs_branch"])
 
-            with gpkg_engine(wc).connect() as conn:
+            with Db_GPKG.create_engine(wc).connect() as conn:
                 update(conn, sample_pks[0], "theirs_version")
                 update(conn, sample_pks[1], "ours_theirs_version")
                 update(conn, sample_pks[2], "theirs_version")
@@ -903,7 +901,7 @@ def postgis_db():
     """
     if "KART_POSTGRES_URL" not in os.environ:
         raise pytest.skip("Requires PostGIS - read docstring at conftest.postgis_db")
-    engine = postgis_engine(os.environ["KART_POSTGRES_URL"])
+    engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
     with engine.connect() as conn:
         # test connection and postgis support
         try:
@@ -951,7 +949,7 @@ def sqlserver_db():
         raise pytest.skip(
             "Requires SQL Server - read docstring at conftest.sqlserver_db"
         )
-    engine = sqlserver_engine(os.environ["KART_SQLSERVER_URL"])
+    engine = Db_SqlServer.create_engine(os.environ["KART_SQLSERVER_URL"])
     with engine.connect() as conn:
         # Test connection
         try:
@@ -1011,7 +1009,7 @@ def mysql_db():
     """
     if "KART_MYSQL_URL" not in os.environ:
         raise pytest.skip("Requires MySQL - read docstring at conftest.mysql_db")
-    engine = mysql_engine(os.environ["KART_MYSQL_URL"])
+    engine = Db_MySql.create_engine(os.environ["KART_MYSQL_URL"])
     with engine.connect() as conn:
         # test connection:
         try:

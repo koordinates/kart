@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.repo import KartRepo
 from kart.exceptions import (
     INVALID_OPERATION,
@@ -198,7 +198,9 @@ def test_import_replace_existing(
             assert r.exit_code == 0, r.stderr
 
             # Now modify the source GPKG
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+            with Db_GPKG.create_engine(
+                data / "nz-waca-adjustments.gpkg"
+            ).connect() as conn:
                 conn.execute(
                     "UPDATE nz_waca_adjustments SET survey_reference = 'edited' WHERE id = 1424927"
                 )
@@ -295,7 +297,9 @@ def test_import_replace_existing_with_compatible_schema_changes(
             # * doesn't include the `survey_reference` column
             # * has the columns in a different order
             # * has a new column
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+            with Db_GPKG.create_engine(
+                data / "nz-waca-adjustments.gpkg"
+            ).connect() as conn:
                 conn.execute(
                     """
                         CREATE TABLE IF NOT EXISTS "nz_waca_adjustments_2" (
@@ -368,7 +372,9 @@ def test_import_replace_existing_with_column_renames(
             # * doesn't include the `survey_reference` column
             # * has the columns in a different order
             # * has a new column
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+            with Db_GPKG.create_engine(
+                data / "nz-waca-adjustments.gpkg"
+            ).connect() as conn:
                 conn.execute(
                     """
                     ALTER TABLE "nz_waca_adjustments" RENAME COLUMN "survey_reference" TO "renamed_survey_reference";
@@ -431,7 +437,9 @@ def test_import_replace_ids(
             assert len(features) == 5
 
             # Now change four features; two updates and two inserts
-            with gpkg_engine(data / "nz-waca-adjustments.gpkg").connect() as conn:
+            with Db_GPKG.create_engine(
+                data / "nz-waca-adjustments.gpkg"
+            ).connect() as conn:
                 conn.execute(
                     """
                     DELETE FROM "nz_waca_adjustments" WHERE id IN (4413497, 4411733)
@@ -773,7 +781,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
         assert repo.config["kart.repostructure.version"] == "2"
         assert repo.config["kart.workingcopy.location"] == "editing.gpkg"
 
-        with gpkg_engine(wc).connect() as db:
+        with Db_GPKG.create_engine(wc).connect() as db:
             wc_rowcount = H.row_count(db, "editing")
             assert wc_rowcount > 0
 
@@ -783,7 +791,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
             assert wc_tree_id == repo.head_tree.hex
 
         # make sure we haven't stuffed up the original file
-        with gpkg_engine("editing.gpkg").connect() as dbo:
+        with Db_GPKG.create_engine("editing.gpkg").connect() as dbo:
             r = dbo.execute("SELECT 1 FROM sqlite_master WHERE name='gpkg_kart_state';")
             assert not r.fetchone()
             source_rowcount = dbo.execute("SELECT COUNT(*) FROM editing;").fetchone()[0]
@@ -898,7 +906,7 @@ def test_init_import_alt_names(data_archive, tmp_path, cli_runner, chdir):
 
     with chdir(repo_path):
         # working copy exists
-        with gpkg_engine("wc.gpkg").connect() as conn:
+        with Db_GPKG.create_engine("wc.gpkg").connect() as conn:
 
             expected_tables = set(a[3].replace("/", "__") for a in ARCHIVE_PATHS)
             r = conn.execute("SELECT name FROM sqlite_master WHERE type='table';")

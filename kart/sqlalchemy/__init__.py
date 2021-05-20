@@ -26,6 +26,26 @@ class DbType(Enum):
             return DbType.GPKG
         return None
 
+    @property
+    def class_(self):
+        if self is DbType.GPKG:
+            from .gpkg import Db_GPKG
+
+            return Db_GPKG
+        elif self is DbType.POSTGIS:
+            from .postgis import Db_Postgis
+
+            return Db_Postgis
+        elif self is DbType.SQL_SERVER:
+            from .sqlserver import Db_SqlServer
+
+            return Db_SqlServer
+        elif self is DbType.MYSQL:
+            from .mysql import Db_MySql
+
+            return Db_MySql
+        raise RuntimeError("Invalid DbType")
+
     def path_length(self, spec):
         """
         Returns the number of identifiers included in the URI path that narrow down our focus to a particular

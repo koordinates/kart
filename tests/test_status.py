@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.exceptions import NO_REPOSITORY
 from kart.repo import KartRepoState
 from kart.structs import CommitWithReference
@@ -82,7 +82,7 @@ def test_status(
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r
 
-        with gpkg_engine(wc).connect() as db:
+        with Db_GPKG.create_engine(wc).connect() as db:
             insert(db)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
@@ -111,7 +111,7 @@ def test_status(
         }
 
     with data_working_copy("points") as (path2, wc):
-        engine = gpkg_engine(wc)
+        engine = Db_GPKG.create_engine(wc)
 
         r = cli_runner.invoke(["remote", "add", "myremote", tmp_path])
         assert r.exit_code == 0, r

@@ -24,7 +24,8 @@ from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output, get_input_mode, InputMode
 from .schema import Schema, ColumnSchema
-from .sqlalchemy.create_engine import gpkg_engine, postgis_engine
+from .sqlalchemy.gpkg import Db_GPKG
+from .sqlalchemy.postgis import Db_Postgis
 from .utils import ungenerator, chunk
 from .working_copy import gpkg_adapter
 
@@ -720,7 +721,7 @@ class GPKGImportSource(SQLAlchemyOgrImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def engine(self):
-        return gpkg_engine(self.ogr_source)
+        return Db_GPKG.create_engine(self.ogr_source)
 
     @property
     def primary_key(self):
@@ -807,7 +808,7 @@ class PostgreSQLImportSource(SQLAlchemyOgrImportSource):
         if conn_str.startswith("PG:"):
             conn_str = conn_str[3:]
         # this will either be a URL or a key=value conn str
-        return postgis_engine(conn_str)
+        return Db_Postgis.create_engine(conn_str)
 
     def _get_primary_key_value(self, ogr_feature, name):
         try:

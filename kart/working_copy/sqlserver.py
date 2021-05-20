@@ -17,7 +17,7 @@ from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.create_engine import sqlserver_engine
+from kart.sqlalchemy.sqlserver import Db_SqlServer
 
 
 class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
@@ -48,7 +48,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = sqlserver_engine(self.connect_uri)
+        self.engine = Db_SqlServer.create_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MSIdentifierPreparer(self.engine.dialect)
 

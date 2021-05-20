@@ -15,7 +15,7 @@ from .table_defs import PostgisKartTables
 from kart import crs_util
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part
-from kart.sqlalchemy.create_engine import postgis_engine
+from kart.sqlalchemy.postgis import Db_Postgis
 
 
 POSTGRES_MAX_IDENTIFIER_LENGTH = 63
@@ -49,7 +49,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = postgis_engine(self.connect_uri)
+        self.engine = Db_Postgis.create_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = PGIdentifierPreparer(self.engine.dialect)
 

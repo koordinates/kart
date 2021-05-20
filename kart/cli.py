@@ -72,7 +72,7 @@ def print_version(ctx):
     import rtree
     import sqlalchemy
 
-    from kart.sqlalchemy.create_engine import gpkg_engine
+    from kart.sqlalchemy.gpkg import Db_GPKG
 
     click.echo(f"Kart v{get_version()}, Copyright (c) Kart Contributors")
 
@@ -85,7 +85,7 @@ def print_version(ctx):
 
     sidx_version = rtree.index.__c_api_version__.decode("ascii")
 
-    engine = gpkg_engine(":memory:")
+    engine = Db_GPKG.create_engine(":memory:")
     with engine.connect() as conn:
         spatialite_version = conn.scalar("SELECT spatialite_version();")
 

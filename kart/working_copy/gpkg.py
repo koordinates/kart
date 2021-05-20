@@ -21,7 +21,7 @@ from kart.exceptions import InvalidOperation
 from kart.geometry import normalise_gpkg_geom
 from kart.schema import Schema
 from kart.sqlalchemy import text_with_inlined_params
-from kart.sqlalchemy.create_engine import gpkg_engine
+from kart.sqlalchemy.gpkg import Db_GPKG
 
 
 L = logging.getLogger("kart.working_copy.gpkg")
@@ -40,7 +40,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
     def __init__(self, repo, location):
         self.repo = repo
         self.path = self.location = location
-        self.engine = gpkg_engine(self.full_path)
+        self.engine = Db_GPKG.create_engine(self.full_path)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
 

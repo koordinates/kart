@@ -2,15 +2,34 @@ import contextlib
 import json
 import logging
 import threading
+
+from pysqlite3 import dbapi2 as sqlite
+
+import sqlalchemy
 from sqlalchemy import Column, Integer, Text, UniqueConstraint
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-from kart.sqlalchemy.create_engine import sqlite_engine
 
 L = logging.getLogger(__name__)
 Base = declarative_base()
+
+
+def sqlite_engine(path):
+    """
+    An engine for non-spatial, non-GPKG sqlite databases.
+    """
+
+    def _on_connect(pysqlite_conn, connection_record):
+        pysqlite_conn.isolation_level = None
+        dbcur = pysqlite_conn.cursor()
+        dbcur.execute("PRAGMA journal_mode = 'wal';")
+        dbcur.execute("PRAGMA foreign_keys = ON;")
+
+    engine = sqlalchemy.create_engine(f"sqlite:///{path}", module=sqlite)
+    sqlalchemy.event.listen(engine, "connect", _on_connect)
+    return engine
 
 
 class KartAnnotation(Base):
