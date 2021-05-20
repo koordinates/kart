@@ -46,10 +46,17 @@ class Dataset0(BaseDataset):
 
     @functools.lru_cache()
     def get_meta_item(self, name):
-        return gpkg_adapter.generate_v2_meta_item(self.gpkg_meta_items, name)
+        return self.meta_items.get(name)
 
     def crs_definitions(self):
-        return gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
+        for key, value in self.meta_items.items():
+            if key.startswith("crs/") and key.endswith(".wkt"):
+                yield key[4:-4], value
+
+    @property
+    @functools.lru_cache(maxsize=1)
+    def meta_items(self):
+        return dict(gpkg_adapter.all_v2_meta_items(self.gpkg_meta_items))
 
     @property
     @functools.lru_cache(maxsize=1)

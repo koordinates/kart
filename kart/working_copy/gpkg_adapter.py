@@ -9,8 +9,7 @@ from kart.timestamps import datetime_to_iso8601_utc
 
 from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer, SQLiteDialect
 
-# Given a dict of all "gpkg_meta_items", generates some or all v2 meta items.
-# See generate_v2_meta_item, all_v2_meta_items.
+# Given a dict of all "gpkg_meta_items", generates all v2 meta items. See all_v2_meta_items.
 # Given a "v2_obj" which supports get_meta_item, adapts it to support get_gpkg_meta_item.
 # See generate_gpkg_meta_item, all_gpkg_meta_items.
 
@@ -65,7 +64,7 @@ def is_v2_meta_item(path):
     return path in V2_META_ITEM_NAMES or path.startswith("crs/")
 
 
-def generate_v2_meta_item(gpkg_meta_items, path, id_salt=None):
+def all_v2_meta_items(gpkg_meta_items, id_salt=None):
     """
     Generate the requested meta_item, given a gpkg object that supports get_gpkg_meta_item.
     Varying the id_salt varies the ids that are generated for the schema.json item.
@@ -79,62 +78,33 @@ def generate_v2_meta_item(gpkg_meta_items, path, id_salt=None):
                 return result
         return result
 
-    if not is_v2_meta_item(path):
-        raise KeyError(f"Not a v2 meta_item: {path}")
+    yield "title", _nested_get(gpkg_meta_items, "gpkg_contents", "identifier")
+    yield "description", _nested_get(gpkg_meta_items, "gpkg_contents", "description")
 
-    if path == "title":
-        return _nested_get(gpkg_meta_items, "gpkg_contents", "identifier")
+    schema = gpkg_to_v2_schema(
+        gpkg_meta_items.get("sqlite_table_info"),
+        gpkg_meta_items.get("gpkg_geometry_columns"),
+        gpkg_meta_items.get("gpkg_spatial_ref_sys"),
+        id_salt or get_table_name(gpkg_meta_items["gpkg_contents"]),
+    )
+    yield "schema.json", schema.to_column_dicts() if schema else None
 
-    elif path == "description":
-        return _nested_get(gpkg_meta_items, "gpkg_contents", "description")
+    yield "metadata/dataset.json", gpkg_metadata_to_json(
+        gpkg_meta_items.get("gpkg_metadata"),
+        gpkg_meta_items.get("gpkg_metadata_reference"),
+    )
+    yield "metadata.xml", gpkg_metadata_to_xml(
+        gpkg_meta_items.get("gpkg_metadata"),
+        gpkg_meta_items.get("gpkg_metadata_reference"),
+    )
 
-    elif path == "schema.json":
-        schema = gpkg_to_v2_schema(
-            gpkg_meta_items.get("sqlite_table_info"),
-            gpkg_meta_items.get("gpkg_geometry_columns"),
-            gpkg_meta_items.get("gpkg_spatial_ref_sys"),
-            id_salt or get_table_name(gpkg_meta_items["gpkg_contents"]),
-        )
-        return schema.to_column_dicts() if schema else None
-    elif path == "metadata/dataset.json":
-        return gpkg_metadata_to_json(
-            gpkg_meta_items.get("gpkg_metadata"),
-            gpkg_meta_items.get("gpkg_metadata_reference"),
-        )
-    elif path == "metadata.xml":
-        return gpkg_metadata_to_xml(
-            gpkg_meta_items.get("gpkg_metadata"),
-            gpkg_meta_items.get("gpkg_metadata_reference"),
-        )
-
-    elif path.startswith("crs/"):
-        gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys") or ()
-        for gsrs in gpkg_spatial_ref_sys:
-            definition = gsrs["definition"]
-            if not definition or definition == "undefined":
-                continue
-            if wkt_to_v2_name(definition) == path:
-                return definition
-        raise KeyError(f"No CRS found for {path}")
-
-
-def all_v2_meta_items(gpkg_meta_items, id_salt=None):
-    for path in V2_META_ITEM_NAMES:
-        result = generate_v2_meta_item(gpkg_meta_items, path, id_salt=id_salt)
-        if result is not None:
-            yield path, result
-
-    for identifier, definition in all_v2_crs_definitions(gpkg_meta_items):
-        yield f"crs/{identifier}.wkt", definition
-
-
-def all_v2_crs_definitions(gpkg_meta_items):
     gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")
     for gsrs in gpkg_spatial_ref_sys:
         d = gsrs["definition"]
         if not d or d == "undefined":
             continue
-        yield crs_util.get_identifier_str(d), crs_util.normalise_wkt(d)
+        id_str = crs_util.get_identifier_str(d)
+        yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(d)
 
 
 def get_table_name(gpkg_contents):
@@ -211,11 +181,6 @@ def wkt_to_gpkg_spatial_ref_sys(wkt):
             "description": None,
         }
     ]
-
-
-def wkt_to_v2_name(wkt):
-    identifier = crs_util.get_identifier_str(wkt)
-    return f"crs/{identifier}.wkt"
 
 
 def generate_sqlite_table_info(v2_obj):
@@ -369,14 +334,16 @@ APPROXIMATED_TYPES = {"interval": "text", "time": "text", "numeric": "text"}
 APPROXIMATED_TYPES_EXTRA_TYPE_INFO = ("length", "precision", "scale")
 
 
-def gpkg_type_to_v2_type(gkpg_type):
+def gpkg_type_to_v2_type(gpkg_type):
+    gpkg_type = gpkg_type.upper()
+
     """Convert a gpkg type to v2 schema type."""
-    m = re.match(r"^(TEXT|BLOB)\(([0-9]+)\)$", gkpg_type)
+    m = re.match(r"^(TEXT|BLOB)\(([0-9]+)\)$", gpkg_type)
     if m:
         return m.group(1).lower(), {"length": int(m.group(2))}
-    v2_type_info = GPKG_TYPE_TO_V2_TYPE.get(gkpg_type)
+    v2_type_info = GPKG_TYPE_TO_V2_TYPE.get(gpkg_type)
     if v2_type_info is None:
-        raise ValueError(f"Unrecognised GPKG type: {gkpg_type}")
+        raise ValueError(f"Unrecognised GPKG type: {gpkg_type}")
     elif isinstance(v2_type_info, tuple):
         v2_type, size = v2_type_info
         extra_type_info = {"size": size}

@@ -10,6 +10,7 @@ import click
 from osgeo import gdal, ogr
 import sqlalchemy
 
+
 from . import crs_util
 from .exceptions import (
     InvalidOperation,
@@ -704,9 +705,10 @@ class GPKGImportSource(SQLAlchemyOgrImportSource):
         if self.table:
             with self.engine.connect() as conn:
                 self._gpkg_primary_key = gpkg_adapter.pk(conn, self.table)
-                self.gpkg_meta_items = dict(
+                gpkg_meta_items = dict(
                     gpkg_adapter.gpkg_meta_items_from_db(conn, self.table)
                 )
+                self.meta_items = dict(gpkg_adapter.all_v2_meta_items(gpkg_meta_items))
 
     @classmethod
     def quote_ident_part(cls, part):
@@ -729,10 +731,12 @@ class GPKGImportSource(SQLAlchemyOgrImportSource):
         if user_specified:
             return user_specified
 
-        return gpkg_adapter.generate_v2_meta_item(self.gpkg_meta_items, "metadata.xml")
+        return self.meta_items.get("metadata.xml")
 
     def crs_definitions(self):
-        yield from gpkg_adapter.all_v2_crs_definitions(self.gpkg_meta_items)
+        for key, value in self.meta_items.items():
+            if key.startswith("crs/") and key.endswith(".wkt"):
+                yield key[4:-4], value
 
 
 class PostgreSQLImportSource(SQLAlchemyOgrImportSource):
