@@ -647,8 +647,8 @@ def diff_output_json_lines(
     def _out(dataset, ds_diff):
         if "meta" in ds_diff:
             meta_json = {
-                "dataset": dataset.path,
                 "type": "meta",
+                "dataset": dataset.path,
                 "key": None,
                 "change": None,
             }
@@ -658,7 +658,7 @@ def diff_output_json_lines(
                 dump_function(meta_json, output_path, json_style=json_style)
 
         if "feature" in ds_diff:
-            feature_json = {"dataset": dataset.path, "type": "feature", "change": None}
+            feature_json = {"type": "feature", "dataset": dataset.path, "change": None}
             geometry_transform = dataset_geometry_transforms.get(dataset.path)
             for key, delta in sorted(ds_diff["feature"].items()):
                 feature_json["change"] = prepare_feature_delta(
@@ -666,6 +666,15 @@ def diff_output_json_lines(
                 )
                 dump_function(feature_json, output_path, json_style=json_style)
 
+    dump_function(
+        {
+            "type": "version",
+            "version": "kart.diff/v2",
+            "outputFormat": "JSONL+hexwkb",
+        },
+        output_path,
+        json_style=json_style,
+    )
     yield _out
 
 
