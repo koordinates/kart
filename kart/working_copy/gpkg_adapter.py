@@ -64,9 +64,18 @@ def is_v2_meta_item(path):
     return path in V2_META_ITEM_NAMES or path.startswith("crs/")
 
 
-def all_v2_meta_items(gpkg_meta_items, id_salt=None):
+def all_v2_meta_items(sess, table_name, id_salt=None):
     """
-    Generate the requested meta_item, given a gpkg object that supports get_gpkg_meta_item.
+    Generate all V2 meta items for the given table.
+    Varying the id_salt varies the ids that are generated for the schema.json item.
+    """
+    gpkg_meta_items = dict(_gpkg_meta_items_from_db(sess, table_name))
+    yield from all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt)
+
+
+def all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt=None):
+    """
+    Generate all the V2 meta items from the given gpkg_meta_items.
     Varying the id_salt varies the ids that are generated for the schema.json item.
     """
 
@@ -546,7 +555,7 @@ METADATA_QUERY = """
     """
 
 
-def gpkg_meta_items_from_db(conn, table_name, keys=None):
+def _gpkg_meta_items_from_db(conn, table_name, keys=None):
     """
     Returns metadata from the gpkg_* tables about this GPKG.
     Keep this in sync with OgrImportSource.gpkg_meta_items for other datasource types.

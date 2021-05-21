@@ -56,7 +56,9 @@ class Dataset0(BaseDataset):
     @property
     @functools.lru_cache(maxsize=1)
     def meta_items(self):
-        return dict(gpkg_adapter.all_v2_meta_items(self.gpkg_meta_items))
+        return dict(
+            gpkg_adapter.all_v2_meta_items_from_gpkg_meta_items(self.gpkg_meta_items)
+        )
 
     @property
     @functools.lru_cache(maxsize=1)

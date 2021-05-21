@@ -706,10 +706,7 @@ class GPKGImportSource(SQLAlchemyOgrImportSource):
         if self.table:
             with self.engine.connect() as conn:
                 self._gpkg_primary_key = gpkg_adapter.pk(conn, self.table)
-                gpkg_meta_items = dict(
-                    gpkg_adapter.gpkg_meta_items_from_db(conn, self.table)
-                )
-                self.meta_items = dict(gpkg_adapter.all_v2_meta_items(gpkg_meta_items))
+                self.meta_items = dict(gpkg_adapter.all_v2_meta_items(conn, self.table))
 
     @classmethod
     def quote_ident_part(cls, part):
