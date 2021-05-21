@@ -16,7 +16,7 @@ from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.MySQL import Db_MySql
+from kart.sqlalchemy.mysql import Db_MySql
 
 
 class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
