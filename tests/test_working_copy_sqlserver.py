@@ -6,7 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from kart.exceptions import NotFound
 from kart.repo import KartRepo
 from kart.sqlalchemy.sqlserver import Db_SqlServer
-from kart.working_copy import sqlserver_adapter
+from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
+
 from kart.working_copy.base import WorkingCopyStatus
 from kart.working_copy.db_server import DatabaseServer_WorkingCopy
 from test_working_copy import compute_approximated_types
@@ -342,8 +343,9 @@ def test_edit_schema(data_archive, cli_runner, new_sqlserver_db_schema):
 
 
 def test_approximated_types():
-    assert sqlserver_adapter.APPROXIMATED_TYPES == compute_approximated_types(
-        sqlserver_adapter.V2_TYPE_TO_MS_TYPE, sqlserver_adapter.MS_TYPE_TO_V2_TYPE
+    assert KartAdapter_SqlServer.APPROXIMATED_TYPES == compute_approximated_types(
+        KartAdapter_SqlServer.V2_TYPE_TO_SQL_TYPE,
+        KartAdapter_SqlServer.SQL_TYPE_TO_V2_TYPE,
     )
 
 

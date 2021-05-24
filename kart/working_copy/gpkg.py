@@ -13,7 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import UserDefinedType
 
 
-from . import gpkg_adapter, WorkingCopyStatus
+from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
 from .table_defs import GpkgTables, GpkgKartTables
 from kart import crs_util
@@ -21,7 +21,7 @@ from kart.exceptions import InvalidOperation
 from kart.geometry import normalise_gpkg_geom
 from kart.schema import Schema
 from kart.sqlalchemy import text_with_inlined_params
-from kart.sqlalchemy.gpkg import Db_GPKG
+from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 
 
 L = logging.getLogger("kart.working_copy.gpkg")
@@ -40,7 +40,8 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
     def __init__(self, repo, location):
         self.repo = repo
         self.path = self.location = location
-        self.engine = Db_GPKG.create_engine(self.full_path)
+        self.adapter = KartAdapter_GPKG
+        self.engine = self.adapter.create_engine(self.full_path)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
 
@@ -200,13 +201,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             self.kart_tables.create_all(sess)
 
     def _create_table_for_dataset(self, sess, dataset):
-        table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
-
-        # GPKG requires an integer primary key for spatial tables, so we add it in if needed:
-        if dataset.has_geometry and "PRIMARY KEY" not in table_spec:
-            table_spec = (
-                '"auto_int_pk" INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,' + table_spec
-            )
+        table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema)
 
         sess.execute(
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
@@ -232,7 +227,9 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         gpkg_contents, gpkg_geometry_columns, gpkg_spatial_ref_sys, gpkg_metadata, gpkg_metadata_reference
         """
         table_name = dataset.table_name
-        gpkg_meta_items = dict(gpkg_adapter.all_gpkg_meta_items(dataset, table_name))
+        gpkg_meta_items = dict(
+            KartAdapter_GPKG.all_gpkg_meta_items(dataset, table_name)
+        )
         gpkg_contents = gpkg_meta_items["gpkg_contents"]
         gpkg_contents["table_name"] = table_name
         gpkg_geometry_columns = gpkg_meta_items.get("gpkg_geometry_columns")
@@ -312,7 +309,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         id_salt = f"{gpkg_name} {dataset.table_name} {self.get_db_tree()}"
 
         with self.session() as sess:
-            yield from gpkg_adapter.all_v2_meta_items(
+            yield from self.adapter.all_v2_meta_items(
                 sess, dataset.table_name, id_salt=id_salt
             )
 
@@ -323,9 +320,9 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         new_type = new_col_dict["dataType"]
 
         # Some types have to be approximated as other types in GPKG, and they also lose any extra type info.
-        if gpkg_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
+        if KartAdapter_GPKG.APPROXIMATED_TYPES.get(old_type) == new_type:
             new_col_dict["dataType"] = new_type = old_type
-            for key in gpkg_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
+            for key in KartAdapter_GPKG.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
         # GPKG primary keys have to be int64, so we approximate int8, int16, int32 primary keys as int64s.
@@ -431,7 +428,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
     def _delete_meta_metadata(self, sess, table_name):
         r = sess.execute(
-            gpkg_adapter.METADATA_QUERY.format(select="M.id"),
+            KartAdapter_GPKG.METADATA_QUERY.format(select="M.id"),
             {"table_name": table_name},
         )
         ids = [row[0] for row in r]
@@ -603,8 +600,8 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         table = dataset.table_name
         self._delete_meta_metadata(sess, table)
         if dest_value:
-            gpkg_metadata = gpkg_adapter.xml_to_gpkg_metadata(dest_value, table)
-            gpkg_metadata_reference = gpkg_adapter.xml_to_gpkg_metadata(
+            gpkg_metadata = KartAdapter_GPKG.xml_to_gpkg_metadata(dest_value, table)
+            gpkg_metadata_reference = KartAdapter_GPKG.xml_to_gpkg_metadata(
                 dest_value, table, reference=True
             )
             self._write_meta_metadata(
@@ -615,8 +612,8 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         table = dataset.table_name
         self._delete_meta_metadata(sess, table)
         if dest_value:
-            gpkg_metadata = gpkg_adapter.json_to_gpkg_metadata(dest_value, table)
-            gpkg_metadata_reference = gpkg_adapter.json_to_gpkg_metadata(
+            gpkg_metadata = KartAdapter_GPKG.json_to_gpkg_metadata(dest_value, table)
+            gpkg_metadata_reference = KartAdapter_GPKG.json_to_gpkg_metadata(
                 dest_value, table, reference=True
             )
             self._write_meta_metadata(

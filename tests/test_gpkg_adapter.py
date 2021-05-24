@@ -1,4 +1,4 @@
-from kart.working_copy.gpkg_adapter import generate_sqlite_table_info
+from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.schema import Schema
 
 V2_SCHEMA_DATA = [
@@ -48,7 +48,7 @@ def test_adapt_schema():
     dataset.tree = dataset
     dataset.name = "test_dataset"
 
-    sqlite_table_info = generate_sqlite_table_info(dataset)
+    sqlite_table_info = KartAdapter_GPKG.generate_sqlite_table_info(dataset)
     assert sqlite_table_info == [
         {
             "cid": 0,

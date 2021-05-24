@@ -1,7 +1,7 @@
 from binascii import unhexlify
 
 import sqlalchemy
-from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer
+from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer, PGDialect
 import psycopg2
 from psycopg2.extensions import Binary, new_type, register_adapter, register_type
 
@@ -78,6 +78,8 @@ register_adapter(Geometry, _adapt_geometry_to_pg)
 class Db_Postgis(BaseDb):
     """Functionality for using sqlalchemy to connect to a PostGIS database."""
 
+    preparer = PGIdentifierPreparer(PGDialect())
+
     @classmethod
     def create_engine(cls, pgurl):
         def _on_connect(psycopg2_conn, connection_record):
@@ -110,5 +112,30 @@ class Db_Postgis(BaseDb):
         return engine
 
     @classmethod
-    def create_preparer(cls, engine):
-        return PGIdentifierPreparer(engine.dialect)
+    def list_tables(cls, sess, db_schema=None):
+        if db_schema is not None:
+            r = sess.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT table_name as name,
+                    obj_description(format('%s.%s', table_schema, table_name)::regclass::oid, 'pg_class') as title
+                    FROM information_schema.tables WHERE table_schema = :db_schema
+                    ORDER BY name;
+                    """
+                ),
+                {"db_schema": db_schema},
+            )
+        else:
+            r = sess.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT format('%s.%s', table_schema, table_name) as name,
+                    obj_description(format('%s.%s', table_schema, table_name)::regclass::oid, 'pg_class') as title
+                    FROM information_schema.tables
+                    WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'tiger', 'topology')
+                    ORDER BY name;
+                    """
+                )
+            )
+
+        return {row['name']: row['title'] for row in r}

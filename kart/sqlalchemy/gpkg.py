@@ -1,7 +1,7 @@
 import os
 
 import sqlalchemy
-from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer
+from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer, SQLiteDialect
 from pysqlite3 import dbapi2 as sqlite
 
 from kart import spatialite_path
@@ -12,6 +12,8 @@ class Db_GPKG(BaseDb):
     """Functionality for using sqlalchemy to connect to a GPKG database."""
 
     GPKG_CACHE_SIZE_MiB = 200
+
+    preparer = SQLiteIdentifierPreparer(SQLiteDialect())
 
     @classmethod
     def create_engine(cls, path):
@@ -31,10 +33,6 @@ class Db_GPKG(BaseDb):
         return engine
 
     @classmethod
-    def create_preparer(cls, engine):
-        return SQLiteIdentifierPreparer(engine.dialect)
-
-    @classmethod
     def list_tables(cls, sess, db_schema=None):
         if db_schema is not None:
             raise RuntimeError("GPKG files don't have a db_schema")
@@ -48,7 +46,7 @@ class Db_GPKG(BaseDb):
                 SELECT SM.name, GC.identifier FROM sqlite_master SM
                 LEFT OUTER JOIN gpkg_contents GC ON GC.table_name = SM.name
                 WHERE SM.type='table'
-                AND SM.name NOT LIKE 'sqlite%' AND SM.name NOT LIKE 'gpkg%' and SM.name NOT LIKE 'rtree%'
+                AND SM.name NOT LIKE 'sqlite%' AND SM.name NOT LIKE 'gpkg%' and SM.name NOT LIKE 'rtree%' and SM.name != 'ogr_empty_table'
                 ORDER BY SM.name;
                 """
             )
@@ -57,8 +55,38 @@ class Db_GPKG(BaseDb):
         r = sess.execute(
             """
             SELECT name FROM sqlite_master SM WHERE type='table'
-            AND name NOT LIKE 'sqlite%' AND name NOT LIKE 'gpkg%' and name NOT LIKE 'rtree%'
+            AND name NOT LIKE 'sqlite%' AND name NOT LIKE 'gpkg%' and name NOT LIKE 'rtree%' AND name != 'ogr_empty_table'
             ORDER BY name;
             """
         )
         return {row['name']: None for row in r}
+
+    @classmethod
+    def pk_name(cls, sess, db_schema=None, table=None):
+        """ Find the primary key for a GeoPackage table """
+
+        # Requirement 150:
+        # A feature table or view SHALL have a column that uniquely identifies the
+        # row. For a feature table, the column SHOULD be a primary key. If there
+        # is no primary key column, the first column SHALL be of type INTEGER and
+        # SHALL contain unique values for each row.
+
+        if db_schema is not None:
+            raise RuntimeError("GPKG files don't have a db_schema")
+
+        r = sess.execute(f"PRAGMA table_info({cls.quote(table)});")
+        fields = []
+        for field in r:
+            if field["pk"]:
+                return field["name"]
+            fields.append(field)
+
+        if fields[0]["type"].upper() == "INTEGER":
+            return fields[0]["name"]
+        else:
+            raise RuntimeError("No valid GeoPackage primary key field found")
+
+    @classmethod
+    def pk_names(cls, sess, db_schema=None, table=None):
+        # GPKG only ever has one primary key.
+        return [cls.pk_names(sess, db_schema, table)]

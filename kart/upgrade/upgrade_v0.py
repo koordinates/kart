@@ -4,7 +4,7 @@ import re
 from kart.geometry import normalise_gpkg_geom
 from kart.base_dataset import BaseDataset
 from kart.serialise_util import json_unpack
-from kart.working_copy import gpkg_adapter
+from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 
 
 class Dataset0(BaseDataset):
@@ -57,7 +57,9 @@ class Dataset0(BaseDataset):
     @functools.lru_cache(maxsize=1)
     def meta_items(self):
         return dict(
-            gpkg_adapter.all_v2_meta_items_from_gpkg_meta_items(self.gpkg_meta_items)
+            KartAdapter_GPKG.all_v2_meta_items_from_gpkg_meta_items(
+                self.gpkg_meta_items
+            )
         )
 
     @property
@@ -66,7 +68,7 @@ class Dataset0(BaseDataset):
         # For V0 / V1, all data is serialised using json.dumps
         return {
             name: self.get_json_data_at(self.META_PATH + name, missing_ok=True)
-            for name in gpkg_adapter.GPKG_META_ITEM_NAMES
+            for name in KartAdapter_GPKG.GPKG_META_ITEM_NAMES
         }
 
     def features(self):

@@ -9,14 +9,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import UserDefinedType
 from sqlalchemy.dialects.mysql.types import DOUBLE
 
-from . import mysql_adapter
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import MySqlKartTables
 from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.mysql import Db_MySql
+from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
 
 
 class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
@@ -58,14 +57,15 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = Db_MySql.create_engine(self.connect_uri)
+        self.adapter = KartAdapter_MySql
+        self.engine = self.adapter.create_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MySQLIdentifierPreparer(self.engine.dialect)
 
         self.kart_tables = MySqlKartTables(self.db_schema, repo.is_kart_branded)
 
     def _create_table_for_dataset(self, sess, dataset):
-        table_spec = mysql_adapter.v2_schema_to_mysql_spec(dataset.schema, dataset)
+        table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema, dataset)
         sess.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
@@ -110,7 +110,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
     def _write_meta(self, sess, dataset):
         # The only metadata to write that is stored outside the table is custom CRS.
-        for crs in mysql_adapter.generate_mysql_spatial_ref_sys(dataset):
+        for crs in KartAdapter_MySql.generate_mysql_spatial_ref_sys(dataset):
             existing_crs = sess.execute(
                 """
                 SELECT organization, definition FROM information_schema.st_spatial_reference_systems
@@ -276,7 +276,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             mysql_spatial_ref_sys = list(r)
 
             id_salt = f"{self.db_schema} {dataset.table_name} {self.get_db_tree()}"
-            schema = mysql_adapter.sqlserver_to_v2_schema(
+            schema = KartAdapter_MySql.sqlserver_to_v2_schema(
                 mysql_table_info, mysql_spatial_ref_sys, id_salt
             )
             yield "schema.json", schema.to_column_dicts()
@@ -292,9 +292,9 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         new_type = new_col_dict["dataType"]
 
         # Some types have to be approximated as other types in MySQL
-        if mysql_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
+        if KartAdapter_MySql.APPROXIMATED_TYPES.get(old_type) == new_type:
             new_col_dict["dataType"] = new_type = old_type
-            for key in mysql_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
+            for key in KartAdapter_MySql.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
         return new_type == old_type
@@ -384,7 +384,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_spec = mysql_adapter.v2_column_schema_to_mysql_spec(col, dataset)
+            dest_spec = KartAdapter_MySql.v2_column_schema_to_mysql_spec(col, dataset)
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} MODIFY {dest_spec};"""
             )

@@ -24,10 +24,8 @@ from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output
 from .schema import Schema, ColumnSchema
-from .sqlalchemy.gpkg import Db_GPKG
 from .sqlalchemy.postgis import Db_Postgis
 from .utils import ungenerator, chunk
-from .working_copy import gpkg_adapter
 
 
 # This defines what formats are allowed, as well as mapping
@@ -680,43 +678,6 @@ class SQLAlchemyOgrImportSource(OgrImportSource):
                 """
             )
             return Geometry.of(geom)
-
-
-class GPKGImportSource(SQLAlchemyOgrImportSource):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.table:
-            with self.engine.connect() as conn:
-                self._gpkg_primary_key = gpkg_adapter.pk(conn, self.table)
-                self.meta_items = dict(gpkg_adapter.all_v2_meta_items(conn, self.table))
-
-    @classmethod
-    def quote_ident_part(cls, part):
-        """
-        SQLite-conformant identifier quoting
-        """
-        return gpkg_adapter.quote(part)
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def engine(self):
-        return Db_GPKG.create_engine(self.ogr_source)
-
-    @property
-    def primary_key(self):
-        return self._primary_key or self._gpkg_primary_key
-
-    def get_metadata_xml(self):
-        user_specified = super().get_metadata_xml()
-        if user_specified:
-            return user_specified
-
-        return self.meta_items.get("metadata.xml")
-
-    def crs_definitions(self):
-        for key, value in self.meta_items.items():
-            if key.startswith("crs/") and key.endswith(".wkt"):
-                yield key[4:-4], value
 
 
 class PostgreSQLImportSource(SQLAlchemyOgrImportSource):

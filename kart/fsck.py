@@ -6,7 +6,7 @@ import click
 from .cli_util import tool_environment
 from .exceptions import NotFound, NO_WORKING_COPY
 from .geometry import normalise_gpkg_geom
-from .working_copy import gpkg_adapter
+from .sqlalchemy.gpkg import Db_GPKG
 
 
 def _fsck_reset(repo, working_copy, dataset_paths):
@@ -82,7 +82,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             )
             table = dataset.table_name
 
-            pk = gpkg_adapter.pk(sess, table)
+            pk = Db_GPKG.pk_name(sess, table=table)
             click.echo(f'Primary key field for table: "{pk}"')
             if pk != dataset.primary_key:
                 has_err = True

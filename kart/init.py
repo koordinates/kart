@@ -441,7 +441,7 @@ def init(
 
     if import_from:
         check_git_user(repo=None)
-        base_source = OgrImportSource.open(import_from, None)
+        base_source = ImportSource.open(import_from)
 
         # Import all tables.
         # If you need finer grained control than this,

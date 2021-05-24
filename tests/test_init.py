@@ -499,7 +499,7 @@ def test_import_replace_ids(
             ]
 
 
-def test_init_import_table_ogr_types(data_archive_readonly, tmp_path, cli_runner):
+def test_init_import_table_gpkg_types(data_archive_readonly, tmp_path, cli_runner):
     with data_archive_readonly("gpkg-types") as data:
         repo_path = tmp_path / "repo"
         r = cli_runner.invoke(

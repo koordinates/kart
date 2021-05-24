@@ -5,9 +5,10 @@ import pygit2
 from sqlalchemy import inspect
 
 from kart.repo import KartRepo
-from kart.working_copy import postgis_adapter
+
 from kart.working_copy.base import WorkingCopyStatus
 from kart.working_copy.db_server import DatabaseServer_WorkingCopy
+from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 from test_working_copy import compute_approximated_types
 
 
@@ -446,8 +447,8 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
 
 
 def test_approximated_types():
-    assert postgis_adapter.APPROXIMATED_TYPES == compute_approximated_types(
-        postgis_adapter.V2_TYPE_TO_PG_TYPE, postgis_adapter.PG_TYPE_TO_V2_TYPE
+    assert KartAdapter_Postgis.APPROXIMATED_TYPES == compute_approximated_types(
+        KartAdapter_Postgis.V2_TYPE_TO_SQL_TYPE, KartAdapter_Postgis.SQL_TYPE_TO_V2_TYPE
     )
 
 

@@ -7,7 +7,7 @@ import sqlalchemy
 
 from kart.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from kart.repo import KartRepo
-from kart.working_copy import gpkg_adapter
+from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.working_copy.base import BaseWorkingCopy
 from test_working_copy import compute_approximated_types
 
@@ -52,8 +52,8 @@ def test_checkout_workingcopy(
                 ).scalar()
                 assert spatial_index_count == dataset.feature_count
 
-        table_spec = gpkg_adapter.v2_schema_to_sqlite_spec(dataset)
-        expected_col_spec = f"{gpkg_adapter.quote(dataset.primary_key)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
+        table_spec = KartAdapter_GPKG.v2_schema_to_sql_spec(dataset.schema)
+        expected_col_spec = f"{KartAdapter_GPKG.quote(dataset.primary_key)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
         assert expected_col_spec in table_spec
 
 
@@ -876,8 +876,8 @@ def test_delete_branch(data_working_copy, cli_runner):
 
 
 def test_approximated_types():
-    assert gpkg_adapter.APPROXIMATED_TYPES == compute_approximated_types(
-        gpkg_adapter.V2_TYPE_TO_GPKG_TYPE, gpkg_adapter.GPKG_TYPE_TO_V2_TYPE
+    assert KartAdapter_GPKG.APPROXIMATED_TYPES == compute_approximated_types(
+        KartAdapter_GPKG.V2_TYPE_TO_SQL_TYPE, KartAdapter_GPKG.SQL_TYPE_TO_V2_TYPE
     )
 
 

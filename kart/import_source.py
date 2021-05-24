@@ -15,17 +15,22 @@ class ImportSource:
     UNNECESSARY_PREFIXES = ("OGR:", "GPKG:", "PG:")
 
     @classmethod
-    def open(cls, spec):
-
+    def _remove_unnecessary_prefix(cls, spec):
+        spec_upper = spec.upper()
         for p in cls.UNNECESSARY_PREFIXES:
-            if spec.startswith(p):
-                spec = spec[len(p) :]
-                break
+            if spec_upper.startswith(p):
+                return spec[len(p) :]
 
+        return spec
+
+    @classmethod
+    def open(cls, spec):
         from kart.sqlalchemy import DbType
 
+        spec = cls._remove_unnecessary_prefix(spec)
+
         db_type = DbType.from_spec(spec)
-        if db_type is DbType.GPKG:
+        if db_type == DbType.GPKG:
             from .sqlalchemy_import_source import SqlAlchemyImportSource
 
             return SqlAlchemyImportSource.open(spec)

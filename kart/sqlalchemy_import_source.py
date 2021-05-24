@@ -8,6 +8,7 @@ import sqlalchemy
 from .exceptions import (
     NotFound,
     NotYetImplemented,
+    NO_IMPORT_SOURCE,
     NO_TABLE,
 )
 from .geometry import Geometry
@@ -32,10 +33,13 @@ class SqlAlchemyImportSource(ImportSource):
             raise cls._bad_import_source_spec(spec)
 
         # TODO - add support for other DB types.
-        if db_type is not DbType.GPKG:
+        if db_type not in (DbType.GPKG, DbType.POSTGIS):
             raise NotYetImplemented(
-                "Only GPKG is currently supported by the SqlAlchemyImportSource"
+                "Only GPKG and PostGIS is currently supported by the SqlAlchemyImportSource"
             )
+
+        if db_type.clearly_doesnt_exist(spec):
+            raise NotFound(f"Couldn't find '{spec}'", exit_code=NO_IMPORT_SOURCE)
 
         path_length = db_type.path_length(spec)
         longest_allowed_path_length = db_type.path_length_for_table
@@ -91,7 +95,6 @@ class SqlAlchemyImportSource(ImportSource):
         self.db_type = db_type
         self.db_class = db_type.class_
         self.engine = engine
-        self.preparer = self.db_class.create_preparer(engine)
 
         self.db_schema = db_schema
         self.table = table
@@ -117,6 +120,9 @@ class SqlAlchemyImportSource(ImportSource):
                 desc += f"\n * {source.dest_path} (from {source.table})"
         return desc
 
+    def default_dest_path(self):
+        return self.table
+
     @functools.lru_cache(maxsize=1)
     def get_tables(self):
         with self.engine.connect() as conn:
@@ -138,16 +144,40 @@ class SqlAlchemyImportSource(ImportSource):
                 click.echo(f"  {table_name} - {title or ''}")
         return tables
 
-    def check_table(self, table_name):
-        if table_name not in self.get_tables():
-            raise NotFound(
-                f"Table '{table_name}' not found",
-                exit_code=NO_TABLE,
-            )
+    def validate_table(self, table):
+        """
+        Find the db-schema and the table, given a table name that the user supplied.
+        The table-name might be in the format "DBSCHEMA.TABLE" or it might just be the table name.
+        OGR can find the table even if the db_schema is not specified, at least in certain circumstances,
+        so we try to do that too.
+        """
+
+        all_tables = self.get_tables().keys()
+        if table in all_tables:
+            if (
+                self.db_schema is None
+                and '.' in table
+                and self.db_type is not DbType.GPKG
+            ):
+                db_schema, table = table.split('.', maxsplit=1)
+                return db_schema, table
+            else:
+                return self.db_schema, table
+
+        if self.db_schema is None and self.db_type is not DbType.GPKG:
+            matching_tables = [t for t in all_tables if t.endswith(f".{table}")]
+            if len(matching_tables) == 1:
+                db_schema, table = matching_tables[0].split('.', maxsplit=1)
+                return db_schema, table
+
+        raise NotFound(
+            f"Table '{table}' not found",
+            exit_code=NO_TABLE,
+        )
 
     def clone_for_table(self, table, primary_key=None, **meta_overrides):
         meta_overrides = {**self.meta_overrides, **meta_overrides}
-        self.check_table(table)
+        db_schema, table = self.validate_table(table)
 
         if primary_key is not None:
             raise NotYetImplemented(
@@ -173,12 +203,12 @@ class SqlAlchemyImportSource(ImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def meta_items(self):
-        # TODO - this only works for GPKG.
-        from kart.working_copy import gpkg_adapter
-
         id_salt = f"{self.engine.url} {self.db_schema} {self.table}"
+
         with self.engine.connect() as conn:
-            return dict(gpkg_adapter.all_v2_meta_items(conn, self.table, id_salt))
+            return dict(
+                self.db_type.adapter.all_v2_meta_items(conn, self.table, id_salt)
+            )
 
     def crs_definitions(self):
         for key, value in self.meta_items.items():
@@ -200,7 +230,7 @@ class SqlAlchemyImportSource(ImportSource):
 
     def quote(self, ident):
         """Conditionally quote an identifier - eg if it is a reserved word or contains special characters."""
-        return self.preparer.quote(ident)
+        return self.db_class.quote(ident)
 
     def features(self):
         with self.engine.connect() as conn:
@@ -237,8 +267,5 @@ class SqlAlchemyImportSource(ImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
-        # TODO - this only works for GPKG.
-        from kart.working_copy import gpkg_adapter
-
         with self.engine.connect() as conn:
-            return gpkg_adapter.pk(conn, self.table)
+            return self.db_class.pk_name(conn, table=self.table)

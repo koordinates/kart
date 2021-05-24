@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy as sa
@@ -46,6 +46,26 @@ class DbType(Enum):
             return Db_MySql
         raise RuntimeError("Invalid DbType")
 
+    @property
+    def adapter(self):
+        if self is DbType.GPKG:
+            from .adapter.gpkg import KartAdapter_GPKG
+
+            return KartAdapter_GPKG
+        elif self is DbType.POSTGIS:
+            from .adapter.postgis import KartAdapter_Postgis
+
+            return KartAdapter_Postgis
+        elif self is DbType.SQL_SERVER:
+            from .adapter.sqlserver import KartAdapter_SqlServer
+
+            return KartAdapter_SqlServer
+        elif self is DbType.MYSQL:
+            from .adapter.mysql import KartAdapter_MySql
+
+            return KartAdapter_MySql
+        raise RuntimeError("Invalid DbType")
+
     def path_length(self, spec):
         """
         Returns the number of identifiers included in the URI path that narrow down our focus to a particular
@@ -69,6 +89,12 @@ class DbType(Enum):
     @property
     def path_length_for_table_container(self):
         return self.path_length_for_table - 1
+
+    def clearly_doesnt_exist(self, spec):
+        if self is self.GPKG:
+            return not Path(spec).expanduser().exists()
+        # Can't easily check if other DB types exists - we just try to connect and report any errors that occur.
+        return False
 
 
 def separate_last_path_part(uri):

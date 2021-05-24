@@ -3,12 +3,16 @@ import re
 import socket
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 
-
+from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.pool import NullPool
+from sqlalchemy.sql.compiler import IdentifierPreparer
 
 
 class BaseDb:
     """Base functionality common to all types of sqlalchemy databases that we support."""
+
+    # Subclasses should override with a specific IdentifierPreparer, or identifier quoting will not work properly.
+    preparer = IdentifierPreparer(DefaultDialect())
 
     @classmethod
     def create_engine(cls, spec):
@@ -16,15 +20,16 @@ class BaseDb:
         raise NotImplementedError()
 
     @classmethod
-    def create_preparer(cls, engine):
-        """Create an identifier preparer for the given engine."""
-        raise NotImplementedError()
+    def quote(cls, identifier):
+        """Conditionally quote the given identifier (ie, if it is a keyword or contains reserved characters."""
+        # Subclasses should override cls.preparer with a specific IdentifierPreparer.
+        return cls.preparer.quote(identifier)
 
     @classmethod
     def _pool_class(cls):
         # Ordinarily, sqlalchemy engine's maintain a pool of connections ready to go.
-        # When running tests, we run lots of kart commands, and each command creates an engine, and each engine maintains
-        # a pool. This can quickly exhaust the database's allowed connection limit.
+        # When running tests, we run lots of kart commands, and each command creates an engine, and each engine
+        # maintains a pool. This can quickly exhaust the database's allowed connection limit.
         # One fix would be to share engines between kart commands run during tests that are connecting to the same DB.
         # But this fix is simpler for now: disable the pool during testing.
         return NullPool if "PYTEST_CURRENT_TEST" in os.environ else None

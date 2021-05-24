@@ -9,13 +9,12 @@ from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
 
-from . import postgis_adapter
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import PostgisKartTables
 from kart import crs_util
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part
-from kart.sqlalchemy.postgis import Db_Postgis
+from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 
 
 POSTGRES_MAX_IDENTIFIER_LENGTH = 63
@@ -49,7 +48,8 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = Db_Postgis.create_engine(self.connect_uri)
+        self.adapter = KartAdapter_Postgis
+        self.engine = self.adapter.create_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = PGIdentifierPreparer(self.engine.dialect)
 
@@ -111,7 +111,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         sess.execute(f"DROP FUNCTION IF EXISTS {function_identifiers};")
 
     def _create_table_for_dataset(self, sess, dataset):
-        table_spec = postgis_adapter.v2_schema_to_postgis_spec(dataset.schema, dataset)
+        table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema, dataset)
         sess.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.table_identifier(dataset)} ({table_spec});"""
         )
@@ -122,7 +122,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
     def _write_meta(self, sess, dataset):
         # The only metadata to write that is stored outside the table is custom CRS.
-        for crs in postgis_adapter.generate_postgis_spatial_ref_sys(dataset):
+        for crs in KartAdapter_Postgis.generate_postgis_spatial_ref_sys(dataset):
             existing_crs = sess.execute(
                 "SELECT auth_name, srtext FROM spatial_ref_sys WHERE srid = :srid;",
                 crs,
@@ -278,7 +278,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             pg_spatial_ref_sys = list(r)
 
             id_salt = f"{self.db_schema} {dataset.table_name} {self.get_db_tree()}"
-            schema = postgis_adapter.postgis_to_v2_schema(
+            schema = KartAdapter_Postgis.postgis_to_v2_schema(
                 pg_table_info, pg_spatial_ref_sys, id_salt
             )
             yield "schema.json", schema.to_column_dicts()
@@ -301,7 +301,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         if old_type == "integer" and new_type == "integer":
             old_size = old_col_dict.get("size")
             new_size = new_col_dict.get("size")
-            if postgis_adapter.APPROXIMATED_TYPES.get((old_type, old_size)) == (
+            if KartAdapter_Postgis.APPROXIMATED_TYPES.get((old_type, old_size)) == (
                 new_type,
                 new_size,
             ):
@@ -382,7 +382,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_type = postgis_adapter.v2_type_to_pg_type(col, dataset)
+            dest_type = KartAdapter_Postgis.v2_type_to_pg_type(col, dataset)
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
             )

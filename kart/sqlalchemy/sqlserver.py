@@ -3,7 +3,7 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy
-from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer
+from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer, MSDialect
 
 
 from kart.exceptions import NotFound, NO_DRIVER
@@ -19,6 +19,8 @@ class Db_SqlServer(BaseDb):
     CANONICAL_SCHEME = "mssql"
     INTERNAL_SCHEME = "mssql+pyodbc"
     INSTALL_DOC_URL = "https://docs.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server"
+
+    preparer = MSIdentifierPreparer(MSDialect())
 
     @classmethod
     def create_engine(cls, msurl):
@@ -38,10 +40,6 @@ class Db_SqlServer(BaseDb):
 
         engine = sqlalchemy.create_engine(msurl, poolclass=cls._pool_class())
         return engine
-
-    @classmethod
-    def create_preparer(cls, engine):
-        return MSIdentifierPreparer(engine.dialect)
 
     @classmethod
     def get_odbc_drivers(cls):

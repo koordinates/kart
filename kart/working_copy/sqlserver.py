@@ -10,14 +10,13 @@ from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function
 from sqlalchemy.types import UserDefinedType
 
-from . import sqlserver_adapter
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import SqlServerKartTables
 from kart import crs_util
 from kart.geometry import Geometry
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.sqlserver import Db_SqlServer
+from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 
 
 class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
@@ -48,16 +47,15 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         self.check_valid_location(self.uri, repo)
         self.connect_uri, self.db_schema = separate_last_path_part(self.uri)
 
-        self.engine = Db_SqlServer.create_engine(self.connect_uri)
+        self.adapter = KartAdapter_SqlServer
+        self.engine = self.adapter.create_engine(self.connect_uri)
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = MSIdentifierPreparer(self.engine.dialect)
 
         self.kart_tables = SqlServerKartTables(self.db_schema, repo.is_kart_branded)
 
     def _create_table_for_dataset(self, sess, dataset):
-        table_spec = sqlserver_adapter.v2_schema_to_sqlserver_spec(
-            dataset.schema, dataset
-        )
+        table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema, dataset)
         sess.execute(
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
         )
@@ -256,7 +254,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             ms_spatial_ref_sys = list(filter(None, ms_spatial_ref_sys))  # Remove nulls.
 
             id_salt = f"{self.db_schema} {dataset.table_name} {self.get_db_tree()}"
-            schema = sqlserver_adapter.sqlserver_to_v2_schema(
+            schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
                 ms_table_info, ms_spatial_ref_sys, id_salt
             )
             yield "schema.json", schema.to_column_dicts()
@@ -277,9 +275,9 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         new_type = new_col_dict["dataType"]
 
         # Some types have to be approximated as other types in SQL Server, and they also lose any extra type info.
-        if sqlserver_adapter.APPROXIMATED_TYPES.get(old_type) == new_type:
+        if KartAdapter_SqlServer.APPROXIMATED_TYPES.get(old_type) == new_type:
             new_col_dict["dataType"] = new_type = old_type
-            for key in sqlserver_adapter.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
+            for key in KartAdapter_SqlServer.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
         # Geometry type loses various extra type info when roundtripped through SQL Server.
@@ -392,7 +390,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_spec = sqlserver_adapter.v2_column_schema_to_sqlserver_spec(
+            dest_spec = KartAdapter_SqlServer.v2_column_schema_to_sqlserver_spec(
                 col, dataset
             )
             sess.execute(
