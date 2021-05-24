@@ -35,32 +35,30 @@ class Db_GPKG(BaseDb):
         return SQLiteIdentifierPreparer(engine.dialect)
 
     @classmethod
-    def list_tables(cls, sess, db_schema=None, with_titles=False):
+    def list_tables(cls, sess, db_schema=None):
         if db_schema is not None:
             raise RuntimeError("GPKG files don't have a db_schema")
 
-        if with_titles:
-            gpkg_contents_exists = sess.scalar(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='gpkg_contents';",
+        gpkg_contents_exists = sess.scalar(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='gpkg_contents';",
+        )
+        if gpkg_contents_exists:
+            r = sess.execute(
+                """
+                SELECT SM.name, GC.identifier FROM sqlite_master SM
+                LEFT OUTER JOIN gpkg_contents GC ON GC.table_name = SM.name
+                WHERE SM.type='table'
+                AND SM.name NOT LIKE 'sqlite%' AND SM.name NOT LIKE 'gpkg%' and SM.name NOT LIKE 'rtree%'
+                ORDER BY SM.name;
+                """
             )
-            if gpkg_contents_exists:
-                r = sess.execute(
-                    """
-                    SELECT SM.name, GC.identifier FROM sqlite_master SM
-                    LEFT OUTER JOIN gpkg_contents GC ON GC.table_name = SM.name
-                    WHERE SM.type='table'
-                    AND SM.name NOT LIKE 'sqlite%' AND SM.name NOT LIKE 'gpkg%' and SM.name NOT LIKE 'rtree%';
-                    """
-                )
-                return {row['name']: row['identifier'] for row in r}
+            return {row['name']: row['identifier'] for row in r}
 
         r = sess.execute(
             """
             SELECT name FROM sqlite_master SM WHERE type='table'
-            AND name NOT LIKE 'sqlite%' AND name NOT LIKE 'gpkg%' and name NOT LIKE 'rtree%';
+            AND name NOT LIKE 'sqlite%' AND name NOT LIKE 'gpkg%' and name NOT LIKE 'rtree%'
+            ORDER BY name;
             """
         )
-        if with_titles:
-            return {row['name']: None for row in r}
-        else:
-            return [row['name'] for row in r]
+        return {row['name']: None for row in r}

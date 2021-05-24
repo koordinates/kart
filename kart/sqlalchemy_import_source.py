@@ -43,9 +43,8 @@ class SqlAlchemyImportSource(ImportSource):
             db_type.path_length_for_table_container - 1, 0
         )
 
-        if (
-            path_length > longest_allowed_path_length
-            or path_length < shortest_allowed_path_length
+        if not (
+            shortest_allowed_path_length <= path_length <= longest_allowed_path_length
         ):
             raise cls._bad_import_source_spec(spec)
 
@@ -63,7 +62,9 @@ class SqlAlchemyImportSource(ImportSource):
             connect_url, db_schema = separate_last_path_part(connect_url)
 
         engine = db_type.class_.create_engine(connect_url)
-        return SqlAlchemyImportSource(spec, db_type, engine, db_schema, table)
+        return SqlAlchemyImportSource(
+            spec, db_type=db_type, engine=engine, db_schema=db_schema, table=table
+        )
 
     @classmethod
     def _bad_import_source_spec(self, spec):
@@ -79,6 +80,7 @@ class SqlAlchemyImportSource(ImportSource):
     def __init__(
         self,
         original_spec,
+        *,
         db_type,
         engine,
         db_schema,
@@ -119,7 +121,7 @@ class SqlAlchemyImportSource(ImportSource):
     def get_tables(self):
         with self.engine.connect() as conn:
             # TODO - this only works for GPKG
-            tables = self.db_class.list_tables(conn, self.db_schema, with_titles=True)
+            tables = self.db_class.list_tables(conn, self.db_schema)
 
         if self.table is not None:
             return {self.table: self.tables.get(self.table)}
@@ -154,10 +156,10 @@ class SqlAlchemyImportSource(ImportSource):
 
         return SqlAlchemyImportSource(
             self.original_spec,
-            self.db_type,
-            self.engine,
-            self.db_schema,
-            table,
+            db_type=self.db_type,
+            engine=self.engine,
+            db_schema=self.db_schema,
+            table=table,
             **meta_overrides,
         )
 
