@@ -1,6 +1,8 @@
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy
+from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer
+
 
 from .base import BaseDb
 
@@ -29,3 +31,7 @@ class Db_MySql(BaseDb):
         sqlalchemy.event.listen(engine, "checkout", _on_checkout)
 
         return engine
+
+    @classmethod
+    def create_preparer(cls, engine):
+        return MySQLIdentifierPreparer(engine.dialect)

@@ -16,6 +16,11 @@ class BaseDb:
         raise NotImplementedError()
 
     @classmethod
+    def create_preparer(cls, engine):
+        """Create an identifier preparer for the given engine."""
+        raise NotImplementedError()
+
+    @classmethod
     def _pool_class(cls):
         # Ordinarily, sqlalchemy engine's maintain a pool of connections ready to go.
         # When running tests, we run lots of kart commands, and each command creates an engine, and each engine maintains

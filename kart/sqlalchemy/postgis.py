@@ -1,6 +1,7 @@
 from binascii import unhexlify
 
 import sqlalchemy
+from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer
 import psycopg2
 from psycopg2.extensions import Binary, new_type, register_adapter, register_type
 
@@ -107,3 +108,7 @@ class Db_Postgis(BaseDb):
         sqlalchemy.event.listen(engine, "checkout", _on_checkout)
 
         return engine
+
+    @classmethod
+    def create_preparer(cls, engine):
+        return PGIdentifierPreparer(engine.dialect)

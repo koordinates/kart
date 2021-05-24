@@ -22,7 +22,7 @@ from .exceptions import (
 from .geometry import Geometry, ogr_to_gpkg_geom
 from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
-from .output_util import dump_json_output, get_input_mode, InputMode
+from .output_util import dump_json_output
 from .schema import Schema, ColumnSchema
 from .sqlalchemy.gpkg import Db_GPKG
 from .sqlalchemy.postgis import Db_Postgis
@@ -269,24 +269,6 @@ class OgrImportSource(ImportSource):
             for table_name, pretty_name in names.items():
                 click.echo(f"  {table_name} - {pretty_name}")
         return names
-
-    def prompt_for_table(self, prompt):
-        table_list = list(self.get_tables().keys())
-
-        if len(table_list) == 1:
-            return table_list[0]
-        else:
-            self.print_table_list()
-            if get_input_mode() == InputMode.NO_INPUT:
-                raise NotFound("No table specified", exit_code=NO_TABLE)
-            t_choices = click.Choice(choices=table_list)
-            t_default = table_list[0] if len(table_list) == 1 else None
-            return click.prompt(
-                f"\n{prompt}",
-                type=t_choices,
-                show_choices=False,
-                default=t_default,
-            )
 
     def __str__(self):
         s = str(self.source)
