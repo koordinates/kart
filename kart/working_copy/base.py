@@ -583,8 +583,23 @@ class BaseWorkingCopy:
         return False
 
     def meta_items(self, dataset):
-        """Returns all the meta items for the given dataset from the working copy DB."""
-        raise NotImplementedError()
+        """
+        Extract all the metadata for this table and convert to dataset V2 format.
+        Note that the extracted schema will not be aligned to any existing schema
+        - the generated column IDs are stable, but do not necessarily match the ones in the dataset.
+        Calling Schema.align_* is required to find how the columns matches the existing schema.
+        """
+
+        # Column IDs are generated deterministically from the column contents and the current state.
+        # That way, they don't vary at random if the same command is run twice in a row, but
+        # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
+        # for two unrelated columns.
+        id_salt = f"{self.engine.url} {self.db_schema} {dataset.table_name} {self.get_db_tree()}"
+
+        with self.session() as sess:
+            yield from self.adapter.all_v2_meta_items(
+                sess, self.db_schema, dataset.table_name, id_salt=id_salt
+            )
 
     def diff_db_to_tree_feature(
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False

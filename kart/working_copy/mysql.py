@@ -234,58 +234,6 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         yield
         self._create_triggers(sess, dataset)
 
-    def meta_items(self, dataset):
-        with self.session() as sess:
-            title = sess.scalar(
-                """
-                SELECT table_comment FROM information_schema.tables
-                WHERE table_schema=:table_schema AND table_name=:table_name;
-                """,
-                {"table_schema": self.db_schema, "table_name": dataset.table_name},
-            )
-            yield "title", title
-
-            table_info_sql = """
-                SELECT
-                    C.column_name, C.ordinal_position, C.data_type, C.srs_id,
-                    C.character_maximum_length, C.numeric_precision, C.numeric_scale,
-                    KCU.ordinal_position AS pk_ordinal_position
-                FROM information_schema.columns C
-                LEFT OUTER JOIN information_schema.key_column_usage KCU
-                ON (KCU.table_schema = C.table_schema)
-                AND (KCU.table_name = C.table_name)
-                AND (KCU.column_name = C.column_name)
-                WHERE C.table_schema=:table_schema AND C.table_name=:table_name
-                ORDER BY C.ordinal_position;
-            """
-            r = sess.execute(
-                table_info_sql,
-                {"table_schema": self.db_schema, "table_name": dataset.table_name},
-            )
-            mysql_table_info = list(r)
-
-            spatial_ref_sys_sql = """
-                SELECT SRS.* FROM information_schema.st_spatial_reference_systems SRS
-                LEFT OUTER JOIN information_schema.st_geometry_columns GC ON (GC.srs_id = SRS.srs_id)
-                WHERE GC.table_schema=:table_schema AND GC.table_name=:table_name;
-            """
-            r = sess.execute(
-                spatial_ref_sys_sql,
-                {"table_schema": self.db_schema, "table_name": dataset.table_name},
-            )
-            mysql_spatial_ref_sys = list(r)
-
-            id_salt = f"{self.db_schema} {dataset.table_name} {self.get_db_tree()}"
-            schema = KartAdapter_MySql.sqlserver_to_v2_schema(
-                mysql_table_info, mysql_spatial_ref_sys, id_salt
-            )
-            yield "schema.json", schema.to_column_dicts()
-
-            for crs_info in mysql_spatial_ref_sys:
-                wkt = crs_info["DEFINITION"]
-                id_str = crs_util.get_identifier_str(wkt)
-                yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
-
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):
         old_type = old_col_dict["dataType"]

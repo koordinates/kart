@@ -92,11 +92,13 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         )
 
     @classmethod
-    def all_v2_meta_items(cls, sess, table_name, id_salt=None):
+    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
         """
+        assert not db_schema
+
         gpkg_meta_items = dict(cls._gpkg_meta_items_from_db(sess, table_name))
         yield from cls.all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt)
 

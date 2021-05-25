@@ -293,26 +293,6 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
             sess.execute(GpkgTables.gpkg_metadata_reference.insert(), params)
 
-    def meta_items(self, dataset):
-        """
-        Extract all the metadata of this GPKG and convert to dataset V2 format.
-        Note that the extracted schema will not be aligned to any existing schema
-        - the generated column IDs are stable, but do not necessarily match the ones in the dataset.
-        Calling Schema.align_* is required to find how the columns matches the existing schema.
-        """
-
-        # Column IDs are generated deterministically from the column contents and the current state.
-        # That way, they don't vary at random if the same command is run twice in a row, but
-        # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
-        # for two unrelated columns.
-        gpkg_name = os.path.basename(self.path)
-        id_salt = f"{gpkg_name} {dataset.table_name} {self.get_db_tree()}"
-
-        with self.session() as sess:
-            yield from self.adapter.all_v2_meta_items(
-                sess, dataset.table_name, id_salt=id_salt
-            )
-
     # Some types are approximated as text in GPKG - see super()._remove_hidden_meta_diffs
     @classmethod
     def try_align_schema_col(cls, old_col_dict, new_col_dict):

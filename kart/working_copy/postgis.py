@@ -234,60 +234,6 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
             """
         )
 
-    def meta_items(self, dataset):
-        with self.session() as sess:
-            title = sess.scalar(
-                "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
-                {"table_identifier": f"{self.db_schema}.{dataset.table_name}"},
-            )
-            yield "title", title
-
-            table_info_sql = """
-                SELECT
-                    C.column_name, C.ordinal_position, C.data_type, C.udt_name,
-                    C.character_maximum_length, C.numeric_precision, C.numeric_scale,
-                    KCU.ordinal_position AS pk_ordinal_position,
-                    upper(postgis_typmod_type(A.atttypmod)) AS geometry_type,
-                    postgis_typmod_srid(A.atttypmod) AS geometry_srid
-                FROM information_schema.columns C
-                LEFT OUTER JOIN information_schema.key_column_usage KCU
-                ON (KCU.table_schema = C.table_schema)
-                AND (KCU.table_name = C.table_name)
-                AND (KCU.column_name = C.column_name)
-                LEFT OUTER JOIN pg_attribute A
-                ON (A.attname = C.column_name)
-                AND (A.attrelid = (C.table_schema || '.' || C.table_name)::regclass::oid)
-                WHERE C.table_schema=:table_schema AND C.table_name=:table_name
-                ORDER BY C.ordinal_position;
-            """
-            r = sess.execute(
-                table_info_sql,
-                {"table_schema": self.db_schema, "table_name": dataset.table_name},
-            )
-            pg_table_info = list(r)
-
-            spatial_ref_sys_sql = """
-                SELECT SRS.* FROM spatial_ref_sys SRS
-                LEFT OUTER JOIN geometry_columns GC ON (GC.srid = SRS.srid)
-                WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
-            """
-            r = sess.execute(
-                spatial_ref_sys_sql,
-                {"table_schema": self.db_schema, "table_name": dataset.table_name},
-            )
-            pg_spatial_ref_sys = list(r)
-
-            id_salt = f"{self.db_schema} {dataset.table_name} {self.get_db_tree()}"
-            schema = KartAdapter_Postgis.postgis_to_v2_schema(
-                pg_table_info, pg_spatial_ref_sys, id_salt
-            )
-            yield "schema.json", schema.to_column_dicts()
-
-            for crs_info in pg_spatial_ref_sys:
-                wkt = crs_info["srtext"]
-                id_str = crs_util.get_identifier_str(wkt)
-                yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
-
     # Postgis has nowhere obvious to put this metadata.
     _UNSUPPORTED_META_ITEMS = ("description", "metadata/dataset.json", "metadata.xml")
 

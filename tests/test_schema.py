@@ -324,6 +324,14 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
 
 def check_points_diff_output(r, output_format):
     if output_format == "text":
+
+        # New column "colour" has an ID is deterministically generated from the commit hash,
+        # but we don't care exactly what it is.
+        try:
+            colour_id_line = r.stdout.splitlines()[42]
+        except KeyError:
+            colour_id_line = ""
+
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
             '--- nz_pa_points_topo_150k:meta:schema.json',
@@ -368,7 +376,7 @@ def check_points_diff_output(r, output_format):
             '      "length": 75',
             '    },',
             '+   {',
-            '+     "id": "28c65b9a-2cd2-5507-a5b1-b3267c513fc3",',
+            colour_id_line,
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "length": 32',
@@ -394,6 +402,16 @@ def check_points_diff_output(r, output_format):
             '+                                   colour = red',
         ]
     elif output_format == "json":
+        # New column "colour" has an ID is deterministically generated from the commit hash,
+        # but we don't care exactly what it is.
+        try:
+            schema_json = json.loads(r.stdout)["kart.diff/v1+hexwkb"][
+                "nz_pa_points_topo_150k"
+            ]["meta"]["schema.json"]
+            colour_id = schema_json["+"][-1]["id"]
+        except KeyError:
+            colour_id = None
+
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "kart.diff/v1+hexwkb": {
@@ -481,7 +499,7 @@ def check_points_diff_output(r, output_format):
                                 },
                                 {
                                     "dataType": "text",
-                                    "id": "28c65b9a-2cd2-5507-a5b1-b3267c513fc3",
+                                    "id": colour_id,
                                     "length": 32,
                                     "name": "colour",
                                 },

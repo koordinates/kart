@@ -207,7 +207,9 @@ class SqlAlchemyImportSource(ImportSource):
 
         with self.engine.connect() as conn:
             return dict(
-                self.db_type.adapter.all_v2_meta_items(conn, self.table, id_salt)
+                self.db_type.adapter.all_v2_meta_items(
+                    conn, self.db_schema, self.table, id_salt
+                )
             )
 
     def crs_definitions(self):

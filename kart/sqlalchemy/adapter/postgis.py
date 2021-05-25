@@ -77,6 +77,61 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         return ", ".join(result)
 
     @classmethod
+    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
+        """
+        Generate all V2 meta items for the given table.
+        Varying the id_salt varies the ids that are generated for the schema.json item.
+        """
+        title = sess.scalar(
+            "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
+            {"table_identifier": f"{db_schema}.{table_name}"},
+        )
+        yield "title", title
+
+        table_info_sql = """
+            SELECT
+                C.column_name, C.ordinal_position, C.data_type, C.udt_name,
+                C.character_maximum_length, C.numeric_precision, C.numeric_scale,
+                KCU.ordinal_position AS pk_ordinal_position,
+                upper(postgis_typmod_type(A.atttypmod)) AS geometry_type,
+                postgis_typmod_srid(A.atttypmod) AS geometry_srid
+            FROM information_schema.columns C
+            LEFT OUTER JOIN information_schema.key_column_usage KCU
+            ON (KCU.table_schema = C.table_schema)
+            AND (KCU.table_name = C.table_name)
+            AND (KCU.column_name = C.column_name)
+            LEFT OUTER JOIN pg_attribute A
+            ON (A.attname = C.column_name)
+            AND (A.attrelid = (C.table_schema || '.' || C.table_name)::regclass::oid)
+            WHERE C.table_schema=:table_schema AND C.table_name=:table_name
+            ORDER BY C.ordinal_position;
+        """
+        r = sess.execute(
+            table_info_sql,
+            {"table_schema": db_schema, "table_name": table_name},
+        )
+        pg_table_info = list(r)
+
+        spatial_ref_sys_sql = """
+            SELECT SRS.* FROM spatial_ref_sys SRS
+            LEFT OUTER JOIN geometry_columns GC ON (GC.srid = SRS.srid)
+            WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
+        """
+        r = sess.execute(
+            spatial_ref_sys_sql,
+            {"table_schema": db_schema, "table_name": table_name},
+        )
+        pg_spatial_ref_sys = list(r)
+
+        schema = cls.postgis_to_v2_schema(pg_table_info, pg_spatial_ref_sys, id_salt)
+        yield "schema.json", schema.to_column_dicts()
+
+        for crs_info in pg_spatial_ref_sys:
+            wkt = crs_info["srtext"]
+            id_str = crs_util.get_identifier_str(wkt)
+            yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
+
+    @classmethod
     def v2_type_to_pg_type(cls, column_schema, v2_obj):
         """Convert a v2 schema type to a postgis type."""
 

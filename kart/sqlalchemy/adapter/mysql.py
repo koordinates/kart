@@ -92,6 +92,57 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         return ", ".join(result)
 
     @classmethod
+    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt=None):
+        title = sess.scalar(
+            """
+            SELECT table_comment FROM information_schema.tables
+            WHERE table_schema=:table_schema AND table_name=:table_name;
+            """,
+            {"table_schema": db_schema, "table_name": table_name},
+        )
+        yield "title", title
+
+        table_info_sql = """
+            SELECT
+                C.column_name, C.ordinal_position, C.data_type, C.srs_id,
+                C.character_maximum_length, C.numeric_precision, C.numeric_scale,
+                KCU.ordinal_position AS pk_ordinal_position
+            FROM information_schema.columns C
+            LEFT OUTER JOIN information_schema.key_column_usage KCU
+            ON (KCU.table_schema = C.table_schema)
+            AND (KCU.table_name = C.table_name)
+            AND (KCU.column_name = C.column_name)
+            WHERE C.table_schema=:table_schema AND C.table_name=:table_name
+            ORDER BY C.ordinal_position;
+        """
+        r = sess.execute(
+            table_info_sql,
+            {"table_schema": db_schema, "table_name": table_name},
+        )
+        mysql_table_info = list(r)
+
+        spatial_ref_sys_sql = """
+            SELECT SRS.* FROM information_schema.st_spatial_reference_systems SRS
+            LEFT OUTER JOIN information_schema.st_geometry_columns GC ON (GC.srs_id = SRS.srs_id)
+            WHERE GC.table_schema=:table_schema AND GC.table_name=:table_name;
+        """
+        r = sess.execute(
+            spatial_ref_sys_sql,
+            {"table_schema": db_schema, "table_name": table_name},
+        )
+        mysql_spatial_ref_sys = list(r)
+
+        schema = KartAdapter_MySql.sqlserver_to_v2_schema(
+            mysql_table_info, mysql_spatial_ref_sys, id_salt
+        )
+        yield "schema.json", schema.to_column_dicts()
+
+        for crs_info in mysql_spatial_ref_sys:
+            wkt = crs_info["DEFINITION"]
+            id_str = crs_util.get_identifier_str(wkt)
+            yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
+
+    @classmethod
     def v2_column_schema_to_mysql_spec(cls, column_schema, v2_obj):
         name = column_schema.name
         mysql_type = cls._v2_type_to_mysql_type(column_schema, v2_obj)
