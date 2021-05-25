@@ -8,7 +8,6 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 import click
 from osgeo import gdal, ogr
-import sqlalchemy
 
 
 from . import crs_util
@@ -19,12 +18,11 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
-from .geometry import Geometry, ogr_to_gpkg_geom
+from .geometry import ogr_to_gpkg_geom
 from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output
 from .schema import Schema, ColumnSchema
-from .sqlalchemy.postgis import Db_Postgis
 from .utils import ungenerator, chunk
 
 
@@ -620,168 +618,43 @@ class ESRIShapefileImportSource(OgrImportSource):
         return True
 
 
-class SQLAlchemyOgrImportSource(OgrImportSource):
+def postgres_url_to_ogr_conn_str(url):
     """
-    An import source that fetches features via SQLAlchemy,
-    instead of via OGR.
+    Takes a URL ('postgresql://..')
+    and turns it into a key/value connection string, prefixed by 'PG:' for OGR.
+
+    libpq actually handles URIs fine, but OGR doesn't :(
+    So to import via OGR we have to convert them.
+
+    https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+
+    ^ These docs say these URLs can contain multiple hostnames or ports,
+    but we don't handle that.
     """
 
-    CURSOR_SIZE = 10000
+    url = urlsplit(url)
+    scheme = url.scheme.lower()
+    if scheme not in ("postgres", "postgresql"):
+        raise ValueError("Bad scheme")
 
-    @property
-    def engine(self):
-        raise NotImplementedError
+    # Start with everything from the querystring.
+    params = dict(parse_qsl(url.query))
 
-    @ungenerator(dict)
-    def _sqlalchemy_row_to_kart_feature(self, sa_row):
-        for key, value in sa_row.items():
-            if key in self.geometry_column_names:
-                yield (key, Geometry.of(value))
-            else:
-                yield key, value
+    # Each of these fields can come from the main part of the URL,
+    # OR can come from the querystring.
+    # If both are specified, the querystring has precedence.
+    # So in 'postgresql://host1/?host=host2', the resultant host is 'host2'
+    if url.username:
+        params.setdefault("user", url.username)
+    if url.password:
+        params.setdefault("password", url.password)
+    if url.hostname:
+        params.setdefault("host", unquote(url.hostname))
+    if url.port:
+        params.setdefault("port", url.port)
+    dbname = (url.path or "/")[1:]
+    if dbname:
+        params.setdefault("dbname", dbname)
 
-    def _sqlalchemy_to_kart_features(self, resultset):
-        for sa_row in resultset:
-            yield self._sqlalchemy_row_to_kart_feature(sa_row)
-
-    def features(self):
-        """
-        Overrides the OGR implementation for performance reasons
-        (it turns out that OGR feature iterators can be quite slow!)
-        """
-        with self.engine.connect() as conn:
-            r = (
-                conn.execution_options(stream_results=True)
-                .execute(f"SELECT * FROM {self.quote_ident(self.table)};")
-                .yield_per(self.CURSOR_SIZE)
-            )
-            yield from self._sqlalchemy_to_kart_features(r)
-
-    def get_features(self, row_pks, *, ignore_missing=False):
-        with self.engine.connect() as conn:
-            pk_field = self.primary_key
-            batch_query = sqlalchemy.text(
-                f"SELECT * FROM {self.quote_ident(self.table)} "
-                f"WHERE {self.quote_ident(pk_field)} IN :pks ;"
-            ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
-
-            for batch in chunk(self._first_pk_values(row_pks), 1000):
-                r = conn.execute(batch_query, {"pks": batch})
-                yield from self._sqlalchemy_to_kart_features(r)
-
-    def sample_geometry(self, geom_col):
-        with self.engine.connect() as conn:
-            geom = conn.scalar(
-                f"""
-                SELECT {self.quote_ident(geom_col)} FROM {self.quote_ident(self.table)}
-                WHERE {self.quote_ident(geom_col)} IS NOT NULL LIMIT 1;
-                """
-            )
-            return Geometry.of(geom)
-
-
-class PostgreSQLImportSource(SQLAlchemyOgrImportSource):
-    @classmethod
-    def postgres_url_to_ogr_conn_str(cls, url):
-        """
-        Takes a URL ('postgresql://..')
-        and turns it into a key/value connection string, prefixed by 'PG:' for OGR.
-
-        libpq actually handles URIs fine, but OGR doesn't :(
-        So to import via OGR we have to convert them.
-
-        https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-
-        ^ These docs say these URLs can contain multiple hostnames or ports,
-        but we don't handle that.
-        """
-
-        url = urlsplit(url)
-        scheme = url.scheme.lower()
-        if scheme not in ("postgres", "postgresql"):
-            raise ValueError("Bad scheme")
-
-        # Start with everything from the querystring.
-        params = dict(parse_qsl(url.query))
-
-        # Each of these fields can come from the main part of the URL,
-        # OR can come from the querystring.
-        # If both are specified, the querystring has precedence.
-        # So in 'postgresql://host1/?host=host2', the resultant host is 'host2'
-        if url.username:
-            params.setdefault("user", url.username)
-        if url.password:
-            params.setdefault("password", url.password)
-        if url.hostname:
-            params.setdefault("host", unquote(url.hostname))
-        if url.port:
-            params.setdefault("port", url.port)
-        dbname = (url.path or "/")[1:]
-        if dbname:
-            params.setdefault("dbname", dbname)
-
-        conn_str = " ".join(sorted(f"{k}={v}" for (k, v) in params.items()))
-        return f"PG:{conn_str}"
-
-    @classmethod
-    def handle_source_string(cls, source):
-        if "://" not in source:
-            return None
-        try:
-            return cls.postgres_url_to_ogr_conn_str(source), ["PG"]
-        except ValueError:
-            return None
-
-    @classmethod
-    def _ogr_open(cls, ogr_source, **open_kwargs):
-        open_options = open_kwargs.setdefault("open_options", [])
-        # don't only list tables listed in geometry_columns
-        open_options.append("LIST_ALL_TABLES=YES")
-        return super()._ogr_open(ogr_source, **open_kwargs)
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def engine(self):
-        conn_str = self.source
-        if conn_str.startswith("OGR:"):
-            conn_str = conn_str[4:]
-        if conn_str.startswith("PG:"):
-            conn_str = conn_str[3:]
-        # this will either be a URL or a key=value conn str
-        return Db_Postgis.create_engine(conn_str)
-
-    def _get_primary_key_value(self, ogr_feature, name):
-        try:
-            return ogr_feature.GetField(name)
-        except KeyError:
-            # OGR uses integer PKs as the 'FID', but then *doesn't*
-            # expose them as fields.
-            # In that case we have to call GetFID()
-            return ogr_feature.GetFID()
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def primary_key(self):
-        if self._primary_key:
-            return self._primary_key
-        with self.engine.connect() as conn:
-            r = conn.execute(
-                sqlalchemy.text(
-                    """
-                SELECT a.attname
-                FROM   pg_index i
-                JOIN   pg_attribute a ON a.attrelid = i.indrelid
-                                     AND a.attnum = ANY(i.indkey)
-                WHERE  i.indrelid = (:table)::regclass
-                AND    i.indisprimary;
-                """
-                ),
-                {"table": self.table},
-            )
-            rows = list(r)
-            num_pks = len(rows)
-            if num_pks == 0:
-                return None
-            # TODO: handle multi-column PKs. Ignoring for now.
-            assert num_pks == 1
-            return rows[0][0]
+    conn_str = " ".join(sorted(f"{k}={v}" for (k, v) in params.items()))
+    return f"PG:{conn_str}"

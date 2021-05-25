@@ -14,7 +14,8 @@ from kart.dataset2 import Dataset2
 from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
-from kart.ogr_import_source import OgrImportSource, PostgreSQLImportSource
+from kart.import_source import ImportSource
+from kart.ogr_import_source import postgres_url_to_ogr_conn_str
 from kart.pk_generation import PkGeneratingImportSource
 from kart.repo import KartRepo
 
@@ -458,9 +459,7 @@ def quote_ident(part):
 
 @pytest.fixture()
 def postgis_layer(postgis_db, data_archive):
-    postgres_conn_str = PostgreSQLImportSource.postgres_url_to_ogr_conn_str(
-        os.environ["KART_POSTGRES_URL"]
-    )
+    postgres_conn_str = postgres_url_to_ogr_conn_str(os.environ["KART_POSTGRES_URL"])
 
     @contextlib.contextmanager
     def _postgis_layer(archive_name, gpkg_name, table):
@@ -523,7 +522,7 @@ def _test_postgis_import(
 
     meta_items = dict(dataset.meta_items())
     meta_item_keys = set(meta_items.keys())
-    assert {"title", "description", "schema.json"}.issubset(meta_item_keys)
+    assert "schema.json" in meta_item_keys
     crs_keys = meta_item_keys - {"title", "description", "schema.json"}
     assert len(crs_keys) == 1
     crs_key = next(iter(crs_keys))
@@ -835,10 +834,8 @@ def test_postgis_import_replace_no_ids(
 
         r = cli_runner.invoke(["--repo", str(repo_path.resolve()), "show"])
         assert r.exit_code == 0, r.stderr
-        assert r.stdout.splitlines()[-4:] == [
-            "--- nz_waca_adjustments_view:meta:title",
+        assert r.stdout.splitlines()[-2:] == [
             "+++ nz_waca_adjustments_view:meta:title",
-            "- ",
             "+ New title",
         ]
 
@@ -1020,7 +1017,7 @@ def test_write_feature_performance(
 
             repo = KartRepo(repo_path)
 
-            source = OgrImportSource.open(data / source_gpkg, table=table)
+            source = ImportSource.open(data / source_gpkg, table=table)
             with source:
                 dataset = Dataset2(None, table)
                 feature_iter = itertools.cycle(list(source.features()))
@@ -1057,7 +1054,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
 
             repo = KartRepo(repo_path)
 
-            source = OgrImportSource.open(
+            source = ImportSource.open(
                 data / "nz-pa-points-topo-150k.gpkg", table=table
             )
 

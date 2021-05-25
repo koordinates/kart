@@ -1,7 +1,9 @@
 from osgeo.osr import SpatialReference
+import sqlalchemy
 
 
 from kart import crs_util
+from kart.utils import ungenerator
 from kart.schema import Schema, ColumnSchema
 from kart.sqlalchemy.postgis import Db_Postgis
 from kart.sqlalchemy.adapter.base import BaseKartAdapter
@@ -59,6 +61,8 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
     # Types that can't be roundtripped perfectly in PostGIS, and what they end up as.
     APPROXIMATED_TYPES = {("integer", 8): ("integer", 16)}
 
+    ZM_FLAG_TO_STRING = {0: "", 1: "M", 2: "Z", 3: "ZM"}
+
     @classmethod
     def v2_schema_to_sql_spec(cls, schema, v2_obj):
         """
@@ -112,22 +116,45 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         )
         pg_table_info = list(r)
 
-        spatial_ref_sys_sql = """
-            SELECT SRS.* FROM spatial_ref_sys SRS
-            LEFT OUTER JOIN geometry_columns GC ON (GC.srid = SRS.srid)
+        # Get all the information on the geometry columns that we can get without sampling the geometries:
+        geom_cols_info_sql = """
+            SELECT GC.f_geometry_column AS column_name, GC.srid, SRS.srtext
+            FROM geometry_columns GC
+            LEFT OUTER JOIN spatial_ref_sys SRS ON (GC.srid = SRS.srid)
             WHERE GC.f_table_schema=:table_schema AND GC.f_table_name=:table_name;
         """
         r = sess.execute(
-            spatial_ref_sys_sql,
+            geom_cols_info_sql,
             {"table_schema": db_schema, "table_name": table_name},
         )
-        pg_spatial_ref_sys = list(r)
+        geom_cols_info = [cls._filter_row_to_dict(row) for row in r]
 
-        schema = cls.postgis_to_v2_schema(pg_table_info, pg_spatial_ref_sys, id_salt)
+        # Improve the geometry information by sampling one geometry from each column, where available.
+        table_identifier = cls.preparer.format_table(
+            sqlalchemy.table(table_name, schema=db_schema)
+        )
+        for col_info in geom_cols_info:
+            c = col_info["column_name"]
+            row = sess.execute(
+                f"""
+                SELECT ST_Zmflag({cls.quote(c)}) AS zm,
+                ST_SRID({cls.quote(c)}) AS srid, SRS.srtext
+                FROM {table_identifier} LEFT OUTER JOIN spatial_ref_sys SRS
+                ON SRS.srid = ST_SRID({cls.quote(c)})
+                WHERE {cls.quote(c)} IS NOT NULL LIMIT 1;
+                """,
+            ).fetchone()
+            if row:
+                sampled_info = cls._filter_row_to_dict(row)
+                sampled_info['zm'] = cls.ZM_FLAG_TO_STRING.get(sampled_info.get('zm'))
+                # Original col_info from geometry_columns takes precedence, where it exists:
+                col_info.update({**sampled_info, **col_info})
+
+        schema = cls.postgis_to_v2_schema(pg_table_info, geom_cols_info, id_salt)
         yield "schema.json", schema.to_column_dicts()
 
-        for crs_info in pg_spatial_ref_sys:
-            wkt = crs_info["srtext"]
+        for col_info in geom_cols_info:
+            wkt = col_info["srtext"]
             id_str = crs_util.get_identifier_str(wkt)
             yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
@@ -183,24 +210,24 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             return "GEOMETRY"
 
     @classmethod
-    def postgis_to_v2_schema(cls, pg_table_info, pg_spatial_ref_sys, id_salt):
+    def postgis_to_v2_schema(cls, pg_table_info, geom_cols_info, id_salt):
         """Generate a V2 schema from the given postgis metadata tables."""
         return Schema(
             [
-                cls._postgis_to_column_schema(col, pg_spatial_ref_sys, id_salt)
+                cls._postgis_to_column_schema(col, geom_cols_info, id_salt)
                 for col in pg_table_info
             ]
         )
 
     @classmethod
-    def _postgis_to_column_schema(cls, pg_col_info, pg_spatial_ref_sys, id_salt):
+    def _postgis_to_column_schema(cls, pg_col_info, geom_cols_info, id_salt):
         """
         Given the postgis column info for a particular column, and some extra context in
         case it is a geometry column, converts it to a ColumnSchema. The extra context will
         only be used if the given pg_col_info is the geometry column.
         Parameters:
         pg_col_info - info about a single column from pg_table_info.
-        pg_spatial_ref_sys - rows of the "spatial_ref_sys" table that are referenced by this dataset.
+        geom_cols_info - a list of dicts, where keys are "column_name", "srid", "srtext", "zm".
         id_salt - the UUIDs of the generated ColumnSchema are deterministic and depend on
         the name and type of the column, and on this salt.
         """
@@ -209,14 +236,14 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         if pk_index is not None:
             pk_index -= 1
         data_type, extra_type_info = cls._pg_type_to_v2_type(
-            pg_col_info, pg_spatial_ref_sys
+            pg_col_info, geom_cols_info
         )
 
         col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
         return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
     @classmethod
-    def _pg_type_to_v2_type(cls, pg_col_info, pg_spatial_ref_sys):
+    def _pg_type_to_v2_type(cls, pg_col_info, geom_cols_info):
         pg_type = pg_col_info["data_type"].upper()
         v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(pg_type)
         if v2_type_info is None:
@@ -230,7 +257,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             extra_type_info = {}
 
         if v2_type == "geometry":
-            return cls._pg_type_to_v2_geometry_type(pg_col_info, pg_spatial_ref_sys)
+            return cls._pg_type_to_v2_geometry_type(pg_col_info, geom_cols_info)
 
         if v2_type == "text":
             length = pg_col_info["character_maximum_length"] or None
@@ -244,38 +271,36 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         return v2_type, extra_type_info
 
     @classmethod
-    def _pg_type_to_v2_geometry_type(cls, pg_col_info, pg_spatial_ref_sys):
+    def _pg_type_to_v2_geometry_type(cls, pg_col_info, geom_cols_info):
         """
         col_name - the name of the column.
-        pg_spatial_ref_sys - rows of the "spatial_ref_sys" table that are referenced by this dataset.
+        geom_cols_info - a list of dicts, where keys are "column_name", "srid", "srtext", "zm".
         """
+        name = pg_col_info["column_name"]
         geometry_type = pg_col_info["geometry_type"].upper()
         # Look for Z, M, or ZM suffix
-        geometry_type, m = cls._pop_suffix(geometry_type, "M")
-        geometry_type, z = cls._pop_suffix(geometry_type, "Z")
-        geometry_type = f"{geometry_type} {z}{m}".strip()
-
+        geometry_type, zm = cls._separate_zm_suffix(geometry_type)
         geometry_crs = None
-        crs_id = pg_col_info["geometry_srid"]
-        if crs_id:
-            crs_info = next(
-                (r for r in pg_spatial_ref_sys if r["srid"] == crs_id), None
-            )
-            if crs_info:
-                geometry_crs = crs_util.get_identifier_str(crs_info["srtext"])
+
+        geom_col_info = next(
+            (g for g in geom_cols_info if g["column_name"] == name), None
+        )
+        if geom_col_info:
+            zm = zm or geom_col_info.get("zm") or ""
+            wkt = geom_col_info.get("srtext")
+            if wkt:
+                geometry_crs = crs_util.get_identifier_str(wkt)
+
+        geometry_type = f"{geometry_type} {zm}".strip()
 
         return "geometry", {"geometryType": geometry_type, "geometryCRS": geometry_crs}
 
     @classmethod
-    def _pop_suffix(cls, geometry_type, suffix):
-        """
-        Returns (geometry-type-without-suffix, suffix) if geometry-type ends with suffix.
-        Otherwise just returns (geometry-type, "")
-        """
-        if geometry_type.endswith(suffix):
-            return geometry_type[:-1], suffix
-        else:
-            return geometry_type, ""
+    def _separate_zm_suffix(cls, geometry_type):
+        for suffix in ("ZM", "Z", "M"):
+            if geometry_type.endswith(suffix):
+                return geometry_type[: -len(suffix)].strip(), suffix
+        return geometry_type, ""
 
     @classmethod
     def generate_postgis_spatial_ref_sys(cls, v2_obj):
@@ -301,8 +326,9 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         return result
 
     @classmethod
-    def _dimension_count(cls, geometry_type):
-        # Look for Z, M, or ZM suffix
-        geometry_type, m = cls._pop_suffix(geometry_type, "M")
-        geometry_type, z = cls._pop_suffix(geometry_type, "Z")
-        return len(f"XY{z}{m}")
+    @ungenerator(dict)
+    def _filter_row_to_dict(cls, row):
+        """Turns a db row into a dict, but leaves out key-value pairs with falsey values."""
+        for key, value in zip(row.keys(), row):
+            if value:
+                yield key, value

@@ -26,6 +26,19 @@ class BaseDb:
         return cls.preparer.quote(identifier)
 
     @classmethod
+    def list_tables(cls, sess, db_schema=None):
+        """
+        Find all the user tables (not system tables) in the database (or in a specific db_schema).
+        Returns a dict of {table_name: table_title}
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def db_schema_searchpath(cls, sess):
+        """Returns a list of the db_schemas that the connection is configured to search in by default."""
+        raise NotImplementedError()
+
+    @classmethod
     def _pool_class(cls):
         # Ordinarily, sqlalchemy engine's maintain a pool of connections ready to go.
         # When running tests, we run lots of kart commands, and each command creates an engine, and each engine

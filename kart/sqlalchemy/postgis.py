@@ -139,3 +139,7 @@ class Db_Postgis(BaseDb):
             )
 
         return {row['name']: row['title'] for row in r}
+
+    @classmethod
+    def db_schema_searchpath(cls, sess):
+        return sess.scalar("SELECT current_schemas(true);")

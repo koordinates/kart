@@ -170,7 +170,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
             "table_name": table_name,
             "column_name": geom_columns[0].name,
             "geometry_type_name": type_name,
-            "srs_id": crs_util.get_identifier_int_from_dataset(v2_obj),
+            "srs_id": crs_util.get_identifier_int_from_dataset(v2_obj) or 0,
             "z": z,
             "m": m,
         }
@@ -508,7 +508,6 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     def _gpkg_meta_items_from_db(cls, sess, table_name, keys=None):
         """
         Returns metadata from the gpkg_* tables about this GPKG.
-        Keep this in sync with OgrImportSource.gpkg_meta_items for other datasource types.
         """
 
         QUERIES = {
