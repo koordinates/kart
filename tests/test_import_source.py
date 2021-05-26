@@ -28,7 +28,7 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
                     regularant INTEGER,
                     tumeric20_0 NUMERIC(20,0),
                     tumeric5_5 NUMERIC(5,5),
-                    flote FLOAT,
+                    reel REAL,
                     dubble DOUBLE PRECISION,
                     tumeric99_0 numeric(99,0),
                     tumeric4_0 numeric(4,0),
@@ -60,20 +60,17 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
     assert cols == {
         "bigant_pk": {"dataType": "integer", "primaryKeyIndex": 0, "size": 64},
         "bigant": {"dataType": "integer", "size": 64},
+        "reel": {"dataType": "float", "size": 32},
         "dubble": {"dataType": "float", "size": 64},
         "smallant": {"dataType": "integer", "size": 16},
         "regularant": {"dataType": "integer", "size": 32},
-        "tumeric20_0": {"dataType": "numeric", "precision": 20, "scale": 0},
-        "tumeric4_0": {"dataType": "numeric", "precision": 4, "scale": 0},
+        "tumeric": {"dataType": "numeric"},
+        "tumeric20_0": {"dataType": "numeric", "precision": 20},
+        "tumeric4_0": {"dataType": "numeric", "precision": 4},
         "tumeric5_5": {"dataType": "numeric", "precision": 5, "scale": 5},
-        "tumeric99_0": {"dataType": "numeric", "precision": 99, "scale": 0},
+        "tumeric99_0": {"dataType": "numeric", "precision": 99},
         "techs": {"dataType": "text"},
         "techs10": {"dataType": "text", "length": 100},
-        # these two are regrettable but currently unavoidable;
-        # ogr treats both floats and unqualified numerics as Real(0.0),
-        # so they're indistinguishable from doubles.
-        "tumeric": {"dataType": "float", "size": 64},
-        "flote": {"dataType": "float", "size": 64},
     }
 
     # Now generate a DBF file, and try again from there.
@@ -108,12 +105,13 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
         "regularant": {"dataType": "integer", "size": 32},
         "smallant": {"dataType": "integer", "size": 32},
         "dubble": {"dataType": "float", "size": 64},
-        "flote": {"dataType": "float", "size": 64},
         "techs": {"dataType": "text", "length": 80},
         "techs10": {"dataType": "text", "length": 100},
-        "tumeric": {"dataType": "float", "size": 64},
         "tumeric20_": {"dataType": "numeric", "precision": 20, "scale": 0},
         "tumeric4_0": {"dataType": "numeric", "precision": 4, "scale": 0},
         "tumeric5_5": {"dataType": "numeric", "precision": 5, "scale": 5},
         "tumeric99_": {"dataType": "numeric", "precision": 99, "scale": 0},
+        # These two types conversions are regrettable, but unavoidable as we are using OGR.
+        "reel": {"dataType": "float", "size": 64},
+        "tumeric": {"dataType": "float", "size": 64},
     }
