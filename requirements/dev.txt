@@ -20,7 +20,9 @@ colorama==0.4.4
     #   -c requirements/test.txt
     #   -r requirements/dev.in
 decorator==5.0.7
-    # via ipython
+    # via
+    #   ipdb
+    #   ipython
 execnet==1.8.0
     # via pytest-xdist
 importlib-metadata==4.0.1
@@ -33,7 +35,7 @@ iniconfig==1.1.1
     # via
     #   -c requirements/test.txt
     #   pytest
-ipdb==0.13.7
+ipdb==0.13.8
     # via -r requirements/dev.in
 ipython-genutils==0.2.0
     # via traitlets
