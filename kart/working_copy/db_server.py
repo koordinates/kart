@@ -1,6 +1,7 @@
 import functools
 import re
 from urllib.parse import urlsplit, urlunsplit
+from pathlib import PurePosixPath
 
 import click
 from sqlalchemy.exc import DBAPIError
@@ -61,7 +62,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
 
         if path_length != required_path_length:
             if (path_length + 1) == required_path_length:
-                suggested_path = url.path / cls.default_db_schema(repo)
+                suggested_path = PurePosixPath(url.path) / cls.default_db_schema(repo)
                 suggested_uri = urlunsplit(
                     [url.scheme, url.netloc, str(suggested_path), url.query, ""]
                 )

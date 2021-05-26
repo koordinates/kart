@@ -17,7 +17,7 @@ from .cli_util import (
 )
 from .exceptions import InvalidOperation
 from .import_source import ImportSource
-from .ogr_import_source import OgrImportSource, FORMAT_TO_OGR_MAP
+from .ogr_import_source import FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import KartRepo, PotentialRepo

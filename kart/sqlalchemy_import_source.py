@@ -4,6 +4,7 @@ import sys
 
 import click
 import sqlalchemy
+from sqlalchemy.orm import sessionmaker
 
 from .exceptions import (
     NotFound,
@@ -27,7 +28,7 @@ class SqlAlchemyImportSource(ImportSource):
     CURSOR_SIZE = 10000
 
     @classmethod
-    def open(cls, spec):
+    def open(cls, spec, table=None):
         db_type = DbType.from_spec(spec)
         if db_type is None:
             raise cls._bad_import_source_spec(spec)
@@ -42,7 +43,11 @@ class SqlAlchemyImportSource(ImportSource):
             raise NotFound(f"Couldn't find '{spec}'", exit_code=NO_IMPORT_SOURCE)
 
         path_length = db_type.path_length(spec)
-        longest_allowed_path_length = db_type.path_length_for_table
+        longest_allowed_path_length = (
+            db_type.path_length_for_table
+            if not table
+            else db_type.path_length_for_table_container
+        )
         shortest_allowed_path_length = max(
             db_type.path_length_for_table_container - 1, 0
         )
@@ -54,7 +59,6 @@ class SqlAlchemyImportSource(ImportSource):
 
         connect_url = spec
         db_schema = None
-        table = None
 
         # Handle the case where specification already points to a single table.
         if path_length == db_type.path_length_for_table:
@@ -141,7 +145,10 @@ class SqlAlchemyImportSource(ImportSource):
         else:
             click.secho("Tables found:", bold=True)
             for table_name, title in tables.items():
-                click.echo(f"  {table_name} - {title or ''}")
+                if title:
+                    click.echo(f"  {table_name} - {title}")
+                else:
+                    click.echo(f"  {table_name}")
         return tables
 
     def validate_table(self, table):
@@ -165,10 +172,11 @@ class SqlAlchemyImportSource(ImportSource):
                 return self.db_schema, table
 
         if self.db_schema is None and self.db_type is not DbType.GPKG:
-            matching_tables = [t for t in all_tables if t.endswith(f".{table}")]
-            if len(matching_tables) == 1:
-                db_schema, table = matching_tables[0].split('.', maxsplit=1)
-                return db_schema, table
+            with self.engine.connect() as conn:
+                db_schemas = self.db_class.db_schema_searchpath(conn)
+            for db_schema in db_schemas:
+                if f"{db_schema}.{table}" in all_tables:
+                    return db_schema, table
 
         raise NotFound(
             f"Table '{table}' not found",
@@ -179,19 +187,18 @@ class SqlAlchemyImportSource(ImportSource):
         meta_overrides = {**self.meta_overrides, **meta_overrides}
         db_schema, table = self.validate_table(table)
 
-        if primary_key is not None:
-            raise NotYetImplemented(
-                "Sorry, overriding the primary key is not yet supported"
-            )
-
-        return SqlAlchemyImportSource(
+        result = SqlAlchemyImportSource(
             self.original_spec,
             db_type=self.db_type,
             engine=self.engine,
-            db_schema=self.db_schema,
+            db_schema=db_schema,
             table=table,
             **meta_overrides,
         )
+
+        if primary_key is not None:
+            result.override_primary_key(primary_key)
+        return result
 
     def get_meta_item(self, name):
         if name in self.meta_overrides:
@@ -205,12 +212,32 @@ class SqlAlchemyImportSource(ImportSource):
     def meta_items(self):
         id_salt = f"{self.engine.url} {self.db_schema} {self.table}"
 
-        with self.engine.connect() as conn:
+        with sessionmaker(bind=self.engine)() as sess:
             return dict(
                 self.db_type.adapter.all_v2_meta_items(
-                    conn, self.db_schema, self.table, id_salt
+                    sess, self.db_schema, self.table, id_salt
                 )
             )
+
+    def override_primary_key(self, new_primary_key):
+        """Modify the schema such that the given column is the primary key."""
+
+        def _modify_col(col):
+            pk_index = 0 if col["name"] == new_primary_key else None
+            return {**col, **{"primaryKeyIndex": pk_index}}
+
+        schema = self.get_meta_item("schema.json")
+        new_schema = [_modify_col(c) for c in schema]
+        self.meta_overrides["schema.json"] = new_schema
+
+        # Reload schema if it has been cached:
+        self._schema = self._init_schema()
+
+        if not self.schema.pk_columns:
+            raise click.UsageError(
+                f"Cannot use column '{new_primary_key}' as primary key - column not found"
+            )
+        assert self.schema.pk_columns[0].name == new_primary_key
 
     def crs_definitions(self):
         for key, value in self.meta_items.items():
@@ -219,7 +246,7 @@ class SqlAlchemyImportSource(ImportSource):
 
     @ungenerator(dict)
     def _sqlalchemy_row_to_kart_feature(self, sa_row):
-        # TODO - this only works for GPKG. Use the adapter code from working copies.
+        # TODO - once the type adapters are being used, this won't be needed.
         for key, value in sa_row.items():
             if key in self.geometry_column_names:
                 yield (key, Geometry.of(value))
@@ -250,11 +277,19 @@ class SqlAlchemyImportSource(ImportSource):
             yield x[0]
 
     def get_features(self, row_pks, *, ignore_missing=False):
+        pk_names = [c.name for c in self.schema.pk_columns]
+        if len(pk_names) != 1:
+            raise NotYetImplemented(
+                "Sorry, importing specific IDs is supported only when there is one primary key column:\n"
+                + ", ".join(pk_names)
+            )
+
+        [pk_name] = pk_names
+
         with self.engine.connect() as conn:
-            pk_field = self.primary_key
             batch_query = sqlalchemy.text(
                 f"SELECT * FROM {self.quote(self.table)} "
-                f"WHERE {self.quote(pk_field)} IN :pks ;"
+                f"WHERE {self.quote(pk_name)} IN :pks ;"
             ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
 
             for batch in chunk(self._first_pk_values(row_pks), 1000):
@@ -265,9 +300,3 @@ class SqlAlchemyImportSource(ImportSource):
     @functools.lru_cache(maxsize=1)
     def geometry_column_names(self):
         return [c.name for c in self.schema.geometry_columns]
-
-    @property
-    @functools.lru_cache(maxsize=1)
-    def primary_key(self):
-        with self.engine.connect() as conn:
-            return self.db_class.pk_name(conn, table=self.table)
