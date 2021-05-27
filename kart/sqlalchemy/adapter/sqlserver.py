@@ -1,14 +1,18 @@
-from kart import crs_util
-from kart.geometry import Geometry
-from kart.schema import Schema, ColumnSchema
-from kart.sqlalchemy.sqlserver import Db_SqlServer
-from kart.sqlalchemy.adapter.base import BaseKartAdapter
-
 from sqlalchemy import literal_column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function
-from sqlalchemy.types import UserDefinedType
+
+
+from kart import crs_util
+from kart.geometry import Geometry
+from kart.schema import Schema, ColumnSchema
+from kart.sqlalchemy.sqlserver import Db_SqlServer
+from kart.sqlalchemy.adapter.base import (
+    BaseKartAdapter,
+    ConverterType,
+    aliased_converter_type,
+)
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
@@ -383,17 +387,18 @@ def compile_instance_function(element, compiler, **kw):
     return "(%s).%s()" % (element.clauses, element.name)
 
 
-class GeometryType(UserDefinedType):
-    """UserDefinedType so that V2 geometry is adapted to MS binary format."""
+@aliased_converter_type
+class GeometryType(ConverterType):
+    """ConverterType so that V2 geometry is adapted to MS binary format."""
 
     def __init__(self, crs_id):
         self.crs_id = crs_id
 
-    def bind_processor(self, dialect):
+    def python_prewrite(self, geom):
         # 1. Writing - Python layer - convert Kart geometry to WKB
-        return lambda geom: geom.to_wkb()
+        return geom.to_wkb() if geom else None
 
-    def bind_expression(self, bindvalue):
+    def sql_write(self, bindvalue):
         # 2. Writing - SQL layer - wrap in call to STGeomFromWKB to convert WKB to MS binary.
         return Function(
             quoted_name("geometry::STGeomFromWKB", False),
@@ -402,28 +407,29 @@ class GeometryType(UserDefinedType):
             type_=self,
         )
 
-    def column_expression(self, col):
+    def sql_read(self, column):
         # 3. Reading - SQL layer - append with call to .AsBinaryZM() to convert MS binary to WKB.
-        return InstanceFunction("AsBinaryZM", col, type_=self)
+        return InstanceFunction("AsBinaryZM", column, type_=self)
 
-    def result_processor(self, dialect, coltype):
+    def python_postread(self, wkb):
         # 4. Reading - Python layer - convert WKB to Kart geometry.
-        return lambda wkb: Geometry.from_wkb(wkb)
+        return Geometry.from_wkb(wkb)
 
 
-class BaseDateOrTimeType(UserDefinedType):
+@aliased_converter_type
+class BaseDateOrTimeType(ConverterType):
     """
-    UserDefinedType so we read dates, times, and datetimes as text.
+    ConverterType so we read dates, times, and datetimes as text.
     They are stored as date / time / datetime in SQL Server, but read back out as text.
     """
 
-    def column_expression(self, col):
+    def sql_read(self, column):
         # When reading, convert dates and times to strings using style 127: ISO8601 with time zone Z.
         # https://docs.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql
         return Function(
             "CONVERT",
             literal_column("NVARCHAR"),
-            col,
+            column,
             literal_column("127"),
             type_=self,
         )

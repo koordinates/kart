@@ -2,14 +2,15 @@ from datetime import datetime
 import re
 
 
-from sqlalchemy.types import UserDefinedType
-
-
 from kart import crs_util
 from kart.geometry import normalise_gpkg_geom
 from kart.schema import Schema, ColumnSchema
 from kart.sqlalchemy.gpkg import Db_GPKG
-from kart.sqlalchemy.adapter.base import BaseKartAdapter
+from kart.sqlalchemy.adapter.base import (
+    BaseKartAdapter,
+    ConverterType,
+    aliased_converter_type,
+)
 from kart.timestamps import datetime_to_iso8601_utc
 
 
@@ -591,31 +592,26 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         return None
 
 
-class GeometryType(UserDefinedType):
-    """UserDefinedType so that GPKG geometry is normalised to V2 format."""
+@aliased_converter_type
+class GeometryType(ConverterType):
+    """ConverterType so that GPKG geometry is normalised to V2 format."""
 
-    def result_processor(self, dialect, coltype):
-        def process(gpkg_bytes):
-            # Its possible in GPKG to put arbitrary values in columns, regardless of type.
-            # We don't try to convert them here - we let the commit validation step report this as an error.
-            if not isinstance(gpkg_bytes, bytes):
-                return gpkg_bytes
-            # We normalise geometries to avoid spurious diffs - diffs where nothing
-            # of any consequence has changed (eg, only endianness has changed).
-            # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
-            # but only one per column at most.
-            return normalise_gpkg_geom(gpkg_bytes)
+    def python_postread(self, geom):
+        # We normalise geometries to avoid spurious diffs - diffs where nothing
+        # of any consequence has changed (eg, only endianness has changed).
+        # This includes setting the SRID to zero for each geometry so that we don't store a separate SRID per geometry,
+        # but only one per column at most.
 
-        return process
+        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+        # We don't try to convert them here - we let the commit validation step report this as an error.
+        return normalise_gpkg_geom(geom) if isinstance(geom, bytes) else geom
 
 
-class BooleanType(UserDefinedType):
-    """UserDefinedType so that BOOLEANs are read as bools and not ints."""
+@aliased_converter_type
+class BooleanType(ConverterType):
+    """ConverterType so that BOOLEANs are read as bools and not ints."""
 
-    def result_processor(self, dialect, coltype):
-        def process(gpkg_int):
-            # Its possible in GPKG to put arbitrary values in columns, regardless of type.
-            # We don't try to convert them here - we let the commit validation step report this as an error.
-            return bool(gpkg_int) if gpkg_int in (0, 1) else gpkg_int
-
-        return process
+    def python_postread(self, value):
+        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+        # We don't try to convert them here - we let the commit validation step report this as an error.
+        return bool(value) if value in (0, 1) else value
