@@ -33,3 +33,30 @@ class Db_MySql(BaseDb):
         sqlalchemy.event.listen(engine, "checkout", _on_checkout)
 
         return engine
+
+    @classmethod
+    def list_tables(cls, sess, db_schema=None):
+        # TODO - include titles.
+        if db_schema is not None:
+            r = sess.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT TABLE_NAME
+                    FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = :db_schema
+                    ORDER BY TABLE_NAME;
+                    """
+                ),
+                {"db_schema": db_schema},
+            )
+            return {row['TABLE_NAME']: None for row in r}
+        else:
+            r = sess.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT TABLE_SCHEMA, TABLE_NAME
+                    FROM INFORMATION_SCHEMA.TABLES
+                    ORDER BY TABLE_SCHEMA, TABLE_NAME;
+                    """
+                )
+            )
+            return {f"{row['TABLE_SCHEMA']}.{row['TABLE_NAME']}": None for row in r}

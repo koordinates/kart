@@ -3,6 +3,7 @@ import re
 import socket
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 
+import sqlalchemy
 from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.compiler import IdentifierPreparer
@@ -24,6 +25,10 @@ class BaseDb:
         """Conditionally quote the given identifier (ie, if it is a keyword or contains reserved characters."""
         # Subclasses should override cls.preparer with a specific IdentifierPreparer.
         return cls.preparer.quote(identifier)
+
+    @classmethod
+    def quote_table(cls, table_name, db_schema=None):
+        return cls.preparer.format_table(sqlalchemy.table(table_name, schema=db_schema))
 
     @classmethod
     def list_tables(cls, sess, db_schema=None):

@@ -2,17 +2,12 @@ import contextlib
 import logging
 import time
 
-import sqlalchemy as sa
 from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer
-from sqlalchemy.sql.functions import Function
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import UserDefinedType
-from sqlalchemy.dialects.mysql.types import DOUBLE
 
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import MySqlKartTables
 from kart import crs_util
-from kart.geometry import Geometry
 from kart.schema import Schema
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
 from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
@@ -73,30 +68,6 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             f"ALTER TABLE {self.table_identifier(dataset)} COMMENT = :comment",
             {"comment": dataset.get_meta_item("title")},
         )
-
-    def _type_def_for_column_schema(self, col, dataset=None):
-        if col.data_type == "geometry":
-            crs_name = col.extra_type_info.get("geometryCRS")
-            crs_id = None
-            if dataset is not None:
-                crs_id = (
-                    crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
-                )
-            # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
-            return GeometryType(crs_id)
-        elif col.data_type == "boolean":
-            return BooleanType
-        elif col.data_type == "float" and col.extra_type_info.get("size") != 64:
-            return FloatType
-        elif col.data_type == "date":
-            return DateType
-        elif col.data_type == "time":
-            return TimeType
-        elif col.data_type == "timestamp":
-            return TimestampType
-        else:
-            # Don't need to specify type information for other columns at present, since we just pass through the values.
-            return None
 
     def _is_dataset_supported(self, dataset):
         return not any(
@@ -336,86 +307,3 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} MODIFY {dest_spec};"""
             )
-
-
-class GeometryType(UserDefinedType):
-    """UserDefinedType so that V2 geometry is adapted to MySQL binary format."""
-
-    # In Kart, all geometries are stored as WKB with axis-order=long-lat - since this is the GPKG
-    # standard, and a Kart geometry is a normalised GPKG geometry. MySQL has to be explicitly told
-    # that this is the ordering we use in WKB, since MySQL would otherwise expect lat-long ordering
-    # as specified by ISO 19128:2005.
-    AXIS_ORDER = "axis-order=long-lat"
-
-    def __init__(self, crs_id):
-        self.crs_id = crs_id
-
-    def bind_processor(self, dialect):
-        # 1. Writing - Python layer - convert Kart geometry to WKB
-        return lambda geom: geom.to_wkb()
-
-    def bind_expression(self, bindvalue):
-        # 2. Writing - SQL layer - wrap in call to ST_GeomFromWKB to convert WKB to MySQL binary.
-        return Function(
-            "ST_GeomFromWKB", bindvalue, self.crs_id, self.AXIS_ORDER, type_=self
-        )
-
-    def column_expression(self, col):
-        # 3. Reading - SQL layer - wrap in call to ST_AsBinary() to convert MySQL binary to WKB.
-        return Function("ST_AsBinary", col, self.AXIS_ORDER, type_=self)
-
-    def result_processor(self, dialect, coltype):
-        # 4. Reading - Python layer - convert WKB to Kart geometry.
-        return lambda wkb: Geometry.from_wkb(wkb)
-
-
-class BooleanType(UserDefinedType):
-    # UserDefinedType to read booleans. They are stored in MySQL as Bits but we read them back as bools.
-    def result_processor(self, dialect, coltype):
-        # Reading - Python layer - convert bytes to boolean.
-        def process(b):
-            i = int.from_bytes(b, "big") if b is not None else None
-            return bool(i) if i in (0, 1) else i
-
-        return process
-
-
-class DateType(UserDefinedType):
-    # UserDefinedType to read Dates as text. They are stored in MySQL as Dates but we read them back as text.
-    def column_expression(self, col):
-        # Reading - SQL layer - convert date to string in ISO8601.
-        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
-        return Function("DATE_FORMAT", col, "%Y-%m-%d", type_=self)
-
-
-class FloatType(UserDefinedType):
-    # UserDefinedType to read floats as doubles. For some reason, floats they are rounded so they keep
-    # even less than single-float precision if we read them as floats.
-    def column_expression(self, col):
-        # Reading - SQL layer - convert date to string in ISO8601.
-        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
-        return sa.cast(col, DOUBLE)
-
-
-class TimeType(UserDefinedType):
-    # UserDefinedType to read Times as text. They are stored in MySQL as Times but we read them back as text.
-    def column_expression(self, col):
-        # Reading - SQL layer - convert timestamp to string in ISO8601.
-        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
-        return Function("DATE_FORMAT", col, "%H:%i:%S", type_=self)
-
-
-class TimestampType(UserDefinedType):
-    """
-    UserDefinedType to read Timestamps as text. They are stored in MySQL as Timestamps but we read them back as text.
-    """
-
-    def bind_processor(self, dialect):
-        # 1. Writing - Python layer - remove timezone specifier - MySQL can't read timezone specifiers.
-        # MySQL requires instead that the timezone is set in the database session (see create_engine.py)
-        return lambda timestamp: timestamp.rstrip("Z")
-
-    def column_expression(self, col):
-        # 2. Reading - SQL layer - convert timestamp to string in ISO8601 with Z as the timezone specifier.
-        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
-        return Function("DATE_FORMAT", col, "%Y-%m-%dT%H:%i:%SZ", type_=self)

@@ -30,7 +30,7 @@ class ImportSource:
         spec = cls._remove_unnecessary_prefix(str(full_spec))
 
         db_type = DbType.from_spec(spec)
-        if db_type in (DbType.GPKG, DbType.POSTGIS):
+        if db_type is not None:
             from .sqlalchemy_import_source import SqlAlchemyImportSource
 
             return SqlAlchemyImportSource.open(spec, table=table)

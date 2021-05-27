@@ -75,11 +75,12 @@ def _import_check(repo_path, table, source_gpkg):
 
 def normalise_feature(row):
     row = dict(row)
-    if "geom" in row:
-        # We import via OGR, which strips envelopes by default
-        row["geom"] = ogr_to_gpkg_geom(
-            gpkg_geom_to_ogr(row["geom"], parse_crs=True),
-        )
+    # TODO - this is a bit of a hack:
+    for field_name in ("geom", "Shape"):
+        if field_name in row:
+            row[field_name] = ogr_to_gpkg_geom(
+                gpkg_geom_to_ogr(row[field_name], parse_crs=True),
+            )
     return row
 
 

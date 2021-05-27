@@ -10,6 +10,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ### Major changes in this release
 * The working copy can now be a MySQL database (previously only GPKG, PostGIS and SQL Server working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `mysql://HOST/DBNAME` [#399](https://github.com/koordinates/kart/pull/399)
   - Read the documentation at [docs/MYSQL_WC.md](docs/MYSQL_WC.md)
+* Import of tables using `kart import` is now supported from any type of database that Kart also supports writing to as a working copy - namely, GPKG, PostGIS, SQL Server and MySQL.
 
 ### Other changes
 * Change to `kart data ls` JSON output, now includes whether repo is Kart or Sno branded.

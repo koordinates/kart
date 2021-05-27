@@ -1,9 +1,14 @@
-import sqlalchemy
-
 from kart import crs_util
+from kart.geometry import Geometry
 from kart.schema import Schema, ColumnSchema
 from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.sqlalchemy.adapter.base import BaseKartAdapter
+
+from sqlalchemy import literal_column
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import quoted_name
+from sqlalchemy.sql.functions import Function
+from sqlalchemy.types import UserDefinedType
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
@@ -163,10 +168,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             if row['data_type'] in ('geometry', 'geography')
         ]
 
-        table_identifier = cls.preparer.format_table(
-            sqlalchemy.table(table_name, schema=db_schema)
-        )
-
+        table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
         ms_spatial_ref_sys = [
             sess.execute(
                 f"""
@@ -348,3 +350,80 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             extra_type_info["geometryCRS"] = geometry_crs
 
         return "geometry", extra_type_info
+
+    @classmethod
+    def _type_def_for_column_schema(cls, col, dataset):
+        if col.data_type == "geometry":
+            crs_name = col.extra_type_info.get("geometryCRS")
+            crs_id = None
+            if dataset is not None:
+                crs_id = (
+                    crs_util.get_identifier_int_from_dataset(dataset, crs_name) or 0
+                )
+            # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
+            return GeometryType(crs_id)
+        elif col.data_type in ("date", "time", "timestamp"):
+            return BaseDateOrTimeType
+        else:
+            # Don't need to specify type information for other columns at present, since we just pass through the values.
+            return None
+
+
+class InstanceFunction(Function):
+    """
+    An instance function that compiles like this when applied to an element:
+    >>> element.function()
+    Unlike a normal sqlalchemy function which would compile as follows:
+    >>> function(element)
+    """
+
+
+@compiles(InstanceFunction)
+def compile_instance_function(element, compiler, **kw):
+    return "(%s).%s()" % (element.clauses, element.name)
+
+
+class GeometryType(UserDefinedType):
+    """UserDefinedType so that V2 geometry is adapted to MS binary format."""
+
+    def __init__(self, crs_id):
+        self.crs_id = crs_id
+
+    def bind_processor(self, dialect):
+        # 1. Writing - Python layer - convert Kart geometry to WKB
+        return lambda geom: geom.to_wkb()
+
+    def bind_expression(self, bindvalue):
+        # 2. Writing - SQL layer - wrap in call to STGeomFromWKB to convert WKB to MS binary.
+        return Function(
+            quoted_name("geometry::STGeomFromWKB", False),
+            bindvalue,
+            self.crs_id,
+            type_=self,
+        )
+
+    def column_expression(self, col):
+        # 3. Reading - SQL layer - append with call to .AsBinaryZM() to convert MS binary to WKB.
+        return InstanceFunction("AsBinaryZM", col, type_=self)
+
+    def result_processor(self, dialect, coltype):
+        # 4. Reading - Python layer - convert WKB to Kart geometry.
+        return lambda wkb: Geometry.from_wkb(wkb)
+
+
+class BaseDateOrTimeType(UserDefinedType):
+    """
+    UserDefinedType so we read dates, times, and datetimes as text.
+    They are stored as date / time / datetime in SQL Server, but read back out as text.
+    """
+
+    def column_expression(self, col):
+        # When reading, convert dates and times to strings using style 127: ISO8601 with time zone Z.
+        # https://docs.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql
+        return Function(
+            "CONVERT",
+            literal_column("NVARCHAR"),
+            col,
+            literal_column("127"),
+            type_=self,
+        )

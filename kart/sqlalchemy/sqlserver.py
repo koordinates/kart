@@ -70,3 +70,30 @@ class Db_SqlServer(BaseDb):
                 exit_code=NO_DRIVER,
             )
         return sorted(mssql_drivers)[-1]  # Latest driver
+
+    @classmethod
+    def list_tables(cls, sess, db_schema=None):
+        # TODO - include titles.
+        if db_schema is not None:
+            r = sess.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT table_name
+                    FROM information_schema.tables WHERE table_schema = :db_schema
+                    ORDER BY table_name;
+                    """
+                ),
+                {"db_schema": db_schema},
+            )
+            return {row['table_name']: None for row in r}
+        else:
+            r = sess.execute(
+                sqlalchemy.text(
+                    """
+                    SELECT table_schema, table_name
+                    FROM information_schema.tables
+                    ORDER BY table_schema, table_name;
+                    """
+                )
+            )
+            return {f"{row['table_schema']}.{row['table_name']}": None for row in r}

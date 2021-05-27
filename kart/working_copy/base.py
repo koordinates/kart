@@ -159,36 +159,19 @@ class BaseWorkingCopy:
     @functools.lru_cache()
     def _table_def_for_dataset(self, dataset):
         """Returns a sqlalchemy table definition with conversion-logic for reading or writing to the dataset table."""
-        return sa.Table(
-            dataset.table_name,
-            sa.MetaData(),
-            *[self._column_def_for_column_schema(c, dataset) for c in dataset.schema],
-            schema=self.db_schema,
+        return self.adapter.table_def_for_schema(
+            dataset.schema,
+            db_schema=self.db_schema,
+            table_name=dataset.table_name,
+            dataset=dataset,
         )
 
     @functools.lru_cache()
     def _table_def_for_schema(self, schema, table_name):
         """Returns a sqlalchemy table definition with conversion-logic for reading or writing data with the given schema."""
-        return sa.Table(
-            table_name,
-            sa.MetaData(),
-            *[self._column_def_for_column_schema(c, None) for c in schema],
-            schema=self.db_schema,
+        return self.adapter.table_def_for_schema(
+            schema, db_schema=self.db_schema, table_name=table_name
         )
-
-    def _column_def_for_column_schema(self, col, dataset=None):
-        return sa.Column(
-            col.name,
-            self._type_def_for_column_schema(col, dataset),
-            primary_key=col.pk_index is not None,
-        )
-
-    def _type_def_for_column_schema(self, col, dataset=None):
-        # Mostly sqlalchemy doesn't need to know the type, so we can return None.
-        # We only need to set the type if some automatic conversion needs to happen on read or write.
-        # This is currently only used for selects/inserts/update, not for CREATE TABLE.
-        # TODO: Add the full type information and use it for CREATE TABLE.
-        return None
 
     def _insert_into_dataset(self, dataset):
         """Returns a SQL command for inserting features into the table for that dataset."""

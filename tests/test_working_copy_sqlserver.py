@@ -114,6 +114,10 @@ def test_checkout_workingcopy(
             head_tree_id = repo.head_tree.hex
             assert wc.assert_db_tree_match(head_tree_id)
 
+            # Also test the importer by making sure we can import this from the WC:
+            r = cli_runner.invoke(["import", sqlserver_url, f"{table}:{table}_2"])
+            assert r.exit_code == 0, r.stderr
+
 
 @pytest.mark.parametrize(
     "existing_schema",

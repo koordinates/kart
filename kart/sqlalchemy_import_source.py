@@ -12,11 +12,9 @@ from .exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
 )
-from .geometry import Geometry
 from .import_source import ImportSource
 from .sqlalchemy import DbType, separate_last_path_part
 from .output_util import dump_json_output
-from .utils import ungenerator, chunk
 
 
 class SqlAlchemyImportSource(ImportSource):
@@ -32,12 +30,6 @@ class SqlAlchemyImportSource(ImportSource):
         db_type = DbType.from_spec(spec)
         if db_type is None:
             raise cls._bad_import_source_spec(spec)
-
-        # TODO - add support for other DB types.
-        if db_type not in (DbType.GPKG, DbType.POSTGIS):
-            raise NotYetImplemented(
-                "Only GPKG and PostGIS is currently supported by the SqlAlchemyImportSource"
-            )
 
         if db_type.clearly_doesnt_exist(spec):
             raise NotFound(f"Couldn't find '{spec}'", exit_code=NO_IMPORT_SOURCE)
@@ -244,31 +236,37 @@ class SqlAlchemyImportSource(ImportSource):
             if key.startswith("crs/") and key.endswith(".wkt"):
                 yield key[4:-4], value
 
-    @ungenerator(dict)
-    def _sqlalchemy_row_to_kart_feature(self, sa_row):
-        # TODO - once the type adapters are being used, this won't be needed.
-        for key, value in sa_row.items():
-            if key in self.geometry_column_names:
-                yield (key, Geometry.of(value))
-            else:
-                yield key, value
-
-    def _sqlalchemy_to_kart_features(self, resultset):
-        for sa_row in resultset:
-            yield self._sqlalchemy_row_to_kart_feature(sa_row)
-
     def quote(self, ident):
         """Conditionally quote an identifier - eg if it is a reserved word or contains special characters."""
         return self.db_class.quote(ident)
 
+    @property
+    def table_identifier(self):
+        return self.db_class.quote_table(
+            db_schema=self.db_schema, table_name=self.table
+        )
+
+    @property
+    def feature_count(self):
+        with self.engine.connect() as conn:
+            return conn.scalar(f"SELECT COUNT(*) FROM {self.table_identifier};")
+
     def features(self):
+        table_def = self.db_type.adapter.table_def_for_schema(
+            self.schema, db_schema=self.db_schema, table_name=self.table
+        )
+        query = sqlalchemy.select(table_def.columns).select_from(table_def)
         with self.engine.connect() as conn:
             r = (
                 conn.execution_options(stream_results=True)
-                .execute(f"SELECT * FROM {self.quote(self.table)};")
+                .execute(query)
                 .yield_per(self.CURSOR_SIZE)
             )
-            yield from self._sqlalchemy_to_kart_features(r)
+            yield from self._resultset_as_dicts(r)
+
+    def _resultset_as_dicts(self, resultset):
+        for row in resultset:
+            yield dict(zip(row.keys(), row))
 
     def _first_pk_values(self, row_pks):
         # (123,) --> 123. we only handle one pk field
@@ -286,15 +284,18 @@ class SqlAlchemyImportSource(ImportSource):
 
         [pk_name] = pk_names
 
-        with self.engine.connect() as conn:
-            batch_query = sqlalchemy.text(
-                f"SELECT * FROM {self.quote(self.table)} "
-                f"WHERE {self.quote(pk_name)} IN :pks ;"
-            ).bindparams(sqlalchemy.bindparam("pks", expanding=True))
+        table_def = self.db_type.adapter.table_def_for_schema(
+            self.schema, db_schema=self.db_schema, table_name=self.table
+        )
 
-            for batch in chunk(self._first_pk_values(row_pks), 1000):
-                r = conn.execute(batch_query, {"pks": batch})
-                yield from self._sqlalchemy_to_kart_features(r)
+        with self.engine.connect() as conn:
+            query = (
+                sqlalchemy.select(table_def.columns)
+                .select_from(table_def)
+                .where(table_def.c[pk_name].in_(self._first_pk_values(row_pks)))
+            )
+            r = conn.execution_options(stream_results=True).execute(query)
+            yield from self._resultset_as_dicts(r)
 
     @property
     @functools.lru_cache(maxsize=1)

@@ -1,5 +1,4 @@
 from osgeo.osr import SpatialReference
-import sqlalchemy
 
 
 from kart import crs_util
@@ -130,9 +129,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         geom_cols_info = [cls._filter_row_to_dict(row) for row in r]
 
         # Improve the geometry information by sampling one geometry from each column, where available.
-        table_identifier = cls.preparer.format_table(
-            sqlalchemy.table(table_name, schema=db_schema)
-        )
+        table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
         for col_info in geom_cols_info:
             c = col_info["column_name"]
             row = sess.execute(
@@ -332,3 +329,10 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         for key, value in zip(row.keys(), row):
             if value:
                 yield key, value
+
+    @classmethod
+    def _type_def_for_column_schema(cls, col, dataset=None):
+        # PostGIS code is unique in that it doesn't use the SqlAlchemy layer to do type conversions.
+        # Instead, it uses hooks in Psycopg2.
+        # TODO: Make PostGIS code like the other code for consistency.
+        return None
