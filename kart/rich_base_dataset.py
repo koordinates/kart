@@ -315,7 +315,6 @@ class RichBaseDataset(BaseDataset):
         """
         # TODO - support multiple primary keys.
         meta_diff = dataset_diff.get("meta")
-        schema = None
         if meta_diff:
             self.apply_meta_diff(
                 meta_diff,
@@ -324,14 +323,15 @@ class RichBaseDataset(BaseDataset):
             )
 
             if "schema.json" in meta_diff and meta_diff["schema.json"].new_value:
-                schema = Schema.from_column_dicts(meta_diff["schema.json"].new_value)
+                self.schema = Schema.from_column_dicts(
+                    meta_diff["schema.json"].new_value
+                )
 
         feature_diff = dataset_diff.get("feature")
         if feature_diff:
             self.apply_feature_diff(
                 feature_diff,
                 tree_builder,
-                schema=schema,
                 allow_missing_old_values=allow_missing_old_values,
             )
 
@@ -347,7 +347,7 @@ class RichBaseDataset(BaseDataset):
         )
 
     def apply_feature_diff(
-        self, feature_diff, tree_builder, *, schema=None, allow_missing_old_values=False
+        self, feature_diff, tree_builder, *, allow_missing_old_values=False
     ):
         """Applies a feature diff."""
         if not feature_diff:
@@ -357,10 +357,6 @@ class RichBaseDataset(BaseDataset):
             # Applying diffs works even if there is no tree yet created for the dataset,
             # as is the case when the dataset is first being created right now.
             tree = self.inner_tree or ()
-
-            encode_kwargs = {}
-            if schema is not None:
-                encode_kwargs = {"schema": schema}
 
             has_conflicts = False
             for delta in feature_diff.values():
@@ -421,9 +417,7 @@ class RichBaseDataset(BaseDataset):
                 if old_path and old_path != new_path:
                     tree_builder.remove(old_path)
                 if delta.new_value:
-                    path, data = self.encode_feature(
-                        delta.new.value, relative=True, **encode_kwargs
-                    )
+                    path, data = self.encode_feature(delta.new.value, relative=True)
                     tree_builder.insert(path, data)
 
             if has_conflicts:

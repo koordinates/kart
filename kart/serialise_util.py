@@ -78,6 +78,12 @@ def sha256(*data):
     return h
 
 
+def b64hash(*data):
+    """*data (str or bytes) -> base64 str. Irreversible."""
+    # We only return 160 bits of the hash, same as git hashes - more is overkill.
+    return b64encode_str(sha256(*data).digest()[:20])
+
+
 def hexhash(*data):
     """*data (str or bytes) -> hex str. Irreversible."""
     # We only return 160 bits of the hash, same as git hashes - more is overkill.

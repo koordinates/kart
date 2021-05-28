@@ -5,6 +5,7 @@ import click
 import pygit2
 
 from . import crs_util
+from .dataset2_paths import PathEncoder
 from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
 from .meta_items import META_ITEM_NAMES, ATTACHMENT_META_ITEMS
@@ -14,9 +15,7 @@ from .serialise_util import (
     msg_unpack,
     json_pack,
     json_unpack,
-    b64encode_str,
     b64decode_str,
-    hexhash,
     ensure_bytes,
     ensure_text,
 )
@@ -216,15 +215,47 @@ class Dataset2(RichBaseDataset):
             return
         yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
 
-    @classmethod
-    def decode_path_to_pks(cls, path):
+    @property
+    @functools.lru_cache(maxsize=1)
+    def feature_path_encoder(self):
+        if self.inner_tree is None:
+            # no meta tree; we must be still creating this dataset
+            # figure out a sensible path encoder to use:
+            pks = self.schema.pk_columns
+            if len(pks) == 1 and pks[0].data_type == "integer":
+                path_structure = {
+                    "branches": 64,
+                    "encoding": "base64",
+                    "levels": 4,
+                    "scheme": "int",
+                }
+            else:
+                path_structure = {
+                    "branches": 64,
+                    "encoding": "base64",
+                    "levels": 4,
+                    "scheme": "msgpack/hash",
+                }
+        else:
+            try:
+                path_structure = self.get_meta_item("path-structure.json")
+            except KeyError:
+                # legacy structure:
+                path_structure = {
+                    "branches": 256,
+                    "encoding": "hex",
+                    "levels": 2,
+                    "scheme": "msgpack/hash",
+                }
+        return PathEncoder.get(**path_structure)
+
+    def decode_path_to_pks(self, path):
         """Given a feature path, returns the pk values encoded in it."""
         encoded = os.path.basename(path)
         return msg_unpack(b64decode_str(encoded))
 
-    @classmethod
-    def decode_path_to_1pk(cls, path):
-        decoded = cls.decode_path_to_pks(path)
+    def decode_path_to_1pk(self, path):
+        decoded = self.decode_path_to_pks(path)
         if len(decoded) != 1:
             raise ValueError(f"Expected a single pk_value, got {decoded}")
         return decoded[0]
@@ -256,10 +287,7 @@ class Dataset2(RichBaseDataset):
         Given some pk values, returns the path the feature should be written to.
         pk_values should be a list or tuple of pk values.
         """
-        packed_pk = msg_pack(pk_values)
-        pk_hash = hexhash(packed_pk)
-        filename = b64encode_str(packed_pk)
-        rel_path = f"{self.FEATURE_PATH}{pk_hash[:2]}/{pk_hash[2:4]}/{filename}"
+        rel_path = f"{self.FEATURE_PATH}{self.feature_path_encoder.encode_pks_to_path(pk_values)}"
         return rel_path if relative else self.full_path(rel_path)
 
     def encode_1pk_to_path(self, pk_value, relative=False):
