@@ -1,11 +1,18 @@
 from osgeo.osr import SpatialReference
+from psycopg2.extensions import Binary
+from sqlalchemy.sql.functions import Function
 
 
 from kart import crs_util
+from kart.geometry import Geometry
 from kart.utils import ungenerator
 from kart.schema import Schema, ColumnSchema
 from kart.sqlalchemy.postgis import Db_Postgis
-from kart.sqlalchemy.adapter.base import BaseKartAdapter
+from kart.sqlalchemy.adapter.base import (
+    BaseKartAdapter,
+    ConverterType,
+    aliased_converter_type,
+)
 
 
 class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
@@ -332,7 +339,47 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
 
     @classmethod
     def _type_def_for_column_schema(cls, col, dataset=None):
-        # PostGIS code is unique in that it doesn't use the SqlAlchemy layer to do type conversions.
-        # Instead, it uses hooks in Psycopg2.
-        # TODO: Make PostGIS code like the other code for consistency.
-        return None
+        if col.data_type == "geometry":
+            # This converter-type adapts Kart's GPKG geometry to EWKB which is what PostGIS supports.
+            return GeometryType
+        elif col.data_type == "blob":
+            return BlobType
+        elif col.data_type == "timestamp":
+            return TimestampType
+        elif col.data_type in ("date", "time", "interval", "numeric"):
+            return GenericCastToStringType
+        else:
+            # Don't need to specify type information for other columns at present, since we just pass through the values.
+            return None
+
+
+@aliased_converter_type
+class GeometryType(ConverterType):
+    """ConverterType so that V2 geometry is adapted to EWKB for PostGIS."""
+
+    def python_prewrite(self, geom):
+        return Binary(geom.to_ewkb()) if geom is not None else None
+
+    def python_postread(self, geom):
+        return Geometry.from_hex_ewkb(geom)
+
+
+@aliased_converter_type
+class BlobType(ConverterType):
+    # ConverterType to get read blobs as type <bytes> instead of type <memory>.
+    def python_postread(self, blob):
+        return bytes(blob) if blob is not None else None
+
+
+@aliased_converter_type
+class TimestampType(ConverterType):
+    # ConverterType to read timestamps as text. They are stored in PG as TIMESTAMPS but we read them back as text.
+    def sql_read(self, column):
+        return Function("to_char", column, 'YYYY-MM-DD"T"HH24:MI:SSZ', type_=self)
+
+
+@aliased_converter_type
+class GenericCastToStringType(ConverterType):
+    # ConverterType that simply casts to string in the python layer.
+    def python_postread(self, value):
+        return str(value) if value is not None else None
