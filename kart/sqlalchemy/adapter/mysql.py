@@ -87,18 +87,41 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     }
 
     @classmethod
-    def v2_schema_to_sql_spec(cls, schema, v2_obj):
-        """
-        Generate the SQL CREATE TABLE spec from a V2 object eg:
-        'fid INTEGER, geom POINT WITH CRSID 2136, desc VARCHAR(128), PRIMARY KEY(fid)'
-        """
-        result = [cls.v2_column_schema_to_mysql_spec(col, v2_obj) for col in schema]
+    def v2_type_to_sql_type(cls, column_schema, v2_obj=None):
+        """Convert a v2 schema type to a MySQL type."""
+        v2_type = column_schema.data_type
+        if v2_type == "geometry":
+            return cls._v2_geometry_type_to_mysql_type(column_schema, v2_obj)
 
-        if schema.pk_columns:
-            pk_col_names = ", ".join((cls.quote(col.name) for col in schema.pk_columns))
-            result.append(f"PRIMARY KEY({pk_col_names})")
+        extra_type_info = column_schema.extra_type_info
 
-        return ", ".join(result)
+        mysql_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
+        if mysql_type_info is None:
+            raise ValueError(f"Unrecognised data type: {v2_type}")
+
+        if isinstance(mysql_type_info, dict):
+            return mysql_type_info.get(extra_type_info.get("size", 0))
+
+        mysql_type = mysql_type_info
+
+        length = extra_type_info.get("length", None)
+        if length and length > 0 and length <= cls._MAX_SPECIFIABLE_LENGTH:
+            if mysql_type == "LONGTEXT":
+                return f"VARCHAR({length})"
+            elif mysql_type == "longblob":
+                return f"VARBINARY({length})"
+
+        if mysql_type == "NUMERIC":
+            precision = extra_type_info.get("precision", None)
+            scale = extra_type_info.get("scale", None)
+            if precision is not None and scale is not None:
+                return f"NUMERIC({precision},{scale})"
+            elif precision is not None:
+                return f"NUMERIC({precision})"
+            else:
+                return "NUMERIC"
+
+        return mysql_type
 
     @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt=None):
@@ -151,51 +174,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             id_str = crs_util.get_identifier_str(wkt)
             yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
-    @classmethod
-    def v2_column_schema_to_mysql_spec(cls, column_schema, v2_obj):
-        name = column_schema.name
-        mysql_type = cls._v2_type_to_mysql_type(column_schema, v2_obj)
-
-        return " ".join([cls.quote(name), mysql_type])
-
     _MAX_SPECIFIABLE_LENGTH = 0xFFFF
-
-    @classmethod
-    def _v2_type_to_mysql_type(cls, column_schema, v2_obj):
-        """Convert a v2 schema type to a MySQL type."""
-        v2_type = column_schema.data_type
-        if v2_type == "geometry":
-            return cls._v2_geometry_type_to_mysql_type(column_schema, v2_obj)
-
-        extra_type_info = column_schema.extra_type_info
-
-        mysql_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if mysql_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
-
-        if isinstance(mysql_type_info, dict):
-            return mysql_type_info.get(extra_type_info.get("size", 0))
-
-        mysql_type = mysql_type_info
-
-        length = extra_type_info.get("length", None)
-        if length and length > 0 and length <= cls._MAX_SPECIFIABLE_LENGTH:
-            if mysql_type == "LONGTEXT":
-                return f"VARCHAR({length})"
-            elif mysql_type == "longblob":
-                return f"VARBINARY({length})"
-
-        if mysql_type == "NUMERIC":
-            precision = extra_type_info.get("precision", None)
-            scale = extra_type_info.get("scale", None)
-            if precision is not None and scale is not None:
-                return f"NUMERIC({precision},{scale})"
-            elif precision is not None:
-                return f"NUMERIC({precision})"
-            else:
-                return "NUMERIC"
-
-        return mysql_type
 
     @classmethod
     def _v2_geometry_type_to_mysql_type(cls, column_schema, v2_obj):

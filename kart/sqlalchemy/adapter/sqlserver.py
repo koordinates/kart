@@ -119,18 +119,66 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     )
 
     @classmethod
-    def v2_schema_to_sql_spec(cls, schema, v2_obj):
-        """
-        Generate the SQL CREATE TABLE spec from a V2 object eg:
-        'fid INTEGER, geom GEOMETRY(POINT,2136), desc VARCHAR(128), PRIMARY KEY(fid)'
-        """
-        result = [cls.v2_column_schema_to_sqlserver_spec(col, v2_obj) for col in schema]
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None):
+        result = super().v2_column_schema_to_sql_spec(col, v2_obj)
+        constraints = cls.get_sql_type_constraints(col, v2_obj)
+        return f"{result} {constraints}" if constraints else result
 
-        if schema.pk_columns:
-            pk_col_names = ", ".join((cls.quote(col.name) for col in schema.pk_columns))
-            result.append(f"PRIMARY KEY({pk_col_names})")
+    @classmethod
+    def get_sql_type_constraints(cls, col, v2_obj=None):
+        if col.data_type != "geometry":
+            return None
 
-        return ", ".join(result)
+        constraints = []
+
+        extra_type_info = col.extra_type_info
+        geometry_type = extra_type_info.get("geometryType")
+        if geometry_type is not None:
+            geometry_type = geometry_type.split(" ")[0].upper()
+            if geometry_type != "GEOMETRY":
+                constraints.append(
+                    cls._geometry_type_constraint(col.name, geometry_type)
+                )
+
+        if v2_obj is not None:
+            crs_name = extra_type_info.get("geometryCRS")
+            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
+            if crs_id is not None:
+                constraints.append(cls._geometry_crs_constraint(col.name, crs_id))
+
+        return f"CHECK({' AND '.join(constraints)})" if constraints else None
+
+    @classmethod
+    def v2_type_to_sql_type(cls, column_schema, v2_obj=None):
+        """Convert a v2 schema type to a SQL server type."""
+
+        v2_type = column_schema.data_type
+        extra_type_info = column_schema.extra_type_info
+
+        ms_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
+        if ms_type_info is None:
+            raise ValueError(f"Unrecognised data type: {v2_type}")
+
+        if isinstance(ms_type_info, dict):
+            return ms_type_info.get(extra_type_info.get("size", 0))
+
+        ms_type = ms_type_info
+
+        if ms_type in ("VARCHAR", "NVARCHAR", "VARBINARY"):
+            length = extra_type_info.get("length", None)
+            return f"{ms_type}({length})" if length is not None else f"{ms_type}(max)"
+
+        if ms_type == "NUMERIC":
+            precision = extra_type_info.get("precision", None)
+            scale = extra_type_info.get("scale", None)
+            if precision is not None and scale is not None:
+                return f"NUMERIC({precision},{scale})"
+            elif precision is not None:
+                return f"NUMERIC({precision})"
+            else:
+                return "NUMERIC"
+
+        return ms_type
 
     @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt=None):
@@ -204,33 +252,6 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             )
 
     @classmethod
-    def v2_column_schema_to_sqlserver_spec(cls, column_schema, v2_obj):
-        name = column_schema.name
-        ms_type = cls.v2_type_to_ms_type(column_schema)
-        constraints = []
-
-        if ms_type == "GEOMETRY":
-            extra_type_info = column_schema.extra_type_info
-            geometry_type = extra_type_info.get("geometryType")
-            if geometry_type is not None:
-                geometry_type = geometry_type.split(" ")[0].upper()
-                if geometry_type != "GEOMETRY":
-                    constraints.append(
-                        cls._geometry_type_constraint(name, geometry_type)
-                    )
-
-            crs_name = extra_type_info.get("geometryCRS")
-            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
-            if crs_id is not None:
-                constraints.append(cls._geometry_crs_constraint(name, crs_id))
-
-        if constraints:
-            constraint = f"CHECK({' AND '.join(constraints)})"
-            return " ".join([cls.quote(column_schema.name), ms_type, constraint])
-
-        return " ".join([cls.quote(name), ms_type])
-
-    @classmethod
     def _geometry_type_constraint(cls, col_name, geometry_type):
         ms_geometry_types = cls._MS_GEOMETRY_SUBTYPES.get(geometry_type.upper())
         ms_geometry_types_sql = ",".join(f"'{g}'" for g in ms_geometry_types)
@@ -246,38 +267,6 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     @classmethod
     def _geometry_crs_constraint(cls, col_name, crs_id):
         return f"({cls.quote(col_name)}).STSrid = {crs_id}"
-
-    @classmethod
-    def v2_type_to_ms_type(cls, column_schema):
-        """Convert a v2 schema type to a SQL server type."""
-
-        v2_type = column_schema.data_type
-        extra_type_info = column_schema.extra_type_info
-
-        ms_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if ms_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
-
-        if isinstance(ms_type_info, dict):
-            return ms_type_info.get(extra_type_info.get("size", 0))
-
-        ms_type = ms_type_info
-
-        if ms_type in ("VARCHAR", "NVARCHAR", "VARBINARY"):
-            length = extra_type_info.get("length", None)
-            return f"{ms_type}({length})" if length is not None else f"{ms_type}(max)"
-
-        if ms_type == "NUMERIC":
-            precision = extra_type_info.get("precision", None)
-            scale = extra_type_info.get("scale", None)
-            if precision is not None and scale is not None:
-                return f"NUMERIC({precision},{scale})"
-            elif precision is not None:
-                return f"NUMERIC({precision})"
-            else:
-                return "NUMERIC"
-
-        return ms_type
 
     @classmethod
     def sqlserver_to_v2_schema(cls, ms_table_info, ms_crs_info, id_salt):

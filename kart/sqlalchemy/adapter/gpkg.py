@@ -82,6 +82,58 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     )
 
     @classmethod
+    def v2_schema_to_sql_spec(cls, schema, v2_obj=None):
+        columns = schema.columns
+        if cls._is_conformant_gpkg_pk_column(columns[0]):
+            pk_name = columns[0].name
+            columns = columns[1:]
+        else:
+            pk_name = "auto_int_pk"
+
+        # GPKG requires an integer primary key:
+        first_col = f"{cls.quote(pk_name)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
+        other_cols = [cls.v2_column_schema_to_sql_spec(col, v2_obj) for col in columns]
+
+        return ", ".join([first_col] + other_cols)
+
+    @classmethod
+    def _is_conformant_gpkg_pk_column(cls, first_col):
+        return first_col.pk_index == 0 and first_col.data_type == "integer"
+
+    @classmethod
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None):
+        col_name = cls.quote(col.name)
+        sql_type = cls.v2_type_to_sql_type(col, v2_obj)
+        result = f"{col_name} {sql_type}"
+
+        if col.pk_index is not None:
+            # GPKG conformant primary keys are handled by v2_schema_to_sql_spec.
+            # This column is not conformant so we demote it to just UNIQUE NOT NULL.
+            result += f" UNIQUE NOT NULL CHECK({col_name}<>'')"
+
+        return result
+
+    @classmethod
+    def v2_type_to_sql_type(cls, col, v2_obj=None):
+        """Convert a v2 schema type to a gpkg type."""
+
+        v2_type = col.data_type
+        extra_type_info = col.extra_type_info
+        if col.data_type == "geometry":
+            return extra_type_info.get("geometryType", "GEOMETRY").split(" ", 1)[0]
+
+        gpkg_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
+        if gpkg_type_info is None:
+            raise ValueError(f"Unrecognised data type: {v2_type}")
+
+        if isinstance(gpkg_type_info, dict):
+            return gpkg_type_info.get(extra_type_info.get("size", 0))
+
+        gpkg_type = gpkg_type_info
+        length = extra_type_info.get("length", None)
+        return f"{gpkg_type}({length})" if length else gpkg_type
+
+    @classmethod
     def all_gpkg_meta_items(cls, v2_obj, table_name):
         """Generate all the gpkg_meta_items from the given v2 object (eg dataset)."""
         yield "sqlite_table_info", cls.generate_sqlite_table_info(v2_obj)
@@ -141,10 +193,39 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     @classmethod
     def generate_sqlite_table_info(cls, v2_obj):
         """Generate a sqlite_table_info meta item from a dataset."""
-        return [
-            cls._column_schema_to_gpkg(i, col, v2_obj.has_geometry)
-            for i, col in enumerate(v2_obj.schema)
+        columns = v2_obj.schema.columns
+        if cls._is_conformant_gpkg_pk_column(columns[0]):
+            pk_name = columns[0].name
+            columns = columns[1:]
+        else:
+            pk_name = "auto_int_pk"
+
+        first_col = {
+            "cid": 0,
+            "name": pk_name,
+            "pk": 1,
+            "type": "INTEGER",
+            "notnull": 1,
+            "dflt_value": None,
+        }
+        other_cols = [
+            cls._column_schema_to_gpkg(i + 1, col) for i, col in enumerate(columns)
         ]
+
+        return [first_col] + other_cols
+
+    @classmethod
+    def _column_schema_to_gpkg(cls, cid, column_schema):
+        sql_type = cls.v2_type_to_sql_type(column_schema)
+        not_null = 1 if column_schema.pk_index is not None else 0
+        return {
+            "cid": cid,
+            "name": column_schema.name,
+            "pk": 0,  # GPKG Conformant primary keys are handled by generate_sqlite_table_info.
+            "type": sql_type,
+            "notnull": not_null,
+            "dflt_value": None,
+        }
 
     @classmethod
     def generate_gpkg_contents(cls, v2_obj, table_name):
@@ -219,38 +300,6 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         return None
 
     @classmethod
-    def v2_schema_to_sql_spec(cls, schema):
-        """Generate a sqlite schema string from a dataset eg 'fid INTEGER, shape GEOMETRY'."""
-
-        result = [
-            cls.v2_column_schema_to_sql_spec(col, schema.has_geometry) for col in schema
-        ]
-        # GPKG requires an integer primary key for spatial tables, so we add it in if needed:
-        if schema.has_geometry and not any("PRIMARY KEY" in c for c in result):
-            result = ["auto_int_pk INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"] + result
-
-        return ",".join(result)
-
-    @classmethod
-    def v2_column_schema_to_sql_spec(cls, column_schema, has_geometry):
-        gpkg_type = cls._v2_type_to_gpkg_type(column_schema, has_geometry)
-        col_name = cls.quote(column_schema.name)
-        result = f"{col_name} {gpkg_type}"
-
-        is_pk = column_schema.pk_index is not None
-        if is_pk:
-            if gpkg_type == "INTEGER":
-                result += " PRIMARY KEY AUTOINCREMENT NOT NULL"
-            elif has_geometry:
-                # GPKG feature-tables only allow integer PKs, so we demote this PK to a regular UNIQUE field.
-                result += f" UNIQUE NOT NULL CHECK({col_name}<>'')"
-            else:
-                # Non-geometry tables are allowed non-integer primary keys
-                result += " PRIMARY KEY NOT NULL"
-
-        return result
-
-    @classmethod
     def _gpkg_to_v2_schema(cls, gpkg_meta_items, id_salt):
         """Generate a v2 Schema from the given gpkg meta items."""
         sqlite_table_info = gpkg_meta_items.get("sqlite_table_info")
@@ -295,22 +344,6 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
     @classmethod
-    def _column_schema_to_gpkg(cls, cid, column_schema, has_geometry):
-        is_pk = 1 if column_schema.pk_index is not None else 0
-        not_null = is_pk
-        gpkg_type = cls._v2_type_to_gpkg_type(column_schema, has_geometry)
-        if gpkg_type != "INTEGER" and has_geometry:
-            is_pk = 0  # GPKG features only allow integer PKs, so we demote this PK to a regular field.
-        return {
-            "cid": cid,
-            "name": column_schema.name,
-            "pk": is_pk,
-            "type": gpkg_type,
-            "notnull": not_null,
-            "dflt_value": None,
-        }
-
-    @classmethod
     def _gpkg_to_v2_type(cls, gpkg_type):
         gpkg_type = gpkg_type.upper()
 
@@ -350,32 +383,6 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
             extra_type_info["geometryCRS"] = crs_util.get_identifier_str(wkt)
 
         return "geometry", extra_type_info
-
-    @classmethod
-    def _v2_type_to_gpkg_type(cls, column_schema, has_geometry):
-        """Convert a v2 schema type to a gpkg type."""
-        if (
-            has_geometry
-            and column_schema.pk_index is not None
-            and column_schema.data_type == "integer"
-        ):
-            return "INTEGER"  # Must be INTEGER, not MEDIUMINT etc.
-
-        v2_type = column_schema.data_type
-        extra_type_info = column_schema.extra_type_info
-        if column_schema.data_type == "geometry":
-            return extra_type_info.get("geometryType", "GEOMETRY").split(" ", 1)[0]
-
-        gpkg_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if gpkg_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
-
-        if isinstance(gpkg_type_info, dict):
-            return gpkg_type_info.get(extra_type_info.get("size", 0))
-
-        gpkg_type = gpkg_type_info
-        length = extra_type_info.get("length", None)
-        return f"{gpkg_type}({length})" if length else gpkg_type
 
     @classmethod
     def json_to_gpkg_metadata(cls, v2_metadata_json, table_name, reference=False):

@@ -302,9 +302,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
 
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_spec = KartAdapter_SqlServer.v2_column_schema_to_sqlserver_spec(
-                col, dataset
-            )
+            dest_spec = KartAdapter_SqlServer.v2_column_schema_to_sql_spec(col, dataset)
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} ALTER COLUMN {dest_spec};"""
             )

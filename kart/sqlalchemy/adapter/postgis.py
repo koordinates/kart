@@ -70,21 +70,43 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
     ZM_FLAG_TO_STRING = {0: "", 1: "M", 2: "Z", 3: "ZM"}
 
     @classmethod
-    def v2_schema_to_sql_spec(cls, schema, v2_obj):
-        """
-        Generate the SQL CREATE TABLE spec from a V2 object eg:
-        'fid INTEGER, geom GEOMETRY(POINT,2136), desc VARCHAR(128), PRIMARY KEY(fid)'
-        """
-        result = [
-            f"{cls.quote(col.name)} {cls.v2_type_to_pg_type(col, v2_obj)}"
-            for col in schema
-        ]
+    def v2_type_to_sql_type(cls, column_schema, v2_obj=None):
+        """Convert a v2 schema type to a postgis type."""
 
-        if schema.pk_columns:
-            pk_col_names = ", ".join((cls.quote(col.name) for col in schema.pk_columns))
-            result.append(f"PRIMARY KEY({pk_col_names})")
+        v2_type = column_schema.data_type
+        extra_type_info = column_schema.extra_type_info
 
-        return ", ".join(result)
+        pg_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
+        if pg_type_info is None:
+            raise ValueError(f"Unrecognised data type: {v2_type}")
+
+        if isinstance(pg_type_info, dict):
+            return pg_type_info.get(extra_type_info.get("size", 0))
+
+        pg_type = pg_type_info
+        if pg_type == "GEOMETRY":
+            geometry_type = extra_type_info.get("geometryType")
+            crs_name = extra_type_info.get("geometryCRS")
+            crs_id = None
+            if crs_name is not None:
+                crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
+            return cls._v2_geometry_type_to_pg_type(geometry_type, crs_id)
+
+        if pg_type == "TEXT":
+            length = extra_type_info.get("length", None)
+            return f"VARCHAR({length})" if length is not None else "TEXT"
+
+        if pg_type == "NUMERIC":
+            precision = extra_type_info.get("precision", None)
+            scale = extra_type_info.get("scale", None)
+            if precision is not None and scale is not None:
+                return f"NUMERIC({precision},{scale})"
+            elif precision is not None:
+                return f"NUMERIC({precision})"
+            else:
+                return "NUMERIC"
+
+        return pg_type
 
     @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
@@ -161,45 +183,6 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             wkt = col_info["srtext"]
             id_str = crs_util.get_identifier_str(wkt)
             yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
-
-    @classmethod
-    def v2_type_to_pg_type(cls, column_schema, v2_obj):
-        """Convert a v2 schema type to a postgis type."""
-
-        v2_type = column_schema.data_type
-        extra_type_info = column_schema.extra_type_info
-
-        pg_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if pg_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
-
-        if isinstance(pg_type_info, dict):
-            return pg_type_info.get(extra_type_info.get("size", 0))
-
-        pg_type = pg_type_info
-        if pg_type == "GEOMETRY":
-            geometry_type = extra_type_info.get("geometryType")
-            crs_name = extra_type_info.get("geometryCRS")
-            crs_id = None
-            if crs_name is not None:
-                crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
-            return cls._v2_geometry_type_to_pg_type(geometry_type, crs_id)
-
-        if pg_type == "TEXT":
-            length = extra_type_info.get("length", None)
-            return f"VARCHAR({length})" if length is not None else "TEXT"
-
-        if pg_type == "NUMERIC":
-            precision = extra_type_info.get("precision", None)
-            scale = extra_type_info.get("scale", None)
-            if precision is not None and scale is not None:
-                return f"NUMERIC({precision},{scale})"
-            elif precision is not None:
-                return f"NUMERIC({precision})"
-            else:
-                return "NUMERIC"
-
-        return pg_type
 
     @classmethod
     def _v2_geometry_type_to_pg_type(cls, geometry_type, crs_id):

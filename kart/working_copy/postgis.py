@@ -328,7 +328,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_type = KartAdapter_Postgis.v2_type_to_pg_type(col, dataset)
+            dest_type = KartAdapter_Postgis.v2_type_to_sql_type(col, dataset)
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} ALTER COLUMN {self.quote(col.name)} TYPE {dest_type};"""
             )

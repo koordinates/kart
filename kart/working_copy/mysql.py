@@ -303,7 +303,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
         for col_id in type_updates:
             col = dest_schema[col_id]
-            dest_spec = KartAdapter_MySql.v2_column_schema_to_mysql_spec(col, dataset)
+            dest_spec = KartAdapter_MySql.v2_column_schema_to_sql_spec(col, dataset)
             sess.execute(
                 f"""ALTER TABLE {self.table_identifier(table)} MODIFY {dest_spec};"""
             )

@@ -11,16 +11,47 @@ class BaseKartAdapter:
     """
 
     @classmethod
-    def v2_schema_to_sql_spec(cls, schema):
+    def v2_schema_to_sql_spec(cls, schema, v2_obj=None):
         """
-        Given a V2 schema object, returns a SQL specification that can be used with CREATE TABLE:
+        Given a V2 schema object, returns a SQL specification that can be used with CREATE TABLE.
         For example: 'fid INTEGER, geom GEOMETRY(POINT,2136), desc VARCHAR(128), PRIMARY KEY(fid)'
         The SQL dialect and types will be conformant to the sqlalchemy database that this adapter supports.
         Some type information will be approximated if it is not fully supported by the database.
 
         schema - a kart.schema.Schema object.
+        v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
+        result = [cls.v2_column_schema_to_sql_spec(col, v2_obj) for col in schema]
 
+        if schema.pk_columns:
+            pk_col_names = ", ".join((cls.quote(col.name) for col in schema.pk_columns))
+            result.append(f"PRIMARY KEY({pk_col_names})")
+
+        return ", ".join(result)
+
+    @classmethod
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None):
+        """
+        Given a V2 column schema object, returns a SQL specification that can be used with CREATE TABLE.
+        Can include extra constraints (eg non-null, unique) if they are required for some reason.
+        For example: 'fid INTEGER NOT NULL' or 'geom GEOMETRY(POINT,2136)'.
+        Doesn't include the primary key specification - this is handled by v2_schema_to_sql_spec.
+
+        schema - a kart.schema.ColumnSchema object.
+        v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
+        """
+        return f"{cls.quote(col.name)} {cls.v2_type_to_sql_type(col, v2_obj)}"
+
+    @classmethod
+    def v2_type_to_sql_type(cls, col, v2_obj=None):
+        """
+        Given a V2 column schema object, returns a SQL type specificier that can be used with CREATE TABLE.
+        For example: "INTEGER" or "GEOMETRY(POINT,2136)".
+        Doesn't include column name or any other constraints eg non-null, unique.
+
+        schema - a kart.schema.ColumnSchema object.
+        v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
+        """
         raise NotImplementedError()
 
     @classmethod
@@ -76,7 +107,7 @@ class BaseKartAdapter:
 
     def _type_def_for_column_schema(cls, col, dataset=None):
         """
-        Returns a ConverterType suitable for converting Kart values of type `col.datatype` to or from the equivalent
+        Returns a ConverterType suitable for converting Kart values of type `col.data_type` to or from the equivalent
         SQL type for this type of database.
         Can simply return None if no type conversion is required - for instance the Kart value read for an "integer"
         should be int, and most DB-API drivers will return an int when an integral type is read, so no conversion needed.

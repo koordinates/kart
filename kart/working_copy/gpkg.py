@@ -189,7 +189,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             self.kart_tables.create_all(sess)
 
     def _create_table_for_dataset(self, sess, dataset):
-        table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema)
+        table_spec = self.adapter.v2_schema_to_sql_spec(dataset.schema, dataset)
 
         sess.execute(
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
@@ -303,14 +303,11 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         # Fix up anything we may have done to the primary key before calling super()
-        if (
-            dataset.has_geometry
-            and "schema.json" in ds_meta_items
-            and "schema.json" in wc_meta_items
-        ):
+        if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
             self._restore_approximated_primary_key(
                 ds_meta_items["schema.json"], wc_meta_items["schema.json"]
             )
+
         if "title" in ds_meta_items and "title" in wc_meta_items:
             wc_meta_items["title"] = self._restore_approximated_title(
                 dataset, ds_meta_items["title"], wc_meta_items["title"]
