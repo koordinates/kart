@@ -114,7 +114,7 @@ class NullSchemaParser:
         if f is None:
             return None
         raise InvalidOperation(
-            f"Can't parse {old_or_new} feature value - {old_or_new} schema is missing"
+            f"Can't parse {self.old_or_new} feature value - {self.old_or_new} schema is missing"
         )
 
 
@@ -134,6 +134,29 @@ class DeltaParser:
             self.old_parser.parse(change.get("-")),
             self.new_parser.parse(change.get("+")),
         )
+
+
+def _build_signature(patch_metadata, person, repo):
+    signature = {}
+    for signature_key, patch_key in (
+        ("time", f"{person}Time"),
+        ("email", f"{person}Email"),
+        ("offset", f"{person}TimeOffset"),
+        ("name", f"{person}Name"),
+    ):
+        if patch_key in patch_metadata:
+            signature[signature_key] = patch_metadata[patch_key]
+
+    if "time" in signature:
+        signature["time"] = int(
+            datetime.timestamp(iso8601_utc_to_datetime(signature["time"]))
+        )
+    if "offset" in signature:
+        signature["offset"] = int(
+            iso8601_tz_to_timedelta(signature["offset"]).total_seconds() / 60  # minutes
+        )
+
+    return repo.author_signature(**signature)
 
 
 def apply_patch(
@@ -228,31 +251,10 @@ def apply_patch(
                 "Patch contains no author information, and --no-commit was not supplied"
             )
 
-        author_kwargs = {}
-        for k, patch_kwarg in (
-            ("time", "authorTime"),
-            ("email", "authorEmail"),
-            ("offset", "authorTimeOffset"),
-            ("name", "authorName"),
-        ):
-            if patch_kwarg in metadata:
-                author_kwargs[k] = metadata[patch_kwarg]
-
-        if "time" in author_kwargs:
-            author_kwargs["time"] = int(
-                datetime.timestamp(iso8601_utc_to_datetime(author_kwargs["time"]))
-            )
-        if "offset" in author_kwargs:
-            author_kwargs["offset"] = int(
-                iso8601_tz_to_timedelta(author_kwargs["offset"]).total_seconds()
-                / 60  # minutes
-            )
-
-        author = repo.author_signature(**author_kwargs)
         commit = rs.commit_diff(
             repo_diff,
             metadata["message"],
-            author=author,
+            author=_build_signature(metadata, "author", repo),
             allow_empty=allow_empty,
             allow_missing_old_values=allow_missing_old_values,
         )
