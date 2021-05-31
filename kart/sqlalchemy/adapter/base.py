@@ -10,6 +10,11 @@ class BaseKartAdapter:
     database in a standardised way).
     """
 
+    # Certain types have a small set of subtypes that can be distinguished between by checking the extra type info.
+    # For instance, integers and floats have subtypes that have different "size" attribues.
+    SUBTYPE_KEYS = {"integer": "size", "float": "size"}
+    DEFAULT_SUBTYPE_VALUES = {"size": 0}
+
     @classmethod
     def v2_schema_to_sql_spec(cls, schema, v2_obj=None):
         """
@@ -52,7 +57,30 @@ class BaseKartAdapter:
         schema - a kart.schema.ColumnSchema object.
         v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
-        raise NotImplementedError()
+        v2_type = col.data_type
+
+        # This implementation just looks up V2_TYPE_TO_SQL_TYPE.
+        # Any extra work to be done (eg handling of extra_type_info) must be performed by the subclass.
+
+        subtype_key = cls.SUBTYPE_KEYS.get(v2_type)
+        if subtype_key:
+            sql_type_options = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
+            if not sql_type_options:
+                raise ValueError(f"Unrecognised V2 data type: {v2_type}")
+
+            v2_subtype_value = col.extra_type_info.get(
+                subtype_key, cls.DEFAULT_SUBTYPE_VALUES.get(subtype_key)
+            )
+            sql_type = sql_type_options.get(v2_subtype_value)
+            if not sql_type:
+                raise ValueError(f"Invalid {subtype_key} value: {v2_subtype_value}")
+            return sql_type
+
+        else:
+            sql_type = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
+            if not sql_type:
+                raise ValueError(f"Unrecognised V2 data type: {v2_type}")
+            return sql_type
 
     @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):

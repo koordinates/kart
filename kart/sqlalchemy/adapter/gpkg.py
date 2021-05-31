@@ -115,23 +115,19 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
 
     @classmethod
     def v2_type_to_sql_type(cls, col, v2_obj=None):
-        """Convert a v2 schema type to a gpkg type."""
+        sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        v2_type = col.data_type
         extra_type_info = col.extra_type_info
-        if col.data_type == "geometry":
+        if sql_type == "GEOMETRY":
+            # Return the geometryType, minus the Z or M specifiers.
             return extra_type_info.get("geometryType", "GEOMETRY").split(" ", 1)[0]
 
-        gpkg_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if gpkg_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
+        if sql_type in ("TEXT", "BLOB"):
+            # Add length specifier if present.
+            length = extra_type_info.get("length", None)
+            return f"{sql_type}({length})" if length else sql_type
 
-        if isinstance(gpkg_type_info, dict):
-            return gpkg_type_info.get(extra_type_info.get("size", 0))
-
-        gpkg_type = gpkg_type_info
-        length = extra_type_info.get("length", None)
-        return f"{gpkg_type}({length})" if length else gpkg_type
+        return sql_type
 
     @classmethod
     def all_gpkg_meta_items(cls, v2_obj, table_name):

@@ -149,28 +149,17 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         return f"CHECK({' AND '.join(constraints)})" if constraints else None
 
     @classmethod
-    def v2_type_to_sql_type(cls, column_schema, v2_obj=None):
-        """Convert a v2 schema type to a SQL server type."""
+    def v2_type_to_sql_type(cls, col, v2_obj=None):
+        sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        v2_type = column_schema.data_type
-        extra_type_info = column_schema.extra_type_info
+        extra_type_info = col.extra_type_info
+        if sql_type in ("VARCHAR", "NVARCHAR", "VARBINARY"):
+            length = extra_type_info.get("length")
+            return f"{sql_type}({length})" if length is not None else f"{sql_type}(max)"
 
-        ms_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if ms_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
-
-        if isinstance(ms_type_info, dict):
-            return ms_type_info.get(extra_type_info.get("size", 0))
-
-        ms_type = ms_type_info
-
-        if ms_type in ("VARCHAR", "NVARCHAR", "VARBINARY"):
-            length = extra_type_info.get("length", None)
-            return f"{ms_type}({length})" if length is not None else f"{ms_type}(max)"
-
-        if ms_type == "NUMERIC":
-            precision = extra_type_info.get("precision", None)
-            scale = extra_type_info.get("scale", None)
+        if sql_type == "NUMERIC":
+            precision = extra_type_info.get("precision")
+            scale = extra_type_info.get("scale")
             if precision is not None and scale is not None:
                 return f"NUMERIC({precision},{scale})"
             elif precision is not None:
@@ -178,7 +167,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             else:
                 return "NUMERIC"
 
-        return ms_type
+        return sql_type
 
     @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt=None):

@@ -87,39 +87,53 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     }
 
     @classmethod
-    def v2_type_to_sql_type(cls, column_schema, v2_obj=None):
-        """Convert a v2 schema type to a MySQL type."""
-        v2_type = column_schema.data_type
-        if v2_type == "geometry":
-            return cls._v2_geometry_type_to_mysql_type(column_schema, v2_obj)
+    def v2_type_to_sql_type(cls, col, v2_obj=None):
+        sql_type = super().v2_type_to_sql_type(col, v2_obj)
 
-        extra_type_info = column_schema.extra_type_info
+        extra_type_info = col.extra_type_info
+        if sql_type == "GEOMETRY":
+            return cls._v2_geometry_type_to_sql_type(col, v2_obj)
 
-        mysql_type_info = cls.V2_TYPE_TO_SQL_TYPE.get(v2_type)
-        if mysql_type_info is None:
-            raise ValueError(f"Unrecognised data type: {v2_type}")
+        if sql_type in ("LONGTEXT, LONGBLOB"):
+            length = extra_type_info.get("length")
+            if length and length > 0 and length <= cls._MAX_SPECIFIABLE_LENGTH:
+                if sql_type == "LONGTEXT":
+                    return f"VARCHAR({length})"
+                elif sql_type == "LONGBLOB":
+                    return f"VARBINARY({length})"
+            return sql_type
 
-        if isinstance(mysql_type_info, dict):
-            return mysql_type_info.get(extra_type_info.get("size", 0))
-
-        mysql_type = mysql_type_info
-
-        length = extra_type_info.get("length", None)
-        if length and length > 0 and length <= cls._MAX_SPECIFIABLE_LENGTH:
-            if mysql_type == "LONGTEXT":
-                return f"VARCHAR({length})"
-            elif mysql_type == "longblob":
-                return f"VARBINARY({length})"
-
-        if mysql_type == "NUMERIC":
-            precision = extra_type_info.get("precision", None)
-            scale = extra_type_info.get("scale", None)
+        if sql_type == "NUMERIC":
+            precision = extra_type_info.get("precision")
+            scale = extra_type_info.get("scale")
             if precision is not None and scale is not None:
                 return f"NUMERIC({precision},{scale})"
             elif precision is not None:
                 return f"NUMERIC({precision})"
             else:
                 return "NUMERIC"
+
+        return sql_type
+
+    @classmethod
+    def _v2_geometry_type_to_sql_type(cls, column_schema, v2_obj=None):
+        extra_type_info = column_schema.extra_type_info
+        geometry_type = extra_type_info.get("geometryType", "geometry")
+        geometry_type_parts = geometry_type.strip().split(" ")
+        if len(geometry_type_parts) > 1:
+            raise NotYetImplemented(
+                "Three or four dimensional geometries are not supported by MySQL working copy: "
+                f'("{column_schema.name}" {geometry_type.upper()})'
+            )
+
+        mysql_type = geometry_type_parts[0]
+
+        crs_id = None
+        crs_name = extra_type_info.get("geometryCRS")
+        if crs_name is not None and v2_obj is not None:
+            crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
+        if crs_id is not None:
+            mysql_type += f" SRID {crs_id}"
 
         return mysql_type
 
@@ -175,26 +189,6 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 
     _MAX_SPECIFIABLE_LENGTH = 0xFFFF
-
-    @classmethod
-    def _v2_geometry_type_to_mysql_type(cls, column_schema, v2_obj):
-        extra_type_info = column_schema.extra_type_info
-        geometry_type = extra_type_info.get("geometryType", "geometry")
-        geometry_type_parts = geometry_type.strip().split(" ")
-        if len(geometry_type_parts) > 1:
-            raise NotYetImplemented(
-                "Three or four dimensional geometries are not supported by MySQL working copy: "
-                f'("{column_schema.name}" {geometry_type.upper()})'
-            )
-
-        mysql_type = geometry_type_parts[0]
-
-        crs_name = extra_type_info.get("geometryCRS")
-        crs_id = crs_util.get_identifier_int_from_dataset(v2_obj, crs_name)
-        if crs_id is not None:
-            mysql_type += f" SRID {crs_id}"
-
-        return mysql_type
 
     @classmethod
     def sqlserver_to_v2_schema(cls, mysql_table_info, mysql_crs_info, id_salt):
