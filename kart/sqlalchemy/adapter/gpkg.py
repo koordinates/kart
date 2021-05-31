@@ -331,35 +331,28 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
             gpkg_meta_items, "gpkg_geometry_columns", "column_name"
         )
         if name == geom_name:
-            data_type, extra_type_info = cls._gpkg_geom_to_v2_type(gpkg_meta_items)
+            data_type, extra_type_info = cls._sql_type_to_v2_geometry_type(
+                gpkg_meta_items
+            )
         else:
-            data_type, extra_type_info = cls._gpkg_to_v2_type(sqlite_col_info["type"])
+            sql_type = sqlite_col_info["type"]
+            data_type, extra_type_info = cls.sql_type_to_v2_type(sql_type)
 
         pk_index = 0 if sqlite_col_info["pk"] == 1 else None
         col_id = ColumnSchema.deterministic_id(name, data_type, id_salt)
         return ColumnSchema(col_id, name, data_type, pk_index, **extra_type_info)
 
     @classmethod
-    def _gpkg_to_v2_type(cls, gpkg_type):
-        gpkg_type = gpkg_type.upper()
-
-        """Convert a gpkg type to v2 schema type."""
-        m = re.match(r"^(TEXT|BLOB)\(([0-9]+)\)$", gpkg_type)
+    def sql_type_to_v2_type(cls, sql_type):
+        sql_type = sql_type.upper()
+        m = re.match(r"^(TEXT|BLOB)\(([0-9]+)\)$", sql_type)
         if m:
             return m.group(1).lower(), {"length": int(m.group(2))}
-        v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(gpkg_type)
-        if v2_type_info is None:
-            raise ValueError(f"Unrecognised GPKG type: {gpkg_type}")
-        elif isinstance(v2_type_info, tuple):
-            v2_type, size = v2_type_info
-            extra_type_info = {"size": size}
-        else:
-            v2_type = v2_type_info
-            extra_type_info = {}
-        return v2_type, extra_type_info
+
+        return super().sql_type_to_v2_type(sql_type)
 
     @classmethod
-    def _gpkg_geom_to_v2_type(cls, gpkg_meta_items):
+    def _sql_type_to_v2_geometry_type(cls, gpkg_meta_items):
         # There's only one geometry column so no need to determine which column.
         gpkg_geometry_columns = gpkg_meta_items["gpkg_geometry_columns"]
         gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")

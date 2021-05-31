@@ -222,17 +222,11 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
 
     @classmethod
     def _pg_type_to_v2_type(cls, pg_col_info, geom_cols_info):
-        pg_type = pg_col_info["data_type"].upper()
-        v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(pg_type)
-        if v2_type_info is None:
-            v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(pg_col_info["udt_name"].upper())
+        sql_type = pg_col_info["data_type"].upper()
+        if sql_type not in cls.SQL_TYPE_TO_V2_TYPE:
+            sql_type = pg_col_info["udt_name"].upper()
 
-        if isinstance(v2_type_info, tuple):
-            v2_type = v2_type_info[0]
-            extra_type_info = {"size": v2_type_info[1]}
-        else:
-            v2_type = v2_type_info
-            extra_type_info = {}
+        v2_type, extra_type_info = super().sql_type_to_v2_type(sql_type)
 
         if v2_type == "geometry":
             return cls._pg_type_to_v2_geometry_type(pg_col_info, geom_cols_info)

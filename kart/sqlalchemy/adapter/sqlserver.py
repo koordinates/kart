@@ -294,15 +294,8 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
 
     @classmethod
     def _ms_type_to_v2_type(cls, ms_col_info):
-        ms_type = ms_col_info["data_type"].upper()
-        v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(ms_type)
-
-        if isinstance(v2_type_info, tuple):
-            v2_type = v2_type_info[0]
-            extra_type_info = {"size": v2_type_info[1]}
-        else:
-            v2_type = v2_type_info
-            extra_type_info = {}
+        sql_type = ms_col_info["data_type"].upper()
+        v2_type, extra_type_info = super().sql_type_to_v2_type(sql_type)
 
         if v2_type in ("text", "blob"):
             length = ms_col_info["character_maximum_length"] or None

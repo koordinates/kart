@@ -227,23 +227,12 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
 
     @classmethod
     def _mysql_type_to_v2_type(cls, mysql_col_info):
-        mysql_type = mysql_col_info["DATA_TYPE"].upper()
-        v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(mysql_type)
-
-        if isinstance(v2_type_info, tuple):
-            v2_type = v2_type_info[0]
-            extra_type_info = {"size": v2_type_info[1]}
-        else:
-            v2_type = v2_type_info
-            extra_type_info = {}
+        sql_type = mysql_col_info["DATA_TYPE"].upper()
+        v2_type, extra_type_info = super().sql_type_to_v2_type(sql_type)
 
         if v2_type in ("text", "blob"):
-            length = mysql_col_info["CHARACTER_MAXIMUM_LENGTH"] or None
-            if (
-                length is not None
-                and length > 0
-                and length <= cls._MAX_SPECIFIABLE_LENGTH
-            ):
+            length = mysql_col_info["CHARACTER_MAXIMUM_LENGTH"]
+            if length and length > 0 and length <= cls._MAX_SPECIFIABLE_LENGTH:
                 extra_type_info["length"] = length
 
         if v2_type == "numeric":

@@ -83,6 +83,31 @@ class BaseKartAdapter:
             return sql_type
 
     @classmethod
+    def sql_type_to_v2_type(cls, sql_type):
+        """
+        Given the name of a SQL type, returns the equivalent V2 type as a tuple (data_type, extra_type_info).
+        For example: ("integer", {"size": 32}).
+        Note that the sql_type on its own may or may not contain all needed information to specify a V2 type.
+        Subclasses can use or augment this method as they see fit - what is required is that the result of
+        all_v2_meta_items includes a schema.json with the right data types.
+        """
+
+        # This implementation just looks up SQL_TYPE_TO_V2_TYPE.
+        # Any extra work to be done (eg handling of extra_type_info) must be performed by the subclass.
+        sql_type = sql_type.upper()
+        v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(sql_type)
+        if v2_type_info is None:
+            raise ValueError(f"Unsupported SQL type: {sql_type}")
+
+        if isinstance(v2_type_info, tuple):
+            v2_type, v2_subtype_value = v2_type_info
+            subtype_key = cls.SUBTYPE_KEYS.get(v2_type)
+            return v2_type, {subtype_key: v2_subtype_value}
+        else:
+            v2_type = v2_type_info
+            return v2_type, {}
+
+    @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the specified table, yielded as key-value pairs.
