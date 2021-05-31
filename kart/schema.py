@@ -604,13 +604,13 @@ class Schema:
 
     @classmethod
     def _find_time_violation(cls, col, value):
-        if not re.fullmatch(r"\d{2}:\d{2}:\d{2}(\.\d+)?", value):
-            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 time ie HH:MM:SS.SSS"
+        if not re.fullmatch(r"\d{2}:\d{2}:\d{2}(\.\d+)?Z?", value):
+            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 time ie hh:mm:ss.ssss"
 
     @classmethod
     def _find_timestamp_violation(cls, col, value):
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z", value):
-            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 UTC datetime ie YYYY-MM-DDTHH:MM:SS.SSSZ"
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z?", value):
+            return f"In column '{col.name}' value {repr(value)} is not an ISO 8601 UTC datetime ie YYYY-MM-DDThh:mm:ss.ssss"
 
 
 class DefaultRoundtripContext:

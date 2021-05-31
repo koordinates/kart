@@ -42,7 +42,10 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         "text": "TEXT",
         "blob": "BLOB",
         "date": "DATE",
-        "timestamp": "DATETIME",
+        "timestamp": {
+            "UTC": "DATETIME",
+            None: "TEXT",  # Null-timezone timestamp is approximated
+        },
         "time": "TEXT",  # Approximated
         "numeric": "TEXT",  # Approximated
         "interval": "TEXT",  # Approximated
@@ -62,12 +65,17 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         "TEXT": "text",
         "BLOB": "blob",
         "DATE": "date",
-        "DATETIME": "timestamp",
+        "DATETIME": ("timestamp", "UTC"),
         "GEOMETRY": "geometry",
     }
 
     # Types that can't be roundtripped perfectly in GPKG, and what they end up as.
-    APPROXIMATED_TYPES = {"interval": "text", "time": "text", "numeric": "text"}
+    APPROXIMATED_TYPES = {
+        "interval": "text",
+        "time": "text",
+        "numeric": "text",
+        ("timestamp", None): "text",
+    }
 
     # Extra type info that might be missing/extra due to an approximated type.
     APPROXIMATED_TYPES_EXTRA_TYPE_INFO = ("length", "precision", "scale")
@@ -584,6 +592,9 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         elif col.data_type == "boolean":
             # Read BOOLEANs as bools, not ints.
             return BooleanType
+        elif col.data_type == "timestamp":
+            # Add and strip Z suffix from timestamps:
+            return TimestampType(col.extra_type_info.get("timezone"))
         # Don't need to specify type information for other columns at present, since we just pass through the values.
         return None
 
@@ -611,3 +622,28 @@ class BooleanType(ConverterType):
         # Its possible in GPKG to put arbitrary values in columns, regardless of type.
         # We don't try to convert them here - we let the commit validation step report this as an error.
         return bool(value) if value in (0, 1) else value
+
+
+@aliased_converter_type
+class TimestampType(ConverterType):
+    """
+    ConverterType so that the Z timezone suffix is added in when written (for UTC timestamps) and stripped on read.
+    In Kart, the timezone information is only stored at the column level, not on the value itself.
+    """
+
+    def __init__(self, timezone):
+        self.timezone = timezone
+
+    def python_prewrite(self, timestamp):
+        if isinstance(timestamp, str):
+            if self.timezone is None:
+                return timestamp.rstrip("Z")
+            elif self.timezone == "UTC" and not timestamp.endswith("Z"):
+                return f"{timestamp}Z"
+
+        return timestamp
+
+    def python_postread(self, timestamp):
+        # Its possible in GPKG to put arbitrary values in columns, regardless of type.
+        # We don't try to convert them here - we let the commit validation step report this as an error.
+        return timestamp.rstrip("Z") if isinstance(timestamp, str) else timestamp

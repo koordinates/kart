@@ -109,7 +109,7 @@ The following data types are supported by Kart. When a versioned Kart dataset is
 * `blob`
   - stores a string of bytes.
 * `date`
-  - stores year + month + day. The timezone that should be used interpret this is not stored.
+  - stores year + month + day. The timezone that should be used to interpret this (if any) is not stored.
 * `float`
   - stores a floating point number using a fixed number of bits. Floating point values have reasonable but imperfect precision over a huge range.
 * `geometry`
@@ -123,9 +123,9 @@ The following data types are supported by Kart. When a versioned Kart dataset is
 * `text`
   - stores a string of text, using the database's text encoding.
 * `time`
-  - stores hour + minute + second, and optionally the timezone that this time was recorded in.
+  - stores a 24 hour time as hour + minute + second. The timezone that should be used to interpret this (if any) is not stored.
 * `timestamp`
-  - stores a date + time, and optionally the timezone that this timestamp was recorded in.
+  - stores a date + time. The timezone that should be used to interpret this is not stored, with one exception: the entire column can be defined as being in UTC in the column schema.
 
 ##### Extra type info
 
@@ -166,6 +166,12 @@ The extra attributes that are supported are as follows:
 - `scale`
   * How many of the digits are to the right of the decimal point.
 For example, the number "1234.5678" can be stored in a numeric type with a precision of 8 and a scale of 4.
+
+###### Extra type info for `"dataType": "timestamp"`
+- `timezone`
+  * Eg: `"timezone": "UTC"`
+  * The timezone that should be used to interpret the timestamp. The only valid values are `"UTC"` and `null`. If the timezone is `null`, that means that the timestamp's timezone (if any) is not stored in Kart, and therefore interpreting the timestamps correctly must be performed by a client with the appropriate context (ie, perhaps the client knows all stored timestamps are in local time at the client's location).
+
 
 #### `meta/legend/...`
 
@@ -247,8 +253,8 @@ Features are stored at a filename that contains a Base64 encoding of their prima
 * `interval` - serialised as a string, in [ISO8601 Duration](https://en.wikipedia.org/wiki/ISO_8601#Durations) format, ie `PnYnMnDTnHnMnS`.
 * `numeric` - serialised as a string, in decimal format eg `123` for a whole number or `123.456` if there is a fractional part.
 * `text` - serialised as a string.
-* `time` - serialised as a string, with the format `hh:mm:ss.ssss`, optionally with the suffix `Z` indicating that the time is in UTC. The fractions of a second may be omitted.
-* `timestamp` - serialised as a string, in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) format with `T` as the separator, ie `YYYY-MM-DDThh:mm:ss.ssss`, optionally with the suffix `Z` indicating that the time is in UTC. The fractions of a second may be omitted.
+* `time` - serialised as a string, with the format `hh:mm:ss.ssss` and without a timezone. The fractions of a second may be omitted.
+* `timestamp` - serialised as a string, in [ISO8601](https://en.wikipedia.org/wiki/ISO_8601) format with `T` as the separator and without a timezone, ie `YYYY-MM-DDThh:mm:ss.ssss`. The fractions of a second may be omitted.
 
 In those cases where a certain part of the representation may be omitted - in practise, that part will be omitted if it is zero. If it is non-zero it will always be included.
 

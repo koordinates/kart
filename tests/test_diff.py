@@ -374,20 +374,20 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                 '+                                       id = 9998',
                 '--- nz_waca_adjustments:feature:1443053',
                 '+++ nz_waca_adjustments:feature:1443053',
-                '-                            date_adjusted = 2011-05-10T12:09:10Z',
-                '+                            date_adjusted = 2019-01-01T00:00:00Z',
+                '-                            date_adjusted = 2011-05-10T12:09:10',
+                '+                            date_adjusted = 2019-01-01T00:00:00',
                 '-                         survey_reference = ␀',
                 '+                         survey_reference = test',
                 '--- nz_waca_adjustments:feature:1452332',
                 '-                                       id = 1452332',
                 '-                                     geom = MULTIPOLYGON(...)',
-                '-                            date_adjusted = 2011-06-07T15:22:58Z',
+                '-                            date_adjusted = 2011-06-07T15:22:58',
                 '-                         survey_reference = ␀',
                 '-                           adjusted_nodes = 558',
                 '+++ nz_waca_adjustments:feature:9999999',
                 '+                                       id = 9999999',
                 '+                                     geom = MULTIPOLYGON(...)',
-                '+                            date_adjusted = 2019-07-05T13:04:00Z',
+                '+                            date_adjusted = 2019-07-05T13:04:00',
                 '+                         survey_reference = Null Island™ 🗺',
                 '+                           adjusted_nodes = 123',
             ]
@@ -429,7 +429,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                         "id": "U-::1424927",
                         "properties": {
                             "adjusted_nodes": 1122,
-                            "date_adjusted": "2011-03-25T07:30:45Z",
+                            "date_adjusted": "2011-03-25T07:30:45",
                             "id": 1424927,
                             "survey_reference": None,
                         },
@@ -466,7 +466,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                         "id": "U+::9998",
                         "properties": {
                             "adjusted_nodes": 1122,
-                            "date_adjusted": "2011-03-25T07:30:45Z",
+                            "date_adjusted": "2011-03-25T07:30:45",
                             "id": 9998,
                             "survey_reference": None,
                         },
@@ -496,7 +496,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                         "id": "U-::1443053",
                         "properties": {
                             "adjusted_nodes": 1238,
-                            "date_adjusted": "2011-05-10T12:09:10Z",
+                            "date_adjusted": "2011-05-10T12:09:10",
                             "id": 1443053,
                             "survey_reference": None,
                         },
@@ -526,7 +526,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                         "id": "U+::1443053",
                         "properties": {
                             "adjusted_nodes": 1238,
-                            "date_adjusted": "2019-01-01T00:00:00Z",
+                            "date_adjusted": "2019-01-01T00:00:00",
                             "id": 1443053,
                             "survey_reference": "test",
                         },
@@ -569,7 +569,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                         "id": "D::1452332",
                         "properties": {
                             "adjusted_nodes": 558,
-                            "date_adjusted": "2011-06-07T15:22:58Z",
+                            "date_adjusted": "2011-06-07T15:22:58",
                             "id": 1452332,
                             "survey_reference": None,
                         },
@@ -593,7 +593,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                         "id": "I::9999999",
                         "properties": {
                             "adjusted_nodes": 123,
-                            "date_adjusted": "2019-07-05T13:04:00Z",
+                            "date_adjusted": "2019-07-05T13:04:00",
                             "id": 9999999,
                             "survey_reference": "Null Island™ 🗺",
                         },
@@ -616,14 +616,14 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                             {
                                 "+": {
                                     "adjusted_nodes": 1122,
-                                    "date_adjusted": "2011-03-25T07:30:45Z",
+                                    "date_adjusted": "2011-03-25T07:30:45",
                                     "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
                                     "id": 9998,
                                     "survey_reference": None,
                                 },
                                 "-": {
                                     "adjusted_nodes": 1122,
-                                    "date_adjusted": "2011-03-25T07:30:45Z",
+                                    "date_adjusted": "2011-03-25T07:30:45",
                                     "geom": "01060000000100000001030000000100000012000000D2B47A3DAEEB65402E86A80212EF42C01D23796880EB6540D54A46E909EE42C03E7210197BEB6540B164332CEBED42C003ECE8DE70EB6540C99AB69AACED42C0916A8E626FEB654040F4DAAC9EED42C0615CA5D035EB6540F2B295FC50EB42C04AA3B89940EB6540D90F9D94DCEA42C00937B99972EB6540163FEB35F4E942C0B9103A5876EB65408D6D995DE5E942C008A85AD68FEB654069D2CB43DDE942C0D24A26924CEC6540C455AF6CB0EC42C0D21275304CEC6540E6CE3803B6EC42C018EA6B3714EC6540D17726991DEE42C00D91731C00EC65401BE20E8A9CEE42C0EBE45150F7EB6540D10F6A10D4EE42C01C6BD51EEDEB6540CD6886390AEF42C0FB975FA7EBEB6540DB85E63A0DEF42C0D2B47A3DAEEB65402E86A80212EF42C0",
                                     "id": 1424927,
                                     "survey_reference": None,
@@ -632,14 +632,14 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                             {
                                 "+": {
                                     "adjusted_nodes": 1238,
-                                    "date_adjusted": "2019-01-01T00:00:00Z",
+                                    "date_adjusted": "2019-01-01T00:00:00",
                                     "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
                                     "id": 1443053,
                                     "survey_reference": "test",
                                 },
                                 "-": {
                                     "adjusted_nodes": 1238,
-                                    "date_adjusted": "2011-05-10T12:09:10Z",
+                                    "date_adjusted": "2011-05-10T12:09:10",
                                     "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
                                     "id": 1443053,
                                     "survey_reference": None,
@@ -648,7 +648,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                             {
                                 "-": {
                                     "adjusted_nodes": 558,
-                                    "date_adjusted": "2011-06-07T15:22:58Z",
+                                    "date_adjusted": "2011-06-07T15:22:58",
                                     "geom": "01060000000100000001030000000100000018000000C43FCCA465D7654049FCE5EE4E6642C031DD1F0460D765406D606177F06542C064343C0760D765408E68DDEBED6542C0774AC25F66D7654003E4041CD46542C00442E6DF6AD765405B0AD914C76542C00F9E1F7B6BD76540B7354771C56542C099152AB96BD76540ED1D93E0C46542C03E5700F86CD76540F85610F9C16542C01E90DF366ED76540FDC68D11BF6542C056546E3273D765402D735F73B36542C056C5C5E175D76540EFB2BA30AD6542C06AC54D4277D76540182AC9FAA96542C09C400C8977D7654048F61C62A96542C03590D37C7AD76540168A743FA76542C0F38A07DA7CD7654069796568AA6542C0FF12A7497FD76540FD8AFFFBAF6542C0D5F5B5BE91D765406A7190D0F26542C049E06AF891D76540BCC23B6FF56542C08B3858D991D76540B6662B2FF96542C07E0C0C0F90D76540E2CF4B20006642C03FF664C98ED7654020CAD027046642C020E67C7C74D765406A7528F9476642C052A1D0E771D76540D9BFA1A64C6642C0C43FCCA465D7654049FCE5EE4E6642C0",
                                     "id": 1452332,
                                     "survey_reference": None,
@@ -657,7 +657,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                             {
                                 "+": {
                                     "adjusted_nodes": 123,
-                                    "date_adjusted": "2019-07-05T13:04:00Z",
+                                    "date_adjusted": "2019-07-05T13:04:00",
                                     "geom": "01060000000100000001030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000",
                                     "id": 9999999,
                                     "survey_reference": "Null Island™ 🗺",
@@ -1488,7 +1488,7 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
                 '+++ nz_waca_adjustments:feature:1424927',
                 '+                                       id = 1424927',
                 '+                                     geom = MULTIPOLYGON(...)',
-                '+                            date_adjusted = 2011-03-25T07:30:45Z',
+                '+                            date_adjusted = 2011-03-25T07:30:45',
                 '+                         survey_reference = ␀',
                 '+                           adjusted_nodes = 1122',
             ]

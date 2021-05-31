@@ -186,7 +186,7 @@ def edit_polygons_schema(db):
     RECORD = {
         "id": 9_999_999,
         "geom": "POLYGON((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0))",
-        "date_adjusted": "2019-07-05T13:04:00Z",
+        "date_adjusted": "2019-07-05T13:04:00",
         "surv_ref": "Null Island™ 🗺",
         "adjusted_nodes": 123,
         "colour": None,
@@ -655,7 +655,7 @@ def check_polygons_diff_output(r, output_format):
         # New column "colour" has an ID is deterministically generated from the commit hash,
         # but we don't care exactly what it is.
         try:
-            colour_id_line = r.stdout.splitlines()[36]
+            colour_id_line = r.stdout.splitlines()[37]
         except KeyError:
             colour_id_line = ""
 
@@ -680,7 +680,8 @@ def check_polygons_diff_output(r, output_format):
             "    {",
             '      "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",',
             '      "name": "date_adjusted",',
-            '      "dataType": "timestamp"',
+            '      "dataType": "timestamp",',
+            '      "timezone": "UTC"',
             "    },",
             "    {",
             '      "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",',
@@ -715,7 +716,7 @@ def check_polygons_diff_output(r, output_format):
             "+++ nz_waca_adjustments:feature:9999999",
             "+                                       id = 9999999",
             "+                                     geom = POLYGON(...)",
-            "+                            date_adjusted = 2019-07-05T13:04:00Z",
+            "+                            date_adjusted = 2019-07-05T13:04:00",
             "+                                 surv_ref = Null Island™ 🗺",
             "+                           adjusted_nodes = 123",
             "+                                   colour = ␀",
@@ -757,6 +758,7 @@ def check_polygons_diff_output(r, output_format):
                                     "dataType": "timestamp",
                                     "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",
                                     "name": "date_adjusted",
+                                    "timezone": "UTC",
                                 },
                                 {
                                     "dataType": "text",
@@ -790,6 +792,7 @@ def check_polygons_diff_output(r, output_format):
                                     "dataType": "timestamp",
                                     "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",
                                     "name": "date_adjusted",
+                                    "timezone": "UTC",
                                 },
                                 {
                                     "dataType": "text",
@@ -817,14 +820,14 @@ def check_polygons_diff_output(r, output_format):
                             "+": {
                                 "adjusted_nodes": 1238,
                                 "colour": None,
-                                "date_adjusted": "2011-05-10T12:09:10Z",
+                                "date_adjusted": "2011-05-10T12:09:10",
                                 "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
                                 "id": 1443053,
                                 "surv_ref": "test",
                             },
                             "-": {
                                 "adjusted_nodes": 1238,
-                                "date_adjusted": "2011-05-10T12:09:10Z",
+                                "date_adjusted": "2011-05-10T12:09:10",
                                 "geom": "0106000000010000000103000000010000000B000000DDEF0B89EEC665400CAB8C50D98E43C0AA7883AEBCC66540F6237BC40C8843C0D25EEE2300C7654002A1BF90B18543C0218DAFE279C76540391485E7938543C09EE81AACF7C76540E85798D99E8843C02E055F7296C765405BFD22B2598D43C0EA119EE595C765406BD26D895C8D43C087CDFB1423C76540723E2B1FB88E43C08DFCB0941BC7654054B82FB1C38E43C0A00948100AC76540FB04E1A5D38E43C0DDEF0B89EEC665400CAB8C50D98E43C0",
                                 "id": 1443053,
                                 "survey_reference": None,
@@ -834,14 +837,14 @@ def check_polygons_diff_output(r, output_format):
                             "+": {
                                 "adjusted_nodes": 558,
                                 "colour": "yellow",
-                                "date_adjusted": "2011-06-07T15:22:58Z",
+                                "date_adjusted": "2011-06-07T15:22:58",
                                 "geom": "01060000000100000001030000000100000018000000C43FCCA465D7654049FCE5EE4E6642C031DD1F0460D765406D606177F06542C064343C0760D765408E68DDEBED6542C0774AC25F66D7654003E4041CD46542C00442E6DF6AD765405B0AD914C76542C00F9E1F7B6BD76540B7354771C56542C099152AB96BD76540ED1D93E0C46542C03E5700F86CD76540F85610F9C16542C01E90DF366ED76540FDC68D11BF6542C056546E3273D765402D735F73B36542C056C5C5E175D76540EFB2BA30AD6542C06AC54D4277D76540182AC9FAA96542C09C400C8977D7654048F61C62A96542C03590D37C7AD76540168A743FA76542C0F38A07DA7CD7654069796568AA6542C0FF12A7497FD76540FD8AFFFBAF6542C0D5F5B5BE91D765406A7190D0F26542C049E06AF891D76540BCC23B6FF56542C08B3858D991D76540B6662B2FF96542C07E0C0C0F90D76540E2CF4B20006642C03FF664C98ED7654020CAD027046642C020E67C7C74D765406A7528F9476642C052A1D0E771D76540D9BFA1A64C6642C0C43FCCA465D7654049FCE5EE4E6642C0",
                                 "id": 1452332,
                                 "surv_ref": None,
                             },
                             "-": {
                                 "adjusted_nodes": 558,
-                                "date_adjusted": "2011-06-07T15:22:58Z",
+                                "date_adjusted": "2011-06-07T15:22:58",
                                 "geom": "01060000000100000001030000000100000018000000C43FCCA465D7654049FCE5EE4E6642C031DD1F0460D765406D606177F06542C064343C0760D765408E68DDEBED6542C0774AC25F66D7654003E4041CD46542C00442E6DF6AD765405B0AD914C76542C00F9E1F7B6BD76540B7354771C56542C099152AB96BD76540ED1D93E0C46542C03E5700F86CD76540F85610F9C16542C01E90DF366ED76540FDC68D11BF6542C056546E3273D765402D735F73B36542C056C5C5E175D76540EFB2BA30AD6542C06AC54D4277D76540182AC9FAA96542C09C400C8977D7654048F61C62A96542C03590D37C7AD76540168A743FA76542C0F38A07DA7CD7654069796568AA6542C0FF12A7497FD76540FD8AFFFBAF6542C0D5F5B5BE91D765406A7190D0F26542C049E06AF891D76540BCC23B6FF56542C08B3858D991D76540B6662B2FF96542C07E0C0C0F90D76540E2CF4B20006642C03FF664C98ED7654020CAD027046642C020E67C7C74D765406A7528F9476642C052A1D0E771D76540D9BFA1A64C6642C0C43FCCA465D7654049FCE5EE4E6642C0",
                                 "id": 1452332,
                                 "survey_reference": None,
@@ -851,7 +854,7 @@ def check_polygons_diff_output(r, output_format):
                             "+": {
                                 "adjusted_nodes": 123,
                                 "colour": None,
-                                "date_adjusted": "2019-07-05T13:04:00Z",
+                                "date_adjusted": "2019-07-05T13:04:00",
                                 "geom": "01030000000100000005000000000000000000000000000000000000000000000000000000FCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503FFCA9F1D24D62503F000000000000000000000000000000000000000000000000",
                                 "id": 9999999,
                                 "surv_ref": "Null Island™ 🗺",
@@ -893,7 +896,7 @@ def check_polygons_diff_output(r, output_format):
                     "id": "U-::1443053",
                     "properties": {
                         "adjusted_nodes": 1238,
-                        "date_adjusted": "2011-05-10T12:09:10Z",
+                        "date_adjusted": "2011-05-10T12:09:10",
                         "id": 1443053,
                         "survey_reference": None,
                     },
@@ -924,7 +927,7 @@ def check_polygons_diff_output(r, output_format):
                     "properties": {
                         "adjusted_nodes": 1238,
                         "colour": None,
-                        "date_adjusted": "2011-05-10T12:09:10Z",
+                        "date_adjusted": "2011-05-10T12:09:10",
                         "id": 1443053,
                         "surv_ref": "test",
                     },
@@ -967,7 +970,7 @@ def check_polygons_diff_output(r, output_format):
                     "id": "U-::1452332",
                     "properties": {
                         "adjusted_nodes": 558,
-                        "date_adjusted": "2011-06-07T15:22:58Z",
+                        "date_adjusted": "2011-06-07T15:22:58",
                         "id": 1452332,
                         "survey_reference": None,
                     },
@@ -1011,7 +1014,7 @@ def check_polygons_diff_output(r, output_format):
                     "properties": {
                         "adjusted_nodes": 558,
                         "colour": "yellow",
-                        "date_adjusted": "2011-06-07T15:22:58Z",
+                        "date_adjusted": "2011-06-07T15:22:58",
                         "id": 1452332,
                         "surv_ref": None,
                     },
@@ -1034,7 +1037,7 @@ def check_polygons_diff_output(r, output_format):
                     "properties": {
                         "adjusted_nodes": 123,
                         "colour": None,
-                        "date_adjusted": "2019-07-05T13:04:00Z",
+                        "date_adjusted": "2019-07-05T13:04:00",
                         "id": 9999999,
                         "surv_ref": "Null Island™ 🗺",
                     },

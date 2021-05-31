@@ -18,9 +18,7 @@ H = pytest.helpers.helpers()
     "accuracy",
     ["exact", "fast"],
 )
-def test_feature_count_noops(
-    head_sha, head1_sha, accuracy, data_archive_readonly, cli_runner
-):
+def test_feature_count_noops(head_sha, head1_sha, accuracy, data_archive, cli_runner):
     NOOP_SPECS = (
         f"{head_sha[:6]}...{head_sha[:6]}",
         f"{head_sha}...{head_sha}",
@@ -30,15 +28,15 @@ def test_feature_count_noops(
         f"...{head_sha}",
     )
 
-    with data_archive_readonly("points"):
+    with data_archive("points"):
         for spec in NOOP_SPECS:
             print(f"noop: {spec}")
             r = cli_runner.invoke(["diff", f"--only-feature-count={accuracy}", spec])
             assert r.exit_code == 0, r
 
 
-def test_feature_count_commits_exact(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points"):
+def test_feature_count_commits_exact(data_archive, cli_runner):
+    with data_archive("points"):
         r = cli_runner.invoke(["diff", "--only-feature-count=exact", "HEAD^...HEAD"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
@@ -47,8 +45,8 @@ def test_feature_count_commits_exact(data_archive_readonly, cli_runner):
         ]
 
 
-def test_feature_count_commits_json_output(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points"):
+def test_feature_count_commits_json_output(data_archive, cli_runner):
+    with data_archive("points"):
         r = cli_runner.invoke(
             ["diff", "--only-feature-count=exact", "HEAD^...HEAD", "-o", "json"]
         )
@@ -56,8 +54,8 @@ def test_feature_count_commits_json_output(data_archive_readonly, cli_runner):
         assert json.loads(r.stdout) == {"nz_pa_points_topo_150k": 5}
 
 
-def test_feature_count_commits_veryfast(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points"):
+def test_feature_count_commits_veryfast(data_archive, cli_runner):
+    with data_archive("points"):
         r = cli_runner.invoke(["diff", "--only-feature-count=veryfast", "HEAD^...HEAD"])
         assert r.exit_code == 0, r.stderr
 
@@ -67,8 +65,8 @@ def test_feature_count_commits_veryfast(data_archive_readonly, cli_runner):
         ]
 
 
-def test_feature_count_commits_fast(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points"):
+def test_feature_count_commits_fast(data_archive, cli_runner):
+    with data_archive("points"):
         r = cli_runner.invoke(["diff", "--only-feature-count=fast", "HEAD^...HEAD"])
         assert r.exit_code == 0, r.stderr
 
@@ -78,8 +76,8 @@ def test_feature_count_commits_fast(data_archive_readonly, cli_runner):
         ]
 
 
-def test_feature_count_no_working_copy(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points"):
+def test_feature_count_no_working_copy(data_archive, cli_runner):
+    with data_archive("points"):
         r = cli_runner.invoke(["diff", "--only-feature-count=fast", "HEAD^"])
         # No working copy
         assert r.exit_code == 45, r.stderr

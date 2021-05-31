@@ -150,7 +150,6 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
     def _sno_tracking_name(self, trigger_type, dataset=None):
         """Returns the sno-branded name of the trigger reponsible for populating the sno_track table."""
-        assert dataset is None
         return f"_sno_track_{trigger_type}"
 
     def _create_triggers(self, sess, dataset):

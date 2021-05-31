@@ -38,9 +38,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         "numeric": "NUMERIC",
         "text": "TEXT",
         "time": "TIME",
-        "timestamp": "TIMESTAMPTZ",
-        # TODO - time and timestamp come in two flavours, with and without timezones.
-        # Code for preserving these flavours in datasets and working copies needs more work.
+        "timestamp": {"UTC": "TIMESTAMPTZ", None: "TIMESTAMP"},
     }
 
     SQL_TYPE_TO_V2_TYPE = {
@@ -59,8 +57,8 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         "TEXT": "text",
         "TIME": "time",
         "TIMETZ": "time",
-        "TIMESTAMP": "timestamp",
-        "TIMESTAMPTZ": "timestamp",
+        "TIMESTAMP": ("timestamp", None),
+        "TIMESTAMPTZ": ("timestamp", "UTC"),
         "VARCHAR": "text",
     }
 
@@ -312,10 +310,12 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             return GeometryType
         elif col.data_type == "blob":
             return BlobType
+        elif col.data_type == "date":
+            return DateType
+        elif col.data_type == "time":
+            return TimeType
         elif col.data_type == "timestamp":
-            return TimestampType
-        elif col.data_type in ("date", "time", "interval", "numeric"):
-            return GenericCastToStringType
+            return TimestampType(col.extra_type_info.get("timezone"))
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
@@ -340,14 +340,37 @@ class BlobType(ConverterType):
 
 
 @aliased_converter_type
-class TimestampType(ConverterType):
-    # ConverterType to read timestamps as text. They are stored in PG as TIMESTAMPS but we read them back as text.
+class DateType(ConverterType):
+    # ConverterType to read dates as text. They are stored in PG as DATE but we read them back as text.
     def sql_read(self, column):
-        return Function("to_char", column, 'YYYY-MM-DD"T"HH24:MI:SSZ', type_=self)
+        return Function("to_char", column, "YYYY-MM-DD", type_=self)
 
 
 @aliased_converter_type
-class GenericCastToStringType(ConverterType):
-    # ConverterType that simply casts to string in the python layer.
-    def python_postread(self, value):
-        return str(value) if value is not None else None
+class TimeType(ConverterType):
+    # ConverterType to read times as text. They are stored in PG as TIME but we read them back as text.
+    def sql_read(self, column):
+        return Function("to_char", column, "HH24:MI:SS", type_=self)
+
+
+@aliased_converter_type
+class TimestampType(ConverterType):
+    """
+    ConverterType so that the Z timezone suffix is added in when written (for UTC timestamps),
+    and so that timestamps are read as text, without a timezone.
+    """
+
+    def __init__(self, timezone):
+        self.timezone = timezone
+
+    def python_prewrite(self, timestamp):
+        if isinstance(timestamp, str):
+            if self.timezone is None:
+                return timestamp.rstrip("Z")
+            elif self.timezone == "UTC" and not timestamp.endswith("Z"):
+                return f"{timestamp}Z"
+
+        return timestamp
+
+    def sql_read(self, column):
+        return Function("to_char", column, 'YYYY-MM-DD"T"HH24:MI:SS', type_=self)

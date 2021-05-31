@@ -63,7 +63,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         "numeric": "NUMERIC",
         "text": "NVARCHAR",
         "time": "TIME",
-        "timestamp": "DATETIMEOFFSET",
+        "timestamp": {"UTC": "DATETIMEOFFSET", None: "DATETIME2"},
     }
 
     SQL_TYPE_TO_V2_TYPE = {
@@ -77,9 +77,10 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         "BINARY": "blob",
         "CHAR": "text",
         "DATE": "date",
-        "DATETIME": "timestamp",
-        "DATETIME2": "timestamp",
-        "DATETIMEOFFSET": "timestamp",
+        "SMALLDATETIME": ("timestamp", None),
+        "DATETIME": ("timestamp", None),
+        "DATETIME2": ("timestamp", None),
+        "DATETIMEOFFSET": ("timestamp", "UTC"),
         "DECIMAL": "numeric",
         "GEOGRAPHY": "geometry",
         "GEOMETRY": "geometry",
@@ -337,8 +338,12 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
                 )
             # This user-defined GeometryType adapts Kart's GPKG geometry to SQL Server's native geometry type.
             return GeometryType(crs_id)
-        elif col.data_type in ("date", "time", "timestamp"):
-            return BaseDateOrTimeType
+        elif col.data_type == "date":
+            return DateType
+        elif col.data_type == "time":
+            return TimeType
+        elif col.data_type == "timestamp":
+            return TimestampType(col.extra_type_info.get("timezone"))
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
@@ -388,19 +393,37 @@ class GeometryType(ConverterType):
 
 
 @aliased_converter_type
-class BaseDateOrTimeType(ConverterType):
+class DateType(ConverterType):
+    # ConverterType to read dates as text. They are stored in MS as DATE but we read them back as text.
+    def sql_read(self, column):
+        return Function("FORMAT", column, "yyyy-MM-dd", type_=self)
+
+
+@aliased_converter_type
+class TimeType(ConverterType):
+    # ConverterType to read times as text. They are stored in MS as TIME but we read them back as text.
+    def sql_read(self, column):
+        return Function("FORMAT", column, "HH:mm:ss", type_=self)
+
+
+@aliased_converter_type
+class TimestampType(ConverterType):
     """
-    ConverterType so we read dates, times, and datetimes as text.
-    They are stored as date / time / datetime in SQL Server, but read back out as text.
+    ConverterType so that the Z timezone suffix is added in when written (for UTC timestamps),
+    and so that timestamps are read as text, without a timezone.
     """
 
+    def __init__(self, timezone):
+        self.timezone = timezone
+
+    def python_prewrite(self, timestamp):
+        if isinstance(timestamp, str):
+            if self.timezone is None:
+                return timestamp.rstrip("Z")
+            elif self.timezone == "UTC" and not timestamp.endswith("Z"):
+                return f"{timestamp}Z"
+
+        return timestamp
+
     def sql_read(self, column):
-        # When reading, convert dates and times to strings using style 127: ISO8601 with time zone Z.
-        # https://docs.microsoft.com/en-us/sql/t-sql/functions/cast-and-convert-transact-sql
-        return Function(
-            "CONVERT",
-            literal_column("NVARCHAR"),
-            column,
-            literal_column("127"),
-            type_=self,
-        )
+        return Function("FORMAT", column, "yyyy-MM-ddTHH:mm:ss", type_=self)

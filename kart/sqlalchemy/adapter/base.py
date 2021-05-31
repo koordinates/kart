@@ -12,7 +12,11 @@ class BaseKartAdapter:
 
     # Certain types have a small set of subtypes that can be distinguished between by checking the extra type info.
     # For instance, integers and floats have subtypes that have different "size" attribues.
-    SUBTYPE_KEYS = {"integer": "size", "float": "size"}
+    SUBTYPE_KEYS = {
+        "integer": "size",
+        "float": "size",
+        "timestamp": "timezone",
+    }
     DEFAULT_SUBTYPE_VALUES = {"size": 0}
 
     @classmethod

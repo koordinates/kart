@@ -75,12 +75,17 @@ def _import_check(repo_path, table, source_gpkg):
 
 def normalise_feature(row):
     row = dict(row)
-    # TODO - this is a bit of a hack:
+    # In production code, this is done automatically the type converters in KartAdapter_GPKG.
+    # Here we do it crudely "by hand", to make sure it's doing what we expect.
     for field_name in ("geom", "Shape"):
         if field_name in row:
             row[field_name] = ogr_to_gpkg_geom(
                 gpkg_geom_to_ogr(row[field_name], parse_crs=True),
             )
+    for field_name in ("date_adjusted",):
+        if row.get(field_name):
+            row[field_name] = row[field_name].rstrip("Z")
+
     return row
 
 

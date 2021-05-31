@@ -489,11 +489,11 @@ class TestHelpers:
             "geom": Geometry.from_wkt(
                 "MULTIPOLYGON(((0 0, 0 0.001, 0.001 0.001, 0.001 0, 0 0)))"
             ).with_crs_id(4167),
-            "date_adjusted": "2019-07-05T13:04:00Z",
+            "date_adjusted": "2019-07-05T13:04:00",
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
         }
-        HEAD_SHA = "5bb25a2da966b15ae7743db4666c1599001e2443"
+        HEAD_SHA = "0a2d0d75162f3b9266fcce562d989ee30033f9c1"
         ROWCOUNT = 228
         TEXT_FIELD = "survey_reference"
         SAMPLE_PKS = [

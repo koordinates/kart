@@ -293,6 +293,16 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             for key in KartAdapter_GPKG.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
+        # GPKG can't store a certain type of timestamp:
+        if old_type == "timestamp":
+            old_timezone = old_col_dict.get("timezone")
+            if (
+                KartAdapter_GPKG.APPROXIMATED_TYPES.get((old_type, old_timezone))
+                == new_type
+            ):
+                new_col_dict["dataType"] = new_type = old_type
+                new_col_dict["timezone"] = old_timezone
+
         # GPKG primary keys have to be int64, so we approximate int8, int16, int32 primary keys as int64s.
         if old_type == "integer" and new_type == "integer":
             if new_col_dict.get("size") != old_col_dict.get("size"):

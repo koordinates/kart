@@ -235,7 +235,7 @@ def test_edit_schema(data_archive, cli_runner, new_mysql_db_schema):
             except KeyError:
                 colour_id_line = ""
 
-            assert diff[-46:] == [
+            assert diff[-47:] == [
                 "--- nz_waca_adjustments:meta:schema.json",
                 "+++ nz_waca_adjustments:meta:schema.json",
                 "  [",
@@ -256,7 +256,8 @@ def test_edit_schema(data_archive, cli_runner, new_mysql_db_schema):
                 "    {",
                 '      "id": "d3d4b64b-d48e-4069-4bb5-dfa943d91e6b",',
                 '      "name": "date_adjusted",',
-                '      "dataType": "timestamp"',
+                '      "dataType": "timestamp",',
+                '      "timezone": "UTC"',
                 "    },",
                 "-   {",
                 '-     "id": "dff34196-229d-f0b5-7fd4-b14ecf835b2c",',

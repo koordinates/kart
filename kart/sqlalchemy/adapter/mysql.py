@@ -38,7 +38,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         "numeric": "NUMERIC",
         "text": "LONGTEXT",
         "time": "TIME",
-        "timestamp": "TIMESTAMP",
+        "timestamp": {"UTC": "TIMESTAMP", None: "DATETIME"},
     }
 
     _TEXT_AND_BLOB_PREFIXES = ("TINY", "MEDIUM", "LONG")
@@ -56,13 +56,13 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         "BLOB": "blob",
         "CHAR": "text",
         "DATE": "date",
-        "DATETIME": "timestamp",
+        "DATETIME": ("timestamp", None),
         "DECIMAL": "numeric",
         "GEOMETRY": "geometry",
         "NUMERIC": "numeric",
         "TEXT": "text",
         "TIME": "time",
-        "TIMESTAMP": "timestamp",
+        "TIMESTAMP": ("timestamp", "UTC"),
         "VARCHAR": "text",
         "VARBINARY": "blob",
         **{f"{prefix}TEXT": "text" for prefix in _TEXT_AND_BLOB_PREFIXES},
@@ -379,10 +379,11 @@ class TimestampType(ConverterType):
 
     def python_prewrite(self, timestamp):
         # 1. Writing - Python layer - remove timezone specifier - MySQL can't read timezone specifiers.
-        # MySQL requires instead that the timezone is set in the database session (see create_engine.py)
+        # Instead, it uses the session timezone (UTC) when writing a timestamp with timezone.
+        # (Datasets V2 shouldn't have a timezone specifier anyway, but it may be present for legacy reasons).
         return timestamp.rstrip("Z") if isinstance(timestamp, str) else timestamp
 
     def sql_read(self, col):
         # 2. Reading - SQL layer - convert timestamp to string in ISO8601 with Z as the timezone specifier.
         # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
-        return Function("DATE_FORMAT", col, "%Y-%m-%dT%H:%i:%SZ", type_=self)
+        return Function("DATE_FORMAT", col, "%Y-%m-%dT%H:%i:%S", type_=self)
