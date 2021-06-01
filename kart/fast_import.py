@@ -159,10 +159,10 @@ def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
             # delete all features not pertaining to this process.
             # we also delete the features that *do*, but we do it further down
             # so that we don't have to iterate the IDs more than once.
-            for subtree in range(256):
-                if subtree % len(procs) != i:
+            for subtree in replacing_dataset.feature_path_encoder().tree_names():
+                if hash(subtree) % len(procs) != i:
                     proc.stdin.write(
-                        f"D {source.dest_path}/.sno-dataset/feature/{subtree:02x}\n".encode(
+                        f"D {source.dest_path}/.sno-dataset/feature/{subtree}\n".encode(
                             "utf8"
                         )
                     )
@@ -212,6 +212,7 @@ def fast_import_tables(
     """
 
     MAX_PROCESSES = 64
+
     if num_processes < 1:
         num_processes = 1
     elif num_processes > MAX_PROCESSES:
@@ -319,7 +320,7 @@ def fast_import_tables(
             else:
 
                 def proc_for_feature_path(path):
-                    feature_rel_path = path.rsplit("/.sno-dataset/feature/", 1)[1]
+                    feature_rel_path = path.rsplit("/feature/", 1)[1]
                     first_subtree_name = feature_rel_path.split("/", 1)[0]
                     return procs[hash(first_subtree_name) % len(procs)]
 
@@ -340,6 +341,7 @@ def fast_import_tables(
                     )
 
                 dataset = dataset_class(tree=None, path=source.dest_path)
+                dataset.schema = source.schema
 
                 with source:
                     if limit:
@@ -362,7 +364,7 @@ def fast_import_tables(
                         # This means we don't have to load the whole list into memory.
                         def _ids():
                             for pk in replace_ids:
-                                pk = source.schema.sanitise_pks(pk)
+                                pk = dataset.schema.sanitise_pks(pk)
                                 path = dataset.encode_pks_to_path(pk)
                                 proc_for_feature_path(path).stdin.write(
                                     f"D {path}\n".encode("utf8")

@@ -12,14 +12,14 @@ H = pytest.helpers.helpers()
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "archive",
+    "archive,layer",
     [
-        pytest.param("points0.snow.tgz", id="points"),
-        pytest.param("polygons0.snow.tgz", id="polygons"),
-        pytest.param("table0.snow.tgz", id="table"),
+        pytest.param("points0.snow.tgz", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons0.snow.tgz", H.POLYGONS.LAYER, id="polygons"),
+        pytest.param("table0.snow.tgz", H.TABLE.LAYER, id="table"),
     ],
 )
-def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir):
+def test_upgrade_v0(archive, layer, data_archive_readonly, cli_runner, tmp_path, chdir):
     archive_path = Path("upgrade") / "v0" / archive
     with data_archive_readonly(archive_path) as source_path:
         r = cli_runner.invoke(["data", "version", "--output-format=json"])
@@ -42,15 +42,15 @@ def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir)
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r.stderr
 
-        if archive == "points0.snow":
+        if layer == H.POINTS.LAYER:
             assert r.stdout.splitlines() == [
-                "commit e0f39729ffe37b9f858afe0783ff0a29c98d699d",
+                "commit 4bb72482574230e1975b5d55d6749f9a63965dce",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
-                "commit 31f8edfc3bfb660c36e0568d67722affd71813eb",
+                "commit 48c6e35f0feb8f1d266d43b22674d9c1b69ec4c8",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Tue Jun 11 12:03:58 2019 +0100",
                 "",
@@ -92,13 +92,13 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
 
         if layer == H.POINTS.LAYER:
             assert r.stdout.splitlines() == [
-                "commit e04c6466e7420fe8e4ea2180bbaf5a041a8bff0f",
+                "commit 4bb72482574230e1975b5d55d6749f9a63965dce",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
-                "commit 0924b05a94c26e86cfbbae98416513e39e17a2be",
+                "commit 48c6e35f0feb8f1d266d43b22674d9c1b69ec4c8",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Tue Jun 11 12:03:58 2019 +0100",
                 "",

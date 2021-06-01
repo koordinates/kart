@@ -223,30 +223,15 @@ class Dataset2(RichBaseDataset):
             # figure out a sensible path encoder to use:
             pks = schema.pk_columns
             if len(pks) == 1 and pks[0].data_type == "integer":
-                path_structure = {
-                    "branches": 64,
-                    "encoding": "base64",
-                    "levels": 4,
-                    "scheme": "int",
-                }
+                return PathEncoder.INT_PK_ENCODER
+
             else:
-                path_structure = {
-                    "branches": 64,
-                    "encoding": "base64",
-                    "levels": 4,
-                    "scheme": "msgpack/hash",
-                }
+                return PathEncoder.GENERAL_ENCODER
         else:
             try:
                 path_structure = self.get_meta_item("path-structure.json")
             except KeyError:
-                # legacy structure:
-                path_structure = {
-                    "branches": 256,
-                    "encoding": "hex",
-                    "levels": 2,
-                    "scheme": "msgpack/hash",
-                }
+                return PathEncoder.LEGACY_ENCODER
         return PathEncoder.get(**path_structure)
 
     def decode_path_to_pks(self, path):
@@ -311,6 +296,10 @@ class Dataset2(RichBaseDataset):
             (self.DESCRIPTION_PATH, source.get_meta_item("description")),
             (self.METADATA_XML, source.get_meta_item("metadata.xml")),
         ]
+
+        path_encoder = self.feature_path_encoder()
+        if path_encoder is not PathEncoder.LEGACY_ENCODER:
+            meta_blobs.append(path_encoder.encode_path_structure_data(relative=True))
 
         for path, definition in source.crs_definitions():
             meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))

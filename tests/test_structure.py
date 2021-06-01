@@ -872,6 +872,7 @@ def test_pk_encoder_string_pk():
     schema = Schema.from_column_dicts(
         [{"name": "mypk", "dataType": "text", "id": "abc123"}]
     )
+    ds.schema = schema
     e = ds.feature_path_encoder(schema)
     assert isinstance(e, MsgpackHashPathEncoder)
     assert e.encoding == "base64"
@@ -896,6 +897,7 @@ def test_pk_encoder_int_pk():
             }
         ]
     )
+    ds.schema = schema
     e = ds.feature_path_encoder(schema)
     assert isinstance(e, IntPathEncoder)
     assert e.encoding == "base64"

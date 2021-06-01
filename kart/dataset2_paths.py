@@ -8,6 +8,17 @@ from .serialise_util import (
 
 
 class PathEncoder:
+    """
+    A system for encoding a feature's primary key to a particular path.
+    Originally hex-hash[0:2]/hex-hash[2:4]/base64-encoded-message-packed-primary-key -
+    - that is, 2 levels, and a branch factor of 256 at each level.
+    But, this system proved costly for massive repos and the resulting massive trees.
+    Now we prefer 4 levels, a branch factor of 64, and clustering similar PKs where possible.
+    """
+
+    PATH_STRUCTURE_ITEM = "path-structure.json"
+    PATH_STRUCTURE_PATH = "meta/" + PATH_STRUCTURE_ITEM
+
     @staticmethod
     def get(*, scheme, **kwargs):
         if scheme == "msgpack/hash":
@@ -22,6 +33,28 @@ class PathEncoder:
     def encode_filename(self, pk_values):
         packed_pk = msg_pack(pk_values)
         return b64encode_str(packed_pk)
+
+    def encode_path_structure_data(self, relative):
+        assert relative is True
+        return self.PATH_STRUCTURE_PATH, self.to_dict()
+
+    def to_dict(self):
+        return {
+            "scheme": self.scheme,
+            "branches": self.branches,
+            "levels": self.levels,
+            "encoding": self.encoding,
+        }
+
+    def tree_names(self):
+        """Yields all possible tree names according to this encoding + branch-factor."""
+        if self.encoding == "hex":
+            format_spec = f"{{:0{self._tree_stride}x}}"
+            for i in range(self.branches):
+                yield format_spec.format(i)
+        elif self.encoding == "base64":
+            for c in _BASE64_URLSAFE_ALPHABET:
+                yield chr(c)
 
 
 class MsgpackHashPathEncoder(PathEncoder):
@@ -45,6 +78,7 @@ class MsgpackHashPathEncoder(PathEncoder):
                 f"This repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
             )
 
+        self.scheme = "msgpack/hash"
         self.branches = branches
         self.encoding = encoding
         self.levels = levels
@@ -107,6 +141,8 @@ class IntPathEncoder(PathEncoder):
             raise InvalidOperation(
                 f"This repo uses {levels!r} path levels, which isn't supported by this version of Kart"
             )
+
+        self.scheme = "int"
         self.branches = branches
         self._mod_value = branches ** levels
         self.encoding = encoding
@@ -120,3 +156,19 @@ class IntPathEncoder(PathEncoder):
         parts = [encoded[i] for i in range(-self.levels, 0)]
         parts.append(self.encode_filename(pk_values))
         return "/".join(parts)
+
+
+# The encoder that was previously used for all datasets.
+PathEncoder.LEGACY_ENCODER = PathEncoder.get(
+    scheme="msgpack/hash", branches=256, levels=2, encoding="hex"
+)
+
+# The encoder now used for datasets with a single integer PK value.
+PathEncoder.INT_PK_ENCODER = PathEncoder.get(
+    scheme="int", branches=64, levels=4, encoding="base64"
+)
+
+# The encoder now used for all other datasets.
+PathEncoder.GENERAL_ENCODER = PathEncoder.get(
+    scheme="msgpack/hash", branches=64, levels=4, encoding="base64"
+)

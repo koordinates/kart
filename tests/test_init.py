@@ -436,7 +436,7 @@ def test_import_replace_ids(
             features = diff.get("feature")
             assert len(features) == 5
 
-            # Now change four features; two updates and two inserts
+            # Now change four features; two deletes and two updates
             with Db_GPKG.create_engine(
                 data / "nz-waca-adjustments.gpkg"
             ).connect() as conn:
@@ -452,7 +452,7 @@ def test_import_replace_ids(
                     """
                 )
 
-            # import, but specify --replace-ids to match only one insert and one update
+            # import, but specify --replace-ids to match only one delete and one update
             r = cli_runner.invoke(
                 [
                     "import",
@@ -468,7 +468,7 @@ def test_import_replace_ids(
             diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]["mytable"]
             features = diff.get("feature")
 
-            # one insert and one update were performed, and the other two changes ignored.
+            # one update and one delete were performed, and the other two changes ignored.
             assert len(features) == 2
             assert features == [
                 {
