@@ -3,7 +3,6 @@ from kart.schema import Legend, ColumnSchema, Schema
 
 
 DATASET_PATH = "path/to/dataset"
-EMPTY_DATASET = Dataset2(None, DATASET_PATH)
 
 
 class MemoryTree:
@@ -67,7 +66,8 @@ def test_legend_roundtrip():
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    path, data = EMPTY_DATASET.encode_legend(orig)
+    empty_dataset = Dataset2(None, DATASET_PATH)
+    path, data = empty_dataset.encode_legend(orig)
     tree = MemoryTree({path: data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
@@ -95,9 +95,50 @@ def test_raw_dict_to_value_tuples():
     assert roundtripped == raw_feature_dict
 
 
+def abcdef_schema():
+    return Schema.from_column_dicts(
+        [
+            {
+                "id": "a",
+                "name": "a",
+                "dataType": "integer",
+                "primaryKeyIndex": 0,
+                "size": 64,
+            },
+            {
+                "id": "b",
+                "name": "b",
+                "dataType": "geometry",
+            },
+            {
+                "id": "c",
+                "name": "c",
+                "dataType": "boolean",
+            },
+            {
+                "id": "d",
+                "name": "d",
+                "dataType": "float",
+            },
+            {
+                "id": "e",
+                "name": "e",
+                "dataType": "text",
+            },
+            {
+                "id": "f",
+                "name": "f",
+                "dataType": "text",
+            },
+        ]
+    )
+
+
 def test_raw_feature_roundtrip():
-    legend = Legend(["a", "b", "c"], ["d", "e", "f"])
-    legend_path, legend_data = EMPTY_DATASET.encode_legend(legend)
+    legend = Legend(["a"], ["b", "c", "d", "e", "f"])
+    empty_dataset = Dataset2(None, DATASET_PATH)
+    empty_dataset.schema = abcdef_schema()
+    legend_path, legend_data = empty_dataset.encode_legend(legend)
 
     raw_feature_dict = {
         "e": "eggs",
@@ -107,7 +148,7 @@ def test_raw_feature_roundtrip():
         "c": True,
         "b": b"bytes",
     }
-    feature_path, feature_data = EMPTY_DATASET.encode_raw_feature_dict(
+    feature_path, feature_data = empty_dataset.encode_raw_feature_dict(
         raw_feature_dict, legend
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: feature_data})
@@ -125,7 +166,7 @@ def test_raw_feature_roundtrip():
         "e": None,
         "f": None,
     }
-    _, empty_feature_data = EMPTY_DATASET.encode_raw_feature_dict(
+    _, empty_feature_data = empty_dataset.encode_raw_feature_dict(
         empty_feature_dict, legend
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: empty_feature_data})
@@ -162,7 +203,8 @@ def test_schema_roundtrip(gen_uuid):
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    path, data = EMPTY_DATASET.encode_schema(orig)
+    empty_dataset = Dataset2(None, DATASET_PATH)
+    path, data = empty_dataset.encode_schema(orig)
     tree = MemoryTree({path: data})
 
     dataset2 = Dataset2(tree / DATASET_PATH, DATASET_PATH)
@@ -181,8 +223,9 @@ def test_feature_roundtrip(gen_uuid):
             ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
-    schema_path, schema_data = EMPTY_DATASET.encode_schema(schema)
-    legend_path, legend_data = EMPTY_DATASET.encode_legend(schema.legend)
+    empty_dataset = Dataset2(None, DATASET_PATH)
+    schema_path, schema_data = empty_dataset.encode_schema(schema)
+    legend_path, legend_data = empty_dataset.encode_legend(schema.legend)
 
     # encode_feature also accepts a feature tuple, but mostly we use dicts everywhere.
     feature_tuple = ("010100000087BF756489EF5C4C", 7, "GIS Choir", b"MP3")
@@ -194,8 +237,8 @@ def test_feature_roundtrip(gen_uuid):
         "geom": "010100000087BF756489EF5C4C",
     }
 
-    feature_path, feature_data = EMPTY_DATASET.encode_feature(feature_tuple, schema)
-    feature_path2, feature_data2 = EMPTY_DATASET.encode_feature(feature_dict, schema)
+    feature_path, feature_data = empty_dataset.encode_feature(feature_tuple, schema)
+    feature_path2, feature_data2 = empty_dataset.encode_feature(feature_dict, schema)
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
@@ -241,17 +284,18 @@ def test_schema_change_roundtrip(gen_uuid):
         "ID": 7,
     }
 
-    feature_path, feature_data = EMPTY_DATASET.encode_feature(feature_tuple, old_schema)
-    feature_path2, feature_data2 = EMPTY_DATASET.encode_feature(
+    empty_dataset = Dataset2(None, DATASET_PATH)
+    feature_path, feature_data = empty_dataset.encode_feature(feature_tuple, old_schema)
+    feature_path2, feature_data2 = empty_dataset.encode_feature(
         feature_dict, old_schema
     )
     # Either encode method should give the same result.
     assert (feature_path, feature_data) == (feature_path2, feature_data2)
 
     # The dataset should store only the current schema, but all legends.
-    schema_path, schema_data = EMPTY_DATASET.encode_schema(new_schema)
-    new_legend_path, new_legend_data = EMPTY_DATASET.encode_legend(new_schema.legend)
-    old_legend_path, old_legend_data = EMPTY_DATASET.encode_legend(old_schema.legend)
+    schema_path, schema_data = empty_dataset.encode_schema(new_schema)
+    new_legend_path, new_legend_data = empty_dataset.encode_legend(new_schema.legend)
+    old_legend_path, old_legend_data = empty_dataset.encode_legend(old_schema.legend)
     tree = MemoryTree(
         {
             schema_path: schema_data,

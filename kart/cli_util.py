@@ -45,6 +45,14 @@ GIT_CONFIG_DEFAULT_OVERRIDES = {
     "pack.window": 0,
 }
 
+# These are the settings that Kart always *overrides* in git config.
+# i.e. regardless of your local git settings, kart will use these settings instead.
+GIT_CONFIG_FORCE_OVERRIDES = {
+    # We use base64 for feature paths.
+    # "kcya" and "kcyA" are *not* the same feature; that way lies data loss
+    "core.ignoreCase": "false",
+}
+
 
 @functools.lru_cache()
 def init_git_config():
@@ -63,6 +71,14 @@ def init_git_config():
                 break
         else:
             new_config_params.append(f"'{k}={v}'")
+
+    for k, v in GIT_CONFIG_FORCE_OVERRIDES.items():
+        v = str(v)
+        # not sure *exactly* how this quoting works; for now let's just check it's safe
+        assert "'" not in k
+        assert "'" not in v
+        new_config_params.append(f"'{k}={v}'")
+
     if new_config_params:
         existing = ""
         if "GIT_CONFIG_PARAMETERS" in os.environ:
