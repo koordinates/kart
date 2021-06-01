@@ -1,4 +1,3 @@
-from sqlalchemy import literal_column
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function

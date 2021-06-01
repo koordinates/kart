@@ -357,8 +357,6 @@ class FloatType(ConverterType):
     # ConverterType to read floats as doubles. For some reason, floats they are rounded so they keep
     # even less than single-float precision if we read them as floats.
     def sql_read(self, col):
-        # Reading - SQL layer - convert date to string in ISO8601.
-        # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
         return sa.cast(col, DOUBLE)
 
 
