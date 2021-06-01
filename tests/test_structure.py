@@ -851,8 +851,8 @@ def test_postgis_import_replace_no_ids(
 def test_pk_encoder_legacy_hashed(data_archive_readonly):
     with data_archive_readonly("points") as repo_path:
         repo = KartRepo(repo_path)
-        ds = repo.datasets()['nz_pa_points_topo_150k']
-        e = ds.feature_path_encoder
+        ds = repo.datasets()["nz_pa_points_topo_150k"]
+        e = ds.feature_path_encoder()
         assert isinstance(e, MsgpackHashPathEncoder)
         assert e.encoding == "hex"
         assert e.branches == 256
@@ -869,10 +869,10 @@ def test_pk_encoder_legacy_hashed(data_archive_readonly):
 
 def test_pk_encoder_string_pk():
     ds = Dataset2(None, "mytable")
-    ds.schema = Schema.from_column_dicts(
+    schema = Schema.from_column_dicts(
         [{"name": "mypk", "dataType": "text", "id": "abc123"}]
     )
-    e = ds.feature_path_encoder
+    e = ds.feature_path_encoder(schema)
     assert isinstance(e, MsgpackHashPathEncoder)
     assert e.encoding == "base64"
     assert e.branches == 64
@@ -885,7 +885,7 @@ def test_pk_encoder_string_pk():
 
 def test_pk_encoder_int_pk():
     ds = Dataset2(None, "mytable")
-    ds.schema = Schema.from_column_dicts(
+    schema = Schema.from_column_dicts(
         [
             {
                 "name": "mypk",
@@ -896,7 +896,7 @@ def test_pk_encoder_int_pk():
             }
         ]
     )
-    e = ds.feature_path_encoder
+    e = ds.feature_path_encoder(schema)
     assert isinstance(e, IntPathEncoder)
     assert e.encoding == "base64"
     assert e.branches == 64
@@ -916,11 +916,11 @@ def test_pk_encoder_int_pk():
     # trees hit wraparound with large PKs, but don't break
     assert (
         ds.encode_1pk_to_path(64 ** 5)
-        == 'mytable/.sno-dataset/feature/A/A/A/A/kc5AAAAA'
+        == "mytable/.sno-dataset/feature/A/A/A/A/kc5AAAAA"
     )
     assert (
         ds.encode_1pk_to_path(-(64 ** 5))
-        == 'mytable/.sno-dataset/feature/A/A/A/A/kdLAAAAA'
+        == "mytable/.sno-dataset/feature/A/A/A/A/kdLAAAAA"
     )
 
 

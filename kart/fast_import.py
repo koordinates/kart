@@ -319,8 +319,9 @@ def fast_import_tables(
             else:
 
                 def proc_for_feature_path(path):
-                    first_subtree = int(path.rsplit("/", 3)[1], 16)
-                    return procs[first_subtree % len(procs)]
+                    feature_rel_path = path.rsplit("/.sno-dataset/feature/", 1)[1]
+                    first_subtree_name = feature_rel_path.split("/", 1)[0]
+                    return procs[hash(first_subtree_name) % len(procs)]
 
             for source in sources:
                 replacing_dataset = None

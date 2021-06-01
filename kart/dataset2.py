@@ -215,13 +215,13 @@ class Dataset2(RichBaseDataset):
             return
         yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
 
-    @property
     @functools.lru_cache(maxsize=1)
-    def feature_path_encoder(self):
+    def feature_path_encoder(self, schema=None):
+        schema = schema or self.schema
         if self.inner_tree is None:
             # no meta tree; we must be still creating this dataset
             # figure out a sensible path encoder to use:
-            pks = self.schema.pk_columns
+            pks = schema.pk_columns
             if len(pks) == 1 and pks[0].data_type == "integer":
                 path_structure = {
                     "branches": 64,
@@ -260,14 +260,16 @@ class Dataset2(RichBaseDataset):
             raise ValueError(f"Expected a single pk_value, got {decoded}")
         return decoded[0]
 
-    def encode_raw_feature_dict(self, raw_feature_dict, legend, relative=False):
+    def encode_raw_feature_dict(
+        self, raw_feature_dict, legend, relative=False, *, schema=None
+    ):
         """
         Given a "raw" feature dict (keyed by column IDs) and a legend, returns the path
         and the data which *should be written* to write this feature. This is almost the
         inverse of get_raw_feature_dict, except Dataset2 doesn't write the data.
         """
         pk_values, non_pk_values = legend.raw_dict_to_value_tuples(raw_feature_dict)
-        path = self.encode_pks_to_path(pk_values, relative=relative)
+        path = self.encode_pks_to_path(pk_values, relative=relative, schema=schema)
         data = msg_pack([legend.hexhash(), non_pk_values])
         return path, data
 
@@ -280,17 +282,20 @@ class Dataset2(RichBaseDataset):
         if schema is None:
             schema = self.schema
         raw_dict = schema.feature_to_raw_dict(feature)
-        return self.encode_raw_feature_dict(raw_dict, schema.legend, relative=relative)
+        return self.encode_raw_feature_dict(
+            raw_dict, schema.legend, relative=relative, schema=schema
+        )
 
-    def encode_pks_to_path(self, pk_values, relative=False):
+    def encode_pks_to_path(self, pk_values, relative=False, *, schema=None):
         """
         Given some pk values, returns the path the feature should be written to.
         pk_values should be a list or tuple of pk values.
         """
-        rel_path = f"{self.FEATURE_PATH}{self.feature_path_encoder.encode_pks_to_path(pk_values)}"
+        encoder = self.feature_path_encoder(schema)
+        rel_path = f"{self.FEATURE_PATH}{encoder.encode_pks_to_path(pk_values)}"
         return rel_path if relative else self.full_path(rel_path)
 
-    def encode_1pk_to_path(self, pk_value, relative=False):
+    def encode_1pk_to_path(self, pk_value, relative=False, *, schema=None):
         """Given a feature's only pk value, returns the path the feature should be written to."""
         if isinstance(pk_value, (list, tuple)):
             raise ValueError(f"Expected a single pk value, got {pk_value}")
@@ -361,7 +366,9 @@ class Dataset2(RichBaseDataset):
             for feature in resultset:
                 try:
                     pk_values = (feature[replacing_dataset.primary_key],)
-                    rel_path = self.encode_pks_to_path(pk_values, relative=True)
+                    rel_path = self.encode_pks_to_path(
+                        pk_values, relative=True, schema=schema
+                    )
                     existing_data = replacing_dataset.get_data_at(
                         rel_path, as_memoryview=True
                     )
@@ -379,7 +386,9 @@ class Dataset2(RichBaseDataset):
                 )
                 if existing_feature == feature:
                     # Nothing changed? No need to rewrite the feature blob
-                    yield self.encode_pks_to_path(pk_values), existing_data
+                    yield self.encode_pks_to_path(
+                        pk_values, schema=schema
+                    ), existing_data
                 else:
                     yield self.encode_feature(feature, schema)
         else:

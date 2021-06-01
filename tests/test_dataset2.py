@@ -137,7 +137,7 @@ def abcdef_schema():
 def test_raw_feature_roundtrip():
     legend = Legend(["a"], ["b", "c", "d", "e", "f"])
     empty_dataset = Dataset2(None, DATASET_PATH)
-    empty_dataset.schema = abcdef_schema()
+    schema = abcdef_schema()
     legend_path, legend_data = empty_dataset.encode_legend(legend)
 
     raw_feature_dict = {
@@ -149,7 +149,7 @@ def test_raw_feature_roundtrip():
         "b": b"bytes",
     }
     feature_path, feature_data = empty_dataset.encode_raw_feature_dict(
-        raw_feature_dict, legend
+        raw_feature_dict, legend, schema=schema
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: feature_data})
 
@@ -159,7 +159,7 @@ def test_raw_feature_roundtrip():
     assert roundtripped == raw_feature_dict
 
     empty_feature_dict = {
-        "a": None,
+        "a": 123,
         "b": None,
         "c": None,
         "d": None,
@@ -167,7 +167,9 @@ def test_raw_feature_roundtrip():
         "f": None,
     }
     _, empty_feature_data = empty_dataset.encode_raw_feature_dict(
-        empty_feature_dict, legend
+        empty_feature_dict,
+        legend,
+        schema=schema,
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: empty_feature_data})
 
@@ -177,8 +179,8 @@ def test_raw_feature_roundtrip():
     # clears the non-pk values, since the pk values are part of the path.
     assert roundtripped == {
         "a": 123,
-        "b": b"bytes",
-        "c": True,
+        "b": None,
+        "c": None,
         "d": None,
         "e": None,
         "f": None,
