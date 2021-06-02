@@ -1,11 +1,13 @@
-import click
 import functools
 import io
 import json
 import jsonschema
 import os
 import platform
+from pathlib import Path
 
+import click
+from click.core import Argument
 import pygit2
 
 
@@ -166,6 +168,10 @@ class StringFromFile(click.types.StringParamType):
         )
 
 
+def _resolve_file(path):
+    return str(Path(path).expanduser())
+
+
 def value_optionally_from_text_file(value, param, ctx, as_file=False, **file_kwargs):
     """
     Given a string, interprets it either as:
@@ -176,9 +182,13 @@ def value_optionally_from_text_file(value, param, ctx, as_file=False, **file_kwa
     If as_file=True, returns a StringIO or a file object. Use this when dealing with
     large files to save memory.
     """
+    if isinstance(param, str):
+        # Not a real param, just a "param_hint". Make an equivalent param.
+        param = Argument(param_decls=[param])
+
     if value == "-" or value.startswith("@"):
         filetype = click.File(**file_kwargs)
-        filename = value[1:] if value.startswith("@") else value
+        filename = _resolve_file(value[1:]) if value.startswith("@") else value
         fp = filetype.convert(filename, param, ctx)
         if as_file:
             return fp
@@ -193,9 +203,13 @@ def value_optionally_from_text_file(value, param, ctx, as_file=False, **file_kwa
 def value_optionally_from_binary_file(
     value, param, ctx, encoding="utf-8", **file_kwargs
 ):
+    if isinstance(param, str):
+        # Not a real param, just a "param_hint". Make an equivalent param.
+        param = Argument(param_decls=[param])
+
     if value == "-" or value.startswith("@"):
         filetype = click.File(mode="rb", **file_kwargs)
-        filename = value[1:] if value.startswith("@") else value
+        filename = _resolve_file(value[1:]) if value.startswith("@") else value
         fp = filetype.convert(filename, param, ctx)
         return fp.read()
 
