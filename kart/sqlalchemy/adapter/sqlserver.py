@@ -184,16 +184,24 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         )
         yield "title", title
 
-        table_info_sql = """
+        primary_key_sql = """
+            SELECT KCU.* FROM information_schema.key_column_usage KCU
+            INNER JOIN information_schema.table_constraints TC
+            ON KCU.constraint_schema = TC.constraint_schema
+            AND KCU.constraint_name = TC.constraint_name
+            WHERE TC.constraint_type = 'PRIMARY KEY'
+        """
+
+        table_info_sql = f"""
             SELECT
                 C.column_name, C.ordinal_position, C.data_type,
                 C.character_maximum_length, C.numeric_precision, C.numeric_scale,
-                KCU.ordinal_position AS pk_ordinal_position
+                PK.ordinal_position AS pk_ordinal_position
             FROM information_schema.columns C
-            LEFT OUTER JOIN information_schema.key_column_usage KCU
-            ON (KCU.table_schema = C.table_schema)
-            AND (KCU.table_name = C.table_name)
-            AND (KCU.column_name = C.column_name)
+            LEFT OUTER JOIN ({primary_key_sql}) PK
+            ON (PK.table_schema = C.table_schema)
+            AND (PK.table_name = C.table_name)
+            AND (PK.column_name = C.column_name)
             WHERE C.table_schema=:table_schema AND C.table_name=:table_name
             ORDER BY C.ordinal_position;
         """
