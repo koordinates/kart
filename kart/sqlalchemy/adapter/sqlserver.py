@@ -351,6 +351,8 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             return TimeType
         elif col.data_type == "timestamp":
             return TimestampType(col.extra_type_info.get("timezone"))
+        elif col.data_type == "text":
+            return TextType
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
@@ -434,3 +436,11 @@ class TimestampType(ConverterType):
 
     def sql_read(self, column):
         return Function("FORMAT", column, "yyyy-MM-ddTHH:mm:ss", type_=self)
+
+
+@aliased_converter_type
+class TextType(ConverterType):
+    """ConverterType to that casts everything to text in the Python layer. Handles things like UUIDs."""
+
+    def python_postread(self, value):
+        return str(value) if value is not None else None

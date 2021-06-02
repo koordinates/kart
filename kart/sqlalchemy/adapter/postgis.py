@@ -59,7 +59,6 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         "TIMETZ": "time",
         "TIMESTAMP": ("timestamp", None),
         "TIMESTAMPTZ": ("timestamp", "UTC"),
-        "UUID": "text",
         "VARCHAR": "text",
     }
 
@@ -389,7 +388,7 @@ class TimestampType(ConverterType):
 
 @aliased_converter_type
 class TextType(ConverterType):
-    """ConverterType to that casts everything to text in the Python layer. Handles UUIDs."""
+    """ConverterType to that casts everything to text in the Python layer. Handles things like UUIDs."""
 
     def python_postread(self, value):
         return str(value) if value is not None else None

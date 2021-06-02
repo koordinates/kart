@@ -309,6 +309,8 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             return TimeType
         elif col.data_type == "timestamp":
             return TimestampType
+        elif col.data_type == "text":
+            return TextType
         else:
             # Don't need to specify type information for other columns at present, since we just pass through the values.
             return None
@@ -397,3 +399,11 @@ class TimestampType(ConverterType):
         # 2. Reading - SQL layer - convert timestamp to string in ISO8601 with Z as the timezone specifier.
         # https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html
         return Function("DATE_FORMAT", col, "%Y-%m-%dT%H:%i:%S", type_=self)
+
+
+@aliased_converter_type
+class TextType(ConverterType):
+    """ConverterType to that casts everything to text in the Python layer. Handles things like UUIDs."""
+
+    def python_postread(self, value):
+        return str(value) if value is not None else None

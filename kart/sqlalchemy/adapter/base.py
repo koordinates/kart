@@ -1,5 +1,9 @@
+import logging
+
 import sqlalchemy
 from sqlalchemy.types import UserDefinedType
+
+L = logging.getLogger("kart.sqlalchemy.adapter.base")
 
 
 class BaseKartAdapter:
@@ -101,7 +105,8 @@ class BaseKartAdapter:
         sql_type = sql_type.upper()
         v2_type_info = cls.SQL_TYPE_TO_V2_TYPE.get(sql_type)
         if v2_type_info is None:
-            raise ValueError(f"Unsupported SQL type: {sql_type}")
+            L.warn(f"SQL type {sql_type} not fully supported - importing as text")
+            return "text", {}
 
         if isinstance(v2_type_info, tuple):
             v2_type, v2_subtype_value = v2_type_info
