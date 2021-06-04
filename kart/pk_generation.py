@@ -424,6 +424,10 @@ class PkGeneratingImportSource(ImportSource):
     def feature_count(self):
         return self.delegate.feature_count
 
+    @property
+    def table(self):
+        return self.delegate.table
+
     def __enter__(self):
         return self.delegate.__enter__()
 
