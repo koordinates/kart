@@ -2,6 +2,8 @@ import os
 
 from osgeo import gdal
 
+import pytest
+
 from kart.ogr_import_source import postgres_url_to_ogr_conn_str
 from kart.repo import KartRepo
 
@@ -15,8 +17,8 @@ def _dataset_col_types(dataset):
     return cols
 
 
-def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
-    # Using postgres here because it has the best type preservation
+@pytest.fixture
+def postgres_table_with_types(postgis_db):
     with postgis_db.connect() as conn:
         conn.execute(
             """
@@ -38,6 +40,17 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
                 );
                 """
         )
+    yield
+    with postgis_db.connect() as conn:
+        conn.execute(
+            """
+            DROP TABLE IF EXISTS typoes;
+            """
+        )
+
+
+def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_runner):
+    # Using postgres here because it has the best type preservation
 
     r = cli_runner.invoke(["init", str(tmp_path / "repo1")])
     assert r.exit_code == 0, r.stderr
@@ -115,3 +128,20 @@ def test_import_various_field_types(tmp_path, postgis_db, cli_runner):
         "reel": {"dataType": "float", "size": 64},
         "tumeric": {"dataType": "float", "size": 64},
     }
+
+
+def test_list_postgres_tables(postgis_db, postgres_table_with_types, cli_runner):
+    r = cli_runner.invoke(["import", "--list", os.environ["KART_POSTGRES_URL"]])
+    assert r.exit_code == 0, r.stderr
+
+    # NOTE: these tables are intentionally absent:
+    # '  public.geography_columns',
+    # '  public.geometry_columns',
+    # '  public.spatial_ref_sys',
+    assert r.stdout.splitlines() == ["Tables found:", "  public.typoes"]
+
+    r = cli_runner.invoke(
+        ["import", "--list", os.environ["KART_POSTGRES_URL"] + "/public"]
+    )
+    assert r.exit_code == 0, r.stderr
+    assert r.stdout.splitlines() == ["Tables found:", "  typoes"]

@@ -31,31 +31,34 @@ class Db_Postgis(BaseDb):
     @classmethod
     def list_tables(cls, sess, db_schema=None):
         if db_schema is not None:
-            r = sess.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT table_name as name,
-                    obj_description(format('%s.%s', table_schema, table_name)::regclass::oid, 'pg_class') as title
-                    FROM information_schema.tables WHERE table_schema = :db_schema
-                    ORDER BY name;
-                    """
-                ),
-                {"db_schema": db_schema},
-            )
+            name_clause = "c.relname"
+            schema_clause = "n.nspname = :db_schema"
+            params = {"db_schema": db_schema}
         else:
-            r = sess.execute(
-                sqlalchemy.text(
-                    """
-                    SELECT format('%s.%s', table_schema, table_name) as name,
-                    obj_description(format('%s.%s', table_schema, table_name)::regclass::oid, 'pg_class') as title
-                    FROM information_schema.tables
-                    WHERE table_schema NOT IN ('information_schema', 'pg_catalog', 'tiger', 'topology')
-                    ORDER BY name;
-                    """
-                )
-            )
+            name_clause = "format('%s.%s', n.nspname, c.relname)"
+            schema_clause = "n.nspname NOT IN ('information_schema', 'pg_catalog', 'tiger', 'topology')"
+            params = {}
 
-        return {row['name']: row['title'] for row in r}
+        r = sess.execute(
+            sqlalchemy.text(
+                f"""
+                SELECT {name_clause} as name, obj_description(c.oid, 'pg_class') as title
+                FROM pg_catalog.pg_class c
+                    INNER JOIN pg_namespace n ON n.oid = c.relnamespace
+                WHERE c.relkind IN ('r', 'v') AND {schema_clause}
+                AND c.oid NOT IN (
+                    SELECT d.objid
+                    FROM pg_catalog.pg_extension AS e
+                        INNER JOIN pg_catalog.pg_depend AS d ON (d.refobjid = e.oid)
+                    WHERE d.deptype = 'e'
+                    AND e.extname = 'postgis'
+                )
+                ORDER BY {name_clause};
+                """
+            ),
+            params,
+        )
+        return {row["name"]: row["title"] for row in r}
 
     @classmethod
     def db_schema_searchpath(cls, sess):
