@@ -343,8 +343,8 @@ def test_import_replace_existing_with_compatible_schema_changes(
             head_rs = repo.structure("HEAD")
             old_rs = repo.structure("HEAD^")
             assert head_rs.tree != old_rs.tree
-            new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
-            old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
+            new_feature_tree = head_rs.tree / "mytable/.table-dataset/feature"
+            old_feature_tree = old_rs.tree / "mytable/.table-dataset/feature"
             assert new_feature_tree == old_feature_tree
 
 
@@ -402,8 +402,8 @@ def test_import_replace_existing_with_column_renames(
             head_rs = repo.structure("HEAD")
             old_rs = repo.structure("HEAD^")
             assert head_rs.tree != old_rs.tree
-            new_feature_tree = head_rs.tree / "mytable/.sno-dataset/feature"
-            old_feature_tree = old_rs.tree / "mytable/.sno-dataset/feature"
+            new_feature_tree = head_rs.tree / "mytable/.table-dataset/feature"
+            old_feature_tree = old_rs.tree / "mytable/.table-dataset/feature"
             assert new_feature_tree == old_feature_tree
 
 
@@ -662,7 +662,7 @@ def test_init_import(
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["kart.repostructure.version"] == "2"
+        assert repo.config["kart.repostructure.version"] == "3"
         assert repo.config["kart.workingcopy.location"] == f"{wc.name}"
 
         with repo.working_copy.session() as sess:
@@ -778,7 +778,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
         assert wc.exists() and wc.is_file()
         print("workingcopy at", wc)
 
-        assert repo.config["kart.repostructure.version"] == "2"
+        assert repo.config["kart.repostructure.version"] == "3"
         assert repo.config["kart.workingcopy.location"] == "editing.gpkg"
 
         with Db_GPKG.create_engine(wc).connect() as db:

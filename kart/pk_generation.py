@@ -1,6 +1,6 @@
 import pygit2
 
-from .dataset2 import Dataset2
+from .dataset3 import Dataset3
 from .import_source import ImportSource
 from .exceptions import NotYetImplemented
 from .serialise_util import json_pack
@@ -97,8 +97,8 @@ class PkGeneratingImportSource(ImportSource):
         self.load_data_from_repo(repo)
 
     def load_data_from_repo(self, repo):
-        if repo.version != 2:
-            raise NotYetImplemented("PK generation only supported for dataset 2")
+        if repo.version != 3:
+            raise NotYetImplemented("PK generation only supported for dataset 3")
 
         self.prev_dest_tree = self._prev_import_dest_tree(repo)
 
@@ -114,7 +114,7 @@ class PkGeneratingImportSource(ImportSource):
             self.similarity_detection_insert_limit = 0
             return
 
-        self.prev_dest_dataset = Dataset2(self.prev_dest_tree, self.dest_path)
+        self.prev_dest_dataset = Dataset3(self.prev_dest_tree, self.dest_path)
         self.prev_dest_schema = self.prev_dest_dataset.schema
 
         data = self.prev_dest_dataset.get_meta_item(self.GENERATED_PKS_ITEM)
@@ -173,7 +173,7 @@ class PkGeneratingImportSource(ImportSource):
     def _get_generated_pks_blob(self, commit_or_tree):
         root_tree = commit_or_tree.peel(pygit2.Tree)
         try:
-            dataset = Dataset2(root_tree / self.dest_path, self.dest_path)
+            dataset = Dataset3(root_tree / self.dest_path, self.dest_path)
             return dataset.inner_tree / self.GENERATED_PKS_PATH
         except KeyError:
             return None
@@ -444,7 +444,7 @@ class PkGeneratingImportSource(ImportSource):
         return self.delegate.aggregate_import_source_desc(import_sources)
 
 
-class FilteredDataset(Dataset2):
+class FilteredDataset(Dataset3):
     """A dataset that only yields features with pk where `pk_filter(pk)` returns True."""
 
     def __init__(self, tree, path, pk_filter):

@@ -18,7 +18,7 @@ def test_init_repository(tmp_path):
         "kart"
     ]
 
-    assert repo.config.get_int("kart.repostructure.version") == 2
+    assert repo.config.get_int("kart.repostructure.version") == 3
     assert repo.config["kart.workingcopy.location"] == "test_repo.gpkg"
     assert repo.config.get_bool("core.bare") is False
 
