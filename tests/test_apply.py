@@ -309,8 +309,8 @@ def test_apply_create_dataset(data_archive, cli_runner):
 
 
 def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
-    # Note - points test repo currently stores XML metadata in metadata/dataset.json hidden meta item.
-    with data_archive("points"):
+    archive_path = Path("upgrade") / "v2.kart" / "points.tgz"
+    with data_archive(archive_path):
         r = cli_runner.invoke(["meta", "get", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         o = json.loads(r.stdout)
@@ -373,7 +373,6 @@ def test_add_and_remove_xml_metadata_as_json(data_archive, cli_runner):
 
 
 def test_add_and_remove_xml_metadata_as_xml(data_archive, cli_runner):
-    # Note - polygons test repo currently stores XML metadata in metadata.xml attachment
     with data_archive("polygons"):
         r = cli_runner.invoke(["meta", "get", "-o", "json"])
         assert r.exit_code == 0, r.stderr

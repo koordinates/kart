@@ -153,21 +153,12 @@ def test_commit_files(data_archive, cli_runner):
             ]
         )
         assert r.exit_code == 0, r.stderr
-        r = subprocess.check_output(["git", "show"], encoding="utf-8")
-        diff = r.splitlines()
-
-        assert diff[9:13] == [
-            "--- /dev/null",
-            "+++ b/LICENSE",
-            "@@ -0,0 +1 @@",
-            "+Do not even look at this data",
-        ]
-
-        assert diff[17:21] == [
-            "--- /dev/null",
-            "+++ b/nz_pa_points_topo_150k/metadata.xml",
-            "@@ -0,0 +1 @@",
-            "+<xml></xml>",
+        r = subprocess.check_output(["git", "show", "--numstat"], encoding="utf-8")
+        assert r.splitlines()[-4:] == [
+            "    Updating attachments",
+            "",
+            "1\t0\tLICENSE",  # 1 line added, 0 deleted
+            "1\t55\tnz_pa_points_topo_150k/metadata.xml",  # 1 line added, 55 deleted.
         ]
 
         # committing a noop change is rejected (unless amending)

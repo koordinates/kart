@@ -465,10 +465,10 @@ class TestHelpers:
             "macronated": "N",
             "name": "Te Motu-a-kore",
         }
-        HEAD_SHA = "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16"
-        HEAD1_SHA = "7bc3b56f20d1559208bcf5bb56860dda6e190b70"
-        HEAD_TREE_SHA = "a8fa3347aed53547b194fc2101974b79b7fc337b"
-        HEAD1_TREE_SHA = "8feb827cf21831cc4766345894cd122947bba748"
+        HEAD_SHA = "1582725544d9122251acd4b3fc75b5c88ac3fd17"
+        HEAD1_SHA = "6e2984a28150330a6c51019a70f9e8fcfe405e8c"
+        HEAD_TREE_SHA = "42b63a2a7c1b5dfe9c21ff9884b59f198e421821"
+        HEAD1_TREE_SHA = "622e7cc3b54cd54493eed6c4c5abe35d4bfa168e"
         ROWCOUNT = 2143
         TEXT_FIELD = "name"
         SAMPLE_PKS = list(range(1, 11))
@@ -493,7 +493,7 @@ class TestHelpers:
             "survey_reference": "Null Island™ 🗺",
             "adjusted_nodes": 123,
         }
-        HEAD_SHA = "0a2d0d75162f3b9266fcce562d989ee30033f9c1"
+        HEAD_SHA = "3f7166eebd11876a9b473a67ed2f66a200493b69"
         ROWCOUNT = 228
         TEXT_FIELD = "survey_reference"
         SAMPLE_PKS = [
@@ -534,7 +534,7 @@ class TestHelpers:
             "Shape_Leng": 4.055_459_982_439_92,
             "Shape_Area": 0.565_449_933_741_451,
         }
-        HEAD_SHA = "e3d4ad33461d1603098666052310cb330bc812b5"
+        HEAD_SHA = "f404fcd4ac2a411ef7bb32070e9ffa663374d875"
         ROWCOUNT = 3141
         TEXT_FIELD = "NAME"
         SAMPLE_PKS = list(range(1, 11))

@@ -40,8 +40,8 @@ def test_branches(
                 "current": "main",
                 "branches": {
                     "main": {
-                        "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                        "abbrevCommit": "0c64d82",
+                        "commit": H.POINTS.HEAD_SHA,
+                        "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                         "branch": "main",
                         "upstream": None,
                     }
@@ -52,14 +52,17 @@ def test_branches(
         r = cli_runner.invoke(["checkout", "HEAD~1"])
         assert r.exit_code == 0, r
 
-        assert text_branches(cli_runner) == ["* (HEAD detached at 7bc3b56)", "  main"]
+        assert text_branches(cli_runner) == [
+            f"* (HEAD detached at {H.POINTS.HEAD1_SHA[:7]})",
+            "  main",
+        ]
         assert json_branches(cli_runner) == {
             "kart.branch/v1": {
                 "current": None,
                 "branches": {
                     "main": {
-                        "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                        "abbrevCommit": "0c64d82",
+                        "commit": H.POINTS.HEAD_SHA,
+                        "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                         "branch": "main",
                         "upstream": None,
                     }

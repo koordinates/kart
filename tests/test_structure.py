@@ -1,6 +1,7 @@
 import contextlib
 import itertools
 import os
+from pathlib import Path
 import re
 import subprocess
 
@@ -849,7 +850,8 @@ def test_postgis_import_replace_no_ids(
 
 
 def test_pk_encoder_legacy_hashed(data_archive_readonly):
-    with data_archive_readonly("points") as repo_path:
+    archive_path = Path("upgrade") / "v2.kart" / "points.tgz"
+    with data_archive_readonly(archive_path) as repo_path:
         repo = KartRepo(repo_path)
         ds = repo.datasets()["nz_pa_points_topo_150k"]
         e = ds.feature_path_encoder()

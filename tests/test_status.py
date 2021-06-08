@@ -48,8 +48,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "kart.status/v1": {
-                "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                "abbrevCommit": "0c64d82",
+                "commit": H.POINTS.HEAD_SHA,
+                "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                 "branch": "main",
                 "upstream": None,
                 "workingCopy": {"path": str(wc), "changes": None},
@@ -60,14 +60,14 @@ def test_status(
         assert r.exit_code == 0, r
 
         assert text_status(cli_runner) == [
-            "HEAD detached at 7bc3b56",
+            f"HEAD detached at {H.POINTS.HEAD1_SHA[:7]}",
             "",
             "Nothing to commit, working copy clean",
         ]
         assert json_status(cli_runner) == {
             "kart.status/v1": {
-                "commit": "7bc3b56f20d1559208bcf5bb56860dda6e190b70",
-                "abbrevCommit": "7bc3b56",
+                "commit": H.POINTS.HEAD1_SHA,
+                "abbrevCommit": H.POINTS.HEAD1_SHA[:7],
                 "branch": None,
                 "upstream": None,
                 "workingCopy": {"path": str(wc), "changes": None},
@@ -133,8 +133,8 @@ def test_status(
         ]
         assert json_status(cli_runner) == {
             "kart.status/v1": {
-                "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                "abbrevCommit": "0c64d82",
+                "commit": H.POINTS.HEAD_SHA,
+                "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                 "branch": "main",
                 "upstream": {
                     "branch": "myremote/main",

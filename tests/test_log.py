@@ -14,13 +14,13 @@ def test_log(output_format, data_archive_readonly, cli_runner):
         assert r.exit_code == 0, r
         if output_format == "text":
             assert r.stdout.splitlines() == [
-                "commit 0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                f"commit {H.POINTS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
                 "    Improve naming on Coromandel East coast",
                 "",
-                "commit 7bc3b56f20d1559208bcf5bb56860dda6e190b70",
+                f"commit {H.POINTS.HEAD1_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Tue Jun 11 12:03:58 2019 +0100",
                 "",
@@ -29,8 +29,8 @@ def test_log(output_format, data_archive_readonly, cli_runner):
         else:
             assert json.loads(r.stdout) == [
                 {
-                    "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                    "abbrevCommit": "0c64d82",
+                    "commit": H.POINTS.HEAD_SHA,
+                    "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                     "message": "Improve naming on Coromandel East coast",
                     "refs": ["HEAD -> main"],
                     "authorEmail": "robert@coup.net.nz",
@@ -41,13 +41,13 @@ def test_log(output_format, data_archive_readonly, cli_runner):
                     "commitTimeOffset": "+01:00",
                     "committerEmail": "robert@coup.net.nz",
                     "committerName": "Robert Coup",
-                    "parents": ["7bc3b56f20d1559208bcf5bb56860dda6e190b70"],
-                    "abbrevParents": ["7bc3b56"],
+                    "parents": [H.POINTS.HEAD1_SHA],
+                    "abbrevParents": [H.POINTS.HEAD1_SHA[:7]],
                     "datasetChanges": ["nz_pa_points_topo_150k"],
                 },
                 {
-                    "commit": "7bc3b56f20d1559208bcf5bb56860dda6e190b70",
-                    "abbrevCommit": "7bc3b56",
+                    "commit": H.POINTS.HEAD1_SHA,
+                    "abbrevCommit": H.POINTS.HEAD1_SHA[:7],
                     "message": "Import from nz-pa-points-topo-150k.gpkg",
                     "refs": [],
                     "authorEmail": "robert@coup.net.nz",
@@ -84,7 +84,7 @@ def test_log_shallow_clone(
 
         if output_format == "text":
             assert r.stdout.splitlines() == [
-                "commit 0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
+                f"commit {H.POINTS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
@@ -93,8 +93,8 @@ def test_log_shallow_clone(
         else:
             assert json.loads(r.stdout) == [
                 {
-                    "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                    "abbrevCommit": "0c64d82",
+                    "commit": H.POINTS.HEAD_SHA,
+                    "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                     "message": "Improve naming on Coromandel East coast",
                     "refs": ["grafted", "HEAD -> main"],
                     "authorEmail": "robert@coup.net.nz",
@@ -105,8 +105,8 @@ def test_log_shallow_clone(
                     "commitTimeOffset": "+01:00",
                     "committerEmail": "robert@coup.net.nz",
                     "committerName": "Robert Coup",
-                    "parents": ["7bc3b56f20d1559208bcf5bb56860dda6e190b70"],
-                    "abbrevParents": ["7bc3b56f20d1559208bcf5bb56860dda6e190b70"],
+                    "parents": [H.POINTS.HEAD1_SHA],
+                    "abbrevParents": [H.POINTS.HEAD1_SHA],
                 },
             ]
 
