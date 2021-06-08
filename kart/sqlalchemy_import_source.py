@@ -155,10 +155,10 @@ class SqlAlchemyImportSource(ImportSource):
         if table in all_tables:
             if (
                 self.db_schema is None
-                and '.' in table
+                and "." in table
                 and self.db_type is not DbType.GPKG
             ):
-                db_schema, table = table.split('.', maxsplit=1)
+                db_schema, table = table.split(".", maxsplit=1)
                 return db_schema, table
             else:
                 return self.db_schema, table
