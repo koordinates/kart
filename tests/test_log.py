@@ -111,9 +111,9 @@ def test_log_shallow_clone(
             ]
 
 
-def test_log_with_feature_count(data_archive_readonly, cli_runner):
+def test_log_with_feature_count(data_archive, cli_runner):
     """ review commit history """
-    with data_archive_readonly("points"):
+    with data_archive("points"):
         r = cli_runner.invoke(
             ["log", "--output-format=json", "--with-feature-count=exact"]
         )
@@ -132,5 +132,5 @@ def test_log_with_feature_count(data_archive_readonly, cli_runner):
         result = [c["featureChanges"] for c in result]
         assert result == [
             {"nz_pa_points_topo_150k": 5},
-            {"nz_pa_points_topo_150k": 2480},
+            {"nz_pa_points_topo_150k": 2174},
         ]

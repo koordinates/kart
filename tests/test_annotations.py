@@ -38,8 +38,8 @@ def test_build_annotations(data_archive, cli_runner, caplog):
         assert r.stdout.splitlines() == [
             "Enumerating reachable commits...",
             "Building feature change counts...",
-            "(1/2): 0c64d82 Improve naming on Coromandel East coast",
-            "(2/2): 7bc3b56 Import from nz-pa-points-topo-150k.gpkg",
+            "(1/2): 1582725 Improve naming on Coromandel East coast",
+            "(2/2): 6e2984a Import from nz-pa-points-topo-150k.gpkg",
             "done.",
         ]
 
@@ -56,7 +56,7 @@ def test_build_annotations(data_archive, cli_runner, caplog):
             if "feature-change-counts-exact" in r.message
         ]
         assert messages == [
-            "retrieved: feature-change-counts-exact for 8feb827cf21831cc4766345894cd122947bba748...a8fa3347aed53547b194fc2101974b79b7fc337b: {'nz_pa_points_topo_150k': 5}"
+            "retrieved: feature-change-counts-exact for 42b63a2a7c1b5dfe9c21ff9884b59f198e421821...622e7cc3b54cd54493eed6c4c5abe35d4bfa168e: {'nz_pa_points_topo_150k': 5}"
         ]
 
 
@@ -85,8 +85,8 @@ def test_diff_feature_count_populates_annotations(
             if "feature-change-counts-fast" in r.message
         ]
         assert messages == [
-            "missing: feature-change-counts-fast for 8feb827cf21831cc4766345894cd122947bba748...a8fa3347aed53547b194fc2101974b79b7fc337b",
-            'storing: feature-change-counts-fast for 8feb827cf21831cc4766345894cd122947bba748...a8fa3347aed53547b194fc2101974b79b7fc337b: {"nz_pa_points_topo_150k": 5}',
+            "missing: feature-change-counts-fast for 42b63a2a7c1b5dfe9c21ff9884b59f198e421821...622e7cc3b54cd54493eed6c4c5abe35d4bfa168e",
+            'storing: feature-change-counts-fast for 42b63a2a7c1b5dfe9c21ff9884b59f198e421821...622e7cc3b54cd54493eed6c4c5abe35d4bfa168e: {"nz_pa_points_topo_150k": 5}',
         ]
 
         # Now do it again and make sure it uses the annotation stored last time
@@ -102,7 +102,7 @@ def test_diff_feature_count_populates_annotations(
         ]
         assert messages == [
             "retrieved: feature-change-counts-fast for "
-            "8feb827cf21831cc4766345894cd122947bba748...a8fa3347aed53547b194fc2101974b79b7fc337b: "
+            "42b63a2a7c1b5dfe9c21ff9884b59f198e421821...622e7cc3b54cd54493eed6c4c5abe35d4bfa168e: "
             "{'nz_pa_points_topo_150k': 5}",
         ]
 

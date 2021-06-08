@@ -210,20 +210,13 @@ def estimate_diff_feature_counts(
                         # no features were encountered in the sample.
                         # this is likely quite a small diff.
                         # let's just sample a lot more trees.
-                        new_sample_size = sample_size * 1024
-                        if new_sample_size > path_encoder.theoretical_max_trees:
-                            L.debug(
-                                "sampled %s trees in %.3fs, found 0 features; stopping",
-                                sample_size,
-                                t2 - t1,
-                            )
-                        else:
-                            L.debug(
-                                "sampled %s trees in %.3fs, found 0 features; increased sample size to %d",
-                                sample_size,
-                                t2 - t1,
-                                new_sample_size,
-                            )
+                        new_sample_size = min(max_trees, sample_size * 1024)
+                        L.debug(
+                            "sampled %s trees in %.3fs, found 0 features; increased sample size to %d",
+                            sample_size,
+                            t2 - t1,
+                            new_sample_size,
+                        )
                         sample_size = new_sample_size
                         continue
                     # try and get within 10% of the real mean.
