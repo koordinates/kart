@@ -182,7 +182,8 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             """,
             {"schema": db_schema, "table": table_name},
         )
-        yield "title", title
+        if title:
+            yield "title", title
 
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU

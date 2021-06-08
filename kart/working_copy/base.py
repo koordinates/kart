@@ -513,16 +513,16 @@ class BaseWorkingCopy:
         can't store the dataset description, then that should be removed from the diff.
         """
 
+        def _safe_del(dict_, key):
+            dict_.pop(key, None)
+
         # A dataset should have at most ONE of "metadata.xml" or "metadata/dataset.json".
         # The XML file is newer and supercedes the JSON file.
         # The GPKG adapter generates both, so we delete one so as to match the dataset.
-        try:
-            if "metadata/dataset.json" in ds_meta_items:
-                del wc_meta_items["metadata.xml"]
-            else:
-                del wc_meta_items["metadata/dataset.json"]
-        except KeyError:
-            pass
+        if "metadata/dataset.json" in ds_meta_items:
+            _safe_del(wc_meta_items, "metadata.xml")
+        else:
+            _safe_del(wc_meta_items, "metadata/dataset.json")
 
         # Make sure schema IDs are preserved, even though these cannot be roundtripped through the working copy:
         if "schema.json" in ds_meta_items and "schema.json" in wc_meta_items:
@@ -532,6 +532,12 @@ class BaseWorkingCopy:
 
         # Remove any spurious diffs caused by the WC having built-in CRS's that we can't / shouldn't modify:
         self._remove_builtin_crs_diffs(ds_meta_items, wc_meta_items)
+
+        # Remove any pointless diffs of titles / descriptions switching between empty <-> None.
+        for name in ("title", "description"):
+            if not ds_meta_items.get(name) and not wc_meta_items.get(name):
+                _safe_del(ds_meta_items, name)
+                _safe_del(wc_meta_items, name)
 
     def _remove_builtin_crs_diffs(self, ds_meta_items, wc_meta_items):
         """

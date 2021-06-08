@@ -146,7 +146,8 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             """,
             {"table_schema": db_schema, "table_name": table_name},
         )
-        yield "title", title
+        if title:
+            yield "title", title
 
         # Primary key SQL is a bit different for MySQL since constraints are named within the namespace of a table -
         # they don't names that are globally unique within the db-schema.

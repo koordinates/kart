@@ -174,8 +174,10 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
 
         title = cls._nested_get(gpkg_meta_items, "gpkg_contents", "identifier")
         description = cls._nested_get(gpkg_meta_items, "gpkg_contents", "description")
-        yield "title", title
-        yield "description", description
+        if title:
+            yield "title", title
+        if description:
+            yield "description", description
 
         id_salt = id_salt or cls._nested_get(
             gpkg_meta_items, "gpkg_contents", "table_name"
