@@ -438,7 +438,7 @@ def fast_import_tables(
                 click.echo(f"Joining {len(import_refs)} parallel-imported trees...")
                 builder = RichTreeBuilder(repo, trees[0])
                 for t in trees[1:]:
-                    datasets = Datasets(t, SUPPORTED_DATASET_CLASS)
+                    datasets = Datasets(repo, t, SUPPORTED_DATASET_CLASS)
                     for ds in datasets:
                         try:
                             feature_tree = ds.feature_tree

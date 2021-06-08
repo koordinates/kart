@@ -132,7 +132,7 @@ class RepoStructure:
 
         self.dataset_class = dataset_class
         self.version = dataset_class.VERSION
-        self.datasets = Datasets(self.tree, self.dataset_class)
+        self.datasets = Datasets(repo, self.tree, self.dataset_class)
 
     def __eq__(self, other):
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
@@ -333,7 +333,8 @@ class Datasets:
     >>> structure.datasets.get(path_to_dataset)
     """
 
-    def __init__(self, tree, dataset_class):
+    def __init__(self, repo, tree, dataset_class):
+        self.repo = repo
         self.tree = tree
         self.dataset_class = dataset_class
 
@@ -345,7 +346,7 @@ class Datasets:
             ds_tree = None
 
         if self.dataset_class.is_dataset_tree(ds_tree):
-            return self.dataset_class(ds_tree, ds_path)
+            return self.dataset_class(ds_tree, ds_path, repo=self.repo)
 
         raise KeyError(f"No valid dataset found at '{ds_path}'")
 
@@ -376,7 +377,7 @@ class Datasets:
                     child_path = child.name
 
                 if self.dataset_class.is_dataset_tree(child):
-                    ds = self.dataset_class(child, child_path)
+                    ds = self.dataset_class(child, child_path, repo=self.repo)
                     yield ds
                 else:
                     # Examine inside this directory

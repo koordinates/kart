@@ -33,7 +33,7 @@ class BaseDataset(ImportSource):
     META_PATH = None  # Eg "meta/"
     FEATURE_PATH = None  # Eg "feature/"
 
-    def __init__(self, tree, path):
+    def __init__(self, tree, path, repo=None):
         """
         Create a dataset at the given tree, which has the given path.
         The tree should contain a child tree with the name DATASET_DIRNAME.
@@ -58,6 +58,8 @@ class BaseDataset(ImportSource):
         self.table_name = self.path.replace("/", "__")
         self.L = logging.getLogger(self.__class__.__qualname__)
 
+        self.repo = repo
+
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.path}>"
 
@@ -80,8 +82,11 @@ class BaseDataset(ImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
-        """Returns the root of the meta tree. Caller take care: will fail if no meta tree exists."""
-        return self.inner_tree / self.META_PATH
+        """Returns the root of the meta tree, or the empty tree if no meta tree exists."""
+        try:
+            return self.inner_tree / self.META_PATH
+        except KeyError:
+            return self.repo.empty_tree if self.repo else None
 
     @property
     def attachment_tree(self):
@@ -90,12 +95,15 @@ class BaseDataset(ImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def feature_tree(self):
-        """Returns the root of the feature tree. Caller take care: fails if no feature tree exists."""
-        return (
-            self.inner_tree / self.FEATURE_PATH
-            if self.FEATURE_PATH
-            else self.inner_tree
-        )
+        """Returns the root of the feature tree, or the empty tree if no meta tree exists."""
+        try:
+            return (
+                self.inner_tree / self.FEATURE_PATH
+                if self.FEATURE_PATH
+                else self.inner_tree
+            )
+        except KeyError:
+            return self.repo.empty_tree if self.repo else None
 
     def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False, tree=None):
         """
