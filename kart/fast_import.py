@@ -258,6 +258,8 @@ def fast_import_tables(
     ]
     if verbosity < 2:
         cmd.append("--quiet")
+    for arg in extra_cmd_args:
+        cmd.append(arg)
 
     orig_commit = repo.head_commit
     import_refs = []
