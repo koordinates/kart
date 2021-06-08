@@ -1,3 +1,5 @@
+import random
+import subprocess
 from .exceptions import InvalidOperation
 from .serialise_util import (
     msg_pack,
@@ -5,6 +7,49 @@ from .serialise_util import (
     b64hash,
     hexhash,
 )
+
+
+# https://datatracker.ietf.org/doc/html/rfc3548.html#section-4
+_BASE64_URLSAFE_ALPHABET = (
+    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+)
+_BASE64_URLSAFE_ALPHABET_DECODE_MAP = {
+    _BASE64_URLSAFE_ALPHABET[i]: i for i in range(64)
+}
+MAX_B64_INT = 2 ** 29
+
+
+def b64encode_int(integer):
+    """
+    Encodes an integer to a string using exactly five bytes from the urlsafe base64 alphabet.
+    Raises ValueError if the integer is outside the valid range.
+    """
+    if not (-MAX_B64_INT < integer <= MAX_B64_INT):
+        raise ValueError(
+            f"{integer} should be between {-MAX_B64_INT +1} and {MAX_B64_INT}"
+        )
+
+    result = bytearray(bytes(5))
+    for index in range(4, -1, -1):
+        integer, mod = divmod(integer, 64)
+        result[index] = _BASE64_URLSAFE_ALPHABET[mod]
+    return result.decode("ascii")
+
+
+def b64decode_int(s):
+    """
+    Takes a 5-character string, decodes it using base64 as an integer.
+    Reverse of b64encode_int
+    """
+    assert len(s) == 5
+
+    result = 0
+    for i, byt in enumerate(s.encode()):
+        val = _BASE64_URLSAFE_ALPHABET_DECODE_MAP[byt]
+        result += val * 64 ** (4 - i)
+    if result > 2 ** 29:
+        result -= 2 ** 30
+    return result
 
 
 class PathEncoder:
@@ -29,6 +74,13 @@ class PathEncoder:
             raise InvalidOperation(
                 f"This repo uses {scheme!r} feature path scheme, which isn't supported by this version of Kart"
             )
+
+    @property
+    def theoretical_max_trees(self):
+        """
+        Returns the number of trees this structure can possibly store.
+        """
+        return self.branches ** self.levels
 
     def encode_filename(self, pk_values):
         packed_pk = msg_pack(pk_values)
@@ -64,6 +116,8 @@ class MsgpackHashPathEncoder(PathEncoder):
     based on the hash value.
     """
 
+    DISTRIBUTED_FEATURES = True
+
     def __init__(self, *, levels: int, branches: int, encoding: str):
         if encoding == "hex":
             assert branches in (16, 256)
@@ -98,29 +152,20 @@ class MsgpackHashPathEncoder(PathEncoder):
         parts.append(self.encode_filename(pk_values))
         return "/".join(parts)
 
-
-# https://datatracker.ietf.org/doc/html/rfc3548.html#section-4
-_BASE64_URLSAFE_ALPHABET = (
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
-)
-MAX_B64_INT = 2 ** 29
-
-
-def b64encode_int(integer):
-    """
-    Encodes an integer to a string using exactly five bytes from the urlsafe base64 alphabet.
-    Raises ValueError if the integer is outside the valid range.
-    """
-    if not (-MAX_B64_INT < integer <= MAX_B64_INT):
-        raise ValueError(
-            f"{integer} should be between {-MAX_B64_INT +1} and {MAX_B64_INT}"
-        )
-
-    result = bytearray(bytes(5))
-    for index in range(4, -1, -1):
-        integer, mod = divmod(integer, 64)
-        result[index] = _BASE64_URLSAFE_ALPHABET[mod]
-    return result.decode("ascii")
+    def sample_subtrees(self, num_trees, *, max_tree_id=None):
+        total_subtrees = self.theoretical_max_trees
+        if num_trees >= total_subtrees:
+            # sample all trees
+            yield "."
+            return
+        stride = total_subtrees / num_trees
+        assert stride > 1
+        for i in range(num_trees):
+            tree_idx = round(i * stride)
+            encoded = b64encode_int(tree_idx)
+            # take chars from the end. so "ABCDE" with two levels becomes "DE"
+            parts = [encoded[i] for i in range(-self.levels, 0)]
+            yield "/".join(parts)
 
 
 class IntPathEncoder(PathEncoder):
@@ -129,6 +174,8 @@ class IntPathEncoder(PathEncoder):
     This provides much better repo packing characteristics than the hashing encoders,
     but can only be used for (single-field) integer PKs.
     """
+
+    DISTRIBUTED_FEATURES = False
 
     def __init__(self, *, levels: int, branches: int, encoding: str):
         if encoding == "base64":
@@ -144,9 +191,9 @@ class IntPathEncoder(PathEncoder):
 
         self.scheme = "int"
         self.branches = branches
-        self._mod_value = branches ** levels
         self.encoding = encoding
         self.levels = levels
+        self._mod_value = self.theoretical_max_trees
 
     def encode_pks_to_path(self, pk_values):
         assert len(pk_values) == 1
@@ -156,6 +203,70 @@ class IntPathEncoder(PathEncoder):
         parts = [encoded[i] for i in range(-self.levels, 0)]
         parts.append(self.encode_filename(pk_values))
         return "/".join(parts)
+
+    def _nonrecursive_diff(self, tree_a, tree_b):
+        """
+        Returns a dict mapping names to OIDs which differ between the trees.
+        (either the key is present in both, and the OID is different,
+        or the key is only present in one of the trees)
+        """
+        a = {obj.name: obj for obj in tree_a}
+        b = {obj.name: obj for obj in tree_b}
+        all_names = set(a.keys() | b.keys())
+        return {k: (a.get(k), b.get(k)) for k in all_names}
+
+    def max_tree_id(self, repo, base_feature_tree, target_feature_tree):
+        """
+        Looks at a few trees to determine the maximum integer ID of the trees in the given diff.
+        Used as an upper bound for feature count sampling.
+
+        e.g if the only tree is 'A/A/A/A', returns 0
+        """
+        max_tree_path = self._max_feature_tree_path(
+            repo, base_feature_tree, target_feature_tree
+        )
+        return b64decode_int("A" + "".join(max_tree_path.split("/")))
+
+    def _max_feature_tree_path(
+        self, repo, base_feature_tree, target_feature_tree, *, depth=0
+    ):
+        """
+        Returns the path of the tree containing the greatest PK,
+        relative to the given feature tree.
+        """
+        if base_feature_tree == target_feature_tree:
+            return None
+
+        diff = self._nonrecursive_diff(
+            base_feature_tree, target_feature_tree or repo.EMPTY_TREE
+        )
+        max_path = max(diff.keys())
+        if depth == self.levels - 1:
+            return max_path
+        else:
+            a, b = diff[max_path]
+            return (
+                f"{max_path}/{self._max_feature_tree_path(repo, a, b, depth=depth + 1)}"
+            )
+
+    def sample_subtrees(self, num_trees, *, max_tree_id=None):
+        if max_tree_id is None:
+            total_subtrees = self.branches ** self.levels
+        else:
+            total_subtrees = max_tree_id
+        if num_trees >= total_subtrees:
+            # sample all trees
+            yield "."
+            return
+
+        stride = total_subtrees / num_trees
+        assert stride > 1
+        for i in range(num_trees):
+            tree_idx = round(i * stride)
+            encoded = b64encode_int(tree_idx)
+            # take chars from the end. so "ABCDE" with two levels becomes "DE"
+            parts = [encoded[i] for i in range(-self.levels, 0)]
+            yield "/".join(parts)
 
 
 # The encoder that was previously used for all datasets.

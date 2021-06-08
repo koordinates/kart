@@ -31,6 +31,8 @@ from .timestamps import tz_offset_to_minutes
 
 L = logging.getLogger("kart.repo")
 
+EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 
 class KartRepoFiles:
     """Useful files that are found in `repo.gitdir_path`"""
@@ -325,6 +327,11 @@ class KartRepo(pygit2.Repository):
 
     @property
     @lru_cache(maxsize=1)
+    def EMPTY_TREE(self):
+        return self.get(EMPTY_TREE_SHA)
+
+    @property
+    @lru_cache(maxsize=1)
     def diff_annotations(self):
         return DiffAnnotations(self)
 
@@ -578,8 +585,8 @@ class KartRepo(pygit2.Repository):
 
     @property
     def empty_tree(self):
-        """Returns the empty tree, with SHA 4b825dc642cb6eb9a060e54bf8d69288fbee4904."""
-        return self['4b825dc642cb6eb9a060e54bf8d69288fbee4904']
+        f"""Returns the empty tree, with SHA {EMPTY_TREE_SHA}."""
+        return self[EMPTY_TREE_SHA]
 
     @property
     def head_branch(repo):
