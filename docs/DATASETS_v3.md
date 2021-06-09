@@ -1,22 +1,32 @@
-Datasets V2
+Datasets V3
 -----------
 
 ### Background
 
-Kart was previously known as Sno. Sno 0.2 introduced Datasets V1, and Sno 0.5 introduced Datasets V2.
-Datasets V1 and V2 are storage formats for database tables where each table row is stored in a separate file.
-This means table rows can be stored using git-style version control, resulting in a storage format for a database-table which has version history.
+Kart's internal repository structure - currently called "Datasets V3" - has been through a few iterations:
 
-Datasets V2 is very similar to Datasets V1 - the main difference is that the schema of a Datasets V2 table can be changed in isolation without having
-to rewrite every row in the table. Rows that were written with a previous schema are adapted to fit the current schema when read.
+Kart Version | Kart's name at the time | Repository structure version
+--- | --- | ---
+0.0 to 0.1 | Snowflake | Datasets V0
+0.2 to 0.4 | Sno | Datasets V1
+0.5 to 0.8 | Sno | Datasets V2
+0.9 | Kart | Datasets V2
+0.10 | Kart | Datasets V3 (but v2 still supported)
 
-In Sno 0.4, only Datasets V1 is supported. In Sno 0.5, both Datasets V1 and Datasets V2 are supported, but a particular Sno repository must be entirely one or the other. From Sno/Kart 0.8 onwards, only Datasets V2 is supported - V1 and earlier must be upgraded first using `kart upgrade SOURCE DEST`.
+Datasets V3 is a storage formats for database tables where each table row is stored in a separate file. This means table rows can be stored using git-style version control, resulting in a storage format for a database-table which has version history.
 
-The following is a technical description of Datasets V2.
+The main improvement of Datasets V3 is how the rows are divided into different folders (or "trees" in git terminology) for more efficient storage when there are a large number of revisions and features. See [DATASETS_v2](DATASETS_v2.md) for more information on the preivous system.
+
+The main improvement of Datasets V2 is that the schema of a table can be changed in isolation without having to rewrite every row in the table. Rows that were written with a previous schema are adapted to fit the current schema when read. See [DATASETS_v1](DATASETS_v1.md) for more information on the previous system.
+
+To upgrade a Kart repository to the latest supported repository structure, run
+`kart upgrade SOURCE DEST` where `SOURCE` is the path to the existing repo, and `DEST` is the path to where the upgraded repo will be created.
+
+The following is a technical description of Datasets V3.
 
 ### Overall structure
 
-A V2 dataset is a folder named `.table-dataset` (or, alternatively, `.sno-dataset`) that contains two folders. These are `meta` which contains information about the database table itself - its title, description, and schema - and 'feature' which contains the table rows. The schema file contains the structure of the table rows, ie the names and type of each column. The "name" of the V2 Dataset is the path to the `.table-dataset` folder.
+A V3 dataset is a folder named `.table-dataset` that contains two folders. These are `meta` which contains information about the database table itself - its title, description, and schema - and 'feature' which contains the table rows. The schema file contains the structure of the table rows, ie the names and type of each column. The "name" of the V2 Dataset is the path to the `.table-dataset` folder.
 
 For example, here is the basic folder structure of a dataset named contours/500m:
 
@@ -238,7 +248,7 @@ Finally, the current schema is consulted to find out the current position and na
 }
 ```
 
-Features are stored at a filename that contains a Base64 encoding of their primary key, so that an update to the feature that doesn't change its primary key will cause it to be overwritten in place.
+Features are stored at a path based on their primary key, so that an update to the feature that doesn't change its primary key will cause it to be overwritten in place. More information is provided below under [Feature paths](#feature-paths).
 
 ### Messagepack encoding
 
@@ -274,3 +284,72 @@ Geometries are encoded using the Standard GeoPackageBinary format specified in [
 5. The `srs_id` is always 0, since this information not stored in the geometry object but is stored on a per-column basis in `meta/schema.json` in the `geometryCRS` field.
 
 **Note on axis-ordering:** As required by the GeoPackageBinary format, which Kart uses internally for geometry storage, Kart's axis-ordering is always `(longitude, latitude)`. This same axis-ordering is also used in Kart's JSON and GeoJSON output.
+
+### Feature paths
+
+Every feature is stored at a path based on its primary key, so that an update to the feature that doesn't change its primary key will cause it to be overwritten in place. The primary key value can be transformed into its path and back into a primary key value without losing any information - for this reason, the values for primary key columns are not included in the contents of a feature file, since they can be inferred from the file's name.
+
+A feature path might look like this:
+
+`A/A/A/B/kU0=`
+
+There are two parts to this: the path to the file - `A/A/A/B` - and the filename itself - `kU0=`. 
+
+#### Feature path filename
+
+The filename is the more important part, and it is generated in the following manner:
+
+`urlsafe_b64encode(msgpack.packb(primary_key_value_array))`
+
+In the example feature path above, there is only one primary key column, and the feature being stored is the feature with primary key 77. So the primary key values are an array of length one containing 77: `[77]`. So the filename was generated as follows:
+
+`[77]` -> MessagePack -> `bytes([0x91, 0x4d])` -> Base64 -> `kU0=`
+
+#### Path to the feature file
+
+For technical reasons, it is best if only a relatively small number of features are stored together in a single directory, and similarly if only a small number of directories are stored together in a single directory. Ideally, the features created at the same time or likely to be edited at the same time should be stored together, rather than spread out among all the other features - so, neighbouring primary key values should be neighbouring files where possible.
+
+The exact system used to generate the path to the file depends on a few parameters which are stored in the dataset as an extra meta item called `path-structure.json`. The path structure might look like this:
+
+```json
+{
+  "scheme": "int",
+  "branches": 64,
+  "levels": 4,
+  "encoding": "base64"
+}
+```
+
+The `"scheme": "int"` tells us that this path-structure is used for a dataset which has a single primary key column of type integer, and that value will be used directly to generate the path to the file. (The only other supported scheme is `"msgpack/hash"` - see below).
+
+The next two parameters - `"branches": 64, "levels": 4` indicate that there are 4 levels of directory hierarchy, and at each level, there are up to 64 different directories branching out, such that a dataset with a huge number of features will have them spread across `64 ** 4 = 16777216` leaf-node directories - so a dataset could have `64 ** 5 = 1073741824` features and no directory would contain more than 64 directories or features. (Directories are only created when needed, so a dataset with only one feature with primary key 1 would create only four nested folders in which to store it, eg `A/A/A/A`.)
+
+Each directory is named after a character in the base64 alphabet - this is the `"encoding": "base64"`, and this encoding only supports a branch factor of 64. The other valid encoding is `"hex"`, which supports a branch factor of 16 or 256.
+
+So to encode the example before where the primary-key-value-array is `[77]` - since the scheme is "int" we know there is only one primary key value, an integer, which we can use as input for the subsequent steps: `77`. Encoding an integer (rather than a string of bytes) using Base64 works similarly to encoding integers in other bases such as hexadecimal. A quick primer: 0 is `A`, 1 is `B`, 64 is `BA`, and 77 is `BN`. We pad the left side with `A` (which stands for `0`) as needed: `AAABN`, and we remove the last character since we want to only change the path every 64 features, not every feature, giving us `AAAB`. (Feature filenames already have their own scheme which distiguishes them from every other feature in the same folder). Treating this as a path 4 levels long gives us `A/A/A/B`.
+
+So, feature with primary key values `[77]` would be written at `A/A/A/B/kU0=` using this path-structure.
+
+##### Alternate scheme - msgpack/hash
+
+This scheme doesn't keep similarly named features near each other, so the "int" scheme is preferred when available. However, this scheme is more generic and works with any number of primary key columns, of any type.
+
+The method for turning a primary key into a path to a file is now as follows:
+
+`encode(sha256(msgpack.packb(primary_key_value_array)))`
+
+So if we started with `[77]` again, we would turn it into a string of bytes as follows:
+
+`[77]` -> MessagePack -> `bytes([0x91, 0x4d])` -> SHA256 -> `bytes([0x3c, 0x57, 0x8e, 0x75, ...])`
+
+For the encoding step, as many bits as are needed are taken from the start of this bytestring and encoded to Base64 or hex in order to make the path. Assuming we use the same parameters as last time, four levels of base64 requires `4 * 6 = 24` bits, so this would work like so:
+
+`bytes([0x3c, 0x57, 0x8e, 0x75, ...])` -> Base64 encode first 24 bits -> `PFeO` -> treat as path -> `P/F/e/O`
+
+So, feature with primary key values `[77]` would be written at `P/F/e/O/kU0=` using this path-structure.
+
+The paths to the files are more opaque in this scheme and provide less information about the feature's primary keys - however, just as in the last scheme, the feature's filename by itself can be decoded back into the primary key values. The paths are simply there to spread out the features for performance reasons.
+
+#### Legacy path-structure
+
+Datasets V2 only supports a single path structure, which is not stored in the dataset, but hard-coded. If no path-structure information is stored in the dataset, then the Datasets V2 structure is assumed. See [DATASETS_v2](DATASETS_v2.md)
