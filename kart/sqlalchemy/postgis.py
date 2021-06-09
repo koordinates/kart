@@ -46,6 +46,7 @@ class Db_Postgis(BaseDb):
                 FROM pg_catalog.pg_class c
                     INNER JOIN pg_namespace n ON n.oid = c.relnamespace
                 WHERE c.relkind IN ('r', 'v') AND {schema_clause}
+                AND c.relname NOT LIKE '_kart_%'
                 AND c.oid NOT IN (
                     SELECT d.objid
                     FROM pg_catalog.pg_extension AS e

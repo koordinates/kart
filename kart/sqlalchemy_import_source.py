@@ -126,7 +126,7 @@ class SqlAlchemyImportSource(ImportSource):
             tables = self.db_class.list_tables(conn, self.db_schema)
 
         if self.table is not None:
-            return {self.table: self.tables.get(self.table)}
+            return {self.table: tables.get(self.table)}
         else:
             return tables
 

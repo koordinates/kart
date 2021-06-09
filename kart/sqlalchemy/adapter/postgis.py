@@ -115,11 +115,14 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
         """
+        table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
+
         title = sess.scalar(
             "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
-            {"table_identifier": f"{db_schema}.{table_name}"},
+            {"table_identifier": table_identifier},
         )
-        yield "title", title
+        if title:
+            yield "title", title
 
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU
@@ -143,13 +146,17 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             AND (PK.column_name = C.column_name)
             LEFT OUTER JOIN pg_attribute A
             ON (A.attname = C.column_name)
-            AND (A.attrelid = (C.table_schema || '.' || C.table_name)::regclass::oid)
+            AND (A.attrelid = (:table_identifier)::regclass::oid)
             WHERE C.table_schema=:table_schema AND C.table_name=:table_name
             ORDER BY C.ordinal_position;
         """
         r = sess.execute(
             table_info_sql,
-            {"table_schema": db_schema, "table_name": table_name},
+            {
+                "table_identifier": table_identifier,
+                "table_schema": db_schema,
+                "table_name": table_name,
+            },
         )
         pg_table_info = list(r)
 
@@ -167,7 +174,6 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         geom_cols_info = [cls._filter_row_to_dict(row) for row in r]
 
         # Improve the geometry information by sampling one geometry from each column, where available.
-        table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
         for col_info in geom_cols_info:
             c = col_info["column_name"]
             row = sess.execute(
