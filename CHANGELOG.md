@@ -7,12 +7,22 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.10.0 (UNRELEASED)
 
-### Major changes in this release
+Kart v0.10.0 introduces a new repository structure, which is the default, dubbed 'Datasets V3'. Datasets V2 continues to be supported, but all newly created repos are V3 going forward.
+
+### Datasets V3
+
+ * Entire repositories can be upgraded from V2 to V3 using `kart upgrade EXISTING_REPO NEW_REPO`.
+ * Anything which works in a V2 repo should work in a V3 repo and vice versa.
+ * V3 repos are much more performant when dealing with extremely large datasets.
+
+### Other major changes in this release
+
 * The working copy can now be a MySQL database (previously only GPKG, PostGIS and SQL Server working copies were supported). The commands `init`, `clone` and `create-workingcopy` now all accept working copy paths in the form `mysql://HOST/DBNAME` [#399](https://github.com/koordinates/kart/pull/399)
   - Read the documentation at [docs/MYSQL_WC.md](docs/MYSQL_WC.md)
 * Import of tables using `kart import` is now supported from any type of database that Kart also supports writing to as a working copy - namely, GPKG, PostGIS, SQL Server and MySQL.
+* Support for rapidly calculating or estimating feature-counts - see below.
 
-### Other changes
+### Other minor changes
 * Change to `kart data ls` JSON output, now includes whether repo is Kart or Sno branded.
 * Importing from a datasource now samples the first geometry to check the number of dimensions - in case the datasource actually has 3 or 4 dimensions but this fact is not stored in the column metadata (which is not necessarily required by all source types). [#337](https://github.com/koordinates/kart/issues/337)
 * Bugfix: Creating a working copy while switching branch now creates a working copy with the post-switch branch checked out, not the pre-switch branch.
