@@ -44,7 +44,6 @@ GIT_CONFIG_DEFAULT_OVERRIDES = {
     "pack.depth": 0,
     "pack.window": 0,
 }
-
 # These are the settings that Kart always *overrides* in git config.
 # i.e. regardless of your local git settings, kart will use these settings instead.
 GIT_CONFIG_FORCE_OVERRIDES = {
@@ -52,6 +51,12 @@ GIT_CONFIG_FORCE_OVERRIDES = {
     # "kcya" and "kcyA" are *not* the same feature; that way lies data loss
     "core.ignoreCase": "false",
 }
+
+
+# from https://github.com/git/git/blob/ebf3c04b262aa27fbb97f8a0156c2347fecafafb/quote.c#L12-L44
+def _git_sq_quote_buf(src):
+    dst = src.replace("'", r"'\''").replace("!", r"'\!'")
+    return f"'{dst}'"
 
 
 @functools.lru_cache()
@@ -62,22 +67,13 @@ def init_git_config():
     configs = list(_pygit2_configs())
     new_config_params = []
     for k, v in GIT_CONFIG_DEFAULT_OVERRIDES.items():
-        v = str(v)
-        # not sure *exactly* how this quoting works; for now let's just check it's safe
-        assert "'" not in k
-        assert "'" not in v
         for config in configs:
             if k in config:
                 break
         else:
-            new_config_params.append(f"'{k}={v}'")
-
+            new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
     for k, v in GIT_CONFIG_FORCE_OVERRIDES.items():
-        v = str(v)
-        # not sure *exactly* how this quoting works; for now let's just check it's safe
-        assert "'" not in k
-        assert "'" not in v
-        new_config_params.append(f"'{k}={v}'")
+        new_config_params.append(_git_sq_quote_buf(f"{k}={v}"))
 
     if new_config_params:
         existing = ""
