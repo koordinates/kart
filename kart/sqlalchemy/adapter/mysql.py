@@ -138,7 +138,9 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         return mysql_type
 
     @classmethod
-    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt=None):
+    def all_v2_meta_items_including_empty(
+        cls, sess, db_schema, table_name, id_salt=None
+    ):
         title = sess.scalar(
             """
             SELECT table_comment FROM information_schema.tables
@@ -146,8 +148,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             """,
             {"table_schema": db_schema, "table_name": table_name},
         )
-        if title:
-            yield "title", title
+        yield "title", title
 
         # Primary key SQL is a bit different for MySQL since constraints are named within the namespace of a table -
         # they don't names that are globally unique within the db-schema.

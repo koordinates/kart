@@ -170,7 +170,9 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         return sql_type
 
     @classmethod
-    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt=None):
+    def all_v2_meta_items_including_empty(
+        cls, sess, db_schema, table_name, id_salt=None
+    ):
         """
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
@@ -182,8 +184,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             """,
             {"schema": db_schema, "table": table_name},
         )
-        if title:
-            yield "title", title
+        yield "title", title
 
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU
@@ -237,7 +238,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         schema = KartAdapter_SqlServer.sqlserver_to_v2_schema(
             ms_table_info, ms_spatial_ref_sys, id_salt
         )
-        yield "schema.json", schema.to_column_dicts()
+        yield "schema.json", schema.to_column_dicts() if schema else None
 
         for crs_info in ms_spatial_ref_sys:
             auth_name = crs_info["authority_name"]

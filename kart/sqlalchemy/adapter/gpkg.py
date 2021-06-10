@@ -154,7 +154,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         )
 
     @classmethod
-    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
+    def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
@@ -174,10 +174,8 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
 
         title = cls._nested_get(gpkg_meta_items, "gpkg_contents", "identifier")
         description = cls._nested_get(gpkg_meta_items, "gpkg_contents", "description")
-        if title:
-            yield "title", title
-        if description:
-            yield "description", description
+        yield "title", title
+        yield "description", description
 
         id_salt = id_salt or cls._nested_get(
             gpkg_meta_items, "gpkg_contents", "table_name"

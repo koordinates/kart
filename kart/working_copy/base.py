@@ -492,7 +492,7 @@ class BaseWorkingCopy:
         """
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         """
-        ds_meta_items = dict(dataset.meta_items())
+        ds_meta_items = dict(self.adapter.remove_empty_values(dataset.meta_items()))
         wc_meta_items = dict(self.meta_items(dataset))
         self._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
         result = DeltaDiff.diff_dicts(ds_meta_items, wc_meta_items)
@@ -532,12 +532,6 @@ class BaseWorkingCopy:
 
         # Remove any spurious diffs caused by the WC having built-in CRS's that we can't / shouldn't modify:
         self._remove_builtin_crs_diffs(ds_meta_items, wc_meta_items)
-
-        # Remove any pointless diffs of titles / descriptions switching between empty <-> None.
-        for name in ("title", "description"):
-            if not ds_meta_items.get(name) and not wc_meta_items.get(name):
-                _safe_del(ds_meta_items, name)
-                _safe_del(wc_meta_items, name)
 
     def _remove_builtin_crs_diffs(self, ds_meta_items, wc_meta_items):
         """
@@ -813,8 +807,13 @@ class BaseWorkingCopy:
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
         with self.session() as sess:
+            dataset_count = len(datasets)
+            for i, dataset in enumerate(datasets):
+                total_features = dataset.feature_count
+                L.info(
+                    f"Writing dataset {i+1} of {dataset_count}: {dataset.path} with {total_features} features"
+                )
 
-            for dataset in datasets:
                 try:
                     # Create the table
                     self._write_meta(sess, dataset)
@@ -837,7 +836,6 @@ class BaseWorkingCopy:
                 t0p = t0
 
                 CHUNK_SIZE = 10000
-                total_features = dataset.feature_count
 
                 for row_dicts in chunk(dataset.features_with_crs_ids(), CHUNK_SIZE):
                     sess.execute(sql, row_dicts)
@@ -862,12 +860,15 @@ class BaseWorkingCopy:
                 L.info(
                     "Overall rate: %d features/s", (feat_progress / (t1 - t0 or 0.001))
                 )
-
                 if dataset.has_geometry:
                     self._create_spatial_index_post(sess, dataset)
 
                 self._create_triggers(sess, dataset)
                 self._update_last_write_time(sess, dataset, commit)
+
+                L.info(
+                    f"Wrote dataset {i+1} of {dataset_count}: {dataset.path} with {total_features} features"
+                )
 
             self._insert_or_replace_state_table_tree(
                 sess, commit.peel(pygit2.Tree).id.hex

@@ -110,7 +110,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         return f"GEOMETRY({geometry_type},{crs_id})"
 
     @classmethod
-    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
+    def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
@@ -121,8 +121,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             "SELECT obj_description((:table_identifier)::regclass, 'pg_class');",
             {"table_identifier": table_identifier},
         )
-        if title:
-            yield "title", title
+        yield "title", title
 
         primary_key_sql = """
             SELECT KCU.* FROM information_schema.key_column_usage KCU
@@ -192,7 +191,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
                 col_info.update({**sampled_info, **col_info})
 
         schema = cls.postgis_to_v2_schema(pg_table_info, geom_cols_info, id_salt)
-        yield "schema.json", schema.to_column_dicts()
+        yield "schema.json", schema.to_column_dicts() if schema else None
 
         for col_info in geom_cols_info:
             wkt = col_info["srtext"]
