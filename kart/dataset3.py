@@ -98,14 +98,14 @@ class Dataset3(RichBaseDataset):
                 return True
         return False
 
-    def __init__(self, tree, path):
+    def __init__(self, tree, path, repo=None):
         # Look for either of the DATASET_DIRNAMES and use whichever one is there:
         if tree:
             for d in self.DATASET_DIRNAMES:
                 if d in tree:
                     self.DATASET_DIRNAME = d
                     break
-        super().__init__(tree, path)
+        super().__init__(tree, path, repo=repo)
 
     @functools.lru_cache()
     def get_meta_item(self, name):
