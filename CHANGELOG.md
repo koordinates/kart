@@ -13,7 +13,7 @@ Kart v0.10.0 introduces a new repository structure, which is the default, dubbed
 
  * Entire repositories can be upgraded from V2 to V3 using `kart upgrade EXISTING_REPO NEW_REPO`.
  * Anything which works in a V2 repo should work in a V3 repo and vice versa.
- * V3 repos are much more performant when dealing with extremely large datasets.
+ * V3 repos are more performant for large datasets - compared to V2 repos where size-on-disk climbs quickly once dataset size exceeds 16 million features.
 
 ### Other major changes in this release
 

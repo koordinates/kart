@@ -7,7 +7,7 @@ Kart's internal repository structure - currently called "Datasets V3" - has been
 
 Kart Version | Kart's name at the time | Repository structure version
 --- | --- | ---
-0.0 to 0.1 | Snowflake | Datasets V0
+0.0 to 0.1 | Snowdrop | Datasets V0
 0.2 to 0.4 | Sno | Datasets V1
 0.5 to 0.8 | Sno | Datasets V2
 0.9 | Kart | Datasets V2
@@ -20,7 +20,7 @@ The main improvement of Datasets V3 is how the rows are divided into different f
 The main improvement of Datasets V2 is that the schema of a table can be changed in isolation without having to rewrite every row in the table. Rows that were written with a previous schema are adapted to fit the current schema when read. See [DATASETS_v1](DATASETS_v1.md) for more information on the previous system.
 
 To upgrade a Kart repository to the latest supported repository structure, run
-`kart upgrade SOURCE DEST` where `SOURCE` is the path to the existing repo, and `DEST` is the path to where the upgraded repo will be created.
+`kart upgrade SOURCE DEST` where `SOURCE` is the path to the existing repo, and `DEST` is the path to where the upgraded repo will be created. This will rewrite your repository history — all commit information is preserved but the commit identifiers will all change. Merging changes across upgrades will not work out.
 
 The following is a technical description of Datasets V3.
 
@@ -112,7 +112,7 @@ Those are all of the fields that apply to any column. Certain dataTypes can have
 
 ##### Data types
 
-The following data types are supported by Kart. When a versioned Kart dataset is converted to a database table (ie, when `kart checkout` updates the working copy) then these Kart data types will be converted to equivalent data types in the database table, depending on what is supported by the database in question.
+The following data types are supported by Kart, generally these follow the SQL standard data type categories. When a versioned Kart dataset is converted to a database table (ie, when `kart checkout` updates the working copy) then these Kart data types will be converted to equivalent data types in the database table, depending on what is supported by the database in question.
 
 * `boolean`
   - stores `true` or `false`.
@@ -283,7 +283,7 @@ Geometries are encoded using the Standard GeoPackageBinary format specified in [
    - Other geometries have an XY envelope.
 5. The `srs_id` is always 0, since this information not stored in the geometry object but is stored on a per-column basis in `meta/schema.json` in the `geometryCRS` field.
 
-**Note on axis-ordering:** As required by the GeoPackageBinary format, which Kart uses internally for geometry storage, Kart's axis-ordering is always `(longitude, latitude)`. This same axis-ordering is also used in Kart's JSON and GeoJSON output.
+**Note on axis-ordering:** As required by the GeoPackageBinary format, which Kart uses internally for geometry storage, Kart's axis-ordering is always *(longitude/easting/x, latitude/northing/y, z, m)*. Following the GeoJSON specification, this same axis-ordering is also used in Kart's JSON and GeoJSON output.
 
 ### Feature paths
 
@@ -307,7 +307,7 @@ In the example feature path above, there is only one primary key column, and the
 
 #### Path to the feature file
 
-For technical reasons, it is best if only a relatively small number of features are stored together in a single directory, and similarly if only a small number of directories are stored together in a single directory. Ideally, the features created at the same time or likely to be edited at the same time should be stored together, rather than spread out among all the other features - so, neighbouring primary key values should be neighbouring files where possible.
+For technical reasons, it is best if only a relatively small number of features are stored together in a single directory, and similarly if only a small number of directories are stored together in a single directory. Ideally, the features created at the same time or likely to be edited at the same time should be stored together, rather than spread out among all the other features - so, neighbouring primary key values should be neighbouring file paths where possible.
 
 The exact system used to generate the path to the file depends on a few parameters which are stored in the dataset as an extra meta item called `path-structure.json`. The path structure might look like this:
 
@@ -324,11 +324,21 @@ The `"scheme": "int"` tells us that this path-structure is used for a dataset wh
 
 The next two parameters - `"branches": 64, "levels": 4` indicate that there are 4 levels of directory hierarchy, and at each level, there are up to 64 different directories branching out, such that a dataset with a huge number of features will have them spread across `64 ** 4 = 16777216` leaf-node directories - so a dataset could have `64 ** 5 = 1073741824` features and no directory would contain more than 64 directories or features. (Directories are only created when needed, so a dataset with only one feature with primary key 1 would create only four nested folders in which to store it, eg `A/A/A/A`.)
 
-Each directory is named after a character in the base64 alphabet - this is the `"encoding": "base64"`, and this encoding only supports a branch factor of 64. The other valid encoding is `"hex"`, which supports a branch factor of 16 or 256.
+Each directory is named after a character in the [URL-safe Base64 alphabet](https://en.wikipedia.org/wiki/Base64#The_URL_applications) - this is the `"encoding": "base64"`, and this encoding only supports a branch factor of 64. The other valid encoding is `"hex"`, which supports a branch factor of 16 or 256.
 
 So to encode the example before where the primary-key-value-array is `[77]` - since the scheme is "int" we know there is only one primary key value, an integer, which we can use as input for the subsequent steps: `77`. Encoding an integer (rather than a string of bytes) using Base64 works similarly to encoding integers in other bases such as hexadecimal. A quick primer: 0 is `A`, 1 is `B`, 64 is `BA`, and 77 is `BN`. We pad the left side with `A` (which stands for `0`) as needed: `AAABN`, and we remove the last character since we want to only change the path every 64 features, not every feature, giving us `AAAB`. (Feature filenames already have their own scheme which distiguishes them from every other feature in the same folder). Treating this as a path 4 levels long gives us `A/A/A/B`.
 
 So, feature with primary key values `[77]` would be written at `A/A/A/B/kU0=` using this path-structure.
+
+###### Example with a very large primary key:
+
+`[1234567890]` -> Base64 -> `BJlgLS` -> remove last character, take next 4 last characters as path -> `J/l/g/L`
+
+The filename would be encoded as before:
+
+`[1234567890]` -> MessagePack -> `bytes([0x91, 0xce, 0x49, 0x96, 0x02, 0xd2])` -> Base64 -> `kc5JlgLS`
+
+Giving a complete feature path of: `J/l/g/L/kc5JlgLS`
 
 ##### Alternate scheme - msgpack/hash
 
@@ -352,4 +362,15 @@ The paths to the files are more opaque in this scheme and provide less informati
 
 #### Legacy path-structure
 
-Datasets V2 only supports a single path structure, which is not stored in the dataset, but hard-coded. If no path-structure information is stored in the dataset, then the Datasets V2 structure is assumed. See [DATASETS_v2](DATASETS_v2.md)
+Datasets V2 only supports a single path structure, which is not stored in the dataset, but hard-coded. If no path-structure information is stored in the dataset, then the Datasets V2 structure is assumed. The Datasets V2 structure uses the following path-structure parameters (though these are implied, not stored in the repository):
+
+```json
+{
+  "scheme": "msgpack/hash",
+  "branches": 256,
+  "levels": 2,
+  "encoding": "hex"
+}
+```
+
+See [DATASETS_v2](DATASETS_v2.md).
