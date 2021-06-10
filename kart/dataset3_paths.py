@@ -1,5 +1,5 @@
-import random
-import subprocess
+import binascii
+
 from .exceptions import InvalidOperation
 from .serialise_util import (
     msg_pack,
@@ -17,6 +17,10 @@ _BASE64_URLSAFE_ALPHABET_DECODE_MAP = {
     _BASE64_URLSAFE_ALPHABET[i]: i for i in range(64)
 }
 MAX_B64_INT = 2 ** 29
+
+# Return value indicating the caller should sample all trees within a particular tree - so, the current directory, "." -
+# as opposed to sampling a particular tree relative to the current directory, ie "A/B/C/D"
+SAMPLE_ALL_TREES = "."
 
 
 def b64encode_int(integer):
@@ -44,9 +48,12 @@ def b64decode_int(s):
     assert len(s) == 5
 
     result = 0
-    for i, byt in enumerate(s.encode()):
-        val = _BASE64_URLSAFE_ALPHABET_DECODE_MAP[byt]
-        result += val * 64 ** (4 - i)
+    try:
+        for i, byt in enumerate(s.encode("ascii")):
+            val = _BASE64_URLSAFE_ALPHABET_DECODE_MAP[byt]
+            result += val * 64 ** (4 - i)
+    except KeyError:
+        raise binascii.Error('Non-base64 digit found')
     if result > 2 ** 29:
         result -= 2 ** 30
     return result
@@ -54,11 +61,21 @@ def b64decode_int(s):
 
 class PathEncoder:
     """
-    A system for encoding a feature's primary key to a particular path.
-    Originally hex-hash[0:2]/hex-hash[2:4]/base64-encoded-message-packed-primary-key -
-    - that is, 2 levels, and a branch factor of 256 at each level.
-    But, this system proved costly for massive repos and the resulting massive trees.
-    Now we prefer 4 levels, a branch factor of 64, and clustering similar PKs where possible.
+    A system for transforming a primary key to a path (which can be transformed back into a primary key again).
+    The path structure attempts to spread out features so that every tree has at most a relatively small number
+    of children, so that neighbouring primary keys also tend to be neighbours in trees, and so that small datasets
+    have few trees. This is achieved by placing features in a nested structure of a few levels of trees, such that
+    a low branch factor can still branch out into millions of features.
+
+    - A dataset with a single integer primary key will get encoded with 4 tree levels and a branch factor of 64 at each
+      level. Sequential PKs tend to end up in the same tree.
+    - Anything else (multiple PK fields, strings, etc) gets the PKs values hashed first, before encoding into a similar
+      64-branch 4-level structure.
+
+    Before 0.10, Kart used a two-level, 256-branch structure and hashed *all* PKs first. However, this system proved
+    costly for massive repos (roughly, repos with greater than 16 milllion features), resulting in significant
+    repository bloat. Existing repos created before this change (Datasets V2 repos) continue to use the old system,
+    which Kart continues to support.
     """
 
     PATH_STRUCTURE_ITEM = "path-structure.json"
@@ -105,8 +122,7 @@ class PathEncoder:
             for i in range(self.branches):
                 yield format_spec.format(i)
         elif self.encoding == "base64":
-            for c in _BASE64_URLSAFE_ALPHABET:
-                yield chr(c)
+            yield from _BASE64_URLSAFE_ALPHABET.decode('ascii')
 
 
 class MsgpackHashPathEncoder(PathEncoder):
@@ -155,8 +171,7 @@ class MsgpackHashPathEncoder(PathEncoder):
     def sample_subtrees(self, num_trees, *, max_tree_id=None):
         total_subtrees = self.theoretical_max_trees
         if num_trees >= total_subtrees:
-            # sample all trees
-            yield "."
+            yield SAMPLE_ALL_TREES
             return
         stride = total_subtrees / num_trees
         assert stride > 1
@@ -237,9 +252,10 @@ class IntPathEncoder(PathEncoder):
         if base_feature_tree == target_feature_tree:
             return None
 
-        diff = self._nonrecursive_diff(
-            base_feature_tree, target_feature_tree or repo.EMPTY_TREE
-        )
+        base_feature_tree = base_feature_tree or repo.empty_tree
+        target_feature_tree = target_feature_tree or repo.empty_tree
+
+        diff = self._nonrecursive_diff(base_feature_tree, target_feature_tree)
         max_path = max(diff.keys())
         if depth == self.levels - 1:
             return max_path
@@ -255,8 +271,7 @@ class IntPathEncoder(PathEncoder):
         else:
             total_subtrees = max_tree_id
         if num_trees >= total_subtrees:
-            # sample all trees
-            yield "."
+            yield SAMPLE_ALL_TREES
             return
 
         stride = total_subtrees / num_trees

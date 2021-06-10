@@ -327,11 +327,6 @@ class KartRepo(pygit2.Repository):
 
     @property
     @lru_cache(maxsize=1)
-    def EMPTY_TREE(self):
-        return self.get(EMPTY_TREE_SHA)
-
-    @property
-    @lru_cache(maxsize=1)
     def diff_annotations(self):
         return DiffAnnotations(self)
 
@@ -584,6 +579,7 @@ class KartRepo(pygit2.Repository):
         return None if self.head_is_unborn else self.head.peel(pygit2.Tree)
 
     @property
+    @lru_cache(maxsize=1)
     def empty_tree(self):
         f"""Returns the empty tree, with SHA {EMPTY_TREE_SHA}."""
         return self[EMPTY_TREE_SHA]
