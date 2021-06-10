@@ -109,9 +109,11 @@ def get_approximate_diff_blob_count(
     sample_size, required_confidence, z_score = ACCURACY_PARAMS[accuracy]
 
     if path_encoder.DISTRIBUTED_FEATURES:
-        # TODO
-        max_trees = path_encoder.max_trees
-        raise NotImplementedError
+
+        diff_count, samples_taken = _recursive_distributed_diff_count(
+            repo, tree1, tree2, path_encoder.branches, 16
+        )
+        return int(round(diff_count))
     else:
         # integer PK encoder. First, find what range of trees we have
         max_tree_id = path_encoder.max_tree_id(repo, tree1, tree2)
@@ -180,6 +182,49 @@ def get_approximate_diff_blob_count(
             sample_size *= 2
         sample_size = min(max_trees, sample_size)
     return int(round(sample_mean * max_trees))
+
+
+def _nonrecursive_diff(tree_a, tree_b):
+    """
+    Returns a dict mapping names to OIDs which differ between the trees.
+    (either the key is present in both, and the OID is different,
+    or the key is only present in one of the trees)
+    """
+    a = {obj.name: obj for obj in tree_a} if tree_a else {}
+    b = {obj.name: obj for obj in tree_b} if tree_b else {}
+    all_names = sorted(list(set(a.keys() | b.keys())))
+
+    return {k: (a.get(k), b.get(k)) for k in all_names if a.get(k) != b.get(k)}
+
+
+def _recursive_distributed_diff_count(
+    repo, tree1, tree2, branch_count, total_samples_to_take
+):
+    diff = _nonrecursive_diff(tree1, tree2)
+    diff_size = len(diff)
+    if diff_size < branch_count / 2:
+        L.debug(f"Found {diff_size} diffs.")
+        return diff_size, 1
+
+    L.debug(f"Found {diff_size} diffs, checking next level:")
+
+    total_subsample_size = 0
+    total_subsamples_taken = 0
+    total_samples_taken = 0
+    for tree1, tree2 in diff.values():
+        subsample_size, samples_taken = _recursive_distributed_diff_count(
+            repo, tree1, tree2, branch_count, total_samples_to_take
+        )
+        total_subsample_size += subsample_size
+        total_subsamples_taken += 1
+        total_samples_taken += samples_taken
+        if total_samples_taken >= total_samples_to_take:
+            break
+
+    return (
+        1.0 * diff_size * total_subsample_size / total_subsamples_taken,
+        total_samples_taken,
+    )
 
 
 def estimate_diff_feature_counts(

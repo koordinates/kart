@@ -238,7 +238,7 @@ class IntPathEncoder(PathEncoder):
         a = {obj.name: obj for obj in tree_a}
         b = {obj.name: obj for obj in tree_b}
         all_names = a.keys() | b.keys()
-        return {k: (a.get(k), b.get(k)) for k in all_names}
+        return {k: (a.get(k), b.get(k)) for k in all_names if a.get(k) != b.get(k)}
 
     def max_tree_id(self, repo, base_feature_tree, target_feature_tree):
         """
