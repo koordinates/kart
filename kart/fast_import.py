@@ -13,8 +13,8 @@ from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
 from .import_source import ImportSource
 from .repo_version import (
     extra_blobs_for_version,
-    SUPPORTED_REPO_VERSION,
-    SUPPORTED_DATASET_CLASS,
+    SUPPORTED_REPO_VERSIONS,
+    dataset_class_for_version,
 )
 from .rich_tree_builder import RichTreeBuilder
 from .structure import Datasets
@@ -149,22 +149,21 @@ def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
     if replacing_dataset is None:
         # nothing to do
         return
+    dest_inner_path = f"{source.dest_path}/{replacing_dataset.DATASET_DIRNAME}"
     for i, proc in enumerate(procs):
         if replace_ids is None:
             # Delete the existing dataset, before we re-import it.
             proc.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
         else:
             # delete and reimport meta/
-            proc.stdin.write(f"D {source.dest_path}/.sno-dataset/meta\n".encode("utf8"))
+            proc.stdin.write(f"D {dest_inner_path}/meta\n".encode("utf8"))
             # delete all features not pertaining to this process.
             # we also delete the features that *do*, but we do it further down
             # so that we don't have to iterate the IDs more than once.
-            for subtree in range(256):
-                if subtree % len(procs) != i:
+            for subtree in replacing_dataset.feature_path_encoder().tree_names():
+                if hash(subtree) % len(procs) != i:
                     proc.stdin.write(
-                        f"D {source.dest_path}/.sno-dataset/feature/{subtree:02x}\n".encode(
-                            "utf8"
-                        )
+                        f"D {dest_inner_path}/feature/{subtree}\n".encode("utf8")
                     )
 
         # We just deleted the legends, but we still need them to reimport
@@ -212,6 +211,7 @@ def fast_import_tables(
     """
 
     MAX_PROCESSES = 64
+
     if num_processes < 1:
         num_processes = 1
     elif num_processes > MAX_PROCESSES:
@@ -234,11 +234,9 @@ def fast_import_tables(
     if not starting_tree:
         replace_existing = ReplaceExisting.ALL
 
-    assert repo.version == SUPPORTED_REPO_VERSION
-    extra_blobs = (
-        extra_blobs_for_version(SUPPORTED_REPO_VERSION) if not starting_tree else []
-    )
-    dataset_class = SUPPORTED_DATASET_CLASS
+    assert repo.version in SUPPORTED_REPO_VERSIONS
+    extra_blobs = extra_blobs_for_version(repo.version) if not starting_tree else []
+    dataset_class = dataset_class_for_version(repo.version)
 
     ImportSource.check_valid(sources)
 
@@ -260,6 +258,8 @@ def fast_import_tables(
     ]
     if verbosity < 2:
         cmd.append("--quiet")
+    for arg in extra_cmd_args:
+        cmd.append(arg)
 
     orig_commit = repo.head_commit
     import_refs = []
@@ -319,8 +319,9 @@ def fast_import_tables(
             else:
 
                 def proc_for_feature_path(path):
-                    first_subtree = int(path.rsplit("/", 3)[1], 16)
-                    return procs[first_subtree % len(procs)]
+                    feature_rel_path = path.rsplit("/feature/", 1)[1]
+                    first_subtree_name = feature_rel_path.split("/", 1)[0]
+                    return procs[hash(first_subtree_name) % len(procs)]
 
             for source in sources:
                 replacing_dataset = None
@@ -339,6 +340,7 @@ def fast_import_tables(
                     )
 
                 dataset = dataset_class(tree=None, path=source.dest_path)
+                dataset.schema = source.schema
 
                 with source:
                     if limit:
@@ -361,7 +363,7 @@ def fast_import_tables(
                         # This means we don't have to load the whole list into memory.
                         def _ids():
                             for pk in replace_ids:
-                                pk = source.schema.sanitise_pks(pk)
+                                pk = dataset.schema.sanitise_pks(pk)
                                 path = dataset.encode_pks_to_path(pk)
                                 proc_for_feature_path(path).stdin.write(
                                     f"D {path}\n".encode("utf8")
@@ -438,7 +440,9 @@ def fast_import_tables(
                 click.echo(f"Joining {len(import_refs)} parallel-imported trees...")
                 builder = RichTreeBuilder(repo, trees[0])
                 for t in trees[1:]:
-                    datasets = Datasets(repo, t, SUPPORTED_DATASET_CLASS)
+                    datasets = Datasets(
+                        repo, t, dataset_class_for_version(repo.version)
+                    )
                     for ds in datasets:
                         try:
                             feature_tree = ds.feature_tree

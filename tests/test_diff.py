@@ -1106,8 +1106,8 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
 
     # Columns: id,value
 
-    R0 = "075b0cf1414d71a6edbcdb4f05da93e1083ccdc2"
-    R1 = "c9d8c52ec9e8b1260aec153958954c880573e24a"  # HEAD
+    R0 = "e1b8c966d4d35451cf26cecf2575b0cbbd880e75"
+    R1 = "349a25079b0743206d662aab4c1f759ecd3fc25e"  # HEAD
 
     with data_working_copy("editing") as (repo_path, wc):
         # empty HEAD -> no working copy changes
@@ -1364,9 +1364,8 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         if output_format == "text":
-            commit_hash = r.stdout[7:47]
             assert r.stdout.splitlines() == [
-                f"commit {commit_hash}",
+                f"commit {H.POINTS.HEAD_SHA}",
                 "Author: Robert Coup <robert@coup.net.nz>",
                 "Date:   Thu Jun 20 15:28:33 2019 +0100",
                 "",
@@ -1426,11 +1425,11 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
                 "committerName": "Robert Coup",
                 "commitTime": "2019-06-20T14:28:33Z",
                 "commitTimeOffset": "+01:00",
-                "commit": "0c64d8211c072a08d5fc6e6fe898cbb59fc83d16",
-                "abbrevCommit": "0c64d82",
+                "commit": H.POINTS.HEAD_SHA,
+                "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                 "message": "Improve naming on Coromandel East coast",
-                "parents": ["7bc3b56f20d1559208bcf5bb56860dda6e190b70"],
-                "abbrevParents": ["7bc3b56"],
+                "parents": [H.POINTS.HEAD1_SHA],
+                "abbrevParents": [H.POINTS.HEAD1_SHA[:7]],
             }
 
 

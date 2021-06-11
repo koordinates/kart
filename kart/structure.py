@@ -211,6 +211,7 @@ class RepoStructure:
 
             if schema_delta and schema_delta.type == "insert":
                 dataset = self.dataset_class(tree=None, path=ds_path)
+                dataset.schema = Schema.from_column_dicts(schema_delta.new_value)
             else:
                 dataset = self.datasets[ds_path]
 

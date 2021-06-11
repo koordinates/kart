@@ -7,8 +7,8 @@ from .serialise_util import json_unpack
 
 class BaseDataset(ImportSource):
     """
-    Common interface for all datasets - mainly Dataset2, but
-    there is also Dataset0 and Dataset1 used by `kart upgrade`.
+    Common interface for all datasets - mostly used by Dataset3,
+    but also implemented by legacy datasets ie during `kart upgrade`.
 
     A Dataset instance is immutable since it is a view of a particular git tree.
     To get a new version of a dataset, commit the desired changes,
@@ -40,7 +40,7 @@ class BaseDataset(ImportSource):
         The tree can be None if this dataset hasn't yet been written to the repo.
         """
         if self.__class__ is BaseDataset:
-            raise TypeError("Cannot construct a BaseDataset - you may want Dataset2")
+            raise TypeError("Cannot construct a BaseDataset - you may want Dataset3")
 
         if tree is not None:
             self.tree = tree

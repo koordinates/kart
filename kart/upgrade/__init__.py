@@ -6,12 +6,13 @@ from pathlib import Path
 
 
 from kart import checkout, context
+from kart.dataset2 import Dataset2
 from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import fast_import_tables, ReplaceExisting
 from kart.repo import KartRepo
+from kart.repo_version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
 from kart.timestamps import minutes_to_tz_offset
-from kart.repo_version import SUPPORTED_REPO_VERSION
 
 
 def dataset_class_for_legacy_version(version):
@@ -23,8 +24,26 @@ def dataset_class_for_legacy_version(version):
         return Dataset0
     elif version == 1:
         return Dataset1
+    elif version == 2:
+        return XmlUpgradingDataset2
 
     return None
+
+
+class XmlUpgradingDataset2(Dataset2):
+    """Variant of Dataset2 that extracts the metadata.xml out of dataset/metadata.json."""
+
+    def get_meta_item(self, name):
+        result = super().get_meta_item(name)
+        if result is None and name == "metadata.xml":
+            metadata_json = self.get_meta_item("metadata/dataset.json")
+            if metadata_json:
+                metadata_xml = [
+                    m for m in metadata_json.values() if "text/xml" in m.keys()
+                ]
+                if metadata_xml:
+                    return next(iter(metadata_xml))["text/xml"]
+        return result
 
 
 @click.command()
@@ -53,12 +72,12 @@ def upgrade(ctx, source, dest):
         )
 
     source_version = source_repo.version
-    if source_version == SUPPORTED_REPO_VERSION:
+    if source_version == DEFAULT_NEW_REPO_VERSION:
         raise InvalidOperation(
-            "Cannot upgrade: source repository is already at latest known version (Datasets V2)"
+            f"Cannot upgrade: source repository is already at latest known version (Datasets V{source_version})"
         )
 
-    if source_version > SUPPORTED_REPO_VERSION:
+    if source_version > DEFAULT_NEW_REPO_VERSION:
         # Repo is too advanced for this version of Kart to understand, we can't upgrade it.
         # This prints a good error messsage explaining the whole situation.
         source_repo.ensure_supported_version()
@@ -73,7 +92,7 @@ def upgrade(ctx, source, dest):
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
-    dest_repo = KartRepo.init_repository(dest, wc_location=None, bare=True)
+    dest_repo = KartRepo.init_repository(dest, wc_location=None)
 
     # walk _all_ references
     source_walker = source_repo.walk(

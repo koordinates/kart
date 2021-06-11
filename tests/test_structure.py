@@ -1,6 +1,7 @@
 import contextlib
 import itertools
 import os
+from pathlib import Path
 import re
 import subprocess
 
@@ -10,9 +11,11 @@ import pygit2
 import pytest
 
 from kart import init, fast_import
-from kart.dataset2 import Dataset2
+from kart.dataset3 import Dataset3
+from kart.dataset3_paths import IntPathEncoder, MsgpackHashPathEncoder
 from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
+from kart.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from kart.import_source import ImportSource
 from kart.ogr_import_source import postgres_url_to_ogr_conn_str
@@ -52,7 +55,7 @@ GPKG_IMPORTS = (
 def _import_check(repo_path, table, source_gpkg):
     repo = KartRepo(repo_path)
     dataset = repo.datasets()[table]
-    assert dataset.VERSION == 2
+    assert dataset.VERSION == 3
 
     with Db_GPKG.create_engine(source_gpkg).connect() as conn:
         num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
@@ -60,10 +63,10 @@ def _import_check(repo_path, table, source_gpkg):
     o = subprocess.check_output(["git", "ls-tree", "-r", "-t", "HEAD", table])
     print("\n".join(l.decode("utf8") for l in o.splitlines()[:20]))
 
-    if dataset.VERSION != 2:
+    if dataset.VERSION != 3:
         raise NotImplementedError(dataset.VERSION)
 
-    re_paths = r"^\d{6} blob [0-9a-f]{40}\t%s/.sno-dataset/feature/.*$" % table
+    re_paths = r"^\d{6} blob [0-9a-f]{40}\t%s/.table-dataset/feature/.*$" % table
     git_paths = [m for m in re.findall(re_paths, o.decode("utf-8"), re.MULTILINE)]
     assert len(git_paths) == num_rows
 
@@ -846,28 +849,84 @@ def test_postgis_import_replace_no_ids(
         ]
 
 
-def test_pk_encoding():
-    ds = Dataset2(None, "mytable")
+def test_pk_encoder_legacy_hashed(data_archive_readonly):
+    archive_path = Path("upgrade") / "v2.kart" / "points.tgz"
+    with data_archive_readonly(archive_path) as repo_path:
+        repo = KartRepo(repo_path)
+        ds = repo.datasets()["nz_pa_points_topo_150k"]
+        e = ds.feature_path_encoder()
+        assert isinstance(e, MsgpackHashPathEncoder)
+        assert e.encoding == "hex"
+        assert e.branches == 256
+        assert e.levels == 2
+        assert (
+            ds.encode_1pk_to_path(1181)
+            == "nz_pa_points_topo_150k/.sno-dataset/feature/7b/36/kc0EnQ=="
+        )
+        assert (
+            ds.encode_1pk_to_path("Dave")
+            == "nz_pa_points_topo_150k/.sno-dataset/feature/b2/fe/kaREYXZl"
+        )
 
+
+def test_pk_encoder_string_pk():
+    ds = Dataset3(None, "mytable")
+    schema = Schema.from_column_dicts(
+        [{"name": "mypk", "dataType": "text", "id": "abc123"}]
+    )
+    ds.schema = schema
+    e = ds.feature_path_encoder(schema)
+    assert isinstance(e, MsgpackHashPathEncoder)
+    assert e.encoding == "base64"
+    assert e.branches == 64
+    assert e.levels == 4
+    assert ds.encode_1pk_to_path("") == "mytable/.table-dataset/feature/I/6/M/_/kaA="
     assert (
-        ds.encode_1pk_to_path(492183) == "mytable/.sno-dataset/feature/72/91/kc4AB4KX"
+        ds.encode_1pk_to_path("Dave")
+        == "mytable/.table-dataset/feature/s/v/7/j/kaREYXZl"
+    )
+
+
+def test_pk_encoder_int_pk():
+    ds = Dataset3(None, "mytable")
+    schema = Schema.from_column_dicts(
+        [
+            {
+                "name": "mypk",
+                "dataType": "integer",
+                "size": 64,
+                "id": "abc123",
+                "primaryKeyIndex": 0,
+            }
+        ]
+    )
+    ds.schema = schema
+    e = ds.feature_path_encoder(schema)
+    assert isinstance(e, IntPathEncoder)
+    assert e.encoding == "base64"
+    assert e.branches == 64
+    assert e.levels == 4
+
+    with pytest.raises(TypeError):
+        ds.encode_1pk_to_path("Dave")
+    with pytest.raises(TypeError):
+        ds.encode_1pk_to_path(0.1)
+
+    assert ds.encode_1pk_to_path(0) == "mytable/.table-dataset/feature/A/A/A/A/kQA="
+    assert ds.encode_1pk_to_path(1) == "mytable/.table-dataset/feature/A/A/A/A/kQE="
+    assert ds.encode_1pk_to_path(-1) == "mytable/.table-dataset/feature/_/_/_/_/kf8="
+    assert (
+        ds.encode_1pk_to_path(1181) == "mytable/.table-dataset/feature/A/A/A/S/kc0EnQ=="
+    )
+    # trees hit wraparound with large PKs, but don't break
+    assert (
+        ds.encode_1pk_to_path(64 ** 5)
+        == "mytable/.table-dataset/feature/A/A/A/A/kc5AAAAA"
     )
     assert (
-        ds.decode_path_to_1pk("mytable/.sno-dataset/feature/72/91/kc4AB4KX") == 492183
+        ds.encode_1pk_to_path(-(64 ** 5))
+        == "mytable/.table-dataset/feature/A/A/A/A/kdLAAAAA"
     )
-
-    assert (
-        ds.encode_1pk_to_path("Dave") == "mytable/.sno-dataset/feature/b2/fe/kaREYXZl"
-    )
-    assert (
-        ds.decode_path_to_1pk("mytable/.sno-dataset/feature/b2/fe/kaREYXZl") == "Dave"
-    )
-
-    enc = [(i, ds.encode_1pk_to_path(i)) for i in range(-50000, 50000, 23)]
-    assert len(set([k for i, k in enc])) == len(enc)
-
-    for i, k in enc:
-        assert ds.decode_path_to_1pk(k) == i
 
 
 @pytest.mark.slow
@@ -1025,7 +1084,7 @@ def test_write_feature_performance(
 
             source = ImportSource.open(data / source_gpkg, table=table)
             with source:
-                dataset = Dataset2(None, table)
+                dataset = Dataset3(None, table)
                 feature_iter = itertools.cycle(list(source.features()))
 
                 index = pygit2.Index()
@@ -1071,7 +1130,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
             assert repo.head.shorthand == "main"
 
             dataset = repo.datasets()[table]
-            assert dataset.VERSION == 2
+            assert dataset.VERSION == 3
 
             # has a single commit
             assert len([c for c in repo.walk(repo.head.target)]) == 1

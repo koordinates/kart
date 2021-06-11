@@ -46,14 +46,15 @@ def test_data_ls_with_ref(data_archive_readonly, cli_runner):
 
 
 @pytest.mark.parametrize("output_format", ("text", "json"))
-@pytest.mark.parametrize("version", (0, 1, 2))
+@pytest.mark.parametrize("version", (0, 1, 2, 3))
 def test_data_version(version, output_format, data_archive_readonly, cli_runner):
     archive_paths = {
         0: Path("upgrade") / "v0" / "points0.snow.tgz",
         1: Path("upgrade") / "v1" / "points.tgz",
-        2: Path("points.tgz"),
+        2: Path("upgrade") / "v2.kart" / "points.tgz",
+        3: Path("points.tgz"),
     }
-    branding = {0: "sno", 1: "sno", 2: "kart"}[version]
+    branding = {0: "sno", 1: "sno", 2: "kart", 3: "kart"}[version]
 
     with data_archive_readonly(archive_paths[version]):
         r = cli_runner.invoke(["data", "version", "-o", output_format])

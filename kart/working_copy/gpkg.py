@@ -58,6 +58,11 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             )
 
     @classmethod
+    def clearly_doesnt_exist(cls, wc_location, repo):
+        gpkg_path = (repo.workdir_path / wc_location).resolve()
+        return not gpkg_path.exists()
+
+    @classmethod
     def check_valid_location(cls, wc_location, repo):
         if not str(wc_location).endswith(".gpkg"):
             suggested_path = f"{os.path.splitext(str(wc_location))[0]}.gpkg"

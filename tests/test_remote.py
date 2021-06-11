@@ -126,7 +126,7 @@ def test_clone(
             assert wc.exists() and wc.is_file()
 
             table = H.POINTS.LAYER
-            assert repo.config["kart.repostructure.version"] == "2"
+            assert repo.config["kart.repostructure.version"] == "3"
             assert repo.config["kart.workingcopy.location"] == wc.name
 
             with Db_GPKG.create_engine(wc).connect() as conn:

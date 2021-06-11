@@ -9,17 +9,31 @@ from kart.repo import KartRepo
 
 H = pytest.helpers.helpers()
 
+POINTS_UPGRADE_RESULT = [
+    "commit 1582725544d9122251acd4b3fc75b5c88ac3fd17",
+    "Author: Robert Coup <robert@coup.net.nz>",
+    "Date:   Thu Jun 20 15:28:33 2019 +0100",
+    "",
+    "    Improve naming on Coromandel East coast",
+    "",
+    "commit 6e2984a28150330a6c51019a70f9e8fcfe405e8c",
+    "Author: Robert Coup <robert@coup.net.nz>",
+    "Date:   Tue Jun 11 12:03:58 2019 +0100",
+    "",
+    "    Import from nz-pa-points-topo-150k.gpkg",
+]
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "archive",
+    "archive,layer",
     [
-        pytest.param("points0.snow.tgz", id="points"),
-        pytest.param("polygons0.snow.tgz", id="polygons"),
-        pytest.param("table0.snow.tgz", id="table"),
+        pytest.param("points0.snow.tgz", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons0.snow.tgz", H.POLYGONS.LAYER, id="polygons"),
+        pytest.param("table0.snow.tgz", H.TABLE.LAYER, id="table"),
     ],
 )
-def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir):
+def test_upgrade_v0(archive, layer, data_archive_readonly, cli_runner, tmp_path, chdir):
     archive_path = Path("upgrade") / "v0" / archive
     with data_archive_readonly(archive_path) as source_path:
         r = cli_runner.invoke(["data", "version", "--output-format=json"])
@@ -42,20 +56,8 @@ def test_upgrade_v0(archive, data_archive_readonly, cli_runner, tmp_path, chdir)
         r = cli_runner.invoke(["log"])
         assert r.exit_code == 0, r.stderr
 
-        if archive == "points0.snow":
-            assert r.stdout.splitlines() == [
-                "commit e0f39729ffe37b9f858afe0783ff0a29c98d699d",
-                "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Thu Jun 20 15:28:33 2019 +0100",
-                "",
-                "    Improve naming on Coromandel East coast",
-                "",
-                "commit 31f8edfc3bfb660c36e0568d67722affd71813eb",
-                "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Tue Jun 11 12:03:58 2019 +0100",
-                "",
-                "    Import from nz-pa-points-topo-150k.gpkg",
-            ]
+        if layer == H.POINTS.LAYER:
+            assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
 
 @pytest.mark.slow
@@ -91,26 +93,61 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
-            assert r.stdout.splitlines() == [
-                "commit e04c6466e7420fe8e4ea2180bbaf5a041a8bff0f",
-                "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Thu Jun 20 15:28:33 2019 +0100",
-                "",
-                "    Improve naming on Coromandel East coast",
-                "",
-                "commit 0924b05a94c26e86cfbbae98416513e39e17a2be",
-                "Author: Robert Coup <robert@coup.net.nz>",
-                "Date:   Tue Jun 11 12:03:58 2019 +0100",
-                "",
-                "    Import from nz-pa-points-topo-150k.gpkg",
-            ]
+            assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
+
+        r = cli_runner.invoke(["status", "--output-format=json"])
+        assert r.exit_code == 0, r
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "archive,layer",
+    [
+        pytest.param("points.tgz", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons.tgz", H.POLYGONS.LAYER, id="polygons"),
+        pytest.param("table.tgz", H.TABLE.LAYER, id="table"),
+    ],
+)
+@pytest.mark.parametrize(
+    "branding",
+    [
+        pytest.param("sno"),
+        pytest.param("kart"),
+    ],
+)
+def test_upgrade_v2(
+    branding, archive, layer, data_archive_readonly, cli_runner, tmp_path, chdir
+):
+    archive_path = Path("upgrade") / f"v2.{branding}" / archive
+    with data_archive_readonly(archive_path) as source_path:
+        r = cli_runner.invoke(["data", "version", "--output-format=json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "repostructure.version": 2,
+            "localconfig.branding": branding,
+        }
+
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == 0  # V2 is still supported
+
+        r = cli_runner.invoke(["upgrade", source_path, tmp_path / "dest"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Upgrade complete"
+
+    with chdir(tmp_path / "dest"):
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == 0, r.stderr
+
+        if layer == H.POINTS.LAYER:
+            assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r
 
 
 def test_upgrade_to_tidy(data_archive, cli_runner, chdir):
-    with data_archive("old-bare") as source_path:
+    archive_path = Path("upgrade") / "old-bare.tgz"
+    with data_archive(archive_path) as source_path:
         r = cli_runner.invoke(["upgrade-to-tidy", source_path])
         assert r.exit_code == 0, r.stderr
         assert (

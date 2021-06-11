@@ -401,6 +401,9 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     if new_wc_loc != old_wc_loc:
         BaseWorkingCopy.check_valid_creation_location(new_wc_loc, repo)
 
+    if BaseWorkingCopy.clearly_doesnt_exist(old_wc_loc, repo):
+        old_wc_loc = None
+
     if old_wc_loc:
         old_wc = BaseWorkingCopy.get_at_location(
             repo,

@@ -3,12 +3,11 @@ import statistics
 import subprocess
 import time
 
-
-FEATURE_SUBTREES_PER_TREE = 256
-FEATURE_TREE_NESTING = 2
-MAX_TREES = FEATURE_SUBTREES_PER_TREE ** FEATURE_TREE_NESTING
+from kart.exceptions import SubprocessError
 
 L = logging.getLogger("kart.diff_estimation")
+
+# required_confidence -> z_score
 Z_SCORES = {
     0.50: 0.0,
     0.60: 0.26,
@@ -21,20 +20,16 @@ Z_SCORES = {
     0.99: 2.33,
 }
 
+# accuracy -> (sample_size, required_confidence, z_score)
+ACCURACY_PARAMS = {
+    "veryfast": (2, 0.00001, 0.0),
+    "fast": (2, 0.60, Z_SCORES[0.60]),
+    "medium": (8, 0.80, Z_SCORES[0.80]),
+    "good": (16, 0.95, Z_SCORES[0.95]),
+}
 
-def _feature_count_sample_trees(repo, git_rev_spec, feature_path, num_trees):
-    if num_trees == MAX_TREES:
-        paths = [feature_path]
-    else:
-        num_full_subtrees = num_trees // 256
-        paths = [f"{feature_path}{n:02x}" for n in range(num_full_subtrees)]
-        paths.extend(
-            [
-                f"{feature_path}{num_full_subtrees:02x}/{n:02x}"
-                for n in range(num_trees % 256)
-            ]
-        )
 
+def _feature_count_sample_trees(repo, git_rev_spec, tree_paths_sample, num_trees):
     p = subprocess.Popen(
         [
             "git",
@@ -45,7 +40,7 @@ def _feature_count_sample_trees(repo, git_rev_spec, feature_path, num_trees):
             "--no-renames",
             git_rev_spec,
             "--",
-            *paths,
+            *tree_paths_sample,
         ],
         stdout=subprocess.PIPE,
         encoding="utf-8",
@@ -58,13 +53,178 @@ def _feature_count_sample_trees(repo, git_rev_spec, feature_path, num_trees):
         k = f"{tree}/{subtree}"
         tree_samples.setdefault(k, 0)
         tree_samples[k] += 1
-    p.wait()
+    retcode = p.wait()
+    if retcode != 0:
+        raise SubprocessError("Error calling git diff", retcode)
     r = list(tree_samples.values())
     r.extend([0] * (num_trees - len(r)))
     return r
 
 
 ACCURACY_CHOICES = ("veryfast", "fast", "medium", "good", "exact")
+
+
+def get_exact_diff_blob_count(repo, tree1, tree2):
+    """
+    Returns an exact blob count for the diff between the two pygit2.Tree instances
+    """
+    if tree1 == tree2:
+        return 0
+
+    git_rev_spec = f"{tree1.id}..{tree2.id}"
+    p = subprocess.Popen(
+        [
+            "git",
+            "-C",
+            repo.path,
+            "diff",
+            "--name-only",
+            "--no-renames",
+            git_rev_spec,
+        ],
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    count = sum(1 for x in p.stdout)
+    retcode = p.wait()
+    if retcode != 0:
+        raise SubprocessError("Error calling git diff", retcode)
+    return count
+
+
+def get_approximate_diff_blob_count(
+    repo, accuracy, tree1, tree2, dataset_path, path_encoder
+):
+    """
+    Returns an approximate blob count of the required accuracy for the diff between the two pygit2.Tree instances,
+    as long as both Trees are either feature trees with features arranged according to the given path_encoder,
+    or the empty tree.
+    """
+
+    # TODO(craigds) - write some more comments explaining how it works.
+    if tree1 == tree2:
+        return 0
+
+    git_rev_spec = f"{tree1.id}..{tree2.id}"
+    sample_size, required_confidence, z_score = ACCURACY_PARAMS[accuracy]
+
+    if path_encoder.DISTRIBUTED_FEATURES:
+
+        diff_count, samples_taken = _recursive_distributed_diff_count(
+            repo, tree1, tree2, path_encoder.branches, 16
+        )
+        return int(round(diff_count))
+    else:
+        # integer PK encoder. First, find what range of trees we have
+        max_tree_id = path_encoder.max_tree_id(repo, tree1, tree2)
+        max_trees = max_tree_id + 1
+
+    if sample_size >= max_trees:
+        return get_exact_diff_blob_count(repo, tree1, tree2)
+
+    sample_mean = 0
+    while sample_size <= max_trees:
+        L.debug(
+            "sampling %d trees for dataset %s",
+            sample_size,
+            dataset_path,
+        )
+        t1 = time.monotonic()
+        # Now take a sample of all trees present
+        sample_tree_paths = list(
+            path_encoder.sample_subtrees(sample_size, max_tree_id=max_tree_id)
+        )
+        samples = _feature_count_sample_trees(
+            repo, git_rev_spec, sample_tree_paths, sample_size
+        )
+        sample_mean = statistics.mean(samples)
+        sample_stdev = statistics.stdev(samples)
+        t2 = time.monotonic()
+        if accuracy == "veryfast":
+            # Even if no features were found in the two trees, call it done.
+            # This will be Good Enough if all you need to know is something like
+            # "is the diff size probably less than 100K features?"
+            break
+        if sample_mean == 0:
+            # No features were encountered in the sample.
+            # This is likely quite a small diff.
+            # Let's just sample a lot more trees.
+            new_sample_size = min(max_trees, sample_size * 1024)
+            L.debug(
+                "sampled %s trees in %.3fs, found 0 features; increased sample size to %d",
+                sample_size,
+                t2 - t1,
+                new_sample_size,
+            )
+            sample_size = new_sample_size
+            continue
+        # Try and get within 10% of the real mean.
+        margin_of_error = 0.10 * sample_mean
+        required_sample_size = min(
+            max_trees,
+            (z_score * sample_stdev / margin_of_error) ** 2,
+        )
+        L.debug(
+            "sampled %s trees in %.3fs (ƛ=%.3f, s=%.3f). required: %.1f (margin: %.1f; confidence: %d%%)",
+            sample_size,
+            t2 - t1,
+            sample_mean,
+            sample_stdev,
+            required_sample_size,
+            margin_of_error * max_trees,
+            required_confidence * 100,
+        )
+        if sample_size >= required_sample_size:
+            break
+        if sample_size == max_trees:
+            break
+        while sample_size < required_sample_size:
+            sample_size *= 2
+        sample_size = min(max_trees, sample_size)
+    return int(round(sample_mean * max_trees))
+
+
+def _nonrecursive_diff(tree_a, tree_b):
+    """
+    Returns a dict mapping names to OIDs which differ between the trees.
+    (either the key is present in both, and the OID is different,
+    or the key is only present in one of the trees)
+    """
+    a = {obj.name: obj for obj in tree_a} if tree_a else {}
+    b = {obj.name: obj for obj in tree_b} if tree_b else {}
+    all_names = sorted(list(set(a.keys() | b.keys())))
+
+    return {k: (a.get(k), b.get(k)) for k in all_names if a.get(k) != b.get(k)}
+
+
+def _recursive_distributed_diff_count(
+    repo, tree1, tree2, branch_count, total_samples_to_take
+):
+    diff = _nonrecursive_diff(tree1, tree2)
+    diff_size = len(diff)
+    if diff_size < branch_count / 2:
+        L.debug(f"Found {diff_size} diffs.")
+        return diff_size, 1
+
+    L.debug(f"Found {diff_size} diffs, checking next level:")
+
+    total_subsample_size = 0
+    total_subsamples_taken = 0
+    total_samples_taken = 0
+    for tree1, tree2 in diff.values():
+        subsample_size, samples_taken = _recursive_distributed_diff_count(
+            repo, tree1, tree2, branch_count, total_samples_to_take
+        )
+        total_subsample_size += subsample_size
+        total_subsamples_taken += 1
+        total_samples_taken += samples_taken
+        if total_samples_taken >= total_samples_to_take:
+            break
+
+    return (
+        1.0 * diff_size * total_subsample_size / total_subsamples_taken,
+        total_samples_taken,
+    )
 
 
 def estimate_diff_feature_counts(
@@ -90,7 +250,6 @@ def estimate_diff_feature_counts(
     base_ds_paths = {ds.path for ds in base_rs.datasets}
     target_ds_paths = {ds.path for ds in target_rs.datasets}
     all_ds_paths = base_ds_paths | target_ds_paths
-    git_rev_spec = f"{base_rs.tree.id}..{target_rs.tree.id}"
 
     annotation_type = f"feature-change-counts-{accuracy}"
     annotation = repo.diff_annotations.get(
@@ -103,125 +262,43 @@ def estimate_diff_feature_counts(
 
     dataset_change_counts = {}
     for dataset_path in all_ds_paths:
+        base_ds = base_rs.datasets.get(dataset_path)
+        target_ds = target_rs.datasets.get(dataset_path)
+        if not base_ds and not target_ds:
+            continue
+
+        base_feature_tree = base_ds.feature_tree if base_ds else repo.empty_tree
+        target_feature_tree = target_ds.feature_tree if target_ds else repo.empty_tree
+
         if accuracy == "exact" and working_copy:
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
             from kart.diff import get_dataset_diff
 
-            ds_diff = get_dataset_diff(
-                base_rs,
-                target_rs,
-                working_copy,
-                dataset_path,
+            ds_diff = get_dataset_diff(base_rs, target_rs, working_copy, dataset_path)
+            ds_total = len(ds_diff.get("feature", []))
+
+        elif accuracy == "exact":
+            # nice, simple, no stats involved. but slow :/
+            ds_total = get_exact_diff_blob_count(
+                repo, base_feature_tree, target_feature_tree
             )
-            if "feature" not in ds_diff:
-                ds_total = 0
-            else:
-                ds_total = len(ds_diff["feature"])
         else:
-            base_ds = base_rs.datasets.get(dataset_path)
-            target_ds = target_rs.datasets.get(dataset_path)
-
-            if not base_ds:
-                base_ds, target_ds = target_ds, base_ds
-
-            # Come up with a list of trees to diff.
-            feature_path = (
-                f"{base_ds.path}/{base_ds.DATASET_DIRNAME}/{base_ds.FEATURE_PATH}"
+            path_encoder = (
+                base_ds.feature_path_encoder()
+                if base_ds
+                else target_ds.feature_path_encoder()
             )
-            ds_total = 0
-            if (not target_ds) or base_ds.feature_tree != target_ds.feature_tree:
-                if accuracy == "exact":
-                    ds_total += sum(
-                        _feature_count_sample_trees(
-                            repo, git_rev_spec, feature_path, MAX_TREES
-                        )
-                    )
-                else:
-                    if accuracy == "veryfast":
-                        # only ever sample two trees
-                        sample_size = 2
-                        required_confidence = 0.00001
-                        z_score = 0.0
-                    else:
-                        if accuracy == "fast":
-                            sample_size = 2
-                            required_confidence = 0.60
-                        elif accuracy == "medium":
-                            sample_size = 8
-                            required_confidence = 0.80
-                        elif accuracy == "good":
-                            sample_size = 16
-                            required_confidence = 0.95
-                        z_score = Z_SCORES[required_confidence]
+            ds_total = get_approximate_diff_blob_count(
+                repo,
+                accuracy,
+                base_feature_tree,
+                target_feature_tree,
+                dataset_path,
+                path_encoder,
+            )
+            if working_copy and target_ds:
+                ds_total += working_copy.tracking_changes_count(target_ds)
 
-                    sample_mean = 0
-                    while sample_size <= MAX_TREES:
-                        L.debug(
-                            "sampling %d trees for dataset %s",
-                            sample_size,
-                            dataset_path,
-                        )
-                        t1 = time.monotonic()
-                        samples = _feature_count_sample_trees(
-                            repo, git_rev_spec, feature_path, sample_size
-                        )
-                        sample_mean = statistics.mean(samples)
-                        sample_stdev = statistics.stdev(samples)
-
-                        t2 = time.monotonic()
-                        if accuracy == "veryfast":
-                            # even if no features were found in the two trees, call it done.
-                            # this will be Good Enough if all you need to know is something like
-                            # "is the diff size probably less than 100K features?"
-                            break
-                        if sample_mean == 0:
-                            # no features were encountered in the sample.
-                            # this is likely quite a small diff.
-                            # let's just sample a lot more trees.
-                            new_sample_size = sample_size * 1024
-                            if new_sample_size > MAX_TREES:
-                                L.debug(
-                                    "sampled %s trees in %.3fs, found 0 features; stopping",
-                                    sample_size,
-                                    t2 - t1,
-                                )
-                            else:
-                                L.debug(
-                                    "sampled %s trees in %.3fs, found 0 features; increased sample size to %d",
-                                    sample_size,
-                                    t2 - t1,
-                                    new_sample_size,
-                                )
-                            sample_size = new_sample_size
-                            continue
-
-                        # try and get within 10% of the real mean.
-                        margin_of_error = 0.10 * sample_mean
-                        required_sample_size = min(
-                            MAX_TREES, (z_score * sample_stdev / margin_of_error) ** 2
-                        )
-                        L.debug(
-                            "sampled %s trees in %.3fs (ƛ=%.3f, s=%.3f). required: %.1f (margin: %.1f; confidence: %d%%)",
-                            sample_size,
-                            t2 - t1,
-                            sample_mean,
-                            sample_stdev,
-                            required_sample_size,
-                            margin_of_error * MAX_TREES,
-                            required_confidence * 100,
-                        )
-                        if sample_size >= required_sample_size:
-                            break
-
-                        if sample_size == MAX_TREES:
-                            break
-                        while sample_size < required_sample_size:
-                            sample_size *= 2
-                        sample_size = min(MAX_TREES, sample_size)
-                    ds_total += int(round(sample_mean * MAX_TREES))
-
-            if working_copy:
-                ds_total += working_copy.tracking_changes_count(base_ds)
         if ds_total:
             dataset_change_counts[dataset_path] = ds_total
 

@@ -6,6 +6,9 @@ from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
 
+H = pytest.helpers.helpers()
+
+
 @pytest.mark.parametrize(
     "working_copy",
     [
@@ -103,8 +106,8 @@ def test_reset(data_working_copy, cli_runner, edit_points):
         r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "0c64d82 (HEAD -> main) Improve naming on Coromandel East coast",
-            "7bc3b56 Import from nz-pa-points-topo-150k.gpkg",
+            f"{H.POINTS.HEAD_SHA[:7]} (HEAD -> main) Improve naming on Coromandel East coast",
+            f"{H.POINTS.HEAD1_SHA[:7]} Import from nz-pa-points-topo-150k.gpkg",
         ]
 
         r = cli_runner.invoke(["reset", "HEAD^"])
@@ -119,5 +122,5 @@ def test_reset(data_working_copy, cli_runner, edit_points):
         r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "7bc3b56 (HEAD -> main) Import from nz-pa-points-topo-150k.gpkg",
+            f"{H.POINTS.HEAD1_SHA[:7]} (HEAD -> main) Import from nz-pa-points-topo-150k.gpkg",
         ]

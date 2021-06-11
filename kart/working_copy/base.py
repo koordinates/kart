@@ -295,6 +295,21 @@ class BaseWorkingCopy:
         )
 
     @classmethod
+    def clearly_doesnt_exist(cls, wc_location, repo):
+        """
+        Given a user-supplied string describing where to put the working copy, returns True if there is clearly
+        no working copy or other database already there. This call should return in a fraction of a second.
+        Generally returns False since, we don't attempt to connect to a database using username+password to check
+        if something "clearly doesn't exist" - this could fail for network or authentication reasons, and can
+        take a long time before it fails, which violates the contract of this method.
+        """
+        if not wc_location:
+            wc_location = cls.default_location(repo)
+        return cls.subclass_from_location(wc_location).clearly_doesnt_exist(
+            wc_location, repo
+        )
+
+    @classmethod
     def check_valid_location(cls, wc_location, repo):
         """
         Given a user-supplied string describing where to put the working copy, ensures it is a valid location,

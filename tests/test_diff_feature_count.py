@@ -76,6 +76,17 @@ def test_feature_count_commits_fast(data_archive, cli_runner):
         ]
 
 
+def test_feature_count_commits_string_pks(data_archive, cli_runner):
+    with data_archive("string-pks"):
+        r = cli_runner.invoke(["diff", "--only-feature-count=fast", "HEAD^?...HEAD"])
+        assert r.exit_code == 0, r.stderr
+
+        assert r.stdout.splitlines() == [
+            "nz_waca_adjustments:",
+            "\t208 features changed",
+        ]
+
+
 def test_feature_count_no_working_copy(data_archive, cli_runner):
     with data_archive("points"):
         r = cli_runner.invoke(["diff", "--only-feature-count=fast", "HEAD^"])

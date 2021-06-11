@@ -1,7 +1,8 @@
 import pygit2
 
-from .dataset2 import Dataset2
 from .import_source import ImportSource
+from .dataset2 import Dataset2
+from .dataset2 import Dataset3
 from .exceptions import NotYetImplemented
 from .serialise_util import json_pack
 from .schema import ColumnSchema, Schema
@@ -86,6 +87,7 @@ class PkGeneratingImportSource(ImportSource):
         return [cls.wrap_source_if_needed(source, repo, **kwargs) for source in sources]
 
     def __init__(self, delegate, repo, *, dest_path=None, similarity_detection_limit=0):
+        self.repo = repo
         self.delegate = delegate
         if dest_path is not None:
             self.dest_path = dest_path
@@ -94,13 +96,12 @@ class PkGeneratingImportSource(ImportSource):
         # to see if some of them can be paired up to make edits.
         self.similarity_detection_limit = similarity_detection_limit
 
-        self.load_data_from_repo(repo)
+        self.load_data_from_repo()
 
-    def load_data_from_repo(self, repo):
-        if repo.version != 2:
-            raise NotYetImplemented("PK generation only supported for dataset 2")
+    def load_data_from_repo(self):
+        self.repo.ensure_supported_version()
 
-        self.prev_dest_tree = self._prev_import_dest_tree(repo)
+        self.prev_dest_tree = self._prev_import_dest_tree()
 
         if not self.prev_dest_tree:
             self.prev_dest_dataset = None
@@ -114,7 +115,9 @@ class PkGeneratingImportSource(ImportSource):
             self.similarity_detection_insert_limit = 0
             return
 
-        self.prev_dest_dataset = Dataset2(self.prev_dest_tree, self.dest_path)
+        self.prev_dest_dataset = self.repo.dataset_class(
+            self.prev_dest_tree, self.dest_path
+        )
         self.prev_dest_schema = self.prev_dest_dataset.schema
 
         data = self.prev_dest_dataset.get_meta_item(self.GENERATED_PKS_ITEM)
@@ -144,18 +147,18 @@ class PkGeneratingImportSource(ImportSource):
                 max(self.similarity_detection_limit + feature_count_delta, 0) // 2
             )
 
-    def _prev_import_dest_tree(self, repo):
+    def _prev_import_dest_tree(self):
         """Returns the dataset tree that was created the last time this datasource was imported."""
-        if not repo.head_tree:
+        if not self.repo.head_tree:
             return None
 
-        current_pks_blob = self._get_generated_pks_blob(repo.head_tree)
+        current_pks_blob = self._get_generated_pks_blob(self.repo.head_tree)
         if current_pks_blob is None:
             return None
 
         prev_import_commit = None
         try:
-            for commit in repo.walk(repo.head_commit.id):
+            for commit in self.repo.walk(self.repo.head_commit.id):
                 if self._get_generated_pks_blob(commit) == current_pks_blob:
                     prev_import_commit = commit
                 else:
@@ -168,12 +171,14 @@ class PkGeneratingImportSource(ImportSource):
             # This can happen for shallow-clones - we couldn't find the last-import commit.
             #  We return the tree of the last non-import commit instead.
             # This means similarity detection works subtly differently.
-            return repo.head_tree / self.dest_path
+            return self.repo.head_tree / self.dest_path
 
     def _get_generated_pks_blob(self, commit_or_tree):
         root_tree = commit_or_tree.peel(pygit2.Tree)
         try:
-            dataset = Dataset2(root_tree / self.dest_path, self.dest_path)
+            dataset = self.repo.dataset_class(
+                root_tree / self.dest_path, self.dest_path
+            )
             return dataset.inner_tree / self.GENERATED_PKS_PATH
         except KeyError:
             return None
@@ -387,10 +392,16 @@ class PkGeneratingImportSource(ImportSource):
         for pks in hash_to_unassigned_pks.values():
             unassigned_pks.update(pks)
 
+        filtered_dataset_class = {2: FilteredDataset2, 3: FilteredDataset3}[
+            self.repo.version
+        ]
+
         def pk_filter(pk):
             return pk in unassigned_pks
 
-        filtered_ds = FilteredDataset(self.prev_dest_tree, self.dest_path, pk_filter)
+        filtered_ds = filtered_dataset_class(
+            self.prev_dest_tree, self.dest_path, pk_filter
+        )
         return list(filtered_ds.features())
 
     def check_fully_specified(self):
@@ -444,7 +455,7 @@ class PkGeneratingImportSource(ImportSource):
         return self.delegate.aggregate_import_source_desc(import_sources)
 
 
-class FilteredDataset(Dataset2):
+class AbstractFilteredDataset:
     """A dataset that only yields features with pk where `pk_filter(pk)` returns True."""
 
     def __init__(self, tree, path, pk_filter):
@@ -456,6 +467,14 @@ class FilteredDataset(Dataset2):
             pk = self.decode_path_to_1pk(blob.name)
             if self.pk_filter(pk):
                 yield blob
+
+
+class FilteredDataset3(AbstractFilteredDataset, Dataset3):
+    pass
+
+
+class FilteredDataset2(AbstractFilteredDataset, Dataset2):
+    pass
 
 
 class FeaturePlusHashes:

@@ -43,6 +43,11 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
             )
 
     @classmethod
+    def clearly_doesnt_exist(cls, wc_location, repo):
+        # As documented in base class - we can't connect to a database for this quick check, so have to return False.
+        return False
+
+    @classmethod
     def normalise_location(cls, wc_location, repo):
         return wc_location
 

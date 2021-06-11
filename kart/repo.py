@@ -19,17 +19,19 @@ from .exceptions import (
     InvalidOperation,
     NotFound,
     NO_REPOSITORY,
-    UNSUPPORTED_VERSION,
 )
 from .repo_version import (
-    SUPPORTED_REPO_VERSION,
-    SUPPORTED_DATASET_CLASS,
+    DEFAULT_NEW_REPO_VERSION,
+    ensure_supported_repo_version,
     get_repo_version,
+    dataset_class_for_version,
 )
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
 
 L = logging.getLogger("kart.repo")
+
+EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 class KartRepoFiles:
@@ -337,7 +339,7 @@ class KartRepo(pygit2.Repository):
         version_key = KartConfigKeys.BRANDED_REPOSTRUCTURE_VERSION_KEYS[
             self.BRANDING_FOR_NEW_REPOS
         ]
-        self.config[version_key] = str(SUPPORTED_REPO_VERSION)
+        self.config[version_key] = str(DEFAULT_NEW_REPO_VERSION)
 
         # Bare-style Kart repos are always implemented as bare git repos:
         if self.is_bare_style:
@@ -351,18 +353,7 @@ class KartRepo(pygit2.Repository):
         BaseWorkingCopy.write_config(self, wc_location, bare)
 
     def ensure_supported_version(self):
-        from .cli import get_version
-
-        if self.version != SUPPORTED_REPO_VERSION:
-            message = (
-                f"This Kart repo uses Datasets v{self.version}, "
-                f"but Kart {get_version()} only supports Datasets v{SUPPORTED_REPO_VERSION}.\n"
-            )
-            if self.version < SUPPORTED_REPO_VERSION:
-                message += "Use `kart upgrade SOURCE DEST` to upgrade this repo to the supported version."
-            else:
-                message += "Get the latest version of Kart to work with this repo."
-            raise InvalidOperation(message, exit_code=UNSUPPORTED_VERSION)
+        ensure_supported_repo_version(self.version)
 
     def write_readme(self):
         readme_filename = f"{self.branding.upper()}_README.txt"
@@ -511,7 +502,7 @@ class KartRepo(pygit2.Repository):
     def structure(self, refish="HEAD"):
         """Get the structure of this Kart repository at a particular revision."""
         self.ensure_supported_version()
-        return RepoStructure(self, refish, dataset_class=SUPPORTED_DATASET_CLASS)
+        return RepoStructure(self, refish, dataset_class=self.dataset_class)
 
     def datasets(self, refish="HEAD"):
         """
@@ -519,6 +510,11 @@ class KartRepo(pygit2.Repository):
         Equivalent to: self.structure(refish).datasets
         """
         return self.structure(refish).datasets
+
+    @property
+    def dataset_class(self):
+        self.ensure_supported_version()
+        return dataset_class_for_version(self.version)
 
     @property
     def working_copy(self):
@@ -583,9 +579,10 @@ class KartRepo(pygit2.Repository):
         return None if self.head_is_unborn else self.head.peel(pygit2.Tree)
 
     @property
+    @lru_cache(maxsize=1)
     def empty_tree(self):
-        """Returns the empty tree, with SHA 4b825dc642cb6eb9a060e54bf8d69288fbee4904."""
-        return self['4b825dc642cb6eb9a060e54bf8d69288fbee4904']
+        f"""Returns the empty tree, with SHA {EMPTY_TREE_SHA}."""
+        return self[EMPTY_TREE_SHA]
 
     @property
     def head_branch(repo):

@@ -58,6 +58,8 @@ vendor/Brewfile.lock.json
 !/tests/data/upgrade
 /tests/data/upgrade/v0/*/
 /tests/data/upgrade/v1/*/
+/tests/data/upgrade/v2.kart/*/
+/tests/data/upgrade/v2.sno/*/
 /coverage
 pytest.xml
 .coverage
