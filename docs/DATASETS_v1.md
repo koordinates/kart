@@ -1,5 +1,9 @@
 # Datasets V1 (& earlier)
 
+[Datasets V3](Datasets_v3.md) is the current repository structure Kart uses - Datasets V1 is no longer supported except that Kart can upgrade an old repo from Datasets V1 to Datasets V3, using `kart upgrade SOURCE DEST`.
+
+Nevertheless, documentation for Datasets V1 follows.
+
 Repository Layout:
 
 ## v0.2 with working copy
