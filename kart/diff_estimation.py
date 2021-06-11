@@ -110,7 +110,7 @@ def get_approximate_diff_blob_count(
 
     if path_encoder.DISTRIBUTED_FEATURES:
         # TODO
-        max_trees = path_encoder.theoretical_max_trees
+        max_trees = path_encoder.max_trees
         raise NotImplementedError
     else:
         # integer PK encoder. First, find what range of trees we have

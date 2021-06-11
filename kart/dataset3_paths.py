@@ -1,6 +1,6 @@
 import binascii
 
-from .exceptions import InvalidOperation
+from .exceptions import NotYetImplemented
 from .serialise_util import (
     msg_pack,
     b64encode_str,
@@ -42,16 +42,16 @@ def b64encode_int(integer):
 
 def b64decode_int(s):
     """
-    Takes a 5-character string, decodes it using base64 as an integer.
+    Takes a string, decodes it using base64 as an integer.
     Reverse of b64encode_int
     """
-    assert len(s) == 5
+    assert len(s)
 
     result = 0
     try:
-        for i, byt in enumerate(s.encode("ascii")):
+        for i, byt in enumerate(s.encode("ascii")[::-1]):
             val = _BASE64_URLSAFE_ALPHABET_DECODE_MAP[byt]
-            result += val * 64 ** (4 - i)
+            result += val * 64 ** i
     except KeyError:
         raise binascii.Error('Non-base64 digit found')
     if result > 2 ** 29:
@@ -88,20 +88,22 @@ class PathEncoder:
         elif scheme == "int":
             return IntPathEncoder(**kwargs)
         else:
-            raise InvalidOperation(
-                f"This repo uses {scheme!r} feature path scheme, which isn't supported by this version of Kart"
+            raise NotYetImplemented(
+                f"Sorry, this repo uses {scheme!r} feature path scheme, which isn't supported by this version of Kart"
             )
 
     @property
-    def theoretical_max_trees(self):
+    def max_trees(self):
         """
         Returns the number of trees this structure can possibly store.
         """
         return self.branches ** self.levels
 
-    def encode_filename(self, pk_values):
-        packed_pk = msg_pack(pk_values)
+    def _encode_file_name_from_packed_pk(self, packed_pk):
         return b64encode_str(packed_pk)
+
+    def encode_filename(self, pk_values):
+        return self._encode_file_name_from_packed_pk(msg_pack(pk_values))
 
     def encode_path_structure_data(self, relative):
         assert relative is True
@@ -122,7 +124,9 @@ class PathEncoder:
             for i in range(self.branches):
                 yield format_spec.format(i)
         elif self.encoding == "base64":
-            yield from _BASE64_URLSAFE_ALPHABET.decode('ascii')
+            base64_alphabet = _BASE64_URLSAFE_ALPHABET.decode("ascii")
+            for i in range(64):
+                yield base64_alphabet[i]
 
 
 class MsgpackHashPathEncoder(PathEncoder):
@@ -144,8 +148,8 @@ class MsgpackHashPathEncoder(PathEncoder):
             self._tree_stride = 1
             self._hash = b64hash
         else:
-            raise InvalidOperation(
-                f"This repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
+            raise NotYetImplemented(
+                f"Sorry, this repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
             )
 
         self.scheme = "msgpack/hash"
@@ -165,11 +169,17 @@ class MsgpackHashPathEncoder(PathEncoder):
             pk_hash[i * self._tree_stride : (i + 1) * self._tree_stride]
             for i in range(self.levels)
         ]
-        parts.append(self.encode_filename(pk_values))
+        parts.append(self._encode_file_name_from_packed_pk(packed_pk))
         return "/".join(parts)
 
     def sample_subtrees(self, num_trees, *, max_tree_id=None):
-        total_subtrees = self.theoretical_max_trees
+        """
+        Yields a sample set of outermost trees such as might contain features for sampling,
+        for feature count estimation. Eg: ["A/A/D/E", "A/A/H/J", ...]
+        Yields num_trees trees, max_tree_id is ignored since features are distributed uniformly
+        and randomly all over the structure.
+        """
+        total_subtrees = self.max_trees
         if num_trees >= total_subtrees:
             yield SAMPLE_ALL_TREES
             return
@@ -196,19 +206,19 @@ class IntPathEncoder(PathEncoder):
         if encoding == "base64":
             assert branches == 64
         else:
-            raise InvalidOperation(
-                f"This repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
+            raise NotYetImplemented(
+                f"Sorry, this repo uses {encoding!r} path encoding, which isn't supported by this version of Kart"
             )
         if levels > 5:
-            raise InvalidOperation(
-                f"This repo uses {levels!r} path levels, which isn't supported by this version of Kart"
+            raise NotYetImplemented(
+                f"Sorry, this repo uses {levels!r} path levels, which isn't supported by this version of Kart"
             )
 
         self.scheme = "int"
         self.branches = branches
         self.encoding = encoding
         self.levels = levels
-        self._mod_value = self.theoretical_max_trees
+        self._mod_value = self.max_trees
 
     def encode_pks_to_path(self, pk_values):
         assert len(pk_values) == 1
@@ -227,7 +237,7 @@ class IntPathEncoder(PathEncoder):
         """
         a = {obj.name: obj for obj in tree_a}
         b = {obj.name: obj for obj in tree_b}
-        all_names = set(a.keys() | b.keys())
+        all_names = a.keys() | b.keys()
         return {k: (a.get(k), b.get(k)) for k in all_names}
 
     def max_tree_id(self, repo, base_feature_tree, target_feature_tree):
@@ -240,22 +250,23 @@ class IntPathEncoder(PathEncoder):
         max_tree_path = self._max_feature_tree_path(
             repo, base_feature_tree, target_feature_tree
         )
-        return b64decode_int("A" + "".join(max_tree_path.split("/")))
+        return b64decode_int("".join(max_tree_path.split("/")))
 
     def _max_feature_tree_path(
         self, repo, base_feature_tree, target_feature_tree, *, depth=0
     ):
         """
         Returns the path of the tree containing the greatest PK,
-        relative to the given feature tree.
+        relative to the given feature tree. Recurses to self.levels.
         """
-        if base_feature_tree == target_feature_tree:
-            return None
-
         base_feature_tree = base_feature_tree or repo.empty_tree
         target_feature_tree = target_feature_tree or repo.empty_tree
 
+        if base_feature_tree == target_feature_tree:
+            return None
+
         diff = self._nonrecursive_diff(base_feature_tree, target_feature_tree)
+        # Diff is always non-empty since the trees must differ.
         max_path = max(diff.keys())
         if depth == self.levels - 1:
             return max_path
@@ -266,6 +277,12 @@ class IntPathEncoder(PathEncoder):
             )
 
     def sample_subtrees(self, num_trees, *, max_tree_id=None):
+        """
+        Yields a sample set of outermost trees such as might contain features for sampling,
+        for feature count estimation. Eg: ["A/A/D/E", "A/A/H/J", ...]
+        Yields num_trees trees. All returned trees will be *before* the max_tree_id supplied,
+        since primary keys used are generally clustered at the start of the path structure.
+        """
         if max_tree_id is None:
             total_subtrees = self.branches ** self.levels
         else:
