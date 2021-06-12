@@ -463,6 +463,15 @@ class Dataset3(RichBaseDataset):
                         f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
                         legend.dumps(),
                     )
+                path_encoder = self.feature_path_encoder(new_schema)
+                if (
+                    new_schema
+                    and not existing_tree
+                    and path_encoder is not PathEncoder.LEGACY_ENCODER
+                ):
+                    tree_builder.insert(
+                        "path-structure.json", json_pack(path_encoder.to_dict())
+                    )
 
             # Conflict detection
             if delta.type == "delete" and name not in existing_tree:

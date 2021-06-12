@@ -1,6 +1,10 @@
+import decimal
+
 from osgeo.osr import SpatialReference
 from psycopg2.extensions import Binary
+import sqlalchemy as sa
 from sqlalchemy.sql.functions import Function
+from sqlalchemy.types import TEXT
 
 
 from kart import crs_util
@@ -319,12 +323,16 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
     @classmethod
     def _type_def_for_column_schema(cls, col, dataset=None):
         if col.data_type == "geometry":
-            # This converter-type adapts Kart's GPKG geometry to EWKB which is what PostGIS supports.
+            # This :converter-type adapts Kart's GPKG geometry to EWKB which is what PostGIS supports.
             return GeometryType
         elif col.data_type == "blob":
             return BlobType
         elif col.data_type == "date":
             return DateType
+        elif col.data_type == "interval":
+            return IntervalType
+        elif col.data_type == "numeric":
+            return NumericType
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
@@ -359,6 +367,26 @@ class DateType(ConverterType):
     # ConverterType to read dates as text. They are stored in PG as DATE but we read them back as text.
     def sql_read(self, column):
         return Function("to_char", column, "YYYY-MM-DD", type_=self)
+
+
+@aliased_converter_type
+class IntervalType(ConverterType):
+    """ConverterType to that casts intervals to text - ISO8601 mode is set for durations so this does what we want."""
+
+    def sql_read(self, column):
+        return sa.cast(column, TEXT)
+
+
+@aliased_converter_type
+class NumericType(ConverterType):
+    """ConverterType to read numerics as text. They are stored in PG as NUMERIC but we read them back as text."""
+
+    def python_postread(self, value):
+        return (
+            str(value).rstrip("0").rstrip(".")
+            if isinstance(value, decimal.Decimal)
+            else value
+        )
 
 
 @aliased_converter_type

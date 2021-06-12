@@ -215,6 +215,9 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             for key in KartAdapter_MySql.APPROXIMATED_TYPES_EXTRA_TYPE_INFO:
                 new_col_dict[key] = old_col_dict.get(key)
 
+        if old_type == new_type == "numeric":
+            cls._remove_hidden_numeric_diffs(old_col_dict, new_col_dict, 10)
+
         return new_type == old_type
 
     _UNSUPPORTED_META_ITEMS = (

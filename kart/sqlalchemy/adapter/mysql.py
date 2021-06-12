@@ -1,3 +1,6 @@
+import decimal
+
+
 import sqlalchemy as sa
 from sqlalchemy.sql.functions import Function
 from sqlalchemy.dialects.mysql.types import DOUBLE
@@ -307,6 +310,8 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
             return FloatType
         elif col.data_type == "date":
             return DateType
+        elif col.data_type == "numeric":
+            return NumericType
         elif col.data_type == "time":
             return TimeType
         elif col.data_type == "timestamp":
@@ -374,6 +379,18 @@ class FloatType(ConverterType):
     # even less than single-float precision if we read them as floats.
     def sql_read(self, col):
         return sa.cast(col, DOUBLE)
+
+
+@aliased_converter_type
+class NumericType(ConverterType):
+    """ConverterType to read numerics as text. They are stored in MySQL as NUMERIC but we read them back as text."""
+
+    def python_postread(self, value):
+        return (
+            str(value).rstrip("0").rstrip(".")
+            if isinstance(value, decimal.Decimal)
+            else value
+        )
 
 
 @aliased_converter_type

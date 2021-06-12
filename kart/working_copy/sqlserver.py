@@ -193,7 +193,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
                 new_col_dict[key] = old_col_dict.get(key)
 
         # Geometry type loses various extra type info when roundtripped through SQL Server.
-        if new_type == "geometry":
+        if old_type == new_type == "geometry":
             new_col_dict["geometryType"] = old_col_dict.get("geometryType")
             new_geometry_crs = new_col_dict.get("geometryCRS", "")
             # Custom CRS can't be stored in SQL Server - even the CRS authority can't be roundtripped:
@@ -201,6 +201,9 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
                 suffix = new_geometry_crs[new_geometry_crs.index(":") :]
                 if old_col_dict.get("geometryCRS", "").endswith(suffix):
                     new_col_dict["geometryCRS"] = old_col_dict["geometryCRS"]
+
+        if old_type == new_type == "numeric":
+            cls._remove_hidden_numeric_diffs(old_col_dict, new_col_dict, 18)
 
         return new_type == old_type
 

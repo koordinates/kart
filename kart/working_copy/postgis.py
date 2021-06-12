@@ -254,7 +254,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
                 new_col_dict["size"] = old_size
 
         # PostGIS can't limit a blob's size to a certain maximum length.
-        if old_type == "blob" and new_type == "blob":
+        if old_type == new_type == "blob":
             new_col_dict["length"] = old_col_dict.get("length")
 
         return new_type == old_type

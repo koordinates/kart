@@ -520,6 +520,18 @@ class BaseWorkingCopy:
     def try_align_schema_col(cls, old_col_dict, new_col_dict):
         return DefaultRoundtripContext.try_align_schema_col(old_col_dict, new_col_dict)
 
+    @classmethod
+    def _remove_hidden_numeric_diffs(
+        cls, old_col_dict, new_col_dict, default_prec, default_scale=0
+    ):
+        """
+        If we create an unadorned NUMERIC in a certain database type, it will roundtrip as
+        NUMERIC(default precision, default scale). Hide this spurious diff when it shows up.
+        """
+        for name, default_val in ("precision", default_prec), ("scale", default_scale):
+            if old_col_dict.get(name) is None and new_col_dict.get(name) == default_val:
+                new_col_dict[name] = None
+
     def _remove_hidden_meta_diffs(self, dataset, ds_meta_items, wc_meta_items):
         """
         Remove any meta diffs that can't or shouldn't be committed, and so shouldn't be shown to the user.
