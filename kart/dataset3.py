@@ -69,9 +69,7 @@ class Dataset3(RichBaseDataset):
 
     VERSION = 3
 
-    DATASET_DIRNAME = ".table-dataset"  # Default for new V3 datasets.
-    # A V3 dataset can be stored in a tree with either one or other of these names:
-    DATASET_DIRNAMES = (".sno-dataset", ".table-dataset")
+    DATASET_DIRNAME = ".table-dataset"  # New name for V3 datasets.
 
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
     FEATURE_PATH = "feature/"
@@ -93,19 +91,10 @@ class Dataset3(RichBaseDataset):
     def is_dataset_tree(cls, tree):
         if tree is None:
             return False
-        for d in cls.DATASET_DIRNAMES:
-            if d in tree and (tree / d).type_str == "tree":
-                return True
-        return False
-
-    def __init__(self, tree, path, repo=None):
-        # Look for either of the DATASET_DIRNAMES and use whichever one is there:
-        if tree:
-            for d in self.DATASET_DIRNAMES:
-                if d in tree:
-                    self.DATASET_DIRNAME = d
-                    break
-        super().__init__(tree, path, repo=repo)
+        return (
+            cls.DATASET_DIRNAME in tree
+            and (tree / cls.DATASET_DIRNAME).type_str == "tree"
+        )
 
     @functools.lru_cache()
     def get_meta_item(self, name):
