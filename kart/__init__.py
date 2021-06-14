@@ -124,7 +124,13 @@ else:
     if os.getpid() == os.getpgrp():
         import signal
 
+        _kart_process_group_killed = False
+
         def _cleanup_process_group(signum, stack_frame):
+            global _kart_process_group_killed
+            if _kart_process_group_killed:
+                return
+            _kart_process_group_killed = True
             os.killpg(os.getpid(), signum)
             sys.exit(128 + signum)
 
