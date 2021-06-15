@@ -92,7 +92,9 @@ def upgrade(ctx, source, dest):
     # action!
     click.secho(f"Initialising {dest} ...", bold=True)
     dest.mkdir()
-    dest_repo = KartRepo.init_repository(dest, wc_location=None)
+    dest_repo = KartRepo.init_repository(
+        dest, wc_location=None, bare=source_repo.is_bare_style
+    )
 
     # walk _all_ references
     source_walker = source_repo.walk(
