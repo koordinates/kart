@@ -96,7 +96,7 @@ def upgrade(ctx, source, dest):
 
     # walk _all_ references
     source_walker = source_repo.walk(
-        source_repo.head.target, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE
+        None, pygit2.GIT_SORT_TOPOLOGICAL | pygit2.GIT_SORT_REVERSE
     )
     for ref in source_repo.listall_reference_objects():
         source_walker.push(ref.resolve().target)
@@ -104,6 +104,7 @@ def upgrade(ctx, source, dest):
     commit_map = {}
 
     click.secho("\nWriting new commits ...", bold=True)
+    i = -1
     for i, source_commit in enumerate(source_walker):
         dest_parents = []
         for parent_id in source_commit.parent_ids:
@@ -140,13 +141,14 @@ def upgrade(ctx, source, dest):
             dest_repo.references.create(ref.name, ref.target)
             click.echo(f"  {ref.name} → {ref.target}")
 
-    if source_repo.head_is_detached:
-        dest_repo.set_head(pygit2.Oid(hex=commit_map[source_repo.head.target.hex]))
-    else:
-        dest_repo.set_head(source_repo.head.name)
+    if i >= 0:
+        if source_repo.head_is_detached:
+            dest_repo.set_head(pygit2.Oid(hex=commit_map[source_repo.head.target.hex]))
+        else:
+            dest_repo.set_head(source_repo.head.name)
 
-    click.secho("\nCompacting repository ...", bold=True)
-    dest_repo.gc()
+        click.secho("\nCompacting repository ...", bold=True)
+        dest_repo.gc()
 
     if source_repo.workingcopy_location:
         click.secho("\nCreating working copy ...", bold=True)
