@@ -16,7 +16,7 @@ from kart.structure import RepoStructure
 from kart.timestamps import minutes_to_tz_offset
 
 
-def dataset_class_for_legacy_version(version):
+def dataset_class_for_legacy_version(version, in_place=False):
     from .upgrade_v0 import Dataset0
     from .upgrade_v1 import Dataset1
 
@@ -26,7 +26,10 @@ def dataset_class_for_legacy_version(version):
     elif version == 1:
         return Dataset1
     elif version == 2:
-        return XmlUpgradingDataset2
+        if in_place:
+            return InPlaceUpgradingDataset2
+        else:
+            return XmlUpgradingDataset2
 
     return None
 
@@ -47,11 +50,35 @@ class XmlUpgradingDataset2(Dataset2):
         return result
 
 
+class InPlaceUpgradingDataset2(XmlUpgradingDataset2):
+    @property
+    def feature_blobs_already_written(self):
+        return True
+
+    def feature_iter_with_reused_blobs(self, new_dataset):
+        for blob in self.feature_blobs():
+            pk_values = self.decode_path_to_pks(blob.name)
+            new_path = new_dataset.encode_pks_to_path(pk_values, schema=self.schema)
+            yield new_path, blob.id.hex
+
+
+class ForceLatestVersionRepo(KartRepo):
+    """
+    A repo that always claims to be the latest version, regardless of its contents or config.
+    Used for upgrading in-place.
+    """
+
+    @property
+    def version(self):
+        return DEFAULT_NEW_REPO_VERSION
+
+
 @click.command()
 @click.pass_context
+@click.option("--in-place", is_flag=True, default=False, hidden=True)
 @click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
-@click.argument("dest", type=click.Path(exists=False, writable=True), required=True)
-def upgrade(ctx, source, dest):
+@click.argument("dest", type=click.Path(writable=True), required=True)
+def upgrade(ctx, source, dest, in_place):
     """
     Upgrade a repository for an earlier version of Kart to be compatible with the latest version.
     The current repository structure of Kart is known as Datasets V2, which is used from kart/Kart 0.5 onwards.
@@ -62,8 +89,11 @@ def upgrade(ctx, source, dest):
     source = Path(source)
     dest = Path(dest)
 
-    if dest.exists():
-        raise click.BadParameter(f"'{dest}': already exists", param_hint="DEST")
+    if in_place:
+        dest = source
+
+    if not in_place and dest.exists() and any(dest.iterdir()):
+        raise InvalidOperation(f'"{dest}" isn\'t empty', param_hint="DEST")
 
     try:
         source_repo = KartRepo(source)
@@ -83,7 +113,7 @@ def upgrade(ctx, source, dest):
         # This prints a good error messsage explaining the whole situation.
         source_repo.ensure_supported_version()
 
-    source_dataset_class = dataset_class_for_legacy_version(source_version)
+    source_dataset_class = dataset_class_for_legacy_version(source_version, in_place)
 
     if not source_dataset_class:
         raise InvalidOperation(
@@ -91,11 +121,14 @@ def upgrade(ctx, source, dest):
         )
 
     # action!
-    click.secho(f"Initialising {dest} ...", bold=True)
-    dest.mkdir()
-    dest_repo = KartRepo.init_repository(
-        dest, wc_location=None, bare=source_repo.is_bare_style
-    )
+    if in_place:
+        dest_repo = ForceLatestVersionRepo(dest)
+    else:
+        click.secho(f"Initialising {dest} ...", bold=True)
+        dest.mkdir()
+        dest_repo = KartRepo.init_repository(
+            dest, wc_location=None, bare=source_repo.is_bare
+        )
 
     # walk _all_ references
     source_walker = source_repo.walk(

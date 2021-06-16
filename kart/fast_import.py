@@ -462,7 +462,15 @@ def _import_single_source(
         if verbosity >= 1:
             progress_every = max(100, 100_000 // (10 ** (verbosity - 1)))
 
-        if should_compare_imported_features_against_old_features(
+        feature_blobs_already_written = getattr(
+            source, "feature_blobs_already_written", False
+        )
+        if feature_blobs_already_written:
+            # This is an optimisation for upgrading repos in-place from V2 -> V3,
+            # which are so similar we don't even need to rewrite the blobs.
+            feature_blob_iter = source.feature_iter_with_reused_blobs(dataset)
+
+        elif should_compare_imported_features_against_old_features(
             repo, source, replacing_dataset
         ):
             feature_blob_iter = dataset.import_iter_feature_blobs(
@@ -478,7 +486,10 @@ def _import_single_source(
 
         for i, (feature_path, blob_data) in enumerate(feature_blob_iter):
             stream = proc_for_feature_path(feature_path).stdin
-            write_blob_to_stream(stream, feature_path, blob_data)
+            if feature_blobs_already_written:
+                copy_existing_blob_to_stream(stream, feature_path, blob_data)
+            else:
+                write_blob_to_stream(stream, feature_path, blob_data)
 
             if i and progress_every and i % progress_every == 0:
                 click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
@@ -512,6 +523,10 @@ def write_blobs_to_stream(stream, blob_iterator):
     for i, (blob_path, blob_data) in enumerate(blob_iterator):
         write_blob_to_stream(stream, blob_path, blob_data)
         yield i, blob_path
+
+
+def copy_existing_blob_to_stream(stream, blob_path, blob_sha):
+    stream.write(f"M 644 {blob_sha} {blob_path}\n".encode("utf8"))
 
 
 def generate_header(repo, sources, message, branch):
