@@ -466,7 +466,8 @@ class Dataset3(RichBaseDataset):
             if delta.type == "delete" and name not in existing_tree:
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to delete nonexistent meta item: {name}"
+                    f"{self.path}: Trying to delete nonexistent meta item: {name}",
+                    err=True,
                 )
                 continue
             if (
@@ -477,20 +478,23 @@ class Dataset3(RichBaseDataset):
             ):
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to create meta item that already exists: {name}"
+                    f"{self.path}: Trying to create meta item that already exists: {name}",
+                    err=True,
                 )
                 continue
 
             if delta.type == "update" and name not in existing_tree:
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to update nonexistent meta item: {name}"
+                    f"{self.path}: Trying to update nonexistent meta item: {name}",
+                    err=True,
                 )
                 continue
             if delta.type == "update" and self.get_meta_item(name) != old_value:
                 has_conflicts = True
                 click.echo(
-                    f"{self.path}: Trying to update out-of-date meta item: {name}"
+                    f"{self.path}: Trying to update out-of-date meta item: {name}",
+                    err=True,
                 )
                 continue
 
