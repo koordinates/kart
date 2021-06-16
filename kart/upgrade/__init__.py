@@ -1,8 +1,9 @@
-import click
-import pygit2
-
 from datetime import datetime
 from pathlib import Path
+import uuid
+
+import click
+import pygit2
 
 
 from kart import checkout, context
@@ -121,7 +122,6 @@ def upgrade(ctx, source, dest):
             i,
             source_repo,
             source_commit,
-            source_version,
             source_dataset_class,
             dest_parents,
             dest_repo,
@@ -166,7 +166,6 @@ def _upgrade_commit(
     i,
     source_repo,
     source_commit,
-    source_version,
     source_dataset_class,
     dest_parents,
     dest_repo,
@@ -184,28 +183,33 @@ def _upgrade_commit(
     s = source_commit
     author_time = f"{s.author.time} {minutes_to_tz_offset(s.author.offset)}"
     commit_time = f"{s.commit_time} {minutes_to_tz_offset(s.commit_time_offset)}"
+
+    # We import the commit onto a temporary branch, and fix the branch heads later.
+    # We choose a name that will never collide with a real branch so we can happily delete it later.
+    upgrade_ref = f"refs/heads/kart-upgrade-{uuid.uuid4()}"
     header = (
-        # We import every commit onto refs/heads/main and fix the branch heads later.
-        "commit refs/heads/main\n"
+        f"commit {upgrade_ref}\n"
         f"author {s.author.name} <{s.author.email}> {author_time}\n"
         f"committer {s.committer.name} <{s.committer.email}> {commit_time}\n"
         f"data {len(s.message.encode('utf8'))}\n{s.message}\n"
     )
     header += "".join(f"merge {p}\n" for p in dest_parents)
 
-    fast_import_tables(
-        dest_repo,
-        source_datasets,
-        replace_existing=ReplaceExisting.ALL,
-        verbosity=0,
-        header=header,
-        # We import every commit onto refs/heads/main, even though not all commits are related - this means
-        # the main branch head will jump all over the place. git-fast-import only allows this with --force.
-        extra_cmd_args=["--force"],
-        num_processes=1,
-    )
+    try:
+        fast_import_tables(
+            dest_repo,
+            source_datasets,
+            replace_existing=ReplaceExisting.ALL,
+            verbosity=0,
+            header=header,
+            extra_cmd_args=["--force"],
+            num_processes=1,
+        )
+        dest_commit = dest_repo.references.get(upgrade_ref).target
+    finally:
+        # delete the extra branch ref we just created; we don't need/want it
+        dest_repo.references.delete(upgrade_ref)
 
-    dest_commit = dest_repo.head_commit
     commit_map[source_commit.hex] = dest_commit.hex
 
     commit_time = datetime.fromtimestamp(source_commit.commit_time)

@@ -31,6 +31,7 @@ Kart v0.10.0 introduces a new repository structure, which is the default, dubbed
 * Bugfix: 3D and 4D geometries are now properly roundtripped through SQL Server working copy.
 * Fix help text for discarding changes to refer to `kart restore` instead of `kart reset`, as `kart restore` is now the simplest way to discard changes. [#426](https://github.com/koordinates/kart/issues/426)
 * `import`: PostGIS internal views/tables are no longer listed by `--list` or imported by `--all-tables`, and can't be imported by name either. [#439](https://github.com/koordinates/kart/issues/439)
+* `upgrade` no longer adds a `main` or `master` branch to upgraded repos.
 
 ### Calculating feature counts for diffs
 

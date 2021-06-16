@@ -1,6 +1,8 @@
 import json
-import pytest
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from kart.cli import get_version
 from kart.exceptions import UNSUPPORTED_VERSION
@@ -239,3 +241,19 @@ def test_upgrade_to_kart(data_working_copy, cli_runner, chdir):
                 )
                 == 0
             )
+
+
+def test_upgrade_preserves_refs(data_archive, cli_runner, tmp_path):
+    with data_archive("upgrade/v2.kart/points") as source_path:
+        # first make a new branch, and remove 'main'
+        subprocess.check_call(["git", "branch", "-m", "main", "newbranch"])
+
+        # upgrade it
+        dest = tmp_path / "dest"
+        r = cli_runner.invoke(["upgrade", source_path, dest])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Upgrade complete"
+
+        # check that the refs are the same as before
+        repo = KartRepo(dest)
+        assert set(repo.references) == {"refs/heads/newbranch"}
