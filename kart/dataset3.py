@@ -473,6 +473,7 @@ class Dataset3(RichBaseDataset):
                 delta.type == "insert"
                 and (not allow_missing_old_values)
                 and name in existing_tree
+                and (existing_tree / name).data
             ):
                 has_conflicts = True
                 click.echo(
