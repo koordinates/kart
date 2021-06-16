@@ -1,2 +1,5 @@
 [tool.black]
 target-version = ['py37']
+
+[tool.pyright]
+exclude = ["**/__pycache__", "**/build", "venv"]
