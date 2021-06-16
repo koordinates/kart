@@ -119,6 +119,7 @@ def upgrade(ctx, source, dest):
                 )
 
         _upgrade_commit(
+            ctx,
             i,
             source_repo,
             source_commit,
@@ -163,6 +164,7 @@ def upgrade(ctx, source, dest):
 
 
 def _upgrade_commit(
+    ctx,
     i,
     source_repo,
     source_commit,
@@ -200,7 +202,7 @@ def _upgrade_commit(
             dest_repo,
             source_datasets,
             replace_existing=ReplaceExisting.ALL,
-            verbosity=0,
+            verbosity=ctx.obj.verbosity,
             header=header,
             extra_cmd_args=["--force"],
             num_processes=1,
