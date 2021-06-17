@@ -236,7 +236,6 @@ def fast_import_tables(
 
     assert repo.version in SUPPORTED_REPO_VERSIONS
     extra_blobs = extra_blobs_for_version(repo.version) if not starting_tree else []
-    dataset_class = dataset_class_for_version(repo.version)
 
     ImportSource.check_valid(sources)
 
@@ -324,112 +323,16 @@ def fast_import_tables(
                     return procs[hash(first_subtree_name) % len(procs)]
 
             for source in sources:
-                replacing_dataset = None
-                if replace_existing == ReplaceExisting.GIVEN:
-                    try:
-                        replacing_dataset = repo.datasets()[source.dest_path]
-                    except KeyError:
-                        # no such dataset; no problem
-                        replacing_dataset = None
-
-                    fast_import_clear_trees(
-                        procs=procs,
-                        replace_ids=replace_ids,
-                        replacing_dataset=replacing_dataset,
-                        source=source,
-                    )
-
-                dataset = dataset_class(tree=None, path=source.dest_path)
-                dataset.schema = source.schema
-
-                with source:
-                    if limit:
-                        num_rows = min(limit, source.feature_count)
-                        num_rows_text = f"{num_rows:,d} of {source.feature_count:,d}"
-                    else:
-                        num_rows = source.feature_count
-                        num_rows_text = f"{num_rows:,d}"
-
-                    if verbosity >= 1:
-                        click.echo(
-                            f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
-                        )
-
-                    # Features
-                    t1 = time.monotonic()
-                    if replace_ids is not None:
-
-                        # As we iterate over IDs, also delete them from the dataset.
-                        # This means we don't have to load the whole list into memory.
-                        def _ids():
-                            for pk in replace_ids:
-                                pk = dataset.schema.sanitise_pks(pk)
-                                path = dataset.encode_pks_to_path(pk)
-                                proc_for_feature_path(path).stdin.write(
-                                    f"D {path}\n".encode("utf8")
-                                )
-                                yield pk
-
-                        src_iterator = source.get_features(_ids(), ignore_missing=True)
-                    else:
-                        src_iterator = source.features()
-
-                    progress_every = None
-                    if verbosity >= 1:
-                        progress_every = max(100, 100_000 // (10 ** (verbosity - 1)))
-
-                    if should_compare_imported_features_against_old_features(
-                        repo, source, replacing_dataset
-                    ):
-                        feature_blob_iter = dataset.import_iter_feature_blobs(
-                            repo,
-                            src_iterator,
-                            source,
-                            replacing_dataset=replacing_dataset,
-                        )
-                    else:
-                        feature_blob_iter = dataset.import_iter_feature_blobs(
-                            repo, src_iterator, source
-                        )
-
-                    for i, (feature_path, blob_data) in enumerate(feature_blob_iter):
-                        stream = proc_for_feature_path(feature_path).stdin
-                        stream.write(
-                            f"M 644 inline {feature_path}\ndata {len(blob_data)}\n".encode(
-                                "utf8"
-                            )
-                        )
-                        stream.write(blob_data)
-                        stream.write(b"\n")
-
-                        if i and progress_every and i % progress_every == 0:
-                            click.echo(
-                                f"  {i:,d} features... @{time.monotonic()-t1:.1f}s"
-                            )
-
-                        if limit is not None and i == (limit - 1):
-                            click.secho(
-                                f"  Stopping at {limit:,d} features", fg="yellow"
-                            )
-                            break
-                    t2 = time.monotonic()
-                    if verbosity >= 1:
-                        click.echo(
-                            f"Added {num_rows:,d} Features to index in {t2-t1:.1f}s"
-                        )
-                        click.echo(
-                            f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)"
-                        )
-
-                    # Meta items - written second as certain importers generate extra metadata as they import features.
-                    for x in write_blobs_to_stream(
-                        procs[0].stdin, dataset.import_iter_meta_blobs(repo, source)
-                    ):
-                        pass
-
-        t3 = time.monotonic()
-        if verbosity >= 1:
-            click.echo(f"Closed in {(t3-t2):.0f}s")
+                _import_single_source(
+                    repo,
+                    source,
+                    replace_existing,
+                    procs,
+                    proc_for_feature_path,
+                    replace_ids,
+                    limit,
+                    verbosity,
+                )
 
         if import_refs:
             # we created temp branches for the import above.
@@ -438,6 +341,7 @@ def fast_import_tables(
             trees = [repo.revparse_single(b).peel(pygit2.Tree) for b in import_refs]
             if len(import_refs) > 1:
                 click.echo(f"Joining {len(import_refs)} parallel-imported trees...")
+                t1 = time.monotonic()
                 builder = RichTreeBuilder(repo, trees[0])
                 for t in trees[1:]:
                     datasets = Datasets(
@@ -455,11 +359,10 @@ def fast_import_tables(
                                     subtree,
                                 )
                 new_tree = builder.flush()
-                t4 = time.monotonic()
-                click.echo(f"Joined trees in {(t4-t3):.0f}s")
+                t2 = time.monotonic()
+                click.echo(f"Joined trees in {(t2-t1):.0f}s")
             else:
                 new_tree = trees[0]
-                t4 = time.monotonic()
             if not allow_empty:
                 if new_tree == orig_tree:
                     raise NotFound("No changes to commit", exit_code=NO_CHANGES)
@@ -481,13 +384,133 @@ def fast_import_tables(
                 repo.references.delete(b)
 
 
-def write_blobs_to_stream(stream, blobs):
-    for i, (blob_path, blob_data) in enumerate(blobs):
-        stream.write(
-            f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode("utf8")
+def _import_single_source(
+    repo,
+    source,
+    replace_existing,
+    procs,
+    proc_for_feature_path,
+    replace_ids,
+    limit,
+    verbosity,
+):
+    """
+    repo - the Kart repo to import into.
+    source - an individual ImportSource
+    replace_existing - See ReplaceExisting enum
+    procs - all the processes to be used (for parallel imports)
+    proc_for_feature_path - function, given a feature path returns the process to use to import it
+    replace_ids - list of PK values to replace, or None
+    limit - maximum number of features to import per source.
+    verbosity - integer:
+        0: no progress information is printed to stdout.
+        1: basic status information
+        2: full output of `git-fast-import --stats ...`
+    """
+    replacing_dataset = None
+    if replace_existing == ReplaceExisting.GIVEN:
+        try:
+            replacing_dataset = repo.datasets()[source.dest_path]
+        except KeyError:
+            # no such dataset; no problem
+            replacing_dataset = None
+
+        fast_import_clear_trees(
+            procs=procs,
+            replace_ids=replace_ids,
+            replacing_dataset=replacing_dataset,
+            source=source,
         )
-        stream.write(blob_data)
-        stream.write(b"\n")
+
+    dataset_class = dataset_class_for_version(repo.version)
+    dataset = dataset_class(tree=None, path=source.dest_path)
+    dataset.schema = source.schema
+
+    with source:
+        if limit:
+            num_rows = min(limit, source.feature_count)
+            num_rows_text = f"{num_rows:,d} of {source.feature_count:,d}"
+        else:
+            num_rows = source.feature_count
+            num_rows_text = f"{num_rows:,d}"
+
+        if verbosity >= 1:
+            click.echo(
+                f"Importing {num_rows_text} features from {source} to {source.dest_path}/ ..."
+            )
+
+        # Features
+        t1 = time.monotonic()
+        if replace_ids is not None:
+
+            # As we iterate over IDs, also delete them from the dataset.
+            # This means we don't have to load the whole list into memory.
+            def _ids():
+                for pk in replace_ids:
+                    pk = dataset.schema.sanitise_pks(pk)
+                    path = dataset.encode_pks_to_path(pk)
+                    proc_for_feature_path(path).stdin.write(
+                        f"D {path}\n".encode("utf8")
+                    )
+                    yield pk
+
+            src_iterator = source.get_features(_ids(), ignore_missing=True)
+        else:
+            src_iterator = source.features()
+
+        progress_every = None
+        if verbosity >= 1:
+            progress_every = max(100, 100_000 // (10 ** (verbosity - 1)))
+
+        if should_compare_imported_features_against_old_features(
+            repo, source, replacing_dataset
+        ):
+            feature_blob_iter = dataset.import_iter_feature_blobs(
+                repo,
+                src_iterator,
+                source,
+                replacing_dataset=replacing_dataset,
+            )
+        else:
+            feature_blob_iter = dataset.import_iter_feature_blobs(
+                repo, src_iterator, source
+            )
+
+        for i, (feature_path, blob_data) in enumerate(feature_blob_iter):
+            stream = proc_for_feature_path(feature_path).stdin
+            write_blob_to_stream(stream, feature_path, blob_data)
+
+            if i and progress_every and i % progress_every == 0:
+                click.echo(f"  {i:,d} features... @{time.monotonic()-t1:.1f}s")
+
+            if limit is not None and i == (limit - 1):
+                click.secho(f"  Stopping at {limit:,d} features", fg="yellow")
+                break
+        t2 = time.monotonic()
+        if verbosity >= 1:
+            click.echo(f"Added {num_rows:,d} Features to index in {t2-t1:.1f}s")
+            click.echo(f"Overall rate: {(num_rows/(t2-t1 or 1E-3)):.0f} features/s)")
+
+        # Meta items - written second as certain importers generate extra metadata as they import features.
+        for x in write_blobs_to_stream(
+            procs[0].stdin, dataset.import_iter_meta_blobs(repo, source)
+        ):
+            pass
+
+    t3 = time.monotonic()
+    if verbosity >= 1:
+        click.echo(f"Closed in {(t3-t2):.0f}s")
+
+
+def write_blob_to_stream(stream, blob_path, blob_data):
+    stream.write(f"M 644 inline {blob_path}\ndata {len(blob_data)}\n".encode("utf8"))
+    stream.write(blob_data)
+    stream.write(b"\n")
+
+
+def write_blobs_to_stream(stream, blob_iterator):
+    for i, (blob_path, blob_data) in enumerate(blob_iterator):
+        write_blob_to_stream(stream, blob_path, blob_data)
         yield i, blob_path
 
 
