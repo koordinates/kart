@@ -80,7 +80,7 @@ def format_json_for_output(output, fp, json_style="pretty"):
 
 
 def can_output_colour(fp):
-    return fp == sys.stdout and fp.isatty()
+    return fp in (sys.stdout, sys.stderr) and fp.isatty()
 
 
 def format_wkt_for_output(output, fp=None, syntax_highlight=True):

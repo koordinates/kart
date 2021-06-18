@@ -1,5 +1,6 @@
 import functools
 import os
+import sys
 
 import click
 import pygit2
@@ -84,6 +85,8 @@ class Dataset3(RichBaseDataset):
 
     CRS_PATH = META_PATH + "crs/"
 
+    CAPABILITIES_PATH = META_PATH + "capabilities.json"
+
     # Attachments
     METADATA_XML = "metadata.xml"
 
@@ -96,10 +99,33 @@ class Dataset3(RichBaseDataset):
             and (tree / cls.DATASET_DIRNAME).type_str == "tree"
         )
 
+    def __init__(self, tree, path, repo=None):
+        super().__init__(tree, path, repo)
+        if self.inner_tree is not None:
+            self.ensure_only_supported_capabilities()
+
+    def ensure_only_supported_capabilities(self):
+        capabilities = self.get_meta_item("capabilities.json", missing_ok=True)
+        if capabilities is not None:
+            from .output_util import dump_json_output
+            from .cli import get_version
+            from .exceptions import UNSUPPORTED_VERSION
+
+            click.echo(
+                f"The dataset at {self.path} requires the following capabilities which Kart {get_version()} does not support:",
+                err=True,
+            )
+            dump_json_output(capabilities, sys.stderr)
+            raise InvalidOperation(
+                "Download the latest Kart to work with this dataset",
+                exit_code=UNSUPPORTED_VERSION,
+            )
+
     @functools.lru_cache()
-    def get_meta_item(self, name):
-        if name == "version":
-            return 2
+    def get_meta_item(self, name, missing_ok=None):
+        if missing_ok is None:
+            # If the caller doesn't specify, the default is that all standard meta-items are allowed to be missing.
+            missing_ok = name in META_ITEM_NAMES
 
         if name in ATTACHMENT_META_ITEMS:
             rel_path = name
@@ -108,9 +134,7 @@ class Dataset3(RichBaseDataset):
             rel_path = self.META_PATH + name
             meta_item_tree = self.inner_tree
 
-        data = self.get_data_at(
-            rel_path, missing_ok=name in META_ITEM_NAMES, tree=meta_item_tree
-        )
+        data = self.get_data_at(rel_path, missing_ok=missing_ok, tree=meta_item_tree)
         if data is None:
             return data
 
