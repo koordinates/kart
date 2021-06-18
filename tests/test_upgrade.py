@@ -147,6 +147,46 @@ def test_upgrade_v2(
         assert r.exit_code == 0, r
 
 
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "archive,layer",
+    [
+        pytest.param("points.tgz", H.POINTS.LAYER, id="points"),
+        pytest.param("polygons.tgz", H.POLYGONS.LAYER, id="polygons"),
+        pytest.param("table.tgz", H.TABLE.LAYER, id="table"),
+    ],
+)
+def test_upgrade_v2_in_place(archive, layer, data_archive, cli_runner, tmp_path, chdir):
+    archive_path = Path("upgrade") / "v2.kart" / archive
+    with data_archive(archive_path) as source_path:
+        r = cli_runner.invoke(["data", "version", "--output-format=json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "repostructure.version": 2,
+            "localconfig.branding": "kart",
+        }
+
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == 0  # V2 is still supported
+
+        r = cli_runner.invoke(["upgrade", "--in-place", source_path, source_path])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Upgrade complete"
+
+        r = cli_runner.invoke(["data", "version", "--output-format=json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "repostructure.version": 3,
+            "localconfig.branding": "kart",
+        }
+
+        r = cli_runner.invoke(["log"])
+        assert r.exit_code == 0, r.stderr
+
+        if layer == H.POINTS.LAYER:
+            assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
+
+
 def test_upgrade_to_tidy(data_archive, cli_runner, chdir):
     archive_path = Path("upgrade") / "old-bare.tgz"
     with data_archive(archive_path) as source_path:
