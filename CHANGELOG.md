@@ -5,7 +5,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
 
-## 0.10.0 (UNRELEASED)
+## 0.10.0
 
 Kart v0.10.0 introduces a new repository structure, which is the default, dubbed 'Datasets V3'. Datasets V2 continues to be supported, but all newly created repos are V3 going forward.
 
