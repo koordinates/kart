@@ -319,7 +319,6 @@ def _find_sole_dataset_diff(
         for path in all_ds_paths
         if _is_path_changed(parent_commit, source_commit, path)
     ]
-    click.echo(all_changed_ds_paths)
     if len(all_changed_ds_paths) != 1:
         return None
 
