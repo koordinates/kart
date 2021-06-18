@@ -55,11 +55,23 @@ class InPlaceUpgradingDataset2(XmlUpgradingDataset2):
     def feature_blobs_already_written(self):
         return True
 
-    def feature_iter_with_reused_blobs(self, new_dataset):
-        for blob in self.feature_blobs():
-            pk_values = self.decode_path_to_pks(blob.name)
-            new_path = new_dataset.encode_pks_to_path(pk_values, schema=self.schema)
-            yield new_path, blob.id.hex
+    def feature_iter_with_reused_blobs(self, new_dataset, feature_ids=None):
+        if feature_ids is None:
+            for blob in self.feature_blobs():
+                pk_values = self.decode_path_to_pks(blob.name)
+                new_path = new_dataset.encode_pks_to_path(pk_values, schema=self.schema)
+                yield new_path, blob.id.hex
+        else:
+            for pk_values in feature_ids:
+                old_path = self.encode_pks_to_path(pk_values, relative=True)
+                try:
+                    blob = self.inner_tree / old_path
+                    new_path = new_dataset.encode_pks_to_path(
+                        pk_values, schema=self.schema
+                    )
+                    yield new_path, blob.id.hex
+                except KeyError:
+                    continue  # Missing / deleted blobs are just skipped
 
 
 class ForceLatestVersionRepo(KartRepo):
@@ -206,14 +218,13 @@ def _upgrade_commit(
     dest_repo,
     commit_map,
 ):
-    rs = RepoStructure(
+    source_rs = RepoStructure(
         source_repo,
         source_commit,
         dataset_class=source_dataset_class,
     )
-    source_datasets = list(rs.datasets)
+    source_datasets = list(source_rs.datasets)
     dataset_count = len(source_datasets)
-    feature_count = sum(s.feature_count for s in source_datasets)
 
     s = source_commit
     author_time = f"{s.author.time} {minutes_to_tz_offset(s.author.offset)}"
@@ -228,13 +239,38 @@ def _upgrade_commit(
         f"committer {s.committer.name} <{s.committer.email}> {commit_time}\n"
         f"data {len(s.message.encode('utf8'))}\n{s.message}\n"
     )
-    header += "".join(f"merge {p}\n" for p in dest_parents)
+
+    sole_dataset_diff = _find_sole_dataset_diff(
+        source_repo, source_commit, source_rs, source_dataset_class
+    )
+
+    if sole_dataset_diff:
+        # Optimisation - we can use feature_ids if we are only importing one dataset at a time, and,
+        # we have access to the parent commit.
+        ds_path, ds_diff = sole_dataset_diff
+        source_datasets = [source_rs.datasets[ds_path]]
+        replace_existing = ReplaceExisting.GIVEN
+        from_parent = commit_map[source_commit.parents[0].hex]
+        merge_parents = [p for p in dest_parents if p != from_parent]
+        replace_ids = list(ds_diff.get("feature", {}).keys())
+        feature_count = len(replace_ids)
+    else:
+        from_parent = None
+        merge_parents = dest_parents
+        replace_existing = ReplaceExisting.ALL
+        replace_ids = None
+        feature_count = sum(s.feature_count for s in source_datasets)
+
+    if from_parent:
+        header += f"from {from_parent}\n"
+    header += "".join(f"merge {p}\n" for p in merge_parents)
 
     try:
         fast_import_tables(
             dest_repo,
             source_datasets,
-            replace_existing=ReplaceExisting.ALL,
+            replace_existing=replace_existing,
+            replace_ids=replace_ids,
             verbosity=ctx.obj.verbosity,
             header=header,
             extra_cmd_args=["--force"],
@@ -252,6 +288,58 @@ def _upgrade_commit(
         f"  {i}: {source_commit.hex[:8]} → {dest_commit.hex[:8]}"
         f" ({commit_time}; {source_commit.committer.name}; {dataset_count} datasets; {feature_count} rows)"
     )
+
+
+def _find_sole_dataset_diff(
+    source_repo, source_commit, source_rs, source_dataset_class
+):
+    """
+    Returns a tuple (dataset_path, dataset_diff) if there is only one dataset which is changed
+    in source_commit (when comparing source_commit to its first parent). Otherwise returns None.
+    """
+    if not hasattr(source_dataset_class, "diff"):
+        # Earlier dataset versions are no longer full-featured so we can't diff them anymore,
+        # so, we don't do this optimisation.
+        return None
+
+    parent_commit = source_commit.parents[0] if source_commit.parents else None
+    if not parent_commit:
+        # Initial commit - this optimisation won't help here anyway.
+        return None
+    parent_rs = RepoStructure(
+        source_repo,
+        parent_commit,
+        dataset_class=source_dataset_class,
+    )
+    source_ds_paths = {ds.path for ds in source_rs.datasets}
+    parent_ds_paths = {ds.path for ds in parent_rs.datasets}
+    all_ds_paths = source_ds_paths | parent_ds_paths
+    all_changed_ds_paths = [
+        path
+        for path in all_ds_paths
+        if _is_path_changed(parent_commit, source_commit, path)
+    ]
+    click.echo(all_changed_ds_paths)
+    if len(all_changed_ds_paths) != 1:
+        return None
+
+    from kart.diff import get_dataset_diff
+
+    ds_path = all_changed_ds_paths[0]
+    ds_diff = get_dataset_diff(parent_rs, source_rs, None, ds_path)
+    return ds_path, ds_diff
+
+
+def _is_path_changed(treeish_a, treeish_b, path):
+    def lookup_path(tree, path):
+        try:
+            return tree / path
+        except KeyError:
+            return None
+
+    tree_a = lookup_path(treeish_a.peel(pygit2.Tree), path)
+    tree_b = lookup_path(treeish_b.peel(pygit2.Tree), path)
+    return tree_a != tree_b
 
 
 @click.command()

@@ -280,27 +280,26 @@ def fast_import_tables(
             #   * after the importing is all done, we merge the trees together.
             #   * there should never be any conflicts in this merge process.
             for i in range(num_processes):
-                if header is None:
+                if header is not None:
+                    # A client-supplied header won't work if num_processes > 1 because we'll try and write to
+                    # the same branch multiple times in parallel.
+                    # Luckily only upgrade script passes a header in, so there we just use 1 proc.
+                    proc_header = header
+                    assert num_processes == 1
+                else:
                     # import onto a temp branch. then reset the head branch afterwards.
                     import_ref = f"refs/kart-import/{uuid.uuid4()}"
                     import_refs.append(import_ref)
 
                     # may be None, if head is detached
                     orig_branch = repo.head_branch
-                    generated_header = generate_header(
-                        repo, sources, message, import_ref
-                    )
-                else:
-                    generated_header = header
-                    # this won't work if num_processes > 1 because we'll try and write to
-                    # the same branch multiple times in parallel.
-                    # luckily only upgrade script passes a header in, so there we just use 1 proc.
-                    assert num_processes == 1
+                    proc_header = generate_header(repo, sources, message, import_ref)
+                    if replace_existing != ReplaceExisting.ALL:
+                        proc_header += f"from {orig_commit.oid}\n"
+
                 proc = stack.enter_context(_git_fast_import(repo, *cmd))
                 procs.append(proc)
-                if replace_existing != ReplaceExisting.ALL:
-                    generated_header += f"from {orig_commit.oid}\n"
-                proc.stdin.write(generated_header.encode("utf8"))
+                proc.stdin.write(proc_header.encode("utf8"))
 
             # Write the extra blob that records the repo's version:
             for i, blob_path in write_blobs_to_stream(procs[0].stdin, extra_blobs):
@@ -454,8 +453,10 @@ def _import_single_source(
                     )
                     yield pk
 
-            src_iterator = source.get_features(_ids(), ignore_missing=True)
+            id_iterator = _ids()
+            src_iterator = source.get_features(id_iterator, ignore_missing=True)
         else:
+            id_iterator = None
             src_iterator = source.features()
 
         progress_every = None
@@ -468,7 +469,9 @@ def _import_single_source(
         if feature_blobs_already_written:
             # This is an optimisation for upgrading repos in-place from V2 -> V3,
             # which are so similar we don't even need to rewrite the blobs.
-            feature_blob_iter = source.feature_iter_with_reused_blobs(dataset)
+            feature_blob_iter = source.feature_iter_with_reused_blobs(
+                dataset, id_iterator
+            )
 
         elif should_compare_imported_features_against_old_features(
             repo, source, replacing_dataset
