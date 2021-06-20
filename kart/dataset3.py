@@ -232,24 +232,22 @@ class Dataset3(RichBaseDataset):
             return
         yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
 
+    @property
     @functools.lru_cache(maxsize=1)
-    def feature_path_encoder(self, schema=None):
-        schema = schema or self.schema
-        if self.inner_tree is None:
-            # no meta tree; we must be still creating this dataset
-            # figure out a sensible path encoder to use:
-            pks = schema.pk_columns
+    def feature_path_encoder(self):
+        if not self.inner_tree:
+            # No meta tree; we must be still creating this dataset.
+            # Figure out a sensible path encoder to use:
+            pks = self.schema.pk_columns
             if len(pks) == 1 and pks[0].data_type == "integer":
                 return PathEncoder.INT_PK_ENCODER
-
             else:
                 return PathEncoder.GENERAL_ENCODER
-        else:
-            try:
-                path_structure = self.get_meta_item("path-structure.json")
-            except KeyError:
-                return PathEncoder.LEGACY_ENCODER
-        return PathEncoder.get(**path_structure)
+        # Otherwise, load the path-structure meta-item.
+        path_structure = self.get_meta_item("path-structure.json", missing_ok=True)
+        if path_structure is not None:
+            return PathEncoder.get(**path_structure)
+        return PathEncoder.LEGACY_ENCODER
 
     def decode_path_to_pks(self, path):
         """Given a feature path, returns the pk values encoded in it."""
@@ -293,7 +291,7 @@ class Dataset3(RichBaseDataset):
         Given some pk values, returns the path the feature should be written to.
         pk_values should be a list or tuple of pk values.
         """
-        encoder = self.feature_path_encoder(schema)
+        encoder = self.feature_path_encoder
         rel_path = f"{self.FEATURE_PATH}{encoder.encode_pks_to_path(pk_values)}"
         return rel_path if relative else self.full_path(rel_path)
 
@@ -314,7 +312,7 @@ class Dataset3(RichBaseDataset):
             (self.METADATA_XML, source.get_meta_item("metadata.xml")),
         ]
 
-        path_encoder = self.feature_path_encoder()
+        path_encoder = self.feature_path_encoder
         if path_encoder is not PathEncoder.LEGACY_ENCODER:
             meta_blobs.append(path_encoder.encode_path_structure_data(relative=True))
 
@@ -476,7 +474,7 @@ class Dataset3(RichBaseDataset):
                         f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
                         legend.dumps(),
                     )
-                path_encoder = self.feature_path_encoder(new_schema)
+                path_encoder = self.feature_path_encoder
                 if (
                     new_schema
                     and not existing_tree

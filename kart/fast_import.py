@@ -160,7 +160,7 @@ def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
             # delete all features not pertaining to this process.
             # we also delete the features that *do*, but we do it further down
             # so that we don't have to iterate the IDs more than once.
-            for subtree in replacing_dataset.feature_path_encoder().tree_names():
+            for subtree in replacing_dataset.feature_path_encoder.tree_names():
                 if hash(subtree) % len(procs) != i:
                     proc.stdin.write(
                         f"D {dest_inner_path}/feature/{subtree}\n".encode("utf8")
@@ -422,8 +422,9 @@ def _import_single_source(
         )
 
     dataset_class = dataset_class_for_version(repo.version)
-    dataset = dataset_class(tree=None, path=source.dest_path)
-    dataset.schema = source.schema
+    dataset = dataset_class.new_dataset_for_writing(
+        source.dest_path, source.schema, repo=repo
+    )
 
     with source:
         if limit:

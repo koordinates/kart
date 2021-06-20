@@ -284,9 +284,9 @@ def estimate_diff_feature_counts(
             )
         else:
             path_encoder = (
-                base_ds.feature_path_encoder()
+                base_ds.feature_path_encoder
                 if base_ds
-                else target_ds.feature_path_encoder()
+                else target_ds.feature_path_encoder
             )
             ds_total = get_approximate_diff_blob_count(
                 repo,

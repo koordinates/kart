@@ -60,6 +60,12 @@ class BaseDataset(ImportSource):
 
         self.repo = repo
 
+    @classmethod
+    def new_dataset_for_writing(cls, path, schema, repo=None):
+        result = cls(None, path, repo=repo)
+        result._original_schema = schema
+        return result
+
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.path}>"
 
@@ -255,6 +261,11 @@ class BaseDataset(ImportSource):
         redundant work. Similarly, if the caller knows data, they can supply that too to avoid redundant work.
         """
         raise NotImplementedError()
+
+    def align_schema_to_existing_schema(self, existing_schema):
+        raise RuntimeError(
+            "Dataset object is immutable, aligning schema is not supported"
+        )
 
 
 class IntegrityError(ValueError):

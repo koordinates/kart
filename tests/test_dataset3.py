@@ -66,7 +66,7 @@ def test_legend_roundtrip():
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    empty_dataset = Dataset3(None, DATASET_PATH)
+    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, None)
     path, data = empty_dataset.encode_legend(orig)
     tree = MemoryTree({path: data})
 
@@ -136,8 +136,8 @@ def abcdef_schema():
 
 def test_raw_feature_roundtrip():
     legend = Legend(["a"], ["b", "c", "d", "e", "f"])
-    empty_dataset = Dataset3(None, DATASET_PATH)
     schema = abcdef_schema()
+    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, schema)
     legend_path, legend_data = empty_dataset.encode_legend(legend)
 
     raw_feature_dict = {
@@ -205,7 +205,7 @@ def test_schema_roundtrip(gen_uuid):
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    empty_dataset = Dataset3(None, DATASET_PATH)
+    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, None)
     path, data = empty_dataset.encode_schema(orig)
     tree = MemoryTree({path: data})
 
@@ -225,7 +225,7 @@ def test_feature_roundtrip(gen_uuid):
             ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
-    empty_dataset = Dataset3(None, DATASET_PATH)
+    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, schema)
     schema_path, schema_data = empty_dataset.encode_schema(schema)
     legend_path, legend_data = empty_dataset.encode_legend(schema.legend)
 
@@ -286,7 +286,7 @@ def test_schema_change_roundtrip(gen_uuid):
         "ID": 7,
     }
 
-    empty_dataset = Dataset3(None, DATASET_PATH)
+    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, old_schema)
     feature_path, feature_data = empty_dataset.encode_feature(feature_tuple, old_schema)
     feature_path2, feature_data2 = empty_dataset.encode_feature(
         feature_dict, old_schema

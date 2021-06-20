@@ -129,17 +129,16 @@ class ImportSource:
     @property
     def schema(self):
         """
-        An ImportSource has a settable schema - although the ImportSource has the reponsibility to load the schema
-        from the import-source that it represents (in _init_schema), the importer has the option to modify it.
-        This is commonly done to replace the schema with one that is aligned with pre-existing data, if present.
+        An ImportSource has an alignable schema - although the ImportSource has the reponsibility to load the schema
+        from the import-source that it represents (in _init_schema), the importer has the option to modify it by
+        calling align_schema_to_existing_schema, so that the column IDs match with a pre-existing schema.
         """
-        if not hasattr(self, "_schema"):
-            self._schema = self._init_schema()
-        return self._schema
-
-    @schema.setter
-    def schema(self, value):
-        self._schema = value
+        if hasattr(self, "_aligned_schema"):
+            return self._aligned_schema
+        elif hasattr(self, "_original_schema"):
+            return self._original_schema
+        self._original_schema = self._init_schema()
+        return self._original_schema
 
     def _init_schema(self):
         """
@@ -154,7 +153,7 @@ class ImportSource:
         that they had last time. Failing to align the schema would mean that some features would be re-encoded
         even if they hadn't actually changed.
         """
-        self.schema = existing_schema.align_to_self(self.schema)
+        self._aligned_schema = existing_schema.align_to_self(self.schema)
 
     @property
     def has_geometry(self):

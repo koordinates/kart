@@ -7,5 +7,6 @@ class Dataset2(Dataset3):
 
     DATASET_DIRNAME = ".sno-dataset"  # Old name for V2 datasets.
 
-    def feature_path_encoder(self, schema=None):
+    @property
+    def feature_path_encoder(self):
         return PathEncoder.LEGACY_ENCODER

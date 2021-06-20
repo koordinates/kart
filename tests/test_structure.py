@@ -771,9 +771,9 @@ def test_import_no_pk_performance(data_archive_readonly, benchmark):
         new_features = features[1000:2143]
 
         pkis = PkGeneratingImportSource(dataset, repo)
-        pkis.schema = dataset.schema
+        pkis._original_schema = dataset.schema
         pkis.prev_dest_schema = dataset.schema
-        pkis.primarky_key = dataset.primary_key
+        pkis.primary_key = dataset.primary_key
 
         def _match_features_benchmark():
             # Exhaust generator:
@@ -854,7 +854,7 @@ def test_pk_encoder_legacy_hashed(data_archive_readonly):
     with data_archive_readonly(archive_path) as repo_path:
         repo = KartRepo(repo_path)
         ds = repo.datasets()["nz_pa_points_topo_150k"]
-        e = ds.feature_path_encoder()
+        e = ds.feature_path_encoder
         assert isinstance(e, MsgpackHashPathEncoder)
         assert e.encoding == "hex"
         assert e.branches == 256
@@ -870,12 +870,11 @@ def test_pk_encoder_legacy_hashed(data_archive_readonly):
 
 
 def test_pk_encoder_string_pk():
-    ds = Dataset3(None, "mytable")
     schema = Schema.from_column_dicts(
         [{"name": "mypk", "dataType": "text", "id": "abc123"}]
     )
-    ds.schema = schema
-    e = ds.feature_path_encoder(schema)
+    ds = Dataset3.new_dataset_for_writing("mytable", schema)
+    e = ds.feature_path_encoder
     assert isinstance(e, MsgpackHashPathEncoder)
     assert e.encoding == "base64"
     assert e.branches == 64
@@ -888,7 +887,6 @@ def test_pk_encoder_string_pk():
 
 
 def test_pk_encoder_int_pk():
-    ds = Dataset3(None, "mytable")
     schema = Schema.from_column_dicts(
         [
             {
@@ -900,8 +898,8 @@ def test_pk_encoder_int_pk():
             }
         ]
     )
-    ds.schema = schema
-    e = ds.feature_path_encoder(schema)
+    ds = Dataset3.new_dataset_for_writing("mytable", schema)
+    e = ds.feature_path_encoder
     assert isinstance(e, IntPathEncoder)
     assert e.encoding == "base64"
     assert e.branches == 64
@@ -1084,7 +1082,7 @@ def test_write_feature_performance(
 
             source = ImportSource.open(data / source_gpkg, table=table)
             with source:
-                dataset = Dataset3(None, table)
+                dataset = Dataset3.new_dataset_for_writing(table, source.schema)
                 feature_iter = itertools.cycle(list(source.features()))
 
                 index = pygit2.Index()
