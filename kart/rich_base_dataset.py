@@ -164,11 +164,11 @@ class RichBaseDataset(BaseDataset):
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
-
         ds_diff = DatasetDiff()
-        ds_diff["meta"] = self.diff_meta(other, reverse=reverse)
-        ds_diff["feature"] = self.diff_feature(
-            other, ds_filter.get("feature", ()), reverse=reverse
+        ds_diff["meta"] = DeltaDiff(self.diff_meta(other, reverse=reverse))
+        feature_filter = ds_filter.get("feature", ())
+        ds_diff["feature"] = DeltaDiff(
+            self.diff_feature(other, feature_filter, reverse=reverse)
         )
         return ds_diff
 
@@ -184,7 +184,7 @@ class RichBaseDataset(BaseDataset):
 
         meta_old = dict(old.meta_items()) if old else {}
         meta_new = dict(new.meta_items()) if new else {}
-        return DeltaDiff.diff_dicts(meta_old, meta_new)
+        yield from DeltaDiff.diff_dicts_as_deltas(meta_old, meta_new)
 
     _INSERT_UPDATE_DELETE = (
         pygit2.GIT_DELTA_ADDED,
@@ -199,7 +199,6 @@ class RichBaseDataset(BaseDataset):
         Generates a diff from self -> other, but only for features that match the feature_filter.
         If reverse is true, generates a diff from other -> self.
         """
-        result = DeltaDiff()
         feature_filter = feature_filter or UNFILTERED
 
         params = {}
@@ -231,81 +230,68 @@ class RichBaseDataset(BaseDataset):
             old, new = self, other
 
         for d in diff_index.deltas:
-            self.L.debug(
-                "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
-            )
-
             if d.old_file and not d.old_file.path.startswith(self.FEATURE_PATH):
                 continue
             elif d.new_file and not d.new_file.path.startswith(self.FEATURE_PATH):
                 continue
 
-            if d.status in self._INSERT_UPDATE_DELETE:
+            self.L.debug(
+                "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
+            )
 
-                if d.status in self._UPDATE_DELETE:
-                    old_path = d.old_file.path
-                    old_pk = old.decode_path_to_1pk(old_path)
-                else:
-                    old_pk = None
-
-                if d.status in self._INSERT_UPDATE:
-                    new_path = d.new_file.path
-                    new_pk = new.decode_path_to_1pk(d.new_file.path)
-                else:
-                    new_pk = None
-
-                if (
-                    str(old_pk) not in feature_filter
-                    and str(new_pk) not in feature_filter
-                ):
-                    continue
-
-                if d.status == pygit2.GIT_DELTA_ADDED:
-                    self.L.debug("diff(): insert %s (%s)", new_path, new_pk)
-                elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                    self.L.debug(
-                        "diff(): update %s %s -> %s %s",
-                        old_path,
-                        old_pk,
-                        new_path,
-                        new_pk,
-                    )
-                elif d.status == pygit2.GIT_DELTA_DELETED:
-                    self.L.debug("diff(): delete %s %s", old_path, old_pk)
-
-                if d.status in self._UPDATE_DELETE:
-                    old_feature_promise = functools.partial(
-                        old.get_feature,
-                        old_pk,
-                        path=old_path,
-                    )
-                    old_half_delta = old_pk, old_feature_promise
-                else:
-                    old_half_delta = None
-
-                if d.status in self._INSERT_UPDATE:
-                    new_feature_promise = functools.partial(
-                        new.get_feature,
-                        new_pk,
-                        path=new_path,
-                    )
-                    new_half_delta = new_pk, new_feature_promise
-                else:
-                    new_half_delta = None
-
-                result.add_delta(Delta(old_half_delta, new_half_delta))
-
-            else:
-                # GIT_DELTA_RENAMED
-                # GIT_DELTA_COPIED
-                # GIT_DELTA_IGNORED
-                # GIT_DELTA_TYPECHANGE
-                # GIT_DELTA_UNMODIFIED
-                # GIT_DELTA_UNREADABLE
-                # GIT_DELTA_UNTRACKED
+            if d.status not in self._INSERT_UPDATE_DELETE:
+                # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE, UNTRACKED
                 raise NotImplementedError(f"Delta status: {d.status_char()}")
 
-        return result
+            if d.status in self._UPDATE_DELETE:
+                old_path = d.old_file.path
+                old_pk = old.decode_path_to_1pk(old_path)
+            else:
+                old_pk = None
+
+            if d.status in self._INSERT_UPDATE:
+                new_path = d.new_file.path
+                new_pk = new.decode_path_to_1pk(d.new_file.path)
+            else:
+                new_pk = None
+
+            if str(old_pk) not in feature_filter and str(new_pk) not in feature_filter:
+                continue
+
+            if d.status == pygit2.GIT_DELTA_ADDED:
+                self.L.debug("diff(): insert %s (%s)", new_path, new_pk)
+            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+                self.L.debug(
+                    "diff(): update %s %s -> %s %s",
+                    old_path,
+                    old_pk,
+                    new_path,
+                    new_pk,
+                )
+            elif d.status == pygit2.GIT_DELTA_DELETED:
+                self.L.debug("diff(): delete %s %s", old_path, old_pk)
+
+            if d.status in self._UPDATE_DELETE:
+                old_feature_promise = functools.partial(
+                    old.get_feature,
+                    old_pk,
+                    path=old_path,
+                )
+                old_half_delta = old_pk, old_feature_promise
+            else:
+                old_half_delta = None
+
+            if d.status in self._INSERT_UPDATE:
+                new_feature_promise = functools.partial(
+                    new.get_feature,
+                    new_pk,
+                    path=new_path,
+                )
+                new_half_delta = new_pk, new_feature_promise
+            else:
+                new_half_delta = None
+
+            yield Delta(old_half_delta, new_half_delta)
 
     def apply_diff(self, dataset_diff, tree_builder, *, allow_missing_old_values=False):
         """

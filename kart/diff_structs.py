@@ -339,8 +339,7 @@ class DeltaDiff(Diff):
         return {f"{delta_type}s": value for delta_type, value in result.items()}
 
     @classmethod
-    def diff_dicts(cls, old, new):
-        result = DeltaDiff()
+    def diff_dicts_as_deltas(cls, old, new):
         for k in set(old) | set(new):
             old_value = old.get(k)
             new_value = new.get(k)
@@ -348,7 +347,13 @@ class DeltaDiff(Diff):
                 continue
             old_key_value = (k, old_value) if old_value is not None else None
             new_key_value = (k, new_value) if new_value is not None else None
-            result.add_delta(Delta(old_key_value, new_key_value))
+            yield Delta(old_key_value, new_key_value)
+
+    @classmethod
+    def diff_dicts(cls, old, new):
+        result = DeltaDiff()
+        for delta in cls.diff_dicts_as_deltas(old, new):
+            result.add_delta(delta)
         return result
 
 

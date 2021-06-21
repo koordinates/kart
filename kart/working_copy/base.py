@@ -1081,7 +1081,7 @@ class BaseWorkingCopy:
             # And, do we support then changing it from base_ds metadata to target_ds metadata?
             target_ds = target_datasets[table]
             if target_ds != base_ds:
-                rev_rev_meta_diff = base_ds.diff_meta(target_ds)
+                rev_rev_meta_diff = DeltaDiff(base_ds.diff_meta(target_ds))
                 update_supported = update_supported and self._is_meta_update_supported(
                     rev_rev_meta_diff
                 )
@@ -1165,7 +1165,9 @@ class BaseWorkingCopy:
         self._reset_dirty_rows(sess, base_ds)
 
         if target_ds != base_ds:
-            self._apply_meta_diff(sess, target_ds, base_ds.diff_meta(target_ds))
+            self._apply_meta_diff(
+                sess, target_ds, DeltaDiff(base_ds.diff_meta(target_ds))
+            )
             # WC now has target_ds structure and so we can write target_ds features to WC.
             self._apply_feature_diff(sess, base_ds, target_ds, track_changes_as_dirty)
 
