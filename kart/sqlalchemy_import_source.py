@@ -13,8 +13,9 @@ from .exceptions import (
     NO_TABLE,
 )
 from .import_source import ImportSource
-from .sqlalchemy import DbType, separate_last_path_part
 from .output_util import dump_json_output
+from .sqlalchemy import DbType, separate_last_path_part
+from .utils import ungenerator
 
 
 class SqlAlchemyImportSource(ImportSource):
@@ -197,9 +198,8 @@ class SqlAlchemyImportSource(ImportSource):
             return self.meta_overrides[name]
         elif name == "metadata.xml" and "xml_metadata" in self.meta_overrides:
             return self.meta_overrides["xml_metadata"]
-        return self.meta_items.get(name)
+        return self.meta_items().get(name)
 
-    @property
     @functools.lru_cache(maxsize=1)
     def meta_items(self):
         id_salt = f"{self.engine.url} {self.db_schema} {self.table}"
@@ -231,8 +231,10 @@ class SqlAlchemyImportSource(ImportSource):
             )
         assert self.schema.pk_columns[0].name == new_primary_key
 
+    @functools.lru_cache(maxsize=1)
+    @ungenerator(dict)
     def crs_definitions(self):
-        for key, value in self.meta_items.items():
+        for key, value in self.meta_items().items():
             if key.startswith("crs/") and key.endswith(".wkt"):
                 yield key[4:-4], value
 

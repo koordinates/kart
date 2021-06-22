@@ -9,7 +9,6 @@ from sqlalchemy.types import TEXT
 
 from kart import crs_util
 from kart.geometry import Geometry
-from kart.utils import ungenerator
 from kart.schema import Schema, ColumnSchema
 from kart.sqlalchemy.postgis import Db_Postgis
 from kart.sqlalchemy.adapter.base import (
@@ -17,6 +16,7 @@ from kart.sqlalchemy.adapter.base import (
     ConverterType,
     aliased_converter_type,
 )
+from kart.utils import ungenerator
 
 
 class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
@@ -114,6 +114,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         return f"GEOMETRY({geometry_type},{crs_id})"
 
     @classmethod
+    @ungenerator(dict)
     def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
         """
         Generate all V2 meta items for the given table.
@@ -297,7 +298,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         Each dict has the format {column-name: value}.
         """
         result = []
-        for crs_name, definition in v2_obj.crs_definitions():
+        for crs_name, definition in v2_obj.crs_definitions().items():
             spatial_ref = SpatialReference(definition)
             auth_name = spatial_ref.GetAuthorityName(None) or "NONE"
             crs_id = crs_util.get_identifier_int(spatial_ref)

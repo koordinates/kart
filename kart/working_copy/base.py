@@ -507,8 +507,8 @@ class BaseWorkingCopy:
         """
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         """
-        ds_meta_items = dict(self.adapter.remove_empty_values(dataset.meta_items()))
-        wc_meta_items = dict(self.meta_items(dataset))
+        ds_meta_items = self.adapter.remove_empty_values(dataset.meta_items())
+        wc_meta_items = self.meta_items(dataset)
         self._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
         result = DeltaDiff.diff_dicts(ds_meta_items, wc_meta_items)
         if raise_if_dirty and result:
@@ -607,7 +607,7 @@ class BaseWorkingCopy:
         id_salt = f"{self.engine.url} {self.db_schema} {dataset.table_name} {self.get_db_tree()}"
 
         with self.session() as sess:
-            yield from self.adapter.all_v2_meta_items(
+            return self.adapter.all_v2_meta_items(
                 sess, self.db_schema, dataset.table_name, id_salt=id_salt
             )
 

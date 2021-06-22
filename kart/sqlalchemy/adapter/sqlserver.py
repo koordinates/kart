@@ -15,6 +15,7 @@ from kart.sqlalchemy.adapter.base import (
     ConverterType,
     aliased_converter_type,
 )
+from kart.utils import ungenerator
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
@@ -173,6 +174,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         return sql_type
 
     @classmethod
+    @ungenerator(dict)
     def all_v2_meta_items_including_empty(
         cls, sess, db_schema, table_name, id_salt=None
     ):

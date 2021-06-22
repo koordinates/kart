@@ -380,7 +380,10 @@ def fast_import_tables(
         # remove the import branches
         for b in import_refs:
             if b in repo.references:
-                repo.references.delete(b)
+                try:
+                    repo.references.delete(b)
+                except KeyError:
+                    pass  # Nothing to delete, probably due to some earlier failure.
 
 
 def _import_single_source(

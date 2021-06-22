@@ -81,7 +81,7 @@ def meta_get(ctx, output_format, json_style, ref, dataset, keys):
         if keys:
             all_items[ds.path] = get_meta_items(ds, keys)
         else:
-            all_items[ds.path] = dict(ds.meta_items())
+            all_items[ds.path] = ds.meta_items()
 
     if output_format == "text":
         for ds_path, items in all_items.items():

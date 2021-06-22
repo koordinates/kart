@@ -20,6 +20,7 @@ from .serialise_util import (
     ensure_bytes,
     ensure_text,
 )
+from .utils import ungenerator
 
 
 def find_blobs_in_tree(tree, max_depth=4):
@@ -152,8 +153,9 @@ class Dataset3(RichBaseDataset):
         else:
             return ensure_text(data)
 
+    @ungenerator(dict)
     def crs_definitions(self):
-        """Yields (identifier, definition) for all CRS definitions in this dataset."""
+        """Returns {identifier: definition} dict for all CRS definitions in this dataset."""
         if not self.inner_tree or self.CRS_PATH not in self.inner_tree:
             return
         for blob in find_blobs_in_tree(self.inner_tree / self.CRS_PATH):
@@ -316,7 +318,7 @@ class Dataset3(RichBaseDataset):
         if path_encoder is not PathEncoder.LEGACY_ENCODER:
             meta_blobs.append(path_encoder.encode_path_structure_data(relative=True))
 
-        for path, definition in source.crs_definitions():
+        for path, definition in source.crs_definitions().items():
             meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))
 
         if hasattr(source, "encode_generated_pk_data"):

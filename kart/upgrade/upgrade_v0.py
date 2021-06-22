@@ -5,6 +5,7 @@ from kart.geometry import normalise_gpkg_geom
 from kart.base_dataset import BaseDataset
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
+from kart.utils import ungenerator
 
 
 class Dataset0(BaseDataset):
@@ -44,25 +45,22 @@ class Dataset0(BaseDataset):
 
                 yield dir2
 
-    @functools.lru_cache()
     def get_meta_item(self, name):
-        return self.meta_items.get(name)
+        return self.meta_items().get(name)
 
+    @functools.lru_cache(maxsize=1)
+    @ungenerator(dict)
     def crs_definitions(self):
-        for key, value in self.meta_items.items():
+        for key, value in self.meta_items().items():
             if key.startswith("crs/") and key.endswith(".wkt"):
                 yield key[4:-4], value
 
-    @property
     @functools.lru_cache(maxsize=1)
     def meta_items(self):
-        return dict(
-            KartAdapter_GPKG.all_v2_meta_items_from_gpkg_meta_items(
-                self.gpkg_meta_items
-            )
+        return KartAdapter_GPKG.all_v2_meta_items_from_gpkg_meta_items(
+            self.gpkg_meta_items()
         )
 
-    @property
     @functools.lru_cache(maxsize=1)
     def gpkg_meta_items(self):
         # For V0 / V1, all data is serialised using json.dumps

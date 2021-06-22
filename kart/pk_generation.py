@@ -1,3 +1,5 @@
+import functools
+
 import pygit2
 
 from .import_source import ImportSource
@@ -418,11 +420,12 @@ class PkGeneratingImportSource(ImportSource):
     def get_meta_item(self, name):
         return self.delegate.get_meta_item(name)
 
+    @functools.lru_cache(maxsize=1)
     def meta_items(self):
-        yield from self.delegate.meta_items()
+        return self.delegate.meta_items()
 
     def crs_definitions(self):
-        yield from self.delegate.crs_definitions()
+        return self.delegate.crs_definitions()
 
     def get_crs_definition(self, identifier=None):
         return self.delegate.get_crs_definition(identifier)

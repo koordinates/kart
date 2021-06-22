@@ -119,7 +119,7 @@ class BaseKartAdapter:
     @classmethod
     def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
         """
-        Generate all V2 meta items for the specified table, yielded as key-value pairs.
+        Returns a dict all V2 meta items for the specified table.
         Guaranteed to at least generate the table's V2 schema with key "schema.json", if the table exists at all.
         Possibly returns any or all of the title, description, xml metadata, and attached CRS definitions.
         Varying the id_salt varies the column ids that are generated for the schema.json item -
@@ -137,25 +137,19 @@ class BaseKartAdapter:
         )
 
     @classmethod
-    def remove_empty_values(cls, meta_item_generator):
+    def remove_empty_values(cls, meta_items):
         """
-        Given a generator of V2 meta item key-value pairs, remove empty ones which contain no data.
-        This normalises three different ways of showing no data - either key omitted, (key, None), or (key, "") -
+        Given a dict of V2 meta item key-value pairs, remove empty ones which contain no data.
+        This normalises three different ways of showing no data - either key omitted, {key: None}, or {key: ""} -
         into the first way: key ommitted.
         """
-        for key, value in meta_item_generator:
+        result = {}
+        for key, value in meta_items.items():
             # Don't skip over CRS entries even if they are empty - the name of the CRS could be informative,
             # even if we can't find the definition.
             if key.startswith("crs/") or value:
-                yield key, value
-
-    def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
-        """
-        Same as all_v2_meta_items but for ease of implementation, has a few options for empty values -
-        can omit them, or yield (key, None), or yield (key, "") - all are eqivalent, and these are normalised
-        by being ommitted by all_v2_meta_items.
-        """
-        raise NotImplementedError()
+                result[key] = value
+        return result
 
     @classmethod
     def table_def_for_schema(cls, schema, table_name, db_schema=None, dataset=None):

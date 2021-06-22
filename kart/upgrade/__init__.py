@@ -279,7 +279,10 @@ def _upgrade_commit(
         dest_commit = dest_repo.references.get(upgrade_ref).target
     finally:
         # delete the extra branch ref we just created; we don't need/want it
-        dest_repo.references.delete(upgrade_ref)
+        try:
+            dest_repo.references.delete(upgrade_ref)
+        except KeyError:
+            pass  # Nothing to delete, probably due to some earlier failure.
 
     commit_map[source_commit.hex] = dest_commit.hex
 

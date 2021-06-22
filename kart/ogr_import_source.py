@@ -420,6 +420,8 @@ class OgrImportSource(ImportSource):
             return self.get_crs_definition(name)
         raise KeyError(f"No meta item found with name: {name}")
 
+    @functools.lru_cache(maxsize=1)
+    @ungenerator(dict)
     def crs_definitions(self):
         ld = self.layer_defn
         for i in range(ld.GetGeomFieldCount()):
@@ -545,7 +547,7 @@ class OgrImportSource(ImportSource):
         extra_type_info = {"geometryType": v2_geom_type}
 
         # TODO: Support tables with different CRSs in different columns.
-        crs_definitions = list(self.crs_definitions())
+        crs_definitions = list(self.crs_definitions().items())
         if crs_definitions:
             extra_type_info["geometryCRS"] = crs_definitions[0][0]
 

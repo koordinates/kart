@@ -16,6 +16,7 @@ from kart.sqlalchemy.adapter.base import (
     ConverterType,
     aliased_converter_type,
 )
+from kart.utils import ungenerator
 
 
 class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
@@ -141,6 +142,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         return mysql_type
 
     @classmethod
+    @ungenerator(dict)
     def all_v2_meta_items_including_empty(
         cls, sess, db_schema, table_name, id_salt=None
     ):
@@ -279,7 +281,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
         Each dict has the format {column-name: value}.
         """
         result = []
-        for crs_name, definition in v2_obj.crs_definitions():
+        for crs_name, definition in v2_obj.crs_definitions().items():
             auth_name, auth_code = crs_util.parse_authority(definition)
             crs_id = crs_util.get_identifier_int(definition)
             result.append(

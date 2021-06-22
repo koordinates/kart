@@ -12,6 +12,7 @@ from kart.sqlalchemy.adapter.base import (
     aliased_converter_type,
 )
 from kart.timestamps import datetime_to_iso8601_utc
+from kart.utils import ungenerator
 
 
 class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
@@ -161,10 +162,11 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         """
         assert not db_schema
 
-        gpkg_meta_items = dict(cls._gpkg_meta_items_from_db(sess, table_name))
-        yield from cls.all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt)
+        gpkg_meta_items = cls._gpkg_meta_items_from_db(sess, table_name)
+        return cls.all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt)
 
     @classmethod
+    @ungenerator(dict)
     def all_v2_meta_items_from_gpkg_meta_items(cls, gpkg_meta_items, id_salt=None):
         """
         Generate all the V2 meta items from the given gpkg_meta_items lists / dicts -
@@ -515,6 +517,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         """
 
     @classmethod
+    @ungenerator(dict)
     def _gpkg_meta_items_from_db(cls, sess, table_name, keys=None):
         """
         Returns metadata from the gpkg_* tables about this GPKG.

@@ -1,9 +1,10 @@
 import click
 
+from .exceptions import NotFound, NO_TABLE
 from .meta_items import META_ITEM_NAMES
 from .output_util import get_input_mode, InputMode
 from .schema import Schema
-from .exceptions import NotFound, NO_TABLE
+from .utils import ungenerator
 
 
 class ImportSource:
@@ -87,19 +88,20 @@ class ImportSource:
         """Find or generate a V2 meta item."""
         raise NotImplementedError()
 
+    @ungenerator(dict)
     def meta_items(self):
-        """Iterates over all the meta items that need to be imported."""
+        """Retuns a dict of all the meta items that need to be imported. See META_ITEM_NAMES."""
         for name in META_ITEM_NAMES:
             meta_item = self.get_meta_item(name)
             if meta_item is not None:
                 yield name, meta_item
 
-        for identifier, definition in self.crs_definitions():
+        for identifier, definition in self.crs_definitions().items():
             yield f"crs/{identifier}.wkt", definition
 
     def crs_definitions(self):
         """
-        Yields a (identifier, definition) tuple for every CRS definition.
+        Returns an {identifier: definition} dict containing every CRS definition.
         The identifier should be a string that uniquely identifies the CRS eg "EPSG:4326"
         The definition should be a string containing a WKT definition eg 'GEOGCS["WGS 84"...'
         """
@@ -113,7 +115,7 @@ class ImportSource:
         # Subclasses may overrdie this to make it more efficient.
         if not self.has_geometry:
             return None
-        crs_definitions_dict = dict(self.crs_definitions())
+        crs_definitions_dict = self.crs_definitions()
         if identifier is not None:
             if identifier.startswith("crs/") and identifier.endswith(".wkt"):
                 identifier = identifier[4:-4]
