@@ -645,6 +645,15 @@ def diff_output_json_lines(
         return result
 
     def _out(dataset, ds_diff):
+        # Output the schema if it is not in the diff, so that clients understand the feature diffs.
+        if "schema.json" not in ds_diff.get("meta", {}):
+            non_diff_schema_json = {
+                "type": "metaInfo",
+                "dataset": dataset.path,
+                "key": "schema.json",
+                "value": dataset.schema.to_column_dicts(),
+            }
+            dump_function(non_diff_schema_json, output_path, json_style=json_style)
         if "meta" in ds_diff:
             meta_json = {
                 "type": "meta",
