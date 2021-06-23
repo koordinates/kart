@@ -4,7 +4,7 @@ import logging
 from . import crs_util
 from .import_source import ImportSource
 from . import meta_items
-from .serialise_util import json_unpack
+from .serialise_util import json_unpack, ensure_text
 from .utils import ungenerator
 
 
@@ -68,7 +68,7 @@ class BaseDataset(ImportSource):
     @classmethod
     def new_dataset_for_writing(cls, path, schema, repo=None):
         result = cls(None, path, repo=repo)
-        result._original_schema = schema
+        result._schema = schema
         return result
 
     def __repr__(self):
@@ -115,6 +115,12 @@ class BaseDataset(ImportSource):
             )
         except KeyError:
             return self.repo.empty_tree if self.repo else None
+
+    @property
+    def schema(self):
+        if not hasattr(self, "_schema"):
+            self._schema = super().schema
+        return self._schema
 
     def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False, tree=None):
         """
@@ -224,7 +230,7 @@ class BaseDataset(ImportSource):
             yield f"crs/{identifier}.wkt", definition
 
         if not only_standard_items:
-            yield from self.extra_meta_items()
+            yield from self.extra_meta_items().items()
 
     @functools.lru_cache()
     @ungenerator(dict)
@@ -303,11 +309,6 @@ class BaseDataset(ImportSource):
         redundant work. Similarly, if the caller knows data, they can supply that too to avoid redundant work.
         """
         raise NotImplementedError()
-
-    def align_schema_to_existing_schema(self, existing_schema):
-        raise RuntimeError(
-            "Dataset object is immutable, aligning schema is not supported"
-        )
 
 
 class IntegrityError(ValueError):

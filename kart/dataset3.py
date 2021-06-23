@@ -86,6 +86,7 @@ class Dataset3(RichBaseDataset):
 
     CRS_PATH = META_PATH + "crs/"
 
+    PATH_STRUCTURE_PATH = META_PATH + "path-structure.json"
     CAPABILITIES_PATH = META_PATH + "capabilities.json"
 
     # Attachments
@@ -300,27 +301,20 @@ class Dataset3(RichBaseDataset):
         return self.encode_pks_to_path((pk_value,), relative=relative)
 
     def import_iter_meta_blobs(self, repo, source):
-        schema = source.schema
-        yield self.encode_schema(schema)
-        yield self.encode_legend(schema.legend)
+        # The source schema is a meta item.
+        # The legend of said schema is not a meta item, but must also be written.
+        yield self.encode_legend(source.schema.legend)
 
-        meta_blobs = [
-            (self.TITLE_PATH, source.get_meta_item("title")),
-            (self.DESCRIPTION_PATH, source.get_meta_item("description")),
-            (self.METADATA_XML, source.get_meta_item("metadata.xml")),
-        ]
+        # This can include non-standard meta-items, like generated-pks.json
+        meta_items = source.meta_items()
 
+        # The path encoder is not a meta-item of the source, since it is only a property
+        # of how we are importing the data into this dataset. But it must also be written.
         path_encoder = self.feature_path_encoder
         if path_encoder is not PathEncoder.LEGACY_ENCODER:
-            meta_blobs.append(path_encoder.encode_path_structure_data(relative=True))
+            meta_items["path-structure.json"] = path_encoder.to_dict()
 
-        for path, definition in source.crs_definitions().items():
-            meta_blobs.append((f"{self.CRS_PATH}{path}.wkt", definition))
-
-        if hasattr(source, "encode_generated_pk_data"):
-            meta_blobs.append(source.encode_generated_pk_data(relative=True))
-
-        for rel_path, content in meta_blobs:
+        for rel_path, content in meta_items.items():
             if content is None:
                 continue
             if not isinstance(content, bytes):
@@ -329,11 +323,13 @@ class Dataset3(RichBaseDataset):
                 else:
                     content = ensure_bytes(content)
 
-            full_path = (
-                self.full_attachment_path(rel_path)
-                if rel_path in ATTACHMENT_META_ITEMS
-                else self.full_path(rel_path)
-            )
+            if rel_path in ATTACHMENT_META_ITEMS:
+                full_path = self.full_attachment_path(rel_path)
+            else:
+                if not rel_path.startswith(self.META_PATH):
+                    rel_path = self.META_PATH + rel_path
+                full_path = self.full_path(rel_path)
+
             yield full_path, content
 
     def iter_legend_blob_data(self):

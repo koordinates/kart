@@ -608,7 +608,11 @@ class BaseWorkingCopy:
 
         with self.session() as sess:
             return self.adapter.all_v2_meta_items(
-                sess, self.db_schema, dataset.table_name, id_salt=id_salt
+                sess,
+                self.db_schema,
+                dataset.table_name,
+                id_salt=id_salt,
+                include_legacy_items=True,
             )
 
     def diff_db_to_tree_feature(

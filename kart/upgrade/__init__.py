@@ -38,9 +38,13 @@ class XmlUpgradingDataset2(Dataset2):
     """Variant of Dataset2 that extracts the metadata.xml out of dataset/metadata.json."""
 
     def get_meta_item(self, name, missing_ok=True):
+        if name == "metadata/dataset.json":
+            return None
+
         result = super().get_meta_item(name, missing_ok=missing_ok)
+
         if result is None and name == "metadata.xml":
-            metadata_json = self.get_meta_item("metadata/dataset.json")
+            metadata_json = super().get_meta_item("metadata/dataset.json")
             if metadata_json:
                 metadata_xml = [
                     m for m in metadata_json.values() if "text/xml" in m.keys()

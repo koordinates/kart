@@ -79,7 +79,6 @@ class PathEncoder:
     """
 
     PATH_STRUCTURE_ITEM = "path-structure.json"
-    PATH_STRUCTURE_PATH = "meta/" + PATH_STRUCTURE_ITEM
 
     @staticmethod
     def get(*, scheme, **kwargs):
@@ -104,10 +103,6 @@ class PathEncoder:
 
     def encode_filename(self, pk_values):
         return self._encode_file_name_from_packed_pk(msg_pack(pk_values))
-
-    def encode_path_structure_data(self, relative):
-        assert relative is True
-        return self.PATH_STRUCTURE_PATH, self.to_dict()
 
     def to_dict(self):
         return {

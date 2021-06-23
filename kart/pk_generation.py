@@ -1,12 +1,8 @@
-import functools
-
 import pygit2
 
 from .import_source import ImportSource
 from .dataset2 import Dataset2
 from .dataset2 import Dataset3
-from .exceptions import NotYetImplemented
-from .serialise_util import json_pack
 from .schema import ColumnSchema, Schema
 
 
@@ -99,6 +95,8 @@ class PkGeneratingImportSource(ImportSource):
         self.similarity_detection_limit = similarity_detection_limit
 
         self.load_data_from_repo()
+        overridden_schema = [self.pk_col] + self.delegate.schema.to_column_dicts()
+        self.delegate.meta_overrides["schema.json"] = overridden_schema
 
     def load_data_from_repo(self):
         self.repo.ensure_supported_version()
@@ -185,16 +183,11 @@ class PkGeneratingImportSource(ImportSource):
         except KeyError:
             return None
 
-    def encode_generated_pk_data(self, relative=False):
-        if not relative:
-            raise NotYetImplemented("Only relative paths are supported here")
-
-        path = self.GENERATED_PKS_PATH
-        data = {
+    def to_dict(self):
+        return {
             "primaryKeySchema": self.pk_col,
             "generatedPrimaryKeys": self.pk_to_hash,
         }
-        return path, json_pack(data)
 
     def _invert_pk_map(self, pk_to_hash):
         result = {}
@@ -202,10 +195,6 @@ class PkGeneratingImportSource(ImportSource):
             result.setdefault(h, [])
             result[h].append(pk)
         return result
-
-    def _init_schema(self):
-        cols = self.delegate.schema.to_column_dicts()
-        return Schema.from_column_dicts([self.pk_col] + cols)
 
     def _is_schema_similar_to_last_import(self):
         if not self.prev_dest_schema:
@@ -417,12 +406,14 @@ class PkGeneratingImportSource(ImportSource):
     def dest_path(self, dest_path):
         self.delegate.dest_path = dest_path
 
-    def get_meta_item(self, name):
-        return self.delegate.get_meta_item(name)
-
-    @functools.lru_cache(maxsize=1)
     def meta_items(self):
-        return self.delegate.meta_items()
+        return {
+            **self.delegate.meta_items(),
+            self.GENERATED_PKS_ITEM: self.to_dict(),
+        }
+
+    def align_schema_to_existing_schema(self, existing_schema):
+        return self.delegate.align_schema_to_existing_schema(existing_schema)
 
     def crs_definitions(self):
         return self.delegate.crs_definitions()

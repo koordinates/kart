@@ -133,21 +133,9 @@ class ImportSource:
     @property
     def schema(self):
         """
-        An ImportSource has an alignable schema - although the ImportSource has the reponsibility to load the schema
-        from the import-source that it represents (in _init_schema), the importer has the option to modify it by
-        calling align_schema_to_existing_schema, so that the column IDs match with a pre-existing schema.
-        """
-        if hasattr(self, "_modified_schema"):
-            return self._modified_schema
-        elif hasattr(self, "_original_schema"):
-            return self._original_schema
-        self._original_schema = self._init_schema()
-        return self._original_schema
-
-    def _init_schema(self):
-        """
-        Default implementation - simply loads the schema.json meta item into a Schema object.
-        Subclasses can override if they choose to instantiate a schema directly.
+        The ImportSource implemenation must return the schema as a meta-item called "schema.json", so this accessor
+        simply delegates to that. Calling self.align_schema_to_existing_schema(...) should modify the schema returned by
+        self.meta_items()
         """
         return Schema.from_column_dicts(self.get_meta_item("schema.json"))
 
@@ -155,9 +143,9 @@ class ImportSource:
         """
         Aligning the schema with an existing schema means that the pre-existing colunms will keep the same ID
         that they had last time. Failing to align the schema would mean that some features would be re-encoded
-        even if they hadn't actually changed.
+        even if they hadn't actually changed. This should update the schema.json meta-item of this import source.
         """
-        self._modified_schema = existing_schema.align_to_self(self.schema)
+        raise NotImplementedError()
 
     @property
     def has_geometry(self):

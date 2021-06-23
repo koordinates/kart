@@ -155,19 +155,26 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         )
 
     @classmethod
-    def all_v2_meta_items_including_empty(cls, sess, db_schema, table_name, id_salt):
+    def all_v2_meta_items_including_empty(
+        cls, sess, db_schema, table_name, id_salt, include_legacy_items=False
+    ):
         """
         Generate all V2 meta items for the given table.
         Varying the id_salt varies the ids that are generated for the schema.json item.
         """
         assert not db_schema
+        include_metadata_json = include_legacy_items
 
         gpkg_meta_items = cls._gpkg_meta_items_from_db(sess, table_name)
-        return cls.all_v2_meta_items_from_gpkg_meta_items(gpkg_meta_items, id_salt)
+        return cls.all_v2_meta_items_from_gpkg_meta_items(
+            gpkg_meta_items, id_salt, include_metadata_json
+        )
 
     @classmethod
     @ungenerator(dict)
-    def all_v2_meta_items_from_gpkg_meta_items(cls, gpkg_meta_items, id_salt=None):
+    def all_v2_meta_items_from_gpkg_meta_items(
+        cls, gpkg_meta_items, id_salt=None, include_metadata_json=False
+    ):
         """
         Generate all the V2 meta items from the given gpkg_meta_items lists / dicts -
         either loaded from JSON, or generated directly from the database.
@@ -185,7 +192,8 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         schema = cls._gpkg_to_v2_schema(gpkg_meta_items, id_salt)
         yield "schema.json", schema.to_column_dicts() if schema else None
 
-        yield "metadata/dataset.json", cls.gpkg_to_json_metadata(gpkg_meta_items)
+        if include_metadata_json:
+            yield "metadata/dataset.json", cls.gpkg_to_json_metadata(gpkg_meta_items)
         yield "metadata.xml", cls.gpkg_to_xml_metadata(gpkg_meta_items)
 
         gpkg_spatial_ref_sys = gpkg_meta_items.get("gpkg_spatial_ref_sys")

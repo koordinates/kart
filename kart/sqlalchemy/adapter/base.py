@@ -117,7 +117,9 @@ class BaseKartAdapter:
             return v2_type, {}
 
     @classmethod
-    def all_v2_meta_items(cls, sess, db_schema, table_name, id_salt):
+    def all_v2_meta_items(
+        cls, sess, db_schema, table_name, id_salt, include_legacy_items=False
+    ):
         """
         Returns a dict all V2 meta items for the specified table.
         Guaranteed to at least generate the table's V2 schema with key "schema.json", if the table exists at all.
@@ -133,7 +135,13 @@ class BaseKartAdapter:
         """
 
         return cls.remove_empty_values(
-            cls.all_v2_meta_items_including_empty(sess, db_schema, table_name, id_salt)
+            cls.all_v2_meta_items_including_empty(
+                sess,
+                db_schema,
+                table_name,
+                id_salt,
+                include_legacy_items=include_legacy_items,
+            )
         )
 
     @classmethod

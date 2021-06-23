@@ -204,11 +204,14 @@ class SqlAlchemyImportSource(ImportSource):
         id_salt = f"{self.engine.url} {self.db_schema} {self.table}"
 
         with sessionmaker(bind=self.engine)() as sess:
-            return dict(
-                self.db_type.adapter.all_v2_meta_items(
-                    sess, self.db_schema, self.table, id_salt
-                )
+            return self.db_type.adapter.all_v2_meta_items(
+                sess, self.db_schema, self.table, id_salt
             )
+
+    def align_schema_to_existing_schema(self, existing_schema):
+        aligned_schema = existing_schema.align_to_self(self.schema)
+        self.meta_overrides["schema.json"] = aligned_schema.to_column_dicts()
+        assert self.schema == aligned_schema
 
     def override_primary_key(self, new_primary_key):
         """Modify the schema such that the given column is the primary key."""
@@ -220,7 +223,6 @@ class SqlAlchemyImportSource(ImportSource):
         old_schema = self.get_meta_item("schema.json")
         new_schema = [_modify_col(c) for c in old_schema]
         self.meta_overrides["schema.json"] = new_schema
-        self._modified_schema = Schema.from_column_dicts(new_schema)
 
         if not self.schema.pk_columns:
             raise click.UsageError(
@@ -251,8 +253,10 @@ class SqlAlchemyImportSource(ImportSource):
             return conn.scalar(f"SELECT COUNT(*) FROM {self.table_identifier};")
 
     def features(self):
+        # Make sure to use the raw schema from the db - self.schema can be modified.
+        schema = Schema.from_column_dicts(self.meta_items_from_db().get("schema.json"))
         table_def = self.db_type.adapter.table_def_for_schema(
-            self.schema, db_schema=self.db_schema, table_name=self.table
+            schema, db_schema=self.db_schema, table_name=self.table
         )
         query = sqlalchemy.select(table_def.columns).select_from(table_def)
         with self.engine.connect() as conn:

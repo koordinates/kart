@@ -144,7 +144,7 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     @classmethod
     @ungenerator(dict)
     def all_v2_meta_items_including_empty(
-        cls, sess, db_schema, table_name, id_salt=None
+        cls, sess, db_schema, table_name, id_salt=None, include_legacy_items=False
     ):
         title = sess.scalar(
             """

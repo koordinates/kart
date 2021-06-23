@@ -399,6 +399,11 @@ class OgrImportSource(ImportSource):
                 return ogr_to_gpkg_geom(geom)
         return None
 
+    def align_schema_to_existing_schema(self, existing_schema):
+        aligned_schema = existing_schema.align_to_self(self.schema)
+        self.meta_overrides["schema.json"] = aligned_schema.to_column_dicts()
+        assert self.schema == aligned_schema
+
     def meta_items(self):
         return {**self.meta_items_from_db(), **self.meta_overrides}
 
@@ -408,7 +413,7 @@ class OgrImportSource(ImportSource):
         ogr_metadata = self.ogrlayer.GetMetadata()
         yield "title", ogr_metadata.get("IDENTIFIER")
         yield "description", ogr_metadata.get("DESCRIPTION")
-        yield "schema.json", self.schema.to_column_dicts()
+        yield "schema.json", self._schema_from_db().to_column_dicts()
 
         for identifier, definition in self.crs_definitions().items():
             yield f"crs/{identifier}.wkt", definition
@@ -572,7 +577,7 @@ class OgrImportSource(ImportSource):
 
         return f"{v2_type} {z}{m}".strip()
 
-    def _init_schema(self):
+    def _schema_from_db(self):
         pk_col = self.pk_column_schema
         pk_cols = [pk_col] if pk_col else []
         columns = pk_cols + self.geometry_columns_schema + self.regular_columns_schema

@@ -763,13 +763,14 @@ def test_import_no_pk_performance(data_archive_readonly, benchmark):
     with data_archive_readonly("points") as repo_path:
         repo = KartRepo(repo_path)
         dataset = repo.datasets()["nz_pa_points_topo_150k"]
+        dataset.meta_overrides = {}
+
         features = list(dataset.features())
         assert len(features) == 2143
         old_features = features[0:1000]
         new_features = features[1000:2143]
 
         pkis = PkGeneratingImportSource(dataset, repo)
-        pkis._original_schema = dataset.schema
         pkis.prev_dest_schema = dataset.schema
         pkis.primary_key = dataset.primary_key
 

@@ -176,7 +176,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     @classmethod
     @ungenerator(dict)
     def all_v2_meta_items_including_empty(
-        cls, sess, db_schema, table_name, id_salt=None
+        cls, sess, db_schema, table_name, id_salt=None, include_legacy_items=False
     ):
         """
         Generate all V2 meta items for the given table.
