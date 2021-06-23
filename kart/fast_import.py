@@ -42,7 +42,7 @@ class _CommitMissing(Exception):
     pass
 
 
-def _safe_walk_repo(repo):
+def _safe_walk_repo(repo, from_commit):
     """
     Contextmanager. Walk the repo log, yielding each commit.
     If a commit isn't present, raises _CommitMissing.
@@ -50,7 +50,7 @@ def _safe_walk_repo(repo):
     """
     do_raise = False
     try:
-        for commit in repo.walk(repo.head.target):
+        for commit in repo.walk(from_commit.id):
             try:
                 yield commit
             except KeyError:
@@ -65,7 +65,10 @@ def _safe_walk_repo(repo):
 
 
 def should_compare_imported_features_against_old_features(
-    repo, source, replacing_dataset
+    repo,
+    source,
+    replacing_dataset,
+    from_commit,
 ):
     """
     Returns True iff we should compare feature blobs to the previous feature blobs
@@ -91,7 +94,7 @@ def should_compare_imported_features_against_old_features(
 
     # Walk the log until we encounter a relevant schema change
     try:
-        for commit in _safe_walk_repo(repo):
+        for commit in _safe_walk_repo(repo, from_commit):
             datasets = repo.datasets(commit.oid)
             try:
                 old_dataset = datasets[replacing_dataset.path]
@@ -149,14 +152,22 @@ def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
     if replacing_dataset is None:
         # nothing to do
         return
-    dest_inner_path = f"{source.dest_path}/{replacing_dataset.DATASET_DIRNAME}"
+    dest_path = source.dest_path
+    dest_inner_path = f"{dest_path}/{replacing_dataset.DATASET_DIRNAME}"
     for i, proc in enumerate(procs):
         if replace_ids is None:
             # Delete the existing dataset, before we re-import it.
             proc.stdin.write(f"D {source.dest_path}\n".encode("utf8"))
         else:
-            # delete and reimport meta/
+            # Delete and reimport any attachments at dest_path
+            attachment_names = [
+                obj.name for obj in replacing_dataset.tree if obj.type_str == "blob"
+            ]
+            for name in attachment_names:
+                proc.stdin.write(f"D {dest_path}/{name}\n".encode("utf8"))
+            # Delete and reimport <inner_path>/meta/
             proc.stdin.write(f"D {dest_inner_path}/meta\n".encode("utf8"))
+
             # delete all features not pertaining to this process.
             # we also delete the features that *do*, but we do it further down
             # so that we don't have to iterate the IDs more than once.
@@ -174,20 +185,25 @@ def fast_import_clear_trees(*, procs, replace_ids, replacing_dataset, source):
             pass
 
 
+UNSPECIFIED = object()
+
+
 def fast_import_tables(
     repo,
     sources,
     *,
     verbosity=1,
     num_processes=4,
-    header=None,
     message=None,
     replace_existing=ReplaceExisting.DONT_REPLACE,
+    from_commit=UNSPECIFIED,
     replace_ids=None,
     allow_empty=False,
     limit=None,
     max_pack_size="2G",
     max_delta_depth=0,
+    # Advanced use - used by kart upgrade.
+    header=None,
     extra_cmd_args=(),
 ):
     """
@@ -200,13 +216,16 @@ def fast_import_tables(
         1: basic status information
         2: full output of `git-fast-import --stats ...`
     num_processes: how many import processes to run in parallel
-    header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
     message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
     replace_existing - See ReplaceExisting enum
+    from_commit - the commit to be used as a starting point before beginning the import.
     replace_ids - list of PK values to replace, or None
     limit - maximum number of features to import per source.
     max_pack_size - maximum size of pack files. Affects performance.
     max_delta_depth - maximum depth of delta-compression chains. Affects performance.
+
+    The following extra options are used by kart upgrade.
+    header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
     extra_cmd_args - any extra args for the git-fast-import command.
     """
 
@@ -220,28 +239,26 @@ def fast_import_tables(
         # too many processes it won't be very even.
         raise ValueError(f"Can't import with more than {MAX_PROCESSES} processes")
 
-    # The tree this repo was at before this function was called.
-    # May be None (repo is empty)
-    orig_tree = repo.head_tree
-
-    # The tree we look at for considering what datasets already exist
-    # depends what we want to replace.
-    if replace_existing == ReplaceExisting.ALL:
-        starting_tree = None
+    # The commit that this import is using as the basis for the new commit.
+    # If we are replacing everything, we start from scratch, so from_commit is None.
+    if replace_existing is ReplaceExisting.ALL:
+        from_commit = None
     else:
-        starting_tree = repo.head_tree
+        if from_commit is UNSPECIFIED:
+            raise RuntimeError(
+                "Caller should specify from_commit when requesting an import that doesn't start from scratch"
+            )
 
-    if not starting_tree:
-        replace_existing = ReplaceExisting.ALL
+    from_tree = from_commit.peel(pygit2.Tree) if from_commit else repo.empty_tree
 
     assert repo.version in SUPPORTED_REPO_VERSIONS
-    extra_blobs = extra_blobs_for_version(repo.version) if not starting_tree else []
+    extra_blobs = extra_blobs_for_version(repo.version) if not from_commit else []
 
     ImportSource.check_valid(sources)
 
     if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:
-            if source.dest_path in starting_tree:
+            if source.dest_path in from_tree:
                 raise InvalidOperation(
                     f"Cannot import to {source.dest_path}/ - already exists in repository"
                 )
@@ -260,7 +277,6 @@ def fast_import_tables(
     for arg in extra_cmd_args:
         cmd.append(arg)
 
-    orig_commit = repo.head_commit
     import_refs = []
 
     if verbosity >= 1:
@@ -291,11 +307,13 @@ def fast_import_tables(
                     import_ref = f"refs/kart-import/{uuid.uuid4()}"
                     import_refs.append(import_ref)
 
-                    # may be None, if head is detached
+                    # orig_branch may be None, if head is detached
+                    # FIXME - this code relies upon the fact that we always either a) import at HEAD (import flow)
+                    # or b) Fix up the branch heads later (upgrade flow).
                     orig_branch = repo.head_branch
-                    proc_header = generate_header(repo, sources, message, import_ref)
-                    if replace_existing != ReplaceExisting.ALL:
-                        proc_header += f"from {orig_commit.oid}\n"
+                    proc_header = generate_header(
+                        repo, sources, message, import_ref, from_commit
+                    )
 
                 proc = stack.enter_context(_git_fast_import(repo, *cmd))
                 procs.append(proc)
@@ -303,10 +321,7 @@ def fast_import_tables(
 
             # Write the extra blob that records the repo's version:
             for i, blob_path in write_blobs_to_stream(procs[0].stdin, extra_blobs):
-                if (
-                    replace_existing != ReplaceExisting.ALL
-                    and blob_path in starting_tree
-                ):
+                if replace_existing != ReplaceExisting.ALL and blob_path in from_tree:
                     raise ValueError(f"{blob_path} already exists")
 
             if num_processes == 1:
@@ -326,6 +341,7 @@ def fast_import_tables(
                     repo,
                     source,
                     replace_existing,
+                    from_commit,
                     procs,
                     proc_for_feature_path,
                     replace_ids,
@@ -363,7 +379,7 @@ def fast_import_tables(
             else:
                 new_tree = trees[0]
             if not allow_empty:
-                if new_tree == orig_tree:
+                if new_tree == from_tree:
                     raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
             # use the existing commit details we already imported, but use the new tree
@@ -380,16 +396,14 @@ def fast_import_tables(
         # remove the import branches
         for b in import_refs:
             if b in repo.references:
-                try:
-                    repo.references.delete(b)
-                except KeyError:
-                    pass  # Nothing to delete, probably due to some earlier failure.
+                repo.references.delete(b)
 
 
 def _import_single_source(
     repo,
     source,
     replace_existing,
+    from_commit,
     procs,
     proc_for_feature_path,
     replace_ids,
@@ -400,6 +414,7 @@ def _import_single_source(
     repo - the Kart repo to import into.
     source - an individual ImportSource
     replace_existing - See ReplaceExisting enum
+    from_commit - the commit to be used as a starting point before beginning the import.
     procs - all the processes to be used (for parallel imports)
     proc_for_feature_path - function, given a feature path returns the process to use to import it
     replace_ids - list of PK values to replace, or None
@@ -412,7 +427,7 @@ def _import_single_source(
     replacing_dataset = None
     if replace_existing == ReplaceExisting.GIVEN:
         try:
-            replacing_dataset = repo.datasets()[source.dest_path]
+            replacing_dataset = repo.datasets(refish=from_commit)[source.dest_path]
         except KeyError:
             # no such dataset; no problem
             replacing_dataset = None
@@ -478,7 +493,10 @@ def _import_single_source(
             )
 
         elif should_compare_imported_features_against_old_features(
-            repo, source, replacing_dataset
+            repo,
+            source,
+            replacing_dataset,
+            from_commit,
         ):
             feature_blob_iter = dataset.import_iter_feature_blobs(
                 repo,
@@ -536,18 +554,21 @@ def copy_existing_blob_to_stream(stream, blob_path, blob_sha):
     stream.write(f"M 644 {blob_sha} {blob_path}\n".encode("utf8"))
 
 
-def generate_header(repo, sources, message, branch):
+def generate_header(repo, sources, message, branch, from_commit):
     if message is None:
         message = generate_message(sources)
 
     author = repo.author_signature()
     committer = repo.committer_signature()
-    return (
+    result = (
         f"commit {branch}\n"
         f"author {author.name} <{author.email}> {author.time} {minutes_to_tz_offset(author.offset)}\n"
         f"committer {committer.name} <{committer.email}> {committer.time} {minutes_to_tz_offset(committer.offset)}\n"
         f"data {len(message.encode('utf8'))}\n{message}\n"
     )
+    if from_commit:
+        result += f"from {from_commit.oid}\n"
+    return result
 
 
 def generate_message(sources):

@@ -1120,7 +1120,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
                 data / "nz-pa-points-topo-150k.gpkg", table=table
             )
 
-            fast_import.fast_import_tables(repo, [source])
+            fast_import.fast_import_tables(repo, [source], from_commit=None)
 
             assert not repo.is_empty
             assert repo.head.name == "refs/heads/main"

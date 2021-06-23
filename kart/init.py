@@ -326,15 +326,17 @@ def import_(
         import_sources.append(import_source)
 
     ImportSource.check_valid(import_sources, param_hint="tables")
+    replace_existing_enum = (
+        ReplaceExisting.GIVEN if replace_existing else ReplaceExisting.DONT_REPLACE
+    )
     fast_import_tables(
         repo,
         import_sources,
         verbosity=ctx.obj.verbosity + 1,
         message=message,
         max_delta_depth=max_delta_depth,
-        replace_existing=ReplaceExisting.GIVEN
-        if replace_existing
-        else ReplaceExisting.DONT_REPLACE,
+        replace_existing=replace_existing_enum,
+        from_commit=repo.head_commit,
         replace_ids=replace_ids,
         allow_empty=allow_empty,
         num_processes=num_processes or get_default_num_processes(),
@@ -458,6 +460,7 @@ def init(
         fast_import_tables(
             repo,
             sources,
+            from_commit=None,
             message=message,
             max_delta_depth=max_delta_depth,
             num_processes=num_processes or get_default_num_processes(),

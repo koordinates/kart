@@ -10,7 +10,7 @@ from kart import checkout, context
 from kart.dataset2 import Dataset2
 from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import fast_import_tables, ReplaceExisting
-from kart.repo import KartRepo
+from kart.repo import KartRepo, KartConfigKeys
 from kart.repo_version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
 from kart.timestamps import minutes_to_tz_offset
@@ -27,22 +27,29 @@ def dataset_class_for_legacy_version(version, in_place=False):
         return Dataset1
     elif version == 2:
         if in_place:
-            return InPlaceUpgradingDataset2
+            return InPlaceUpgradeSourceDataset2
         else:
-            return XmlUpgradingDataset2
+            return UpgradeSourceDataset2
 
     return None
 
 
-class XmlUpgradingDataset2(Dataset2):
-    """Variant of Dataset2 that extracts the metadata.xml out of dataset/metadata.json."""
+class UpgradeSourceDataset2(Dataset2):
+    """
+    Variant of Dataset2 that:
+    - preserves all meta_items, even non-standard ones.
+    - preserves attachments
+    - upgrades dataset/metadata.json to metadata.xml
+    """
+
+    def meta_items(self):
+        # We also want to include hidden items like generated-pks.json, in the odd case where we have it.
+        return super().meta_items(only_standard_items=False)
 
     def get_meta_item(self, name, missing_ok=True):
         if name == "metadata/dataset.json":
             return None
-
         result = super().get_meta_item(name, missing_ok=missing_ok)
-
         if result is None and name == "metadata.xml":
             metadata_json = super().get_meta_item("metadata/dataset.json")
             if metadata_json:
@@ -53,8 +60,13 @@ class XmlUpgradingDataset2(Dataset2):
                     return next(iter(metadata_xml))["text/xml"]
         return result
 
+    def attachment_items(self):
+        attachments = [obj for obj in self.tree if obj.type_str == "blob"]
+        for attachment in attachments:
+            yield attachment.name, attachment.data
 
-class InPlaceUpgradingDataset2(XmlUpgradingDataset2):
+
+class InPlaceUpgradeSourceDataset2(UpgradeSourceDataset2):
     @property
     def feature_blobs_already_written(self):
         return True
@@ -209,6 +221,11 @@ def upgrade(ctx, source, dest, in_place):
         subctx.obj.user_repo_path = str(dest)
         subctx.invoke(checkout.create_workingcopy)
 
+    if in_place:
+        dest_repo.config[KartConfigKeys.KART_REPOSTRUCTURE_VERSION] = str(
+            DEFAULT_NEW_REPO_VERSION
+        )
+
     click.secho("\nUpgrade complete", fg="green", bold=True)
 
 
@@ -218,7 +235,7 @@ def _upgrade_commit(
     source_repo,
     source_commit,
     source_dataset_class,
-    dest_parents,
+    dest_parent_ids,
     dest_repo,
     commit_map,
 ):
@@ -254,26 +271,28 @@ def _upgrade_commit(
         ds_path, ds_diff = sole_dataset_diff
         source_datasets = [source_rs.datasets[ds_path]]
         replace_existing = ReplaceExisting.GIVEN
-        from_parent = commit_map[source_commit.parents[0].hex]
-        merge_parents = [p for p in dest_parents if p != from_parent]
+        from_id = commit_map[source_commit.parents[0].hex]
+        from_commit = dest_repo[from_id]
+        merge_ids = [p for p in dest_parent_ids if p != from_id]
         replace_ids = list(ds_diff.get("feature", {}).keys())
         feature_count = len(replace_ids)
     else:
-        from_parent = None
-        merge_parents = dest_parents
+        from_id = from_commit = None
+        merge_ids = dest_parent_ids
         replace_existing = ReplaceExisting.ALL
         replace_ids = None
         feature_count = sum(s.feature_count for s in source_datasets)
 
-    if from_parent:
-        header += f"from {from_parent}\n"
-    header += "".join(f"merge {p}\n" for p in merge_parents)
+    if from_id:
+        header += f"from {from_id}\n"
+    header += "".join(f"merge {p}\n" for p in merge_ids)
 
     try:
         fast_import_tables(
             dest_repo,
             source_datasets,
             replace_existing=replace_existing,
+            from_commit=from_commit,
             replace_ids=replace_ids,
             verbosity=ctx.obj.verbosity,
             header=header,
