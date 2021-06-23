@@ -1,5 +1,7 @@
 import datetime
+import itertools
 import json
+from pathlib import Path
 import re
 import shutil
 import sys
@@ -21,20 +23,44 @@ JSON_PARAMS = {
 }
 
 
+class SerializableGenerator(list):
+    """Generator that is serializable by JSON"""
+
+    def __init__(self, iterable):
+        tmp_body = iter(iterable)
+        try:
+            self._head = iter([next(tmp_body)])
+            self.append(tmp_body)
+        except StopIteration:
+            self._head = []
+
+    def __iter__(self):
+        return itertools.chain(self._head, *self[:1])
+
+
 class ExtendedJsonEncoder(json.JSONEncoder):
     """A JSONEncoder that tries calling __json__() if it can't serialise an object another way."""
 
+    def __init__(self, *args, default=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_function = default
+
     def default(self, obj):
+        if self.default_function is not None:
+            result = self.default_function(obj)
+            if result is not None:
+                return result
+
         if isinstance(obj, types.GeneratorType):
-            return list(obj)
+            return SerializableGenerator(obj)
 
         if isinstance(obj, (datetime.date, datetime.datetime, datetime.time)):
             return obj.isoformat()
 
-        try:
+        if hasattr(obj, "__json__"):
             return obj.__json__()
-        except AttributeError:
-            return json.JSONEncoder.default(self, obj)
+
+        return json.JSONEncoder.default(self, obj)
 
 
 def get_terminal_formatter():
@@ -150,7 +176,13 @@ def _buffer_json_keys(chunk_generator):
         yield buf
 
 
-def dump_json_output(output, output_path, json_style="pretty"):
+def dump_json_output(
+    output,
+    output_path,
+    json_style="pretty",
+    encoder_class=ExtendedJsonEncoder,
+    encoder_kwargs={},
+):
     """
     Dumps the output to JSON in the output file.
     """
@@ -159,7 +191,7 @@ def dump_json_output(output, output_path, json_style="pretty"):
     fp = resolve_output_path(output_path)
 
     highlit = json_style == "pretty" and can_output_colour(fp)
-    json_encoder = ExtendedJsonEncoder(**JSON_PARAMS[json_style])
+    json_encoder = encoder_class(**JSON_PARAMS[json_style], **encoder_kwargs)
     if highlit:
         json_lexer = JsonLexer()
         for chunk in _buffer_json_keys(json_encoder.iterencode(output)):
@@ -201,6 +233,9 @@ def resolve_output_path(output_path):
       * a file-like object
       * the string '-' or None (both will return sys.stdout)
     """
+    if isinstance(output_path, Path):
+        output_path = output_path.expanduser()
+
     if hasattr(output_path, "write"):
         # filelike object. *usually* this is a io.TextIOWrapper,
         # but in some circumstances it can be something else.

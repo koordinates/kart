@@ -3,13 +3,17 @@ import json
 import click
 import pytest
 
-from kart.diff_output import schema_diff_as_text
 from kart.geometry import Geometry
 from kart.repo import KartRepo
 from kart.schema import Schema, ColumnSchema
+from kart.text_diff_writer import TextDiffWriter
 
 
 H = pytest.helpers.helpers()
+
+
+def schema_diff_as_text(old_schema, new_schema):
+    return TextDiffWriter._schema_diff_as_text(old_schema, new_schema)
 
 
 @pytest.fixture
@@ -563,7 +567,7 @@ def check_points_diff_output(r, output_format):
     elif output_format == "geojson":
         assert r.exit_code == 0, r
         assert (
-            "Warning: meta changes aren't included in GeoJSON output: schema.json"
+            "Warning: nz_pa_points_topo_150k meta changes aren't included in GeoJSON output: schema.json"
             in r.stderr
         )
         assert json.loads(r.stdout) == {
@@ -867,7 +871,7 @@ def check_polygons_diff_output(r, output_format):
     elif output_format == "geojson":
         assert r.exit_code == 0, r
         assert (
-            "Warning: meta changes aren't included in GeoJSON output: schema.json"
+            "Warning: nz_waca_adjustments meta changes aren't included in GeoJSON output: schema.json"
             in r.stderr
         )
         assert json.loads(r.stdout) == {

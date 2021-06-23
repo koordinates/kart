@@ -245,7 +245,7 @@
                 } else if (id.startsWith('D::')) {
                     featuresByRealId[realId] = [fc, null]
                 } else if (id.startsWith('I::')) {
-                    featuresByRealId[realId] = [fc, null]
+                    featuresByRealId[realId] = [null, fc]
                 } else {
                     console.log('unknown ID format: ' + id)
                     continue

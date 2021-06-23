@@ -1,14 +1,20 @@
-from collections import namedtuple
+from collections import UserDict
+from dataclasses import dataclass
+from typing import Any
 
 
 class Conflict(Exception):
     pass
 
 
-class KeyValue(namedtuple("KeyValue", ("key", "value"))):
+@dataclass
+class KeyValue:
     """
     A key-value pair. A delta is made of two of these - one old, one new.
     """
+
+    key: Any
+    value: Any
 
     @staticmethod
     def of(obj):
@@ -26,16 +32,14 @@ class KeyValue(namedtuple("KeyValue", ("key", "value"))):
             # Not a lazily evaluated value. Just a value.
             return self.value
 
-        try:
-            # Look for memoized value.
-            return self._cached_value
-        except AttributeError:
-            # Time to evaluate and memoize.
+        if not hasattr(self, "_cached_value"):
+            # Time to evaluate value().
             self._cached_value = self.value()
-            return self._cached_value
+        return self._cached_value
 
 
-class Delta(namedtuple("Delta", ("old", "new"))):
+@dataclass
+class Delta:
     """
     An object changes from old to new. Either old or new can be None, for insert or delete operations.
     When present, old and new are both key-value pairs.
@@ -50,16 +54,17 @@ class Delta(namedtuple("Delta", ("old", "new"))):
     - these handle the case where old.value or new.value is a callable and can be lazily evaluated.
     """
 
-    def __new__(cls, old, new):
-        return super().__new__(cls, KeyValue.of(old), KeyValue.of(new))
+    old: KeyValue
+    new: KeyValue
 
     def __init__(self, old, new):
-        super().__init__()
-        if self.old is None and self.new is None:
+        self.old = KeyValue.of(old)
+        self.new = KeyValue.of(new)
+        if old is None and new is None:
             raise ValueError("Empty Delta")
-        elif self.old is None:
+        elif old is None:
             self.type = "insert"
-        elif self.new is None:
+        elif new is None:
             self.type = "delete"
         else:
             self.type = "update"
@@ -145,10 +150,18 @@ class Delta(namedtuple("Delta", ("old", "new"))):
             else:
                 raise Conflict()
 
+    def to_plus_minus_dict(self):
+        result = {}
+        if self.old:
+            result["-"] = self.old_value
+        if self.new:
+            result["+"] = self.new_value
+        return result
 
-class RichDict(dict):
+
+class RichDict(UserDict):
     """
-    A RichDict is a dict with some extra features, mostly useful when dealing with nested dicts with a
+    A RichDict is a UserDict with some extra features, mostly useful when dealing with nested dicts with a
     well-defined structure.  It enforces that each node has children of the expected type. Using this
     type information it also supports getting or setting items deep in the nested tree using recursive_get
     or recursive_set, even if this involves creating extra dicts to contain the new value.
@@ -290,6 +303,9 @@ class Diff(RichDict):
     def type_counts(self):
         return {k: v.type_counts() for k, v in self.items()}
 
+    def __json__(self):
+        return {k: v for k, v in self.items()}
+
 
 class DeltaDiff(Diff):
     """
@@ -300,7 +316,7 @@ class DeltaDiff(Diff):
     child_type = Delta
 
     def __init__(self, initial_contents=()):
-        if isinstance(initial_contents, dict):
+        if isinstance(initial_contents, (dict, UserDict)):
             super().__init__(initial_contents)
         else:
             super().__init__((delta.key, delta) for delta in initial_contents)
@@ -361,6 +377,18 @@ class DatasetDiff(Diff):
     """A DatasetDiff contains up to two DeltaDiffs, at keys "meta" or "feature"."""
 
     child_type = DeltaDiff
+
+    def __json__(self):
+        result = {}
+        if "meta" in self:
+            result["meta"] = {
+                key: value.to_plus_minus_dict() for key, value in self["meta"].items()
+            }
+        if "feature" in self:
+            result["feature"] = (
+                value for key, value in sorted(self["feature"].items())
+            )
+        return result
 
 
 class RepoDiff(Diff):

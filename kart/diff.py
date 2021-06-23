@@ -1,27 +1,11 @@
 import logging
-import re
 import sys
-from pathlib import Path
 
 import click
 
 from .crs_util import CoordinateReferenceString
-from .diff_output import (  # noqa - used from globals()
-    diff_output_text,
-    diff_output_json,
-    diff_output_geojson,
-    diff_output_json_lines,
-    diff_output_quiet,
-    diff_output_html,
-)
 from .diff_structs import RepoDiff, DatasetDiff
-from .exceptions import (
-    InvalidOperation,
-    NotFound,
-    NO_WORKING_COPY,
-    UNCATEGORIZED_ERROR,
-)
-from .filter_util import build_feature_filter, UNFILTERED
+from .filter_util import UNFILTERED
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from . import diff_estimation
@@ -84,166 +68,6 @@ def get_repo_diff(base_rs, target_rs, feature_filter=UNFILTERED):
     return result
 
 
-def get_common_ancestor(repo, rs1, rs2):
-    for rs in rs1, rs2:
-        if not rs.commit:
-            raise click.UsageError(
-                f"The .. operator works on commits, not trees - {rs.id} is a tree. (Perhaps try the ... operator)"
-            )
-    ancestor_id = repo.merge_base(rs1.id, rs2.id)
-    if not ancestor_id:
-        raise InvalidOperation(
-            "The .. operator tries to find the common ancestor, but no common ancestor was found. Perhaps try the ... operator."
-        )
-    return repo.structure(ancestor_id)
-
-
-def _parse_diff_commit_spec(repo, commit_spec):
-    # Parse <commit> or <commit>...<commit>
-    commit_spec = commit_spec or "HEAD"
-    commit_parts = re.split(r"(\.{2,3})", commit_spec)
-
-    if len(commit_parts) == 3:
-        # Two commits specified - base and target. We diff base<>target.
-        base_rs = repo.structure(commit_parts[0] or "HEAD")
-        target_rs = repo.structure(commit_parts[2] or "HEAD")
-        if commit_parts[1] == "..":
-            # A   C    A...C is A<>C
-            #  \ /     A..C  is B<>C
-            #   B      (git log semantics)
-            base_rs = get_common_ancestor(repo, base_rs, target_rs)
-        working_copy = None
-    else:
-        # When one commit is specified, it is base, and we diff base<>working_copy.
-        # When no commits are specified, base is HEAD, and we do the same.
-        # We diff base<>working_copy by diffing base<>target + target<>working_copy,
-        # and target is set to HEAD.
-        base_rs = repo.structure(commit_parts[0])
-        target_rs = repo.structure("HEAD")
-        working_copy = repo.working_copy
-        if not working_copy:
-            raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
-        working_copy.assert_db_tree_match(target_rs.tree)
-    return base_rs, target_rs, working_copy
-
-
-def diff_with_writer(
-    ctx,
-    diff_writer,
-    *,
-    output_path="-",
-    exit_code,
-    json_style="pretty",
-    commit_spec,
-    filters,
-    target_crs=None,
-):
-    """
-    Calculates the appropriate diff from the arguments,
-    and writes it using the given writer contextmanager.
-
-      ctx: the click context
-      diff_writer: One of the `diff_output_*` contextmanager factories.
-                   When used as a contextmanager, the diff_writer should yield
-                   another callable which accepts (dataset, diff) arguments
-                   and writes the output by the time it exits.
-      output_path: The output path, or a file-like object, or the string '-' to use stdout.
-      exit_code:   If True, the process will exit with code 1 if the diff is non-empty.
-      commit_spec: The commit-ref or -refs to diff.
-      filters:     Limit the diff to certain datasets or features.
-      target_crs:  An osr.SpatialReference object, or None
-    """
-    try:
-        if isinstance(output_path, str) and output_path != "-":
-            output_path = Path(output_path).expanduser()
-
-        repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-
-        base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
-
-        # Parse [<dataset>[:pk]...]
-        feature_filter = build_feature_filter(filters)
-
-        base_str = base_rs.id
-        target_str = "working-copy" if working_copy else target_rs.id
-        L.debug("base=%s target=%s", base_str, target_str)
-
-        base_ds_paths = {ds.path for ds in base_rs.datasets}
-        target_ds_paths = {ds.path for ds in target_rs.datasets}
-        all_ds_paths = base_ds_paths | target_ds_paths
-
-        if feature_filter is not UNFILTERED:
-            all_ds_paths = all_ds_paths.intersection(feature_filter.keys())
-
-        dataset_geometry_transforms = {}
-        if target_crs is not None:
-            for ds_path in all_ds_paths:
-                ds = base_rs.datasets.get(ds_path) or target_rs.datasets.get(ds_path)
-                transform = ds.get_geometry_transform(target_crs)
-                if transform is not None:
-                    dataset_geometry_transforms[ds_path] = transform
-
-        writer_params = {
-            "repo": repo,
-            "base": base_rs,
-            "target": target_rs,
-            "output_path": output_path,
-            "dataset_count": len(all_ds_paths),
-            "json_style": json_style,
-            "dataset_geometry_transforms": dataset_geometry_transforms,
-        }
-
-        L.debug(
-            "base_rs %s == target_rs %s: %s",
-            repr(base_rs),
-            repr(target_rs),
-            base_rs == target_rs,
-        )
-
-        num_changes = 0
-        feature_change_counts = {}
-        with diff_writer(**writer_params) as w:
-            for ds_path in all_ds_paths:
-                diff = get_dataset_diff(
-                    base_rs,
-                    target_rs,
-                    working_copy,
-                    ds_path,
-                    feature_filter[ds_path],
-                )
-                ds = base_rs.datasets.get(ds_path) or target_rs.datasets.get(ds_path)
-                num_changes += len(diff)
-                if "feature" in diff:
-                    feature_change_counts[ds_path] = len(diff["feature"])
-                L.debug("overall diff (%s): %s", ds_path, repr(diff))
-                w(ds, diff)
-
-        if not working_copy:
-            # store this count in case it's needed later
-            repo.diff_annotations.store(
-                base_rs=base_rs,
-                target_rs=target_rs,
-                annotation_type="feature-change-counts-exact",
-                data=feature_change_counts,
-            )
-
-    except click.ClickException as e:
-        L.debug("Caught ClickException: %s", e)
-        if exit_code and e.exit_code == 1:
-            e.exit_code = UNCATEGORIZED_ERROR
-        raise
-    except Exception as e:
-        L.debug("Caught non-ClickException: %s", e)
-        if exit_code:
-            click.secho(f"Error: {e}", fg="red", file=sys.stderr)
-            raise SystemExit(UNCATEGORIZED_ERROR) from e
-        else:
-            raise
-    else:
-        if exit_code and num_changes:
-            sys.exit(1)
-
-
 def feature_count_diff(
     ctx,
     output_format,
@@ -257,7 +81,11 @@ def feature_count_diff(
         raise click.UsageError("--only-feature-count requires text or json output")
 
     repo = ctx.obj.repo
-    base_rs, target_rs, working_copy = _parse_diff_commit_spec(repo, commit_spec)
+    from .base_diff_writer import BaseDiffWriter
+
+    base_rs, target_rs, working_copy = BaseDiffWriter._parse_diff_commit_spec(
+        repo, commit_spec
+    )
 
     dataset_change_counts = diff_estimation.estimate_diff_feature_counts(
         base_rs, target_rs, working_copy=working_copy, accuracy=accuracy
@@ -362,18 +190,14 @@ def diff(
             only_feature_count,
         )
 
-    output_format = output_format.replace("-", "_")
-    diff_writer = globals()[f"diff_output_{output_format}"]
-    if output_format == "quiet":
-        exit_code = True
+    from .base_diff_writer import BaseDiffWriter
 
-    return diff_with_writer(
-        ctx,
-        diff_writer,
-        output_path=output_path,
-        exit_code=exit_code,
-        json_style=json_style,
-        commit_spec=commit_spec,
-        filters=filters,
-        target_crs=crs,
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_format)
+    diff_writer = diff_writer_class(
+        repo, commit_spec, filters, output_path, json_style=json_style, target_crs=crs
     )
+    diff_writer.write_diff()
+
+    if exit_code or output_format == "quiet":
+        diff_writer.exit_with_code()

@@ -1295,7 +1295,7 @@ def test_diff_object_eq_reverse():
     assert forward_counts["inserts"] == reverse_counts["deletes"]
     assert forward_counts["deletes"] == reverse_counts["inserts"]
     assert forward_counts["updates"] == reverse_counts["updates"]
-    assert list(forward.values()) == [Delta(v1, v0) for v0, v1 in reverse.values()]
+    assert list(forward.values()) == [Delta(d.new, d.old) for d in reverse.values()]
 
 
 def test_diff_3way(data_working_copy, cli_runner, insert, request):
