@@ -14,6 +14,7 @@ from .exceptions import (
 )
 from .import_source import ImportSource
 from .output_util import dump_json_output
+from .schema import Schema
 from .sqlalchemy import DbType, separate_last_path_part
 from .utils import ungenerator
 
@@ -86,7 +87,7 @@ class SqlAlchemyImportSource(ImportSource):
         engine,
         db_schema,
         table,
-        **meta_overrides,
+        meta_overrides=None,
     ):
         self.original_spec = original_spec
         self.db_type = db_type
@@ -95,7 +96,9 @@ class SqlAlchemyImportSource(ImportSource):
 
         self.db_schema = db_schema
         self.table = table
-        self.meta_overrides = {k: v for k, v in meta_overrides.items() if v is not None}
+        self.meta_overrides = {
+            k: v for k, v in (meta_overrides or {}).items() if v is not None
+        }
 
     @property
     def source_name(self):
@@ -176,7 +179,7 @@ class SqlAlchemyImportSource(ImportSource):
             exit_code=NO_TABLE,
         )
 
-    def clone_for_table(self, table, primary_key=None, **meta_overrides):
+    def clone_for_table(self, table, primary_key=None, meta_overrides={}):
         meta_overrides = {**self.meta_overrides, **meta_overrides}
         db_schema, table = self.validate_table(table)
 
@@ -186,22 +189,18 @@ class SqlAlchemyImportSource(ImportSource):
             engine=self.engine,
             db_schema=db_schema,
             table=table,
-            **meta_overrides,
+            meta_overrides=meta_overrides,
         )
 
         if primary_key is not None:
             result.override_primary_key(primary_key)
         return result
 
-    def get_meta_item(self, name):
-        if name in self.meta_overrides:
-            return self.meta_overrides[name]
-        elif name == "metadata.xml" and "xml_metadata" in self.meta_overrides:
-            return self.meta_overrides["xml_metadata"]
-        return self.meta_items().get(name)
+    def meta_items(self):
+        return {**self.meta_items_from_db(), **self.meta_overrides}
 
     @functools.lru_cache(maxsize=1)
-    def meta_items(self):
+    def meta_items_from_db(self):
         id_salt = f"{self.engine.url} {self.db_schema} {self.table}"
 
         with sessionmaker(bind=self.engine)() as sess:
@@ -218,12 +217,10 @@ class SqlAlchemyImportSource(ImportSource):
             pk_index = 0 if col["name"] == new_primary_key else None
             return {**col, **{"primaryKeyIndex": pk_index}}
 
-        schema = self.get_meta_item("schema.json")
-        new_schema = [_modify_col(c) for c in schema]
+        old_schema = self.get_meta_item("schema.json")
+        new_schema = [_modify_col(c) for c in old_schema]
         self.meta_overrides["schema.json"] = new_schema
-
-        # Reload schema if it has been cached:
-        self._schema = self._init_schema()
+        self._modified_schema = Schema.from_column_dicts(new_schema)
 
         if not self.schema.pk_columns:
             raise click.UsageError(

@@ -1,12 +1,11 @@
-# Meta item names - part of the Datasets V2 standard.
-# See DATASETS_v2.md
+# Meta item names - part of the Datasets V3 standard.
+# See DATASETS_v3.md
 
 META_ITEM_NAMES = (
-    "title",
-    "description",
-    "schema.json",
-    "metadata.xml",
-    "metadata/dataset.json",  # deprecated - imported as metadata.xml going forward.
+    "title",  # Text - the dataset's name / title.
+    "description",  # Text - a longer description about the dataset's contents.
+    "schema.json",  # JSON representation of the dataset's schema. See kart/schema.py, DATASETS_v3.md
+    "metadata.xml",  # Any XML metadata about the dataset.
 )
 
 # These meta items aren't stored at <dataset>/.sno-dataset/meta/<meta-item-name>

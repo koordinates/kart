@@ -1,8 +1,11 @@
 import functools
 import logging
 
+from . import crs_util
 from .import_source import ImportSource
+from . import meta_items
 from .serialise_util import json_unpack
+from .utils import ungenerator
 
 
 class BaseDataset(ImportSource):
@@ -32,6 +35,8 @@ class BaseDataset(ImportSource):
 
     META_PATH = None  # Eg "meta/"
     FEATURE_PATH = None  # Eg "feature/"
+
+    META_ITEM_NAMES = meta_items.META_ITEM_NAMES
 
     def __init__(self, tree, path, repo=None):
         """
@@ -190,9 +195,46 @@ class BaseDataset(ImportSource):
         return ("feature", pk)
 
     @functools.lru_cache()
-    def get_meta_item(self, name):
-        """Finds or generates the meta item with the given name, according to the V2 spec."""
-        raise NotImplementedError()
+    def get_meta_item(self, name, missing_ok=True):
+        """Loads a meta item stored in the meta tree."""
+        rel_path = self.META_PATH + name
+        data = self.get_data_at(rel_path, missing_ok=missing_ok)
+        if data is None:
+            return data
+
+        if rel_path.endswith(".json"):
+            return json_unpack(data)
+        elif rel_path.endswith(".wkt"):
+            return crs_util.normalise_wkt(ensure_text(data))
+        else:
+            return ensure_text(data)
+
+    @functools.lru_cache()
+    @ungenerator(dict)
+    def meta_items(self, only_standard_items=True):
+        if not self.meta_tree:
+            return
+
+        for name in self.META_ITEM_NAMES:
+            value = self.get_meta_item(name)
+            if value:
+                yield name, value
+
+        for identifier, definition in self.crs_definitions().items():
+            yield f"crs/{identifier}.wkt", definition
+
+        if not only_standard_items:
+            yield from self.extra_meta_items()
+
+    @functools.lru_cache()
+    @ungenerator(dict)
+    def extra_meta_items(self):
+        if not self.meta_tree:
+            return
+
+        extra_names = [obj.name for obj in self.meta_tree if obj.type_str == "blob"]
+        for name in sorted(extra_names):
+            yield name, self.get_meta_item(name)
 
     @property
     @functools.lru_cache(maxsize=1)

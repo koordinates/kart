@@ -273,13 +273,13 @@ def import_(
         if is_windows:
             dest_path = dest_path.replace("\\", "/")  # git paths use / as a delimiter
 
-        info = table_info.get(dest_path, {})
+        meta_overrides = table_info.get(dest_path, {})
+        if "xmlMetadata" in meta_overrides:
+            meta_overrides["metadata.xml"] = meta_overrides.pop("xmlMetadata")
         import_source = base_import_source.clone_for_table(
             src_table,
             primary_key=primary_key,
-            title=info.get("title"),
-            description=info.get("description"),
-            xml_metadata=info.get("xmlMetadata"),
+            meta_overrides=meta_overrides,
         )
         if replace_ids is not None:
             if repo.version < 2:

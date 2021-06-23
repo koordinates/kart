@@ -184,7 +184,7 @@ class OgrImportSource(ImportSource):
         source,
         ogr_source,
         primary_key=None,
-        **meta_overrides,
+        meta_overrides=None,
     ):
         self.ds = ogr_ds
         self.driver = self.ds.GetDriver()
@@ -192,13 +192,9 @@ class OgrImportSource(ImportSource):
         self.source = source
         self.ogr_source = ogr_source
         self._primary_key = self._check_primary_key_option(primary_key)
-        self._meta_overrides = {
-            k: v for k, v in meta_overrides.items() if v is not None
+        self.meta_overrides = {
+            k: v for k, v in (meta_overrides or {}).items() if v is not None
         }
-        if "metadata/dataset.json" in self._meta_overrides:
-            raise click.UsageError(
-                "metadata/dataset.json is no longer supported, use metadata.xml"
-            )
 
     def default_dest_path(self):
         return self.table
@@ -222,8 +218,8 @@ class OgrImportSource(ImportSource):
     def source_name(self):
         return Path(self.source).name
 
-    def clone_for_table(self, table, primary_key=None, **meta_overrides):
-        meta_overrides = {**self._meta_overrides, **meta_overrides}
+    def clone_for_table(self, table, primary_key=None, meta_overrides={}):
+        meta_overrides = {**self.meta_overrides, **meta_overrides}
         self.check_table(table)
 
         return self.__class__(
@@ -232,7 +228,7 @@ class OgrImportSource(ImportSource):
             source=self.source,
             ogr_source=self.ogr_source,
             primary_key=primary_key or self._primary_key,
-            **meta_overrides,
+            meta_overrides=meta_overrides,
         )
 
     @property
@@ -403,22 +399,19 @@ class OgrImportSource(ImportSource):
                 return ogr_to_gpkg_geom(geom)
         return None
 
+    def meta_items(self):
+        return {**self.meta_items_from_db(), **self.meta_overrides}
+
     @functools.lru_cache()
-    def get_meta_item(self, name):
-        if name in self._meta_overrides:
-            return self._meta_overrides[name]
+    @ungenerator(dict)
+    def meta_items_from_db(self):
         ogr_metadata = self.ogrlayer.GetMetadata()
-        if name == "title":
-            return ogr_metadata.get("IDENTIFIER") or ""
-        elif name == "description":
-            return ogr_metadata.get("DESCRIPTION") or ""
-        elif name == "schema.json":
-            return self.schema.to_column_dicts()
-        elif name == "metadata.xml":
-            return self.get_metadata_xml()
-        elif name.startswith("crs/"):
-            return self.get_crs_definition(name)
-        raise KeyError(f"No meta item found with name: {name}")
+        yield "title", ogr_metadata.get("IDENTIFIER")
+        yield "description", ogr_metadata.get("DESCRIPTION")
+        yield "schema.json", self.schema.to_column_dicts()
+
+        for identifier, definition in self.crs_definitions().items():
+            yield f"crs/{identifier}.wkt", definition
 
     @functools.lru_cache(maxsize=1)
     @ungenerator(dict)
@@ -588,13 +581,6 @@ class OgrImportSource(ImportSource):
     _KNOWN_METADATA_URIS = {
         "GDALMultiDomainMetadata": "http://gdal.org",
     }
-
-    def get_metadata_xml(self):
-        for key in ("metadata.xml", "xml_metadata"):
-            result = self._meta_overrides.get(key)
-            if result is not None:
-                return result
-        return None
 
 
 class ESRIShapefileImportSource(OgrImportSource):

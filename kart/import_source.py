@@ -1,10 +1,8 @@
 import click
 
 from .exceptions import NotFound, NO_TABLE
-from .meta_items import META_ITEM_NAMES
 from .output_util import get_input_mode, InputMode
 from .schema import Schema
-from .utils import ungenerator
 
 
 class ImportSource:
@@ -84,20 +82,24 @@ class ImportSource:
         """
         raise NotImplementedError()
 
-    def get_meta_item(self, name):
-        """Find or generate a V2 meta item."""
-        raise NotImplementedError()
+    def get_meta_item(self, name, missing_ok=True):
+        """
+        Find or generate a V3 meta item. A missing meta item is treated the same as it being None,
+        but a client can set missing_ok=False to raise an error if it is missing.
+        """
+        result = self.meta_items().get(name)
+        if result is None and not missing_ok:
+            raise KeyError(f"No meta item found with name {name}")
+        return result
 
-    @ungenerator(dict)
     def meta_items(self):
-        """Retuns a dict of all the meta items that need to be imported. See META_ITEM_NAMES."""
-        for name in META_ITEM_NAMES:
-            meta_item = self.get_meta_item(name)
-            if meta_item is not None:
-                yield name, meta_item
-
-        for identifier, definition in self.crs_definitions().items():
-            yield f"crs/{identifier}.wkt", definition
+        """
+        Returns a dict of all the meta items that need to be imported. See META_ITEM_NAMES.
+        Meta items from this list can be ommitted if there is no data (eg, no title or description exists).
+        Meta items not on this list can also be included, they will be stored verbatim in the resulting dataset.
+        All CRS definitions from self.crs_definitions() should also be included with keys crs/{identifier}.wkt
+        """
+        raise NotImplementedError()
 
     def crs_definitions(self):
         """
@@ -135,8 +137,8 @@ class ImportSource:
         from the import-source that it represents (in _init_schema), the importer has the option to modify it by
         calling align_schema_to_existing_schema, so that the column IDs match with a pre-existing schema.
         """
-        if hasattr(self, "_aligned_schema"):
-            return self._aligned_schema
+        if hasattr(self, "_modified_schema"):
+            return self._modified_schema
         elif hasattr(self, "_original_schema"):
             return self._original_schema
         self._original_schema = self._init_schema()
@@ -155,7 +157,7 @@ class ImportSource:
         that they had last time. Failing to align the schema would mean that some features would be re-encoded
         even if they hadn't actually changed.
         """
-        self._aligned_schema = existing_schema.align_to_self(self.schema)
+        self._modified_schema = existing_schema.align_to_self(self.schema)
 
     @property
     def has_geometry(self):

@@ -433,9 +433,7 @@ def test_shp_import_meta(
 
         meta_items = dict(dataset.meta_items())
         assert set(meta_items) == {
-            "description",
             "schema.json",
-            "title",
             "crs/EPSG:4167.wkt",
         }
         schema = without_ids(dataset.get_meta_item("schema.json"))

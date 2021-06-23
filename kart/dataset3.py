@@ -9,7 +9,7 @@ from . import crs_util
 from .dataset3_paths import PathEncoder
 from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
-from .meta_items import META_ITEM_NAMES, ATTACHMENT_META_ITEMS
+from .meta_items import ATTACHMENT_META_ITEMS
 from .schema import Legend, Schema
 from .serialise_util import (
     msg_pack,
@@ -123,11 +123,7 @@ class Dataset3(RichBaseDataset):
             )
 
     @functools.lru_cache()
-    def get_meta_item(self, name, missing_ok=None):
-        if missing_ok is None:
-            # If the caller doesn't specify, the default is that all standard meta-items are allowed to be missing.
-            missing_ok = name in META_ITEM_NAMES
-
+    def get_meta_item(self, name, missing_ok=True):
         if name in ATTACHMENT_META_ITEMS:
             rel_path = name
             meta_item_tree = self.attachment_tree

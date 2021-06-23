@@ -14,6 +14,7 @@ from .cli_util import (
 from .checkout import reset_wc_if_needed
 from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
 from .rich_tree_builder import RichTreeBuilder
+from .meta_items import META_ITEM_NAMES
 from .output_util import (
     dump_json_output,
     format_json_for_output,
@@ -105,7 +106,10 @@ def get_meta_items(ds, keys):
     items = {}
     for key in keys:
         try:
-            items[key] = ds.get_meta_item(key)
+            # Standard meta items are allowed to be missing - it means they are effectively None.
+            # If the user requests something else, and it doesn't exist, we error.
+            missing_ok = key in META_ITEM_NAMES
+            items[key] = ds.get_meta_item(key, missing_ok=missing_ok)
         except KeyError:
             pass
 
