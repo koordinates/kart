@@ -101,6 +101,14 @@ class ImportSource:
         """
         raise NotImplementedError()
 
+    def attachment_items(self):
+        """
+        Returns a dict of all the attachment items that need to be imported.
+        These are files that will be imported verbatim to dest_path, but not hidden inside the dataset.
+        This could be a license or a readme.
+        """
+        return {}
+
     def crs_definitions(self):
         """
         Returns an {identifier: definition} dict containing every CRS definition.

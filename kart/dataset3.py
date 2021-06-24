@@ -332,6 +332,9 @@ class Dataset3(RichBaseDataset):
 
             yield full_path, content
 
+        for rel_path, content in source.attachment_items():
+            yield self.full_attachment_path(rel_path), content
+
     def iter_legend_blob_data(self):
         """
         Generates (full_path, blob_data) tuples for each legend in this dataset

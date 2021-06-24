@@ -201,9 +201,9 @@ class RichBaseDataset(BaseDataset):
         """
         feature_filter = feature_filter or UNFILTERED
 
-        params = {}
+        params = {"flags": pygit2.GIT_DIFF_SKIP_BINARY_CHECK}
         if reverse:
-            params = {"swap": True}
+            params["swap"] = True
 
         if other is None:
             diff_index = self.inner_tree.diff_to_tree(**params)
