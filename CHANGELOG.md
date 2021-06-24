@@ -4,6 +4,14 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.1
+
+#### Fix for `kart upgrade`
+Fixed `kart upgrade` so that it preserves more complicated (or yet-to-be-released) features of V2 repos as they are upgraded to V3. [#448](https://github.com/koordinates/kart/issues/448)
+
+Specifically:
+* `generated-pks.json` metadata, extra metadata found in datasets that have an automatically generated primary key and which are maintained by repeatedly importing from a primary-key-less datasource
+* attachments (which are not yet fully supported by Kart) - arbitrary files kept alongside datasets, such as license or readme files.
 
 ## 0.10.0
 
