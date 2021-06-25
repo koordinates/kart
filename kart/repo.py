@@ -550,13 +550,16 @@ class KartRepo(pygit2.Repository):
         if key in config:
             del config[key]
 
-    def gc(self, *args):
-        """Runs git-gc on the Kart repository."""
+    def invoke_git(self, *args):
         try:
-            args = ["git", "-C", self.path, "gc", *args]
+            args = ["git", "-C", self.path, *args]
             subprocess.check_call(args, env=tool_environment())
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
+
+    def gc(self, *args):
+        """Runs git-gc on the Kart repository."""
+        self.invoke_git("gc", *args)
 
     def _ensure_exists_and_empty(dir_path):
         if dir_path.exists() and any(dir_path.iterdir()):

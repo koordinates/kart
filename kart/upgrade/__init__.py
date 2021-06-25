@@ -103,7 +103,13 @@ class ForceLatestVersionRepo(KartRepo):
 
 @click.command()
 @click.pass_context
-@click.option("--in-place", is_flag=True, default=False, hidden=True)
+@click.option(
+    "--in-place",
+    is_flag=True,
+    default=False,
+    hidden=True,
+    help="Irreversibly upgrade a repo in place.",
+)
 @click.argument("source", type=click.Path(exists=True, file_okay=False), required=True)
 @click.argument("dest", type=click.Path(writable=True), required=True)
 def upgrade(ctx, source, dest, in_place):
@@ -212,7 +218,15 @@ def upgrade(ctx, source, dest, in_place):
             dest_repo.set_head(source_repo.head.name)
 
         click.secho("\nCompacting repository ...", bold=True)
-        dest_repo.gc()
+        if in_place:
+            # old reflogs will refer to old objects, which prevents them from getting gc'd.
+            # so we clear out the old reflogs here.
+            # this *does* mean you can't go back, hence the 'irreversible' in the --in-place help.
+            dest_repo.invoke_git(
+                "reflog", "expire", "--expire-unreachable=now", "--all"
+            )
+
+        dest_repo.gc("--prune=now")
 
     if source_repo.workingcopy_location:
         click.secho("\nCreating working copy ...", bold=True)
