@@ -13,6 +13,24 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 
 
 class JsonDiffWriter(BaseDiffWriter):
+    """
+    Writes JSON diffs, with geometry encoded using hexwkb.
+    Of all the diff-writers, JSON diffs are the most descriptive - nothing is left out (which is why the PatchWriter
+    is just a slight variation of the JSON diff writer).
+    As the output is a single JSON object, json.dumps interface requires that entire RepoDiff object representing the diff is
+    generated first, and then dumped. This means the diff can be slow to start - the situation is improved somewhat by
+    the fact that Delta's can be lazily evaluated, so at least individual blobs needn't be read until each delta is output.
+    JsonLinesDiffWriter is faster to start for multi-dataset repos since it generates diffs repo by repo.
+
+    The basic diff structure is as follows - for meta items:
+      {"kart.diff/v1+hexwkb": {dataset-path: {"meta": {meta-item-name: {"-/+": old/new-value}}}}}
+    And for features:
+      {"kart.diff/v1+hexwkb": {dataset-path: {"feature": [{"-/+": old/new-value}, ...]}}}
+
+    For kart show, there is another top level key alongside "kart.diff/v1+hexwkb" - that is "kart.show/v1+hexwkb",
+    which contains information about the commit object.
+    """
+
     @classmethod
     def _check_output_path(cls, repo, output_path):
         if isinstance(output_path, Path) and output_path.is_dir():
@@ -68,6 +86,12 @@ class JsonDiffWriter(BaseDiffWriter):
 
 
 class PatchWriter(JsonDiffWriter):
+    """
+    PatchWriter is the same as JsonDiffWriter except for how the commit object is serialised -
+    - it only has information that will be kept when the patch is reapplied (ie, authorName, but not committerName).
+    - it is at the key "kart.patch/v1" instead of "kart.show/v1"
+    """
+
     def add_json_header(self, obj):
         if self.commit is not None:
             author = self.commit.author
@@ -84,6 +108,27 @@ class PatchWriter(JsonDiffWriter):
 
 
 class JsonLinesDiffWriter(BaseDiffWriter):
+    """
+    Writes diffs using JSON-lines, which means, diff output can begin as soon as the first delta is known  Python's json
+    library makes it very difficult to begin to json.dumps a dictionary without knowing how many entries it must have,
+    which is a problem for the JsonDiffWriter - the top level dict which has one key per dataset-which-has-changes therefore
+    requires we at least generate a list of all datasets which have changes before outputting anything. JSON-lines solves this.
+    Similarly, it is also easier for clients to parse one line at a time and make use of it - most JSON decoding libraries
+    will not make it easy to use information from a partially parsed top-level object.
+
+    The messages that are streamed by the JsonLines diff-writer take the following form:
+    Header:
+      {"type": "version", "version": "kart.diff/v2", "outputFormat": "JSONL+hexwkb"}
+    Commit (for kart show command):
+      {"type": "commit", "value": {commit-info}}
+    Meta info which hasn't changed - only output for schema.json:
+      {"type": "metaInfo", "dataset": dataset-path, "key": "schema.json", "value" {schema-json}}
+    Meta into which has changed:
+      {"type": "meta", "dataset": dataset-path, "key": "schema.json", "change": {"-/+": old/new-value}}
+    Feature which has changed:
+      {"type": "feature", "dataset": dataset-path, "change": {"-/+": old/new-value}}
+    """
+
     @classmethod
     def _check_output_path(cls, repo, output_path):
         if isinstance(output_path, Path) and output_path.is_dir():
@@ -150,6 +195,17 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
 
 class GeojsonDiffWriter(BaseDiffWriter):
+    """
+    Writes all feature deltas as a single GeoJSON FeatureCollection of GeoJSON features.
+    Meta deltas aren't output at all.
+    The name of each feature in the collection indicates whether it is the old or new version of the feature,
+    or if it was inserted or deleted. For example:
+    U-::123  - old version of feature 123
+    U+::123  - new version of features 123
+    D::123   - feature 123 as it was before it was deleted
+    I::123   - features 123 as it is after it was inserted
+    """
+
     @classmethod
     def _check_output_path(cls, repo, output_path):
         # DONOTSUBMIT - check path type, handle directories
