@@ -107,7 +107,7 @@ class Delta(namedtuple("Delta", ("old", "new"))):
     def key(self):
         # To be stored in a Diff, a Delta needs a single key.
         # This mostly works, but isn't perfect when renames are involved.
-        return self.old_key or self.new_key
+        return self.old_key if self.old_key is not None else self.new_key
 
     def __add__(self, other):
         """Concatenate this delta with the subsequent delta, return the result as a single delta."""
