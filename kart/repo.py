@@ -12,7 +12,6 @@ import click
 import pygit2
 
 from . import is_windows
-from .annotations import DiffAnnotations
 from .cli_util import tool_environment
 from .exceptions import (
     translate_subprocess_exit_code,
@@ -328,6 +327,9 @@ class KartRepo(pygit2.Repository):
     @property
     @lru_cache(maxsize=1)
     def diff_annotations(self):
+        # DiffAnnotations is slow to import - don't move this to the top of this file.
+        from .annotations import DiffAnnotations
+
         return DiffAnnotations(self)
 
     def write_config(
