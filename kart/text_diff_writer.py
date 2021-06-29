@@ -60,11 +60,13 @@ class TextDiffWriter(BaseDiffWriter):
         click.secho(**self.pecho)
 
     def write_ds_diff(self, ds_path, ds_diff):
-        for key, delta in sorted(ds_diff.get("meta", {}).items()):
-            self.write_meta_delta(ds_path, key, delta)
+        if "meta" in ds_diff:
+            for key, delta in ds_diff["meta"].sorted_items():
+                self.write_meta_delta(ds_path, key, delta)
 
-        for key, delta in sorted(ds_diff.get("feature", {}).items()):
-            self.write_feature_delta(ds_path, key, delta)
+        if "feature" in ds_diff:
+            for key, delta in ds_diff["feature"].sorted_items():
+                self.write_feature_delta(ds_path, key, delta)
 
     def write_meta_delta(self, ds_path, key, delta):
         if delta.old:

@@ -175,16 +175,22 @@ class JsonLinesDiffWriter(BaseDiffWriter):
         self.write_feature_deltas(ds_path, ds_diff)
 
     def write_meta_deltas(self, ds_path, ds_diff):
+        if "meta" not in ds_diff:
+            return
+
         obj = {"type": "meta", "dataset": ds_path, "key": None, "change": None}
-        for key, delta in sorted(ds_diff.get("meta", {}).items()):
+        for key, delta in ds_diff["meta"].sorted_items():
             obj["key"] = key
             obj["change"] = delta.to_plus_minus_dict()
             self.dump(obj)
 
     def write_feature_deltas(self, ds_path, ds_diff):
+        if "feature" not in ds_diff:
+            return
+
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
         obj = {"type": "feature", "dataset": ds_path, "change": None}
-        for key, delta in sorted(ds_diff.get("feature", {}).items()):
+        for key, delta in ds_diff["feature"].sorted_items():
             change = {}
             if delta.old:
                 change["-"] = json_row(delta.old_value, delta.old_key, old_transform)
@@ -247,7 +253,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
 
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
 
-        deltas = (value for key, value in sorted(feature_diff.items()))
+        deltas = (value for key, value in feature_diff.sorted_items())
         for delta in deltas:
             if delta.old:
                 change_type = "U-" if delta.new else "D"

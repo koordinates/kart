@@ -372,6 +372,24 @@ class DeltaDiff(Diff):
             result.add_delta(delta)
         return result
 
+    def sorted_items(self):
+        from numbers import Number
+
+        inf = float("inf")
+
+        def key(item):
+            k, v = item
+            if k is None:
+                return (-inf, "")
+            elif isinstance(k, Number):
+                return (k, "")
+            elif isinstance(k, str):
+                return (inf, k)
+            else:
+                return (inf, str(k))
+
+        return sorted(self.items(), key=key)
+
 
 class DatasetDiff(Diff):
     """A DatasetDiff contains up to two DeltaDiffs, at keys "meta" or "feature"."""
@@ -385,9 +403,7 @@ class DatasetDiff(Diff):
                 key: value.to_plus_minus_dict() for key, value in self["meta"].items()
             }
         if "feature" in self:
-            result["feature"] = (
-                value for key, value in sorted(self["feature"].items())
-            )
+            result["feature"] = (value for key, value in self["feature"].sorted_items())
         return result
 
 
