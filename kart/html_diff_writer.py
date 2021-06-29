@@ -34,7 +34,11 @@ class HtmlDiffWriter(BaseDiffWriter):
         repo_diff = self.get_repo_diff()
         self.has_changes = bool(repo_diff)
 
-        commit_spec_desc = f"{self.base_rs.short_id} ... {self.target_rs.short_id if self.target_rs else 'working-copy'}"
+        if self.commit:
+            commit_spec_desc = self.commit.short_id
+        else:
+            commit_spec_desc = f"{self.base_rs.short_id} ... {self.target_rs.short_id if self.target_rs else 'working-copy'}"
+
         title = f"{self.repo.workdir_path.stem}: {commit_spec_desc}"
 
         all_datasets_geojson = {
