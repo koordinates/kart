@@ -1,8 +1,10 @@
 from collections.abc import Iterable
 from pathlib import Path
 
-from .repo import KartRepo, KartRepoState
 from .exceptions import InvalidOperation, NotFound, NO_REPOSITORY
+
+# Don't import kart.repo here - kart.context.Context is always imported at startup,
+# whereas kart.repo.KartRepo isn't always needed, and takes a while to import.
 
 
 class Context(object):
@@ -46,7 +48,7 @@ class Context(object):
     def get_repo(
         self,
         allow_unsupported_versions=False,
-        allowed_states=KartRepoState.NORMAL,
+        allowed_states=None,  # The actual default is KartRepoState.NORMAL - see below.
         bad_state_message=None,
         command_extra=None,
     ):
@@ -55,6 +57,11 @@ class Context(object):
         Raises an error if there isn't a Kart repository there, or if the repository is
         not in one of the allowed states.
         """
+        from .repo import KartRepo, KartRepoState
+
+        if allowed_states is None:
+            allowed_states = KartRepoState.NORMAL
+
         if not hasattr(self, "_repo"):
             try:
                 self._repo = KartRepo(self.repo_path)
@@ -87,6 +94,8 @@ class Context(object):
         return self._repo
 
     def check_not_dirty(self, help_message=None):
+        from .repo import KartRepoState
+
         repo = self.get_repo(allowed_states=KartRepoState.ALL_STATES)
         working_copy = repo.working_copy
         if working_copy:
