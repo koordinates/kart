@@ -142,16 +142,15 @@ class KartGroup(click.Group):
         ctx.fail(fail_message)
 
     def invoke(self, ctx):
-        try:
-            import ipdb as pdb
-        except ImportError:
-            # ipdb is only installed in dev venvs, not releases
-            import pdb
-
         if ctx.params.get("post_mortem"):
             try:
                 return super().invoke(ctx)
             except Exception:
+                try:
+                    import ipdb as pdb
+                except ImportError:
+                    # ipdb is only installed in dev venvs, not releases
+                    import pdb
                 pdb.post_mortem()
                 raise
         else:
