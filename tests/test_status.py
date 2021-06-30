@@ -5,7 +5,7 @@ import pytest
 
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.exceptions import NO_REPOSITORY
-from kart.repo import KartRepoState
+from kart.repo import KartRepoState, KartRepo
 from kart.structs import CommitWithReference
 
 H = pytest.helpers.helpers()
@@ -292,8 +292,9 @@ def test_status_none(tmp_path, cli_runner, chdir):
         )
 
 
-def test_status_merging(create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS) as repo:
+def test_status_merging(data_archive, cli_runner):
+    with data_archive("conflicts/points.tgz") as repo_path:
+        repo = KartRepo(repo_path)
         r = cli_runner.invoke(["merge", "theirs_branch"])
         assert r.exit_code == 0, r
 

@@ -721,36 +721,6 @@ def insert(request, cli_runner):
     return func
 
 
-@pytest.fixture
-def update(request, cli_runner):
-    H = pytest.helpers.helpers()
-
-    def func(conn, pk, update_str, layer=None, commit=True):
-        layer = layer or _find_layer(conn)
-        metadata = H.metadata(layer)
-        pk_field = metadata.LAYER_PK
-        text_field = metadata.TEXT_FIELD
-
-        sql = (
-            f"""UPDATE {layer} SET {text_field} = :update_str WHERE {pk_field} = {pk}"""
-        )
-        r = conn.execute(sql, {"update_str": update_str})
-        assert r.rowcount == 1
-
-        if commit:
-            if hasattr(conn, "commit"):
-                conn.commit()
-            r = cli_runner.invoke(["commit", "-m", f"commit-update-{pk}", "-o", "json"])
-            assert r.exit_code == 0, r.stderr
-
-            commit_id = json.loads(r.stdout)["kart.commit/v1"]["commit"]
-            return commit_id
-        else:
-            return pk
-
-    return func
-
-
 def _insert_command(table_name, col_names):
     return sqlalchemy.table(
         table_name, *[sqlalchemy.column(c) for c in col_names]
@@ -842,45 +812,6 @@ def _edit_table(conn, dataset=None, working_copy=None):
 @pytest.fixture
 def edit_table():
     return _edit_table
-
-
-@pytest.fixture
-def create_conflicts(
-    data_working_copy,
-    cli_runner,
-    update,
-    insert,
-):
-    @contextlib.contextmanager
-    def ctx(data):
-        with data_working_copy(data.ARCHIVE) as (repo_path, wc):
-            repo = KartRepo(repo_path)
-            sample_pks = data.SAMPLE_PKS
-
-            cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
-            cli_runner.invoke(["checkout", "-b", "theirs_branch"])
-
-            with Db_GPKG.create_engine(wc).connect() as conn:
-                update(conn, sample_pks[0], "theirs_version")
-                update(conn, sample_pks[1], "ours_theirs_version")
-                update(conn, sample_pks[2], "theirs_version")
-                update(conn, sample_pks[3], "theirs_version")
-                update(conn, sample_pks[4], "theirs_version")
-                insert(conn, reset_index=1, insert_str="insert_theirs")
-
-                cli_runner.invoke(["checkout", "ancestor_branch"])
-                cli_runner.invoke(["checkout", "-b", "ours_branch"])
-
-                update(conn, sample_pks[1], "ours_theirs_version")
-                update(conn, sample_pks[2], "ours_version")
-                update(conn, sample_pks[3], "ours_version")
-                update(conn, sample_pks[4], "ours_version")
-                update(conn, sample_pks[5], "ours_version")
-                insert(conn, reset_index=1, insert_str="insert_ours")
-
-            yield repo
-
-    return ctx
 
 
 @pytest.fixture

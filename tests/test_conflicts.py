@@ -8,9 +8,10 @@ from kart.structs import CommitWithReference
 H = pytest.helpers.helpers()
 
 
-def test_merge_index_roundtrip(create_conflicts, cli_runner):
+def test_merge_index_roundtrip(data_archive, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS) as repo:
+    with data_archive("conflicts/polygons.tgz") as repo_path:
+        repo = KartRepo(repo_path)
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
@@ -53,9 +54,9 @@ def test_merge_index_roundtrip(create_conflicts, cli_runner):
         assert r2 == r1
 
 
-def test_summarise_conflicts(create_conflicts, cli_runner):
+def test_summarise_conflicts(data_archive, cli_runner):
     # Difficult to create conflict indexes directly - easier to create them by doing a merge:
-    with create_conflicts(H.POLYGONS) as repo:
+    with data_archive("conflicts/polygons.tgz") as _:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         r = cli_runner.invoke(["conflicts", "-s"])
@@ -93,8 +94,8 @@ def test_summarise_conflicts(create_conflicts, cli_runner):
         }
 
 
-def test_list_conflicts(create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS) as repo:
+def test_list_conflicts(data_archive, cli_runner):
+    with data_archive("conflicts/points.tgz") as _:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         expected_text = [
@@ -244,8 +245,8 @@ def test_list_conflicts(create_conflicts, cli_runner):
             assert version in features_geojson
 
 
-def test_list_conflicts_transform_crs(create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS) as repo:
+def test_list_conflicts_transform_crs(data_archive, cli_runner):
+    with data_archive("conflicts/points") as _:
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         r = cli_runner.invoke(

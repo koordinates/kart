@@ -234,10 +234,11 @@ def test_merge_conflicts(
     data,
     output_format,
     dry_run,
-    create_conflicts,
+    data_archive,
     cli_runner,
 ):
-    with create_conflicts(data) as repo:
+    with data_archive(f"conflicts/{data.ARCHIVE}.tgz") as repo_path:
+        repo = KartRepo(repo_path)
         ancestor = CommitWithReference.resolve(repo, "ancestor_branch")
         ours = CommitWithReference.resolve(repo, "ours_branch")
         theirs = CommitWithReference.resolve(repo, "theirs_branch")
@@ -320,8 +321,9 @@ def test_merge_conflicts(
             assert not repo.gitdir_file(filename).exists()
 
 
-def test_merge_state_lock(create_conflicts, cli_runner):
-    with create_conflicts(H.POINTS) as repo:
+def test_merge_state_lock(data_archive, cli_runner):
+    with data_archive("conflicts/points.tgz") as repo_path:
+        repo = KartRepo(repo_path)
         # Repo state: normal
         # kart checkout works, but kart conflicts and kart resolve do not.
         assert repo.state == KartRepoState.NORMAL

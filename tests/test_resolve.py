@@ -4,7 +4,7 @@ import pytest
 from kart.diff_output import json_row
 from kart.exceptions import INVALID_OPERATION
 from kart.merge_util import MergeIndex
-from kart.repo import KartRepoState
+from kart.repo import KartRepoState, KartRepo
 
 
 H = pytest.helpers.helpers()
@@ -33,8 +33,10 @@ def get_json_feature(rs, layer, pk):
         return None
 
 
-def test_resolve_with_version(create_conflicts, cli_runner):
-    with create_conflicts(H.POLYGONS) as repo:
+def test_resolve_with_version(data_archive, cli_runner):
+    with data_archive("conflicts/polygons.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr
         assert json.loads(r.stdout)["kart.merge/v1"]["conflicts"]
@@ -105,8 +107,10 @@ def test_resolve_with_version(create_conflicts, cli_runner):
         assert get_json_feature(merged, l, pk3) is None
 
 
-def test_resolve_with_file(create_conflicts, cli_runner):
-    with create_conflicts(H.POLYGONS) as repo:
+def test_resolve_with_file(data_archive, cli_runner):
+    with data_archive("conflicts/polygons.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r.stderr
         ours_geojson = json.loads(r.stdout)["features"][0]
