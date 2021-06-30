@@ -8,6 +8,8 @@ from .cli_util import tool_environment
 from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
+from .repo import KartRepoState
+from .structs import CommitWithReference
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
 
@@ -47,49 +49,119 @@ from . import diff_estimation
         "Otherwise, the feature count will be approximated with varying levels of accuracy."
     ),
 )
+@click.option(
+    "--separate-logs",
+    is_flag=True,
+    help="Return separate logs for each argument, plus a log showing the common ancestor of them all. "
+    "Only works with --output-format-json",
+    hidden=True,
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, args):
+def log(
+    ctx,
+    output_format,
+    json_style,
+    do_dataset_changes,
+    with_feature_count,
+    separate_logs,
+    args,
+):
     """ Show commit logs """
     if output_format == "text":
         execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
 
     elif output_format == "json":
-        repo = ctx.obj.repo
-        try:
-            cmd = [
-                "git",
-                "-C",
-                repo.path,
-                "log",
-                "--pretty=format:%H,%D",
-            ] + list(args)
-            r = subprocess.run(
-                cmd,
-                encoding="utf8",
-                check=True,
-                capture_output=True,
-                env=tool_environment(),
+        repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+        dataset_change_cache = {}
+        if separate_logs:
+            result = get_separate_logs_as_json(
+                repo, do_dataset_changes, with_feature_count, args, dataset_change_cache
             )
-        except subprocess.CalledProcessError as e:
-            raise SubprocessError(
-                f"There was a problem with git log: {e}", called_process_error=e
+        else:
+            result = get_log_as_json(
+                repo, do_dataset_changes, with_feature_count, args, dataset_change_cache
             )
+        dump_json_output(result, sys.stdout, json_style)
 
-        commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
+
+def get_separate_logs_as_json(
+    repo, do_dataset_changes, with_feature_count, log_args, dataset_change_cache=None
+):
+    if dataset_change_cache is None:
         dataset_change_cache = {}
 
-        commit_log = [
-            commit_obj_to_json(
-                repo[commit_id],
-                repo,
-                refs,
-                do_dataset_changes,
-                dataset_change_cache,
-                with_feature_count,
+    for arg in log_args:
+        if ".." in log_args:
+            raise click.BadParameter(
+                f"--separate-logs doesn't support ranges, such as: {arg}"
             )
-            for (commit_id, refs) in commit_ids_and_refs_log
-        ]
-        dump_json_output(commit_log, sys.stdout, json_style)
+
+    if not log_args:
+        log_args = ["HEAD"]
+
+    ancestor_id = CommitWithReference.resolve(repo, log_args[0]).id.hex
+    for arg in log_args[1:]:
+        ancestor_id = repo.merge_base(
+            ancestor_id, CommitWithReference.resolve(repo, arg).id.hex
+        ).hex
+
+    def get_log_from_to(from_, to):
+        if to is None:
+            return []
+        log_range_spec = to if from_ is None else f"{from_}..{to}"
+        return get_log_as_json(
+            repo,
+            do_dataset_changes,
+            with_feature_count,
+            [log_range_spec],
+            dataset_change_cache,
+        )
+
+    result = {arg: get_log_from_to(ancestor_id, arg) for arg in log_args}
+    result["*"] = get_log_from_to(None, ancestor_id)
+    return result
+
+
+def get_log_as_json(
+    repo, do_dataset_changes, with_feature_count, log_args, dataset_change_cache=None
+):
+    if dataset_change_cache is None:
+        dataset_change_cache = {}
+
+    try:
+        cmd = [
+            "git",
+            "-C",
+            repo.path,
+            "log",
+            "--pretty=format:%H,%D",
+        ] + list(log_args)
+        r = subprocess.run(
+            cmd,
+            encoding="utf8",
+            check=True,
+            capture_output=True,
+            env=tool_environment(),
+        )
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with git log: {e}", called_process_error=e
+        )
+
+    commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
+    dataset_change_cache = {}
+
+    return [
+        commit_obj_to_json(
+            repo[commit_id],
+            repo,
+            refs,
+            do_dataset_changes,
+            dataset_change_cache,
+            with_feature_count,
+        )
+        for (commit_id, refs) in commit_ids_and_refs_log
+    ]
 
 
 def _parse_git_log_output(lines):
