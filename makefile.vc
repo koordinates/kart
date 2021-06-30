@@ -63,9 +63,9 @@ test: $(app) venv\.test.installed
 ci-test:
 	set CI=true
 	set failed=0
-	FOR /L %%I IN (0, 1, 9) DO \
+	FOR /L %%I IN (0, 1, 19) DO \
 		pytest \
-			--num-shards 10 \
+			--num-shards 20 \
 			--shard-id %I \
 			--verbose \
 			--benchmark-enable \
