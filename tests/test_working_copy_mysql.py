@@ -4,9 +4,9 @@ import pygit2
 
 from kart.repo import KartRepo
 
+from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
 from kart.working_copy.base import WorkingCopyStatus
-from kart.working_copy.db_server import DatabaseServer_WorkingCopy
 from test_working_copy import compute_approximated_types
 
 
@@ -50,7 +50,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {DatabaseServer_WorkingCopy.strip_password(mysql_url)} ..."
+                == f"Creating working copy at {strip_password(mysql_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])

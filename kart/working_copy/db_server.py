@@ -8,7 +8,7 @@ from sqlalchemy.exc import DBAPIError
 
 from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
-from kart.sqlalchemy import DbType
+from kart.sqlalchemy import DbType, strip_password
 from kart.exceptions import InvalidOperation, DbConnectionError
 
 
@@ -93,20 +93,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
 
     @property
     def clean_location(self):
-        return self.strip_password(self.uri)
-
-    @classmethod
-    def strip_password(cls, uri):
-        p = urlsplit(uri)
-        if p.password is not None:
-            nl = p.hostname
-            if p.username is not None:
-                nl = f"{p.username}@{nl}"
-            if p.port is not None:
-                nl += f":{p.port}"
-            p = p._replace(netloc=nl)
-
-        return p.geturl()
+        return strip_password(self.uri)
 
     @property
     @functools.lru_cache(maxsize=1)

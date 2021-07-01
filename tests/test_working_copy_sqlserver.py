@@ -5,11 +5,11 @@ from sqlalchemy.exc import IntegrityError
 
 from kart.exceptions import NotFound
 from kart.repo import KartRepo
+from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 
 from kart.working_copy.base import WorkingCopyStatus
-from kart.working_copy.db_server import DatabaseServer_WorkingCopy
 from test_working_copy import compute_approximated_types
 
 
@@ -96,7 +96,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {DatabaseServer_WorkingCopy.strip_password(sqlserver_url)} ..."
+                == f"Creating working copy at {strip_password(sqlserver_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])

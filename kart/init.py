@@ -266,21 +266,27 @@ def import_(
 
     import_sources = []
     for table in tables:
-        (src_table, *rest) = table.split(":", 1)
-        dest_path = rest[0] if rest else src_table
-        if not dest_path:
-            raise click.BadParameter("Invalid table name", param_hint="tables")
+        if ":" in table:
+            table, dest_path = table.split(":", 1)
+            if not dest_path:
+                raise click.BadParameter("Invalid table name", param_hint="tables")
+        else:
+            dest_path = table
+
+        meta_overrides = table_info.get(dest_path, {})
+        dest_path = dest_path.replace(".", "/")
         if is_windows:
             dest_path = dest_path.replace("\\", "/")  # git paths use / as a delimiter
 
-        meta_overrides = table_info.get(dest_path, {})
         if "xmlMetadata" in meta_overrides:
             meta_overrides["metadata.xml"] = meta_overrides.pop("xmlMetadata")
         import_source = base_import_source.clone_for_table(
-            src_table,
+            table,
+            dest_path=dest_path,
             primary_key=primary_key,
             meta_overrides=meta_overrides,
         )
+
         if replace_ids is not None:
             if repo.version < 2:
                 raise InvalidOperation(
@@ -322,7 +328,6 @@ def import_(
                     similarity_detection_limit=similarity_detection_limit,
                 )
                 import_source.align_schema_to_existing_schema(existing_ds.schema)
-        import_source.dest_path = dest_path
         import_sources.append(import_source)
 
     ImportSource.check_valid(import_sources, param_hint="tables")

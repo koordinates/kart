@@ -15,7 +15,7 @@ from .exceptions import (
 from .import_source import ImportSource
 from .output_util import dump_json_output
 from .schema import Schema
-from .sqlalchemy import DbType, separate_last_path_part
+from .sqlalchemy import DbType, separate_last_path_part, strip_username_and_password
 from .utils import ungenerator
 
 
@@ -87,6 +87,7 @@ class SqlAlchemyImportSource(ImportSource):
         engine,
         db_schema,
         table,
+        dest_path=None,
         meta_overrides=None,
     ):
         self.original_spec = original_spec
@@ -96,17 +97,47 @@ class SqlAlchemyImportSource(ImportSource):
 
         self.db_schema = db_schema
         self.table = table
+        if dest_path:
+            self.dest_path = dest_path
         self.meta_overrides = {
             k: v for k, v in (meta_overrides or {}).items() if v is not None
         }
 
     @property
     def source_name(self):
-        # TODO - this only works for GPKG.
-        return os.path.basename(self.original_spec)
+        """Returns the container the user specified to find the table or table(s) inside."""
+        if self.db_type == DbType.GPKG:
+            return os.path.basename(self.original_spec)
+        else:
+            return strip_username_and_password(self.original_spec)
+
+    @property
+    def table_location_within_source(self):
+        if self.db_type == DbType.GPKG:
+            return self.table
+
+        path_length = self.db_type.path_length(self.original_spec)
+        if path_length == self.db_type.path_length_for_table:
+            return ""
+        elif path_length == self.db_type.path_length_for_table_container:
+            return self.table
+        else:
+            return f"{self.db_schema}/{self.table}"
+
+    @property
+    def fully_qualified_table_location(self):
+        table_loc = self.table_location_within_source
+        if not table_loc:
+            return self.source_name
+
+        separator = ":" if self.db_type is DbType.GPKG else "/"
+        return f"{self.source_name}{separator}{table_loc}"
+
+    def __str__(self):
+        return self.fully_qualified_table_location
 
     def import_source_desc(self):
-        return f"Import from {self.source_name}:{self.table} to {self.dest_path}/"
+        return f"Import from {self.fully_qualified_table_location} to {self.dest_path}/"
 
     def aggregate_import_source_desc(self, import_sources):
         if len(import_sources) == 1:
@@ -114,14 +145,14 @@ class SqlAlchemyImportSource(ImportSource):
 
         desc = f"Import {len(import_sources)} datasets from {self.source_name}:"
         for source in import_sources:
-            if source.dest_path == source.table:
-                desc += f"\n * {source.table}/"
+            if source.dest_path == source.table_location_within_source:
+                desc += f"\n * {source.table_location_within_source}/"
             else:
-                desc += f"\n * {source.dest_path} (from {source.table})"
+                desc += f"\n * {source.dest_path} (from {source.table_location_within_source})"
         return desc
 
     def default_dest_path(self):
-        return self.table
+        return self.table_location_within_source or self.table
 
     @functools.lru_cache(maxsize=1)
     def get_tables(self):
@@ -179,7 +210,9 @@ class SqlAlchemyImportSource(ImportSource):
             exit_code=NO_TABLE,
         )
 
-    def clone_for_table(self, table, primary_key=None, meta_overrides={}):
+    def clone_for_table(
+        self, table, *, dest_path=None, primary_key=None, meta_overrides={}
+    ):
         meta_overrides = {**self.meta_overrides, **meta_overrides}
         db_schema, table = self.validate_table(table)
 
@@ -189,6 +222,7 @@ class SqlAlchemyImportSource(ImportSource):
             engine=self.engine,
             db_schema=db_schema,
             table=table,
+            dest_path=dest_path,
             meta_overrides=meta_overrides,
         )
 

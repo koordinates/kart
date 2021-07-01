@@ -7,7 +7,7 @@ from sqlalchemy import inspect
 from kart.repo import KartRepo
 
 from kart.working_copy.base import WorkingCopyStatus
-from kart.working_copy.db_server import DatabaseServer_WorkingCopy
+from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 from test_working_copy import compute_approximated_types
 
@@ -52,7 +52,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {DatabaseServer_WorkingCopy.strip_password(postgres_url)} ..."
+                == f"Creating working copy at {strip_password(postgres_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])

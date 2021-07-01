@@ -97,6 +97,32 @@ class DbType(Enum):
         return False
 
 
+def strip_username_and_password(uri):
+    """Removes username and password from URI."""
+    p = urlsplit(uri)
+    if p.username is not None or p.password is not None:
+        nl = p.hostname
+        if p.port is not None:
+            nl += f":{p.port}"
+        p = p._replace(netloc=nl)
+
+    return p.geturl()
+
+
+def strip_password(uri):
+    """Removes password from URI but keeps username."""
+    p = urlsplit(uri)
+    if p.password is not None:
+        nl = p.hostname
+        if p.username is not None:
+            nl = f"{p.username}@{nl}"
+        if p.port is not None:
+            nl += f":{p.port}"
+        p = p._replace(netloc=nl)
+
+    return p.geturl()
+
+
 def separate_last_path_part(uri):
     """
     Removes the last part of the path from a URI and returns it separately.

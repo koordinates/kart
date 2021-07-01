@@ -183,6 +183,7 @@ class OgrImportSource(ImportSource):
         *,
         source,
         ogr_source,
+        dest_path=None,
         primary_key=None,
         meta_overrides=None,
     ):
@@ -191,6 +192,8 @@ class OgrImportSource(ImportSource):
         self.table = table
         self.source = source
         self.ogr_source = ogr_source
+        if dest_path:
+            self.dest_path = dest_path
         self._primary_key = self._check_primary_key_option(primary_key)
         self.meta_overrides = {
             k: v for k, v in (meta_overrides or {}).items() if v is not None
@@ -218,13 +221,16 @@ class OgrImportSource(ImportSource):
     def source_name(self):
         return Path(self.source).name
 
-    def clone_for_table(self, table, primary_key=None, meta_overrides={}):
+    def clone_for_table(
+        self, table, *, dest_path=None, primary_key=None, meta_overrides={}
+    ):
         meta_overrides = {**self.meta_overrides, **meta_overrides}
         self.check_table(table)
 
         return self.__class__(
             self.ds,
             table=table,
+            dest_path=dest_path,
             source=self.source,
             ogr_source=self.ogr_source,
             primary_key=primary_key or self._primary_key,
