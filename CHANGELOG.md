@@ -16,6 +16,7 @@ Specifically:
 #### Other changes
  * `kart show` now supports all the same options as `kart diff`. Both `kart diff` and `kart show` now both support output in JSON-lines format, so that large diffs can be processed as the diff is generated.
  * Bugfix: diffs containing a mixture of primary key types can now be shown (necessary in the case where the primary key type has changed).
+ * Some performance improvements - less startup overhead.
 
 ## 0.10.0
 
