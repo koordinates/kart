@@ -8,6 +8,7 @@ from .cli_util import tool_environment
 from .exec import execvp
 from .exceptions import SubprocessError
 from .output_util import dump_json_output
+from .repo import KartRepoState
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
 
@@ -54,7 +55,7 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, 
         execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
 
     elif output_format == "json":
-        repo = ctx.obj.repo
+        repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
         try:
             cmd = [
                 "git",
