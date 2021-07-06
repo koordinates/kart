@@ -4,6 +4,11 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.2 (UNRELEASED)
+
+ * Added support for the geometry `POINT EMPTY` in SQL Server working copy.
+
+
 ## 0.10.1
 
 #### Fix for `kart upgrade`

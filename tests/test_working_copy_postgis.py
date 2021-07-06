@@ -483,8 +483,42 @@ def test_values_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
 
             with repo.working_copy.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
-                sess.execute(f'UPDATE {postgres_schema}.manytypes SET "PK"=999;')
-                sess.execute(f'UPDATE {postgres_schema}.manytypes SET "PK"=1;')
+                sess.execute(
+                    f'UPDATE {postgres_schema}.manytypes SET "PK"="PK" + 1000;'
+                )
+                sess.execute(
+                    f'UPDATE {postgres_schema}.manytypes SET "PK"="PK" - 1000;'
+                )
+
+            # If values roundtripping code isn't working for certain types,
+            # we could get spurious diffs on those values.
+            r = cli_runner.invoke(["diff", "--exit-code"])
+            assert r.exit_code == 0, r.stdout
+
+
+def test_empty_geometry_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
+    with data_archive("empty-geometry") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            repo.config["kart.workingcopy.location"] = postgres_url
+            r = cli_runner.invoke(["checkout"])
+
+            with repo.working_copy.session() as sess:
+                # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
+                sess.execute(
+                    f'UPDATE {postgres_schema}.point_test SET "PK"="PK" + 1000;'
+                )
+                sess.execute(
+                    f'UPDATE {postgres_schema}.point_test SET "PK"="PK" - 1000;'
+                )
+                sess.execute(
+                    f'UPDATE {postgres_schema}.polygon_test SET "PK"="PK" + 1000;'
+                )
+                sess.execute(
+                    f'UPDATE {postgres_schema}.polygon_test SET "PK"="PK" - 1000;'
+                )
 
             # If values roundtripping code isn't working for certain types,
             # we could get spurious diffs on those values.

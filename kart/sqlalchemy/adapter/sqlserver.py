@@ -1,6 +1,6 @@
 import decimal
 
-
+import sqlalchemy as sa
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function
@@ -385,6 +385,8 @@ def compile_instance_function(element, compiler, **kw):
 class GeometryType(ConverterType):
     """ConverterType so that V2 geometry is adapted to MS binary format."""
 
+    EMPTY_POINT_WKB = "0x0101000000000000000000f87f000000000000f87f"
+
     def __init__(self, crs_id):
         self.crs_id = crs_id
 
@@ -394,16 +396,38 @@ class GeometryType(ConverterType):
 
     def sql_write(self, bindvalue):
         # 2. Writing - SQL layer - wrap in call to STGeomFromWKB to convert WKB to MS binary.
-        return Function(
-            quoted_name("geometry::STGeomFromWKB", False),
-            bindvalue,
-            self.crs_id,
-            type_=self,
+        # POINT EMPTY is handled specially since it doesn't have a WKB value the SQL Server accepts.
+        return sa.case(
+            (
+                bindvalue == sa.literal_column(self.EMPTY_POINT_WKB),
+                Function(
+                    quoted_name("geometry::STGeomFromText", False),
+                    'POINT EMPTY',
+                    self.crs_id,
+                    type_=self,
+                ),
+            ),
+            else_=Function(
+                quoted_name("geometry::STGeomFromWKB", False),
+                bindvalue,
+                self.crs_id,
+                type_=self,
+            ),
         )
 
     def sql_read(self, column):
         # 3. Reading - SQL layer - append with call to .AsBinaryZM() to convert MS binary to WKB.
-        return InstanceFunction("AsBinaryZM", column, type_=self)
+        # POINT EMPTY is handled specially since SQL Server returns WKB(MULTIPOINT EMPTY) for (POINT EMPTY).AsBinaryZM()
+        return sa.case(
+            (
+                sa.and_(
+                    InstanceFunction("STGeometryType", column) == "Point",
+                    InstanceFunction("STIsEmpty", column) == 1,
+                ),
+                sa.literal_column(self.EMPTY_POINT_WKB, type_=self),
+            ),
+            else_=InstanceFunction("AsBinaryZM", column, type_=self),
+        )
 
     def python_postread(self, wkb):
         # 4. Reading - Python layer - convert WKB to Kart geometry.

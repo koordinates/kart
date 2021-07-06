@@ -896,8 +896,21 @@ def test_values_roundtrip(data_working_copy, cli_runner):
         repo = KartRepo(repo_path)
         with repo.working_copy.session() as sess:
             # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
-            sess.execute('UPDATE manytypes SET "PK"=999;')
-            sess.execute('UPDATE manytypes SET "PK"=1;')
+            sess.execute('UPDATE manytypes SET "PK"="PK" + 1000;')
+            sess.execute('UPDATE manytypes SET "PK"="PK" - 1000;')
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0, r.stdout
+
+
+def test_empty_geometry_roundtrip(data_working_copy, cli_runner):
+    with data_working_copy("empty-geometry") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
+            sess.execute('UPDATE point_test SET "PK"="PK" + 1000;')
+            sess.execute('UPDATE point_test SET "PK"="PK" - 1000;')
+            sess.execute('UPDATE polygon_test SET "PK"="PK" + 1000;')
+            sess.execute('UPDATE polygon_test SET "PK"="PK" - 1000;')
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stdout
 
