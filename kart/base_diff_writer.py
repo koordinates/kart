@@ -1,5 +1,6 @@
 import itertools
 import logging
+from pathlib import Path
 import re
 import sys
 
@@ -83,7 +84,9 @@ class BaseDiffWriter:
 
         self.all_ds_paths = sorted(list(all_ds_paths))
 
-        self.output_path = self._check_output_path(repo, output_path)
+        self.output_path = self._check_output_path(
+            repo, self._normalize_output_path(output_path)
+        )
 
         self.json_style = json_style
         self.target_crs = target_crs
@@ -96,6 +99,16 @@ class BaseDiffWriter:
         with all the info for commit C.
         """
         self.commit = self.target_rs.commit
+
+    @classmethod
+    def _normalize_output_path(cls, output_path):
+        if not output_path or output_path == "-":
+            return output_path
+        if isinstance(output_path, str):
+            output_path = Path(output_path)
+        if isinstance(output_path, Path):
+            output_path = output_path.expanduser()
+        return output_path
 
     @classmethod
     def _check_output_path(cls, repo, output_path):

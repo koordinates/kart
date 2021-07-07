@@ -233,6 +233,11 @@ def resolve_output_path(output_path):
       * a file-like object
       * the string '-' or None (both will return sys.stdout)
     """
+    if (not output_path) or output_path == "-":
+        return sys.stdout
+
+    if isinstance(output_path, str):
+        output_path = Path(output_path)
     if isinstance(output_path, Path):
         output_path = output_path.expanduser()
 
@@ -241,8 +246,7 @@ def resolve_output_path(output_path):
         # but in some circumstances it can be something else.
         # e.g. click on windows may wrap it with a colorama.ansitowin32.StreamWrapper.
         return output_path
-    elif (not output_path) or output_path == "-":
-        return sys.stdout
+
     else:
         return output_path.open("w")
 

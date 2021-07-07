@@ -1638,3 +1638,15 @@ def test_diff_streaming(data_archive_readonly):
             expected_calls += 1
             assert old.get_feature_calls == expected_calls
             assert new.get_feature_calls == expected_calls
+
+
+@pytest.mark.parametrize(
+    "output_format", [o for o in DIFF_OUTPUT_FORMATS if o not in {"html", "quiet"}]
+)
+def test_diff_output_to_file(output_format, data_archive, cli_runner):
+    with data_archive("points") as repo_path:
+        r = cli_runner.invoke(
+            ["show", f"--output-format={output_format}", "--output=out"]
+        )
+        assert r.exit_code == 0, r
+        assert (repo_path / "out").exists()
