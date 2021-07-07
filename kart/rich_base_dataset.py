@@ -165,7 +165,7 @@ class RichBaseDataset(BaseDataset):
         If reverse is true, generates a diff from other -> self.
         """
         ds_diff = DatasetDiff()
-        ds_diff["meta"] = DeltaDiff(self.diff_meta(other, reverse=reverse))
+        ds_diff["meta"] = self.diff_meta(other, reverse=reverse)
         feature_filter = ds_filter.get("feature", ())
         ds_diff["feature"] = DeltaDiff(
             self.diff_feature(other, feature_filter, reverse=reverse)
@@ -174,7 +174,7 @@ class RichBaseDataset(BaseDataset):
 
     def diff_meta(self, other, reverse=False):
         """
-        Generates a diff from self -> other, but only for meta items.
+        Returns a diff from self -> other, but only for meta items.
         If reverse is true, generates a diff from other -> self.
         """
         if reverse:
@@ -184,7 +184,7 @@ class RichBaseDataset(BaseDataset):
 
         meta_old = dict(old.meta_items()) if old else {}
         meta_new = dict(new.meta_items()) if new else {}
-        yield from DeltaDiff.diff_dicts_as_deltas(meta_old, meta_new)
+        return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     _INSERT_UPDATE_DELETE = (
         pygit2.GIT_DELTA_ADDED,
@@ -196,8 +196,8 @@ class RichBaseDataset(BaseDataset):
 
     def diff_feature(self, other, feature_filter=UNFILTERED, reverse=False):
         """
-        Generates a diff from self -> other, but only for features that match the feature_filter.
-        If reverse is true, generates a diff from other -> self.
+        Yields feature deltas from self -> other, but only for features that match the feature_filter.
+        If reverse is true, yields feature deltas from other -> self.
         """
         feature_filter = feature_filter or UNFILTERED
 

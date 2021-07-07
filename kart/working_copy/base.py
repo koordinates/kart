@@ -2,6 +2,7 @@ import contextlib
 import functools
 import logging
 import time
+import types
 
 import click
 import pygit2
@@ -1169,59 +1170,52 @@ class BaseWorkingCopy:
         self._reset_dirty_rows(sess, base_ds)
 
         if target_ds != base_ds:
-            self._apply_meta_diff(
-                sess, target_ds, DeltaDiff(base_ds.diff_meta(target_ds))
-            )
+            self._apply_meta_diff(sess, target_ds, base_ds.diff_meta(target_ds))
             # WC now has target_ds structure and so we can write target_ds features to WC.
-            self._apply_feature_diff(sess, base_ds, target_ds, track_changes_as_dirty)
+            self._apply_feature_diff(
+                sess, target_ds, base_ds.diff_feature(target_ds), track_changes_as_dirty
+            )
 
         self._update_last_write_time(sess, target_ds, commit)
 
     def _apply_feature_diff(
-        self, sess, base_ds, target_ds, track_changes_as_dirty=False
+        self, sess, target_ds, feature_diff, track_changes_as_dirty=False
     ):
         """
-        Change the features of this working copy from their current state, base_ds - to the desired state, target_ds.
+        Change the features of this working copy in target_ds from their current state to the desired state.
 
         sess - sqlalchemy session.
-        base_ds - dataset containing the features that match the WC table currently.
-        target_ds - dataset containing the desired features of the WC table.
+        target_ds - the table to modify.
+        feature_diff - the feature-deltas between the current table state and its desired state.
         track_changes_as_dirty - whether to track these changes as working-copy edits in the tracking table.
         """
-        feature_diff_index = base_ds.feature_tree.diff_to_tree(target_ds.feature_tree)
-        if not feature_diff_index:
+
+        if isinstance(feature_diff, types.GeneratorType):
+            feature_diff = DeltaDiff(feature_diff)
+
+        if not feature_diff:
             return
 
-        L.debug("Applying feature diff: about %s changes", len(feature_diff_index))
+        L.debug("Applying feature diff: about %s changes", len(feature_diff))
 
         delete_pks = []
         insert_and_update_pks = []
 
-        for d in feature_diff_index.deltas:
-            if d.old_file and d.old_file.path.startswith(base_ds.META_PATH):
-                continue
-            if d.new_file and d.new_file.path.startswith(base_ds.META_PATH):
-                continue
-
-            if d.status == pygit2.GIT_DELTA_DELETED:
-                delete_pks.append(base_ds.decode_path_to_1pk(d.old_file.path))
-            elif d.status in (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED):
-                insert_and_update_pks.append(
-                    target_ds.decode_path_to_1pk(d.new_file.path)
-                )
+        for delta in feature_diff.values():
+            if delta.type == "delete":
+                delete_pks.append(delta.old_key)
             else:
-                # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE, UNTRACKED
-                raise NotImplementedError(f"Delta status: {d.status_char()}")
+                insert_and_update_pks.append(delta.new_key)
 
         if not track_changes_as_dirty:
             # We don't want to track these changes as working copy edits - they will be part of the new WC base.
-            ctx = self._suspend_triggers(sess, base_ds)
+            ctx = self._suspend_triggers(sess, target_ds)
         else:
             # We want to track these changes as working copy edits so they can be committed later.
             ctx = contextlib.nullcontext()
 
         with ctx:
-            self._delete_features(sess, base_ds, delete_pks)
+            self._delete_features(sess, target_ds, delete_pks)
             self._write_features(sess, target_ds, insert_and_update_pks)
 
     def _is_meta_update_supported(self, meta_diff):
