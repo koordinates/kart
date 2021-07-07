@@ -19,7 +19,7 @@ from .exceptions import (
     NO_DATA,
     NO_WORKING_COPY,
 )
-from .filter_util import build_feature_filter
+from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .status import (
     get_branch_status_message,
@@ -89,8 +89,8 @@ def commit(ctx, message, allow_empty, output_format, filters):
 
     working_copy.assert_db_tree_match(tree)
 
-    commit_filter = build_feature_filter(filters)
-    wc_diff = working_copy.diff_to_tree(commit_filter)
+    repo_key_filter = RepoKeyFilter.build_from_user_patterns(filters)
+    wc_diff = working_copy.diff_to_tree(repo_key_filter)
 
     if not wc_diff and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
@@ -108,7 +108,7 @@ def commit(ctx, message, allow_empty, output_format, filters):
         wc_diff, commit_msg, allow_empty=allow_empty
     )
 
-    working_copy.reset_tracking_table(commit_filter)
+    working_copy.reset_tracking_table(repo_key_filter)
     working_copy.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
 
     jdict = commit_obj_to_json(new_commit, repo, wc_diff)

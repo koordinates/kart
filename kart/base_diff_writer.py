@@ -7,7 +7,7 @@ import click
 
 from .diff_structs import RepoDiff, DatasetDiff
 from .exceptions import InvalidOperation, NotFound, NotYetImplemented, NO_WORKING_COPY
-from .filter_util import build_feature_filter, UNFILTERED
+from .key_filters import RepoKeyFilter
 
 
 L = logging.getLogger("kart.diff_writer")
@@ -59,7 +59,7 @@ class BaseDiffWriter:
         self,
         repo,
         commit_spec,
-        filters,
+        user_key_filters,
         output_path="-",
         *,
         json_style="pretty",
@@ -71,15 +71,15 @@ class BaseDiffWriter:
             repo, commit_spec
         )
 
-        self.filters = filters
-        self.diff_filter = build_feature_filter(filters)
+        self.user_key_filters = user_key_filters
+        self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
 
         base_ds_paths = {ds.path for ds in self.base_rs.datasets}
         target_ds_paths = {ds.path for ds in self.target_rs.datasets}
         all_ds_paths = base_ds_paths | target_ds_paths
 
-        if self.diff_filter is not UNFILTERED:
-            all_ds_paths = all_ds_paths & self.diff_filter.keys()
+        if not self.repo_key_filter.match_all:
+            all_ds_paths = all_ds_paths & self.repo_key_filter.keys()
 
         self.all_ds_paths = sorted(list(all_ds_paths))
 
@@ -188,7 +188,7 @@ class BaseDiffWriter:
         """Returns the DatasetDiff object for the dataset at path dataset_path."""
 
         diff = DatasetDiff()
-        ds_filter = self.diff_filter[dataset_path]
+        ds_filter = self.repo_key_filter[dataset_path]
 
         if self.base_rs != self.target_rs:
             # diff += base_rs<>target_rs

@@ -16,7 +16,7 @@ from kart.exceptions import (
     NotFound,
     NO_WORKING_COPY,
 )
-from kart.filter_util import UNFILTERED
+from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
 from kart.schema import Schema, DefaultRoundtripContext
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.utils import chunk
@@ -455,13 +455,11 @@ class BaseWorkingCopy:
         except WorkingCopyDirty:
             return True
 
-    def diff_to_tree(self, repo_filter=UNFILTERED, raise_if_dirty=False):
+    def diff_to_tree(self, repo_filter=RepoKeyFilter.MATCH_ALL, raise_if_dirty=False):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for every dataset in the given repository structure.
         """
-        repo_filter = repo_filter or UNFILTERED
-
         with self.session():
             repo_diff = RepoDiff()
             for dataset in self.repo.datasets(self.get_db_tree()):
@@ -485,18 +483,21 @@ class BaseWorkingCopy:
         """
         return True
 
-    def diff_db_to_tree(self, dataset, ds_filter=None, raise_if_dirty=False):
+    def diff_db_to_tree(
+        self, dataset, ds_filter=DatasetKeyFilter.MATCH_ALL, raise_if_dirty=False
+    ):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
         """
         if not self._is_dataset_supported(dataset):
             return DatasetDiff()
-        ds_filter = ds_filter or UNFILTERED
+
+        feature_filter = ds_filter.get("feature", ds_filter.child_type())
         with self.session():
             meta_diff = self.diff_db_to_tree_meta(dataset, raise_if_dirty)
             feature_diff = self.diff_db_to_tree_feature(
-                dataset, ds_filter.get("feature", ()), meta_diff, raise_if_dirty
+                dataset, feature_filter, meta_diff, raise_if_dirty
             )
 
         ds_diff = DatasetDiff()
@@ -684,15 +685,12 @@ class BaseWorkingCopy:
         return True
 
     def _execute_dirty_rows_query(
-        self, sess, dataset, feature_filter=None, meta_diff=None
+        self, sess, dataset, feature_filter=FeatureKeyFilter.MATCH_ALL, meta_diff=None
     ):
         """
         Does a join on the tracking table and the table for the given dataset, and returns a result
         containing all the rows that have been inserted / updated / deleted.
         """
-
-        feature_filter = feature_filter or UNFILTERED
-
         if (
             meta_diff
             and "schema.json" in meta_diff
@@ -721,7 +719,7 @@ class BaseWorkingCopy:
             )
         )
 
-        if feature_filter is UNFILTERED:
+        if feature_filter.match_all:
             query = base_query.where(kart_track.c.table_name == dataset.table_name)
         else:
             pks = list(feature_filter)
@@ -734,37 +732,37 @@ class BaseWorkingCopy:
 
         return sess.execute(query)
 
-    def reset_tracking_table(self, reset_filter=UNFILTERED):
+    def reset_tracking_table(self, repo_key_filter=RepoKeyFilter.MATCH_ALL):
         """Delete the rows from the tracking table that match the given filter."""
-        reset_filter = reset_filter or UNFILTERED
-
         kart_track = self.kart_tables.kart_track
         with self.session() as sess:
-            if reset_filter == UNFILTERED:
+            if repo_key_filter.match_all:
                 sess.execute(sa.delete(kart_track))
                 return
 
-            for dataset_path, dataset_filter in reset_filter.items():
+            for dataset_path, dataset_filter in repo_key_filter.items():
                 table_name = dataset_path.strip("/").replace("/", "__")
-                if (
-                    dataset_filter == UNFILTERED
-                    or dataset_filter.get("feature") == UNFILTERED
-                ):
-                    sess.execute(
-                        sa.delete(kart_track).where(
-                            kart_track.c.table_name == table_name
-                        )
+                feature_filter = dataset_filter.get(
+                    "feature", dataset_filter.child_type()
+                )
+                self._reset_tracking_table_for_table(sess, table_name, feature_filter)
+
+    def _reset_tracking_table_for_table(self, sess, table_name, feature_filter):
+        kart_track = self.kart_tables.kart_track
+        if feature_filter.match_all:
+            sess.execute(
+                sa.delete(kart_track).where(kart_track.c.table_name == table_name)
+            )
+        else:
+            pks = list(feature_filter)
+            sess.execute(
+                sa.delete(kart_track).where(
+                    sa.and_(
+                        kart_track.c.table_name == table_name,
+                        kart_track.c.pk.in_(pks),
                     )
-                else:
-                    pks = list(dataset_filter.get("feature", []))
-                    sess.execute(
-                        sa.delete(kart_track).where(
-                            sa.and_(
-                                kart_track.c.table_name == table_name,
-                                kart_track.c.pk.in_(pks),
-                            )
-                        )
-                    )
+                )
+            )
 
     def can_find_renames(self, meta_diff):
         """Can we find a renamed (aka moved) feature? There's no point looking for renames if the schema has changed."""
@@ -1017,7 +1015,7 @@ class BaseWorkingCopy:
         target_tree_or_commit,
         *,
         force=False,
-        paths=None,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
     ):
         """
@@ -1060,31 +1058,33 @@ class BaseWorkingCopy:
         )
 
         base_datasets = {
-            ds.table_name: ds
-            for ds in self._filter_by_paths(self.repo.datasets(base_tree), paths)
+            ds.path: ds
+            for ds in self.repo.datasets(base_tree)
+            if ds.path in repo_key_filter
         }
         if base_tree == target_tree:
             target_datasets = base_datasets
         else:
             target_datasets = {
-                ds.table_name: ds
-                for ds in self._filter_by_paths(self.repo.datasets(target_tree), paths)
+                ds.path: ds
+                for ds in self.repo.datasets(target_tree)
+                if ds.path in repo_key_filter
             }
 
-        table_inserts = target_datasets.keys() - base_datasets.keys()
-        table_deletes = base_datasets.keys() - target_datasets.keys()
-        table_updates = base_datasets.keys() & target_datasets.keys()
-        table_updates_unsupported = set()
+        ds_inserts = target_datasets.keys() - base_datasets.keys()
+        ds_deletes = base_datasets.keys() - target_datasets.keys()
+        ds_updates = base_datasets.keys() & target_datasets.keys()
+        ds_updates_unsupported = set()
 
-        for table in table_updates:
-            base_ds = base_datasets[table]
+        for ds_path in ds_updates:
+            base_ds = base_datasets[ds_path]
 
             # Do we support changing the WC metadata to back to base_ds metadata?
             rev_wc_meta_diff = self.diff_db_to_tree_meta(base_ds)
             update_supported = self._is_meta_update_supported(rev_wc_meta_diff)
 
             # And, do we support then changing it from base_ds metadata to target_ds metadata?
-            target_ds = target_datasets[table]
+            target_ds = target_datasets[ds_path]
             if target_ds != base_ds:
                 rev_rev_meta_diff = DeltaDiff(base_ds.diff_meta(target_ds))
                 update_supported = update_supported and self._is_meta_update_supported(
@@ -1092,50 +1092,64 @@ class BaseWorkingCopy:
                 )
 
             if not update_supported:
-                table_updates_unsupported.add(table)
+                ds_updates_unsupported.add(ds_path)
 
-        for table in table_updates_unsupported:
-            table_updates.remove(table)
-            table_inserts.add(table)
-            table_deletes.add(table)
+        for ds_path in ds_updates_unsupported:
+            ds_updates.remove(ds_path)
+            ds_inserts.add(ds_path)
+            ds_deletes.add(ds_path)
 
         L.debug(
-            "reset(): table_inserts: %s, table_deletes: %s, table_updates %s",
-            table_inserts,
-            table_deletes,
-            table_updates,
+            "reset(): ds_inserts: %s, ds_deletes: %s, ds_updates %s",
+            ds_inserts,
+            ds_deletes,
+            ds_updates,
         )
 
-        structural_changes = table_inserts | table_deletes
+        structural_changes = ds_inserts | ds_deletes
         if track_changes_as_dirty and structural_changes:
             # We don't yet support tracking changes as dirty if we delete, create, or rewrite an entire table.
             structural_changes_text = "\n".join(structural_changes)
             raise NotYetImplemented(
-                "Sorry, this operation is not possible when there are structural changes."
+                "Sorry, this operation is not yet supported when there are structural changes."
                 f" Structural changes are affecting:\n{structural_changes_text}"
+            )
+
+        unsupported_filters = set()
+        for ds_path in structural_changes:
+            ds_filter = repo_key_filter[ds_path]
+            feature_filter = ds_filter.get("feature", ds_filter.child_type())
+            if not ds_filter.match_all and not feature_filter.match_all:
+                unsupported_filters.add(ds_path)
+
+        if unsupported_filters:
+            raise NotYetImplemented(
+                "Sorry, this type of filter is not yet supported when there are structural changes."
+                f" Unfilterable structural changes are affecting:\n{unsupported_filters}"
             )
 
         with self.session() as sess:
             # Delete old tables
-            if table_deletes:
+            if ds_deletes:
                 self.drop_table(
-                    target_tree_or_commit, *[base_datasets[d] for d in table_deletes]
+                    target_tree_or_commit, *[base_datasets[d] for d in ds_deletes]
                 )
             # Write new tables
-            if table_inserts:
+            if ds_inserts:
                 self.write_full(
-                    target_tree_or_commit, *[target_datasets[d] for d in table_inserts]
+                    target_tree_or_commit, *[target_datasets[d] for d in ds_inserts]
                 )
 
             # Update tables that can be updated in place.
-            for table in table_updates:
-                base_ds = base_datasets[table]
-                target_ds = target_datasets[table]
+            for ds_path in ds_updates:
+                base_ds = base_datasets[ds_path]
+                target_ds = target_datasets[ds_path]
                 self._update_table(
                     sess,
                     base_ds,
                     target_ds,
                     commit,
+                    ds_filter=repo_key_filter[ds_path],
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
 
@@ -1143,15 +1157,15 @@ class BaseWorkingCopy:
                 # update the tree id
                 self._insert_or_replace_state_table_tree(sess, target_tree_id)
 
-    def _filter_by_paths(self, datasets, paths):
-        """Filters the datasets so that only those matching the paths are returned."""
-        if paths:
-            return [ds for ds in datasets if ds.path.startswith(paths)]
-        else:
-            return datasets
-
     def _update_table(
-        self, sess, base_ds, target_ds, commit=None, track_changes_as_dirty=False
+        self,
+        sess,
+        base_ds,
+        target_ds,
+        commit=None,
+        *,
+        ds_filter=DatasetKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
     ):
         """
         Update the given table in working copy from its current state to target_ds.
@@ -1162,18 +1176,21 @@ class BaseWorkingCopy:
         base_ds - the dataset that this working copy table is currently based on.
         target_ds - the target desired state for this working copy table.
         commit - the commit that contains target_ds, if any.
+        ds_filter - a DatasetKeyFilter controlling what to update.
         track_changes_if_dirty - whether to track changes made from base_ds -> target_ds as WC edits.
         """
+        feature_filter = ds_filter.get("feature", ds_filter.child_type())
 
         self._apply_meta_diff(sess, base_ds, ~self.diff_db_to_tree_meta(base_ds))
         # WC now has base_ds structure and so we can write base_ds features to WC.
-        self._reset_dirty_rows(sess, base_ds)
+        self._reset_dirty_rows(sess, base_ds, feature_filter)
 
         if target_ds != base_ds:
             self._apply_meta_diff(sess, target_ds, base_ds.diff_meta(target_ds))
             # WC now has target_ds structure and so we can write target_ds features to WC.
+            feature_diff = base_ds.diff_feature(target_ds, feature_filter)
             self._apply_feature_diff(
-                sess, target_ds, base_ds.diff_feature(target_ds), track_changes_as_dirty
+                sess, target_ds, feature_diff, track_changes_as_dirty
             )
 
         self._update_last_write_time(sess, target_ds, commit)
@@ -1283,7 +1300,9 @@ class BaseWorkingCopy:
     def _apply_meta_metadata_xml(self, sess, dataset, src_value, dest_value):
         pass  # This is a no-op for most WC types, which don't store metadata XML.
 
-    def _reset_dirty_rows(self, sess, base_ds):
+    def _reset_dirty_rows(
+        self, sess, base_ds, feature_filter=FeatureKeyFilter.MATCH_ALL
+    ):
         """
         Reset the dirty rows recorded in the tracking table to match the originals from the dataset.
 
@@ -1297,6 +1316,9 @@ class BaseWorkingCopy:
             )
         )
         dirty_pk_list = [row[0] for row in r]
+        if not feature_filter.match_all:
+            dirty_pk_list = [pk for pk in dirty_pk_list if pk in feature_filter]
+
         track_count = len(dirty_pk_list)
         if not dirty_pk_list:
             return
@@ -1317,8 +1339,6 @@ class BaseWorkingCopy:
                 f"_reset_dirty_rows(): wrote {count} features, tracking Δ count={track_count}"
             )
 
-            sess.execute(
-                sa.delete(kart_track).where(
-                    kart_track.c.table_name == base_ds.table_name
-                )
+            self._reset_tracking_table_for_table(
+                sess, base_ds.table_name, feature_filter
             )

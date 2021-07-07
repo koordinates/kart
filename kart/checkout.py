@@ -10,6 +10,7 @@ from .exceptions import (
 )
 
 from .exceptions import DbConnectionError
+from .key_filters import RepoKeyFilter
 from .structs import CommitWithReference
 from .working_copy import WorkingCopyStatus
 from .output_util import InputMode, get_input_mode
@@ -289,8 +290,8 @@ def _find_remote_branch_by_name(repo, name):
     ),
     default="HEAD",
 )
-@click.argument("pathspec", nargs=-1)
-def restore(ctx, source, pathspec):
+@click.argument("filters", nargs=-1)
+def restore(ctx, source, filters):
     """
     Restore specified paths in the working copy with some contents from the given restore source.
     By default, restores the entire working copy to the commit at HEAD (so, discards all uncommitted changes).
@@ -307,11 +308,13 @@ def restore(ctx, source, pathspec):
     except (KeyError, pygit2.InvalidSpecError):
         raise NotFound(f"{source} is not a commit or tree", exit_code=NO_COMMIT)
 
+    repo_key_filter = RepoKeyFilter.build_from_user_patterns(filters)
+
     working_copy.reset(
         commit_or_tree,
         force=True,
         track_changes_as_dirty=True,
-        paths=pathspec,
+        repo_key_filter=repo_key_filter,
     )
 
 

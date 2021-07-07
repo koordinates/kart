@@ -698,13 +698,13 @@ def test_create_workingcopy(data_working_copy, cli_runner, tmp_path):
     ],
 )
 @pytest.mark.parametrize(
-    "pathspec",
+    "filters",
     [
         pytest.param([], id="all"),
         pytest.param(["bob"], id="exclude"),
     ],
 )
-def test_restore(source, pathspec, data_working_copy, cli_runner):
+def test_restore(source, filters, data_working_copy, cli_runner):
     with data_working_copy("points", force_new=True) as (repo_path, wc_path):
         layer = H.POINTS.LAYER
         pk_field = H.POINTS.LAYER_PK
@@ -774,7 +774,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
             ]
 
         # using `kart restore
-        r = cli_runner.invoke(["restore"] + source + pathspec)
+        r = cli_runner.invoke(["restore"] + source + filters)
         assert r.exit_code == 0, r
 
         with wc.session() as sess:
@@ -786,7 +786,7 @@ def test_restore(source, pathspec, data_working_copy, cli_runner):
             ]
             head_sha = wc.get_db_tree()
 
-            if pathspec:
+            if filters:
                 # we restore'd paths other than our test dataset, so all the changes should still be there
                 assert changes_post == changes_pre
 

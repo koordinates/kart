@@ -6,7 +6,6 @@ import re
 import pygit2
 
 from .diff_output import text_row, json_row, geojson_row
-from .filter_util import UNFILTERED
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .utils import ungenerator
@@ -570,17 +569,18 @@ class RichConflictVersion:
         )
 
     def matches_filter(self, repo_filter):
-        if repo_filter == UNFILTERED:
+        if repo_filter.match_all:
             return True
         ds_filter = repo_filter.get(self.dataset_path, None)
         if not ds_filter:
             return False
+
+        if self.is_meta:
+            # Metadata always matches, since metadata filtering is not yet implemented.
+            return True
+
         pk_filter = ds_filter.get("feature", None)
-        if not pk_filter:
-            return False
-        return pk_filter == UNFILTERED or (
-            self.is_feature and str(self.pk) in pk_filter
-        )
+        return pk_filter and self.pk in pk_filter
 
 
 class RichConflict:

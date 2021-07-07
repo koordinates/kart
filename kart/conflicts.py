@@ -5,7 +5,7 @@ import click
 
 from .crs_util import CoordinateReferenceString
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
-from .filter_util import build_feature_filter, UNFILTERED
+from .key_filters import RepoKeyFilter
 from .merge_util import MergeIndex, MergeContext, rich_conflicts
 from .output_util import dump_json_output
 from .repo import KartRepoState
@@ -23,7 +23,7 @@ def list_conflicts(
     merge_index,
     merge_context,
     output_format="text",
-    conflict_filter=UNFILTERED,
+    conflict_filter=RepoKeyFilter.MATCH_ALL,
     summarise=0,
     flat=False,
     target_crs=None,
@@ -54,14 +54,13 @@ def list_conflicts(
     """
     output_dict = {}
     conflict_output = _CONFLICT_PLACEHOLDER
-    conflict_filter = conflict_filter or UNFILTERED
 
     if output_format == "geojson":
         flat = True  # geojson must be flat or it is not valid geojson
         summarise = 0
 
     conflicts = rich_conflicts(merge_index.unresolved_conflicts.values(), merge_context)
-    if conflict_filter != UNFILTERED:
+    if not conflict_filter.match_all:
         conflicts = (c for c in conflicts if c.matches_filter(conflict_filter))
 
     for conflict in conflicts:
@@ -284,7 +283,7 @@ def conflicts(
         ctx.exit(SUCCESS_WITH_FLAG if merge_index.conflicts else SUCCESS)
 
     merge_context = MergeContext.read_from_repo(repo)
-    conflict_filter = build_feature_filter(filters)
+    conflict_filter = RepoKeyFilter.build_from_user_patterns(filters)
     result = list_conflicts(
         merge_index,
         merge_context,

@@ -13,8 +13,8 @@ from .exceptions import (
     NotYetImplemented,
     PATCH_DOES_NOT_APPLY,
 )
-from .filter_util import UNFILTERED
 from .geometry import geom_envelope, make_crs
+from .key_filters import DatasetKeyFilter, FeatureKeyFilter
 from .schema import Schema
 
 from .base_dataset import BaseDataset
@@ -159,14 +159,14 @@ class RichBaseDataset(BaseDataset):
                 f"Can't reproject dataset {self.path!r} into target CRS: {e}"
             )
 
-    def diff(self, other, ds_filter=UNFILTERED, reverse=False):
+    def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
         """
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
         ds_diff = DatasetDiff()
         ds_diff["meta"] = self.diff_meta(other, reverse=reverse)
-        feature_filter = ds_filter.get("feature", ())
+        feature_filter = ds_filter.get("feature", ds_filter.child_type())
         ds_diff["feature"] = DeltaDiff(
             self.diff_feature(other, feature_filter, reverse=reverse)
         )
@@ -194,13 +194,13 @@ class RichBaseDataset(BaseDataset):
     _INSERT_UPDATE = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED)
     _UPDATE_DELETE = (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_DELETED)
 
-    def diff_feature(self, other, feature_filter=UNFILTERED, reverse=False):
+    def diff_feature(
+        self, other, feature_filter=FeatureKeyFilter.MATCH_ALL, reverse=False
+    ):
         """
         Yields feature deltas from self -> other, but only for features that match the feature_filter.
         If reverse is true, yields feature deltas from other -> self.
         """
-        feature_filter = feature_filter or UNFILTERED
-
         params = {"flags": pygit2.GIT_DIFF_SKIP_BINARY_CHECK}
         if reverse:
             params["swap"] = True
