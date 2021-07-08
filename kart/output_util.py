@@ -248,7 +248,7 @@ def resolve_output_path(output_path):
         return output_path
 
     else:
-        return output_path.open("w")
+        return output_path.open("w", encoding="utf-8")
 
 
 class InputMode:
