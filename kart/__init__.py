@@ -99,7 +99,9 @@ if is_linux:
 
 
 # If Kart is aborted, also abort all child processes.
-if is_windows:
+
+
+def _configure_process_cleanup_windows():
     import ctypes
 
     # On Windows, the calling process is responsible for giving Kart its own process group ID -
@@ -109,7 +111,9 @@ if is_windows:
     kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
     if not kernel32.SetConsoleCtrlHandler(None, False):
         L.warn('Error calling SetConsoleCtrlHandler: ', ctypes.get_last_error())
-else:
+
+
+def _configure_process_cleanup_nonwindows():
     # On non-Windows we can use os.setsid() which Windows lacks,
     # to attempt to give Kart it's own process group ID (PGID)
     if "_KART_PGID_SET" not in os.environ and os.getpid() != os.getpgrp():
@@ -127,7 +131,7 @@ else:
         _kart_process_group_killed = False
 
         def _cleanup_process_group(signum, stack_frame):
-            global _kart_process_group_killed
+            nonlocal _kart_process_group_killed
             if _kart_process_group_killed:
                 return
             _kart_process_group_killed = True
@@ -136,3 +140,10 @@ else:
 
         signal.signal(signal.SIGTERM, _cleanup_process_group)
         signal.signal(signal.SIGINT, _cleanup_process_group)
+
+
+if "NO_CONFIGURE_PROCESS_CLEANUP" not in os.environ:
+    if is_windows:
+        _configure_process_cleanup_windows()
+    else:
+        _configure_process_cleanup_nonwindows()

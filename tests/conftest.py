@@ -21,13 +21,14 @@ from click.testing import CliRunner
 import pygit2
 import sqlalchemy
 
+# Pytest sets up its own keyboard interrupt handler - don't mess with that.
+os.environ["NO_CONFIGURE_PROCESS_CLEANUP"] = "1"  # noqa
 
-from kart.geometry import Geometry
-from kart.repo import KartRepo
-from kart.sqlalchemy.gpkg import Db_GPKG
-from kart.sqlalchemy.postgis import Db_Postgis
-from kart.sqlalchemy.sqlserver import Db_SqlServer
-from kart.sqlalchemy.mysql import Db_MySql
+from kart.geometry import Geometry  # noqa: E402
+from kart.repo import KartRepo  # noqa: E402
+from kart.sqlalchemy.postgis import Db_Postgis  # noqa: E402
+from kart.sqlalchemy.sqlserver import Db_SqlServer  # noqa: E402
+from kart.sqlalchemy.mysql import Db_MySql  # noqa: E402
 
 
 pytest_plugins = ["helpers_namespace"]
