@@ -8,9 +8,19 @@ __all__ = (
 )
 
 import os
+import locale
 import logging
 import platform
 import sys
+
+# Always use UTF-8 for opening text-mode files.
+# This is the default on POSIX but not on Windows for some reason.
+# But we want consistent results across platforms, so we override it.
+# We *would* set PYTHONUTF8=1 to enable python's UTF-8 mode,
+# but that can't be changed after the interpreter
+# has started up, so it's harder for us to control.
+lang = locale.getlocale()[0]
+locale.setlocale(locale.LC_CTYPE, f"{lang}.UTF-8")
 
 L = logging.getLogger("kart.__init__")
 
@@ -106,9 +116,9 @@ if is_windows:
     # which is recommended - but we can't do anything about if they haven't done it properly.
     # But, we do need to handle CTRL-C events - the call below "restores normal processing of CTRL-C events"
     # (ie,  don't ignore them) and this is also inherited by child processes.
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     if not kernel32.SetConsoleCtrlHandler(None, False):
-        L.warn('Error calling SetConsoleCtrlHandler: ', ctypes.get_last_error())
+        L.warn("Error calling SetConsoleCtrlHandler: ", ctypes.get_last_error())
 else:
     # On non-Windows we can use os.setsid() which Windows lacks,
     # to attempt to give Kart it's own process group ID (PGID)
