@@ -214,20 +214,45 @@ class GeojsonDiffWriter(BaseDiffWriter):
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
-        # DONOTSUBMIT - check path type, handle directories
         return output_path
 
     def write_diff(self):
-        output_obj = {
-            "type": "FeatureCollection",
-            "features": self.all_repo_feature_deltas(),
-        }
+        if isinstance(self.output_path, Path) and self.output_path.is_dir():
+            self.write_file_per_dataset()
+        else:
+            output_obj = {
+                "type": "FeatureCollection",
+                "features": self.all_repo_feature_deltas(),
+            }
 
-        dump_json_output(
-            output_obj,
-            self.output_path,
-            json_style=self.json_style,
-        )
+            dump_json_output(
+                output_obj,
+                self.output_path,
+                json_style=self.json_style,
+            )
+
+    def write_file_per_dataset(self):
+        has_changes = False
+        for ds_path in self.all_ds_paths:
+            ds_diff = self.get_dataset_diff(ds_path)
+            if not ds_diff:
+                continue
+
+            self._warn_about_any_meta_diffs(ds_path, ds_diff)
+            has_changes = True
+            output_obj = {
+                "type": "FeatureCollection",
+                "features": self.all_ds_feature_deltas(ds_path, ds_diff),
+            }
+
+            ds_output_filename = str(ds_path).replace("/", "__") + ".geojson"
+            ds_output_path = self.output_path / ds_output_filename
+            dump_json_output(
+                output_obj,
+                ds_output_path,
+                json_style=self.json_style,
+            )
+        self.has_changes = has_changes
 
     def all_repo_feature_deltas(self):
         has_changes = False
