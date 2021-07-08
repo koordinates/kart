@@ -25,20 +25,26 @@ from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 
 
-def list_import_formats(ctx, param, value):
+def list_import_formats(ctx):
     """
     List the supported import formats
     """
-    names = set()
+    click.echo("Geopackage: PATH.gpkg")
+    click.echo("PostgreSQL: postgresql://HOST/DBNAME[/DBSCHEMA]")
+    click.echo("SQL Server: mssql://HOST/DBNAME[/DBSCHEMA]")
+    click.echo("MySQL: mysql://HOST[/DBNAME]")
+
+    ogr_types = set()
     for prefix, ogr_driver_name in FORMAT_TO_OGR_MAP.items():
         d = gdal.GetDriverByName(ogr_driver_name)
         if d:
             m = d.GetMetadata()
             # only vector formats which can read things.
             if m.get("DCAP_VECTOR") == "YES" and m.get("DCAP_OPEN") == "YES":
-                names.add(prefix)
-    for n in sorted(names):
-        click.echo(n)
+                ogr_types.add(prefix)
+
+    if "SHP" in ogr_types:
+        click.echo("Shapefile: PATH.shp")
 
 
 def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):

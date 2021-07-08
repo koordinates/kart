@@ -1037,3 +1037,17 @@ def test_init_import_detached_head(data_working_copy, data_archive, chdir, cli_r
             assert repo.head_is_detached
             assert repo.head.target.hex != initial_head
             assert repo.revparse_single("HEAD^").hex == initial_head
+
+
+def test_import_list_formats(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points") as _:
+        r = cli_runner.invoke(["import", "--list-formats"])
+        assert r.exit_code == 0, r.stderr
+        prefixes = [l.split(":")[0] for l in r.stdout.splitlines()]
+        assert prefixes == [
+            "Geopackage",
+            "PostgreSQL",
+            "SQL Server",
+            "MySQL",
+            "Shapefile",
+        ]
