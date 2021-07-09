@@ -8,7 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * Added support for the geometry `POINT EMPTY` in SQL Server working copy.
  * Bugfix: fixed the error when writing diff output to a file. [#453](https://github.com/koordinates/kart/issues/453)
-
+ * Bugfix: when checking out a dataset that has an integer primary key as a GPKG working copy, Kart should continue to use the actual primary key instead of overriding it, even if the primary key column isn't the first column. [#455](https://github.com/koordinates/kart/issues/455)
 
 ## 0.10.1
 

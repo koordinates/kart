@@ -915,6 +915,27 @@ def test_empty_geometry_roundtrip(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stdout
 
 
+def test_pk_second_roundtrip(data_working_copy, cli_runner):
+    # Make sure we can handle the PK being second without creating an auto_int_pk column or showing spurious diffs.
+    with data_working_copy("pk-second") as (repo_path, wc_path):
+        repo = KartRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(
+                "SELECT name FROM pragma_table_info('nz_waca_adjustments');"
+            )
+            col_names = [row[0] for row in r]
+            assert col_names == [
+                'geom',
+                'id',
+                'date_adjusted',
+                'survey_reference',
+                'adjusted_nodes',
+            ]
+
+        r = cli_runner.invoke(["diff", "--exit-code"])
+        assert r.exit_code == 0, r.stdout
+
+
 def _edit_string_pk_polygons(conn):
     H = pytest.helpers.helpers()
     layer = H.POLYGONS.LAYER
