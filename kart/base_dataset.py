@@ -5,6 +5,7 @@ from . import crs_util
 from .import_source import ImportSource
 from . import meta_items
 from .serialise_util import json_unpack, ensure_text
+from .spatial_filters import SpatialFilter
 from .utils import ungenerator
 
 
@@ -262,7 +263,7 @@ class BaseDataset(ImportSource):
         geom_columns = self.schema.geometry_columns
         return geom_columns[0].name if geom_columns else None
 
-    def features(self):
+    def features(self, spatial_filter=SpatialFilter.MATCH_ALL):
         """
         Yields a dict for every feature. Dicts contain key-value pairs for each feature property,
         and geometries use kart.geometry.Geometry objects, as in the following example::
@@ -277,8 +278,15 @@ class BaseDataset(ImportSource):
         Each dict is guaranteed to iterate in the same order as the columns are ordered in the schema,
         so that zip(schema.columns, feature.values()) matches each field with its column.
         """
+        if not self.geom_column_name or spatial_filter.match_all:
+            matches = lambda f: True
+        else:
+            matches = lambda f: f[self.geom_column_name] in spatial_filter
+
         for blob in self.feature_blobs():
-            yield self.get_feature(path=blob.name, data=memoryview(blob))
+            feature = self.get_feature(path=blob.name, data=memoryview(blob))
+            if matches(feature):
+                yield feature
 
     @property
     def feature_count(self):

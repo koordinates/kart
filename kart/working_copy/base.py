@@ -18,6 +18,7 @@ from kart.exceptions import (
 )
 from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
 from kart.schema import Schema, DefaultRoundtripContext
+from kart.spatial_filters import SpatialFilter
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.utils import chunk
 from . import WorkingCopyStatus, WorkingCopyType
@@ -828,7 +829,7 @@ class BaseWorkingCopy:
         )
         return r.rowcount
 
-    def write_full(self, commit, *datasets, **kwargs):
+    def write_full(self, commit, *datasets, spatial_filter=SpatialFilter.MATCH_ALL):
         """
         Writes a full layer into a working-copy table
 
@@ -867,7 +868,9 @@ class BaseWorkingCopy:
 
                 CHUNK_SIZE = 10000
 
-                for row_dicts in chunk(dataset.features_with_crs_ids(), CHUNK_SIZE):
+                for row_dicts in chunk(
+                    dataset.features_with_crs_ids(spatial_filter), CHUNK_SIZE
+                ):
                     sess.execute(sql, row_dicts)
                     feat_progress += len(row_dicts)
 

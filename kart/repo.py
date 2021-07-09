@@ -84,6 +84,8 @@ class KartConfigKeys:
     KART_WORKINGCOPY_LOCATION = "kart.workingcopy.location"
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
+    KART_SPATIALFILTER_GEOMETRY = "kart.spatialfilter.geometry"
+
     # This variable was also renamed, but when tidy-style repos were added - not during rebranding.
     CORE_BARE = "core.bare"  # Newer repos use the standard "core.bare" variable.
     SNO_WORKINGCOPY_BARE = (
@@ -474,6 +476,18 @@ class KartRepo(pygit2.Repository):
         repo_cfg = self.config
         location_key = self.WORKINGCOPY_LOCATION_KEY
         return repo_cfg[location_key] if location_key in repo_cfg else None
+
+    @property
+    def spatial_filter(self):
+        from .spatial_filters import SpatialFilter
+
+        repo_cfg = self.config
+        spec_key = KartConfigKeys.KART_SPATIALFILTER_GEOMETRY
+        return (
+            SpatialFilter.from_spec(repo_cfg[spec_key])
+            if spec_key in repo_cfg
+            else SpatialFilter.MATCH_ALL
+        )
 
     @property
     def is_bare(self):

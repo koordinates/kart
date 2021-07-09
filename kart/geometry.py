@@ -16,6 +16,32 @@ GPKG_ENVELOPE_XYZ = 2
 GPKG_ENVELOPE_XYM = 3
 GPKG_ENVELOPE_XYZM = 4
 
+# The structure of the various GPKG envelope types for reading and writing.
+GPKG_ENVELOPE_FORMATS = {
+    GPKG_ENVELOPE_NONE: "",
+    GPKG_ENVELOPE_XY: "d" * 4,  # 4 doubles: XYXY
+    GPKG_ENVELOPE_XYZ: "d" * 6,  # 6 doubles: XYZXYZ
+    GPKG_ENVELOPE_XYM: "d" * 6,  # 6 doubles: XYMXYM
+    GPKG_ENVELOPE_XYZM: "d" * 8,  # 8 doubles: XYZMXYZM
+}
+
+# The size in bytes of the various GPKG envelope types.
+GPKG_ENVELOPE_SIZES = {
+    env_type: len(env_format) * 8  # 8 bytes per double
+    for env_type, env_format in GPKG_ENVELOPE_FORMATS.items()
+}
+
+# Skips 8 bytes / skips a double
+x8 = "x" * 8
+
+# The 2D portion of the various GPKG envelope types, for reading.
+GPKG_READ_2D_ENVELOPE_FORMAT = {
+    GPKG_ENVELOPE_XY: "dddd",
+    GPKG_ENVELOPE_XYZ: f"dd{x8}dd{x8}",
+    GPKG_ENVELOPE_XYM: f"dd{x8}dd{x8}",
+    GPKG_ENVELOPE_XYZM: f"dd{x8}{x8}dd{x8}{x8}",
+}
+
 
 class Geometry(bytes):
     """
@@ -45,8 +71,8 @@ class Geometry(bytes):
     def __json__(self):
         return self.to_hex_wkb()
 
-    def to_gpkg_geom(self):
-        return bytes(self)
+    def normalise(self):
+        return normalise_gpkg_geom(self)
 
     def to_wkb(self):
         return gpkg_geom_to_wkb(self)
@@ -65,6 +91,17 @@ class Geometry(bytes):
         return Geometry.of(self[:4] + crs_id_bytes + self[8:])
 
     @property
+    def flags(self):
+        return self[3]
+
+    def is_little_endian(self):
+        return bool(self.flags & _GPKG_LE_BIT)
+
+    @property
+    def envelope_type(self):
+        return (self.flags & _GPKG_ENVELOPE_BITS) >> 1
+
+    @property
     def crs_id(self):
         """
         Returns the CRS ID as it is embedded in the GPKG header - before the WKB.
@@ -76,13 +113,31 @@ class Geometry(bytes):
 
     @property
     def geometry_type(self):
-        flags = _validate_gpkg_geom(self)
-        envelope_size = gpkg_envelope_size(flags)
+        envelope_size = gpkg_envelope_size(self.flags)
         wkb_offset = 8 + envelope_size
         wkb_is_le, geom_type = _wkb_endianness_and_geometry_type(
             self, wkb_offset=wkb_offset
         )
         return geom_type
+
+    @property
+    def envelope(self):
+        """Returns the envelope as a tuple of 4, 6, or 8 values, or None if no envelope is stored."""
+        assert self.is_little_endian()
+        fmt = GPKG_ENVELOPE_FORMATS.get(self.envelope_type)
+        return struct.unpack_from(f"<{fmt}", self, 8) if fmt else None
+
+    @property
+    def envelope_2d(self):
+        """Returns the 2D envelope as a tuple of 4 values, or None if no envelope is stored."""
+        assert self.is_little_endian()
+        fmt = GPKG_READ_2D_ENVELOPE_FORMAT.get(self.envelope_type)
+        return struct.unpack_from(f"<{fmt}", self, 8) if fmt else None
+
+    def envelope_2d_as_ogr(self):
+        """Returns the 2D envelope as an OGR Polygon, for performing intersection tests etc."""
+        envelope_2d = self.envelope_2d
+        return envelope_2d_to_ogr(envelope_2d) if envelope_2d else None
 
     @classmethod
     def from_wkt(cls, wkt):
@@ -134,21 +189,11 @@ def _validate_gpkg_geom(gpkg_geom):
 
 
 def gpkg_envelope_size(flags):
-    envelope_typ = (flags & _GPKG_ENVELOPE_BITS) >> 1
-    if envelope_typ == 1:
-        # 2d envelope
-        return 32
-    elif envelope_typ in (2, 3):
-        # 3d envelope (XYZ, XYM)
-        return 48
-    elif envelope_typ == 4:
-        # 4d envelope (XYZM)
-        return 64
-    elif envelope_typ == 0:
-        # no envelope
-        return 0
-    else:
+    envelope_type = (flags & _GPKG_ENVELOPE_BITS) >> 1
+    size = GPKG_ENVELOPE_SIZES.get(envelope_type)
+    if size is None:
         raise ValueError("Invalid envelope contents indicator")
+    return size
 
 
 def _wkb_endianness_and_geometry_type(buf, wkb_offset=0):
@@ -414,13 +459,13 @@ def ogr_to_gpkg_geom(
     )
     envelope = b""
     if _add_envelope_type:
+
         if _add_envelope_type == GPKG_ENVELOPE_XY:
-            fmt = "dddd"
             envelope = ogr_geom.GetEnvelope()
         elif _add_envelope_type == GPKG_ENVELOPE_XYZ:
-            fmt = "dddddd"
             envelope = ogr_geom.GetEnvelope3D()
 
+        fmt = GPKG_ENVELOPE_FORMATS[_add_envelope_type]
         envelope = struct.pack(f'{"<" if _little_endian else ">"}{fmt}', *envelope)
 
     return Geometry(header + envelope + wkb)
@@ -589,3 +634,19 @@ def geom_envelope(gpkg_geom):
             return envelope
     else:
         raise ValueError("Invalid envelope contents indicator")
+
+
+def envelope_2d_to_ogr(envelope_2d):
+    (min_x, max_x, min_y, max_y) = envelope_2d
+
+    ogr_ring = ogr.Geometry(ogr.wkbLinearRing)
+    ogr_ring.AddPoint(min_x, min_y)
+    ogr_ring.AddPoint(max_x, min_y)
+    ogr_ring.AddPoint(max_x, max_y)
+    ogr_ring.AddPoint(min_x, max_y)
+
+    ogr_ring.AddPoint(min_x, min_y)
+
+    ogr_poly = ogr.Geometry(ogr.wkbPolygon)
+    ogr_poly.AddGeometry(ogr_ring)
+    return ogr_poly
