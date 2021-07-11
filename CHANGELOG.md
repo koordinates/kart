@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.10.2 (UNRELEASED)
+## 0.10.2
 
  * Added support for the geometry `POINT EMPTY` in SQL Server working copy.
  * Bugfix: fixed the error when writing diff output to a file. [#453](https://github.com/koordinates/kart/issues/453)
