@@ -269,12 +269,9 @@ def test_check_user_config(git_user_config, monkeypatch, data_archive, tmp_path)
         )
 
 
-@pytest.mark.xfail(
-    condition=is_windows, reason="PROJ transformation grid not working on windows"
-)
-def test_gdal_proj_data():
+def test_gdal_data_exists():
     import kart  # noqa
-    from osgeo import gdal, osr
+    from osgeo import gdal
 
     # GDAL_DATA
     assert "GDAL_DATA" in os.environ
@@ -283,6 +280,12 @@ def test_gdal_proj_data():
 
     # PROJ_LIB
     assert "PROJ_LIB" in os.environ
+    assert (Path(os.environ["PROJ_LIB"]) / "proj.db").exists()
+
+
+def test_proj_transformation_grid():
+    import kart  # noqa
+    from osgeo import osr
 
     # Do a test conversion to check the transformation grids are available
     nzgd49 = osr.SpatialReference()
@@ -292,6 +295,11 @@ def test_gdal_proj_data():
     ct = osr.CreateCoordinateTransformation(nzgd49, nzgd2k)
     # Test point from: https://www.linz.govt.nz/data/geodetic-system/coordinate-conversion/geodetic-datum-conversions/datum-transformation-examples
     pt = ct.TransformPoint(-36.5, 175.0)
-    # using the 7-parameter transform would result in: (-36.49819267, 175.00018527)
-    # which indicates the transformation grid isn't available
-    assert pt == pytest.approx((-36.49819023, 175.00019297, 0.0), abs=1e-8)
+
+    if not is_windows:
+        # This is the accurate result expected when the transformation grid is available:
+        assert pt == pytest.approx((-36.49819023, 175.00019297, 0.0), abs=1e-8)
+    else:
+        # This is the less accurate result which uses the 7-parameter transform,
+        # which indicates that the transformation grid is not available (currently the case on Windows)
+        assert pt == pytest.approx((-36.49819267, 175.00018527, 0.0), abs=1e-8)

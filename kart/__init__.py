@@ -63,9 +63,17 @@ else:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
 # GDAL Data
-if not is_windows:
-    os.environ["GDAL_DATA"] = os.path.join(prefix, "share", "gdal")
-    os.environ["PROJ_LIB"] = os.path.join(prefix, "share", "proj")
+if is_windows:
+    if prefix.endswith("venv"):
+        data_prefix = os.path.join(prefix, "Lib", "site-packages", "osgeo", "data")
+    else:
+        data_prefix = os.path.join(prefix, "osgeo", "data")
+else:
+    data_prefix = os.path.join(prefix, "share")
+
+os.environ["GDAL_DATA"] = os.path.join(data_prefix, "gdal")
+os.environ["PROJ_LIB"] = os.path.join(data_prefix, "proj")
+
 
 # GPKG optimisation:
 if "OGR_SQLITE_PRAGMA" not in os.environ:
