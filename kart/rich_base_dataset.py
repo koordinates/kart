@@ -13,7 +13,7 @@ from .exceptions import (
     NotYetImplemented,
     PATCH_DOES_NOT_APPLY,
 )
-from .geometry import geom_envelope, make_crs
+from .geometry import make_crs
 from .key_filters import DatasetKeyFilter, FeatureKeyFilter
 from .schema import Schema
 from .spatial_filters import SpatialFilter
@@ -105,7 +105,7 @@ class RichBaseDataset(BaseDataset):
                 if geom is None:
                     continue
 
-                e = geom_envelope(geom)
+                e = geom.envelope(only_2d=True, calculate_if_missing=True)
                 yield (pk, e, None)
 
                 if c % 50000 == 0:

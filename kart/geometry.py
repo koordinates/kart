@@ -19,27 +19,16 @@ GPKG_ENVELOPE_XYZM = 4
 # The structure of the various GPKG envelope types for reading and writing.
 GPKG_ENVELOPE_FORMATS = {
     GPKG_ENVELOPE_NONE: "",
-    GPKG_ENVELOPE_XY: "d" * 4,  # 4 doubles: XYXY
-    GPKG_ENVELOPE_XYZ: "d" * 6,  # 6 doubles: XYZXYZ
-    GPKG_ENVELOPE_XYM: "d" * 6,  # 6 doubles: XYMXYM
-    GPKG_ENVELOPE_XYZM: "d" * 8,  # 8 doubles: XYZMXYZM
+    GPKG_ENVELOPE_XY: "d" * 4,  # 4 doubles: (min-x, max-x, min-y, max-y)
+    GPKG_ENVELOPE_XYZ: "d" * 6,  # 6: standard four + (min-z, max-z)
+    GPKG_ENVELOPE_XYM: "d" * 6,  # 6: standard four + (min-m, max-m)
+    GPKG_ENVELOPE_XYZM: "d" * 8,  # 8: standard four + (min-z, max-z, min-m, max-m)
 }
 
 # The size in bytes of the various GPKG envelope types.
 GPKG_ENVELOPE_SIZES = {
     env_type: len(env_format) * 8  # 8 bytes per double
     for env_type, env_format in GPKG_ENVELOPE_FORMATS.items()
-}
-
-# Skips 8 bytes / skips a double
-x8 = "x" * 8
-
-# The 2D portion of the various GPKG envelope types, for reading.
-GPKG_READ_2D_ENVELOPE_FORMAT = {
-    GPKG_ENVELOPE_XY: "dddd",
-    GPKG_ENVELOPE_XYZ: f"dd{x8}dd{x8}",
-    GPKG_ENVELOPE_XYM: f"dd{x8}dd{x8}",
-    GPKG_ENVELOPE_XYZM: f"dd{x8}{x8}dd{x8}{x8}",
 }
 
 
@@ -120,24 +109,16 @@ class Geometry(bytes):
         )
         return geom_type
 
-    @property
-    def envelope(self):
-        """Returns the envelope as a tuple of 4, 6, or 8 values, or None if no envelope is stored."""
-        assert self.is_little_endian()
-        fmt = GPKG_ENVELOPE_FORMATS.get(self.envelope_type)
-        return struct.unpack_from(f"<{fmt}", self, 8) if fmt else None
-
-    @property
-    def envelope_2d(self):
-        """Returns the 2D envelope as a tuple of 4 values, or None if no envelope is stored."""
-        assert self.is_little_endian()
-        fmt = GPKG_READ_2D_ENVELOPE_FORMAT.get(self.envelope_type)
-        return struct.unpack_from(f"<{fmt}", self, 8) if fmt else None
-
-    def envelope_2d_as_ogr(self):
-        """Returns the 2D envelope as an OGR Polygon, for performing intersection tests etc."""
-        envelope_2d = self.envelope_2d
-        return envelope_2d_to_ogr(envelope_2d) if envelope_2d else None
+    def envelope(self, only_2d=False, calculate_if_missing=False):
+        """
+        Returns the envelope as a tuple of 4, 6, or 8 values, or None if no envelope is stored.
+        The tuple ordering is (min-x, max-x, min-y, max-y, min-z?, max-z?, min-m?, max-m?) - ? values may be missing.
+        If only_2d is True, then only (min-x, max-x, min-y, max-y) is returned, even if more values are present.
+        if calculate_if_missing is True then the entire geometry is loaded into OGR in order to calculate the envelope.
+        """
+        return geom_envelope(
+            self, only_2d=only_2d, calculate_if_missing=calculate_if_missing
+        )
 
     @classmethod
     def from_wkt(cls, wkt):
@@ -579,7 +560,7 @@ def hex_ewkb_to_gpkg_geom(hex_ewkb):
     return normalise_gpkg_geom(gpkg_geom)
 
 
-def geom_envelope(gpkg_geom):
+def geom_envelope(gpkg_geom, only_2d=False, calculate_if_missing=False):
     """
     Parse GeoPackage geometry to a 2D envelope.
     This is a shortcut to avoid instantiating a full OGR geometry if possible.
@@ -588,6 +569,11 @@ def geom_envelope(gpkg_geom):
 
     http://www.geopackage.org/spec/#gpb_format
     """
+    if calculate_if_missing and not only_2d:
+        raise NotImplementedError(
+            "calculate_if_missing is only supported for 2D envelopes - set only_2d to True also"
+        )
+
     if gpkg_geom is None:
         return None
 
@@ -608,45 +594,32 @@ def geom_envelope(gpkg_geom):
     if flags & _GPKG_EMPTY_BIT:  # Empty geometry
         return None
 
-    envelope_typ = (flags & _GPKG_ENVELOPE_BITS) >> 1
+    envelope_type = (flags & _GPKG_ENVELOPE_BITS) >> 1
     # E: envelope contents indicator code (3-bit unsigned integer)
-    # 0: no envelope (space saving slower indexing option), 0 bytes
-    # 1: envelope is [minx, maxx, miny, maxy], 32 bytes
-    # 2: envelope is [minx, maxx, miny, maxy, minz, maxz], 48 bytes
-    # 3: envelope is [minx, maxx, miny, maxy, minm, maxm], 48 bytes
-    # 4: envelope is [minx, maxx, miny, maxy, minz, maxz, minm, maxm], 64 bytes
-    # 5-7: invalid
+    # See GPKG_ENVELOPE_FORMATS above.
+    envelope_format = GPKG_ENVELOPE_FORMATS.get(envelope_type)
+    if envelope_format is None:
+        raise ValueError("Invalid envelope contents indicator")
 
-    if envelope_typ == 0:
-        # parse the full geometry then get it's envelope
+    if envelope_format == "":
+        if not calculate_if_missing:
+            return None
         ogr_geom = gpkg_geom_to_ogr(gpkg_geom)
         if ogr_geom.IsEmpty():
             # envelope is apparently (0, 0, 0, 0), thanks OGR :/
             return None
         else:
             return ogr_geom.GetEnvelope()
-    elif envelope_typ <= 4:
-        # we only care about 2D envelopes here
-        envelope = struct.unpack_from(f"{'<' if is_le else '>'}dddd", gpkg_geom, 8)
-        if any(math.isnan(c) for c in envelope):
-            return None
-        else:
-            return envelope
+
+    if only_2d:
+        # First 4 doubles are always the 2D ones.
+        envelope_format = "dddd"
+
+    envelope = struct.unpack_from(
+        f"{'<' if is_le else '>'}{envelope_format}", gpkg_geom, 8
+    )
+
+    if any(math.isnan(c) for c in envelope):
+        return None
     else:
-        raise ValueError("Invalid envelope contents indicator")
-
-
-def envelope_2d_to_ogr(envelope_2d):
-    (min_x, max_x, min_y, max_y) = envelope_2d
-
-    ogr_ring = ogr.Geometry(ogr.wkbLinearRing)
-    ogr_ring.AddPoint(min_x, min_y)
-    ogr_ring.AddPoint(max_x, min_y)
-    ogr_ring.AddPoint(max_x, max_y)
-    ogr_ring.AddPoint(min_x, max_y)
-
-    ogr_ring.AddPoint(min_x, min_y)
-
-    ogr_poly = ogr.Geometry(ogr.wkbPolygon)
-    ogr_poly.AddGeometry(ogr_ring)
-    return ogr_poly
+        return envelope
