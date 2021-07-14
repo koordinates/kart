@@ -293,7 +293,7 @@ class BaseDataset(ImportSource):
         if not self.geom_column_name or spatial_filter.match_all:
             matches = lambda f: True
         else:
-            matches = lambda f: f[self.geom_column_name] in spatial_filter
+            matches = lambda f: spatial_filter.matches(f[self.geom_column_name])
 
         n_read = 0
         n_chunk = 0

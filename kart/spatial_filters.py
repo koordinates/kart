@@ -1,4 +1,3 @@
-import collections
 import functools
 import logging
 
@@ -10,6 +9,13 @@ from .geometry import Geometry, make_crs
 L = logging.getLogger("kart.spatial_filters")
 
 
+# TODO(https://github.com/koordinates/kart/issues/456) - need to handle the following issues:
+# - make sure long polygon edges are segmented into short lines before reprojecting, so that the
+# geographical location of the middle of the polygon's edge doesn't change
+# - handle anti-meridians appropriately, particularly the case where the spatial filter crosses the anti-meridian
+# - handle the case where the spatial filter cannot or can only partially be projected to the target CRS
+
+
 class SpatialFilter:
     @classmethod
     @functools.lru_cache()
@@ -17,6 +23,7 @@ class SpatialFilter:
         if not geometry_wkt:
             return SpatialFilter.MATCH_ALL
 
+        # TODO - use PreparedGeometry.
         filter_geometry_ogr = Geometry.from_wkt(geometry_wkt).to_ogr()
         if crs_spec is not None:
             try:
@@ -46,7 +53,15 @@ class SpatialFilter:
         self.crs = crs
         self.match_all = match_all
 
-    def __contains__(self, feature_geometry):
+    def matches(self, feature_geometry):
+        """
+        Returns True if the given feature geometry matches this spatial filter.
+        The feature to be tested is assumed to be using the same CRS as this spatial filter,
+        otherwise the intersection test makes no sense.
+        To get a spatial filter for a particular CRS, see transfrom_for_dataset / transform_for_crs.
+
+        feature_geometry - a geometry.Geometry object.
+        """
         if self.match_all or self.filter_ogr is None or feature_geometry is None:
             return True
 
@@ -89,6 +104,7 @@ class SpatialFilter:
         return True
 
     def transform_for_dataset(self, dataset):
+        """Transform this spatial filter so that it matches the CRS of the given dataset."""
         if self.match_all or self.filter_ogr is None or self.crs is None:
             return self
 
@@ -101,9 +117,13 @@ class SpatialFilter:
                 f"Sorry, spatial filtering dataset {ds_path!r} with multiple CRS is not yet supported"
             )
         ds_crs_def = list(ds_crs_defs.values())[0]
-        return self.transform_for_crs_def(ds_crs_def, ds_path)
+        return self.transform_for_crs(ds_crs_def, ds_path)
 
-    def transform_for_crs_def(self, crs_def, ds_path=None):
+    def transform_for_crs(self, new_crs, ds_path=None):
+        """
+        Transform this spatial filter so that it matches the given CRS.
+        The CRS should be a name eg EPSG:4326, or a full CRS definition, or an osgeo.osr.SpatialReference
+        """
         if self.match_all or self.filter_ogr is None or self.crs is None:
             return self
 
@@ -111,14 +131,16 @@ class SpatialFilter:
         from kart.geometry import make_crs
 
         try:
-            new_crs = make_crs(crs_def)
+            crs_spec = str(new_crs)
+            if isinstance(new_crs, str):
+                new_crs = make_crs(new_crs)
             transform = osr.CoordinateTransformation(self.crs, new_crs)
             new_filter_ogr = self.filter_ogr.Clone()
             new_filter_ogr.Transform(transform)
             return SpatialFilter(new_filter_ogr, new_crs)
 
         except RuntimeError as e:
-            crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_def!r}"
+            crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_spec!r}"
             raise InvalidOperation(
                 f"Can't reproject spatial filter into {crs_desc}:\n{e}"
             )
