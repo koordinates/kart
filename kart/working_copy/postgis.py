@@ -186,7 +186,7 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         spatial_index.create(sess.connection())
         sess.execute(f"""ANALYZE {self.table_identifier(dataset)};""")
 
-        L.info("Created spatial index in %ss", time.monotonic() - t0)
+        L.info("Created spatial index in %.1fs", time.monotonic() - t0)
 
     def _drop_spatial_index(self, sess, dataset):
         # PostGIS deletes the spatial index automatically when the table is deleted.

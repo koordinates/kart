@@ -142,7 +142,7 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
             f"ALTER TABLE {self.table_identifier(dataset)} ADD SPATIAL INDEX({self.quote(geom_col)})"
         )
 
-        L.info("Created spatial index in %ss", time.monotonic() - t0)
+        L.info("Created spatial index in %.1fs", time.monotonic() - t0)
 
     def _drop_spatial_index(self, sess, dataset):
         # MySQL deletes the spatial index automatically when the table is deleted.

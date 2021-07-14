@@ -85,6 +85,7 @@ class KartConfigKeys:
     SNO_WORKINGCOPY_PATH = "sno.workingcopy.path"
 
     KART_SPATIALFILTER_GEOMETRY = "kart.spatialfilter.geometry"
+    KART_SPATIALFILTER_CRS = "kart.spatialfilter.crs"
 
     # This variable was also renamed, but when tidy-style repos were added - not during rebranding.
     CORE_BARE = "core.bare"  # Newer repos use the standard "core.bare" variable.
@@ -473,21 +474,22 @@ class KartRepo(pygit2.Repository):
     @property
     def workingcopy_location(self):
         """Return the path to the Kart working copy, if one exists."""
-        repo_cfg = self.config
-        location_key = self.WORKINGCOPY_LOCATION_KEY
-        return repo_cfg[location_key] if location_key in repo_cfg else None
+        return self._get_config_str(self.WORKINGCOPY_LOCATION_KEY)
 
     @property
     def spatial_filter(self):
         from .spatial_filters import SpatialFilter
 
-        repo_cfg = self.config
-        spec_key = KartConfigKeys.KART_SPATIALFILTER_GEOMETRY
+        geometry_spec = self._get_config_str(KartConfigKeys.KART_SPATIALFILTER_GEOMETRY)
+        crs_spec = self._get_config_str(KartConfigKeys.KART_SPATIALFILTER_CRS)
         return (
-            SpatialFilter.from_spec(repo_cfg[spec_key])
-            if spec_key in repo_cfg
+            SpatialFilter.from_spec(geometry_spec, crs_spec)
+            if geometry_spec
             else SpatialFilter.MATCH_ALL
         )
+
+    def _get_config_str(self, key):
+        return self.config[key] if key in self.config else None
 
     @property
     def is_bare(self):

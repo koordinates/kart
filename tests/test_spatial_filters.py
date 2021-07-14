@@ -6,22 +6,87 @@ from kart.repo import KartRepo
 H = pytest.helpers.helpers()
 
 
-SPATIAL_FILTERS = {
-    "points": "0103000000010000000E0000005C94E90C569E65406777FF1A808F41C06BB6213CEFAD65407C23003250DE41C034D22DD5A8BA65402B9F88C2F51642C067EA6918BEC5654058053150C14542C039FDEDDA5CCE654016A3F10F008E42C0A11342F39FD86540D96B72D5F2E942C0DE22F65F9ADF6540917F6AADFAF242C0B128686B45E265404D5F1AA933E442C0E1FBBF3ABFCD6540D1239929B65342C0B8DAFB208FBE65406E60D0E439FA41C009BE7B726CB165400CFC0F8240CC41C0BBB3C5FBB3AC654002A68F76D8A441C07F97FFD7C59F6540E4611F18A68541C05C94E90C569E65406777FF1A808F41C0",
-    "polygons": "01060000000100000001030000000100000009000000EC21ADE020DC65403CFAB52CF3E942C0CF9F2289C0E06540F1BFAEBD38FD42C00E41DB9104E86540836341F410FD42C0130676A754EC65409196FB0A81EB42C04BB42C8C68EC6540F8BB59CA2BD242C01531A50CABE765404B7D5EBBFCBF42C0CF9F2289C0E06540DC20F1F1D4BF42C05B7E1AAA48DC6540CDED36DB64D142C0EC21ADE020DC65403CFAB52CF3E942C0",
+def ring_as_wkt(*points):
+    return "(" + ",".join(f"{x} {y}" for x, y in points) + ")"
+
+
+SPATIAL_FILTER_GEOMETRY = {
+    "points": (
+        "MULTIPOLYGON(("
+        + ring_as_wkt(
+            (172.948, -35.1211),
+            (173.4355, -35.7368),
+            (173.8331, -36.1794),
+            (174.1795, -36.545),
+            (174.4488, -37.1094),
+            (174.7695, -37.8277),
+            (174.9876, -37.8983),
+            (175.071, -37.7828),
+            (174.4296, -36.654),
+            (173.955, -35.9549),
+            (173.5445, -35.5957),
+            (173.3970, -35.2879),
+            (172.9929, -35.0441),
+            (172.948, -35.1211),
+        )
+        + "))"
+    ),
+    "polygons": (
+        "POLYGON("
+        + ring_as_wkt(
+            (174.879, -37.8277),
+            (175.0235, -37.9783),
+            (175.2506, -37.9771),
+            (175.3853, -37.8399),
+            (175.3878, -37.642),
+            (175.2396, -37.4999),
+            (175.0235, -37.4987),
+            (174.8839, -37.6359),
+            (174.879, -37.8277),
+        )
+        + ")"
+    ),
+    "polygons-with-reprojection": (
+        "POLYGON("
+        + ring_as_wkt(
+            (2675607, 6373321),
+            (2687937, 6356327),
+            (2707884, 6355974),
+            (2720124, 6370883),
+            (2720939, 6392831),
+            (2708268, 6408939),
+            (2689170, 6409537),
+            (2676500, 6394592),
+            (2675607, 6373321),
+        )
+        + ")"
+    ),
+}
+
+SPATIAL_FILTER_CRS = {
+    "points": "EPSG:4326",
+    "polygons": "EPSG:4167",
+    "polygons-with-reprojection": "EPSG:27200",
 }
 
 
 @pytest.mark.parametrize(
-    "archive,table",
+    "archive,table,filter_key",
     [
-        pytest.param("points", H.POINTS.LAYER, id="points"),
-        pytest.param("polygons", H.POLYGONS.LAYER, id="polygons"),
-        pytest.param("table", H.TABLE.LAYER, id="table"),
+        pytest.param("points", H.POINTS.LAYER, "points", id="points"),
+        pytest.param("polygons", H.POLYGONS.LAYER, "polygons", id="polygons"),
+        pytest.param(
+            "polygons",
+            H.POLYGONS.LAYER,
+            "polygons-with-reprojection",
+            id="polygons-with-reprojection",
+        ),
+        # Use polygons spatial filter config for table archive too - doesn't matter exactly what it is.
+        pytest.param("table", H.TABLE.LAYER, "polygons", id="table"),
     ],
 )
 def test_spatial_filtered_workingcopy(
-    archive, table, data_archive, tmp_path, cli_runner
+    archive, table, filter_key, data_archive, tmp_path, cli_runner
 ):
     """ Checkout a working copy to edit """
     with data_archive(archive) as repo_path:
@@ -34,9 +99,8 @@ def test_spatial_filtered_workingcopy(
             "table": H.TABLE.ROWCOUNT,  # All rows from table.tgz should be present, unaffected by spatial filtering.
         }
 
-        # Use polygons spatial filter for table archive too - doesn't matter exactly what it is.
-        key = "polygons" if archive == "table" else archive
-        repo.config["kart.spatialfilter.geometry"] = SPATIAL_FILTERS[key]
+        repo.config["kart.spatialfilter.geometry"] = SPATIAL_FILTER_GEOMETRY[filter_key]
+        repo.config["kart.spatialfilter.crs"] = SPATIAL_FILTER_CRS[filter_key]
 
         r = cli_runner.invoke(["checkout"])
         assert r.exit_code == 0, r

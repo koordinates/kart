@@ -4,7 +4,8 @@ import logging
 
 import click
 
-from .geometry import Geometry
+from .exceptions import InvalidOperation, NotYetImplemented
+from .geometry import Geometry, make_crs
 
 L = logging.getLogger("kart.spatial_filters")
 
@@ -12,27 +13,41 @@ L = logging.getLogger("kart.spatial_filters")
 class SpatialFilter:
     @classmethod
     @functools.lru_cache()
-    def from_spec(cls, spec):
-        if not spec:
+    def from_spec(cls, geometry_wkt, crs_spec):
+        if not geometry_wkt:
             return SpatialFilter.MATCH_ALL
 
-        # Could also accept WKT here if that is useful.
-        filter_geometry = Geometry.from_hex_wkb(spec).normalise()
-        return SpatialFilter(filter_geometry)
+        filter_geometry_ogr = Geometry.from_wkt(geometry_wkt).to_ogr()
+        if crs_spec is not None:
+            try:
+                crs = make_crs(crs_spec)
+            except RuntimeError as e:
+                raise click.BadParameter(
+                    f"Invalid or unknown coordinate reference system configured in spatial filter: {crs_spec!r} ({e})"
+                )
+        else:
+            crs = None
 
-    def __init__(self, filter_geometry, match_all=False):
-        self.filter_geometry = filter_geometry
-        if filter_geometry is not None:
-            self.filter_ogr = filter_geometry.to_ogr()
+        return SpatialFilter(filter_geometry_ogr, crs)
+
+    def __init__(self, filter_geometry_ogr, crs, match_all=False):
+        """
+        Create a new spatial filter.
+        filter_geometry_ogr - The shape of the spatial filter. An OGR Geometry object.
+        crs - The CRS used to interpret the spatial filter. An OGR SpatialReference object.
+        match_all - if True, this filter is the default match-everything filter.
+        """
+        self.filter_ogr = filter_geometry_ogr
+        if self.filter_ogr is not None:
             self.filter_env = self.filter_ogr.GetEnvelope()
         else:
-            self.filter_ogr = None
             self.filter_env = None
 
+        self.crs = crs
         self.match_all = match_all
 
     def __contains__(self, feature_geometry):
-        if self.match_all or self.filter_geometry is None or feature_geometry is None:
+        if self.match_all or self.filter_ogr is None or feature_geometry is None:
             return True
 
         err = None
@@ -56,6 +71,7 @@ class SpatialFilter:
                     # Geometries definitely don't intersect if envelopes don't intersect.
                     return False
             except Exception as e:
+                raise
                 L.warn(e)
                 err = e
 
@@ -72,8 +88,43 @@ class SpatialFilter:
         click.echo(f"Error applying spatial filter to geometry:\n{err}", err=True)
         return True
 
+    def transform_for_dataset(self, dataset):
+        if self.match_all or self.filter_ogr is None or self.crs is None:
+            return self
 
-SpatialFilter.MATCH_ALL = SpatialFilter(None, match_all=True)
+        ds_path = dataset.path
+        ds_crs_defs = dataset.crs_definitions()
+        if not ds_crs_defs:
+            return self
+        if len(ds_crs_defs) > 1:
+            raise NotYetImplemented(
+                f"Sorry, spatial filtering dataset {ds_path!r} with multiple CRS is not yet supported"
+            )
+        ds_crs_def = list(ds_crs_defs.values())[0]
+        return self.transform_for_crs_def(ds_crs_def, ds_path)
+
+    def transform_for_crs_def(self, crs_def, ds_path=None):
+        if self.match_all or self.filter_ogr is None or self.crs is None:
+            return self
+
+        from osgeo import osr
+        from kart.geometry import make_crs
+
+        try:
+            new_crs = make_crs(crs_def)
+            transform = osr.CoordinateTransformation(self.crs, new_crs)
+            new_filter_ogr = self.filter_ogr.Clone()
+            new_filter_ogr.Transform(transform)
+            return SpatialFilter(new_filter_ogr, new_crs)
+
+        except RuntimeError as e:
+            crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_def!r}"
+            raise InvalidOperation(
+                f"Can't reproject spatial filter into {crs_desc}:\n{e}"
+            )
+
+
+SpatialFilter.MATCH_ALL = SpatialFilter(None, None, match_all=True)
 
 
 def _range_overlaps(range1_tuple, range2_tuple):
@@ -97,21 +148,8 @@ def _range_overlaps(range1_tuple, range2_tuple):
 
 def bbox_intersects_fast(a, b):
     """
-    Takes two four-tuples representing extents, and returns whether their interiors intersect.
-    Also handles multiboxes (two tuples each containing zero-or-more four-tuples)
-    Intended for use when doing intersections of loads of mathematically-created boxes, avoiding
-    the substantial overhead of creating geometry objects and then calling .intersects() on them.
-    Don't use this if you've already got GEOSGeometry objects - calling .extent on each and then calling
-    this is unlikely to help with performance.
-    Don't call this for global projections unless you're certain that the boxes inhabit the same world
-    (since we don't/can't wrap boxes across the antimeridian here)
+    Given two bounding boxes in the form (min-x, max-x, min-y, max-y) - returns True if the bounding boxes overlap.
     """
-    if (not len(a)) or isinstance(a[0], collections.Iterable):
-        # a is a multi-box
-        return any(bbox_intersects_fast(a_item, b) for a_item in a)
-    if (not len(b)) or isinstance(b[0], collections.Iterable):
-        # b is a multi-box
-        return any(bbox_intersects_fast(a, b_item) for b_item in b)
-    return _range_overlaps((a[0], a[2]), (b[0], b[2])) and _range_overlaps(
-        (a[1], a[3]), (b[1], b[3])
+    return _range_overlaps((a[0], a[1]), (b[0], b[1])) and _range_overlaps(
+        (a[2], a[3]), (b[2], b[3])
     )

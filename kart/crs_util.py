@@ -1,5 +1,3 @@
-import itertools
-
 from osgeo.osr import SpatialReference
 
 from .cli_util import StringFromFile

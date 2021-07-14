@@ -39,13 +39,17 @@ class RichBaseDataset(BaseDataset):
         for blob in self.feature_blobs():
             yield self.get_feature(path=blob.name, data=memoryview(blob)), blob
 
-    def features_with_crs_ids(self, spatial_filter=SpatialFilter.MATCH_ALL):
+    def features_with_crs_ids(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, log_progress=False
+    ):
         """
         Same as base_dataset.features(), but includes the CRS ID from the schema in every Geometry object.
         By contrast, the returned Geometries from base_dataset.features() all contain a CRS ID of zero,
         so the schema must be consulted separately to learn about CRS IDs.
         """
-        yield from self._add_crs_ids_to_features(self.features(spatial_filter))
+        yield from self._add_crs_ids_to_features(
+            self.features(spatial_filter, log_progress=log_progress)
+        )
 
     def get_features_with_crs_ids(self, row_pks, *, ignore_missing=False):
         """
