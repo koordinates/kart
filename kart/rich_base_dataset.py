@@ -13,9 +13,11 @@ from .exceptions import (
     NotYetImplemented,
     PATCH_DOES_NOT_APPLY,
 )
-from .geometry import geom_envelope, make_crs
+from .geometry import make_crs
 from .key_filters import DatasetKeyFilter, FeatureKeyFilter
 from .schema import Schema
+from .spatial_filters import SpatialFilter
+
 
 from .base_dataset import BaseDataset
 
@@ -37,19 +39,23 @@ class RichBaseDataset(BaseDataset):
         for blob in self.feature_blobs():
             yield self.get_feature(path=blob.name, data=memoryview(blob)), blob
 
-    def features_with_crs_ids(self):
+    def features_with_crs_ids(
+        self, spatial_filter=SpatialFilter.MATCH_ALL, log_progress=False
+    ):
         """
         Same as base_dataset.features(), but includes the CRS ID from the schema in every Geometry object.
-        By contrast, base_dataset.features() Geometries only contain CRS IDs of zero, so the schema must
-        be consulted separately to learn about CRS IDs.
+        By contrast, the returned Geometries from base_dataset.features() all contain a CRS ID of zero,
+        so the schema must be consulted separately to learn about CRS IDs.
         """
-        yield from self._add_crs_ids_to_features(self.features())
+        yield from self._add_crs_ids_to_features(
+            self.features(spatial_filter, log_progress=log_progress)
+        )
 
     def get_features_with_crs_ids(self, row_pks, *, ignore_missing=False):
         """
-        Same as base_dataset.get_features(...), but includes the CRS ID from the Schema in every Geometry object.
-        By contrast, base_dataset.get_features_with_crs_ids(...) Geometries only contain CRS IDs of zero, so the schema
-        must be consulted separately to learn about CRS IDs.
+        Same as base_dataset.get_features(...), but includes the CRS ID from the schema in every Geometry object.
+        By contrast, the returned Geometries from base_dataset.get_features(...) all contain a CRS ID of zero,
+        so the schema must be consulted separately to learn about CRS IDs.
         """
         yield from self._add_crs_ids_to_features(
             self.get_features(row_pks, ignore_missing=ignore_missing)
@@ -103,7 +109,7 @@ class RichBaseDataset(BaseDataset):
                 if geom is None:
                     continue
 
-                e = geom_envelope(geom)
+                e = geom.envelope(only_2d=True, calculate_if_missing=True)
                 yield (pk, e, None)
 
                 if c % 50000 == 0:

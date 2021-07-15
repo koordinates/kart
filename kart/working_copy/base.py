@@ -18,6 +18,7 @@ from kart.exceptions import (
 )
 from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
 from kart.schema import Schema, DefaultRoundtripContext
+from kart.spatial_filters import SpatialFilter
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.utils import chunk
 from . import WorkingCopyStatus, WorkingCopyType
@@ -828,7 +829,7 @@ class BaseWorkingCopy:
         )
         return r.rowcount
 
-    def write_full(self, commit, *datasets, **kwargs):
+    def write_full(self, commit, *datasets, spatial_filter=SpatialFilter.MATCH_ALL):
         """
         Writes a full layer into a working-copy table
 
@@ -839,9 +840,8 @@ class BaseWorkingCopy:
         with self.session() as sess:
             dataset_count = len(datasets)
             for i, dataset in enumerate(datasets):
-                total_features = dataset.feature_count
                 L.info(
-                    f"Writing dataset {i+1} of {dataset_count}: {dataset.path} with {total_features} features"
+                    "Writing dataset %d of %d: %s", i + 1, dataset_count, dataset.path
                 )
 
                 try:
@@ -861,35 +861,20 @@ class BaseWorkingCopy:
 
                 L.info("Creating features...")
                 sql = self._insert_into_dataset(dataset)
-                feat_progress = 0
                 t0 = time.monotonic()
-                t0p = t0
 
                 CHUNK_SIZE = 10000
 
-                for row_dicts in chunk(dataset.features_with_crs_ids(), CHUNK_SIZE):
+                dataset_spatial_filter = spatial_filter.transform_for_dataset(dataset)
+                for row_dicts in chunk(
+                    dataset.features_with_crs_ids(
+                        dataset_spatial_filter, log_progress=L.info
+                    ),
+                    CHUNK_SIZE,
+                ):
                     sess.execute(sql, row_dicts)
-                    feat_progress += len(row_dicts)
-
-                    t0a = time.monotonic()
-                    L.info(
-                        "%.1f%% %d/%d features... @%.1fs (+%.1fs, ~%d F/s)",
-                        feat_progress / total_features * 100,
-                        feat_progress,
-                        total_features,
-                        t0a - t0,
-                        t0a - t0p,
-                        CHUNK_SIZE / (t0a - t0p or 0.001),
-                    )
-                    t0p = t0a
 
                 t1 = time.monotonic()
-                L.info(
-                    "Added %d features to working copy in %.1fs", feat_progress, t1 - t0
-                )
-                L.info(
-                    "Overall rate: %d features/s", (feat_progress / (t1 - t0 or 0.001))
-                )
                 if dataset.has_geometry:
                     self._create_spatial_index_post(sess, dataset)
 
@@ -897,7 +882,11 @@ class BaseWorkingCopy:
                 self._update_last_write_time(sess, dataset, commit)
 
                 L.info(
-                    f"Wrote dataset {i+1} of {dataset_count}: {dataset.path} with {total_features} features"
+                    "Wrote dataset %d of %d in %.1fs: %s",
+                    i + 1,
+                    dataset_count,
+                    t1 - t0,
+                    dataset.path,
                 )
 
             self._insert_or_replace_state_table_tree(

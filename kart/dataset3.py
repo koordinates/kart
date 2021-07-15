@@ -224,8 +224,7 @@ class Dataset3(RichBaseDataset):
 
     def feature_blobs(self):
         """
-        Returns a generator that calls get_feature once per feature.
-        Each entry in the generator is the path of the feature and then the feature itself.
+        Returns a generator that yields every feature blob in turn.
         """
         if self.FEATURE_PATH not in self.inner_tree:
             return

@@ -1,11 +1,15 @@
 import functools
 import logging
+import time
 
 from . import crs_util
 from .import_source import ImportSource
 from . import meta_items
 from .serialise_util import json_unpack, ensure_text
+from .spatial_filters import SpatialFilter
 from .utils import ungenerator
+
+L = logging.getLogger("kart.base_dataset")
 
 
 class BaseDataset(ImportSource):
@@ -37,6 +41,8 @@ class BaseDataset(ImportSource):
     FEATURE_PATH = None  # Eg "feature/"
 
     META_ITEM_NAMES = meta_items.META_ITEM_NAMES
+
+    NUM_FEATURES_PER_PROGRESS_LOG = 10_000
 
     def __init__(self, tree, path, repo=None):
         """
@@ -262,7 +268,7 @@ class BaseDataset(ImportSource):
         geom_columns = self.schema.geometry_columns
         return geom_columns[0].name if geom_columns else None
 
-    def features(self):
+    def features(self, spatial_filter=SpatialFilter.MATCH_ALL, log_progress=False):
         """
         Yields a dict for every feature. Dicts contain key-value pairs for each feature property,
         and geometries use kart.geometry.Geometry objects, as in the following example::
@@ -276,9 +282,71 @@ class BaseDataset(ImportSource):
 
         Each dict is guaranteed to iterate in the same order as the columns are ordered in the schema,
         so that zip(schema.columns, feature.values()) matches each field with its column.
+
+        spatial_filter - restricts the features yielded to those that are in a particular geographic area.
+        log_progress - can be set to True, or to a callable logger method eg L.info, to enable logging.
         """
+        if log_progress:
+            plog = L.info if log_progress is True else log_progress
+            log_progress = bool(log_progress)
+
+        if not self.geom_column_name or spatial_filter.match_all:
+            matches = lambda f: True
+        else:
+            matches = lambda f: spatial_filter.matches(f[self.geom_column_name])
+
+        n_read = 0
+        n_chunk = 0
+        n_matched = 0
+        n_total = self.feature_count
+        t0 = time.monotonic()
+        t0_chunk = t0
+
+        if log_progress:
+            plog("0.0%% 0/%d features... @0.0s", n_total)
+
         for blob in self.feature_blobs():
-            yield self.get_feature(path=blob.name, data=memoryview(blob))
+            feature = self.get_feature(path=blob.name, data=memoryview(blob))
+            n_read += 1
+            n_chunk += 1
+
+            if matches(feature):
+                n_matched += 1
+                yield feature
+
+            if log_progress and n_chunk == self.NUM_FEATURES_PER_PROGRESS_LOG:
+                t = time.monotonic()
+                self._log_feature_progress(
+                    plog, n_read, n_chunk, n_matched, n_total, t0, t0_chunk, t
+                )
+                t0_chunk = t
+                n_chunk = 0
+
+        if log_progress and n_total:
+            t = time.monotonic()
+            self._log_feature_progress(
+                plog, n_read, n_chunk, n_matched, n_total, t0, t0_chunk, t
+            )
+            plog("Overall rate: %d features/s", (n_read / (t - t0 or 0.001)))
+
+    def _log_feature_progress(
+        self, plog, num_read, num_chunk, num_matched, num_total, t0, t0_chunk, t
+    ):
+        plog(
+            "%.1f%% %d/%d features... @%.1fs (+%.1fs, ~%d F/s)",
+            num_read / num_total * 100,
+            num_read,
+            num_total,
+            t - t0,
+            t - t0_chunk,
+            num_chunk / (t - t0_chunk or 0.001),
+        )
+        if num_matched != num_read:
+            plog(
+                "(of %d features read, wrote %d to the working copy that match the spatial filter)",
+                num_read,
+                num_matched,
+            )
 
     @property
     def feature_count(self):

@@ -438,7 +438,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             {"table": dataset.table_name, "geom": geom_col},
         )
 
-        L.info("Created spatial index in %ss", time.monotonic() - t0)
+        L.info("Created spatial index in %.1fs", time.monotonic() - t0)
 
     def _drop_spatial_index(self, sess, dataset):
         L = logging.getLogger(f"{self.__class__.__qualname__}._drop_spatial_index")
@@ -460,7 +460,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             {"table_name": dataset.table_name, "column_name": geom_col},
         )
 
-        L.info("Dropped spatial index in %ss", time.monotonic() - t0)
+        L.info("Dropped spatial index in %.1fs", time.monotonic() - t0)
 
     def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type in ("ins", "upd", "del")

@@ -16,6 +16,21 @@ GPKG_ENVELOPE_XYZ = 2
 GPKG_ENVELOPE_XYM = 3
 GPKG_ENVELOPE_XYZM = 4
 
+# The structure of the various GPKG envelope types for reading and writing.
+GPKG_ENVELOPE_FORMATS = {
+    GPKG_ENVELOPE_NONE: "",
+    GPKG_ENVELOPE_XY: "d" * 4,  # 4 doubles: (min-x, max-x, min-y, max-y)
+    GPKG_ENVELOPE_XYZ: "d" * 6,  # 6: standard four + (min-z, max-z)
+    GPKG_ENVELOPE_XYM: "d" * 6,  # 6: standard four + (min-m, max-m)
+    GPKG_ENVELOPE_XYZM: "d" * 8,  # 8: standard four + (min-z, max-z, min-m, max-m)
+}
+
+# The size in bytes of the various GPKG envelope types.
+GPKG_ENVELOPE_SIZES = {
+    env_type: len(env_format) * 8  # 8 bytes per double
+    for env_type, env_format in GPKG_ENVELOPE_FORMATS.items()
+}
+
 
 class Geometry(bytes):
     """
@@ -45,8 +60,8 @@ class Geometry(bytes):
     def __json__(self):
         return self.to_hex_wkb()
 
-    def to_gpkg_geom(self):
-        return bytes(self)
+    def normalise(self):
+        return normalise_gpkg_geom(self)
 
     def to_wkb(self):
         return gpkg_geom_to_wkb(self)
@@ -65,6 +80,17 @@ class Geometry(bytes):
         return Geometry.of(self[:4] + crs_id_bytes + self[8:])
 
     @property
+    def flags(self):
+        return self[3]
+
+    def is_little_endian(self):
+        return bool(self.flags & _GPKG_LE_BIT)
+
+    @property
+    def envelope_type(self):
+        return (self.flags & _GPKG_ENVELOPE_BITS) >> 1
+
+    @property
     def crs_id(self):
         """
         Returns the CRS ID as it is embedded in the GPKG header - before the WKB.
@@ -76,13 +102,23 @@ class Geometry(bytes):
 
     @property
     def geometry_type(self):
-        flags = _validate_gpkg_geom(self)
-        envelope_size = gpkg_envelope_size(flags)
+        envelope_size = gpkg_envelope_size(self.flags)
         wkb_offset = 8 + envelope_size
         wkb_is_le, geom_type = _wkb_endianness_and_geometry_type(
             self, wkb_offset=wkb_offset
         )
         return geom_type
+
+    def envelope(self, only_2d=False, calculate_if_missing=False):
+        """
+        Returns the envelope as a tuple of 4, 6, or 8 values, or None if no envelope is stored.
+        The tuple ordering is (min-x, max-x, min-y, max-y, min-z?, max-z?, min-m?, max-m?) - ? values may be missing.
+        If only_2d is True, then only (min-x, max-x, min-y, max-y) is returned, even if more values are present.
+        if calculate_if_missing is True then the entire geometry is loaded into OGR in order to calculate the envelope.
+        """
+        return geom_envelope(
+            self, only_2d=only_2d, calculate_if_missing=calculate_if_missing
+        )
 
     @classmethod
     def from_wkt(cls, wkt):
@@ -134,21 +170,11 @@ def _validate_gpkg_geom(gpkg_geom):
 
 
 def gpkg_envelope_size(flags):
-    envelope_typ = (flags & _GPKG_ENVELOPE_BITS) >> 1
-    if envelope_typ == 1:
-        # 2d envelope
-        return 32
-    elif envelope_typ in (2, 3):
-        # 3d envelope (XYZ, XYM)
-        return 48
-    elif envelope_typ == 4:
-        # 4d envelope (XYZM)
-        return 64
-    elif envelope_typ == 0:
-        # no envelope
-        return 0
-    else:
+    envelope_type = (flags & _GPKG_ENVELOPE_BITS) >> 1
+    size = GPKG_ENVELOPE_SIZES.get(envelope_type)
+    if size is None:
         raise ValueError("Invalid envelope contents indicator")
+    return size
 
 
 def _wkb_endianness_and_geometry_type(buf, wkb_offset=0):
@@ -414,13 +440,13 @@ def ogr_to_gpkg_geom(
     )
     envelope = b""
     if _add_envelope_type:
+
         if _add_envelope_type == GPKG_ENVELOPE_XY:
-            fmt = "dddd"
             envelope = ogr_geom.GetEnvelope()
         elif _add_envelope_type == GPKG_ENVELOPE_XYZ:
-            fmt = "dddddd"
             envelope = ogr_geom.GetEnvelope3D()
 
+        fmt = GPKG_ENVELOPE_FORMATS[_add_envelope_type]
         envelope = struct.pack(f'{"<" if _little_endian else ">"}{fmt}', *envelope)
 
     return Geometry(header + envelope + wkb)
@@ -534,7 +560,7 @@ def hex_ewkb_to_gpkg_geom(hex_ewkb):
     return normalise_gpkg_geom(gpkg_geom)
 
 
-def geom_envelope(gpkg_geom):
+def geom_envelope(gpkg_geom, only_2d=False, calculate_if_missing=False):
     """
     Parse GeoPackage geometry to a 2D envelope.
     This is a shortcut to avoid instantiating a full OGR geometry if possible.
@@ -543,6 +569,11 @@ def geom_envelope(gpkg_geom):
 
     http://www.geopackage.org/spec/#gpb_format
     """
+    if calculate_if_missing and not only_2d:
+        raise NotImplementedError(
+            "calculate_if_missing is only supported for 2D envelopes - set only_2d to True also"
+        )
+
     if gpkg_geom is None:
         return None
 
@@ -563,29 +594,32 @@ def geom_envelope(gpkg_geom):
     if flags & _GPKG_EMPTY_BIT:  # Empty geometry
         return None
 
-    envelope_typ = (flags & _GPKG_ENVELOPE_BITS) >> 1
+    envelope_type = (flags & _GPKG_ENVELOPE_BITS) >> 1
     # E: envelope contents indicator code (3-bit unsigned integer)
-    # 0: no envelope (space saving slower indexing option), 0 bytes
-    # 1: envelope is [minx, maxx, miny, maxy], 32 bytes
-    # 2: envelope is [minx, maxx, miny, maxy, minz, maxz], 48 bytes
-    # 3: envelope is [minx, maxx, miny, maxy, minm, maxm], 48 bytes
-    # 4: envelope is [minx, maxx, miny, maxy, minz, maxz, minm, maxm], 64 bytes
-    # 5-7: invalid
+    # See GPKG_ENVELOPE_FORMATS above.
+    envelope_format = GPKG_ENVELOPE_FORMATS.get(envelope_type)
+    if envelope_format is None:
+        raise ValueError("Invalid envelope contents indicator")
 
-    if envelope_typ == 0:
-        # parse the full geometry then get it's envelope
+    if envelope_format == "":
+        if not calculate_if_missing:
+            return None
         ogr_geom = gpkg_geom_to_ogr(gpkg_geom)
         if ogr_geom.IsEmpty():
             # envelope is apparently (0, 0, 0, 0), thanks OGR :/
             return None
         else:
             return ogr_geom.GetEnvelope()
-    elif envelope_typ <= 4:
-        # we only care about 2D envelopes here
-        envelope = struct.unpack_from(f"{'<' if is_le else '>'}dddd", gpkg_geom, 8)
-        if any(math.isnan(c) for c in envelope):
-            return None
-        else:
-            return envelope
+
+    if only_2d:
+        # First 4 doubles are always the 2D ones.
+        envelope_format = "dddd"
+
+    envelope = struct.unpack_from(
+        f"{'<' if is_le else '>'}{envelope_format}", gpkg_geom, 8
+    )
+
+    if any(math.isnan(c) for c in envelope):
+        return None
     else:
-        raise ValueError("Invalid envelope contents indicator")
+        return envelope
