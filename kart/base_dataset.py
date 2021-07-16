@@ -290,10 +290,7 @@ class BaseDataset(ImportSource):
             plog = L.info if log_progress is True else log_progress
             log_progress = bool(log_progress)
 
-        if not self.geom_column_name or spatial_filter.match_all:
-            matches = lambda f: True
-        else:
-            matches = lambda f: spatial_filter.matches(f[self.geom_column_name])
+        spatial_filter = spatial_filter.transform_for_dataset(self)
 
         n_read = 0
         n_chunk = 0
@@ -310,7 +307,7 @@ class BaseDataset(ImportSource):
             n_read += 1
             n_chunk += 1
 
-            if matches(feature):
+            if spatial_filter.matches(feature):
                 n_matched += 1
                 yield feature
 
@@ -353,14 +350,20 @@ class BaseDataset(ImportSource):
         """The total number of features in this dataset."""
         return sum(1 for blob in self.feature_blobs())
 
-    def get_features(self, row_pks, *, ignore_missing=False):
+    def get_features(
+        self, row_pks, *, ignore_missing=False, spatial_filter=SpatialFilter.MATCH_ALL
+    ):
         """
         Yields a dict for each of the specified features.
         If ignore_missing is True, then failing to find a specified feature does not raise a KeyError.
+        If the spatial filter is set, only features which match the spatial filter will be returned.
         """
+        spatial_filter = spatial_filter.transform_for_dataset(self)
         for pk_values in row_pks:
             try:
-                yield self.get_feature(pk_values)
+                feature = self.get_feature(pk_values)
+                if spatial_filter.matches(feature):
+                    yield feature
             except KeyError:
                 if ignore_missing:
                     continue

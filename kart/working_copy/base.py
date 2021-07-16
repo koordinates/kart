@@ -647,6 +647,8 @@ class BaseWorkingCopy:
                     db_obj = None
 
                 try:
+                    # TODO - this feature doesn't necessarily match the spatial filter.
+                    # If it doesn't, that generally means the user has accidentally reused a PK.
                     repo_obj = dataset.get_feature(track_pk)
                 except KeyError:
                     repo_obj = None
@@ -828,9 +830,10 @@ class BaseWorkingCopy:
         )
         return r.rowcount
 
-    def write_full(self, commit, *datasets, spatial_filter=SpatialFilter.MATCH_ALL):
+    def write_full(self, commit, *datasets):
         """
-        Writes a full layer into a working-copy table
+        Writes a full layer into a working-copy table.
+        Only writes features that match the given spatial filter (defaults to the repo spatial filter.)
 
         Use for new working-copy checkouts.
         """
@@ -864,10 +867,9 @@ class BaseWorkingCopy:
 
                 CHUNK_SIZE = 10000
 
-                dataset_spatial_filter = spatial_filter.transform_for_dataset(dataset)
                 for row_dicts in chunk(
                     dataset.features_with_crs_ids(
-                        dataset_spatial_filter, log_progress=L.info
+                        self.repo.spatial_filter, log_progress=L.info
                     ),
                     CHUNK_SIZE,
                 ):
@@ -946,7 +948,11 @@ class BaseWorkingCopy:
         feat_count = 0
         CHUNK_SIZE = 10000
         for row_dicts in chunk(
-            dataset.get_features_with_crs_ids(pk_list, ignore_missing=ignore_missing),
+            dataset.get_features_with_crs_ids(
+                pk_list,
+                ignore_missing=ignore_missing,
+                spatial_filter=self.repo.spatial_filter,
+            ),
             CHUNK_SIZE,
         ):
             sess.execute(sql, row_dicts)
@@ -1199,7 +1205,7 @@ class BaseWorkingCopy:
         sess - sqlalchemy session.
         base_ds - the dataset that contains the features in their current state
         target_ds - the dataset that contains the features in their desired state.
-        feature_diff - the feature-deltas between the current table state and its desired state.
+        feature_filter - features are only modified where their PKs match this filter.
         track_changes_as_dirty - whether to track these changes as working-copy edits in the tracking table.
         """
 

@@ -61,7 +61,7 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
 
     if replace_existing:
         wc.drop_table(commit, *datasets)
-    wc.write_full(commit, *datasets, spatial_filter=repo.spatial_filter)
+    wc.write_full(commit, *datasets)
 
 
 class GenerateIDsFromFile(StringFromFile):
