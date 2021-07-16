@@ -2,7 +2,6 @@ import contextlib
 import functools
 import logging
 import time
-import types
 
 import click
 import pygit2
@@ -1177,41 +1176,40 @@ class BaseWorkingCopy:
         if target_ds != base_ds:
             self._apply_meta_diff(sess, target_ds, base_ds.diff_meta(target_ds))
             # WC now has target_ds structure and so we can write target_ds features to WC.
-            feature_diff = base_ds.diff_feature(target_ds, feature_filter)
             self._apply_feature_diff(
-                sess, target_ds, feature_diff, track_changes_as_dirty
+                sess, base_ds, target_ds, feature_filter, track_changes_as_dirty
             )
 
         self._update_last_write_time(sess, target_ds, commit)
 
     def _apply_feature_diff(
-        self, sess, target_ds, feature_diff, track_changes_as_dirty=False
+        self,
+        sess,
+        base_ds,
+        target_ds,
+        feature_filter=FeatureKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
     ):
         """
-        Change the features of this working copy in target_ds from their current state to the desired state.
+        Change the features of this working copy from their current state, base_ds, to the desired state, target_ds,
+        as long as their keys match the feature filter. Used by reset() to move dataset tables that currently have one
+        one commit checked out such that they have a different commit checked out - doesn't actually support applying
+        arbitrary feature diffs to a table.
 
         sess - sqlalchemy session.
-        target_ds - the table to modify.
+        base_ds - the dataset that contains the features in their current state
+        target_ds - the dataset that contains the features in their desired state.
         feature_diff - the feature-deltas between the current table state and its desired state.
         track_changes_as_dirty - whether to track these changes as working-copy edits in the tracking table.
         """
 
-        if isinstance(feature_diff, types.GeneratorType):
-            feature_diff = DeltaDiff(feature_diff)
+        feature_diff = DeltaDiff(base_ds.diff_feature(target_ds, feature_filter))
 
         if not feature_diff:
             return
 
-        L.debug("Applying feature diff: about %s changes", len(feature_diff))
-
-        delete_pks = []
-        insert_and_update_pks = []
-
-        for delta in feature_diff.values():
-            if delta.type == "delete":
-                delete_pks.append(delta.old_key)
-            else:
-                insert_and_update_pks.append(delta.new_key)
+        pks = list(feature_diff.keys())
+        L.debug("Applying feature diff: about %s changes", len(pks))
 
         if not track_changes_as_dirty:
             # We don't want to track these changes as working copy edits - they will be part of the new WC base.
@@ -1221,8 +1219,8 @@ class BaseWorkingCopy:
             ctx = contextlib.nullcontext()
 
         with ctx:
-            self._delete_features(sess, target_ds, delete_pks)
-            self._write_features(sess, target_ds, insert_and_update_pks)
+            self._delete_features(sess, target_ds, pks)
+            self._write_features(sess, target_ds, pks, ignore_missing=True)
 
     def _is_meta_update_supported(self, meta_diff):
         """
