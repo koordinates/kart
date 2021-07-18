@@ -51,14 +51,18 @@ class RichBaseDataset(BaseDataset):
             self.features(spatial_filter, log_progress=log_progress)
         )
 
-    def get_features_with_crs_ids(self, row_pks, *, ignore_missing=False):
+    def get_features_with_crs_ids(
+        self, row_pks, *, ignore_missing=False, spatial_filter=SpatialFilter.MATCH_ALL
+    ):
         """
         Same as base_dataset.get_features(...), but includes the CRS ID from the schema in every Geometry object.
         By contrast, the returned Geometries from base_dataset.get_features(...) all contain a CRS ID of zero,
         so the schema must be consulted separately to learn about CRS IDs.
         """
         yield from self._add_crs_ids_to_features(
-            self.get_features(row_pks, ignore_missing=ignore_missing)
+            self.get_features(
+                row_pks, ignore_missing=ignore_missing, spatial_filter=spatial_filter
+            )
         )
 
     def _add_crs_ids_to_features(self, features):

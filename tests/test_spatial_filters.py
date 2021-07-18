@@ -1,3 +1,4 @@
+import json
 import pytest
 
 from kart.repo import KartRepo
@@ -8,6 +9,20 @@ H = pytest.helpers.helpers()
 
 def ring_as_wkt(*points):
     return "(" + ",".join(f"{x} {y}" for x, y in points) + ")"
+
+
+def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):
+    return (
+        "POLYGON("
+        + ring_as_wkt(
+            (min_x, min_y),
+            (max_x, min_y),
+            (max_x, max_y),
+            (min_x, max_y),
+            (min_x, min_y),
+        )
+        + ")"
+    )
 
 
 SPATIAL_FILTER_GEOMETRY = {
@@ -86,7 +101,7 @@ SPATIAL_FILTER_CRS = {
     ],
 )
 def test_spatial_filtered_workingcopy(
-    archive, table, filter_key, data_archive, tmp_path, cli_runner
+    archive, table, filter_key, data_archive, cli_runner
 ):
     """ Checkout a working copy to edit """
     with data_archive(archive) as repo_path:
@@ -104,8 +119,55 @@ def test_spatial_filtered_workingcopy(
 
         r = cli_runner.invoke(["checkout"])
         assert r.exit_code == 0, r
-        wc = repo.working_copy
 
-        with wc.session() as sess:
-            feature_count = sess.execute(f"SELECT COUNT(*) FROM {table};").scalar()
-            assert feature_count == matching_features[archive]
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, table) == matching_features[archive]
+
+
+def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
+    # This spatial filter matches 2 of the 5 possible changes between main^ and main.
+    spatial_filter_geom = bbox_as_wkt_polygon(175.8, 175.9, -36.9, -37.1)
+
+    with data_archive("points.tgz") as repo_path:
+        # Without a spatial filter - checking out main^ then restoring main results in 5 uncommitted changes,
+        # the difference between main^ and main.
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        r = cli_runner.invoke(["checkout", "main^"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["restore", "-s", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        status = json.loads(r.stdout)["kart.status/v1"]
+        assert (
+            status["workingCopy"]["changes"][H.POINTS.LAYER]["feature"]["updates"] == 5
+        )
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
+
+        # With the spatial filter - checking out main^ then restoring main results in 2 uncommitted changes,
+        # the difference between main^ and main that matches the spatial filter.
+        H.clear_working_copy()
+        repo.config["kart.spatialfilter.geometry"] = spatial_filter_geom
+        repo.config["kart.spatialfilter.crs"] = SPATIAL_FILTER_CRS["points"]
+
+        r = cli_runner.invoke(["checkout", "main^"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["restore", "-s", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        status = json.loads(r.stdout)["kart.status/v1"]
+        assert (
+            status["workingCopy"]["changes"][H.POINTS.LAYER]["feature"]["updates"] == 2
+        )
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == 13

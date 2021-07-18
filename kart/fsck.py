@@ -14,7 +14,7 @@ def _fsck_reset(repo, working_copy, dataset_paths):
     datasets = [repo.datasets()[p] for p in dataset_paths]
 
     working_copy.drop_table(commit, *datasets)
-    working_copy.write_full(commit, *datasets, spatial_filter=repo.spatial_filter)
+    working_copy.write_full(commit, *datasets)
 
 
 @click.command(context_settings=dict(ignore_unknown_options=True))
