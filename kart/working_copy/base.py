@@ -833,7 +833,7 @@ class BaseWorkingCopy:
     def write_full(self, commit, *datasets):
         """
         Writes a full layer into a working-copy table.
-        Only writes features that match the given spatial filter (defaults to the repo spatial filter.)
+        Only writes features that match the repo's spatial filter.
 
         Use for new working-copy checkouts.
         """

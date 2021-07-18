@@ -481,15 +481,17 @@ class KartRepo(pygit2.Repository):
         from .spatial_filters import SpatialFilter
 
         geometry_spec = self._get_config_str(KartConfigKeys.KART_SPATIALFILTER_GEOMETRY)
-        crs_spec = self._get_config_str(KartConfigKeys.KART_SPATIALFILTER_CRS)
+        crs_spec = self._get_config_str(
+            KartConfigKeys.KART_SPATIALFILTER_CRS, "EPSG::4326"
+        )
         return (
             SpatialFilter.from_spec(geometry_spec, crs_spec)
             if geometry_spec
             else SpatialFilter.MATCH_ALL
         )
 
-    def _get_config_str(self, key):
-        return self.config[key] if key in self.config else None
+    def _get_config_str(self, key, default=None):
+        return self.config[key] if key in self.config else default
 
     @property
     def is_bare(self):

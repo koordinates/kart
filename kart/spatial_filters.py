@@ -30,18 +30,17 @@ class SpatialFilter:
     def from_spec(cls, geometry_wkt, crs_spec):
         if not geometry_wkt:
             return SpatialFilter.MATCH_ALL
+        if not crs_spec:
+            raise ValueError("SpatialFilter requires a CRS")
 
         # TODO - use PreparedGeometry.
         filter_geometry_ogr = Geometry.from_wkt(geometry_wkt).to_ogr()
-        if crs_spec is not None:
-            try:
-                crs = make_crs(crs_spec)
-            except RuntimeError as e:
-                raise click.BadParameter(
-                    f"Invalid or unknown coordinate reference system configured in spatial filter: {crs_spec!r} ({e})"
-                )
-        else:
-            crs = None
+        try:
+            crs = make_crs(crs_spec)
+        except RuntimeError as e:
+            raise click.BadParameter(
+                f"Invalid or unknown coordinate reference system configured in spatial filter: {crs_spec!r} ({e})"
+            )
 
         return SpatialFilter(filter_geometry_ogr, crs)
 
@@ -54,18 +53,18 @@ class SpatialFilter:
         crs - The CRS used to interpret the spatial filter. An OGR SpatialReference object.
         match_all - if True, this filter is the default match-everything filter.
         """
+        self.match_all = match_all
+
         if match_all:
-            self.filter_ogr = None
-            self.filter_env = None
+            self.filter_ogr = self.filter_env = self.crs = None
+            self.geom_column_name = None
         else:
             self.filter_ogr = filter_geometry_ogr
             self.filter_env = self.filter_ogr.GetEnvelope()
+            self.crs = crs
+            self.geom_column_name = geom_column_name
 
-        self.crs = crs
-        self.geom_column_name = geom_column_name
-        self.match_all = match_all
-
-    def matches(self, feature_or_geometry):
+    def matches(self, feature):
         """
         Returns True if the given feature geometry matches this spatial filter.
         The feature to be tested is assumed to be using the same CRS as this spatial filter,
@@ -75,15 +74,10 @@ class SpatialFilter:
         feature_geometry - either a feature dict (in which case self.geom_column_name must be set)
             or a geometry.Geometry object.
         """
-        if self.match_all or feature_or_geometry is None:
+        if self.match_all or feature is None:
             return True
 
-        if isinstance(feature_or_geometry, dict):
-            feature_geometry = feature_or_geometry[self.geom_column_name]
-        elif isinstance(feature_or_geometry, Geometry):
-            feature_geometry = feature_or_geometry
-        else:
-            raise TypeError("Expected feature dict or geometry.Geometry")
+        feature_geometry = feature[self.geom_column_name]
 
         err = None
         feature_env = None
@@ -125,7 +119,7 @@ class SpatialFilter:
 
     def transform_for_dataset(self, dataset):
         """Transform this spatial filter so that it matches the CRS of the given dataset."""
-        if self.match_all or dataset is None:
+        if self.match_all:
             return SpatialFilter.MATCH_ALL
 
         geom_column_name = dataset.geom_column_name
@@ -133,19 +127,16 @@ class SpatialFilter:
             return SpatialFilter.MATCH_ALL
         result = self.with_geom_column_name(geom_column_name)
 
-        if self.crs is not None:
-            ds_path = dataset.path
-            ds_crs_defs = dataset.crs_definitions()
-            if not ds_crs_defs:
-                return self
-            if len(ds_crs_defs) > 1:
-                raise NotYetImplemented(
-                    f"Sorry, spatial filtering dataset {ds_path!r} with multiple CRS is not yet supported"
-                )
-            ds_crs_def = list(ds_crs_defs.values())[0]
-            return result.transform_for_crs(ds_crs_def, ds_path)
-        else:
-            return result
+        ds_path = dataset.path
+        ds_crs_defs = dataset.crs_definitions()
+        if not ds_crs_defs:
+            return self
+        if len(ds_crs_defs) > 1:
+            raise NotYetImplemented(
+                f"Sorry, spatial filtering dataset {ds_path!r} with multiple CRS is not yet supported"
+            )
+        ds_crs_def = list(ds_crs_defs.values())[0]
+        return result.transform_for_crs(ds_crs_def, ds_path)
 
     def with_geom_column_name(self, geom_column_name):
         if self.match_all:
@@ -159,8 +150,6 @@ class SpatialFilter:
         """
         if self.match_all:
             return SpatialFilter.MATCH_ALL
-        if self.crs is None:
-            return self
 
         from osgeo import osr
         from kart.geometry import make_crs
