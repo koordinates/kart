@@ -13,7 +13,6 @@ from .exceptions import (
     NotYetImplemented,
     PATCH_DOES_NOT_APPLY,
 )
-from .geometry import make_crs
 from .key_filters import DatasetKeyFilter, FeatureKeyFilter
 from .schema import Schema
 from .spatial_filters import SpatialFilter
@@ -162,7 +161,7 @@ class RichBaseDataset(BaseDataset):
         if crs_definition is None:
             return None
         try:
-            src_crs = make_crs(crs_definition)
+            src_crs = crs_util.make_crs(crs_definition)
             return osr.CoordinateTransformation(src_crs, target_crs)
         except RuntimeError as e:
             raise InvalidOperation(

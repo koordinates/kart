@@ -1,7 +1,7 @@
-from osgeo.osr import SpatialReference
+from osgeo import osr
 
 from .cli_util import StringFromFile
-from .geometry import make_crs
+from .exceptions import CrsError
 from .serialise_util import uint32hash
 from .wkt_lexer import (
     WKTLexer,
@@ -14,6 +14,24 @@ from .wkt_lexer import (
 )
 
 
+def make_crs(crs_text, context=None):
+    """
+    Creates an OGR SpatialReference object from the given string.
+    Accepted input is very flexible.
+    see https://gdal.org/api/ogrspatialref.html#classOGRSpatialReference_1aec3c6a49533fe457ddc763d699ff8796
+    """
+    try:
+        crs = osr.SpatialReference()
+        crs.SetFromUserInput(crs_text)
+        crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        return crs
+    except RuntimeError as e:
+        crs_desc = "coordinate reference system"
+        if context:
+            crs_desc += f" for {context}"
+        raise CrsError(f"Invalid or unknown {crs_desc}: {crs_text!r} ({e})")
+
+
 class CoordinateReferenceString(StringFromFile):
     """Click option to specify a CRS."""
 
@@ -22,10 +40,8 @@ class CoordinateReferenceString(StringFromFile):
 
         try:
             return make_crs(value)
-        except RuntimeError as e:
-            self.fail(
-                f"Invalid or unknown coordinate reference system: {value!r} ({e})"
-            )
+        except CrsError as e:
+            self.fail(str(e))
 
 
 NAME_PATTERN = (Keyword, OpenBracket, String)
@@ -39,11 +55,11 @@ def parse_name(crs):
         if result:
             return result[0]
         else:
-            spatial_ref = SpatialReference(crs)
-    elif isinstance(crs, SpatialReference):
+            spatial_ref = make_crs(crs)
+    elif isinstance(crs, osr.SpatialReference):
         spatial_ref = crs
     else:
-        raise RuntimeError(f"Unrecognised CRS: {crs}")
+        raise TypeError(f"Unrecognised CRS: {crs}")
     return spatial_ref.GetName()
 
 
@@ -58,8 +74,8 @@ def parse_authority(crs):
         )
         if result:
             return result
-        spatial_ref = SpatialReference(crs)
-    elif isinstance(crs, SpatialReference):
+        spatial_ref = make_crs(crs)
+    elif isinstance(crs, osr.SpatialReference):
         spatial_ref = crs
     else:
         raise RuntimeError(f"Unrecognised CRS: {crs}")

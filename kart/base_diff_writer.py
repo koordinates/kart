@@ -7,7 +7,13 @@ import sys
 import click
 
 from .diff_structs import RepoDiff, DatasetDiff
-from .exceptions import InvalidOperation, NotFound, NotYetImplemented, NO_WORKING_COPY
+from .exceptions import (
+    CrsError,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
+    NO_WORKING_COPY,
+)
 from .key_filters import RepoKeyFilter
 
 
@@ -276,14 +282,12 @@ class BaseDiffWriter:
 
     def _make_transform(self, crs_def, ds_path):
         from osgeo import osr
-        from kart.geometry import make_crs
+        from kart.crs_util import make_crs
 
         try:
             return osr.CoordinateTransformation(make_crs(crs_def), self.target_crs)
         except RuntimeError as e:
-            raise InvalidOperation(
-                f"Can't reproject dataset {ds_path!r} into target CRS: {e}"
-            )
+            raise CrsError(f"Can't reproject dataset {ds_path!r} into target CRS: {e}")
 
     def exit_with_code(self):
         """Exit with code 1 if the diff already written had changes, otherwise exit with code 0."""

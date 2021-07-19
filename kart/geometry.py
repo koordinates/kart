@@ -137,18 +137,6 @@ class Geometry(bytes):
         return hex_ewkb_to_gpkg_geom(hex_ewkb)
 
 
-def make_crs(crs_text):
-    """
-    Creates an OGR SpatialReference object from the given string.
-    Accepted input is very flexible.
-    see https://gdal.org/api/ogrspatialref.html#classOGRSpatialReference_1aec3c6a49533fe457ddc763d699ff8796
-    """
-    crs = osr.SpatialReference()
-    crs.SetFromUserInput(crs_text)
-    crs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    return crs
-
-
 def _validate_gpkg_geom(gpkg_geom):
     """
     Validates some basic things about the given GPKG geometry.

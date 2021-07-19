@@ -3,8 +3,9 @@ import logging
 
 import click
 
-from .exceptions import InvalidOperation, NotYetImplemented
-from .geometry import Geometry, make_crs
+from .crs_util import make_crs
+from .exceptions import CrsError, NotYetImplemented
+from .geometry import Geometry
 
 L = logging.getLogger("kart.spatial_filters")
 
@@ -152,7 +153,6 @@ class SpatialFilter:
             return SpatialFilter.MATCH_ALL
 
         from osgeo import osr
-        from kart.geometry import make_crs
 
         try:
             crs_spec = str(new_crs)
@@ -165,9 +165,7 @@ class SpatialFilter:
 
         except RuntimeError as e:
             crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_spec!r}"
-            raise InvalidOperation(
-                f"Can't reproject spatial filter into {crs_desc}:\n{e}"
-            )
+            raise CrsError(f"Can't reproject spatial filter into {crs_desc}:\n{e}")
 
 
 SpatialFilter.MATCH_ALL = SpatialFilter(None, None, match_all=True)

@@ -16,6 +16,7 @@ MERGE_CONFLICT = 21
 PATCH_DOES_NOT_APPLY = 22
 SCHEMA_VIOLATION = 23
 UNSUPPORTED_VERSION = 24
+CRS_ERROR = 25
 
 NOT_YET_IMPLEMENTED = 30
 
@@ -88,6 +89,10 @@ class NotYetImplemented(BaseException):
 
 class NotFound(BaseException):
     exit_code = NOT_FOUND
+
+
+class CrsError(BaseException):
+    exit_code = CRS_ERROR
 
 
 class DbConnectionError(BaseException):

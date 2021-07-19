@@ -1,8 +1,8 @@
 import json
 import pytest
 
-from kart.diff_output import feature_as_json
 from kart.exceptions import INVALID_OPERATION
+from kart.feature_output import feature_as_json
 from kart.merge_util import MergeIndex
 from kart.repo import KartRepoState, KartRepo
 
