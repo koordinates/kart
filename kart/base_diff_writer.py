@@ -238,19 +238,10 @@ class BaseDiffWriter:
             diff.prune()
         return diff
 
-    def get_geometry_transforms(self, ds_path, ds_diff):
-        """
-        Returns old_transform, new_transform for the dataset at a particular path -
-        where old_transform is the transform that should be applied to old, pre-diff values,
-        and new_transform is the transform that should be applied to new, post-diff values,
-        in order that all geometry values output are now in self.target_crs
-        """
+    def get_old_and_new_crs(self, ds_path, ds_diff, context=None):
+        from kart.crs_util import make_crs
 
-        if self.target_crs is None:
-            return None, None
-
-        # Check if the CRS is changing during the diff - in which case,
-        # we need to reproject old and new geometries differently.
+        # If the CRS is changing during the diff, we extract the two CRS from the diff.
         if "meta" in ds_diff:
             meta_diff = ds_diff["meta"]
             old_crs_defs = [
@@ -264,30 +255,60 @@ class BaseDiffWriter:
                 if k.startswith("crs/") and v.new is not None
             ]
             if len(old_crs_defs) > 1 or len(new_crs_defs) > 1:
-                raise NotYetImplemented(
-                    f"Sorry, reprojecting dataset {ds_path!r} with multiple CRS into target CRS is not yet supported"
-                )
-            old_transform, new_transform = None, None
+                self._raise_multi_crs_error(ds_path, context=context)
+            old_crs, new_crs = None, None
             if old_crs_defs:
-                old_transform = self._make_transform(old_crs_defs[0], ds_path)
+                old_crs = make_crs(old_crs_defs[0], context=ds_path)
             if new_crs_defs:
-                new_transform = self._make_transform(new_crs_defs[0], ds_path)
+                new_crs = make_crs(new_crs_defs[0], context=ds_path)
             if old_crs_defs or new_crs_defs:
-                return old_transform, new_transform
+                return old_crs, new_crs
 
-        # No diff case - old and new transform are the same.
+        # No diff - old and new CRS are the same.
         ds = self.base_rs.datasets.get(ds_path) or self.target_rs.datasets.get(ds_path)
-        transform = ds.get_geometry_transform(self.target_crs)
-        return transform, transform
+        crs_defs = list(ds.crs_definitions().values())
+        if not crs_defs:
+            return None, None
+        if len(crs_defs) > 1:
+            self._raise_multi_crs_error(ds_path, context=context)
+        crs = make_crs(crs_defs[0], context=ds_path)
+        return crs, crs
 
-    def _make_transform(self, crs_def, ds_path):
-        from osgeo import osr
-        from kart.crs_util import make_crs
+    def _raise_multi_crs_error(ds_path, context=None):
+        message = (
+            f"Sorry, multiple CRS definitions at {ds_path!r} are not yet supported"
+        )
+        if context:
+            message += f" for {message}"
+        raise CrsError(message)
 
-        try:
-            return osr.CoordinateTransformation(make_crs(crs_def), self.target_crs)
-        except RuntimeError as e:
-            raise CrsError(f"Can't reproject dataset {ds_path!r} into target CRS: {e}")
+    def get_geometry_transforms(self, ds_path, ds_diff, context=None):
+        """
+        Returns old_transform, new_transform for the dataset at a particular path -
+        where old_transform is the transform that should be applied to old, pre-diff values,
+        and new_transform is the transform that should be applied to new, post-diff values,
+        in order that all geometry values output are now in self.target_crs
+        """
+        if self.target_crs is None:
+            return None, None
+
+        def _get_transform(source_crs):
+            if source_crs is None:
+                return None
+
+            from osgeo import osr
+
+            try:
+                return osr.CoordinateTransformation(source_crs, self.target_crs)
+            except RuntimeError as e:
+                raise CrsError(
+                    f"Can't reproject dataset {ds_path!r} into target CRS: {e}"
+                )
+
+        old_crs, new_crs = self.get_old_and_new_crs(
+            ds_path, ds_diff, context="reprojection"
+        )
+        return (_get_transform(old_crs), _get_transform(new_crs))
 
     def exit_with_code(self):
         """Exit with code 1 if the diff already written had changes, otherwise exit with code 0."""
