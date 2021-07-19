@@ -6,7 +6,7 @@ import click
 
 from .base_diff_writer import BaseDiffWriter
 from .diff_structs import DatasetDiff, Delta
-from .diff_output import json_row, geojson_row
+from .feature_output import feature_as_json, feature_as_geojson
 from .log import commit_obj_to_json
 from .output_util import dump_json_output, resolve_output_path
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -79,9 +79,13 @@ class JsonDiffWriter(BaseDiffWriter):
     def encode_delta(self, delta):
         result = {}
         if delta.old:
-            result["-"] = json_row(delta.old_value, delta.old_key, self._old_transform)
+            result["-"] = feature_as_json(
+                delta.old_value, delta.old_key, self._old_transform
+            )
         if delta.new:
-            result["+"] = json_row(delta.new_value, delta.new_key, self._new_transform)
+            result["+"] = feature_as_json(
+                delta.new_value, delta.new_key, self._new_transform
+            )
         return result
 
 
@@ -193,9 +197,13 @@ class JsonLinesDiffWriter(BaseDiffWriter):
         for key, delta in ds_diff["feature"].sorted_items():
             change = {}
             if delta.old:
-                change["-"] = json_row(delta.old_value, delta.old_key, old_transform)
+                change["-"] = feature_as_json(
+                    delta.old_value, delta.old_key, old_transform
+                )
             if delta.new:
-                change["+"] = json_row(delta.new_value, delta.new_key, new_transform)
+                change["+"] = feature_as_json(
+                    delta.new_value, delta.new_key, new_transform
+                )
             obj["change"] = change
             self.dump(obj)
 
@@ -282,11 +290,11 @@ class GeojsonDiffWriter(BaseDiffWriter):
         for delta in deltas:
             if delta.old:
                 change_type = "U-" if delta.new else "D"
-                yield geojson_row(
+                yield feature_as_geojson(
                     delta.old_value, delta.old_key, change_type, old_transform
                 )
             if delta.new:
                 change_type = "U+" if delta.old else "I"
-                yield geojson_row(
+                yield feature_as_geojson(
                     delta.new_value, delta.new_key, change_type, new_transform
                 )

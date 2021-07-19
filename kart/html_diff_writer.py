@@ -7,7 +7,7 @@ import webbrowser
 import click
 
 from .base_diff_writer import BaseDiffWriter
-from .diff_output import geojson_row
+from .feature_output import feature_as_geojson
 from .output_util import ExtendedJsonEncoder, resolve_output_path
 
 
@@ -76,11 +76,11 @@ class HtmlDiffWriter(BaseDiffWriter):
         for delta in deltas:
             if delta.old:
                 change_type = "U-" if delta.new else "D"
-                yield geojson_row(
+                yield feature_as_geojson(
                     delta.old_value, delta.old_key, change_type, old_transform
                 )
             if delta.new:
                 change_type = "U+" if delta.old else "I"
-                yield geojson_row(
+                yield feature_as_geojson(
                     delta.new_value, delta.new_key, change_type, new_transform
                 )

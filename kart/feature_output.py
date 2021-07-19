@@ -6,16 +6,16 @@ from .geometry import Geometry, ogr_to_hex_wkb
 from .utils import ungenerator
 
 
-def text_row(row, prefix=""):
+def feature_as_text(row, prefix=""):
     result = []
     for key in row.keys():
         if key.startswith("__"):
             continue
-        result.append(text_row_field(row, key, prefix))
+        result.append(feature_field_as_text(row, key, prefix))
     return "\n".join(result)
 
 
-def text_row_field(row, key, prefix):
+def feature_field_as_text(row, key, prefix):
     val = row[key]
 
     if isinstance(val, Geometry):
@@ -33,7 +33,32 @@ def text_row_field(row, key, prefix):
     return f"{prefix}{key:>40} = {val}"
 
 
-def geojson_row(row, pk_value, change=None, geometry_transform=None):
+@ungenerator(dict)
+def feature_as_json(row, pk_value, geometry_transform=None):
+    """
+    Turns a row into a dict for serialization as JSON.
+    The geometry is serialized as hexWKB.
+    """
+    for k, v in row.items():
+        if isinstance(v, Geometry):
+            if geometry_transform is None:
+                v = v.to_hex_wkb()
+            else:
+                # reproject
+                ogr_geom = v.to_ogr()
+                try:
+                    ogr_geom.Transform(geometry_transform)
+                except RuntimeError as e:
+                    raise InvalidOperation(
+                        f"Can't reproject geometry with ID '{pk_value}' into target CRS"
+                    ) from e
+                v = ogr_to_hex_wkb(ogr_geom)
+        elif isinstance(v, bytes):
+            v = bytes.hex(v)
+        yield k, v
+
+
+def feature_as_geojson(row, pk_value, change=None, geometry_transform=None):
     """
     Turns a row into a dict representing a GeoJSON feature.
     """
@@ -65,28 +90,3 @@ def geojson_row(row, pk_value, change=None, geometry_transform=None):
             f["properties"][k] = v
 
     return f
-
-
-@ungenerator(dict)
-def json_row(row, pk_value, geometry_transform=None):
-    """
-    Turns a row into a dict for serialization as JSON.
-    The geometry is serialized as hexWKB.
-    """
-    for k, v in row.items():
-        if isinstance(v, Geometry):
-            if geometry_transform is None:
-                v = v.to_hex_wkb()
-            else:
-                # reproject
-                ogr_geom = v.to_ogr()
-                try:
-                    ogr_geom.Transform(geometry_transform)
-                except RuntimeError as e:
-                    raise InvalidOperation(
-                        f"Can't reproject geometry with ID '{pk_value}' into target CRS"
-                    ) from e
-                v = ogr_to_hex_wkb(ogr_geom)
-        elif isinstance(v, bytes):
-            v = bytes.hex(v)
-        yield k, v

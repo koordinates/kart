@@ -5,7 +5,7 @@ import re
 
 import pygit2
 
-from .diff_output import text_row, json_row, geojson_row
+from .feature_output import feature_as_text, feature_as_json, feature_as_geojson
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .utils import ungenerator
@@ -557,9 +557,11 @@ class RichConflictVersion:
             return result
 
         if output_format == "text":
-            return text_row(self.feature)
+            return feature_as_text(self.feature)
 
-        transform_func = json_row if output_format == "json" else geojson_row
+        transform_func = (
+            feature_as_json if output_format == "json" else feature_as_geojson
+        )
         geometry_transform = None
         if target_crs is not None:
             geometry_transform = self.dataset.get_geometry_transform(target_crs)

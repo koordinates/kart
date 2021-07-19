@@ -9,7 +9,7 @@ import click
 from .base_diff_writer import BaseDiffWriter
 
 from .output_util import format_wkt_for_output, resolve_output_path
-from .diff_output import text_row, text_row_field
+from .feature_output import feature_as_text, feature_field_as_text
 
 
 from .schema import Schema
@@ -117,14 +117,14 @@ class TextDiffWriter(BaseDiffWriter):
 
         if delta.type == "insert":
             click.secho(f"+++ {ds_path}:feature:{new_pk}", bold=True, **self.pecho)
-            output = text_row(new_feature, prefix="+ ")
+            output = feature_as_text(new_feature, prefix="+ ")
 
             click.secho(output, fg="green", **self.pecho)
             return
 
         if delta.type == "delete":
             click.secho(f"--- {ds_path}:feature:{old_pk}", bold=True, **self.pecho)
-            output = text_row(old_feature, prefix="- ")
+            output = feature_as_text(old_feature, prefix="- ")
             click.secho(output, fg="red", **self.pecho)
             return
 
@@ -141,10 +141,10 @@ class TextDiffWriter(BaseDiffWriter):
             if old_feature.get(k, _NULL) == new_feature.get(k, _NULL):
                 continue
             if k in old_feature:
-                output = text_row_field(old_feature, k, prefix="- ")
+                output = feature_field_as_text(old_feature, k, prefix="- ")
                 click.secho(output, fg="red", **self.pecho)
             if k in new_feature:
-                output = text_row_field(new_feature, k, prefix="+ ")
+                output = feature_field_as_text(new_feature, k, prefix="+ ")
                 click.secho(output, fg="green", **self.pecho)
 
     # The rest of the class is all just so we can get nice schema diffs. Still, that's important.

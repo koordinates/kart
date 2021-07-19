@@ -1,7 +1,7 @@
 import json
 import pytest
 
-from kart.diff_output import json_row
+from kart.diff_output import feature_as_json
 from kart.exceptions import INVALID_OPERATION
 from kart.merge_util import MergeIndex
 from kart.repo import KartRepoState, KartRepo
@@ -28,7 +28,7 @@ def delete_remaining_conflicts(cli_runner):
 def get_json_feature(rs, layer, pk):
     try:
         feature = rs.datasets[layer].get_feature(pk)
-        return json_row(feature, pk)
+        return feature_as_json(feature, pk)
     except KeyError:
         return None
 
