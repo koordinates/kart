@@ -11,10 +11,10 @@ from .exceptions import (
     CrsError,
     InvalidOperation,
     NotFound,
-    NotYetImplemented,
     NO_WORKING_COPY,
 )
 from .key_filters import RepoKeyFilter
+from .spatial_filters import SpatialFilter
 
 
 L = logging.getLogger("kart.diff_writer")
@@ -80,6 +80,8 @@ class BaseDiffWriter:
 
         self.user_key_filters = user_key_filters
         self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
+
+        self.spatial_filter = repo.spatial_filter
 
         base_ds_paths = {ds.path for ds in self.base_rs.datasets}
         target_ds_paths = {ds.path for ds in self.target_rs.datasets}
@@ -203,7 +205,7 @@ class BaseDiffWriter:
             diff.prune()
         return diff
 
-    def get_dataset_diff(self, dataset_path, prune=True):
+    def get_dataset_diff(self, dataset_path, apply_spatial_filter=True, prune=True):
         """Returns the DatasetDiff object for the dataset at path dataset_path."""
 
         diff = DatasetDiff()
@@ -222,6 +224,8 @@ class BaseDiffWriter:
             diff_cc = base_ds.diff(target_ds, ds_filter=ds_filter, **params)
             L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
             diff += diff_cc
+        else:
+            diff_cc = None
 
         if self.working_copy:
             # diff += target_rs<>working_copy
@@ -233,12 +237,73 @@ class BaseDiffWriter:
                 repr(diff_wc),
             )
             diff += diff_wc
+        else:
+            diff_wc = None
+
+        if apply_spatial_filter and diff_cc is not None:
+            self._apply_spatial_filter(dataset_path, diff, diff_wc)
 
         if prune:
             diff.prune()
         return diff
 
-    def get_old_and_new_crs(self, ds_path, ds_diff, context=None):
+    def _apply_spatial_filter(self, ds_path, ds_diff, ds_diff_wc=None):
+        """
+        Removes all the feature-deltas from the given dataset diff that don't match the self.spatial_filter.
+        Features that are present in the working-copy diff for this dataset - if supplied - are not
+        removed from the diff, since working-copy edits are always relevant to the user even if outside the
+        spatial filter.
+        """
+        # NOTE: This function has to load every feature if it is to do any filtering at all.
+        # This stops lazy-loading of features for streaming diffs from providing any benefit.
+        # TODO: Write better streaming alternatives for the more streamable output types, ie text and json-lines.
+        if self.spatial_filter.match_all or not ds_diff.get("feature"):
+            return
+
+        old_spatial_filter, new_spatial_filter = self._get_spatial_filters(
+            ds_path, ds_diff
+        )
+        if old_spatial_filter.match_all and new_spatial_filter.match_all:
+            # This can happen if neither the old nor the new version of the dataset have
+            # any geometry - all of their features are guaranteed to match the spatial filter,
+            # so no point doing any filtering here.
+            return
+
+        feature_diff = ds_diff["feature"]
+        wc_feature_diff = ds_diff_wc.get("feature", ()) if ds_diff_wc else ()
+        nonmatching_keys = []
+        for key, delta in feature_diff.items():
+            if key in wc_feature_diff:
+                continue
+            if delta.old_value and old_spatial_filter.matches(delta.old_value):
+                continue
+            if delta.new_value and new_spatial_filter.matches(delta.new_value):
+                continue
+            nonmatching_keys.append(key)
+
+        # TODO - either show a warning for `kart create-patch` when some deltas have been removed,
+        # or, don't apply spatial filters at all when writing patches.
+        for key in nonmatching_keys:
+            del feature_diff[key]
+
+    def _get_old_and_new_schema(self, ds_path, ds_diff):
+        from kart.schema import Schema
+
+        old_schema = new_schema = None
+        schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
+        if schema_delta and schema_delta.old_value:
+            old_schema = Schema.from_column_dicts(schema_delta.old_value)
+        if schema_delta and schema_delta.new_value:
+            new_schema = Schema.from_column_dicts(schema_delta.new_value)
+        if old_schema or new_schema:
+            return old_schema, new_schema
+
+        # No diff - old and new schemas are the same.
+        ds = self.base_rs.datasets.get(ds_path) or self.target_rs.datasets.get(ds_path)
+        schema = ds.schema
+        return schema, schema
+
+    def _get_old_and_new_crs(self, ds_path, ds_diff, context=None):
         from kart.crs_util import make_crs
 
         # If the CRS is changing during the diff, we extract the two CRS from the diff.
@@ -305,10 +370,34 @@ class BaseDiffWriter:
                     f"Can't reproject dataset {ds_path!r} into target CRS: {e}"
                 )
 
-        old_crs, new_crs = self.get_old_and_new_crs(
+        old_crs, new_crs = self._get_old_and_new_crs(
             ds_path, ds_diff, context="reprojection"
         )
         return (_get_transform(old_crs), _get_transform(new_crs))
+
+    def _get_spatial_filters(self, ds_path, ds_diff):
+        """
+        Returns old_spatial_filter, new_spatial filter for the datast at a particular path -
+        where old_spatial_filter is the filter that should be applied to old, pre-diff values,
+        and new_spatial_filter is the transform that should be applied to new, post-diff values,
+        so that the spatial filter's CRS and geometry column name match the dataset.
+        """
+        old_schema, new_schema = self._get_old_and_new_schema(ds_path, ds_diff)
+        old_crs, new_crs = self._get_old_and_new_crs(
+            ds_path, ds_diff, context="spatial filtering"
+        )
+        sf = self.spatial_filter
+        old_spatial_filter = (
+            sf.transform_for_schema_and_crs(old_schema, old_crs, ds_path)
+            if old_schema
+            else SpatialFilter.MATCH_ALL
+        )
+        new_spatial_filter = (
+            sf.transform_for_schema_and_crs(new_schema, new_crs, ds_path)
+            if new_schema
+            else SpatialFilter.MATCH_ALL
+        )
+        return old_spatial_filter, new_spatial_filter
 
     def exit_with_code(self):
         """Exit with code 1 if the diff already written had changes, otherwise exit with code 0."""

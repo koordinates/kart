@@ -133,11 +133,28 @@ class SpatialFilter:
         if not ds_crs_defs:
             return self
         if len(ds_crs_defs) > 1:
-            raise NotYetImplemented(
+            raise CrsError(
                 f"Sorry, spatial filtering dataset {ds_path!r} with multiple CRS is not yet supported"
             )
         ds_crs_def = list(ds_crs_defs.values())[0]
         return result.transform_for_crs(ds_crs_def, ds_path)
+
+    def transform_for_schema_and_crs(self, schema, crs, ds_path=None):
+        """
+        Similar to transform_for_dataset above, but can also be used without a dataset object - for example,
+        to apply the spatial filter to a working copy table which might not exactly match any dataset.
+        """
+        if self.match_all:
+            return SpatialFilter.MATCH_ALL
+
+        geometry_columns = schema.geometry_columns
+        if not geometry_columns:
+            return SpatialFilter.MATCH_ALL
+        result = self.with_geom_column_name(geometry_columns[0].name)
+        if crs is None:
+            return result
+        else:
+            return result.transform_for_crs(crs, ds_path=ds_path)
 
     def with_geom_column_name(self, geom_column_name):
         if self.match_all:

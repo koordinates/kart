@@ -26,6 +26,7 @@ def bbox_as_wkt_polygon(min_x, max_x, min_y, max_y):
 
 
 SPATIAL_FILTER_GEOMETRY = {
+    # A long skinny spatial filter on an angle - makes sure our filter envelopes and filter geometries are working.
     "points": (
         "MULTIPOLYGON(("
         + ring_as_wkt(
@@ -46,6 +47,8 @@ SPATIAL_FILTER_GEOMETRY = {
         )
         + "))"
     ),
+    # Whereas this spatial filter is targeted on some but not all of the changes of the most recent points commit.
+    "points-edit": bbox_as_wkt_polygon(175.8, 175.9, -36.9, -37.1),
     "polygons": (
         "POLYGON("
         + ring_as_wkt(
@@ -126,7 +129,6 @@ def test_spatial_filtered_workingcopy(
 
 def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
     # This spatial filter matches 2 of the 5 possible changes between main^ and main.
-    spatial_filter_geom = bbox_as_wkt_polygon(175.8, 175.9, -36.9, -37.1)
 
     with data_archive("points.tgz") as repo_path:
         # Without a spatial filter - checking out main^ then restoring main results in 5 uncommitted changes,
@@ -153,7 +155,9 @@ def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
         # With the spatial filter - checking out main^ then restoring main results in 2 uncommitted changes,
         # the difference between main^ and main that matches the spatial filter.
         H.clear_working_copy()
-        repo.config["kart.spatialfilter.geometry"] = spatial_filter_geom
+        repo.config["kart.spatialfilter.geometry"] = SPATIAL_FILTER_GEOMETRY[
+            "points-edit"
+        ]
         repo.config["kart.spatialfilter.crs"] = SPATIAL_FILTER_CRS["points"]
 
         r = cli_runner.invoke(["checkout", "main^"])
@@ -171,3 +175,44 @@ def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 13
+
+
+def test_diff_commits_with_spatial_filter(data_archive, cli_runner, insert):
+    with data_archive("points.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+        repo.config["kart.spatialfilter.geometry"] = SPATIAL_FILTER_GEOMETRY[
+            "points-edit"
+        ]
+        repo.config["kart.spatialfilter.crs"] = SPATIAL_FILTER_CRS["points"]
+
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        # 13 of the features in the initial commit match the spatial filter.
+        r = cli_runner.invoke(["show", "HEAD^", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
+        assert len(diff[H.POINTS.LAYER]["feature"]) == 13
+
+        # Of those, 2 have edits in the subsequent commit.
+        r = cli_runner.invoke(["show", "HEAD", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
+        assert len(diff[H.POINTS.LAYER]["feature"]) == 2
+
+        with repo.working_copy.session() as sess:
+            for i in range(5):
+                insert(sess, commit=False)
+
+        # All 5 WC edits are shown, regardless of whether they match the spatial filter.
+        r = cli_runner.invoke(["diff", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
+        assert len(diff[H.POINTS.LAYER]["feature"]) == 5
+
+        # The 2 commit-commit edits that match the filter plus the 5 WC edits are shown.
+        r = cli_runner.invoke(["diff", "HEAD^", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
+        assert len(diff[H.POINTS.LAYER]["feature"]) == 7
