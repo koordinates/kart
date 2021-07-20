@@ -5,7 +5,7 @@ from pathlib import Path
 import click
 
 from .base_diff_writer import BaseDiffWriter
-from .diff_structs import DatasetDiff, Delta
+from .diff_structs import DatasetDiff
 from .feature_output import feature_as_json, feature_as_geojson
 from .log import commit_obj_to_json
 from .output_util import dump_json_output, resolve_output_path
@@ -67,26 +67,36 @@ class JsonDiffWriter(BaseDiffWriter):
         # Part of JsonEncoder interface - adapt objects that couldn't otherwise be encoded.
         if isinstance(obj, DatasetDiff):
             ds_path, ds_diff = obj.ds_path, obj
-            self._old_transform, self._new_transform = self.get_geometry_transforms(
-                ds_path, ds_diff
-            )
-            return None  # Handled by ExtendedJsonEncoder
+            result = {}
+            if "meta" in ds_diff:
+                result["meta"] = {
+                    key: value.to_plus_minus_dict()
+                    for key, value in ds_diff["meta"].items()
+                }
+            if "feature" in ds_diff:
+                result["feature"] = self.filtered_ds_feature_deltas_as_json(
+                    ds_path, ds_diff
+                )
+            return result
 
-        if isinstance(obj, Delta):
-            return self.encode_delta(obj)
         return None
 
-    def encode_delta(self, delta):
-        result = {}
-        if delta.old:
-            result["-"] = feature_as_json(
-                delta.old_value, delta.old_key, self._old_transform
-            )
-        if delta.new:
-            result["+"] = feature_as_json(
-                delta.new_value, delta.new_key, self._new_transform
-            )
-        return result
+    def filtered_ds_feature_deltas_as_json(self, ds_path, ds_diff):
+        if "feature" not in ds_diff:
+            return
+
+        old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
+        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
+            delta_as_json = {}
+            if delta.old:
+                delta_as_json["-"] = feature_as_json(
+                    delta.old_value, delta.old_key, old_transform
+                )
+            if delta.new:
+                delta_as_json["+"] = feature_as_json(
+                    delta.new_value, delta.new_key, new_transform
+                )
+            yield delta_as_json
 
 
 class PatchWriter(JsonDiffWriter):
@@ -95,6 +105,10 @@ class PatchWriter(JsonDiffWriter):
     - it only has information that will be kept when the patch is reapplied (ie, authorName, but not committerName).
     - it is at the key "kart.patch/v1" instead of "kart.show/v1"
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.nonmatching_feature_counts = {}
 
     def add_json_header(self, obj):
         if self.commit is not None:
@@ -109,6 +123,22 @@ class PatchWriter(JsonDiffWriter):
                 "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
                 "message": self.commit.message,
             }
+
+    def report_nonmatching_features(self, ds_path, nonmatching_feature_count):
+        self.nonmatching_feature_counts[ds_path] = nonmatching_feature_count
+
+    def write_diff(self):
+        super().write_diff()
+        if self.nonmatching_feature_counts:
+            click.echo(
+                "Warning: The generated patch does not contain the entire commit: ",
+                err=True,
+            )
+            for ds_path, count in self.nonmatching_feature_counts.items():
+                click.echo(
+                    f"{count} changed features in dataset {ds_path} not included due to spatial filter",
+                    err=True,
+                )
 
 
 class JsonLinesDiffWriter(BaseDiffWriter):
@@ -194,7 +224,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
         obj = {"type": "feature", "dataset": ds_path, "change": None}
-        for key, delta in ds_diff["feature"].sorted_items():
+        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
             change = {}
             if delta.old:
                 change["-"] = feature_as_json(
@@ -230,7 +260,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
         else:
             output_obj = {
                 "type": "FeatureCollection",
-                "features": self.all_repo_feature_deltas(),
+                "features": self.filtered_repo_feature_deltas_as_geojson(),
             }
 
             dump_json_output(
@@ -250,7 +280,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
             has_changes = True
             output_obj = {
                 "type": "FeatureCollection",
-                "features": self.all_ds_feature_deltas(ds_path, ds_diff),
+                "features": self.filtered_ds_feature_deltas(ds_path, ds_diff),
             }
 
             ds_output_filename = str(ds_path).replace("/", "__") + ".geojson"
@@ -262,13 +292,13 @@ class GeojsonDiffWriter(BaseDiffWriter):
             )
         self.has_changes = has_changes
 
-    def all_repo_feature_deltas(self):
+    def filtered_repo_feature_deltas_as_geojson(self):
         has_changes = False
         for ds_path in self.all_ds_paths:
             ds_diff = self.get_dataset_diff(ds_path)
             has_changes |= bool(ds_diff)
             self._warn_about_any_meta_diffs(ds_path, ds_diff)
-            yield from self.all_ds_feature_deltas(ds_path, ds_diff)
+            yield from self.filtered_ds_feature_deltas_as_geojson(ds_path, ds_diff)
         self.has_changes = has_changes
 
     def _warn_about_any_meta_diffs(self, ds_path, ds_diff):
@@ -279,15 +309,13 @@ class GeojsonDiffWriter(BaseDiffWriter):
                 err=True,
             )
 
-    def all_ds_feature_deltas(self, ds_path, ds_diff):
-        feature_diff = ds_diff.get("feature")
-        if not feature_diff:
+    def filtered_ds_feature_deltas_as_geojson(self, ds_path, ds_diff):
+        if "feature" not in ds_diff:
             return
 
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
 
-        deltas = (value for key, value in feature_diff.sorted_items())
-        for delta in deltas:
+        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
             if delta.old:
                 change_type = "U-" if delta.new else "D"
                 yield feature_as_geojson(

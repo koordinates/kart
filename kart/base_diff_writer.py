@@ -6,7 +6,7 @@ import sys
 
 import click
 
-from .diff_structs import RepoDiff, DatasetDiff
+from .diff_structs import RepoDiff, DatasetDiff, WORKING_COPY_EDIT
 from .exceptions import (
     CrsError,
     InvalidOperation,
@@ -205,8 +205,18 @@ class BaseDiffWriter:
             diff.prune()
         return diff
 
-    def get_dataset_diff(self, dataset_path, apply_spatial_filter=True, prune=True):
-        """Returns the DatasetDiff object for the dataset at path dataset_path."""
+    def get_dataset_diff(self, dataset_path, prune=True):
+        """
+        Returns the DatasetDiff object for the dataset at path dataset_path.
+
+        Note that this diff is not yet spatial filtered. It is a dict, not a generator,
+        and may contain feature values that have not yet been loaded. Spatial filtering
+        cannot be applied to it while it remains a dict, since this would involve loading
+        all the features up front, which breaks diff streaming.
+        To apply the spatial filter to it, call self.filtered_ds_feature_deltas(ds_path, ds_diff)
+        which will return a generator that filters features as it loads and outputs them,
+        which can be used to output streaming diffs.
+        """
 
         diff = DatasetDiff()
         ds_filter = self.repo_key_filter[dataset_path]
@@ -224,8 +234,6 @@ class BaseDiffWriter:
             diff_cc = base_ds.diff(target_ds, ds_filter=ds_filter, **params)
             L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
             diff += diff_cc
-        else:
-            diff_cc = None
 
         if self.working_copy:
             # diff += target_rs<>working_copy
@@ -237,54 +245,63 @@ class BaseDiffWriter:
                 repr(diff_wc),
             )
             diff += diff_wc
-        else:
-            diff_wc = None
-
-        if apply_spatial_filter and diff_cc is not None:
-            self._apply_spatial_filter(dataset_path, diff, diff_wc)
 
         if prune:
             diff.prune()
         return diff
 
-    def _apply_spatial_filter(self, ds_path, ds_diff, ds_diff_wc=None):
+    def _unfiltered_ds_feature_deltas(self, ds_path, ds_diff):
+        if "feature" not in ds_diff:
+            return
+
+        yield from ds_diff["feature"].sorted_items()
+
+    def filtered_ds_feature_deltas(self, ds_path, ds_diff):
         """
-        Removes all the feature-deltas from the given dataset diff that don't match the self.spatial_filter.
-        Features that are present in the working-copy diff for this dataset - if supplied - are not
-        removed from the diff, since working-copy edits are always relevant to the user even if outside the
-        spatial filter.
+        Yields the key, delta for only those feature-deltas from the given dataset diff that match
+        self.spatial_filter. Note that feature-deltas are always considered to match the spatial-filter
+        if they are marked as working-copy edits, since working-copy edits are always relevant to the user
+        even if they are outside the spatial filter.
         """
         # NOTE: This function has to load every feature if it is to do any filtering at all.
         # This stops lazy-loading of features for streaming diffs from providing any benefit.
         # TODO: Write better streaming alternatives for the more streamable output types, ie text and json-lines.
-        if self.spatial_filter.match_all or not ds_diff.get("feature"):
+        if "feature" not in ds_diff:
             return
 
-        old_spatial_filter, new_spatial_filter = self._get_spatial_filters(
+        if self.spatial_filter.match_all:
+            yield from self._unfiltered_ds_feature_deltas(ds_path, ds_diff)
+            return
+
+        old_spatial_filter, new_spatial_filter = self.get_spatial_filters(
             ds_path, ds_diff
         )
         if old_spatial_filter.match_all and new_spatial_filter.match_all:
             # This can happen if neither the old nor the new version of the dataset have
             # any geometry - all of their features are guaranteed to match the spatial filter,
             # so no point doing any filtering here.
+            yield from self._unfiltered_ds_feature_deltas(ds_path, ds_diff)
             return
 
-        feature_diff = ds_diff["feature"]
-        wc_feature_diff = ds_diff_wc.get("feature", ()) if ds_diff_wc else ()
-        nonmatching_keys = []
-        for key, delta in feature_diff.items():
-            if key in wc_feature_diff:
-                continue
-            if delta.old_value and old_spatial_filter.matches(delta.old_value):
-                continue
-            if delta.new_value and new_spatial_filter.matches(delta.new_value):
-                continue
-            nonmatching_keys.append(key)
+        nonmatching_feature_count = 0
+        for key, delta in self._unfiltered_ds_feature_deltas(ds_path, ds_diff):
+            matches = bool(delta.flags & WORKING_COPY_EDIT)
+            matches = matches or bool(
+                delta.old_value and old_spatial_filter.matches(delta.old_value)
+            )
+            matches = matches or bool(
+                delta.new_value and new_spatial_filter.matches(delta.new_value)
+            )
+            if matches:
+                yield key, delta
+            else:
+                nonmatching_feature_count += 1
 
-        # TODO - either show a warning for `kart create-patch` when some deltas have been removed,
-        # or, don't apply spatial filters at all when writing patches.
-        for key in nonmatching_keys:
-            del feature_diff[key]
+        self.report_nonmatching_features(ds_path, nonmatching_feature_count)
+
+    def report_nonmatching_features(self, ds_path, nonmatching_feature_count):
+        # Subclasses can override to warn about features that didn't match the spatial filter.
+        pass
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
         from kart.schema import Schema
@@ -375,7 +392,7 @@ class BaseDiffWriter:
         )
         return (_get_transform(old_crs), _get_transform(new_crs))
 
-    def _get_spatial_filters(self, ds_path, ds_diff):
+    def get_spatial_filters(self, ds_path, ds_diff):
         """
         Returns old_spatial_filter, new_spatial filter for the datast at a particular path -
         where old_spatial_filter is the filter that should be applied to old, pre-diff values,
