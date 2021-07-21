@@ -8,7 +8,7 @@ import pygit2
 import sqlalchemy as sa
 
 from kart.base_dataset import BaseDataset
-from kart.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta
+from kart.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
 from kart.exceptions import (
     InvalidOperation,
     NotYetImplemented,
@@ -17,7 +17,6 @@ from kart.exceptions import (
 )
 from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
 from kart.schema import Schema, DefaultRoundtripContext
-from kart.spatial_filters import SpatialFilter
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.utils import chunk
 from . import WorkingCopyStatus, WorkingCopyType
@@ -512,7 +511,9 @@ class BaseWorkingCopy:
         ds_meta_items = self.adapter.remove_empty_values(dataset.meta_items())
         wc_meta_items = self.meta_items(dataset)
         self._remove_hidden_meta_diffs(dataset, ds_meta_items, wc_meta_items)
-        result = DeltaDiff.diff_dicts(ds_meta_items, wc_meta_items)
+        result = DeltaDiff.diff_dicts(
+            ds_meta_items, wc_meta_items, delta_flags=WORKING_COPY_EDIT
+        )
         if raise_if_dirty and result:
             raise WorkingCopyDirty()
         return result
@@ -628,7 +629,9 @@ class BaseWorkingCopy:
             feature_diff = DeltaDiff()
             for feature in dataset.features():
                 if feature[pk_field] in feature_filter:
-                    feature_diff.add_delta(Delta.delete((feature[pk_field], feature)))
+                    delta = Delta.delete((feature[pk_field], feature))
+                    delta.flags = WORKING_COPY_EDIT
+                    feature_diff.add_delta(delta)
             return feature_diff
 
         find_renames = self.can_find_renames(meta_diff)
@@ -663,15 +666,18 @@ class BaseWorkingCopy:
 
                 if db_obj and not repo_obj:  # INSERT
                     insert_count += 1
-                    feature_diff.add_delta(Delta.insert((db_obj[pk_field], db_obj)))
+                    delta = Delta.insert((db_obj[pk_field], db_obj))
 
                 elif repo_obj and not db_obj:  # DELETE
                     delete_count += 1
-                    feature_diff.add_delta(Delta.delete((repo_obj[pk_field], repo_obj)))
+                    delta = Delta.delete((repo_obj[pk_field], repo_obj))
 
                 else:  # UPDATE
                     pk = db_obj[pk_field]
-                    feature_diff.add_delta(Delta.update((pk, repo_obj), (pk, db_obj)))
+                    delta = Delta.update((pk, repo_obj), (pk, db_obj))
+
+                delta.flags = WORKING_COPY_EDIT
+                feature_diff.add_delta(delta)
 
         if find_renames and (insert_count + delete_count) <= 400:
             self.find_renames(feature_diff, dataset)

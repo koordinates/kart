@@ -10,8 +10,6 @@ from .base_diff_writer import BaseDiffWriter
 
 from .output_util import format_wkt_for_output, resolve_output_path
 from .feature_output import feature_as_text, feature_field_as_text
-
-
 from .schema import Schema
 
 
@@ -64,9 +62,8 @@ class TextDiffWriter(BaseDiffWriter):
             for key, delta in ds_diff["meta"].sorted_items():
                 self.write_meta_delta(ds_path, key, delta)
 
-        if "feature" in ds_diff:
-            for key, delta in ds_diff["feature"].sorted_items():
-                self.write_feature_delta(ds_path, key, delta)
+        for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
+            self.write_feature_delta(ds_path, key, delta)
 
     def write_meta_delta(self, ds_path, key, delta):
         if delta.old:

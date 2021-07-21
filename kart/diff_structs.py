@@ -38,6 +38,10 @@ class KeyValue:
         return self._cached_value
 
 
+# Delta flags:
+WORKING_COPY_EDIT = 0x1  # Delta represents a change made in the WC - it is "dirty".
+
+
 @dataclass
 class Delta:
     """
@@ -68,6 +72,7 @@ class Delta:
             self.type = "delete"
         else:
             self.type = "update"
+        self.flags = 0
 
     @staticmethod
     def insert(new):
@@ -126,9 +131,9 @@ class Delta:
             if other.type == "insert":
                 raise Conflict()
             elif other.type == "update":
-                return Delta.insert(other.new)
+                result = Delta.insert(other.new)
             elif other.type == "delete":
-                return None
+                result = None
 
         elif self.type == "update":
             # upd + ins -> Conflict
@@ -137,18 +142,22 @@ class Delta:
             if other.type == "insert":
                 raise Conflict()
             elif other.type == "update":
-                return Delta.maybe_update(self.old, other.new)
+                result = Delta.maybe_update(self.old, other.new)
             elif other.type == "delete":
-                return Delta.delete(self.old)
+                result = Delta.delete(self.old)
 
         elif self.type == "delete":
             # del + ins -> upd?
             # del + del -> Conflict
             # del + upd -> Conflict
             if other.type == "insert":
-                return Delta.maybe_update(self.old, other.new)
+                result = Delta.maybe_update(self.old, other.new)
             else:
                 raise Conflict()
+
+        if result is not None:
+            result.flags = self.flags | other.flags
+        return result
 
     def to_plus_minus_dict(self):
         result = {}
@@ -355,7 +364,7 @@ class DeltaDiff(Diff):
         return {f"{delta_type}s": value for delta_type, value in result.items()}
 
     @classmethod
-    def diff_dicts_as_deltas(cls, old, new):
+    def diff_dicts_as_deltas(cls, old, new, delta_flags=0):
         for k in set(old) | set(new):
             old_value = old.get(k)
             new_value = new.get(k)
@@ -363,12 +372,14 @@ class DeltaDiff(Diff):
                 continue
             old_key_value = (k, old_value) if old_value is not None else None
             new_key_value = (k, new_value) if new_value is not None else None
-            yield Delta(old_key_value, new_key_value)
+            delta = Delta(old_key_value, new_key_value)
+            delta.flags = delta_flags
+            yield delta
 
     @classmethod
-    def diff_dicts(cls, old, new):
+    def diff_dicts(cls, old, new, delta_flags=0):
         result = DeltaDiff()
-        for delta in cls.diff_dicts_as_deltas(old, new):
+        for delta in cls.diff_dicts_as_deltas(old, new, delta_flags=delta_flags):
             result.add_delta(delta)
         return result
 

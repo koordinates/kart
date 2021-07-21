@@ -7,7 +7,7 @@ import webbrowser
 import click
 
 from .base_diff_writer import BaseDiffWriter
-from .feature_output import feature_as_geojson
+from .json_diff_writers import GeojsonDiffWriter
 from .output_util import ExtendedJsonEncoder, resolve_output_path
 
 
@@ -44,7 +44,9 @@ class HtmlDiffWriter(BaseDiffWriter):
         all_datasets_geojson = {
             ds_path: {
                 "type": "FeatureCollection",
-                "features": self.all_ds_feature_deltas(ds_path, ds_diff),
+                "features": self.filtered_ds_feature_deltas_as_geojson(
+                    ds_path, ds_diff
+                ),
             }
             for ds_path, ds_diff in repo_diff.items()
         }
@@ -65,22 +67,7 @@ class HtmlDiffWriter(BaseDiffWriter):
             fo.close()
             webbrowser.open_new(f"file://{self.output_path.resolve()}")
 
-    def all_ds_feature_deltas(self, ds_path, ds_diff):
-        feature_diff = ds_diff.get("feature")
-        if not feature_diff:
-            return
 
-        old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
-
-        deltas = feature_diff.values()
-        for delta in deltas:
-            if delta.old:
-                change_type = "U-" if delta.new else "D"
-                yield feature_as_geojson(
-                    delta.old_value, delta.old_key, change_type, old_transform
-                )
-            if delta.new:
-                change_type = "U+" if delta.old else "I"
-                yield feature_as_geojson(
-                    delta.new_value, delta.new_key, change_type, new_transform
-                )
+HtmlDiffWriter.filtered_ds_feature_deltas_as_geojson = (
+    GeojsonDiffWriter.filtered_ds_feature_deltas_as_geojson
+)
