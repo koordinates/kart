@@ -1,9 +1,13 @@
 import binascii
 import json
 import math
+import re
 import struct
 
 from osgeo import ogr, osr
+
+from .cli_util import StringFromFile
+from .exceptions import GeometryError
 
 # http://www.geopackage.org/spec/#gpb_format
 _GPKG_EMPTY_BIT = 0b10000
@@ -30,6 +34,34 @@ GPKG_ENVELOPE_SIZES = {
     env_type: len(env_format) * 8  # 8 bytes per double
     for env_type, env_format in GPKG_ENVELOPE_FORMATS.items()
 }
+
+
+class GeometryString(StringFromFile):
+    """Click option to specify a Geometry (not including a CRS)."""
+
+    def convert(self, value, param, ctx):
+        value = super().convert(value, param, ctx)
+        try:
+            return geometry_from_string(value)
+        except GeometryError as e:
+            self.fail(str(e))
+
+
+def geometry_from_string(string, context=None):
+    """
+    Convert a user-supplied string to a geometry object. The string can be WKT or hex-encoded WKB.
+    Raises GeometryError if the string cannot be parsed.
+    """
+    try:
+        if re.fullmatch(r"[0-9a-fA-F]*", string):
+            return Geometry.from_hex_wkb(string)
+        else:
+            return Geometry.from_wkt(string)
+    except RuntimeError as e:
+        geometry_desc = "geometry"
+        if context:
+            geometry_desc += f" for {context}"
+        raise GeometryError(f"Invalid {geometry_desc}: {string!r} ({e})")
 
 
 class Geometry(bytes):
@@ -62,6 +94,9 @@ class Geometry(bytes):
 
     def normalise(self):
         return normalise_gpkg_geom(self)
+
+    def to_wkt(self):
+        return self.to_ogr().ExportToWkt()
 
     def to_wkb(self):
         return gpkg_geom_to_wkb(self)
