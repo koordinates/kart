@@ -263,9 +263,6 @@ class BaseDiffWriter:
         if they are marked as working-copy edits, since working-copy edits are always relevant to the user
         even if they are outside the spatial filter.
         """
-        # NOTE: This function has to load every feature if it is to do any filtering at all.
-        # This stops lazy-loading of features for streaming diffs from providing any benefit.
-        # TODO: Write better streaming alternatives for the more streamable output types, ie text and json-lines.
         if "feature" not in ds_diff:
             return
 
