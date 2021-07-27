@@ -215,12 +215,9 @@ def cli(ctx, repo_dir, verbose, post_mortem):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, do_progress, args):
     """ Update remote refs along with associated objects """
-    execvp(
-        "git",
-        [
-            "git",
-            "-C",
-            ctx.obj.repo.path,
+    ctx.invoke(
+        git,
+        args=[
             "push",
             "--progress" if do_progress else "--quiet",
             *args,
@@ -240,12 +237,9 @@ def push(ctx, do_progress, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, do_progress, args):
     """ Download objects and refs from another repository """
-    execvp(
-        "git",
-        [
-            "git",
-            "-C",
-            ctx.obj.repo.path,
+    ctx.invoke(
+        git,
+        args=[
             "fetch",
             "--progress" if do_progress else "--quiet",
             *args,
@@ -258,7 +252,7 @@ def fetch(ctx, do_progress, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def remote(ctx, args):
     """ Manage set of tracked repositories """
-    execvp("git", ["git", "-C", ctx.obj.repo.path, "remote"] + list(args))
+    ctx.invoke(git, args=["remote", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -266,7 +260,7 @@ def remote(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def tag(ctx, args):
     """ Create, list, delete or verify a tag object signed with GPG """
-    execvp("git", ["git", "-C", ctx.obj.repo.path, "tag"] + list(args))
+    ctx.invoke(git, args=["tag", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -274,7 +268,7 @@ def tag(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def reflog(ctx, args):
     """ Manage reflog information """
-    execvp("git", ["git", "-C", ctx.obj.repo.path, "reflog"] + list(args))
+    ctx.invoke(git, args=["reflog", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -282,10 +276,7 @@ def reflog(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
     """ Get and set repository or global options """
-    params = ["git", "config"]
-    if ctx.obj.user_repo_path:
-        params[1:1] = ["-C", ctx.obj.user_repo_path]
-    execvp("git", params + list(args))
+    ctx.invoke(git, args=["config", *args])
 
 
 @cli.command(context_settings=dict(ignore_unknown_options=True))
@@ -293,10 +284,20 @@ def config(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def gc(ctx, args):
     """ Cleanup unnecessary files and optimize the local repository """
-    params = ["git", "gc"]
+    ctx.invoke(git, args=["gc", *args])
+
+
+@cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
+@click.pass_context
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def git(ctx, args):
+    """
+    Run an arbitrary git command, using kart's packaged git
+    """
+    params = ["git"]
     if ctx.obj.user_repo_path:
-        params[1:1] = ["-C", ctx.obj.user_repo_path]
-    execvp("git", params + list(args))
+        params += ["-C", ctx.obj.user_repo_path]
+    execvp("git", [*params, *args])
 
 
 def _hackily_parse_command(args):
