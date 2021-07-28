@@ -2,7 +2,7 @@ import json
 import pytest
 
 from kart.repo import KartRepo
-
+from kart.exceptions import INVALID_ARGUMENT, NO_SPATIAL_FILTER
 
 H = pytest.helpers.helpers()
 
@@ -86,6 +86,116 @@ SPATIAL_FILTER_CRS = {
     "polygons": "EPSG:4167",
     "polygons-with-reprojection": "EPSG:27200",
 }
+
+
+def test_init_with_spatial_filter(cli_runner, tmp_path):
+    geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+    crs = SPATIAL_FILTER_CRS["polygons"]
+
+    repo_path = tmp_path / "inline_test"
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter={crs};{geom}"])
+    assert r.exit_code == 0, r.stderr
+
+    repo = KartRepo(repo_path)
+    assert repo.config["kart.spatialfilter.geometry"].startswith(
+        "POLYGON ((174.879 -37.8277,"
+    )
+    assert repo.config["kart.spatialfilter.crs"] == crs
+
+    repo_path = tmp_path / "file_test"
+    file_path = tmp_path / "spatialfilter.txt"
+    file_path.write_text(f"{crs}\n\n{geom}\n", encoding="utf-8")
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter=@{file_path}"])
+    assert r.exit_code == 0, r.stderr
+
+    repo = KartRepo(repo_path)
+    assert repo.config["kart.spatialfilter.geometry"].startswith(
+        "POLYGON ((174.879 -37.8277,"
+    )
+    assert repo.config["kart.spatialfilter.crs"] == crs
+
+
+def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
+    geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+    crs = SPATIAL_FILTER_CRS["polygons"]
+
+    # The validity of the geometry and CRS should be checked immediately, before the repo is created:
+    repo_path = tmp_path / "invalid_test"
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter={crs};foobar"])
+    assert r.exit_code == INVALID_ARGUMENT
+    assert "Invalid geometry" in r.stderr
+    assert not repo_path.exists()
+
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter=ABCD:1234;{geom}"])
+    assert r.exit_code == INVALID_ARGUMENT
+    assert "Invalid or unknown coordinate reference system" in r.stderr
+    assert not repo_path.exists()
+
+    r = cli_runner.invoke(
+        ["init", repo_path, f"--spatial-filter={crs};POINT(174.879 -37.8277)"]
+    )
+    assert r.exit_code == INVALID_ARGUMENT
+    assert "Expected geometry for spatial filter of type POLYGON|MULTIPOLYGON but found: POINT"
+    assert not repo_path.exists()
+
+
+def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):
+    geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+    crs = SPATIAL_FILTER_CRS["polygons"]
+
+    file_path = tmp_path / "spatialfilter.txt"
+    file_path.write_text(f"{crs}\n\n{geom}\n", encoding="utf-8")
+
+    with data_archive("polygons") as repo1_path:
+        r = cli_runner.invoke(
+            [
+                "commit-files",
+                "-m",
+                "Add spatial filter",
+                f"spatialfilter.txt=@{file_path}",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        r = cli_runner.invoke(["git", "hash-object", file_path])
+        assert r.exit_code == 0, r.stderr
+        blob_sha = r.stdout.strip()
+        r = cli_runner.invoke(["git", "update-ref", "refs/filters/octagon", blob_sha])
+        assert r.exit_code == 0, r.stderr
+
+        # Clone repo using spatial filter reference
+        repo2_path = tmp_path / "repo2"
+        r = cli_runner.invoke(
+            ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
+        )
+        assert r.exit_code == 0, r.stderr
+        repo2 = KartRepo(repo2_path)
+        assert repo2.config["kart.spatialfilter.reference"] == "refs/filters/octagon"
+        assert repo2.config["kart.spatialfilter.objectid"] == blob_sha
+
+        with repo2.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+
+        # Clone repo using spatial filter object ID
+        repo3_path = tmp_path / "repo3"
+        r = cli_runner.invoke(
+            ["clone", repo1_path, repo3_path, f"--spatial-filter={blob_sha}"]
+        )
+        assert r.exit_code == 0, r.stderr
+        repo3 = KartRepo(repo3_path)
+        assert repo3.config["kart.spatialfilter.geometry"].startswith(
+            "POLYGON ((174.879 -37.8277,"
+        )
+        assert repo3.config["kart.spatialfilter.crs"] == crs
+
+        with repo3.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+
+        # Missing spatial filter:
+        repo4_path = tmp_path / "repo4"
+        r = cli_runner.invoke(
+            ["clone", repo1_path, repo4_path, "--spatial-filter=dodecahedron"]
+        )
+        assert r.exit_code == NO_SPATIAL_FILTER, r.stderr
 
 
 @pytest.mark.parametrize(

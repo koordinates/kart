@@ -1,9 +1,14 @@
 import binascii
+from enum import IntEnum
 import json
 import math
+import re
 import struct
 
 from osgeo import ogr, osr
+
+from .cli_util import StringFromFile
+from .exceptions import GeometryError
 
 # http://www.geopackage.org/spec/#gpb_format
 _GPKG_EMPTY_BIT = 0b10000
@@ -30,6 +35,70 @@ GPKG_ENVELOPE_SIZES = {
     env_type: len(env_format) * 8  # 8 bytes per double
     for env_type, env_format in GPKG_ENVELOPE_FORMATS.items()
 }
+
+
+class GeometryType(IntEnum):
+    POINT = 1
+    LINESTRING = 2
+    POLYGON = 3
+    MULTIPOINT = 4
+    MULTILINESTRING = 5
+    MULTIPOLYGON = 6
+    GEOMETRYCOLLECTION = 7
+
+
+class GeometryString(StringFromFile):
+    """Click option to specify a Geometry (not including a CRS)."""
+
+    def __init__(self, *args, allowed_types=None, allow_empty=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allowed_types = allowed_types
+        self.allow_empty = allow_empty
+
+    def convert(self, value, param, ctx):
+        value = super().convert(value, param, ctx)
+        try:
+            return geometry_from_string(
+                value, allowed_types=self.allowed_types, allow_empty=self.allow_empty
+            )
+        except GeometryError as e:
+            self.fail(str(e))
+
+
+def geometry_from_string(string, allowed_types=None, allow_empty=False, context=None):
+    """
+    Convert a user-supplied string to a geometry object. The string can be WKT or hex-encoded WKB.
+    Raises GeometryError if the string cannot be parsed or if it doesn't meet certain requirements.
+    """
+    geometry_desc = f"geometry for {context}" if context else "geometry"
+    try:
+        if re.fullmatch(r"[0-9a-fA-F]*", string):
+            result = Geometry.from_hex_wkb(string)
+        else:
+            result = Geometry.from_wkt(string)
+
+        if allowed_types is not None and result.geometry_type not in allowed_types:
+            allowed_names = "|".join([t.name for t in allowed_types])
+            actual_name = GeometryType(result.geometry_type).name
+            raise GeometryError(
+                f"Expected {geometry_desc} of type {allowed_names} but found: {actual_name}"
+            )
+
+        result_ogr = result.to_ogr()
+        if not result_ogr.IsValid():
+            raise GeometryError(
+                f"Topologically invalid {geometry_desc} - OGR::IsValid returns false"
+            )
+
+        if not allow_empty and result_ogr.IsEmpty():
+            raise GeometryError(
+                f"Invalid {geometry_desc} - a non-empty geometry is required"
+            )
+
+        return result
+
+    except RuntimeError as e:
+        raise GeometryError(f"Invalid {geometry_desc}: {string!r} ({e})")
 
 
 class Geometry(bytes):
@@ -62,6 +131,9 @@ class Geometry(bytes):
 
     def normalise(self):
         return normalise_gpkg_geom(self)
+
+    def to_wkt(self):
+        return self.to_ogr().ExportToWkt()
 
     def to_wkb(self):
         return gpkg_geom_to_wkb(self)

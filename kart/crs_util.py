@@ -33,13 +33,26 @@ def make_crs(crs_text, context=None):
 
 
 class CoordinateReferenceString(StringFromFile):
-    """Click option to specify a CRS."""
+    """
+    Click option to specify a CRS.
+    Can be the name of the CRS eg "EPSG:4326" or the full WKT definition.
+    """
+
+    def __init__(self, *args, keep_as_string=False, **kwargs):
+        """
+        Extra kwargs:
+        keep_as_string - parses the CRS to make sure it can be understood, but still returns a string so that the
+            CRS can be stored in same form as the user provided it in.
+        """
+        self.keep_as_string = keep_as_string
+        super().__init__(*args, **kwargs)
 
     def convert(self, value, param, ctx):
         value = super().convert(value, param, ctx)
 
         try:
-            return make_crs(value)
+            crs = make_crs(value)
+            return value if self.keep_as_string else crs
         except CrsError as e:
             self.fail(str(e))
 

@@ -17,6 +17,7 @@ PATCH_DOES_NOT_APPLY = 22
 SCHEMA_VIOLATION = 23
 UNSUPPORTED_VERSION = 24
 CRS_ERROR = 25
+GEOMETRY_ERROR = 26
 
 NOT_YET_IMPLEMENTED = 30
 
@@ -32,6 +33,7 @@ NO_IMPORT_SOURCE = 48
 NO_TABLE = 49
 NO_CONFLICT = 50
 NO_DRIVER = 51
+NO_SPATIAL_FILTER = 52
 
 CONNECTION_ERROR = 60
 
@@ -93,6 +95,10 @@ class NotFound(BaseException):
 
 class CrsError(BaseException):
     exit_code = CRS_ERROR
+
+
+class GeometryError(BaseException):
+    exit_code = GEOMETRY_ERROR
 
 
 class DbConnectionError(BaseException):
