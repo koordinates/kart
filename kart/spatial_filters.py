@@ -1,11 +1,14 @@
+import re
 import functools
 import logging
 
 import click
 
-from .crs_util import make_crs, CoordinateReferenceString
-from .exceptions import CrsError
-from .geometry import GeometryString, geometry_from_string
+from .cli_util import StringFromFile
+from .crs_util import make_crs
+from .exceptions import CrsError, GeometryError
+from .geometry import geometry_from_string, GeometryType
+
 
 L = logging.getLogger("kart.spatial_filters")
 
@@ -17,42 +20,152 @@ L = logging.getLogger("kart.spatial_filters")
 # - handle the case where the spatial filter cannot or can only partially be projected to the target CRS
 
 
-def spatial_filter_options():
-    """
-    A decorator that can be added to a command to add "--spatial-filter" and "--spatial-filter-crs" options.
-    These can then be converted to a spatial filter using:
-    SpatialFilter.from_cli_opts(spatial_filter, spatial_filter_crs)
-    """
-
-    def decorator(f):
-        options = (
-            click.option(
-                "--spatial-filter",
-                type=GeometryString(encoding="utf-8"),
-                help=(
-                    "Specify a spatial filter geometry to restrict this repository for working on features that "
-                    "intersect that geometry - features outside this area are not shown. Both the user and "
-                    "computer can benefit by not thinking about features outside the area of interest. The "
-                    "geometry should be supplied using WKT or hex-encoded WKB, and should be in EPSG:4326 "
-                    "unless otherwise specified using --spatial-filter-crs."
-                ),
-            ),
-            click.option(
-                "--spatial-filter-crs",
-                type=CoordinateReferenceString(encoding="utf-8", keep_as_string=True),
-                default=SpatialFilter.DEFAULT_CRS_SPEC,
-                help=(
-                    "The coordinate reference system that the --spatial-filter geometry is using. Can be a short name "
-                    "such as EPSG:4326, or a full WKT definition."
-                ),
-            ),
+def spatial_filter_help_text(allow_reference=True):
+    result = (
+        "Specify a spatial filter geometry to restrict this repository for working on features that intersect that"
+        "geometry - features outside this area are not shown. Both the user and computer can benefit by not thinking "
+        "about features outside the area of interest. It should consist of the CRS name, follwed by a semicolon, "
+        "followed by a valid Polygon or Multipolygon encoded using WKT or hex-encoded WKB. For example: "
+        "EPSG:4326;POLYGON((...)) or EPSG:4269;01030000...\n"
+        "Alternatively you may reference a file that contains the data, which should contain either the CRS name "
+        "CRS name or the entire CRS definition in WKT, followed by a blank line, followed by a valid Polygon or "
+        "Multipolygon encoded using WKT or hex-encoded WKB. To reference a file on your filesystem, set this flag "
+        "to an @ symbol followed by the file path. For example: @myfile.txt"
+    )
+    if allow_reference:
+        result += (
+            "\nTo reference a file that has been checked into this repository, set this flag to its object ID, "
+            "or to a git reference that resolves to that object. By convention, references to spatial filters "
+            "are kept in a filters subfolder - ie refs/filters/myfilter - and in which case, the refs/filters/ "
+            "prefix can be omitted, and this flag can be simply set to the name of the reference."
         )
+    return result
 
-        for opt in options:
-            f = opt(f)
-        return f
 
-    return decorator
+class SpatialFilterString(StringFromFile):
+    """Click option to specify a SpatialFilter."""
+
+    def __init__(self, *args, allow_reference=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.allow_reference = allow_reference
+
+    def convert(self, value, param, ctx):
+        if not value:
+            return ResolvedSpatialFilterSpec(None, None, match_all=True)
+
+        try:
+            parts = value.split(";", maxsplit=1)
+            if len(parts) == 2 and re.fullmatch(
+                r"[A-Za-z0-9]{2,10}:[0-9]{1,10}", parts[0]
+            ):
+                # Inline CRS and geometry definition.
+                return ResolvedSpatialFilterSpec(*parts)
+
+            if value.startswith("@"):
+                contents = super().convert(value, param, ctx)
+                parts = ReferenceSpatialFilterSpec.split_file(contents)
+                return ResolvedSpatialFilterSpec(*parts)
+
+            else:
+                if not self.allow_reference:
+                    self.fail(
+                        "Invalid spatial filter definition - "
+                        "should be in the form CRS_AUTHORITY:CRS_ID;GEOMETRY or @FILENAME"
+                    )
+                # Can't parse this spec in any further detail without the repo - which may not even exist yet:
+                # As is the case for eg: kart clone SOURCE --spatial-filter=REFNAME
+                return ReferenceSpatialFilterSpec(value)
+        except (CrsError, GeometryError) as e:
+            self.fail(str(e))
+
+
+class SpatialFilterSpec:
+    """
+    A user-provided specification for a spatial filter.
+    This is different to the OriginalSpatialFilter (see below) in that it may not yet be resolved or even resolvable
+    to a specific geometry and CRS - if the user asks to partially clone a repo by using the spatial filter at
+    refs/filters/xyz, then this will be represented as a ReferenceSpatialFilterSpec until such time as we actually
+    know what that filter is (note that it is not available locally when we begin the clone).
+    """
+
+    def __init__(self):
+        from kart.repo import KartConfigKeys
+
+        self.GEOM_KEY = KartConfigKeys.KART_SPATIALFILTER_GEOMETRY
+        self.CRS_KEY = KartConfigKeys.KART_SPATIALFILTER_CRS
+        self.REF_KEY = KartConfigKeys.KART_SPATIALFILTER_REFERENCE
+        self.OID_KEY = KartConfigKeys.KART_SPATIALFILTER_OBJECTID
+
+
+class ResolvedSpatialFilterSpec(SpatialFilterSpec):
+    """A user-provided specification for a spatial filter where the user has supplied the values directly."""
+
+    def __init__(self, crs_spec, geometry_spec, match_all=False):
+        super().__init__()
+        self.match_all = match_all
+        if not self.match_all:
+            self.crs_spec = crs_spec
+            self.geometry_spec = geometry_spec
+            self.crs = make_crs(crs_spec)
+            self.geometry = geometry_from_string(
+                geometry_spec,
+                allowed_types=(GeometryType.POLYGON, GeometryType.MULTIPOLYGON),
+                allow_empty=False,
+                context="spatial filter",
+            )
+
+    def write_config(self, repo):
+        if self.match_all:
+            self.delete_all_config(repo)
+        else:
+            repo.config[self.GEOM_KEY] = self.geometry.to_wkt()
+            repo.config[self.CRS_KEY] = self.crs_spec
+            repo.del_config(self.REF_KEY)
+            repo.del_config(self.OID_KEY)
+
+
+class ReferenceSpatialFilterSpec(SpatialFilterSpec):
+    """
+    A user-provided specification for a spatial filter where the user has supplied the values indirectly -
+    we need to load an object at a particular object ID or reference to load the spatial filter definition.
+    """
+
+    def __init__(self, ref_or_oid):
+        super().__init__()
+        self.ref_or_oid = ref_or_oid
+
+    def write_config(self, repo):
+        try:
+            obj = repo[self.ref_or_oid]
+            # Found an object - the object is immutable, so no reason to store a pointer to it.
+            # Just resolve the reference to geometry + CRS and store that.
+            contents = obj.data.decode("utf-8")
+            parts = self.split_file(contents)
+            ResolvedSpatialFilterSpec(*parts).write_config(repo)
+
+        except KeyError:
+            ref = self.ref_or_oid
+            if not ref.startswith("refs/"):
+                ref = f"refs/filters/{ref}"
+            if ref not in repo.references:
+                raise click.UsageError(
+                    f"{self.ref_or_oid} was not recognised as a spatial filter definition, file, reference or object ID"
+                )
+            # Found a reference. The reference is mutable, so we store it (and the object it points to).
+            oid = repo.references[ref].resolve().target
+            repo.config[self.REF_KEY] = ref
+            repo.config[self.OID_KEY] = oid
+            repo.del_config(self.GEOM_KEY)
+            repo.del_config(self.CRS_KEY)
+
+    @classmethod
+    def split_file(cls, contents):
+        parts = re.split(r"\n\r?\n", contents, maxsplit=1)
+        if len(parts) != 2:
+            raise click.UsageError(
+                "Spatial filter file must contain the CRS, then an empty line, then the geometry."
+            )
+        return parts
 
 
 class SpatialFilter:
@@ -69,36 +182,37 @@ class SpatialFilter:
         # Overridden by OriginalSpatialFilter.
         return False
 
-    DEFAULT_CRS_SPEC = "EPSG:4326"
-
     @classmethod
     def from_repo_config(cls, repo):
         from kart.repo import KartConfigKeys
 
         geometry_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_GEOMETRY)
         crs_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_CRS)
-        return SpatialFilter.from_config_values(geometry_spec, crs_spec)
+        if geometry_spec:
+            if not crs_spec:
+                raise CrsError("Spatial filter CRS is missing from config")
+            return SpatialFilter.from_spec(geometry_spec, crs_spec)
+
+        ref_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_REFERENCE)
+        oid_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_OBJECTID)
+        if ref_spec:
+            if not oid_spec:
+                raise RuntimeError("Spatial filter object ID is missing from config")
+            # TODO - Re-apply spatial filter when it has changed.
+            assert str(repo.references[ref_spec].resolve().target) == oid_spec
+            contents = repo[oid_spec].data.decode("utf-8")
+            parts = ReferenceSpatialFilterSpec.split_file(contents)
+            return SpatialFilter.from_spec(*parts)
+
+        return SpatialFilter.MATCH_ALL
 
     @classmethod
     @functools.lru_cache()
-    def from_config_values(cls, geometry_spec, crs_spec):
-        if not geometry_spec:
-            return OriginalSpatialFilter._MATCH_ALL
-        if not crs_spec:
-            crs_spec = cls.DEFAULT_CRS_SPEC
-
+    def from_spec(cls, geometry_spec, crs_spec):
         geometry = geometry_from_string(geometry_spec, context="spatial filter")
+        crs = make_crs(crs_spec, context="spatial filter")
 
-        return OriginalSpatialFilter(geometry, crs_spec)
-
-    @classmethod
-    def from_cli_opts(cls, geometry, crs_spec):
-        if geometry is None:
-            return OriginalSpatialFilter._MATCH_ALL
-        if not crs_spec:
-            crs_spec = cls.DEFAULT_CRS_SPEC
-
-        return OriginalSpatialFilter(geometry, crs_spec)
+        return OriginalSpatialFilter(geometry.to_ogr(), crs)
 
     def __init__(
         self, filter_geometry_ogr, crs, geom_column_name=None, match_all=False
@@ -183,39 +297,11 @@ class OriginalSpatialFilter(SpatialFilter):
     Normal SpatialFilters cannot be transformed - since transformation may be lossy, transforming a non-original
     SpatialFilter may lead to extra data loss which could be avoided by only ever transforming the original.
     That is why only OriginalSpatialFilter supports transformation.
-
-    The OriginalSpatialFilter also keeps the CRS specification, in the original form supplied by the user,
-    and it can be written to the config (the specification will be written to the config in its original form).
     """
 
     @property
     def is_original(self):
         return True
-
-    def __init__(self, geometry, crs_spec, match_all=None):
-        self.match_all = match_all
-
-        if match_all:
-            super().__init__(None, None, match_all=True)
-            self.geometry = None
-            self.crs_spec = None
-        else:
-            super().__init__(geometry.to_ogr(), make_crs(crs_spec))
-            self.geometry = geometry
-            self.crs_spec = crs_spec
-
-    def write_config(self, repo):
-        from kart.repo import KartConfigKeys
-
-        geom_key = KartConfigKeys.KART_SPATIALFILTER_GEOMETRY
-        crs_key = KartConfigKeys.KART_SPATIALFILTER_CRS
-
-        if self.match_all:
-            repo.del_config(geom_key)
-            repo.del_config(crs_key)
-        else:
-            repo.config[geom_key] = self.geometry.to_wkt()
-            repo.config[crs_key] = self.crs_spec
 
     def transform_for_dataset(self, dataset):
         """Transform this spatial filter so that it matches the CRS (and geometry column name) of the given dataset."""

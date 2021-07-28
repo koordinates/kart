@@ -25,7 +25,6 @@ from .repo_version import (
     get_repo_version,
     dataset_class_for_version,
 )
-from .spatial_filters import SpatialFilter
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
 
@@ -87,6 +86,8 @@ class KartConfigKeys:
 
     KART_SPATIALFILTER_GEOMETRY = "kart.spatialfilter.geometry"
     KART_SPATIALFILTER_CRS = "kart.spatialfilter.crs"
+    KART_SPATIALFILTER_REFERENCE = "kart.spatialfilter.reference"
+    KART_SPATIALFILTER_OBJECTID = "kart.spatialfilter.objectid"
 
     # This variable was also renamed, but when tidy-style repos were added - not during rebranding.
     CORE_BARE = "core.bare"  # Newer repos use the standard "core.bare" variable.
@@ -202,7 +203,7 @@ class KartRepo(pygit2.Repository):
         wc_location=None,
         bare=False,
         initial_branch=None,
-        spatial_filter=SpatialFilter.MATCH_ALL,
+        spatial_filter_spec=None,
     ):
         """
         Initialise a new Kart repo. A Kart repo is basically a git repo, except -
@@ -259,7 +260,7 @@ class KartRepo(pygit2.Repository):
             )
             kart_repo.lock_git_index()
 
-        kart_repo.write_config(wc_location, bare, spatial_filter)
+        kart_repo.write_config(wc_location, bare, spatial_filter_spec)
         kart_repo.write_readme()
         kart_repo.activate()
         return kart_repo
@@ -272,7 +273,7 @@ class KartRepo(pygit2.Repository):
         clone_args,
         wc_location=None,
         bare=False,
-        spatial_filter=SpatialFilter.MATCH_ALL,
+        spatial_filter_spec=None,
     ):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
@@ -317,7 +318,7 @@ class KartRepo(pygit2.Repository):
             )
             kart_repo.lock_git_index()
 
-        kart_repo.write_config(wc_location, bare, spatial_filter)
+        kart_repo.write_config(wc_location, bare, spatial_filter_spec)
         kart_repo.write_readme()
         kart_repo.activate()
         return kart_repo
@@ -351,7 +352,7 @@ class KartRepo(pygit2.Repository):
         self,
         wc_location=None,
         bare=False,
-        spatial_filter=SpatialFilter.MATCH_ALL,
+        spatial_filter_spec=None,
     ):
         # Whichever of these variable is written, controls whether this repo is kart branded or not.
         version_key = KartConfigKeys.BRANDED_REPOSTRUCTURE_VERSION_KEYS[
@@ -369,7 +370,8 @@ class KartRepo(pygit2.Repository):
         from kart.working_copy.base import BaseWorkingCopy
 
         BaseWorkingCopy.write_config(self, wc_location, bare)
-        spatial_filter.write_config(self)
+        if spatial_filter_spec:
+            spatial_filter_spec.write_config(self)
 
     def ensure_supported_version(self):
         ensure_supported_repo_version(self.version)

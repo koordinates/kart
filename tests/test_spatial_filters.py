@@ -89,12 +89,22 @@ SPATIAL_FILTER_CRS = {
 
 
 def test_init_with_spatial_filter(cli_runner, tmp_path):
-    repo_path = tmp_path / "emptydir"
+    repo_path = tmp_path / "inline_test"
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
-    r = cli_runner.invoke(
-        ["init", repo_path, f"--spatial-filter={geom}", f"--spatial-filter-crs={crs}"]
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter={crs};{geom}"])
+    assert r.exit_code == 0, r.stderr
+
+    repo = KartRepo(repo_path)
+    assert repo.config["kart.spatialfilter.geometry"].startswith(
+        "POLYGON ((174.879 -37.8277,"
     )
+    assert repo.config["kart.spatialfilter.crs"] == crs
+
+    repo_path = tmp_path / "file_test"
+    file_path = tmp_path / "spatialfilter.txt"
+    file_path.write_text(f"{crs}\n\n{geom}\n", encoding="utf-8")
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter=@{file_path}"])
     assert r.exit_code == 0, r.stderr
 
     repo = KartRepo(repo_path)
@@ -104,19 +114,22 @@ def test_init_with_spatial_filter(cli_runner, tmp_path):
     assert repo.config["kart.spatialfilter.crs"] == crs
 
     # The validity of the geometry and CRS should be checked immediately, before the repo is created:
-    repo_path = tmp_path / "emptydir2"
-    r = cli_runner.invoke(
-        ["init", repo_path, "--spatial-filter=foo", f"--spatial-filter-crs={crs}"]
-    )
+    repo_path = tmp_path / "invalid_test"
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter={crs};foobar"])
     assert r.exit_code == INVALID_ARGUMENT
     assert "Invalid geometry" in r.stderr
     assert not repo_path.exists()
 
-    r = cli_runner.invoke(
-        ["init", repo_path, f"--spatial-filter={geom}", "--spatial-filter-crs=bar"]
-    )
+    r = cli_runner.invoke(["init", repo_path, f"--spatial-filter=ABCD:1234;{geom}"])
     assert r.exit_code == INVALID_ARGUMENT
     assert "Invalid or unknown coordinate reference system" in r.stderr
+    assert not repo_path.exists()
+
+    r = cli_runner.invoke(
+        ["init", repo_path, f"--spatial-filter={crs};POINT(174.879 -37.8277)"]
+    )
+    assert r.exit_code == INVALID_ARGUMENT
+    assert "Expected geometry for spatial filter of type POLYGON|MULTIPOLYGON but found: POINT"
     assert not repo_path.exists()
 
 

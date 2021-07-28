@@ -8,7 +8,7 @@ import click
 from . import checkout
 from .exceptions import InvalidOperation
 from .repo import KartRepo, PotentialRepo
-from .spatial_filters import SpatialFilter, spatial_filter_options
+from .spatial_filters import SpatialFilterString, spatial_filter_help_text
 
 
 def get_directory_from_url(url):
@@ -93,7 +93,12 @@ def get_directory_from_url(url):
         "repository. "
     ),
 )
-@spatial_filter_options()
+@click.option(
+    "--spatial-filter",
+    "spatial_filter_spec",
+    type=SpatialFilterString(encoding="utf-8", allow_reference=False),
+    help=spatial_filter_help_text(allow_reference=False),
+)
 @click.argument("url", nargs=1)
 @click.argument(
     "directory",
@@ -109,8 +114,7 @@ def clone(
     depth,
     filterspec,
     branch,
-    spatial_filter,
-    spatial_filter_crs,
+    spatial_filter_spec,
     url,
     directory,
 ):
@@ -139,10 +143,8 @@ def clone(
         # https://git-scm.com/docs/git-rev-list#Documentation/git-rev-list.txt---filterltfilter-specgt
         args.append(f"--filter={filterspec}")
 
-    spatial_filter = SpatialFilter.from_cli_opts(spatial_filter, spatial_filter_crs)
-
     repo = KartRepo.clone_repository(
-        url, repo_path, args, wc_location, bare, spatial_filter=spatial_filter
+        url, repo_path, args, wc_location, bare, spatial_filter_spec=spatial_filter_spec
     )
 
     # Create working copy, if needed.

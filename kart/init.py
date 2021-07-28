@@ -21,7 +21,7 @@ from .ogr_import_source import FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import KartRepo, PotentialRepo
-from .spatial_filters import SpatialFilter, spatial_filter_options
+from .spatial_filters import SpatialFilterString, spatial_filter_help_text
 from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 
@@ -423,7 +423,12 @@ def import_(
     type=click.INT,
     help="How many git-fast-import processes to use. Defaults to the number of available CPU cores.",
 )
-@spatial_filter_options()
+@click.option(
+    "--spatial-filter",
+    "spatial_filter_spec",
+    type=SpatialFilterString(encoding="utf-8", allow_reference=False),
+    help=spatial_filter_help_text(allow_reference=False),
+)
 def init(
     ctx,
     message,
@@ -435,8 +440,7 @@ def init(
     wc_location,
     max_delta_depth,
     num_processes,
-    spatial_filter,
-    spatial_filter_crs,
+    spatial_filter_spec,
 ):
     """
     Initialise a new repository and optionally import data.
@@ -452,8 +456,6 @@ def init(
     from kart.working_copy.base import BaseWorkingCopy
 
     BaseWorkingCopy.check_valid_creation_location(wc_location, PotentialRepo(repo_path))
-
-    spatial_filter = SpatialFilter.from_cli_opts(spatial_filter, spatial_filter_crs)
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)
@@ -474,7 +476,7 @@ def init(
         wc_location,
         bare,
         initial_branch=initial_branch,
-        spatial_filter=spatial_filter,
+        spatial_filter_spec=spatial_filter_spec,
     )
 
     if import_from:
