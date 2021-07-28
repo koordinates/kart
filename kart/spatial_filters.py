@@ -6,7 +6,7 @@ import click
 
 from .cli_util import StringFromFile
 from .crs_util import make_crs
-from .exceptions import CrsError, GeometryError
+from .exceptions import CrsError, GeometryError, NotFound, NO_SPATIAL_FILTER
 from .geometry import geometry_from_string, GeometryType
 
 
@@ -135,24 +135,30 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
         self.ref_or_oid = ref_or_oid
 
     def write_config(self, repo):
+        obj = None
         try:
             obj = repo[self.ref_or_oid]
+        except (KeyError, ValueError):
+            pass
+
+        if obj is not None:
             # Found an object - the object is immutable, so no reason to store a pointer to it.
             # Just resolve the reference to geometry + CRS and store that.
             contents = obj.data.decode("utf-8")
             parts = self.split_file(contents)
             ResolvedSpatialFilterSpec(*parts).write_config(repo)
-
-        except KeyError:
+        else:
             ref = self.ref_or_oid
             if not ref.startswith("refs/"):
                 ref = f"refs/filters/{ref}"
             if ref not in repo.references:
-                raise click.UsageError(
-                    f"{self.ref_or_oid} was not recognised as a spatial filter definition, file, reference or object ID"
+                ref_desc = " or ".join(set([ref, self.ref_or_oid]))
+                raise NotFound(
+                    f"No spatial filter object was found in the repository at {ref_desc}",
+                    exit_code=NO_SPATIAL_FILTER,
                 )
             # Found a reference. The reference is mutable, so we store it (and the object it points to).
-            oid = repo.references[ref].resolve().target
+            oid = str(repo.references[ref].resolve().target)
             repo.config[self.REF_KEY] = ref
             repo.config[self.OID_KEY] = oid
             repo.del_config(self.GEOM_KEY)
@@ -190,14 +196,20 @@ class SpatialFilter:
         crs_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_CRS)
         if geometry_spec:
             if not crs_spec:
-                raise CrsError("Spatial filter CRS is missing from config")
-            return SpatialFilter.from_spec(geometry_spec, crs_spec)
+                raise NotFound(
+                    "Spatial filter CRS is missing from config",
+                    exit_code=NO_SPATIAL_FILTER,
+                )
+            return SpatialFilter.from_spec(crs_spec, geometry_spec)
 
         ref_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_REFERENCE)
         oid_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_OBJECTID)
         if ref_spec:
             if not oid_spec:
-                raise RuntimeError("Spatial filter object ID is missing from config")
+                raise NotFound(
+                    "Spatial filter object ID is missing from config",
+                    exit_code=NO_SPATIAL_FILTER,
+                )
             # TODO - Re-apply spatial filter when it has changed.
             assert str(repo.references[ref_spec].resolve().target) == oid_spec
             contents = repo[oid_spec].data.decode("utf-8")
@@ -208,7 +220,7 @@ class SpatialFilter:
 
     @classmethod
     @functools.lru_cache()
-    def from_spec(cls, geometry_spec, crs_spec):
+    def from_spec(cls, crs_spec, geometry_spec):
         geometry = geometry_from_string(geometry_spec, context="spatial filter")
         crs = make_crs(crs_spec, context="spatial filter")
 

@@ -96,8 +96,8 @@ def get_directory_from_url(url):
 @click.option(
     "--spatial-filter",
     "spatial_filter_spec",
-    type=SpatialFilterString(encoding="utf-8", allow_reference=False),
-    help=spatial_filter_help_text(allow_reference=False),
+    type=SpatialFilterString(encoding="utf-8"),
+    help=spatial_filter_help_text(),
 )
 @click.argument("url", nargs=1)
 @click.argument(

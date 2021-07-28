@@ -284,12 +284,22 @@ class KartRepo(pygit2.Repository):
                 wc_location, PotentialRepo(repo_root_path)
             )
 
+        extra_args = []
+        if spatial_filter_spec is not None:
+            # Make sure we fetch any spatial filters that might exist - we need those straight away.
+            # TODO - This is a bit magic, look into further. We might need it always - or there might be another way.
+            extra_args = [
+                "-c",
+                "remote.origin.fetch=+refs/filters/*:refs/filters/*",
+            ]
+
         if bare:
             kart_repo = cls._create_with_git_command(
                 [
                     "git",
                     "clone",
                     "--bare",
+                    *extra_args,
                     *clone_args,
                     clone_url,
                     str(repo_root_path),
@@ -309,6 +319,7 @@ class KartRepo(pygit2.Repository):
                     "clone",
                     "--no-checkout",
                     f"--separate-git-dir={dot_kart_path}",
+                    *extra_args,
                     *clone_args,
                     clone_url,
                     str(dot_clone_path),
