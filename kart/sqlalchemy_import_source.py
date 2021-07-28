@@ -16,7 +16,7 @@ from .import_source import ImportSource
 from .output_util import dump_json_output
 from .schema import Schema
 from .sqlalchemy import DbType, separate_last_path_part, strip_username_and_password
-from .utils import ungenerator
+from .utils import chunk, ungenerator
 
 
 class SqlAlchemyImportSource(ImportSource):
@@ -326,13 +326,14 @@ class SqlAlchemyImportSource(ImportSource):
         )
 
         with self.engine.connect() as conn:
-            query = (
-                sqlalchemy.select(table_def.columns)
-                .select_from(table_def)
-                .where(table_def.c[pk_name].in_(self._first_pk_values(row_pks)))
-            )
-            r = conn.execution_options(stream_results=True).execute(query)
-            yield from self._resultset_as_dicts(r)
+            for pk_chunk in chunk(self._first_pk_values(row_pks), 10000):
+                query = (
+                    sqlalchemy.select(table_def.columns)
+                    .select_from(table_def)
+                    .where(table_def.c[pk_name].in_(pk_chunk))
+                )
+                r = conn.execution_options(stream_results=True).execute(query)
+                yield from self._resultset_as_dicts(r)
 
     @property
     @functools.lru_cache(maxsize=1)
