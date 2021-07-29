@@ -2,7 +2,7 @@ import json
 import pytest
 
 from kart.repo import KartRepo
-from kart.exceptions import INVALID_ARGUMENT, NO_SPATIAL_FILTER
+from kart.exceptions import INVALID_ARGUMENT, NO_SPATIAL_FILTER, INVALID_OPERATION
 
 H = pytest.helpers.helpers()
 
@@ -326,3 +326,36 @@ def test_diff_commits_with_spatial_filter(data_archive, cli_runner, insert):
         assert r.exit_code == 0, r.stderr
         diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
         assert len(diff[H.POINTS.LAYER]["feature"]) == 7
+
+
+def test_change_spatial_filter(data_archive, cli_runner, insert):
+    with data_archive("polygons.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == H.POLYGONS.ROWCOUNT
+
+        geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+        crs = SPATIAL_FILTER_CRS["polygons"]
+        r = cli_runner.invoke(["checkout", "main", f"--spatial-filter={crs};{geom}"])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+
+        geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+        crs = SPATIAL_FILTER_CRS["polygons"]
+        r = cli_runner.invoke(["checkout", "main", "--spatial-filter="])
+        assert r.exit_code == 0, r.stderr
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == H.POLYGONS.ROWCOUNT
+            insert(sess, commit=False)
+
+        r = cli_runner.invoke(["checkout", "main", f"--spatial-filter={crs};{geom}"])
+        assert r.exit_code == INVALID_OPERATION
+        assert "You have uncommitted changes in your working copy" in r.stderr
