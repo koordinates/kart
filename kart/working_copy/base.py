@@ -1107,8 +1107,9 @@ class BaseWorkingCopy:
         )
 
         structural_changes = ds_inserts | ds_deletes
-        if track_changes_as_dirty and structural_changes:
+        if track_changes_as_dirty and structural_changes and base_tree != target_tree:
             # We don't yet support tracking changes as dirty if we delete, create, or rewrite an entire table.
+            # TODO - could reasonably easily support this in the case that rev_rev_meta_diff is empty (see above).
             structural_changes_text = "\n".join(structural_changes)
             raise NotYetImplemented(
                 "Sorry, this operation is not yet supported when there are structural changes."
