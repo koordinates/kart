@@ -61,8 +61,9 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
         click.echo(f"Updating {wc} ...")
 
     if replace_existing:
-        wc.drop_table(commit, *datasets)
-    wc.write_full(commit, *datasets)
+        wc.rewrite_full(commit, *datasets, force=True)
+    else:
+        wc.write_full(commit, *datasets)
 
 
 class GenerateIDsFromFile(StringFromFile):

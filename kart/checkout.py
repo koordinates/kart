@@ -11,9 +11,11 @@ from .exceptions import (
 
 from .exceptions import DbConnectionError
 from .key_filters import RepoKeyFilter
+from .output_util import InputMode, get_input_mode
+from .spatial_filters import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
 from .working_copy import WorkingCopyStatus
-from .output_util import InputMode, get_input_mode
+
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -38,6 +40,17 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
         working_copy.create_and_initialise()
         datasets = list(repo.datasets(target_tree_or_commit))
         working_copy.write_full(target_tree_or_commit, *datasets)
+        return
+
+    spatial_filter_matches = repo.spatial_filter.matches_working_copy(repo)
+    if not spatial_filter_matches:
+        # TODO - support spatial filter changes without doing full rewrites.
+        click.echo(f"Updating {working_copy} with new spatial filter...")
+        datasets = list(repo.datasets(target_tree_or_commit))
+        working_copy.rewrite_full(
+            target_tree_or_commit, *datasets, force=discard_changes
+        )
+        return
 
     db_tree_matches = (
         working_copy.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
@@ -68,8 +81,16 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     help="If a local branch of given name doesn't exist, but a remote does, "
     "this option guesses that the user wants to create a local to track the remote",
 )
+@click.option(
+    "--spatial-filter",
+    "spatial_filter_spec",
+    type=SpatialFilterString(encoding="utf-8"),
+    help=spatial_filter_help_text(),
+)
 @click.argument("refish", default=None, required=False)
-def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
+def checkout(
+    ctx, new_branch, force, discard_changes, do_guess, spatial_filter_spec, refish
+):
     """ Switch branches or restore working tree files """
     repo = ctx.obj.repo
 
@@ -101,10 +122,16 @@ def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
 
     commit = resolved.commit
     head_ref = resolved.reference.name if resolved.reference else commit.id
-    same_commit = repo.head_commit == commit
+    do_switch_commit = repo.head_commit != commit
+
+    do_switch_spatial_filter = False
+    if spatial_filter_spec is not None:
+        do_switch_spatial_filter = not spatial_filter_spec.resolve(
+            repo
+        ).matches_working_copy(repo)
 
     force = force or discard_changes
-    if not same_commit and not force:
+    if (do_switch_commit or do_switch_spatial_filter) and not force:
         ctx.obj.check_not_dirty(help_message=_DISCARD_CHANGES_HELP_MESSAGE)
 
     if new_branch:
@@ -127,6 +154,9 @@ def checkout(ctx, new_branch, force, discard_changes, do_guess, refish):
         head_ref = new_branch.name
 
     from kart.working_copy.base import BaseWorkingCopy
+
+    if spatial_filter_spec is not None:
+        spatial_filter_spec.write_config(repo)
 
     BaseWorkingCopy.ensure_config_exists(repo)
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
@@ -191,8 +221,8 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             resolved = CommitWithReference.resolve(repo, "HEAD")
         commit = resolved.commit
 
-        same_commit = repo.head_commit == commit
-        if not discard_changes and not same_commit:
+        do_switch_commit = repo.head_commit != commit
+        if do_switch_commit and not discard_changes:
             ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
         if new_branch in repo.branches and not force_create:
@@ -243,8 +273,8 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
 
         commit = existing_branch.peel(pygit2.Commit)
-        same_commit = repo.head_commit == commit
-        if not discard_changes and not same_commit:
+        do_switch_commit = repo.head_commit != commit
+        if do_switch_commit and not discard_changes:
             ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
         if existing_branch.shorthand in repo.branches.local:
@@ -347,8 +377,8 @@ def reset(ctx, discard_changes, refish):
     except (KeyError, pygit2.InvalidSpecError):
         raise NotFound(f"{refish} is not a commit", exit_code=NO_COMMIT)
 
-    same_commit = repo.head_commit == commit
-    if not discard_changes and not same_commit:
+    do_switch_commit = repo.head_commit != commit
+    if do_switch_commit and not discard_changes:
         ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
     head_branch = repo.head_branch

@@ -407,6 +407,18 @@ class BaseWorkingCopy:
                 )
             )
 
+    def get_spatial_filter_hash(self):
+        kart_state = self.kart_tables.kart_state
+        with self.session() as sess:
+            return sess.scalar(
+                sa.select([kart_state.c.value]).where(
+                    sa.and_(
+                        kart_state.c.table_name == "*",
+                        kart_state.c.key == "spatial-filter-hash",
+                    )
+                )
+            )
+
     def assert_db_tree_match(self, tree):
         """Raises a Mismatch if kart_state refers to a different tree and not the given tree."""
         wc_tree_id = self.get_db_tree()
@@ -821,9 +833,9 @@ class BaseWorkingCopy:
         tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
         L.info(f"Tree sha: {tree_id}")
         with self.session() as sess:
-            self._insert_or_replace_state_table_tree(sess, tree_id)
+            self._update_state_table_tree(sess, tree_id)
 
-    def _insert_or_replace_state_table_tree(self, sess, tree_id):
+    def _update_state_table_tree(self, sess, tree_id):
         """
         Write the given tree ID to the state table.
 
@@ -834,6 +846,29 @@ class BaseWorkingCopy:
             upsert(self.kart_tables.kart_state),
             {"table_name": "*", "key": "tree", "value": tree_id},
         )
+        return r.rowcount
+
+    def _update_state_table_spatial_filter_hash(self, sess, spatial_filter_hash):
+        """
+        Write the given spatial filter hash to the state table.
+
+        sess - sqlalchemy session.
+        spatial_filter_hash - str, a hash of the spatial filter.
+        """
+        kart_state = self.kart_tables.kart_state
+        if spatial_filter_hash:
+            r = sess.execute(
+                upsert(kart_state),
+                {
+                    "table_name": "*",
+                    "key": "spatial-filter-hash",
+                    "value": spatial_filter_hash,
+                },
+            )
+        else:
+            r = sess.execute(
+                sa.delete(kart_state).where(kart_state.c.key == "spatial-filter-hash")
+            )
         return r.rowcount
 
     def write_full(self, commit, *datasets):
@@ -896,8 +931,9 @@ class BaseWorkingCopy:
                     dataset.path,
                 )
 
-            self._insert_or_replace_state_table_tree(
-                sess, commit.peel(pygit2.Tree).id.hex
+            self._update_state_table_tree(sess, commit.peel(pygit2.Tree).id.hex)
+            self._update_state_table_spatial_filter_hash(
+                sess, self.repo.spatial_filter.hexhash
             )
 
     def _write_meta(self, sess, dataset):
@@ -982,7 +1018,7 @@ class BaseWorkingCopy:
 
         return feat_count
 
-    def drop_table(self, target_tree_or_commit, *datasets):
+    def drop_tables(self, target_tree_or_commit, *datasets):
         """Drop the tables for all the given datasets."""
         with self.session() as sess:
             for dataset in datasets:
@@ -1009,6 +1045,19 @@ class BaseWorkingCopy:
         Data should not be deleted if it is not clear if Kart created it or not.
         """
         raise NotImplementedError()
+
+    def rewrite_full(self, commit, *datasets, force=False):
+        """
+        Rewrites all of the given datasets from scratch to match the given commit, and updates the state table tree.
+        Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
+        filter is up to date.
+        """
+        if not force:
+            self.check_not_dirty()
+
+        with self.session() as _:
+            self.drop_tables(commit, *datasets)
+            self.write_full(commit, *datasets)
 
     def reset(
         self,
@@ -1132,7 +1181,7 @@ class BaseWorkingCopy:
         with self.session() as sess:
             # Delete old tables
             if ds_deletes:
-                self.drop_table(
+                self.drop_tables(
                     target_tree_or_commit, *[base_datasets[d] for d in ds_deletes]
                 )
             # Write new tables
@@ -1155,8 +1204,7 @@ class BaseWorkingCopy:
                 )
 
             if not track_changes_as_dirty:
-                # update the tree id
-                self._insert_or_replace_state_table_tree(sess, target_tree_id)
+                self._update_state_table_tree(sess, target_tree_id)
 
     def _update_table(
         self,

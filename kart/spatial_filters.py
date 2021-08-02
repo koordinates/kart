@@ -8,6 +8,7 @@ from .cli_util import StringFromFile
 from .crs_util import make_crs
 from .exceptions import CrsError, GeometryError, NotFound, NO_SPATIAL_FILTER
 from .geometry import geometry_from_string, GeometryType
+from .serialise_util import hexhash
 
 
 L = logging.getLogger("kart.spatial_filters")
@@ -96,6 +97,14 @@ class SpatialFilterSpec:
         self.REF_KEY = KartConfigKeys.KART_SPATIALFILTER_REFERENCE
         self.OID_KEY = KartConfigKeys.KART_SPATIALFILTER_OBJECTID
 
+    def resolve(self):
+        """
+        Returns an equivalent ResolvedSpatialFilterSpec that directly contains the geometry and CRS
+        (as opposed to a ReferenceSpatialFilterSpec that contains a reference to some other object
+        that in turn contains the geometry and CRS).
+        """
+        raise NotImplementedError()
+
 
 class ResolvedSpatialFilterSpec(SpatialFilterSpec):
     """A user-provided specification for a spatial filter where the user has supplied the values directly."""
@@ -114,6 +123,9 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
                 context="spatial filter",
             )
 
+    def resolve(self, repo):
+        return self
+
     def write_config(self, repo):
         if self.match_all:
             self.delete_all_config(repo)
@@ -122,6 +134,23 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
             repo.config[self.CRS_KEY] = self.crs_spec
             repo.del_config(self.REF_KEY)
             repo.del_config(self.OID_KEY)
+
+    def delete_all_config(self, repo):
+        for key in (self.GEOM_KEY, self.CRS_KEY, self.REF_KEY, self.OID_KEY):
+            repo.del_config(key)
+
+    def matches_working_copy(self, repo):
+        working_copy = repo.working_copy
+        return (
+            working_copy is None
+            or working_copy.get_spatial_filter_hash() == self.hexhash
+        )
+
+    @property
+    def hexhash(self):
+        if self.match_all:
+            return None
+        return hexhash(self.crs_spec.strip(), self.geometry.to_wkb())
 
 
 class ReferenceSpatialFilterSpec(SpatialFilterSpec):
@@ -134,35 +163,70 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
         super().__init__()
         self.ref_or_oid = ref_or_oid
 
-    def write_config(self, repo):
+    def _resolve_object_contents(self, obj):
+        contents = obj.data.decode("utf-8")
+        parts = self.split_file(contents)
+        return ResolvedSpatialFilterSpec(*parts)
+
+    @functools.lru_cache(maxsize=1)
+    def _resolve_target(self, repo):
+        """
+        Returns a tuple of strings (reference, object_id, ResolvedSpatialFilterSpec).
+        # Returned reference will be None if ref_or_oid is an object-id.
+        """
+
+        # TODO - handle missing objects (try to make sure they are fetched from the remote).
+
         obj = None
+        oid = self.ref_or_oid
         try:
-            obj = repo[self.ref_or_oid]
+            obj = repo[oid]
         except (KeyError, ValueError):
             pass
 
         if obj is not None:
+            return None, oid, self._resolve_object_contents(obj)
+
+        ref = self.ref_or_oid
+        if not ref.startswith("refs/"):
+            ref = f"refs/filters/{ref}"
+
+        if ref in repo.references:
+            oid = str(repo.references[ref].resolve().target)
+            try:
+                obj = repo[oid]
+            except (KeyError, ValueError):
+                pass
+
+        if obj is not None:
+            return ref, oid, self._resolve_object_contents(obj)
+
+        ref_desc = " or ".join(set([oid, ref]))
+        raise NotFound(
+            f"No spatial filter object was found in the repository at {ref_desc}",
+            exit_code=NO_SPATIAL_FILTER,
+        )
+
+    def resolve(self, repo):
+        ref, oid, resolved_spatial_filter_spec = self._resolve_target(repo)
+        return resolved_spatial_filter_spec
+
+    def write_config(self, repo):
+        ref, oid, resolved_spatial_filter_spec = self._resolve_target(repo)
+        if ref is None:
             # Found an object - the object is immutable, so no reason to store a pointer to it.
             # Just resolve the reference to geometry + CRS and store that.
-            contents = obj.data.decode("utf-8")
-            parts = self.split_file(contents)
-            ResolvedSpatialFilterSpec(*parts).write_config(repo)
+            resolved_spatial_filter_spec.write_config(repo)
+
         else:
-            ref = self.ref_or_oid
-            if not ref.startswith("refs/"):
-                ref = f"refs/filters/{ref}"
-            if ref not in repo.references:
-                ref_desc = " or ".join(set([ref, self.ref_or_oid]))
-                raise NotFound(
-                    f"No spatial filter object was found in the repository at {ref_desc}",
-                    exit_code=NO_SPATIAL_FILTER,
-                )
             # Found a reference. The reference is mutable, so we store it (and the object it points to).
-            oid = str(repo.references[ref].resolve().target)
             repo.config[self.REF_KEY] = ref
             repo.config[self.OID_KEY] = oid
             repo.del_config(self.GEOM_KEY)
             repo.del_config(self.CRS_KEY)
+
+    def matches_working_copy(self, repo):
+        return self.resolve().matches_working_copy(repo)
 
     @classmethod
     def split_file(cls, contents):
@@ -221,13 +285,10 @@ class SpatialFilter:
     @classmethod
     @functools.lru_cache()
     def from_spec(cls, crs_spec, geometry_spec):
-        geometry = geometry_from_string(geometry_spec, context="spatial filter")
-        crs = make_crs(crs_spec, context="spatial filter")
-
-        return OriginalSpatialFilter(geometry.to_ogr(), crs)
+        return OriginalSpatialFilter(crs_spec, geometry_spec)
 
     def __init__(
-        self, filter_geometry_ogr, crs, geom_column_name=None, match_all=False
+        self, crs, filter_geometry_ogr, geom_column_name=None, match_all=False
     ):
         """
         Create a new spatial filter.
@@ -238,12 +299,12 @@ class SpatialFilter:
         self.match_all = match_all
 
         if match_all:
-            self.filter_ogr = self.filter_env = self.crs = None
+            self.crs = self.filter_ogr = self.filter_env = None
             self.geom_column_name = None
         else:
+            self.crs = crs
             self.filter_ogr = filter_geometry_ogr
             self.filter_env = self.filter_ogr.GetEnvelope()
-            self.crs = crs
             self.geom_column_name = geom_column_name
 
     def matches(self, feature):
@@ -311,6 +372,17 @@ class OriginalSpatialFilter(SpatialFilter):
     That is why only OriginalSpatialFilter supports transformation.
     """
 
+    def __init__(self, crs_spec, geometry_spec, match_all=False):
+        if match_all:
+            super().__init__(None, None, match_all=True)
+            self.hexhash = None
+        else:
+            ctx = "spatial filter"
+            geometry = geometry_from_string(geometry_spec, context=ctx)
+            crs = make_crs(crs_spec, context=ctx)
+            super().__init__(crs, geometry.to_ogr())
+            self.hexhash = hexhash(crs_spec.strip(), geometry.to_wkb())
+
     @property
     def is_original(self):
         return True
@@ -361,11 +433,18 @@ class OriginalSpatialFilter(SpatialFilter):
             transform = osr.CoordinateTransformation(self.crs, crs)
             new_filter_ogr = self.filter_ogr.Clone()
             new_filter_ogr.Transform(transform)
-            return SpatialFilter(new_filter_ogr, crs, new_geom_column_name)
+            return SpatialFilter(crs, new_filter_ogr, new_geom_column_name)
 
         except RuntimeError as e:
             crs_desc = f"CRS for {ds_path!r}" if ds_path else f"CRS:\n {crs_spec!r}"
             raise CrsError(f"Can't reproject spatial filter into {crs_desc}:\n{e}")
+
+    def matches_working_copy(self, repo):
+        working_copy = repo.working_copy
+        return (
+            working_copy is None
+            or working_copy.get_spatial_filter_hash() == self.hexhash
+        )
 
 
 # A SpatialFilter object that matches everything.
