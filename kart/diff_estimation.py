@@ -30,6 +30,12 @@ ACCURACY_PARAMS = {
     "medium": (8, 0.80, Z_SCORES[0.80]),
     "good": (16, 0.95, Z_SCORES[0.95]),
 }
+ACCURACY_SUBTREE_SAMPLES = {
+    "veryfast": 8,
+    "fast": 16,
+    "medium": 32,
+    "good": 64,
+}
 
 
 def _feature_count_sample_trees(repo, git_rev_spec, tree_paths_sample, num_trees):
@@ -109,18 +115,18 @@ def get_approximate_diff_blob_count(
         return 0
 
     git_rev_spec = f"{tree1.id}..{tree2.id}"
-    sample_size, required_confidence, z_score = ACCURACY_PARAMS[accuracy]
 
     if path_encoder.DISTRIBUTED_FEATURES:
-
+        total_samples_to_take = ACCURACY_SUBTREE_SAMPLES[accuracy]
         diff_count, samples_taken = _recursive_distributed_diff_estimate(
-            repo, tree1, tree2, path_encoder.branches, 16
+            repo, tree1, tree2, path_encoder.branches, total_samples_to_take
         )
         return int(round(diff_count))
-    else:
-        # integer PK encoder. First, find what range of trees we have
-        max_tree_id = path_encoder.max_tree_id(repo, tree1, tree2)
-        max_trees = max_tree_id + 1
+
+    # integer PK encoder. First, find what range of trees we have
+    max_tree_id = path_encoder.max_tree_id(repo, tree1, tree2)
+    max_trees = max_tree_id + 1
+    sample_size, required_confidence, z_score = ACCURACY_PARAMS[accuracy]
 
     if sample_size >= max_trees:
         return get_exact_diff_blob_count(repo, tree1, tree2)
