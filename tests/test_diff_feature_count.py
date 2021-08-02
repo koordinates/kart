@@ -83,7 +83,8 @@ def test_feature_count_commits_string_pks(data_archive, cli_runner):
 
         assert r.stdout.splitlines() == [
             "nz_waca_adjustments:",
-            "\t208 features changed",
+            # there's actually 228, but this is a 'fast' estimate
+            "\t213 features changed",
         ]
 
 
