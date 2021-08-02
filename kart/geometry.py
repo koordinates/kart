@@ -72,6 +72,7 @@ def geometry_from_string(string, allowed_types=None, allow_empty=False, context=
     """
     geometry_desc = f"geometry for {context}" if context else "geometry"
     try:
+        string = string.strip()
         if re.fullmatch(r"[0-9a-fA-F]*", string):
             result = Geometry.from_hex_wkb(string)
         else:

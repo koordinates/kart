@@ -274,8 +274,21 @@ class SpatialFilter:
                     "Spatial filter object ID is missing from config",
                     exit_code=NO_SPATIAL_FILTER,
                 )
-            # TODO - Re-apply spatial filter when it has changed.
-            assert str(repo.references[ref_spec].resolve().target) == oid_spec
+
+            if ref_spec not in repo.references:
+                click.echo(
+                    f"The current spatial filter has been deleted from {ref_spec} - to unapply this filter, run: "
+                    f"kart checkout --spatial-filter=",
+                    err=True,
+                )
+            elif str(repo.references[ref_spec].resolve().target) != oid_spec:
+                # TODO -  Improve handling of changed spatial filter - maybe reapply it automatically if WC is clean.
+                click.echo(
+                    f"The spatial filter at {ref_spec} has changed since it was applied - to apply the new filter, "
+                    f"run: kart checkout --spatial-filter={ref_spec}",
+                    err=True,
+                )
+
             contents = repo[oid_spec].data.decode("utf-8")
             parts = ReferenceSpatialFilterSpec.split_file(contents)
             return SpatialFilter.from_spec(*parts)
