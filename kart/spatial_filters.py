@@ -97,6 +97,14 @@ class SpatialFilterSpec:
         self.REF_KEY = KartConfigKeys.KART_SPATIALFILTER_REFERENCE
         self.OID_KEY = KartConfigKeys.KART_SPATIALFILTER_OBJECTID
 
+    def resolve(self):
+        """
+        Returns an equivalent ResolvedSpatialFilterSpec that directly contains the geometry and CRS
+        (as opposed to a ReferenceSpatialFilterSpec that contains a reference to some other object
+        that in turn contains the geometry and CRS).
+        """
+        raise NotImplementedError()
+
 
 class ResolvedSpatialFilterSpec(SpatialFilterSpec):
     """A user-provided specification for a spatial filter where the user has supplied the values directly."""
@@ -162,8 +170,13 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
 
     @functools.lru_cache(maxsize=1)
     def _resolve_target(self, repo):
-        # Returns a tuple of strings (reference, object_id, ResolvedSpatialFilterSpec).
+        """
+        Returns a tuple of strings (reference, object_id, ResolvedSpatialFilterSpec).
         # Returned reference will be None if ref_or_oid is an object-id.
+        """
+
+        # TODO - handle missing objects (try to make sure they are fetched from the remote).
+
         obj = None
         oid = self.ref_or_oid
         try:
@@ -195,7 +208,6 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
         )
 
     def resolve(self, repo):
-        # Returns the ResolvedSpatialFilterSpec that this ReferenceSpatialFilterSpec points to.
         ref, oid, resolved_spatial_filter_spec = self._resolve_target(repo)
         return resolved_spatial_filter_spec
 

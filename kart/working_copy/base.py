@@ -1018,7 +1018,7 @@ class BaseWorkingCopy:
 
         return feat_count
 
-    def drop_table(self, target_tree_or_commit, *datasets):
+    def drop_tables(self, target_tree_or_commit, *datasets):
         """Drop the tables for all the given datasets."""
         with self.session() as sess:
             for dataset in datasets:
@@ -1055,8 +1055,9 @@ class BaseWorkingCopy:
         if not force:
             self.check_not_dirty()
 
-        self.drop_table(commit, *datasets)
-        self.write_full(commit, *datasets)
+        with self.session() as _:
+            self.drop_tables(commit, *datasets)
+            self.write_full(commit, *datasets)
 
     def reset(
         self,
@@ -1180,7 +1181,7 @@ class BaseWorkingCopy:
         with self.session() as sess:
             # Delete old tables
             if ds_deletes:
-                self.drop_table(
+                self.drop_tables(
                     target_tree_or_commit, *[base_datasets[d] for d in ds_deletes]
                 )
             # Write new tables

@@ -13,7 +13,7 @@ def _fsck_reset(repo, working_copy, dataset_paths):
     commit = repo.head_commit
     datasets = [repo.datasets()[p] for p in dataset_paths]
 
-    working_copy.drop_table(commit, *datasets)
+    working_copy.drop_tables(commit, *datasets)
     working_copy.write_full(commit, *datasets)
 
 

@@ -56,7 +56,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
         working_copy.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
     )
 
-    if discard_changes or not db_tree_matches or not spatial_filter_matches:
+    if discard_changes or not db_tree_matches:
         click.echo(f"Updating {working_copy} ...")
         working_copy.reset(target_tree_or_commit, force=discard_changes)
 
