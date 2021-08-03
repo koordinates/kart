@@ -131,6 +131,18 @@ def test_log_with_feature_count(data_archive, cli_runner):
         result = json.loads(r.stdout)
         result = [c["featureChanges"] for c in result]
         assert result == [
+            # in fact these are exactly right (!)
             {"nz_pa_points_topo_150k": 5},
-            {"nz_pa_points_topo_150k": 2174},
+            {"nz_pa_points_topo_150k": 2143},
+        ]
+        r = cli_runner.invoke(
+            ["log", "--output-format=json", "--with-feature-count=veryfast"]
+        )
+        assert r.exit_code == 0, r
+        result = json.loads(r.stdout)
+        result = [c["featureChanges"] for c in result]
+        assert result == [
+            # not quite so accurate, but veryfast
+            {"nz_pa_points_topo_150k": 5},
+            {"nz_pa_points_topo_150k": 2176},
         ]
