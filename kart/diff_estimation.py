@@ -1,7 +1,10 @@
 import logging
+import math
 import statistics
 import subprocess
 import time
+
+import pygit2
 
 from kart.exceptions import SubprocessError
 
@@ -26,6 +29,12 @@ ACCURACY_PARAMS = {
     "fast": (2, 0.60, Z_SCORES[0.60]),
     "medium": (8, 0.80, Z_SCORES[0.80]),
     "good": (16, 0.95, Z_SCORES[0.95]),
+}
+ACCURACY_SUBTREE_SAMPLES = {
+    "veryfast": 8,
+    "fast": 16,
+    "medium": 32,
+    "good": 64,
 }
 
 
@@ -106,18 +115,18 @@ def get_approximate_diff_blob_count(
         return 0
 
     git_rev_spec = f"{tree1.id}..{tree2.id}"
-    sample_size, required_confidence, z_score = ACCURACY_PARAMS[accuracy]
 
     if path_encoder.DISTRIBUTED_FEATURES:
-
-        diff_count, samples_taken = _recursive_distributed_diff_count(
-            repo, tree1, tree2, path_encoder.branches, 16
+        total_samples_to_take = ACCURACY_SUBTREE_SAMPLES[accuracy]
+        diff_count, samples_taken = _recursive_distributed_diff_estimate(
+            repo, tree1, tree2, path_encoder.branches, total_samples_to_take
         )
         return int(round(diff_count))
-    else:
-        # integer PK encoder. First, find what range of trees we have
-        max_tree_id = path_encoder.max_tree_id(repo, tree1, tree2)
-        max_trees = max_tree_id + 1
+
+    # integer PK encoder. First, find what range of trees we have
+    max_tree_id = path_encoder.max_tree_id(repo, tree1, tree2)
+    max_trees = max_tree_id + 1
+    sample_size, required_confidence, z_score = ACCURACY_PARAMS[accuracy]
 
     if sample_size >= max_trees:
         return get_exact_diff_blob_count(repo, tree1, tree2)
@@ -197,14 +206,25 @@ def _nonrecursive_diff(tree_a, tree_b):
     return {k: (a.get(k), b.get(k)) for k in all_names if a.get(k) != b.get(k)}
 
 
-def _recursive_distributed_diff_count(
+def _num_expected_distributed_tree_blobs(num_samples, branch_factor):
+    """
+    Returns the expected number of children in a tree of the given size.
+
+    """
+    # https://docs.google.com/document/d/11CeJKbiNQoLmhDcYIM68cJSA_nKBHW7kYVybh2N-Lww/edit#heading=h.7z95y6hc62gn
+    return math.log(1 - num_samples / branch_factor) / math.log(1 - 1 / branch_factor)
+
+
+def _recursive_distributed_diff_estimate(
     repo, tree1, tree2, branch_count, total_samples_to_take
 ):
     diff = _nonrecursive_diff(tree1, tree2)
+
     diff_size = len(diff)
     if diff_size < branch_count / 2:
-        L.debug(f"Found {diff_size} diffs.")
-        return diff_size, 1
+        estimated_blobs = _num_expected_distributed_tree_blobs(diff_size, branch_count)
+        L.debug(f"Found {diff_size} diffs for an estimate of {estimated_blobs} blobs.")
+        return estimated_blobs, 1
 
     L.debug(f"Found {diff_size} diffs, checking next level:")
 
@@ -212,9 +232,13 @@ def _recursive_distributed_diff_count(
     total_subsamples_taken = 0
     total_samples_taken = 0
     for tree1, tree2 in diff.values():
-        subsample_size, samples_taken = _recursive_distributed_diff_count(
-            repo, tree1, tree2, branch_count, total_samples_to_take
-        )
+        if isinstance(tree1, pygit2.Blob) or isinstance(tree2, pygit2.Blob):
+            subsample_size = 1
+            samples_taken = 1
+        else:
+            subsample_size, samples_taken = _recursive_distributed_diff_estimate(
+                repo, tree1, tree2, branch_count, total_samples_to_take
+            )
         total_subsample_size += subsample_size
         total_subsamples_taken += 1
         total_samples_taken += samples_taken
