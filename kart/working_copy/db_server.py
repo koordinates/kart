@@ -189,27 +189,11 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
         # We don't use DROP SCHEMA CASCADE since that could possibly delete things outside the schema
         # if they've been linked to it using foreign keys, and we only want to delete the schema that we manage.
         with self.session() as sess:
-            self._drop_all_tables(sess)
-            self._drop_all_functions(sess)
+            self.adapter.drop_all_in_schema(sess, self.db_schema)
 
         if not keep_db_schema_if_possible:
             with self.session() as sess:
                 self._drop_schema(sess, treat_error_as_warning=True)
-
-    def _drop_all_tables(self, sess):
-        """Drops all tables in schema self.db_schema"""
-        r = sess.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema=:table_schema;",
-            {"table_schema": self.db_schema},
-        )
-        table_identifiers = ", ".join((self.table_identifier(row[0]) for row in r))
-        if table_identifiers:
-            sess.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
-
-    def _drop_all_functions(self, sess):
-        """Drops all functions in schema self.db_schema"""
-        # Subclasses only need to override if they create functions in the working copy.
-        pass
 
     def _drop_schema(self, sess, treat_error_as_warning=False):
         """Drops the schema self.db_schema"""

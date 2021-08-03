@@ -875,6 +875,21 @@ def test_delete_branch(data_working_copy, cli_runner):
         assert r.exit_code == 0, r
 
 
+def test_auto_increment_pk(data_working_copy):
+    with data_working_copy("polygons") as (repo_path, wc):
+        repo = KartRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            count = sess.scalar(
+                f"SELECT COUNT(*) FROM {H.POLYGONS.LAYER} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
+            )
+            assert count == 0
+            sess.execute(f"INSERT INTO {H.POLYGONS.LAYER} (geom) VALUES (NULL);")
+            count = sess.scalar(
+                f"SELECT COUNT(*) FROM {H.POLYGONS.LAYER} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
+            )
+            assert count == 1
+
+
 def test_approximated_types():
     assert KartAdapter_GPKG.APPROXIMATED_TYPES == compute_approximated_types(
         KartAdapter_GPKG.V2_TYPE_TO_SQL_TYPE, KartAdapter_GPKG.SQL_TYPE_TO_V2_TYPE

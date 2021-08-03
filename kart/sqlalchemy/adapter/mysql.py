@@ -91,6 +91,16 @@ class KartAdapter_MySql(BaseKartAdapter, Db_MySql):
     }
 
     @classmethod
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None, has_int_pk=False):
+        result = super().v2_column_schema_to_sql_spec(col, v2_obj)
+
+        # Make int PKs auto-increment.
+        if has_int_pk and col.pk_index is not None:
+            result += " AUTO_INCREMENT"
+
+        return result
+
+    @classmethod
     def v2_type_to_sql_type(cls, col, v2_obj=None):
         sql_type = super().v2_type_to_sql_type(col, v2_obj)
 

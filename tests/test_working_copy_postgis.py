@@ -451,6 +451,27 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                     raise SucceedAndRollback()
 
 
+def test_auto_increment_pk(data_archive, cli_runner, new_postgis_db_schema):
+    with data_archive("polygons") as repo_path:
+        H.clear_working_copy()
+        with new_postgis_db_schema() as (postgres_url, postgres_schema):
+            r = cli_runner.invoke(["create-workingcopy", postgres_url])
+            assert r.exit_code == 0, r.stderr
+
+            repo = KartRepo(repo_path)
+            with repo.working_copy.session() as sess:
+                t = f"{postgres_schema}.{H.POLYGONS.LAYER}"
+                count = sess.scalar(
+                    f"SELECT COUNT(*) FROM {t} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
+                )
+                assert count == 0
+                sess.execute(f"INSERT INTO {t} (geom) VALUES (NULL);")
+                count = sess.scalar(
+                    f"SELECT COUNT(*) FROM {t} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
+                )
+                assert count == 1
+
+
 def test_approximated_types():
     assert KartAdapter_Postgis.APPROXIMATED_TYPES == compute_approximated_types(
         KartAdapter_Postgis.V2_TYPE_TO_SQL_TYPE, KartAdapter_Postgis.SQL_TYPE_TO_V2_TYPE

@@ -97,10 +97,11 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
         with self.session() as sess:
             # Don't worry about constraints when dropping everything.
             sess.execute("SET CONSTRAINTS ALL DEFERRED;")
-            self._drop_all_tables(sess)
-            self._drop_all_functions(sess)
-            if not keep_db_schema_if_possible:
-                self._drop_schema(sess)
+            self.adapter.drop_all_in_schema(sess, self.db_schema)
+
+        if not keep_db_schema_if_possible:
+            with self.session() as sess:
+                self._drop_schema(sess, treat_error_as_warning=True)
 
     def _drop_all_functions(self, sess):
         r = sess.execute(
@@ -191,6 +192,21 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     def _drop_spatial_index(self, sess, dataset):
         # PostGIS deletes the spatial index automatically when the table is deleted.
         pass
+
+    def _initialise_sequence(self, sess, dataset):
+        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        if start:
+            quoted_seq_identifier = sess.scalar(
+                "SELECT pg_get_serial_sequence(:table_name, :col_name);",
+                {
+                    "table_name": f"{self.db_schema}.{dataset.table_name}",
+                    "col_name": dataset.primary_key,
+                },
+            )
+            sess.execute(
+                f"ALTER SEQUENCE {quoted_seq_identifier} RESTART WITH :start;",
+                {"start": start},
+            )
 
     def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type in ("trigger", "proc")

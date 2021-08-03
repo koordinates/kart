@@ -6,6 +6,12 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.10.3 (UNRELEASED)
 
+### Major changes
+
+ * Added basic support for spatial filters - the spatial filter can be updated during an `init`, `clone` or `checkout` by supplying the option `--spatial-filter=CRS;GEOMETRY` where CRS is a string such as `EPSG:4326` and GEOMETRY is a polygon or multigon specified using WKT or hex-encoded WKB. When a spatial filter is set, the working copy will only contain features that intersect the spatial filter, and changes that happened outside the working copy are not shown to the user unless specifically required. [#456](https://github.com/koordinates/kart/issues/456)
+
+### Other changes
+ * Auto-incrementing integer PKs: When the working copy is written, Kart now sets up a sequence which supplies the next unassigned PK value and sets it as the default value for the PK column. This helps the user find the next unassigned PK, which can be non-obvious in particular when a spatial filter has been applied and not all features are present in the working copy. [#468](https://github.com/koordinates/kart/pull/468)
  * Bugfix: Set GDAL and PROJ environment variables on startup, which fixes an issue where Kart may or may not work properly depending on whether GDAL and PROJ are appropriately configured in the user's environment
  * Bugfix: `kart restore` now simply discards all working copy changes, as it is intended to - previously it would complain if there were "structural" schema differences between the working copy and HEAD.
  * Feature-count estimates are now more accurate and generally also faster [#467](https://github.com/koordinates/kart/issues/467)
