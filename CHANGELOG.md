@@ -8,6 +8,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
  * Bugfix: Set GDAL and PROJ environment variables on startup, which fixes an issue where Kart may or may not work properly depending on whether GDAL and PROJ are appropriately configured in the user's environment
  * Bugfix: `kart restore` now simply discards all working copy changes, as it is intended to - previously it would complain if there were "structural" schema differences between the working copy and HEAD.
+ * Feature-count estimates are now more accurate and generally also faster [#467](https://github.com/koordinates/kart/issues/467)
 
 ## 0.10.2
 

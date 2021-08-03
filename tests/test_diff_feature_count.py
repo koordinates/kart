@@ -59,9 +59,9 @@ def test_feature_count_commits_veryfast(data_archive, cli_runner):
         r = cli_runner.invoke(["diff", "--only-feature-count=veryfast", "HEAD^...HEAD"])
         assert r.exit_code == 0, r.stderr
 
-        # we get "0 features changed" because veryfast only ever samples 1/65536 trees.
         assert r.stdout.splitlines() == [
-            "0 features changed",
+            "nz_pa_points_topo_150k:",
+            "\t5 features changed",
         ]
 
 
