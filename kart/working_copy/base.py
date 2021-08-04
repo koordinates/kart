@@ -983,7 +983,7 @@ class BaseWorkingCopy:
 
     def _initialise_sequence(self, sess, dataset):
         """Sets up an auto-increment integer PK sequence so that a useful default PK value is provided."""
-        raise NotImplementedError()
+        pass
 
     def _drop_sequence(self, sess, dataset):
         """Drop the PK auto-increment sequence associated with this dataset."""
@@ -1254,6 +1254,10 @@ class BaseWorkingCopy:
             self._apply_feature_diff(
                 sess, base_ds, target_ds, feature_filter, track_changes_as_dirty
             )
+
+        if not target_ds.feature_path_encoder.DISTRIBUTED_FEATURES:
+            # Set up a sequence so that the user doesn't have to supply the next int PK.
+            self._initialise_sequence(sess, target_ds)
 
         self._update_last_write_time(sess, target_ds, commit)
 

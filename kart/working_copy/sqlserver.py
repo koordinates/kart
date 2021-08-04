@@ -144,9 +144,39 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
         if start:
             seq_name = f"{dataset.table_name}_{dataset.primary_key}_seq"
-            sess.execute(
-                f"CREATE SEQUENCE {self.table_identifier(seq_name)} START WITH {start};",
+            seq_exists = sess.scalar(
+                "SELECT COUNT(*) FROM sys.sequences WHERE object_id = object_id(:full_seq_name)",
+                {"full_seq_name": f"{self.db_schema}.{seq_name}"},
             )
+            CREATE = "CREATE" if not seq_exists else "ALTER"
+            START_WITH = "START WITH" if not seq_exists else "RESTART WITH"
+            sess.execute(
+                f"{CREATE} SEQUENCE {self.table_identifier(seq_name)} {START_WITH} {start};",
+            )
+
+            col_id = next(
+                i + 1
+                for i, col in enumerate(dataset.schema.columns)
+                if col.pk_index is not None
+            )
+            constraint_name = sess.scalar(
+                """
+                SELECT name FROM sys.default_constraints
+                WHERE parent_object_id = object_id(:full_table_name) AND parent_column_id = :col_id;
+                """,
+                {
+                    "full_table_name": f"{self.db_schema}.{dataset.table_name}",
+                    "col_id": col_id,
+                },
+            )
+            if constraint_name:
+                sess.execute(
+                    f"""
+                    ALTER TABLE {self.table_identifier(dataset)}
+                    DROP CONSTRAINT {self.quote(constraint_name)}
+                    """
+                )
+
             constraint_name = f"{dataset.table_name}_{dataset.primary_key}_dflt"
             sess.execute(
                 f"""

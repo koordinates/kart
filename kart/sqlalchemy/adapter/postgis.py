@@ -1,4 +1,5 @@
 import decimal
+import re
 
 from osgeo.osr import SpatialReference
 from psycopg2.extensions import Binary
@@ -78,7 +79,8 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
 
         # Make int PKs auto-increment.
         if has_int_pk and col.pk_index is not None:
-            sql_type = sql_type.replace("INT", "SERIAL")
+            # SMALLINT, INTEGER, BIGINT -> SMALLSERIAL, SERIAL, BIGSERIAL
+            sql_type = re.sub("INT(EGER)?", "SERIAL", sql_type)
 
         return f"{col_name} {sql_type}"
 
