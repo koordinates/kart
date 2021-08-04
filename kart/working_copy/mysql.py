@@ -148,6 +148,14 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
         # MySQL deletes the spatial index automatically when the table is deleted.
         pass
 
+    def _initialise_sequence(self, sess, dataset):
+        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        if start:
+            sess.execute(
+                f"ALTER TABLE {self.table_identifier(dataset)} AUTO_INCREMENT = :start;",
+                {"start": start},
+            )
+
     def _sno_tracking_name(self, trigger_type, dataset=None):
         """Returns the sno-branded name of the trigger reponsible for populating the sno_track table."""
         return f"_sno_track_{trigger_type}"

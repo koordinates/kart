@@ -3,7 +3,7 @@ import re
 import socket
 from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
 
-import sqlalchemy
+import sqlalchemy as sa
 from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql.compiler import IdentifierPreparer
@@ -28,7 +28,7 @@ class BaseDb:
 
     @classmethod
     def quote_table(cls, table_name, db_schema=None):
-        return cls.preparer.format_table(sqlalchemy.table(table_name, schema=db_schema))
+        return cls.preparer.format_table(sa.table(table_name, schema=db_schema))
 
     @classmethod
     def list_tables(cls, sess, db_schema=None):
@@ -70,3 +70,22 @@ class BaseDb:
         query_dict = parse_qs(existing_query)
         # ignore new keys if they're already set in the querystring
         return urlencode({**new_query_dict, **query_dict}, doseq=True)
+
+    @classmethod
+    def drop_all_in_schema(cls, sess, db_schema):
+        """Drops all tables, routines, and sequences in schema db_schema."""
+        for thing in ("table", "routine", "sequence"):
+            cls._drop_things_in_schema(cls, sess, db_schema, thing)
+
+    def _drop_things_in_schema(cls, sess, db_schema, thing):
+        r = sess.execute(
+            sa.text(
+                f"SELECT {thing}_name FROM information_schema.{thing}s WHERE {thing}_schema=:db_schema;"
+            ),
+            {"db_schema": db_schema},
+        )
+        thing_identifiers = ", ".join(
+            (cls.quote_table(row[0], db_schema=db_schema) for row in r)
+        )
+        if thing_identifiers:
+            sess.execute(f"DROP {thing} IF EXISTS {thing_identifiers};")

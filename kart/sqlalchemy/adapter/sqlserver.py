@@ -123,7 +123,7 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
     )
 
     @classmethod
-    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None):
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None, has_int_pk=False):
         result = super().v2_column_schema_to_sql_spec(col, v2_obj)
         constraints = cls.get_sql_type_constraints(col, v2_obj)
         return f"{result} {constraints}" if constraints else result

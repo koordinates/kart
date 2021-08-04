@@ -423,6 +423,46 @@ class IntPathEncoder(PathEncoder):
 
         return int(round(num_features))
 
+    def find_start_of_unassigned_range(self, dataset):
+        """
+        Looks at a few trees to determine where new features can be inserted (returns the start
+        of a large empty range that won't collide with any existing features, this will usually
+        be the number one higher than ALL existing PK values).
+        """
+
+        # TODO - handle missing objects, once spatial filters are working as partial clones.
+
+        feature_tree = dataset.feature_tree
+        if not feature_tree:
+            return 0
+        best_empty_range_size = empty_range_size = 0
+        best_last_seen = last_seen = None
+        for t in self.tree_names():
+            if t in feature_tree:
+                if empty_range_size > best_empty_range_size:
+                    best_empty_range_size = empty_range_size
+                    best_last_seen = last_seen
+                last_seen = t
+                empty_range_size = 0
+            else:
+                empty_range_size += 1
+
+        if empty_range_size > best_empty_range_size:
+            best_last_seen = last_seen
+
+        if best_last_seen is None:
+            return 0
+
+        current_tree = feature_tree[best_last_seen]
+        while next(iter(current_tree)).type_str == "tree":
+            max_child = next(
+                current_tree[c] for c in reversed(self.alphabet) if c in current_tree
+            )
+            current_tree = max_child
+        max_pk = max(dataset.decode_path_to_1pk(c.name) for c in current_tree)
+
+        return max_pk + 1
+
 
 # The encoder that was previously used for all datasets.
 PathEncoder.LEGACY_ENCODER = PathEncoder.get(

@@ -93,40 +93,33 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     @classmethod
     def v2_schema_to_sql_spec(cls, schema, v2_obj=None):
         # GPKG requires an integer primary key:
-        if cls._is_conformant_gpkg_pk_schema(schema):
+        has_int_pk = cls._schema_has_int_pk(schema)
+        if has_int_pk:
             prefix_cols = []
-            demote_pk = False
         else:
             prefix_cols = ["auto_int_pk INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"]
-            demote_pk = True
 
         regular_cols = [
-            cls.v2_column_schema_to_sql_spec(col, v2_obj, demote_pk=demote_pk)
+            cls.v2_column_schema_to_sql_spec(col, v2_obj, has_int_pk=has_int_pk)
             for col in schema.columns
         ]
 
         return ", ".join(prefix_cols + regular_cols)
 
     @classmethod
-    def _is_conformant_gpkg_pk_schema(cls, schema):
-        return (
-            len(schema.pk_columns) == 1 and schema.pk_columns[0].data_type == "integer"
-        )
-
-    @classmethod
-    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None, demote_pk=False):
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None, has_int_pk=False):
         col_name = cls.quote(col.name)
         sql_type = cls.v2_type_to_sql_type(col, v2_obj)
         result = f"{col_name} {sql_type}"
 
         if col.pk_index is not None:
-            if demote_pk:
-                # Adding a GPKG conformant primary key will be handled by v2_schema_to_sql_spec.
-                # This column is not conformant so we demote it to just UNIQUE NOT NULL.
-                result += f" UNIQUE NOT NULL CHECK({col_name}<>'')"
-            else:
-                # This is the only type of primary key that GPKG supports.
+            if has_int_pk:
+                # This schema has the only type of primary key that GPKG supports.
                 result = f"{col_name} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
+            else:
+                # Adding a GPKG conformant primary key will be handled by v2_schema_to_sql_spec.
+                # This column is not GPKG conformant so we demote it to just UNIQUE NOT NULL.
+                result += f" UNIQUE NOT NULL CHECK({col_name}<>'')"
 
         return result
 
@@ -215,9 +208,9 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
     @classmethod
     def generate_sqlite_table_info(cls, v2_obj):
         """Generate a sqlite_table_info meta item from a dataset."""
-        if cls._is_conformant_gpkg_pk_schema(v2_obj.schema):
+        has_int_pk = cls._schema_has_int_pk(v2_obj.schema)
+        if has_int_pk:
             prefix_cols = []
-            demote_pk = False
         else:
             prefix_cols = [
                 {
@@ -229,19 +222,18 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
                     "dflt_value": None,
                 }
             ]
-            demote_pk = True
 
         regular_cols = [
-            cls._column_schema_to_gpkg(i + len(prefix_cols), col, demote_pk=demote_pk)
+            cls._column_schema_to_gpkg(i + len(prefix_cols), col, has_int_pk=has_int_pk)
             for i, col in enumerate(v2_obj.schema.columns)
         ]
 
         return prefix_cols + regular_cols
 
     @classmethod
-    def _column_schema_to_gpkg(cls, cid, column_schema, demote_pk=False):
+    def _column_schema_to_gpkg(cls, cid, column_schema, has_int_pk=False):
         sql_type = cls.v2_type_to_sql_type(column_schema)
-        pk = 1 if column_schema.pk_index is not None and not demote_pk else 0
+        pk = 1 if column_schema.pk_index is not None and has_int_pk else 0
         if pk == 1:
             sql_type = "INTEGER"
         not_null = 1 if column_schema.pk_index is not None else 0

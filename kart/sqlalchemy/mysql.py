@@ -60,3 +60,9 @@ class Db_MySql(BaseDb):
                 )
             )
             return {f"{row['TABLE_SCHEMA']}.{row['TABLE_NAME']}": None for row in r}
+
+    @classmethod
+    def drop_all_in_schema(cls, sess, db_schema):
+        """Drops all tables and routines in schema db_schema."""
+        for thing in ("table", "routine"):
+            cls._drop_things_in_schema(cls, sess, db_schema, thing)

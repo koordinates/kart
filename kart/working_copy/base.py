@@ -916,13 +916,17 @@ class BaseWorkingCopy:
                 ):
                     sess.execute(sql, row_dicts)
 
-                t1 = time.monotonic()
                 if dataset.has_geometry:
                     self._create_spatial_index_post(sess, dataset)
+
+                if not dataset.feature_path_encoder.DISTRIBUTED_FEATURES:
+                    # Set up a sequence so that the user doesn't have to supply the next int PK.
+                    self._initialise_sequence(sess, dataset)
 
                 self._create_triggers(sess, dataset)
                 self._update_last_write_time(sess, dataset, commit)
 
+                t1 = time.monotonic()
                 L.info(
                     "Wrote dataset %d of %d in %.1fs: %s",
                     i + 1,
@@ -975,6 +979,15 @@ class BaseWorkingCopy:
 
     def _drop_spatial_index(self, sess, dataset):
         """Inverse of _create_spatial_index_* - deletes the spatial index."""
+        pass
+
+    def _initialise_sequence(self, sess, dataset):
+        """Sets up an auto-increment integer PK sequence so that a useful default PK value is provided."""
+        pass
+
+    def _drop_sequence(self, sess, dataset):
+        """Drop the PK auto-increment sequence associated with this dataset."""
+        # Subclasses only need to override if the sequence is not automatically cleaned up by dropping the table.
         pass
 
     def _update_last_write_time(self, sess, dataset, commit=None):
@@ -1034,6 +1047,7 @@ class BaseWorkingCopy:
                         kart_track.c.table_name == dataset.table_name
                     )
                 )
+                self._drop_sequence(sess, dataset)
 
     def _delete_meta(self, sess, dataset):
         """
@@ -1240,6 +1254,10 @@ class BaseWorkingCopy:
             self._apply_feature_diff(
                 sess, base_ds, target_ds, feature_filter, track_changes_as_dirty
             )
+
+        if not target_ds.feature_path_encoder.DISTRIBUTED_FEATURES:
+            # Set up a sequence so that the user doesn't have to supply the next int PK.
+            self._initialise_sequence(sess, target_ds)
 
         self._update_last_write_time(sess, target_ds, commit)
 

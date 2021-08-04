@@ -1,7 +1,7 @@
 SQL Server Working Copy
 -----------------------
 
-In order to use a [Microsoft SQL Server](https://docs.microsoft.com/sql/sql-server/) working copy, you need to have a SQL Server running. SQL Server 2016 and later is officially supported by Kart (SQL Server 2008 and later are largely compatible but not officially supported).
+In order to use a [Microsoft SQL Server](https://docs.microsoft.com/sql/sql-server/) working copy, you need to have a SQL Server running. SQL Server 2016 and later is officially supported by Kart (SQL Server 2012 and later are largely compatible but not officially supported).
 
 You also need to have the [Microsoft ODBC Driver for SQL Server](https://docs.microsoft.com/sql/connect/odbc/microsoft-odbc-driver-for-sql-server) installed on your system.
 

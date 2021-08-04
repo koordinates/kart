@@ -473,6 +473,7 @@ class TestHelpers:
         ROWCOUNT = 2143
         TEXT_FIELD = "name"
         SAMPLE_PKS = list(range(1, 11))
+        NEXT_UNASSIGNED_PK = 1174
 
     # Test Dataset (gpkg-polygons / polygons)
     class POLYGONS:
@@ -509,6 +510,7 @@ class TestHelpers:
             1457636,
             1458553,
         ]
+        NEXT_UNASSIGNED_PK = 4423294
 
     # Test Dataset (gpkg-spec / table)
     class TABLE:
@@ -539,6 +541,7 @@ class TestHelpers:
         ROWCOUNT = 3141
         TEXT_FIELD = "NAME"
         SAMPLE_PKS = list(range(1, 11))
+        NEXT_UNASSIGNED_PK = 3142
 
     @classmethod
     def metadata(cls, l):
@@ -899,7 +902,9 @@ def new_sqlserver_db_schema(request, sqlserver_db):
         schema = f"kart_test_{sha}"
         with sqlserver_db.connect() as conn:
             # Start by deleting in case it is left over from last test-run...
-            _sqlserver_drop_schema_cascade(conn, schema)
+            Db_SqlServer.drop_all_in_schema(conn, schema)
+            conn.execute(f"DROP SCHEMA IF EXISTS {schema};")
+
             # Actually create only if create=True, otherwise the test will create it
             if create:
                 conn.execute(f"""CREATE SCHEMA "{schema}";""")
@@ -913,23 +918,10 @@ def new_sqlserver_db_schema(request, sqlserver_db):
         finally:
             # Clean up - delete it again if it exists.
             with sqlserver_db.connect() as conn:
-                _sqlserver_drop_schema_cascade(conn, schema)
+                Db_SqlServer.drop_all_in_schema(conn, schema)
+                conn.execute(f"DROP SCHEMA IF EXISTS {schema};")
 
     return ctx
-
-
-def _sqlserver_drop_schema_cascade(conn, db_schema):
-    r = conn.execute(
-        sqlalchemy.text(
-            "SELECT name FROM sys.tables WHERE schema_id=SCHEMA_ID(:schema);"
-        ),
-        {"schema": db_schema},
-    )
-    table_identifiers = ", ".join([f"{db_schema}.{row[0]}" for row in r])
-    if table_identifiers:
-        conn.execute(f"DROP TABLE IF EXISTS {table_identifiers};")
-
-    conn.execute(f"DROP SCHEMA IF EXISTS {db_schema};")
 
 
 @pytest.fixture()

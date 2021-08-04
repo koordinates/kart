@@ -462,6 +462,14 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
         L.info("Dropped spatial index in %.1fs", time.monotonic() - t0)
 
+    def _initialise_sequence(self, sess, dataset):
+        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        if start:
+            sess.execute(
+                "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (:table_name, :seq)",
+                {"table_name": dataset.table_name, "seq": start - 1},
+            )
+
     def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type in ("ins", "upd", "del")
         assert dataset is not None

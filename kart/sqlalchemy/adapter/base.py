@@ -34,7 +34,11 @@ class BaseKartAdapter:
         schema - a kart.schema.Schema object.
         v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
-        result = [cls.v2_column_schema_to_sql_spec(col, v2_obj) for col in schema]
+        has_int_pk = cls._schema_has_int_pk(schema)
+        result = [
+            cls.v2_column_schema_to_sql_spec(col, v2_obj, has_int_pk=has_int_pk)
+            for col in schema
+        ]
 
         if schema.pk_columns:
             pk_col_names = ", ".join((cls.quote(col.name) for col in schema.pk_columns))
@@ -43,7 +47,13 @@ class BaseKartAdapter:
         return ", ".join(result)
 
     @classmethod
-    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None):
+    def _schema_has_int_pk(cls, schema):
+        return (
+            len(schema.pk_columns) == 1 and schema.pk_columns[0].data_type == "integer"
+        )
+
+    @classmethod
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None, has_int_pk=False):
         """
         Given a V2 column schema object, returns a SQL specification that can be used with CREATE TABLE.
         Can include extra constraints (eg non-null, unique) if they are required for some reason.
@@ -53,7 +63,9 @@ class BaseKartAdapter:
         schema - a kart.schema.ColumnSchema object.
         v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
-        return f"{cls.quote(col.name)} {cls.v2_type_to_sql_type(col, v2_obj)}"
+        col_name = cls.quote(col.name)
+        sql_type = cls.v2_type_to_sql_type(col, v2_obj)
+        return f"{col_name} {sql_type}"
 
     @classmethod
     def v2_type_to_sql_type(cls, col, v2_obj=None):

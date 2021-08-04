@@ -1,4 +1,5 @@
 import decimal
+import re
 
 from osgeo.osr import SpatialReference
 from psycopg2.extensions import Binary
@@ -70,6 +71,18 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
     APPROXIMATED_TYPES = {("integer", 8): ("integer", 16)}
 
     ZM_FLAG_TO_STRING = {0: "", 1: "M", 2: "Z", 3: "ZM"}
+
+    @classmethod
+    def v2_column_schema_to_sql_spec(cls, col, v2_obj=None, has_int_pk=False):
+        col_name = cls.quote(col.name)
+        sql_type = cls.v2_type_to_sql_type(col, v2_obj)
+
+        # Make int PKs auto-increment.
+        if has_int_pk and col.pk_index is not None:
+            # SMALLINT, INTEGER, BIGINT -> SMALLSERIAL, SERIAL, BIGSERIAL
+            sql_type = re.sub("INT(EGER)?", "SERIAL", sql_type)
+
+        return f"{col_name} {sql_type}"
 
     @classmethod
     def v2_type_to_sql_type(cls, col, v2_obj=None):

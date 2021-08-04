@@ -140,6 +140,62 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
         # SQL server deletes the spatial index automatically when the table is deleted.
         pass
 
+    def _initialise_sequence(self, sess, dataset):
+        start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
+        if start:
+            seq_name = f"{dataset.table_name}_{dataset.primary_key}_seq"
+            seq_exists = sess.scalar(
+                "SELECT COUNT(*) FROM sys.sequences WHERE object_id = object_id(:full_seq_name)",
+                {"full_seq_name": f"{self.db_schema}.{seq_name}"},
+            )
+            CREATE = "CREATE" if not seq_exists else "ALTER"
+            START_WITH = "START WITH" if not seq_exists else "RESTART WITH"
+            sess.execute(
+                f"{CREATE} SEQUENCE {self.table_identifier(seq_name)} {START_WITH} {start};",
+            )
+
+            col_id = next(
+                i + 1
+                for i, col in enumerate(dataset.schema.columns)
+                if col.pk_index is not None
+            )
+            constraint_name = sess.scalar(
+                """
+                SELECT name FROM sys.default_constraints
+                WHERE parent_object_id = object_id(:full_table_name) AND parent_column_id = :col_id;
+                """,
+                {
+                    "full_table_name": f"{self.db_schema}.{dataset.table_name}",
+                    "col_id": col_id,
+                },
+            )
+            if constraint_name:
+                sess.execute(
+                    f"""
+                    ALTER TABLE {self.table_identifier(dataset)}
+                    DROP CONSTRAINT {self.quote(constraint_name)}
+                    """
+                )
+
+            constraint_name = f"{dataset.table_name}_{dataset.primary_key}_dflt"
+            sess.execute(
+                f"""
+                ALTER TABLE {self.table_identifier(dataset)}
+                ADD CONSTRAINT {self.quote(constraint_name)}
+                DEFAULT NEXT VALUE FOR {self.table_identifier(seq_name)}
+                FOR {self.quote(dataset.primary_key)};
+                """
+            )
+
+    def _drop_sequence(self, sess, dataset):
+        seq_name = f"{dataset.table_name}_{dataset.primary_key}_seq"
+        seq_exists = sess.scalar(
+            "SELECT COUNT(*) FROM sys.sequences WHERE object_id = object_id(:full_seq_name)",
+            {"full_seq_name": f"{self.db_schema}.{seq_name}"},
+        )
+        if seq_exists:
+            sess.execute(f"DROP SEQUENCE {self.table_identifier(seq_name)};")
+
     def _sno_tracking_name(self, trigger_type, dataset):
         assert trigger_type == "trigger"
         assert dataset is not None
