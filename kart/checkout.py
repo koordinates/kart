@@ -464,10 +464,12 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
                 default=True,
             )
 
+        check_if_dirty = not discard_changes
+
         if delete_existing is False:
             allow_unconnectable = old_wc_loc != new_wc_loc
             status = old_wc.status(
-                allow_unconnectable=allow_unconnectable, check_if_dirty=True
+                allow_unconnectable=allow_unconnectable, check_if_dirty=check_if_dirty
             )
             if old_wc_loc == new_wc_loc and status & WorkingCopyStatus.WC_EXISTS:
                 raise InvalidOperation(
@@ -482,7 +484,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
 
         if delete_existing is True:
             try:
-                status = old_wc.status(check_if_dirty=True)
+                status = old_wc.status(check_if_dirty=check_if_dirty)
             except DbConnectionError as e:
                 click.echo(
                     f"Encountered an error while trying to delete existing working copy at {old_wc}"
