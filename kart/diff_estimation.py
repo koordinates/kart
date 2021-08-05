@@ -136,9 +136,9 @@ def estimate_diff_feature_counts(
 
         if accuracy == "exact" and working_copy:
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
-            from kart.diff import get_dataset_diff
+            from kart.diff_util import get_dataset_diff
 
-            ds_diff = get_dataset_diff(base_rs, target_rs, working_copy, dataset_path)
+            ds_diff = get_dataset_diff(dataset_path, base_rs, target_rs, working_copy)
             ds_total = len(ds_diff.get("feature", []))
 
         elif accuracy == "exact":

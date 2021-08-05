@@ -1,71 +1,12 @@
-import logging
 import sys
 
 import click
 
 from .crs_util import CoordinateReferenceString
-from .diff_structs import RepoDiff, DatasetDiff
-from .key_filters import RepoKeyFilter, DatasetKeyFilter
+
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from . import diff_estimation
-
-
-L = logging.getLogger("kart.diff")
-
-
-def get_dataset_diff(
-    base_rs, target_rs, working_copy, dataset_path, ds_filter=DatasetKeyFilter.MATCH_ALL
-):
-    diff = DatasetDiff()
-
-    if base_rs != target_rs:
-        # diff += base_rs<>target_rs
-        base_ds = base_rs.datasets.get(dataset_path)
-        target_ds = target_rs.datasets.get(dataset_path)
-
-        params = {}
-        if not base_ds:
-            base_ds, target_ds = target_ds, base_ds
-            params["reverse"] = True
-
-        diff_cc = base_ds.diff(target_ds, ds_filter=ds_filter, **params)
-        L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
-        diff += diff_cc
-
-    if working_copy:
-        # diff += target_rs<>working_copy
-        target_ds = target_rs.datasets.get(dataset_path)
-        diff_wc = working_copy.diff_db_to_tree(target_ds, ds_filter=ds_filter)
-        L.debug(
-            "commit<>working_copy diff (%s): %s",
-            dataset_path,
-            repr(diff_wc),
-        )
-        diff += diff_wc
-
-    diff.prune()
-    return diff
-
-
-def get_repo_diff(base_rs, target_rs, repo_key_filter=RepoKeyFilter.MATCH_ALL):
-    """Generates a Diff for every dataset in both RepoStructures."""
-    base_ds_paths = {ds.path for ds in base_rs.datasets}
-    target_ds_paths = {ds.path for ds in target_rs.datasets}
-    all_ds_paths = base_ds_paths | target_ds_paths
-
-    if not repo_key_filter.match_all:
-        all_ds_paths = all_ds_paths & repo_key_filter.keys()
-
-    result = RepoDiff()
-    for ds_path in sorted(all_ds_paths):
-        ds_diff = get_dataset_diff(
-            base_rs, target_rs, None, ds_path, repo_key_filter[ds_path]
-        )
-        result[ds_path] = ds_diff
-
-    result.prune()
-    return result
 
 
 def feature_count_diff(

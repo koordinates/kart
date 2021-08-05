@@ -253,13 +253,17 @@ class RichDict(UserDict):
         self[key] = child
         return child
 
-    def prune(self):
-        """Recursively deletes any empty RichDicts that are children of self."""
+    def prune(self, recurse=True):
+        """
+        Deletes any empty RichDicts that are children of self.
+        If recurse is True, also deletes non-empty RichDicts, as long as they only contain empty RichDicts in the end.
+        """
         if not issubclass(self.child_type, RichDict):
             return
         items = list(self.items())
         for key, value in items:
-            value.prune()
+            if recurse:
+                value.prune()
             if not value:
                 del self[key]
 

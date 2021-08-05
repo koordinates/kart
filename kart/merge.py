@@ -6,7 +6,7 @@ import click
 from . import commit
 from .cli_util import call_and_exit_flag, StringFromFile
 from .conflicts import list_conflicts
-from .diff import get_repo_diff
+from .diff_util import get_repo_diff
 from .exceptions import InvalidOperation
 from .merge_util import (
     AncestorOursTheirs,

@@ -6,7 +6,8 @@ import sys
 
 import click
 
-from .diff_structs import RepoDiff, DatasetDiff, WORKING_COPY_EDIT
+from . import diff_util
+from .diff_structs import RepoDiff, WORKING_COPY_EDIT
 from .exceptions import (
     CrsError,
     InvalidOperation,
@@ -65,8 +66,8 @@ class BaseDiffWriter:
     def __init__(
         self,
         repo,
-        commit_spec,
-        user_key_filters,
+        commit_spec="",
+        user_key_filters=(),
         output_path="-",
         *,
         json_style="pretty",
@@ -83,14 +84,9 @@ class BaseDiffWriter:
 
         self.spatial_filter = repo.spatial_filter
 
-        base_ds_paths = {ds.path for ds in self.base_rs.datasets}
-        target_ds_paths = {ds.path for ds in self.target_rs.datasets}
-        all_ds_paths = base_ds_paths | target_ds_paths
-
-        if not self.repo_key_filter.match_all:
-            all_ds_paths = all_ds_paths & self.repo_key_filter.keys()
-
-        self.all_ds_paths = sorted(list(all_ds_paths))
+        self.all_ds_paths = diff_util.get_all_ds_paths(
+            self.base_rs, self.target_rs, self.repo_key_filter
+        )
 
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
@@ -196,16 +192,15 @@ class BaseDiffWriter:
         """For outputting ds_diff, the diff of a particular dataset."""
         raise NotImplementedError()
 
-    def get_repo_diff(self, prune=True):
-        """Returns the RepoDiff object for the entire repo."""
-        diff = RepoDiff()
-        for ds_path in self.all_ds_paths:
-            diff[ds_path] = self.get_dataset_diff(ds_path, prune=False)
-        if prune:
-            diff.prune()
-        return diff
+    def get_repo_diff(self):
+        """
+        Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
+        """
+        return diff_util.get_repo_diff(
+            self.base_rs, self.target_rs, self.working_copy, self.repo_key_filter
+        )
 
-    def get_dataset_diff(self, dataset_path, prune=True):
+    def get_dataset_diff(self, ds_path):
         """
         Returns the DatasetDiff object for the dataset at path dataset_path.
 
@@ -218,37 +213,13 @@ class BaseDiffWriter:
         which can be used to output streaming diffs.
         """
 
-        diff = DatasetDiff()
-        ds_filter = self.repo_key_filter[dataset_path]
-
-        if self.base_rs != self.target_rs:
-            # diff += base_rs<>target_rs
-            base_ds = self.base_rs.datasets.get(dataset_path)
-            target_ds = self.target_rs.datasets.get(dataset_path)
-
-            params = {}
-            if not base_ds:
-                base_ds, target_ds = target_ds, base_ds
-                params["reverse"] = True
-
-            diff_cc = base_ds.diff(target_ds, ds_filter=ds_filter, **params)
-            L.debug("commit<>commit diff (%s): %s", dataset_path, repr(diff_cc))
-            diff += diff_cc
-
-        if self.working_copy:
-            # diff += target_rs<>working_copy
-            target_ds = self.target_rs.datasets.get(dataset_path)
-            diff_wc = self.working_copy.diff_db_to_tree(target_ds, ds_filter=ds_filter)
-            L.debug(
-                "commit<>working_copy diff (%s): %s",
-                dataset_path,
-                repr(diff_wc),
-            )
-            diff += diff_wc
-
-        if prune:
-            diff.prune()
-        return diff
+        return diff_util.get_dataset_diff(
+            ds_path,
+            self.base_rs,
+            self.target_rs,
+            self.working_copy,
+            self.repo_key_filter[ds_path],
+        )
 
     def _unfiltered_ds_feature_deltas(self, ds_path, ds_diff):
         if "feature" not in ds_diff:
