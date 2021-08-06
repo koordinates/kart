@@ -29,7 +29,7 @@ importlib-metadata==4.0.1
     #   pytest
 iniconfig==1.1.1
     # via pytest
-lovely-pytest-docker==0.2.0
+lovely-pytest-docker==0.2.1
     # via -r requirements/test.in
 packaging==20.9
     # via
@@ -37,12 +37,22 @@ packaging==20.9
     #   pytest-sugar
 pluggy==0.13.1
     # via pytest
-py-cpuinfo==8.0.0
-    # via pytest-benchmark
 py==1.10.0
     # via pytest
+py-cpuinfo==8.0.0
+    # via pytest-benchmark
 pyparsing==2.4.7
     # via packaging
+pytest==6.2.4
+    # via
+    #   -r requirements/test.in
+    #   lovely-pytest-docker
+    #   pytest-benchmark
+    #   pytest-cov
+    #   pytest-helpers-namespace
+    #   pytest-profiling
+    #   pytest-shard
+    #   pytest-sugar
 pytest-benchmark[aspect]==3.4.1
     # via -r requirements/test.in
 pytest-cov==2.12.1
@@ -55,16 +65,6 @@ pytest-shard==0.1.2
     # via -r requirements/test.in
 pytest-sugar==0.9.4
     # via -r requirements/test.in
-pytest==6.2.4
-    # via
-    #   -r requirements/test.in
-    #   lovely-pytest-docker
-    #   pytest-benchmark
-    #   pytest-cov
-    #   pytest-helpers-namespace
-    #   pytest-profiling
-    #   pytest-shard
-    #   pytest-sugar
 six==1.15.0
     # via
     #   -c requirements/../requirements.txt
