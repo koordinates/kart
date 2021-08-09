@@ -35,7 +35,7 @@ class BaseDiffWriter:
     # This must be set to True when we need to keep track of which diff deltas were inside or outside the spatial
     # filter, and for which reason(s) - when it is False, we don't check all the possible reasons, we stop as soon
     # as we know the delta does or does not match the spatial filter.
-    RECORD_SPATIAL_FILTER_STATS = False
+    record_spatial_filter_stats = False
 
     @classmethod
     def get_diff_writer_class(cls, output_format):
@@ -100,10 +100,8 @@ class BaseDiffWriter:
             and self.working_copy is not None
         ):
             # When generating a WC diff with a spatial filter active, we need to keep track of PK conflicts:
-            self.RECORD_SPATIAL_FILTER_STATS = True
-            self.spatial_filter_pk_conflicts = {
-                ds_path: [] for ds_path in self.all_ds_paths
-            }
+            self.record_spatial_filter_stats = True
+            self.spatial_filter_pk_conflicts = {p: [] for p in self.all_ds_paths}
 
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
@@ -299,7 +297,7 @@ class BaseDiffWriter:
         def new_value_matches(delta):
             return bool(delta.new_value) and new_spatial_filter.matches(delta.new_value)
 
-        if self.RECORD_SPATIAL_FILTER_STATS:
+        if self.record_spatial_filter_stats:
             # Slower version that calls self.record_spatial_filter_stat on every feature.
             for key, delta in unfiltered_deltas:
                 wce = bool(delta.flags & WORKING_COPY_EDIT)

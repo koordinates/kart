@@ -42,26 +42,23 @@ class CommitDiffWriter(BaseDiffWriter):
         super().__init__(*args, **kwargs)
 
         if not self.spatial_filter.match_all:
-            self.RECORD_SPATIAL_FILTER_STATS = True
-            self.spatial_filter_pk_conflicts = {
-                ds_path: [] for ds_path in self.all_ds_paths
-            }
-            self.remove_from_wc_post_commit = {
-                ds_path: [] for ds_path in self.all_ds_paths
-            }
+            self.record_spatial_filter_stats = True
+            self.spatial_filter_pk_conflicts = {p: [] for p in self.all_ds_paths}
+            self.remove_from_wc_post_commit = {p: [] for p in self.all_ds_paths}
         else:
-            self.RECORD_SPATIAL_FILTER_STATS = False
-            self.spatial_filter_pk_conflicts = self.remove_from_wc_post_commit = None
+            self.record_spatial_filter_stats = False
+            self.spatial_filter_pk_conflicts = None
+            self.remove_from_wc_post_commit = None
 
     def get_repo_diff(self):
         repo_diff = super().get_repo_diff()
 
-        if not self.RECORD_SPATIAL_FILTER_STATS:
+        if not self.record_spatial_filter_stats:
             return repo_diff
 
         for ds_path, ds_diff in repo_diff.items():
             # Applies the spatial filter but ignores the result, just so that spatial_filter_stats are recorded.
-            for _ in self.filtered_ds_feature_deltas(ds_path, repo_diff[ds_path]):
+            for _ in self.filtered_ds_feature_deltas(ds_path, ds_diff):
                 pass
 
         return repo_diff
@@ -93,9 +90,8 @@ class CommitDiffWriter(BaseDiffWriter):
     is_flag=True,
     default=False,
     help=(
-        "Usually recording a commit that has the exact same tree as its sole "
-        "parent commit is a mistake, and the command prevents you from making "
-        "such a commit. This option bypasses the safety."
+        "Usually it is a mistake to record a commit that has the exact same tree as its sole parent commit, "
+        "so by default it is not allowed. This option bypasses the safety."
     ),
 )
 @click.option(
@@ -103,10 +99,10 @@ class CommitDiffWriter(BaseDiffWriter):
     is_flag=True,
     default=False,
     help=(
-        "Usually, inserting some new features into the working copy that have the same primary key values as existing "
-        "features that are not in the working copy because they do not match the spatial filter is a mistake - if "
-        "these were committed, it could accidentally overwrite existing features you were unaware of. This option "
-        "bypasses the safety."
+        "Usually, it is a mistake to insert features into the working copy that have the same primary key "
+        "as something that is outside the spatial filter. If such features were committed, it could "
+        "accidentally overwrite existing features you were unaware of. So by default, this is not allowed. "
+        "This option bypasses the safety."
     ),
 )
 @click.option(
@@ -155,7 +151,7 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
         commit_diff_writer.write_warnings_footer()
         raise InvalidOperation(
             "Aborting commit due to conflicting primary key values - use --allow-pk-conflicts to commit anyway "
-            "(this will overwrite the existing features with these PK values)",
+            "(this will overwrite some existing features that are outside of the current spatial filter)",
             exit_code=SPATIAL_FILTER_PK_CONFLICT,
         )
 

@@ -110,7 +110,7 @@ class PatchWriter(JsonDiffWriter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.nonmatching_feature_counts = {ds_path: 0 for ds_path in self.all_ds_paths}
+        self.nonmatching_feature_counts = {p: 0 for p in self.all_ds_paths}
 
     def add_json_header(self, obj):
         if self.commit is not None:
