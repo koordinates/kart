@@ -7,7 +7,7 @@ import sys
 import click
 
 from . import diff_util
-from .diff_structs import RepoDiff, WORKING_COPY_EDIT
+from .diff_structs import WORKING_COPY_EDIT
 from .exceptions import (
     CrsError,
     InvalidOperation,
@@ -31,6 +31,11 @@ class BaseDiffWriter:
     - finding geometry transforms needed for each dataset
     - exiting with the right code
     """
+
+    # This must be set to True when we need to keep track of which diff deltas were inside or outside the spatial
+    # filter, and for which reason(s) - when it is False, we don't check all the possible reasons, we stop as soon
+    # as we know the delta does or does not match the spatial filter.
+    RECORD_SPATIAL_FILTER_STATS = False
 
     @classmethod
     def get_diff_writer_class(cls, output_format):
@@ -87,6 +92,18 @@ class BaseDiffWriter:
         self.all_ds_paths = diff_util.get_all_ds_paths(
             self.base_rs, self.target_rs, self.repo_key_filter
         )
+
+        self.spatial_filter_pk_conflicts = None
+        if (
+            not self.spatial_filter.match_all
+            and self.base_rs == self.target_rs
+            and self.working_copy is not None
+        ):
+            # When generating a WC diff with a spatial filter active, we need to keep track of PK conflicts:
+            self.RECORD_SPATIAL_FILTER_STATS = True
+            self.spatial_filter_pk_conflicts = {
+                ds_path: [] for ds_path in self.all_ds_paths
+            }
 
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
@@ -171,8 +188,30 @@ class BaseDiffWriter:
         )
 
     def write_header(self):
-        """For writing any header that is not part of the diff itself eg version info, commit info."""
+        """
+        For writing any header that is not part of the diff itself eg version info, commit info.
+        Not used for those JSON diffs where this info can't be written separately (it has to be part of the same JSON
+        root object and output by the same call to json.dump)
+        """
         pass
+
+    def write_warnings_footer(self):
+        """For writing any footer that is not part of the diff itself. Generally just writes warnings to stderr."""
+        pk_conflicts = self.spatial_filter_pk_conflicts
+        if pk_conflicts and any(pk_conflicts.values()):
+            click.secho(
+                "Warning: There are new features inserted in the working copy that have primary key values that "
+                "conflict with existing features that are outside the current spatial filter: ",
+                bold=True,
+                err=True,
+            )
+            for ds_path, pk_list in pk_conflicts.items():
+                if pk_list:
+                    pk_list = ", ".join(str(pk) for pk in pk_list)
+                    click.echo(
+                        f"  In dataset {ds_path} the conflicting PK values are: {pk_list}",
+                        err=True,
+                    )
 
     def write_diff(self):
         """Default implementation for writing a diff. Subclasses can override."""
@@ -180,6 +219,7 @@ class BaseDiffWriter:
         self.has_changes = False
         for ds_path in self.all_ds_paths:
             self.has_changes |= self.write_ds_diff_for_path(ds_path)
+        self.write_warnings_footer()
 
     def write_ds_diff_for_path(self, ds_path):
         """Default implementation for writing the diff for a particular dataset. Subclasses can override."""
@@ -237,8 +277,10 @@ class BaseDiffWriter:
         if "feature" not in ds_diff:
             return
 
+        unfiltered_deltas = self._unfiltered_ds_feature_deltas(ds_path, ds_diff)
+
         if self.spatial_filter.match_all:
-            yield from self._unfiltered_ds_feature_deltas(ds_path, ds_diff)
+            yield from unfiltered_deltas
             return
 
         old_spatial_filter, new_spatial_filter = self.get_spatial_filters(
@@ -248,28 +290,47 @@ class BaseDiffWriter:
             # This can happen if neither the old nor the new version of the dataset have
             # any geometry - all of their features are guaranteed to match the spatial filter,
             # so no point doing any filtering here.
-            yield from self._unfiltered_ds_feature_deltas(ds_path, ds_diff)
+            yield from unfiltered_deltas
             return
 
-        nonmatching_feature_count = 0
-        for key, delta in self._unfiltered_ds_feature_deltas(ds_path, ds_diff):
-            matches = bool(delta.flags & WORKING_COPY_EDIT)
-            matches = matches or bool(
-                delta.old_value and old_spatial_filter.matches(delta.old_value)
-            )
-            matches = matches or bool(
-                delta.new_value and new_spatial_filter.matches(delta.new_value)
-            )
-            if matches:
-                yield key, delta
-            else:
-                nonmatching_feature_count += 1
+        def old_value_matches(delta):
+            return bool(delta.old_value) and old_spatial_filter.matches(delta.old_value)
 
-        self.report_nonmatching_features(ds_path, nonmatching_feature_count)
+        def new_value_matches(delta):
+            return bool(delta.new_value) and new_spatial_filter.matches(delta.new_value)
 
-    def report_nonmatching_features(self, ds_path, nonmatching_feature_count):
-        # Subclasses can override to warn about features that didn't match the spatial filter.
-        pass
+        if self.RECORD_SPATIAL_FILTER_STATS:
+            # Slower version that calls self.record_spatial_filter_stat on every feature.
+            for key, delta in unfiltered_deltas:
+                wce = bool(delta.flags & WORKING_COPY_EDIT)
+                ovm = old_value_matches(delta)
+                nvm = new_value_matches(delta)
+                self.record_spatial_filter_stat(ds_path, key, delta, ovm, nvm)
+                if wce or ovm or nvm:
+                    yield key, delta
+
+        else:
+            # Slightly faster optimisation that may not bother to test old_value_matches or new_value_matches.
+            for key, delta in unfiltered_deltas:
+                if (
+                    bool(delta.flags & WORKING_COPY_EDIT)
+                    or old_value_matches(delta)
+                    or new_value_matches(delta)
+                ):
+                    yield key, delta
+                else:
+                    self.record_spatial_filter_stat(ds_path, key, delta, False, False)
+
+    def record_spatial_filter_stat(
+        self, ds_path, key, delta, old_value_matches, new_value_matches
+    ):
+        """
+        Records which / how many features were inside / outside the spatial filter for which reasons.
+        These records are used by write_warnings_footer to show warnings to the user.
+        """
+        if self.spatial_filter_pk_conflicts is not None:
+            if delta.old_value and not old_value_matches:
+                self.spatial_filter_pk_conflicts[ds_path].append(key)
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
         from kart.schema import Schema

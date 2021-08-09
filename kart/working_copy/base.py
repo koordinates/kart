@@ -761,7 +761,7 @@ class BaseWorkingCopy:
                 return
 
             for dataset_path, dataset_filter in repo_key_filter.items():
-                table_name = dataset_path.strip("/").replace("/", "__")
+                table_name = BaseDataset.dataset_path_to_table_name(dataset_path)
                 feature_filter = dataset_filter.get(
                     "feature", dataset_filter.child_type()
                 )
@@ -1048,6 +1048,17 @@ class BaseWorkingCopy:
                     )
                 )
                 self._drop_sequence(sess, dataset)
+
+    def drop_features(self, pk_lists):
+        """
+        Drop the given features from the given datasets.
+        Doesn't do any further work like modifying the kart_track table in any way.
+        """
+        base_tree_id = self.get_db_tree()
+        base_datasets = self.repo.datasets(base_tree_id)
+        with self.session() as sess:
+            for ds_path, pk_list in pk_lists.items():
+                self._delete_features(sess, base_datasets[ds_path], pk_list)
 
     def _delete_meta(self, sess, dataset):
         """

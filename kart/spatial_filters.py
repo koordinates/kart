@@ -334,6 +334,8 @@ class SpatialFilter:
             return True
 
         feature_geometry = feature[self.geom_column_name]
+        if feature_geometry is None:
+            return True
 
         err = None
         feature_env = None
