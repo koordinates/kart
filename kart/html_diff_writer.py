@@ -67,6 +67,8 @@ class HtmlDiffWriter(BaseDiffWriter):
             fo.close()
             webbrowser.open_new(f"file://{self.output_path.resolve()}")
 
+        self.write_warnings_footer()
+
 
 HtmlDiffWriter.filtered_ds_feature_deltas_as_geojson = (
     GeojsonDiffWriter.filtered_ds_feature_deltas_as_geojson

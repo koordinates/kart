@@ -682,7 +682,9 @@ def _find_layer(conn):
 def insert(request, cli_runner):
     H = pytest.helpers.helpers()
 
-    def func(conn, layer=None, commit=True, reset_index=None, insert_str=None):
+    def func(
+        conn, layer=None, commit=True, reset_index=None, with_pk=None, insert_str=None
+    ):
         if reset_index is not None:
             func.index = reset_index
 
@@ -694,8 +696,12 @@ def insert(request, cli_runner):
         sql = metadata.INSERT
         pk_start = 98000
 
-        # th
-        new_pk = pk_start + func.index
+        if with_pk is not None:
+            new_pk = with_pk
+        else:
+            new_pk = pk_start + func.index
+            func.index += 1
+
         rec[pk_field] = new_pk
         if insert_str:
             rec[metadata.TEXT_FIELD] = insert_str
@@ -703,8 +709,6 @@ def insert(request, cli_runner):
         r = conn.execute(sql, rec)
         assert r.rowcount == 1
         func.inserted_fids.append(new_pk)
-
-        func.index += 1
 
         if commit:
             if hasattr(conn, "commit"):

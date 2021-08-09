@@ -62,6 +62,7 @@ class JsonDiffWriter(BaseDiffWriter):
             json_style=self.json_style,
             encoder_kwargs={"default": self.default},
         )
+        self.write_warnings_footer()
 
     def default(self, obj):
         # Part of JsonEncoder interface - adapt objects that couldn't otherwise be encoded.
@@ -108,7 +109,8 @@ class PatchWriter(JsonDiffWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.nonmatching_feature_counts = {}
+
+        self.nonmatching_feature_counts = {p: 0 for p in self.all_ds_paths}
 
     def add_json_header(self, obj):
         if self.commit is not None:
@@ -124,19 +126,27 @@ class PatchWriter(JsonDiffWriter):
                 "message": self.commit.message,
             }
 
-    def report_nonmatching_features(self, ds_path, nonmatching_feature_count):
-        self.nonmatching_feature_counts[ds_path] = nonmatching_feature_count
+    def record_spatial_filter_stat(
+        self, ds_path, key, delta, old_value_matches, new_value_matches
+    ):
+        """
+        Records which / how many features were inside / outside the spatial filter for which reasons.
+        These records are used by write_warnings_footer to show warnings to the user.
+        """
+        if not old_value_matches and not new_value_matches:
+            self.nonmatching_feature_counts[ds_path] += 1
 
-    def write_diff(self):
-        super().write_diff()
-        if self.nonmatching_feature_counts:
-            click.echo(
+    def write_warnings_footer(self):
+        super().write_warnings_footer()
+        if any(self.nonmatching_feature_counts.values()):
+            click.secho(
                 "Warning: The generated patch does not contain the entire commit: ",
+                bold=True,
                 err=True,
             )
             for ds_path, count in self.nonmatching_feature_counts.items():
                 click.echo(
-                    f"{count} changed features in dataset {ds_path} not included due to spatial filter",
+                    f"  In dataset {ds_path} there are {count} changed features not included due to spatial filter",
                     err=True,
                 )
 
@@ -268,6 +278,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
                 self.output_path,
                 json_style=self.json_style,
             )
+        self.write_warnings_footer()
 
     def write_file_per_dataset(self):
         has_changes = False

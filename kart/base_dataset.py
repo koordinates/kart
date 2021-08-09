@@ -66,7 +66,7 @@ class BaseDataset(ImportSource):
             f"{path}/{self.DATASET_DIRNAME}" if self.DATASET_DIRNAME else self.path
         )
 
-        self.table_name = self.path.replace("/", "__")
+        self.table_name = self.dataset_path_to_table_name(self.path)
         self.L = logging.getLogger(self.__class__.__qualname__)
 
         self.repo = repo
@@ -76,6 +76,10 @@ class BaseDataset(ImportSource):
         result = cls(None, path, repo=repo)
         result._schema = schema
         return result
+
+    @classmethod
+    def dataset_path_to_table_name(cls, ds_path):
+        return ds_path.strip("/").replace("/", "__")
 
     def __repr__(self):
         return f"<{self.__class__.__name__}: {self.path}>"

@@ -2,7 +2,12 @@ import json
 import pytest
 
 from kart.repo import KartRepo
-from kart.exceptions import INVALID_ARGUMENT, NO_SPATIAL_FILTER, INVALID_OPERATION
+from kart.exceptions import (
+    INVALID_ARGUMENT,
+    NO_SPATIAL_FILTER,
+    INVALID_OPERATION,
+    SPATIAL_FILTER_PK_CONFLICT,
+)
 
 H = pytest.helpers.helpers()
 
@@ -359,3 +364,54 @@ def test_change_spatial_filter(data_archive, cli_runner, insert):
         r = cli_runner.invoke(["checkout", "main", f"--spatial-filter={crs};{geom}"])
         assert r.exit_code == INVALID_OPERATION
         assert "You have uncommitted changes in your working copy" in r.stderr
+
+
+def test_pk_conflict_due_to_spatial_filter(
+    data_archive, cli_runner, insert, edit_points
+):
+    with data_archive("points.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+        H.clear_working_copy()
+        repo.config["kart.spatialfilter.geometry"] = SPATIAL_FILTER_GEOMETRY["points"]
+        repo.config["kart.spatialfilter.crs"] = SPATIAL_FILTER_CRS["points"]
+
+        r = cli_runner.invoke(["checkout", "main"])
+        assert r.exit_code == 0, r.stderr
+        head_tree_id = repo.head_tree.id
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == 302
+            # Both of these new features are outside the spatial filter.
+            # One of them - PK=1 - is a conflict with an existing feature (that is outside the spatial filter).
+            insert(sess, commit=False, with_pk=1)
+            insert(sess, commit=False, with_pk=98001)
+            assert H.row_count(sess, H.POINTS.LAYER) == 304
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0
+        assert "Warning: " in r.stderr
+        assert (
+            "In dataset nz_pa_points_topo_150k the conflicting PK values are: 1"
+            in r.stderr
+        )
+
+        r = cli_runner.invoke(["commit", "-m", "test"])
+        assert r.exit_code == SPATIAL_FILTER_PK_CONFLICT
+        assert (
+            "In dataset nz_pa_points_topo_150k the conflicting PK values are: 1"
+            in r.stderr
+        )
+        assert "Aborting commit due to conflicting primary key values" in r.stderr
+        assert repo.head_tree.id == head_tree_id
+
+        r = cli_runner.invoke(["commit", "-m", "test", "--allow-pk-conflicts"])
+        assert r.exit_code == 0
+        assert repo.head_tree.id != head_tree_id
+
+        assert (
+            "Removing 2 features from the working copy that no longer match the spatial filter..."
+            in r.stdout
+        )
+
+        with repo.working_copy.session() as sess:
+            assert H.row_count(sess, H.POINTS.LAYER) == 302
