@@ -156,6 +156,9 @@ class Geometry(bytes):
     def flags(self):
         return self[3]
 
+    def is_empty(self):
+        return bool(self.flags & _GPKG_EMPTY_BIT)
+
     def is_little_endian(self):
         return bool(self.flags & _GPKG_LE_BIT)
 

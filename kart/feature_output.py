@@ -2,7 +2,7 @@ import json
 
 
 from .exceptions import InvalidOperation
-from .geometry import Geometry, ogr_to_hex_wkb
+from .geometry import Geometry, GeometryType, ogr_to_hex_wkb
 from .utils import ungenerator
 
 
@@ -19,13 +19,11 @@ def feature_field_as_text(row, key, prefix):
     val = row[key]
 
     if isinstance(val, Geometry):
-        g = val.to_ogr()
-        geom_typ = g.GetGeometryName()
-        if g.IsEmpty():
+        geom_typ = GeometryType(val.geometry_type).name
+        if val.is_empty():
             val = f"{geom_typ} EMPTY"
         else:
             val = f"{geom_typ}(...)"
-        del g
     elif isinstance(val, bytes):
         val = "BLOB(...)"
 
