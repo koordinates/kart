@@ -4,7 +4,12 @@ We welcome all contributions, bug reports, and suggestions!
 
 ## Installing the development version
 
-By default, vendored dependencies are downloaded from recent CI artifacts to save you a lot of time and effort building them. If you're keen, explore the make targets in `vendor/` to build/assemble them manually.
+By default, vendored dependencies are downloaded from recent CI artifacts to save you a lot of time and effort building them.
+
+If for some reason you do need to build them locally, `cd vendor` and run:
+
+* MacOS/Linux: `make "build-$(uname -s)"`
+* Windows: `nmake /f makefile.vc`
 
 ### macOS
 
