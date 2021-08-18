@@ -80,7 +80,7 @@ class BaseDiffWriter:
     ):
         self.repo = repo
         self.commit_spec = commit_spec
-        self.base_rs, self.target_rs, self.working_copy = self._parse_diff_commit_spec(
+        self.base_rs, self.target_rs, self.working_copy = self.parse_diff_commit_spec(
             repo, commit_spec
         )
 
@@ -135,7 +135,7 @@ class BaseDiffWriter:
         return output_path
 
     @classmethod
-    def _parse_diff_commit_spec(cls, repo, commit_spec):
+    def parse_diff_commit_spec(cls, repo, commit_spec):
         # Parse <commit> or <commit>...<commit>
         commit_spec = commit_spec or "HEAD"
         commit_parts = re.split(r"(\.{2,3})", commit_spec)

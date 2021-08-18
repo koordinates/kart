@@ -1,6 +1,7 @@
 import json
 import logging
 
+import pygit2
 from sqlalchemy.exc import OperationalError
 
 from .db import annotations_session, KartAnnotation
@@ -12,21 +13,23 @@ class DiffAnnotations:
     def __init__(self, repo):
         self.repo = repo
 
-    def _object_id(self, base_rs, target_rs):
+    def _object_id(self, base, target):
         # this is actually symmetric, so we can marginally increase hit rate by sorting first
-        tree_ids = sorted(rs.tree.id for rs in (base_rs, target_rs))
+        base = base.peel(pygit2.Tree)
+        target = target.peel(pygit2.Tree)
+        tree_ids = sorted(r.id for r in (base, target))
         return f"{tree_ids[0]}...{tree_ids[1]}"
 
-    def store(self, *, base_rs, target_rs, annotation_type, data):
+    def store(self, *, base, target, annotation_type, data):
         """
         Stores a diff annotation to the repo's sqlite database,
         and returns the annotation itself.
 
-        base_rs: base RepoStructure object for this diff (revA in a 'revA...revB' diff)
-        target_rs: target RepoStructure object for this diff (revB in a 'revA...revB' diff)
+        base: base Tree or Commit object for this diff (revA in a 'revA...revB' diff)
+        target: target Tree or Commit object for this diff (revB in a 'revA...revB' diff)
         """
         assert isinstance(data, dict)
-        object_id = self._object_id(base_rs, target_rs)
+        object_id = self._object_id(base, target)
         data = json.dumps(data)
         with annotations_session(self.repo) as session:
             if session.is_readonly:
@@ -57,16 +60,16 @@ class DiffAnnotations:
                         raise
         return data
 
-    def get(self, *, base_rs, target_rs, annotation_type):
+    def get(self, *, base, target, annotation_type):
         """
         Returns a diff annotation from the sqlite database.
         Returns None if it isn't found.
 
-        base_rs: base RepoStructure object for this diff (revA in a 'revA...revB' diff)
-        target_rs: target RepoStructure object for this diff (revB in a 'revA...revB' diff)
+        base: base Tree or Commit object for this diff (revA in a 'revA...revB' diff)
+        target: target Tree or Commit object for this diff (revB in a 'revA...revB' diff)
         """
         with annotations_session(self.repo) as session:
-            object_id = self._object_id(base_rs, target_rs)
+            object_id = self._object_id(base, target)
             try:
                 annotations = list(
                     session.query(KartAnnotation).filter(

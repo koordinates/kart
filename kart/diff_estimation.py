@@ -1,5 +1,7 @@
 import subprocess
 
+import pygit2
+
 from kart.exceptions import SubprocessError
 
 
@@ -92,8 +94,9 @@ def get_approximate_diff_blob_count(
 
 
 def estimate_diff_feature_counts(
-    base_rs,
-    target_rs,
+    repo,
+    base,
+    target,
     *,
     working_copy=None,
     accuracy,
@@ -104,25 +107,28 @@ def estimate_diff_feature_counts(
     Datasets with (probably) no features changed are not present in the dict.
     `accuracy` should be one of ACCURACY_CHOICES
     """
-    if base_rs == target_rs and not working_copy:
+    base = base.peel(pygit2.Tree)
+    target = target.peel(pygit2.Tree)
+    if base == target and not working_copy:
         return {}
 
     assert accuracy in ACCURACY_CHOICES
-    assert base_rs.repo == target_rs.repo
-    repo = base_rs.repo
-
-    base_ds_paths = {ds.path for ds in base_rs.datasets}
-    target_ds_paths = {ds.path for ds in target_rs.datasets}
-    all_ds_paths = base_ds_paths | target_ds_paths
 
     annotation_type = f"feature-change-counts-{accuracy}"
     annotation = repo.diff_annotations.get(
-        base_rs=base_rs,
-        target_rs=target_rs,
+        base=base,
+        target=target,
         annotation_type=annotation_type,
     )
     if annotation is not None:
         return annotation
+
+    base_rs = repo.structure(base)
+    target_rs = repo.structure(target)
+
+    base_ds_paths = {ds.path for ds in base_rs.datasets}
+    target_ds_paths = {ds.path for ds in target_rs.datasets}
+    all_ds_paths = base_ds_paths | target_ds_paths
 
     dataset_change_counts = {}
     for dataset_path in all_ds_paths:
@@ -168,8 +174,8 @@ def estimate_diff_feature_counts(
 
     if not working_copy:
         repo.diff_annotations.store(
-            base_rs=base_rs,
-            target_rs=target_rs,
+            base=base,
+            target=target,
             annotation_type=annotation_type,
             data=dataset_change_counts,
         )

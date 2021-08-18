@@ -101,9 +101,6 @@ def _parse_git_log_output(lines):
         yield commit_id, [r.strip() for r in refs]
 
 
-EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
-
-
 def commit_obj_to_json(
     commit,
     repo=None,
@@ -154,13 +151,15 @@ def commit_obj_to_json(
                 parent_commit = commit.parents[0]
             except (KeyError, IndexError):
                 # shallow clone (parent not present) or initial commit (no parents)
-                base_rs = repo.structure(EMPTY_TREE_SHA)
+                base = repo.empty_tree
             else:
-                base_rs = repo.structure(parent_commit)
+                base = parent_commit
 
-            target_rs = repo.structure(commit)
             result["featureChanges"] = diff_estimation.estimate_diff_feature_counts(
-                base_rs, target_rs, accuracy=with_feature_count
+                repo,
+                base=base,
+                target=commit,
+                accuracy=with_feature_count,
             )
         else:
             result["featureChanges"] = {}
