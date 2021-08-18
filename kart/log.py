@@ -22,7 +22,7 @@ from . import diff_estimation
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json"]),
+    type=click.Choice(["text", "json", "json-lines"]),
     default="text",
 )
 @click.option(
@@ -54,7 +54,7 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, 
     if output_format == "text":
         execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
 
-    elif output_format == "json":
+    elif output_format in ("json", "json-lines"):
         repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
         try:
             cmd = [
@@ -79,7 +79,7 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, 
         commit_ids_and_refs_log = _parse_git_log_output(r.stdout.splitlines())
         dataset_change_cache = {}
 
-        commit_log = [
+        commit_log = (
             commit_obj_to_json(
                 repo[commit_id],
                 repo,
@@ -89,8 +89,14 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, 
                 with_feature_count,
             )
             for (commit_id, refs) in commit_ids_and_refs_log
-        ]
-        dump_json_output(commit_log, sys.stdout, json_style)
+        )
+        if output_format == "json-lines":
+            for item in commit_log:
+                # hardcoded style here; each item must be on one line.
+                dump_json_output(item, sys.stdout, "compact")
+
+        else:
+            dump_json_output(commit_log, sys.stdout, json_style)
 
 
 def _parse_git_log_output(lines):
