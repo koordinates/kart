@@ -114,14 +114,15 @@ def estimate_diff_feature_counts(
 
     assert accuracy in ACCURACY_CHOICES
 
-    annotation_type = f"feature-change-counts-{accuracy}"
-    annotation = repo.diff_annotations.get(
-        base=base,
-        target=target,
-        annotation_type=annotation_type,
-    )
-    if annotation is not None:
-        return annotation
+    if not working_copy:
+        annotation_type = f"feature-change-counts-{accuracy}"
+        annotation = repo.diff_annotations.get(
+            base=base,
+            target=target,
+            annotation_type=annotation_type,
+        )
+        if annotation is not None:
+            return annotation
 
     base_rs = repo.structure(base)
     target_rs = repo.structure(target)
