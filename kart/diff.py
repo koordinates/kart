@@ -24,12 +24,16 @@ def feature_count_diff(
     repo = ctx.obj.repo
     from .base_diff_writer import BaseDiffWriter
 
-    base_rs, target_rs, working_copy = BaseDiffWriter._parse_diff_commit_spec(
+    base_rs, target_rs, working_copy = BaseDiffWriter.parse_diff_commit_spec(
         repo, commit_spec
     )
 
     dataset_change_counts = diff_estimation.estimate_diff_feature_counts(
-        base_rs, target_rs, working_copy=working_copy, accuracy=accuracy
+        repo,
+        base_rs.tree,
+        target_rs.tree,
+        working_copy=working_copy,
+        accuracy=accuracy,
     )
 
     if output_format == "text":

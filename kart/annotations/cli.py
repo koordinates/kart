@@ -61,10 +61,9 @@ def build_annotations(ctx, all_reachable):
                     f"({i+1}/{len(commits)}): {commit.short_id} {commit.message.splitlines()[0]}"
                 )
                 estimate_diff_feature_counts(
-                    repo.structure(
-                        commit.parent_ids[0] if commit.parent_ids else EMPTY_TREE_SHA
-                    ),
-                    repo.structure(commit),
+                    repo,
+                    commit.parents[0] if commit.parents else repo.empty_tree,
+                    commit,
                     accuracy="exact",
                 )
     click.echo("done.")
