@@ -190,7 +190,7 @@ def dump_json_output(
 
     fp = resolve_output_path(output_path)
 
-    highlit = json_style == "pretty" and can_output_colour(fp)
+    highlit = can_output_colour(fp)
     json_encoder = encoder_class(**JSON_PARAMS[json_style], **encoder_kwargs)
     if highlit:
         json_lexer = JsonLexer()

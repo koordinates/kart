@@ -5,11 +5,11 @@ import pytest
 H = pytest.helpers.helpers()
 
 
-@pytest.mark.parametrize("output_format", ["text", "json"])
+@pytest.mark.parametrize("output_format", ["text", "json", "json-lines"])
 def test_log(output_format, data_archive_readonly, cli_runner):
     """ review commit history """
     with data_archive_readonly("points"):
-        extra_args = ["--dataset-changes"] if output_format == "json" else []
+        extra_args = ["--dataset-changes"] if output_format.startswith("json") else []
         r = cli_runner.invoke(["log", f"--output-format={output_format}"] + extra_args)
         assert r.exit_code == 0, r
         if output_format == "text":
@@ -26,7 +26,7 @@ def test_log(output_format, data_archive_readonly, cli_runner):
                 "",
                 "    Import from nz-pa-points-topo-150k.gpkg",
             ]
-        else:
+        elif output_format == "json":
             assert json.loads(r.stdout) == [
                 {
                     "commit": H.POINTS.HEAD_SHA,
@@ -63,6 +63,24 @@ def test_log(output_format, data_archive_readonly, cli_runner):
                     "datasetChanges": ["nz_pa_points_topo_150k"],
                 },
             ]
+        else:
+            assert json.loads(r.stdout.splitlines()[1]) == {
+                "commit": H.POINTS.HEAD1_SHA,
+                "abbrevCommit": H.POINTS.HEAD1_SHA[:7],
+                "message": "Import from nz-pa-points-topo-150k.gpkg",
+                "refs": [],
+                "authorEmail": "robert@coup.net.nz",
+                "authorName": "Robert Coup",
+                "authorTime": "2019-06-11T11:03:58Z",
+                "authorTimeOffset": "+01:00",
+                "commitTime": "2019-06-11T11:03:58Z",
+                "commitTimeOffset": "+01:00",
+                "committerEmail": "robert@coup.net.nz",
+                "committerName": "Robert Coup",
+                "parents": [],
+                "abbrevParents": [],
+                "datasetChanges": ["nz_pa_points_topo_150k"],
+            }
 
 
 @pytest.mark.parametrize("output_format", ["text", "json"])
