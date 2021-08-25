@@ -321,7 +321,7 @@ build-Darwin: $(build-libs) $(brew-libs)
 
 # Homebrew seems to sometimes have signed code. But signatures may have been
 # invalidated by out rpath/etc futzing. Remove them all
-	find env/ wheelhouse/ -type f -exec codesign --remove-signature {} + ;
+	find $(VENDOR_ENV) -type f -exec codesign --remove-signature {} + ;
 
 	mkdir -p $(VENDOR_ENV)/share/git-core/
 	cp -vaf env/share/git-core/templates $(VENDOR_ENV)/share/git-core/
