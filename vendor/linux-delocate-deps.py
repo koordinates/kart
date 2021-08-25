@@ -9,7 +9,7 @@ from auditwheel.lddtree import lddtree
 from auditwheel.policy.external_references import lddtree_external_references
 
 
-POLICY = "manylinux2010_x86_64"
+POLICY = "manylinux_2_17_x86_64"  # ie: manylinux2014_x86_64
 
 
 def main():

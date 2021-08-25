@@ -20,17 +20,6 @@ if [ -n "$CCACHE_DIR" ]; then
     export PATH=/usr/lib64/ccache:${PATH}
 fi
 
-echo ">>> Building patched patchelf"
-# https://github.com/pypa/auditwheel/issues/159
-mkdir /patchelf
-curl -sL https://github.com/nvictus/patchelf/archive/d7483d92cfd614e06839c18d2fa194b88ff777a2.tar.gz | tar xz -C /patchelf --strip-components=1
-pushd /patchelf
-./bootstrap.sh
-./configure
-make
-make install
-popd
-
 echo ">>> Python: $(command -v python3.7)"
 
 echo ">>> Setting up /build ..."
