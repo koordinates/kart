@@ -68,9 +68,19 @@ $(pyapp-Darwin):
 app-sign:
 # App Code Signing
 # CODESIGN should start with "Developer ID Application: ..."
-	codesign -vvv --deep --timestamp --strict -s "$(CODESIGN)" --entitlements macos/entitlements.plist -o runtime macos/dist/Kart.app
-	codesign --verify --verbose macos/dist/Kart.app
-#	spctl -vvv --assess --type exec macos/dist/Kart.app
+	xattr -cr macos/dist/Kart.app
+	codesign \
+		--sign "$(CODESIGN)" \
+		--verbose=3 \
+		--deep \
+		--timestamp \
+		--force \
+		--strict \
+		--entitlements macos/entitlements.plist \
+		-o runtime \
+		macos/dist/Kart.app
+	codesign --display --verbose=3 --entitlements :- macos/dist/Kart.app
+	codesign --verify --verbose=3 --deep --strict=all macos/dist/Kart.app
 
 .PHONY: pyapp-Darwin
 pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
@@ -86,13 +96,23 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 		--distpath platforms/macos/dist/ \
 		kart.spec
 
+# fix for https://github.com/pyinstaller/pyinstaller/issues/5442
+	sed -i -e 's#<string>MacOS/kart_cli</string>#<string>kart_cli</string>#' macos/dist/Kart.app/Contents/Info.plist
+
 	-$(RM) -r $(SRC)/vendor/dist/env/
 
 ifdef CODESIGN
 	$(MAKE) app-sign
 endif
 
-	macos/dist/Kart.app/Contents/MacOS/kart_cli --version
+	if macos/dist/Kart.app/Contents/MacOS/kart_cli --version; then \
+		echo "PASSED: code-signing smoke test"; \
+	else \
+		echo "FAILED: code-signing smoke test: $?"; \
+		echo "finding macOS crash reports..."; \
+		find ~/Library/Logs/DiagnosticReports/ -name "kart_cli_$$(date '+%Y-%m-%d')-*.crash" -print -exec cat {} + ; \
+		exit 1; \
+	fi
 
 .PHONY: pyapp
 pyapp:

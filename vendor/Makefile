@@ -308,7 +308,7 @@ build-Darwin: $(build-libs) $(brew-libs)
 	mkdir -p $(VENDOR)/wheelhouse $(VENDOR_ENV) dist
 	for D in bin share lib libexec; do mkdir $(VENDOR_ENV)/$$D; done
 
-	# GDAL/Proj
+# GDAL/Proj
 	cp -vf gdal/wheel/GDAL-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vaf env/share/gdal $(VENDOR_ENV)/share/
 	cp -vaf env/share/proj $(VENDOR_ENV)/share/
@@ -318,6 +318,10 @@ build-Darwin: $(build-libs) $(brew-libs)
 	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
+
+# Homebrew seems to sometimes have signed code. But signatures may have been
+# invalidated by out rpath/etc futzing. Remove them all
+	find env/ wheelhouse/ -type f -exec codesign --remove-signature {} + ;
 
 	mkdir -p $(VENDOR_ENV)/share/git-core/
 	cp -vaf env/share/git-core/templates $(VENDOR_ENV)/share/git-core/
