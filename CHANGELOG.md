@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Auto-incrementing integer PKs: When the working copy is written, Kart now sets up a sequence which supplies the next unassigned PK value and sets it as the default value for the PK column. This helps the user find the next unassigned PK, which can be non-obvious in particular when a spatial filter has been applied and not all features are present in the working copy. [#468](https://github.com/koordinates/kart/pull/468)
  * Bugfix: Set GDAL and PROJ environment variables on startup, which fixes an issue where Kart may or may not work properly depending on whether GDAL and PROJ are appropriately configured in the user's environment
  * Bugfix: `kart restore` now simply discards all working copy changes, as it is intended to - previously it would complain if there were "structural" schema differences between the working copy and HEAD.
+ * Bugfix: MySQL working copy now works without a timezone database - previously it required that at least `UTC` was defined in such a database.
  * Feature-count estimates are now more accurate and generally also faster [#467](https://github.com/koordinates/kart/issues/467)
  * `kart log` now supports output in JSON-lines format, so that large logs can be streamed before being entirely generated.
 

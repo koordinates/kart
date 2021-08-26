@@ -19,7 +19,8 @@ class Db_MySql(BaseDb):
     def create_engine(cls, msurl):
         def _on_checkout(mysql_conn, connection_record, connection_proxy):
             dbcur = mysql_conn.cursor()
-            dbcur.execute("SET time_zone='UTC';")
+            # +00:00 is UTC, but unlike UTC, it works even without a timezone DB.
+            dbcur.execute("SET time_zone='+00:00';")
             dbcur.execute("SET sql_mode = 'ANSI_QUOTES';")
 
         url = urlsplit(msurl)
