@@ -43,7 +43,7 @@ py-cpuinfo==8.0.0
     # via pytest-benchmark
 pyparsing==2.4.7
     # via packaging
-pytest==6.2.4
+pytest==6.2.5
     # via
     #   -r requirements/test.in
     #   lovely-pytest-docker
