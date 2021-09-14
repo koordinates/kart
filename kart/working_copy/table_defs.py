@@ -11,6 +11,8 @@ from sqlalchemy import (
 
 from sqlalchemy.types import NVARCHAR, VARCHAR
 
+from kart.sqlalchemy import TableSet
+
 
 class TinyInt(Integer):
     __visit_name__ = "TINYINT"
@@ -22,16 +24,6 @@ class Double(Float):
 
 class DateTime(Text):
     __visit_name__ = "DATETIME"
-
-
-class TableSet:
-    def __init__(self):
-        self.sqlalchemy_metadata = MetaData()
-
-        # Subclass
-
-    def create_all(self, session):
-        return self.sqlalchemy_metadata.create_all(session.connection())
 
 
 STATE = "state"
@@ -271,5 +263,4 @@ class GpkgTables(TableSet):
 
 
 # Makes GPKG table definitions are also accessible at the GpkgTables class itself:
-for table_name, table in GpkgTables().sqlalchemy_metadata.tables.items():
-    setattr(GpkgTables, table_name, table)
+GpkgTables.copy_tables_to_class()

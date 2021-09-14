@@ -3,6 +3,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy as sa
+from sqlalchemy import MetaData
 
 
 class DbType(Enum):
@@ -158,3 +159,27 @@ def text_with_inlined_params(text, params):
             for key, value in params.items()
         ]
     )
+
+
+class TableSet:
+    """
+    A class that holds a set of table definitions that can be created and/or used for selects / inserts / updates.
+    Generally, instances of this class are used (rather than the class itself), but for those subclasses which can
+    only have one possible definition of each table, the tables definitions can be copied to the class for convenience.
+    """
+
+    def __init__(self):
+        self.sqlalchemy_metadata = MetaData()
+
+    def create_all(self, session):
+        return self.sqlalchemy_metadata.create_all(session.connection())
+
+    @classmethod
+    def _create_all_classmethod(cls, session):
+        return cls().sqlalchemy_metadata.create_all(session.connection())
+
+    @classmethod
+    def copy_tables_to_class(cls):
+        for table_name, table in cls().sqlalchemy_metadata.tables.items():
+            setattr(cls, table_name, table)
+        cls.create_all = cls._create_all_classmethod
