@@ -36,6 +36,7 @@ MODULE_COMMANDS = {
     "pull": {"pull"},
     "resolve": {"resolve"},
     "show": {"create-patch", "show"},
+    "spatial_tree": {"spatial-tree"},
     "status": {"status"},
     "query": {"query"},
     "upgrade": {"upgrade", "upgrade-to-tidy", "upgrade-to-kart"},
