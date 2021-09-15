@@ -1,18 +1,25 @@
 #!/bin/bash
-set -ex
+set -e
 
 source /root/.bashrc
 
-PYENV_PREFIX=$(pyenv prefix)
+set -xu
+
+export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}
+
+python3 --version
+python3 -m venv /venv
+
+export PATH=/venv/bin:${PATH}
 
 { echo ">> Configuring vendor dependencies..."; } 2> /dev/null
 tar xvzf vendor/dist/vendor-Linux.tar.gz -C /tmp wheelhouse
 rm -rf vendor/dist/env/
 tar xzf vendor/dist/vendor-Linux.tar.gz -C vendor/dist/ env
-tar xzf vendor/dist/vendor-Linux.tar.gz -C "$PYENV_PREFIX" --strip-components=1 env/lib/
+tar xzf vendor/dist/vendor-Linux.tar.gz -C /venv --strip-components=1 env/lib/
 
 # get the Rtree installer working successfully
-export SPATIALINDEX_C_LIBRARY="$PYENV_PREFIX/lib/libspatialindex_c.so"
+export SPATIALINDEX_C_LIBRARY="/venv/lib/libspatialindex_c.so"
 
 pip install --no-deps --ignore-installed -r requirements.txt
 pip install --no-deps \
@@ -21,10 +28,10 @@ pip install --no-deps \
 { echo ">> Downgrading PyInstaller (https://github.com/pyinstaller/pyinstaller/issues/4674) ..."; } 2> /dev/null
 pip install "pyinstaller==3.5.*"
 
-python setup.py install
+python3 setup.py install
 
 { echo ">> Pre-bundle Smoke Test ..."; } 2> /dev/null
-pyenv exec kart --version
+kart --version
 
 { echo ">> Running PyInstaller ..."; } 2> /dev/null
 pyinstaller \

@@ -57,9 +57,8 @@ pyapp-Linux: $(SRC)/vendor/dist/vendor-Linux.tar.gz
 		-v "$(SRC):/src" \
 		-w /src \
 		-v "$(abspath linux/.cache):/root/.cache" \
-		--entrypoint "/bin/bash" \
-		cdrx/pyinstaller-linux \
-		-i -c '/src/platforms/linux/pyinstaller.sh $(if $(MANYLINUX_DEBUG),|| bash)'
+		koordinates2/manylinux2014-pyshared:x86_64 \
+		bash -c '/src/platforms/linux/pyinstaller.sh $(if $(MANYLINUX_DEBUG),|| bash)'
 
 $(pyapp-Darwin):
 	$(MAKE) pyapp-Darwin

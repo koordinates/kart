@@ -118,7 +118,6 @@ pyi_analysis = Analysis(
     noarchive=False,
 )
 
-# Git
 if is_win:
     pyi_analysis.datas += Tree('vendor/dist/git', prefix='git')
     # GDAL/osgeo hook doesn't include Proj
@@ -130,6 +129,9 @@ else:
     pyi_analysis.binaries += [('git', 'vendor/dist/env/bin/git', 'BINARY')]
     libexec_root = 'vendor/dist/env/libexec'
     pyi_analysis.datas += Tree('vendor/dist/env/share', prefix='share')
+
+if is_linux:
+    pyi_analysis.binaries += [('libcrypt.so.2', '/usr/local/lib/libcrypt.so.2', 'BINARY')]
 
 pyi_pyz = PYZ(pyi_analysis.pure, pyi_analysis.zipped_data, cipher=None)
 
