@@ -44,7 +44,7 @@ DS_PATH_PATTERN = r'(.+)/\.(sno|table)-dataset/'
 
 
 def _parse_revlist_output(line_iter, rel_path_pattern):
-    full_path_pattern = DS_PATH_PATTERN + rel_path_pattern
+    full_path_pattern = re.compile(DS_PATH_PATTERN + rel_path_pattern)
 
     for line in line_iter:
         parts = line.split(" ", maxsplit=1)
@@ -52,7 +52,7 @@ def _parse_revlist_output(line_iter, rel_path_pattern):
             continue
         oid, path = parts
 
-        m = re.match(full_path_pattern, path)
+        m = full_path_pattern.match(path)
         if not m:
             continue
         ds_path = m.group(1)
@@ -97,11 +97,12 @@ class CrsHelper:
         return transforms
 
     def iter_crs_oids(self, ds_path):
-        cmd = (
-            _revlist_command(self.repo)
-            + ["--all", "--"]
-            + list(self.all_crs_paths(ds_path))
-        )
+        cmd = [
+            *_revlist_command(self.repo),
+            "--all",
+            "--",
+            *self.all_crs_paths(ds_path),
+        ]
         try:
             r = subprocess.run(
                 cmd,
@@ -144,22 +145,33 @@ class CrsHelper:
 
 
 class SpatialTreeTables(TableSet):
-    """Spatial Tree spec tables - see http://www.geopackage.org/spec/#table_definition_sql"""
+    """Tables for associating a variable number of S2 cells with each feature."""
 
     def __init__(self):
         super().__init__()
 
+        # "blobs" tracks all the features we have indexed (even if they do not overlap any s2 cells).
         self.blobs = Table(
             "blobs",
             self.sqlalchemy_metadata,
+            # From a user-perspective, "rowid" isjust an arbitrary integer primary key.
+            # In more detail: This column aliases to the sqlite rowid of the table.
+            # See https://www.sqlite.org/lang_createtable.html#rowid
+            # Using the rowid directly as a foreign key (see "blob_cells") means faster joins.
+            # The rowid can be used without creating a column that aliases to it, but you shouldn't -
+            # rowids might change if they are not aliased. See https://sqlite.org/lang_vacuum.html)
             Column("rowid", Integer, nullable=False, primary_key=True),
+            # "blob_id" is the git object ID (the SHA-1 hash) of a feature, in binary (20 bytes).
+            # Is equivalent to 40 chars of hex eg: d08c3dd220eea08d8dfd6d4adb84f9936c541d7a
             Column("blob_id", BLOB, nullable=False, unique=True),
             sqlite_autoincrement=True,
         )
 
+        # "blob_cells" associates 0 or more S2 cell tokens with each feature that we have indexed.
         self.blob_cells = Table(
             "blob_cells",
             self.sqlalchemy_metadata,
+            # Reference to blobs.rowid.
             Column(
                 "blob_rowid",
                 Integer,
@@ -167,6 +179,8 @@ class SpatialTreeTables(TableSet):
                 nullable=False,
                 primary_key=True,
             ),
+            # S2 cell token eg "6d6dd90351b31cbf".
+            # To locate an S2 cell by token, see https://s2.sidewalklabs.com/regioncoverer/
             Column(
                 "cell_token",
                 Text,
@@ -200,11 +214,20 @@ def iter_feature_oids(repo, commit_spec):
         )
 
 
-def update_spatial_tree(
-    repo, commit_spec, crs_helper, verbosity=1, clear_existing=False
-):
+def update_spatial_tree(repo, commit_spec, verbosity=1, clear_existing=False):
+    """
+    Index the commits given in commit_spec, and write them to the s2_index.db repo file.
+
+    repo - the Kart repo containing the commits to index, and in which to write the index file.
+    commit_spec - a list of commits to index (ancestors of these are implicitly included).
+        Commits can be exluded by prefixing with '^' (ancestors of these are implicitly excluded).
+        (See git rev-list for the full list of possibilities for specifying commits).
+    verbosity - how much non-essential information to output.
+    clear_existing - when true, deletes any pre-existing data before re-indexing.
+    """
     import pywraps2 as s2
 
+    crs_helper = CrsHelper(repo)
     feature_oid_iter = iter_feature_oids(repo, commit_spec)
 
     s2_coverer = s2.S2RegionCoverer()
@@ -223,8 +246,9 @@ def update_spatial_tree(
 
         SpatialTreeTables.create_all(sess)
 
-    t0 = time.monotonic()
     click.echo(f"Indexing {' '.join(commit_spec)} ...")
+    t0 = time.monotonic()
+    i = 0
 
     # Using sqlite directly here instead of sqlalchemy is about 10x faster.
     # Possibly due to huge number of unbatched queries.
@@ -316,20 +340,15 @@ def _point_f2_cells(s2_coverer, geom, transforms):
     import pywraps2 as s2
 
     g = gpkg_geom_to_ogr(geom)
-
     one_transform = len(transforms) == 1
-    if not one_transform:
-        result = set()
 
+    result = set()
     for transform in transforms:
-        g_transformed = _apply_transform(g, transform, one_transform)
+        g_transformed = _apply_transform(g, transform, overwrite_original=one_transform)
         p = g_transformed.GetPoint()[:2]
         s2_ll = s2.S2LatLng.FromDegrees(p[1], p[0]).Normalized()
         s2_token = s2.S2CellId(s2_ll.ToPoint()).ToToken()
-        if one_transform:
-            return (s2_token,)
-        else:
-            result.add(s2_token)
+        result.add(s2_token)
 
     return result
 
@@ -341,10 +360,10 @@ def _general_s2_cells(s2_coverer, geom, transforms):
     if e is None:
         return ()  # Empty.
 
-    sw_src, ne_src = (e[0::2], e[1::2])
+    sw_src = e[0], e[2]
+    ne_src = e[1], e[3]
 
     result = set()
-
     for transform in transforms:
         s2_ll = []
         for p_src in (sw_src, ne_src):
@@ -403,11 +422,9 @@ def index(ctx, index_all_commits, clear_existing, commits):
     commit_spec = ["--all"] if index_all_commits else list(commits)
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    crs_helper = CrsHelper(repo)
     update_spatial_tree(
         repo,
         commit_spec,
-        crs_helper,
         verbosity=ctx.obj.verbosity + 1,
         clear_existing=clear_existing,
     )
