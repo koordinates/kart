@@ -410,9 +410,9 @@ def spatial_tree(ctx, **kwargs):
 @click.pass_context
 def index(ctx, index_all_commits, clear_existing, commits):
     """
-    Indexes all features added by the supplied commits and all of their ancestors.
-    To stop recursing at a particular ancestor or ancestors (eg to stop at a commit
-    that has already been indexed) prefix that commit with a caret: ^COMMIT.
+    Indexes all features added by the supplied commits and their ancestors.
+    The commits can be specified in any format accepted by git rev-list, including
+    --all, COMMIT-TO-INCLUDE, ^COMMIT-TO-EXCLUDE, and RANGE-START..RANGE-END
     """
     if index_all_commits and commits:
         raise click.UsageError("Can't supply both --all and commits to be indexed")
