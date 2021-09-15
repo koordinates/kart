@@ -47,6 +47,7 @@ class KartRepoFiles:
     # Kart-specific files:
     MERGE_INDEX = "MERGE_INDEX"
     MERGE_BRANCH = "MERGE_BRANCH"
+    S2_INDEX = "s2_index.db"
 
 
 class KartRepoState(Enum):
