@@ -68,6 +68,7 @@ class CrsHelper:
     def __init__(self, repo):
         self.repo = repo
         self.ds_to_transforms = {}
+        self.target_crs = make_crs("EPSG:4326")
 
     def transforms_for_dataset(self, ds_path):
         transforms = self.ds_to_transforms.get(ds_path)
@@ -134,13 +135,12 @@ class CrsHelper:
     @functools.lru_cache()
     def transform_from_wkt(self, wkt):
         src_crs = make_crs(wkt)
-        if src_crs.IsGeographic():
+        if src_crs.IsSame(self.target_crs):
             transform = None
             desc = f"IDENTITY({src_crs.GetAuthorityCode(None)})"
         else:
-            target_crs = src_crs.CloneGeogCS()
-            transform = osr.CoordinateTransformation(src_crs, target_crs)
-            desc = f"{src_crs.GetAuthorityCode(None)} -> {target_crs.GetAuthorityCode(None)}"
+            transform = osr.CoordinateTransformation(src_crs, self.target_crs)
+            desc = f"{src_crs.GetAuthorityCode(None)} -> {self.target_crs.GetAuthorityCode(None)}"
         return transform, desc
 
 
