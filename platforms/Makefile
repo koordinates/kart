@@ -96,7 +96,7 @@ pyapp-Darwin: $(pyinstaller) $(SRC)/vendor/dist/vendor-Darwin.tar.gz
 		kart.spec
 
 # fix for https://github.com/pyinstaller/pyinstaller/issues/5442
-	sed -i -e 's#<string>MacOS/kart_cli</string>#<string>kart_cli</string>#' macos/dist/Kart.app/Contents/Info.plist
+	sed -i '' -e 's#<string>MacOS/kart_cli</string>#<string>kart_cli</string>#' macos/dist/Kart.app/Contents/Info.plist
 
 	-$(RM) -r $(SRC)/vendor/dist/env/
 
@@ -172,7 +172,7 @@ pkg-notarize: $(pkg)
 		--file $(pkg) \
 		--output-format xml \
 		| tee macos/build/notarize-app-result.plist
-	echo Notarization-RequestUUID=`$(PLIST_BUDDY) -c "Print notarization-upload:RequestUUID" macos/build/notarize-app-result.plist`
+	echo Notarization-RequestUUID=`/usr/libexec/PlistBuddy -c "Print notarization-upload:RequestUUID" macos/build/notarize-app-result.plist`
 
 .PHONY: pkg-notarize-check
 pkg-notarize-check:
