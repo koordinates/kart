@@ -4,10 +4,9 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.10.3 (UNRELEASED)
+## 0.10.3
 
 ### Major changes
-
  * Added basic support for spatial filters - the spatial filter can be updated during an `init`, `clone` or `checkout` by supplying the option `--spatial-filter=CRS;GEOMETRY` where CRS is a string such as `EPSG:4326` and GEOMETRY is a polygon or multigon specified using WKT or hex-encoded WKB. When a spatial filter is set, the working copy will only contain features that intersect the spatial filter, and changes that happened outside the working copy are not shown to the user unless specifically required. [#456](https://github.com/koordinates/kart/issues/456)
 
 ### Other changes
