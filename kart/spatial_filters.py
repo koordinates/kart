@@ -312,11 +312,15 @@ class SpatialFilter:
         self.match_all = match_all
 
         if match_all:
-            self.crs = self.filter_ogr = self.filter_env = None
+            self.crs = None
+            self.filter_ogr = None
+            self.filter_prep = None
+            self.filter_env = None
             self.geom_column_name = None
         else:
             self.crs = crs
             self.filter_ogr = filter_geometry_ogr
+            self.filter_prep = filter_geometry_ogr.CreatePreparedGeometry()
             self.filter_env = self.filter_ogr.GetEnvelope()
             self.geom_column_name = geom_column_name
 
@@ -366,7 +370,7 @@ class SpatialFilter:
         try:
             if feature_ogr is None:
                 feature_ogr = feature_geometry.to_ogr()
-            return self.filter_ogr.Intersects(feature_ogr)
+            return self.filter_prep.Intersects(feature_ogr)
         except Exception as e:
             L.warn(e)
             err = e
