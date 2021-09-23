@@ -1,4 +1,4 @@
-GIT_VERSION = 2.29.2
+GIT_VERSION = 2.33.0
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)

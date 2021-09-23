@@ -19,7 +19,7 @@ vendor-Darwin-archive = dist/vendor-Darwin.tar.gz
 ifeq ($(PLATFORM),Darwin)
 	LIBINFIX = cpython-37m-darwin
 	LIBSUFFIX = dylib
-	WHEELTOOL = delocate
+	WHEELTOOL = delocate==0.8.2
 	PY3 ?= $(realpath /Library/Frameworks/Python.framework/Versions/3.7/bin/python3.7)
 	WHEELID = macosx_10_9_x86_64
 	export LDFLAGS += -Wl,-rpath,'@loader_path'
@@ -60,8 +60,9 @@ lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
 lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
 lib-pyodbc := env/lib/python3.7/site-packages/pyodbc.$(LIBINFIX).so
+lib-s2_py := env/lib/python3.7/site-packages/s2_py/__init__.py
 
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3)
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3) $(lib-s2_py)
 
 
 # default target
@@ -101,6 +102,10 @@ $(lib-pysqlite3): $(lib-sqlite)
 $(lib-pyodbc):
 	$(MAKE) -C pyodbc wheel
 	pip3 install --force-reinstall pyodbc/wheel/pyodbc-*$(WHEELID).whl
+
+$(lib-s2_py):
+	$(MAKE) -C s2_py wheel
+	pip3 install --force-reinstall s2_py/wheel/s2_py-*$(WHEELID).whl
 
 
 ifeq ($(PLATFORM),Darwin)
@@ -300,6 +305,9 @@ lib-psycopg2: $(lib-psycopg2)
 .PHONY: lib-pyodbc
 lib-pyodbc: $(lib-pyodbc)
 
+.PHONY: lib-s2_py
+lib-s2_py: $(lib-s2_py)
+
 .PHONY: build-Darwin
 build-Darwin: VENDOR:=build/vendor-Darwin
 build-Darwin: VENDOR_ENV:=$(VENDOR)/env
@@ -316,6 +324,7 @@ build-Darwin: $(build-libs) $(brew-libs)
 	cp -vf pygit2/wheel/pygit2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
+	cp -vf s2_py/wheel/s2_py-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
 
@@ -353,7 +362,7 @@ build-Linux:
 		-v /build \
 		-e CCACHE_DIR=/root/.cache/ccache \
 		-e CCACHE_COMPRESS \
-		quay.io/pypa/manylinux2014_x86_64 \
+		koordinates2/manylinux2014-pyshared:x86_64 \
 		bash -c '/src/build-manylinux.sh /src/$(VENDOR) ${LINUX_DEBUG_CMD_$(LINUX_DEBUG)}'
 
 	tar czf $(vendor-Linux-archive) -C $(VENDOR) env wheelhouse

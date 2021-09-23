@@ -30,6 +30,8 @@ vendor/pyodbc/**
 !vendor/pyodbc/Makefile
 vendor/pysqlite3/**
 !vendor/pysqlite3/Makefile
+vendor/s2_py/**
+!vendor/s2_py/Makefile
 vendor/spatialindex/**
 !vendor/spatialindex/Makefile
 vendor/spatialite/**

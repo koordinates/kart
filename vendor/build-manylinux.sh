@@ -8,7 +8,7 @@ yum install -y epel-release
 
 yum install -y ccache openssl-devel gettext wget unixODBC-devel
 
-export PATH=/opt/python/cp37-cp37m/bin:${PATH}
+export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}
 export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}
 
 # setup ccache
@@ -30,6 +30,9 @@ for M in */Makefile; do
     ln -s "$(pwd)/$M" "/build/$M"
     find "$D" -maxdepth 1 \( -name "*.tar.*" -o -name "*.zip" \) -print -exec ln -s "$(pwd)"/{} "/build/$D/" \;
 done
+
+# Vendor builds that have more than a simple Makefile as a basis.
+# sqlite
 cp -v sqlite/version.mk /build/sqlite/
 
 cd /build
@@ -71,6 +74,10 @@ else
     echo ">>> Building psycopg2 ..."
     make lib-psycopg2
     cp -fav psycopg2/wheel/psycopg2-*.whl "$OUTPUT/wheelhouse"
+
+    echo ">>> Building s2_py ..."
+    make lib-s2_py
+    cp -fav s2_py/wheel/s2_py-*.whl "$OUTPUT/wheelhouse"
 
     echo ">>> Bundling libraries ..."
     env/bin/python3 ./linux-delocate-deps.py env/lib/

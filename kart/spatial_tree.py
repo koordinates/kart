@@ -225,7 +225,7 @@ def update_spatial_tree(repo, commit_spec, verbosity=1, clear_existing=False):
     verbosity - how much non-essential information to output.
     clear_existing - when true, deletes any pre-existing data before re-indexing.
     """
-    import pywraps2 as s2
+    import s2_py as s2
 
     crs_helper = CrsHelper(repo)
     feature_oid_iter = iter_feature_oids(repo, commit_spec)
@@ -337,7 +337,7 @@ def _apply_transform(original, transform, overwrite_original=False):
 
 
 def _point_f2_cells(s2_coverer, geom, transforms):
-    import pywraps2 as s2
+    import s2_py as s2
 
     g = gpkg_geom_to_ogr(geom)
     one_transform = len(transforms) == 1
@@ -354,7 +354,7 @@ def _point_f2_cells(s2_coverer, geom, transforms):
 
 
 def _general_s2_cells(s2_coverer, geom, transforms):
-    import pywraps2 as s2
+    import s2_py as s2
 
     e = geom_envelope(geom)
     if e is None:
