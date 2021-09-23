@@ -1,4 +1,4 @@
-GDAL_VERSION ?= 3.3.1
+GDAL_VERSION ?= 3.3.2
 GDAL_SO = libgdal.29
 SHELL = /bin/bash
 
