@@ -1637,6 +1637,7 @@ def test_create_patch(data_archive_readonly, cli_runner):
             "authorTime": "2019-06-20T14:28:33Z",
             "authorTimeOffset": "+01:00",
             "message": "Improve naming on Coromandel East coast",
+            "base": "6e2984a28150330a6c51019a70f9e8fcfe405e8c",
         }
 
 

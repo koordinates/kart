@@ -28,6 +28,7 @@
     "authorName": "Someone",
     "authorTime": "2019-06-20T14:28:33Z",
     "authorTimeOffset": "+01:00",
-    "message": "Change the Coromandel"
+    "message": "Change the Coromandel",
+    "base": "1582725544d9122251acd4b3fc75b5c88ac3fd17"
   }
 }

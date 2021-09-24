@@ -181,6 +181,26 @@ def apply_patch(
         raise click.FileError(
             "Failed to parse JSON patch file: patch contains no `kart.diff/v1+hexwkb` object"
         )
+    metadata = patch.get("kart.patch/v1")
+    if metadata is None:
+        metadata = patch.get("sno.patch/v1")
+    if metadata is None:
+        # Not all diffs are patches.
+        raise click.UsageError("Patch contains no author or head information")
+
+    resolve_missing_values_from_rs = None
+    if "base" in metadata:
+        # if the patch has a `base` that's present in this repo,
+        # then we allow the `-` blobs to be missing, because we can resolve the `-` blobs
+        # from that revision.
+        try:
+            # this only resolves if it's a commit or tree ID, not if it's a symref
+            patch_tree = repo.get(metadata["base"]).peel(pygit2.Tree)
+            resolve_missing_values_from_rs = repo.structure(patch_tree)
+        except KeyError:
+            # this might be fine (if it's a 'full' patch), but maybe we should warn?
+            pass
+
     if ref != "HEAD":
         if not do_commit:
             raise click.UsageError("--no-commit and --ref are incompatible")
