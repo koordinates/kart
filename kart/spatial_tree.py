@@ -17,9 +17,11 @@ from .crs_util import make_crs, normalise_wkt
 from .exceptions import SubprocessError
 from .geometry import Geometry, GeometryType, geom_envelope, gpkg_geom_to_ogr
 from .repo import KartRepoState, KartRepoFiles
+from .serialise_util import msg_unpack
+from .structs import CommitWithReference
 from .sqlalchemy import TableSet
 from .sqlalchemy.sqlite import sqlite_engine
-from .serialise_util import msg_unpack
+
 
 L = logging.getLogger("kart.spatial_tree")
 
@@ -150,6 +152,17 @@ class SpatialTreeTables(TableSet):
     def __init__(self):
         super().__init__()
 
+        # "commits" tracks all the commits we have indexed.
+        # A commit is only considered indexed if ALL of its ancestors are also indexed - this means
+        # relatively few commits need to be recorded as being indexed in this table.
+        self.commits = Table(
+            "commits",
+            self.sqlalchemy_metadata,
+            # "commit_id" is the commit ID (the SHA-1 hash), in binary (20 bytes).
+            # Is equivalent to 40 chars of hex eg: d08c3dd220eea08d8dfd6d4adb84f9936c541d7a
+            Column("commit_id", BLOB, nullable=False, primary_key=True),
+        )
+
         # "blobs" tracks all the features we have indexed (even if they do not overlap any s2 cells).
         self.blobs = Table(
             "blobs",
@@ -198,8 +211,8 @@ def drop_tables(sess):
     sess.execute("DROP TABLE IF EXISTS blobs;")
 
 
-def iter_feature_oids(repo, commit_spec):
-    cmd = _revlist_command(repo) + commit_spec
+def iter_feature_oids(repo, start_commits, stop_commits):
+    cmd = [*_revlist_command(repo), *start_commits, "--not", *stop_commits]
     try:
         p = subprocess.Popen(
             cmd,
@@ -214,21 +227,75 @@ def iter_feature_oids(repo, commit_spec):
         )
 
 
-def update_spatial_tree(repo, commit_spec, verbosity=1, clear_existing=False):
+def _minimal_description_of_commit_set(repo, commits):
+    cmd = ["git", "-C", repo.path, "merge-base", "--independent"] + list(commits)
+    try:
+        r = subprocess.run(
+            cmd,
+            encoding="utf8",
+            check=True,
+            capture_output=True,
+            env=tool_environment(),
+        )
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with git show-ref: {e}", called_process_error=e
+        )
+    return set(r.stdout.splitlines())
+
+
+def _build_on_last_index(repo, start_commits, sess):
+    commits_table_exists = sess.scalar(
+        "SELECT count(*) FROM sqlite_master WHERE name = 'commits';"
+    )
+    if commits_table_exists:
+        stop_commits = set(
+            row[0].hex() for row in sess.execute("SELECT commit_id FROM commits;")
+        )
+    else:
+        stop_commits = set()
+
+    all_independent_commits = _minimal_description_of_commit_set(
+        repo, start_commits | stop_commits
+    )
+    start_commits = all_independent_commits - stop_commits
+    return (start_commits, stop_commits, all_independent_commits)
+
+
+def _format_commits(repo, commit_ids):
+    if not commit_ids:
+        return None
+    length = len(repo[next(iter(commit_ids))].short_id)
+    return " ".join(c[:length] for c in commit_ids)
+
+
+def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
     """
     Index the commits given in commit_spec, and write them to the s2_index.db repo file.
 
     repo - the Kart repo containing the commits to index, and in which to write the index file.
-    commit_spec - a list of commits to index (ancestors of these are implicitly included).
-        Commits can be exluded by prefixing with '^' (ancestors of these are implicitly excluded).
-        (See git rev-list for the full list of possibilities for specifying commits).
+    commits - a set of commit IDs to index (ancestors of these are implicitly included).
     verbosity - how much non-essential information to output.
     clear_existing - when true, deletes any pre-existing data before re-indexing.
     """
     import s2_py as s2
 
     crs_helper = CrsHelper(repo)
-    feature_oid_iter = iter_feature_oids(repo, commit_spec)
+
+    db_path = repo.gitdir_file(KartRepoFiles.S2_INDEX)
+    engine = sqlite_engine(db_path)
+
+    # Find out where we were up to last time, don't reindex anything that's already indexed.
+    with sessionmaker(bind=engine)() as sess:
+        start_commits, stop_commits, all_independent_commits = _build_on_last_index(
+            repo, commits, sess
+        )
+
+    if not start_commits:
+        click.echo("Nothing to do: index already up to date.")
+        return
+
+    feature_oid_iter = iter_feature_oids(repo, start_commits, stop_commits)
 
     s2_coverer = s2.S2RegionCoverer()
     s2_coverer.set_max_cells(S2_MAX_CELLS_INDEX)
@@ -238,15 +305,21 @@ def update_spatial_tree(repo, commit_spec, verbosity=1, clear_existing=False):
     if verbosity >= 1:
         progress_every = max(100, 100_000 // (10 ** (verbosity - 1)))
 
-    db_path = repo.gitdir_file(KartRepoFiles.S2_INDEX)
-    engine = sqlite_engine(db_path)
     with sessionmaker(bind=engine)() as sess:
         if clear_existing:
             drop_tables(sess)
 
         SpatialTreeTables.create_all(sess)
 
-    click.echo(f"Indexing {' '.join(commit_spec)} ...")
+    # We index from the most recent commits, and stop at the already-indexed ancestors -
+    # but in terms of logging it makes more sense to say: indexing from <ANCESTORS> to <CURRENT>.
+    ancestor_desc = _format_commits(repo, stop_commits)
+    current_desc = _format_commits(repo, start_commits)
+    if not ancestor_desc:
+        click.echo(f"Indexing from the very start up to {current_desc} ...")
+    else:
+        click.echo(f"Indexing from {ancestor_desc} up to {current_desc} ...")
+
     t0 = time.monotonic()
     i = 0
 
@@ -291,6 +364,11 @@ def update_spatial_tree(repo, commit_spec, verbosity=1, clear_existing=False):
                 "INSERT OR IGNORE INTO blob_cells (blob_rowid, cell_token) VALUES (?, ?);",
                 params,
             )
+
+        # Update indexed commits.
+        params = [(bytes.fromhex(commit_id),) for commit_id in all_independent_commits]
+        dbcur.execute("DELETE FROM commits;")
+        dbcur.executemany("INSERT INTO commits (commit_id) VALUES (?);", params)
 
     t1 = time.monotonic()
     click.echo(f"Indexed {i} features in {t1-t0:.1f}s")
@@ -380,6 +458,37 @@ def _general_s2_cells(s2_coverer, geom, transforms):
     return result
 
 
+def _resolve_all_commit_refs(repo):
+    cmd = ["git", "-C", repo.path, "show-ref", "--hash", "--head"]
+    try:
+        r = subprocess.run(
+            cmd,
+            encoding="utf8",
+            check=True,
+            capture_output=True,
+            env=tool_environment(),
+        )
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with git show-ref: {e}", called_process_error=e
+        )
+    result = set()
+    for c in r.stdout.splitlines():
+        try:
+            if repo[c].type_str == "commit":
+                result.add(c)
+        except KeyError:
+            pass
+    return result
+
+
+def _resolve_commits(repo, commitish_list):
+    return set(
+        CommitWithReference.resolve(repo, commitish).id.hex
+        for commitish in commitish_list
+    )
+
+
 @add_help_subcommand
 @click.group()
 @click.pass_context
@@ -391,13 +500,6 @@ def spatial_tree(ctx, **kwargs):
 
 @spatial_tree.command()
 @click.option(
-    "--all",
-    "index_all_commits",
-    is_flag=True,
-    default=False,
-    help=("Index / re-index all existing commits"),
-)
-@click.option(
     "--clear-existing",
     is_flag=True,
     default=False,
@@ -408,23 +510,20 @@ def spatial_tree(ctx, **kwargs):
     nargs=-1,
 )
 @click.pass_context
-def index(ctx, index_all_commits, clear_existing, commits):
+def index(ctx, clear_existing, commits):
     """
     Indexes all features added by the supplied commits and their ancestors.
-    The commits can be specified in any format accepted by git rev-list, including
-    --all, COMMIT-TO-INCLUDE, ^COMMIT-TO-EXCLUDE, and RANGE-START..RANGE-END
+    If no commits are supplied, indexes all features in all commits.
     """
-    if index_all_commits and commits:
-        raise click.UsageError("Can't supply both --all and commits to be indexed")
-    elif not index_all_commits and not commits:
-        raise click.UsageError("No commits to be indexed were supplied")
-
-    commit_spec = ["--all"] if index_all_commits else list(commits)
-
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    if not commits:
+        commits = _resolve_all_commit_refs(repo)
+    else:
+        commits = _resolve_commits(repo, commits)
+
     update_spatial_tree(
         repo,
-        commit_spec,
+        commits,
         verbosity=ctx.obj.verbosity + 1,
         clear_existing=clear_existing,
     )
