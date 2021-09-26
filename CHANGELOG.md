@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.5 (UNRELEASED)
+
+ * Fix for [#478](https://github.com/koordinates/kart/issues/478) `merge --dry-run` raises error
+
 ## 0.10.4
 
 ### Major changes

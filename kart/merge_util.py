@@ -706,7 +706,7 @@ def merge_status_to_text(jdict, fresh):
         if dry_run:
             ff_text = (
                 f"Can fast-forward to {commit}\n"
-                "(Not actually fast-forwarding due to --dry-run)",
+                "(Not actually fast-forwarding due to --dry-run)"
             )
         else:
             ff_text = f"Fast-forwarded to {commit}"
