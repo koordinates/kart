@@ -228,6 +228,12 @@ def iter_feature_oids(repo, start_commits, stop_commits):
 
 
 def _minimal_description_of_commit_set(repo, commits):
+    """
+    Returns the minimal set of commit IDs that have the same set of ancestors as
+    the given set of commit IDs.
+    Stated differently - returns the given commits except for those which are
+    reachable by following ancestors of commits in the given set.
+    """
     cmd = ["git", "-C", repo.path, "merge-base", "--independent"] + list(commits)
     try:
         r = subprocess.run(
@@ -239,19 +245,32 @@ def _minimal_description_of_commit_set(repo, commits):
         )
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
-            f"There was a problem with git show-ref: {e}", called_process_error=e
+            f"There was a problem with git merge-base: {e}", called_process_error=e
         )
     return set(r.stdout.splitlines())
 
 
 def _build_on_last_index(repo, start_commits, sess):
+    """
+    Given a set of commits to index (including their ancestors) - the "start-commits" - returns the following:
+    - the minimal description of the "start-commits"
+    - the "stop-commits" - the commits that have already been indexed (including ancestors).
+      The the start commits will have been indexed including their ancestors if we stop
+      following ancestors once we reach these commits, since they are already indexed.
+    - The minimal description of all commits that will have been indexed once this index is finished.
+      (This could include commits from both "start-commits" and from "stop-commits".)
+
+    This allows us to index the given commits (including their ancestors) by building on work we did
+    last time the index was brought up to date (or completed up to a certain point).
+    """
+
     commits_table_exists = sess.scalar(
         "SELECT count(*) FROM sqlite_master WHERE name = 'commits';"
     )
     if commits_table_exists:
-        stop_commits = set(
+        stop_commits = {
             row[0].hex() for row in sess.execute("SELECT commit_id FROM commits;")
-        )
+        }
     else:
         stop_commits = set()
 
