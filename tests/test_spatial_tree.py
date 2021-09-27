@@ -14,7 +14,7 @@ def test_index_points_all(data_archive, cli_runner):
     # Indexing --all should give the same results every time.
     # For points, every point should have only one long S2 cell token.
     with data_archive("points.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index", "--all"])
+        r = cli_runner.invoke(["spatial-tree", "index"])
         assert r.exit_code == 0, r.stderr
 
         stats = _get_spatial_tree_stats(repo_path)
@@ -33,9 +33,7 @@ def test_index_points_commit_by_commit(data_archive, cli_runner):
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 2143
 
-        r = cli_runner.invoke(
-            ["spatial-tree", "index", H.POINTS.HEAD_SHA, "^" + H.POINTS.HEAD1_SHA]
-        )
+        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD_SHA])
         assert r.exit_code == 0, r.stderr
 
         stats = _get_spatial_tree_stats(repo_path)
@@ -47,23 +45,36 @@ def test_index_points_commit_by_commit(data_archive, cli_runner):
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
 def test_index_points_idempotent(data_archive, cli_runner):
-    # Indexing the commits one at a time (and backwards) and then indexing --all should
-    # also give the same result, even though everything will have been indexed twice.
+    # Indexing the commits one at a time and then indexing all commits again will also give the same result.
+    # (We force everything to be indexed twice by deleting the record of whats been indexed).
     with data_archive("points.tgz") as repo_path:
-        r = cli_runner.invoke(
-            ["spatial-tree", "index", H.POINTS.HEAD_SHA, "^" + H.POINTS.HEAD1_SHA]
-        )
+        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r.stderr
         stats = _get_spatial_tree_stats(repo_path)
-        assert stats.features == 5
+        assert stats.features == 2143
 
-        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD1_SHA])
+        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD_SHA])
         assert r.exit_code == 0, r.stderr
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 2148
 
-        r = cli_runner.invoke(["spatial-tree", "index", "--all"])
+        # Trying to reindex shouldn't do anything since we remember where we are up to.
+        r = cli_runner.invoke(["spatial-tree", "index"])
         assert r.exit_code == 0, r.stderr
+        assert "Nothing to do" in r.stdout
+        stats = _get_spatial_tree_stats(repo_path)
+        assert stats.features == 2148
+
+        # Force reindex by deleting record of what's been indexed.
+        # Even so, this should just rewrite the same index over the top of the old one.
+        db_path = repo_path / ".kart" / "s2_index.db"
+        engine = sqlite_engine(db_path)
+        with sessionmaker(bind=engine)() as sess:
+            sess.execute("DELETE FROM commits;")
+
+        r = cli_runner.invoke(["spatial-tree", "index"])
+        assert r.exit_code == 0, r.stderr
+        assert "Nothing to do" not in r.stdout
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 2148
         assert stats.avg_cell_tokens_per_feature == 1
@@ -76,7 +87,7 @@ def test_index_polygons_all(data_archive, cli_runner):
     # FIXME: These results shouldn't be different on macos and linux.
     # Dig into why they are different.
     with data_archive("polygons.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index", "--all"])
+        r = cli_runner.invoke(["spatial-tree", "index"])
         assert r.exit_code == 0, r.stderr
 
         stats = _get_spatial_tree_stats(repo_path)
@@ -91,7 +102,7 @@ def test_index_polygons_all(data_archive, cli_runner):
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
 def test_index_table_all(data_archive, cli_runner):
     with data_archive("table.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index", "--all"])
+        r = cli_runner.invoke(["spatial-tree", "index"])
         assert r.exit_code == 0, r.stderr
 
         stats = _get_spatial_tree_stats(repo_path)
