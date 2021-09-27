@@ -312,10 +312,13 @@ get_geometry.legend_to_col_id = {}
 
 
 def _find_geometry_column(fields):
+    result = NO_GEOMETRY_COLUMN
     for i, field in enumerate(fields):
         if isinstance(field, Geometry):
             return i
-    return NO_GEOMETRY_COLUMN
+        if field is None:
+            result = None
+    return result
 
 
 def find_s2_cells(s2_coverer, geom, transforms):
