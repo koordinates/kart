@@ -302,7 +302,9 @@ class RichBaseDataset(BaseDataset):
 
             yield Delta(old_half_delta, new_half_delta)
 
-    def apply_diff(self, dataset_diff, tree_builder, *, allow_missing_old_values=False):
+    def apply_diff(
+        self, dataset_diff, tree_builder, *, resolve_missing_values_from_ds=None
+    ):
         """
         Given a diff that only affects this dataset, write it to the given treebuilder.
         Blobs will be created in the repo, and referenced in the resulting tree, but
@@ -315,7 +317,7 @@ class RichBaseDataset(BaseDataset):
             self.apply_meta_diff(
                 meta_diff,
                 tree_builder,
-                allow_missing_old_values=allow_missing_old_values,
+                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
             if "schema.json" in meta_diff and meta_diff["schema.json"].new_value:
@@ -327,11 +329,11 @@ class RichBaseDataset(BaseDataset):
                 feature_diff,
                 tree_builder,
                 schema=schema,
-                allow_missing_old_values=allow_missing_old_values,
+                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
     def apply_meta_diff(
-        self, meta_diff, tree_builder, *, allow_missing_old_values=False
+        self, meta_diff, tree_builder, *, resolve_missing_values_from_ds=None
     ):
         """Applies a meta diff. Not supported until Datasets V2"""
         if not meta_diff:
@@ -342,11 +344,22 @@ class RichBaseDataset(BaseDataset):
         )
 
     def apply_feature_diff(
-        self, feature_diff, tree_builder, *, schema=None, allow_missing_old_values=False
+        self,
+        feature_diff,
+        tree_builder,
+        *,
+        schema=None,
+        resolve_missing_values_from_ds=None,
     ):
         """Applies a feature diff."""
         if not feature_diff:
             return
+
+        schema_changed_since_patch = False
+        if resolve_missing_values_from_ds is not None:
+            schema_changed_since_patch = (
+                resolve_missing_values_from_ds.schema != self.schema
+            )
 
         with tree_builder.chdir(self.inner_path):
             # Applying diffs works even if there is no tree yet created for the dataset,
@@ -381,17 +394,57 @@ class RichBaseDataset(BaseDataset):
                     )
                     continue
 
-                if (
-                    delta.type == "insert"
-                    and (not allow_missing_old_values)
-                    and new_path in tree
-                ):
-                    has_conflicts = True
-                    click.echo(
-                        f"{self.path}: Trying to create feature that already exists: {new_key}",
-                        err=True,
-                    )
-                    continue
+                if delta.type == "insert" and new_path in tree:
+                    if resolve_missing_values_from_ds is None:
+                        has_conflicts = True
+                        click.echo(
+                            f"{self.path}: Trying to create feature that already exists: {new_key}",
+                            err=True,
+                        )
+                        continue
+                    else:
+                        feature_conflict_since_patch = False
+                        if schema_changed_since_patch:
+                            # can't use feature OID check here, since schema changes mean that two objects with
+                            # the same OID can actually resolve to different features.
+                            # So we have to call get_feature() twice for every feature
+                            old_feature = resolve_missing_values_from_ds.get_feature(
+                                path=new_path
+                            )
+                            current_feature = self.get_feature(path=new_path)
+                            feature_conflict_since_patch = (
+                                old_feature != current_feature
+                            )
+                        else:
+                            # Fast path - check old features against old features by just comparing OIDs, mostly.
+                            current_blob = self.inner_tree / new_path
+                            old_blob = (
+                                resolve_missing_values_from_ds.inner_tree / new_path
+                            )
+                            old_feature = None
+                            current_feature = None
+
+                            if current_blob.oid != old_blob.oid:
+                                # Two different blobs, but we still need to check the feature is different.
+                                old_feature = (
+                                    resolve_missing_values_from_ds.get_feature(
+                                        path=new_path
+                                    )
+                                )
+                                current_feature = self.get_feature(path=new_path)
+                                current_feature.update(delta.new.value)
+
+                                feature_conflict_since_patch = (
+                                    old_feature != current_feature
+                                )
+
+                        if feature_conflict_since_patch:
+                            has_conflicts = True
+                            click.echo(
+                                f"{self.path}: Feature was modified since patch: {new_key}",
+                                err=True,
+                            )
+                            continue
 
                 if delta.type == "update" and old_path not in tree:
                     has_conflicts = True

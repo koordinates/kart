@@ -4,6 +4,7 @@ from collections import deque
 import click
 import pygit2
 
+from .diff_util import get_repo_diff
 from .exceptions import (
     InvalidOperation,
     NotFound,
@@ -177,16 +178,16 @@ class RepoStructure:
         obj = self.commit or self.tree
         return obj.short_id if obj is not None else None
 
-    def create_tree_from_diff(self, repo_diff, *, allow_missing_old_values=False):
+    def create_tree_from_diff(self, repo_diff, *, resolve_missing_values_from_rs=None):
         """
         Given a diff, returns a new tree created by applying the diff to self.tree -
         Doesn't create any commits or modify the working copy at all.
 
-        If allow_missing_old_values=True, deltas are not checked for conflicts
-        if they have no old_value. This allows for patches to be generated without
-        reference to the old values, which can be (significantly) more efficient.
-        However, it can also be more prone to data loss if the patch isn't generated
-        from the same base revision.
+        If resolve_missing_values_from_rs is provided, we check each delta for conflicts
+        by comparing the diff between  if 'insert' deltas
+        are actually updates from the given base RepoStructure.
+        This supports patches generated with `kart create-patch --patch-type=minimal`,
+        which can be (significantly) smaller.
         """
         tree_builder = RichTreeBuilder(self.repo, self.tree)
 
@@ -215,8 +216,19 @@ class RepoStructure:
             else:
                 dataset = self.datasets[ds_path]
 
+            resolve_missing_values_from_ds = None
+            if resolve_missing_values_from_rs is not None:
+                try:
+                    resolve_missing_values_from_ds = (
+                        resolve_missing_values_from_rs.datasets[ds_path]
+                    )
+                except KeyError:
+                    pass
+
             dataset.apply_diff(
-                ds_diff, tree_builder, allow_missing_old_values=allow_missing_old_values
+                ds_diff,
+                tree_builder,
+                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
             tree_builder.flush()
 
@@ -277,7 +289,7 @@ class RepoStructure:
         author=None,
         committer=None,
         allow_empty=False,
-        allow_missing_old_values=False,
+        resolve_missing_values_from_rs=None,
     ):
         """
         Update the repository structure and write the updated data to the tree
@@ -295,7 +307,7 @@ class RepoStructure:
 
         new_tree = self.create_tree_from_diff(
             wcdiff,
-            allow_missing_old_values=allow_missing_old_values,
+            resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
         if (not allow_empty) and new_tree == self.tree:
             raise NotFound("No changes to commit", exit_code=NO_CHANGES)

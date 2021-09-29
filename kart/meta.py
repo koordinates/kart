@@ -192,7 +192,6 @@ def meta_set(ctx, message, dataset, items):
         do_commit=True,
         patch_file=patch_file,
         allow_empty=False,
-        allow_missing_old_values=True,
     )
 
 

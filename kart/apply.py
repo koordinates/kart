@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum, auto
 
 import click
+import pygit2
 
 from .exceptions import (
     NO_TABLE,
@@ -37,12 +38,16 @@ class MetaChangeType(Enum):
     META_UPDATE = auto()
 
 
-def _meta_change_type(ds_diff_dict, allow_missing_old_values):
+def _meta_change_type(ds_diff_dict, resolve_missing_values_from_rs):
     meta_diff = ds_diff_dict.get("meta", {})
     if not meta_diff:
         return None
     schema_diff = meta_diff.get("schema.json", {})
-    if "+" in schema_diff and "-" not in schema_diff and not allow_missing_old_values:
+    if (
+        "+" in schema_diff
+        and "-" not in schema_diff
+        and not resolve_missing_values_from_rs
+    ):
         return MetaChangeType.CREATE_DATASET
     elif "-" in schema_diff and "+" not in schema_diff:
         return MetaChangeType.DELETE_DATASET
@@ -165,7 +170,6 @@ def apply_patch(
     do_commit,
     patch_file,
     allow_empty,
-    allow_missing_old_values=False,
     ref="HEAD",
     **kwargs,
 ):
@@ -181,6 +185,7 @@ def apply_patch(
         raise click.FileError(
             "Failed to parse JSON patch file: patch contains no `kart.diff/v1+hexwkb` object"
         )
+
     metadata = patch.get("kart.patch/v1")
     if metadata is None:
         metadata = patch.get("sno.patch/v1")
@@ -190,12 +195,12 @@ def apply_patch(
 
     resolve_missing_values_from_rs = None
     if "base" in metadata:
-        # if the patch has a `base` that's present in this repo,
+        # if the patch has a `originalParent` that's present in this repo,
         # then we allow the `-` blobs to be missing, because we can resolve the `-` blobs
         # from that revision.
         try:
             # this only resolves if it's a commit or tree ID, not if it's a symref
-            patch_tree = repo.get(metadata["base"]).peel(pygit2.Tree)
+            patch_tree = repo.get(metadata["originalParent"]).peel(pygit2.Tree)
             resolve_missing_values_from_rs = repo.structure(patch_tree)
         except KeyError:
             # this might be fine (if it's a 'full' patch), but maybe we should warn?
@@ -223,7 +228,9 @@ def apply_patch(
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():
         dataset = rs.datasets.get(ds_path)
-        meta_change_type = _meta_change_type(ds_diff_dict, allow_missing_old_values)
+        meta_change_type = _meta_change_type(
+            ds_diff_dict, resolve_missing_values_from_rs
+        )
         check_change_supported(
             repo.version, dataset, ds_path, meta_change_type, do_commit
         )
@@ -261,21 +268,12 @@ def apply_patch(
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
     if do_commit:
-        metadata = patch.get("kart.patch/v1")
-        if metadata is None:
-            metadata = patch.get("sno.patch/v1")
-        if metadata is None:
-            # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
-            raise click.UsageError(
-                "Patch contains no author information (`kart.patch/v1` object), and --no-commit was not supplied"
-            )
-
         commit = rs.commit_diff(
             repo_diff,
             metadata["message"],
             author=_build_signature(metadata, "author", repo),
             allow_empty=allow_empty,
-            allow_missing_old_values=allow_missing_old_values,
+            resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
         click.echo(f"Commit {commit.hex}")
 
@@ -287,7 +285,7 @@ def apply_patch(
     else:
         new_wc_target = rs.create_tree_from_diff(
             repo_diff,
-            allow_missing_old_values=allow_missing_old_values,
+            resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
 
     if wc and new_wc_target:
@@ -312,19 +310,6 @@ def apply_patch(
         "Usually recording a commit that has the exact same tree as its sole "
         "parent commit is a mistake, and the command prevents you from making "
         "such a commit. This option bypasses the safety"
-    ),
-)
-@click.option(
-    "--allow-missing-old-values",
-    is_flag=True,
-    default=False,
-    hidden=True,
-    help=(
-        "Treats deltas with no '-' value loosely, as either an "
-        "insert or an update. Doesn't check for conflicts with the old "
-        "version of the feature. For use in external patch generators that "
-        "don't have access to the old features, or which have extra "
-        "certainty about the applicability of the patch. Use with caution."
     ),
 )
 @click.option("--ref", default="HEAD", help="Which ref to apply the patch onto.")
