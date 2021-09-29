@@ -25,9 +25,19 @@ from .sqlalchemy.sqlite import sqlite_engine
 
 L = logging.getLogger("kart.spatial_tree")
 
+# These three values cannot be changed without rewriting the entire index:
+S2_MIN_LEVEL = 4
+S2_MAX_LEVEL = 16
+S2_LEVEL_MOD = 1
 
+S2_PARAMETERS = {
+    "min_level": S2_MIN_LEVEL,
+    "max_level": S2_MAX_LEVEL,
+    "level_mod": S2_LEVEL_MOD,
+}
+
+# But this value can be changed at any time.
 S2_MAX_CELLS_INDEX = 8
-S2_MAX_LEVEL = 15
 
 
 def _revlist_command(repo):
@@ -147,10 +157,20 @@ class CrsHelper:
 
 
 class SpatialTreeTables(TableSet):
-    """Tables for associating a variable number of S2 cells with each feature."""
+    """Tables for associating a variable number of S2 tokens with each feature."""
 
     def __init__(self):
         super().__init__()
+
+        # "parameters" records the parameters used to create this index. The same parameters must be used
+        # when updating the index and when querying the index - it won't work if not kept consistent.
+        self.parameters = Table(
+            "parameters",
+            self.sqlalchemy_metadata,
+            Column("min_level", Integer, nullable=False),
+            Column("max_level", Integer, nullable=False),
+            Column("level_mod", Integer, nullable=False),
+        )
 
         # "commits" tracks all the commits we have indexed.
         # A commit is only considered indexed if ALL of its ancestors are also indexed - this means
@@ -163,14 +183,14 @@ class SpatialTreeTables(TableSet):
             Column("commit_id", BLOB, nullable=False, primary_key=True),
         )
 
-        # "blobs" tracks all the features we have indexed (even if they do not overlap any s2 cells).
+        # "blobs" tracks all the features we have indexed (even if they have no associated S2 tokens).
         self.blobs = Table(
             "blobs",
             self.sqlalchemy_metadata,
             # From a user-perspective, "rowid" isjust an arbitrary integer primary key.
             # In more detail: This column aliases to the sqlite rowid of the table.
             # See https://www.sqlite.org/lang_createtable.html#rowid
-            # Using the rowid directly as a foreign key (see "blob_cells") means faster joins.
+            # Using the rowid directly as a foreign key (see "blob_tokens") means faster joins.
             # The rowid can be used without creating a column that aliases to it, but you shouldn't -
             # rowids might change if they are not aliased. See https://sqlite.org/lang_vacuum.html)
             Column("rowid", Integer, nullable=False, primary_key=True),
@@ -180,9 +200,12 @@ class SpatialTreeTables(TableSet):
             sqlite_autoincrement=True,
         )
 
-        # "blob_cells" associates 0 or more S2 cell tokens with each feature that we have indexed.
-        self.blob_cells = Table(
-            "blob_cells",
+        # "blob_tokens" associates 0 or more S2 cell tokens with each feature that we have indexed.
+        # Technically these are "index terms" not S2 cell tokens since they are slightly more complicated
+        # - there are two types of term, ANCESTOR and COVERING. COVERING terms start with a "$" prefix.
+        # For more details on how indexing works, consult the S2RegionTermIndexer documentation.
+        self.blob_tokens = Table(
+            "blob_tokens",
             self.sqlalchemy_metadata,
             # Reference to blobs.rowid.
             Column(
@@ -192,10 +215,11 @@ class SpatialTreeTables(TableSet):
                 nullable=False,
                 primary_key=True,
             ),
-            # S2 cell token eg "6d6dd90351b31cbf".
+            # S2 index term eg "6d6dd90351b31cbf" or "$6e1".
             # To locate an S2 cell by token, see https://s2.sidewalklabs.com/regioncoverer/
+            # (and remove any $ prefix from these index terms so that they are simply S2 cell tokens).
             Column(
-                "cell_token",
+                "s2_token",
                 Text,
                 nullable=False,
                 primary_key=True,
@@ -207,7 +231,9 @@ SpatialTreeTables.copy_tables_to_class()
 
 
 def drop_tables(sess):
-    sess.execute("DROP TABLE IF EXISTS blob_cells;")
+    sess.execute("DROP TABLE IF EXISTS parameters;")
+    sess.execute("DROP TABLE IF EXISTS commits;")
+    sess.execute("DROP TABLE IF EXISTS blob_tokens;")
     sess.execute("DROP TABLE IF EXISTS blobs;")
 
 
@@ -250,7 +276,7 @@ def _minimal_description_of_commit_set(repo, commits):
     return set(r.stdout.splitlines())
 
 
-def _build_on_last_index(repo, start_commits, sess):
+def _build_on_last_index(repo, start_commits, engine, clear_existing=False):
     """
     Given a set of commits to index (including their ancestors) - the "start-commits" - returns the following:
     - the minimal description of the "start-commits"
@@ -264,21 +290,57 @@ def _build_on_last_index(repo, start_commits, sess):
     last time the index was brought up to date (or completed up to a certain point).
     """
 
-    commits_table_exists = sess.scalar(
-        "SELECT count(*) FROM sqlite_master WHERE name = 'commits';"
-    )
-    if commits_table_exists:
-        stop_commits = {
-            row[0].hex() for row in sess.execute("SELECT commit_id FROM commits;")
-        }
-    else:
-        stop_commits = set()
+    stop_commits = set()
+
+    if not clear_existing:
+        with sessionmaker(bind=engine)() as sess:
+            commits_table_exists = sess.scalar(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'commits';"
+            )
+            if commits_table_exists:
+                stop_commits = {
+                    row[0].hex()
+                    for row in sess.execute("SELECT commit_id FROM commits;")
+                }
 
     all_independent_commits = _minimal_description_of_commit_set(
         repo, start_commits | stop_commits
     )
     start_commits = all_independent_commits - stop_commits
     return (start_commits, stop_commits, all_independent_commits)
+
+
+def _create_indexer_from_parameters(sess):
+    """
+    Return an S2RegionTermIndexer configured according to the parameters table.
+    Storing these parameters in a table means we can change them if needed without breaking Kart.
+    """
+
+    import s2_py as s2
+
+    parameters_count = sess.scalar("SELECT COUNT(*) FROM parameters;")
+    assert parameters_count <= 1
+    if not parameters_count:
+        sess.execute(
+            """
+            INSERT INTO parameters (min_level, max_level, level_mod)
+            VALUES (:min_level, :max_level, :level_mod);
+            """,
+            S2_PARAMETERS,
+        )
+
+    row = sess.execute(
+        "SELECT min_level, max_level, level_mod FROM parameters;"
+    ).fetchone()
+    assert row is not None
+    min_level, max_level, level_mod = row
+
+    s2_indexer = s2.S2RegionTermIndexer()
+    s2_indexer.set_min_level(min_level)
+    s2_indexer.set_max_level(max_level)
+    s2_indexer.set_level_mod(level_mod)
+    s2_indexer.set_max_cells(S2_MAX_CELLS_INDEX)
+    return s2_indexer
 
 
 def _format_commits(repo, commit_ids):
@@ -297,28 +359,21 @@ def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
     verbosity - how much non-essential information to output.
     clear_existing - when true, deletes any pre-existing data before re-indexing.
     """
-    import s2_py as s2
-
     crs_helper = CrsHelper(repo)
 
     db_path = repo.gitdir_file(KartRepoFiles.S2_INDEX)
     engine = sqlite_engine(db_path)
 
     # Find out where we were up to last time, don't reindex anything that's already indexed.
-    with sessionmaker(bind=engine)() as sess:
-        start_commits, stop_commits, all_independent_commits = _build_on_last_index(
-            repo, commits, sess
-        )
+    start_commits, stop_commits, all_independent_commits = _build_on_last_index(
+        repo, commits, engine, clear_existing=clear_existing
+    )
 
     if not start_commits:
         click.echo("Nothing to do: index already up to date.")
         return
 
     feature_oid_iter = iter_feature_oids(repo, start_commits, stop_commits)
-
-    s2_coverer = s2.S2RegionCoverer()
-    s2_coverer.set_max_cells(S2_MAX_CELLS_INDEX)
-    s2_coverer.set_max_level(S2_MAX_LEVEL)
 
     progress_every = None
     if verbosity >= 1:
@@ -329,6 +384,7 @@ def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
             drop_tables(sess)
 
         SpatialTreeTables.create_all(sess)
+        s2_indexer = _create_indexer_from_parameters(sess)
 
     # We index from the most recent commits, and stop at the already-indexed ancestors -
     # but in terms of logging it makes more sense to say: indexing from <ANCESTORS> to <CURRENT>.
@@ -360,9 +416,9 @@ def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
             if geom is None:
                 continue
             try:
-                s2_cell_tokens = find_s2_cells(s2_coverer, geom, transforms)
+                s2_tokens = get_s2_tokens(s2_indexer, geom, transforms)
             except Exception as e:
-                L.warning(f"Couldn't locate S2 cells for {feature_oid}:\n{e}")
+                L.warning(f"Couldn't generate S2 index for {feature_oid}:\n{e}")
                 continue
 
             params = (bytes.fromhex(feature_oid),)
@@ -375,12 +431,12 @@ def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
                 dbcur.execute("INSERT INTO blobs (blob_id) VALUES (?);", params)
                 rowid = dbcur.lastrowid
 
-            if not s2_cell_tokens:
+            if not s2_tokens:
                 continue
 
-            params = [(rowid, token) for token in s2_cell_tokens]
+            params = [(rowid, token) for token in s2_tokens]
             dbcur.executemany(
-                "INSERT OR IGNORE INTO blob_cells (blob_rowid, cell_token) VALUES (?, ?);",
+                "INSERT OR IGNORE INTO blob_tokens (blob_rowid, s2_token) VALUES (?, ?);",
                 params,
             )
 
@@ -418,13 +474,13 @@ def _find_geometry_column(fields):
     return result
 
 
-def find_s2_cells(s2_coverer, geom, transforms):
+def get_s2_tokens(s2_indexer, geom, transforms):
     is_point = geom.geometry_type == GeometryType.POINT
 
     return (
-        _point_f2_cells(s2_coverer, geom, transforms)
+        _point_s2_tokens(s2_indexer, geom, transforms)
         if is_point
-        else _general_s2_cells(s2_coverer, geom, transforms)
+        else _general_s2_tokens(s2_indexer, geom, transforms)
     )
 
 
@@ -436,7 +492,7 @@ def _apply_transform(original, transform, overwrite_original=False):
     return result
 
 
-def _point_f2_cells(s2_coverer, geom, transforms):
+def _point_s2_tokens(s2_indexer, geom, transforms):
     import s2_py as s2
 
     g = gpkg_geom_to_ogr(geom)
@@ -447,13 +503,13 @@ def _point_f2_cells(s2_coverer, geom, transforms):
         g_transformed = _apply_transform(g, transform, overwrite_original=one_transform)
         p = g_transformed.GetPoint()[:2]
         s2_ll = s2.S2LatLng.FromDegrees(p[1], p[0]).Normalized()
-        s2_token = s2.S2CellId(s2_ll.ToPoint()).ToToken()
-        result.add(s2_token)
+        query_terms = s2_indexer.GetIndexTerms(s2_ll.ToPoint(), "")
+        result.update(query_terms)
 
     return result
 
 
-def _general_s2_cells(s2_coverer, geom, transforms):
+def _general_s2_tokens(s2_indexer, geom, transforms):
     import s2_py as s2
 
     e = geom_envelope(geom)
@@ -474,8 +530,8 @@ def _general_s2_cells(s2_coverer, geom, transforms):
             s2_ll.append(s2.S2LatLng.FromDegrees(p_dest[1], p_dest[0]).Normalized())
 
         s2_llrect = s2.S2LatLngRect.FromPointPair(*s2_ll)
-        for s2_cell_id in s2_coverer.GetCovering(s2_llrect):
-            result.add(s2_cell_id.ToToken())
+        query_terms = s2_indexer.GetIndexTerms(s2_llrect, "")
+        result.update(query_terms)
 
     return result
 

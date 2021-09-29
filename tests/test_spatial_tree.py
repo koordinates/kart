@@ -19,9 +19,9 @@ def test_index_points_all(data_archive, cli_runner):
 
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 2148
-        assert stats.avg_cell_tokens_per_feature == 1
-        assert stats.avg_cell_token_length == 16
-        assert stats.distinct_cell_tokens == 2143
+        assert stats.avg_s2_tokens_per_feature == 13.0
+        assert stats.avg_s2_token_length == pytest.approx(6.231, abs=0.001)
+        assert stats.distinct_s2_tokens == 10980
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
@@ -38,9 +38,9 @@ def test_index_points_commit_by_commit(data_archive, cli_runner):
 
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 2148
-        assert stats.avg_cell_tokens_per_feature == 1
-        assert stats.avg_cell_token_length == 16
-        assert stats.distinct_cell_tokens == 2143
+        assert stats.avg_s2_tokens_per_feature == 13.0
+        assert stats.avg_s2_token_length == pytest.approx(6.231, abs=0.001)
+        assert stats.distinct_s2_tokens == 10980
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
@@ -77,9 +77,9 @@ def test_index_points_idempotent(data_archive, cli_runner):
         assert "Nothing to do" not in r.stdout
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 2148
-        assert stats.avg_cell_tokens_per_feature == 1
-        assert stats.avg_cell_token_length == 16
-        assert stats.distinct_cell_tokens == 2143
+        assert stats.avg_s2_tokens_per_feature == 13.0
+        assert stats.avg_s2_token_length == pytest.approx(6.231, abs=0.001)
+        assert stats.distinct_s2_tokens == 10980
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
@@ -92,11 +92,13 @@ def test_index_polygons_all(data_archive, cli_runner):
 
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 228
-        assert stats.avg_cell_tokens_per_feature == pytest.approx(
-            7.276 if is_linux else 7.232, abs=0.1
+        assert stats.avg_s2_tokens_per_feature == pytest.approx(
+            30.101 if is_linux else 30.075, abs=0.001
         )
-        assert stats.avg_cell_token_length == pytest.approx(8.066, abs=0.1)
-        assert stats.distinct_cell_tokens == 1370 if is_linux else 1360
+        assert stats.avg_s2_token_length == pytest.approx(
+            7.290 if is_linux else 7.292, abs=0.001
+        )
+        assert stats.distinct_s2_tokens == 3812 if is_linux else 3802
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
@@ -107,7 +109,7 @@ def test_index_table_all(data_archive, cli_runner):
 
         stats = _get_spatial_tree_stats(repo_path)
         assert stats.features == 0
-        assert stats.cell_tokens == 0
+        assert stats.s2_tokens == 0
 
 
 def _get_spatial_tree_stats(repo_path):
@@ -121,24 +123,24 @@ def _get_spatial_tree_stats(repo_path):
     with sessionmaker(bind=engine)() as sess:
         orphans = sess.execute(
             """
-            SELECT blob_rowid FROM blob_cells
+            SELECT blob_rowid FROM blob_tokens
             EXCEPT SELECT rowid FROM blobs;
             """
         )
         assert orphans.first() is None
 
         stats.features = sess.scalar("SELECT COUNT(*) FROM blobs;")
-        stats.cell_tokens = sess.scalar("SELECT COUNT(*) FROM blob_cells;")
+        stats.s2_tokens = sess.scalar("SELECT COUNT(*) FROM blob_tokens;")
 
         if stats.features:
-            stats.avg_cell_tokens_per_feature = stats.cell_tokens / stats.features
+            stats.avg_s2_tokens_per_feature = stats.s2_tokens / stats.features
 
-        if stats.cell_tokens:
-            stats.avg_cell_token_length = sess.scalar(
-                "SELECT AVG(LENGTH(cell_token)) FROM blob_cells;"
+        if stats.s2_tokens:
+            stats.avg_s2_token_length = sess.scalar(
+                "SELECT AVG(LENGTH(s2_token)) FROM blob_tokens;"
             )
-            stats.distinct_cell_tokens = sess.scalar(
-                "SELECT COUNT (DISTINCT cell_token) FROM blob_cells;"
+            stats.distinct_s2_tokens = sess.scalar(
+                "SELECT COUNT (DISTINCT s2_token) FROM blob_tokens;"
             )
 
     return stats
