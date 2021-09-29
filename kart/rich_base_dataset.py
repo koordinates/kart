@@ -418,25 +418,31 @@ class RichBaseDataset(BaseDataset):
                         else:
                             # Fast path - check old features against old features by just comparing OIDs, mostly.
                             current_blob = self.inner_tree / new_path
-                            old_blob = (
-                                resolve_missing_values_from_ds.inner_tree / new_path
-                            )
-                            old_feature = None
-                            current_feature = None
+                            try:
+                                old_blob = (
+                                    resolve_missing_values_from_ds.inner_tree / new_path
+                                )
+                            except KeyError:
+                                # this really was an insert. but it's a conflict, because the PK has been used
+                                # by a later insert (because new_path is in self.inner_tree)
+                                feature_conflict_since_patch = True
+                            else:
+                                old_feature = None
+                                current_feature = None
 
-                            if current_blob.oid != old_blob.oid:
-                                # Two different blobs, but we still need to check the feature is different.
-                                old_feature = (
-                                    resolve_missing_values_from_ds.get_feature(
-                                        path=new_path
+                                if current_blob.oid != old_blob.oid:
+                                    # Two different blobs, but we still need to check the feature is different.
+                                    old_feature = (
+                                        resolve_missing_values_from_ds.get_feature(
+                                            path=new_path
+                                        )
                                     )
-                                )
-                                current_feature = self.get_feature(path=new_path)
-                                current_feature.update(delta.new.value)
+                                    current_feature = self.get_feature(path=new_path)
+                                    current_feature.update(delta.new.value)
 
-                                feature_conflict_since_patch = (
-                                    old_feature != current_feature
-                                )
+                                    feature_conflict_since_patch = (
+                                        old_feature != current_feature
+                                    )
 
                         if feature_conflict_since_patch:
                             has_conflicts = True
