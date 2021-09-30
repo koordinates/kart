@@ -9,6 +9,7 @@ import pygit2
 from .exceptions import (
     NO_TABLE,
     NO_WORKING_COPY,
+    PATCH_DOES_NOT_APPLY,
     NotFound,
     NotYetImplemented,
     InvalidOperation,
@@ -126,19 +127,32 @@ class NullSchemaParser:
 class DeltaParser:
     """Parses JSON for a delta - ie {"-": old-value, "+": new-value} - into a Delta object."""
 
-    def __init__(self, old_schema, new_schema):
+    def __init__(self, old_schema, new_schema, *, allow_minimal_updates=False):
         self.old_parser = (
             KeyValueParser(old_schema) if old_schema else NullSchemaParser("old")
         )
         self.new_parser = (
             KeyValueParser(new_schema) if new_schema else NullSchemaParser("new")
         )
+        self.allow_minimal_updates = allow_minimal_updates
 
     def parse(self, change):
-        return Delta(
-            self.old_parser.parse(change.get("-")),
-            self.new_parser.parse(change.get("+")),
-        )
+        if "*" in change:
+            if self.allow_minimal_updates:
+                return Delta(
+                    None,
+                    self.new_parser.parse(change.get("*")),
+                )
+            else:
+                raise InvalidOperation(
+                    "No 'base' commit specified in patch, can't accept '*' deltas",
+                    exit_code=PATCH_DOES_NOT_APPLY,
+                )
+        else:
+            return Delta(
+                self.old_parser.parse(change.get("-")),
+                self.new_parser.parse(change.get("+")),
+            )
 
 
 def _build_signature(patch_metadata, person, repo):
@@ -195,12 +209,12 @@ def apply_patch(
 
     resolve_missing_values_from_rs = None
     if "base" in metadata:
-        # if the patch has a `originalParent` that's present in this repo,
+        # if the patch has a `base` that's present in this repo,
         # then we allow the `-` blobs to be missing, because we can resolve the `-` blobs
         # from that revision.
         try:
             # this only resolves if it's a commit or tree ID, not if it's a symref
-            patch_tree = repo.get(metadata["originalParent"]).peel(pygit2.Tree)
+            patch_tree = repo.get(metadata["base"]).peel(pygit2.Tree)
             resolve_missing_values_from_rs = repo.structure(patch_tree)
         except KeyError:
             # this might be fine (if it's a 'full' patch), but maybe we should warn?
@@ -238,10 +252,10 @@ def apply_patch(
         meta_changes = ds_diff_dict.get("meta", {})
 
         if meta_changes:
+            allow_minimal_updates = bool(resolve_missing_values_from_rs)
             meta_diff = DeltaDiff(
-                Delta(
-                    (k, v["-"]) if "-" in v else None,
-                    (k, v["+"]) if "+" in v else None,
+                Delta.from_key_and_plus_minus_dict(
+                    k, v, allow_minimal_updates=allow_minimal_updates
                 )
                 for (k, v) in meta_changes.items()
             )
@@ -261,7 +275,11 @@ def apply_patch(
             if schema_delta and schema_delta.new_value:
                 new_schema = Schema.from_column_dicts(schema_delta.new_value)
 
-            delta_parser = DeltaParser(old_schema, new_schema)
+            delta_parser = DeltaParser(
+                old_schema,
+                new_schema,
+                allow_minimal_updates=bool(resolve_missing_values_from_rs),
+            )
             feature_diff = DeltaDiff(
                 (delta_parser.parse(change) for change in feature_changes)
             )

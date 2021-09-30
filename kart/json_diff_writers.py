@@ -34,9 +34,9 @@ class JsonDiffWriter(BaseDiffWriter):
     which contains information about the commit object.
     """
 
-    def __init__(self, *args, include_old_blobs_for_edits=True, **kwargs):
+    def __init__(self, *args, patch_type="full", **kwargs):
         super().__init__(*args, **kwargs)
-        self.include_old_blobs_for_edits = include_old_blobs_for_edits
+        self.patch_type = patch_type
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
@@ -71,10 +71,11 @@ class JsonDiffWriter(BaseDiffWriter):
         )
         self.write_warnings_footer()
 
-    def _make_meta_delta_serializable(self, delta):
+    def _postprocess_meta_delta(self, delta):
         r = delta.to_plus_minus_dict()
-        if (not self.include_old_blobs_for_edits) and "+" in r and "-" in r:
+        if self.patch_type == "minimal" and "+" in r and "-" in r:
             r.pop("-")
+            r["*"] = r.pop("+")
         return r
 
     def default(self, obj):
@@ -84,7 +85,7 @@ class JsonDiffWriter(BaseDiffWriter):
             result = {}
             if "meta" in ds_diff:
                 result["meta"] = {
-                    key: self._make_meta_delta_serializable(value)
+                    key: self._postprocess_meta_delta(value)
                     for key, value in ds_diff["meta"].items()
                 }
             if "feature" in ds_diff:
@@ -103,14 +104,22 @@ class JsonDiffWriter(BaseDiffWriter):
         for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
             delta_as_json = {}
 
-            if delta.old and (self.include_old_blobs_for_edits or not delta.new):
-                delta_as_json["-"] = feature_as_json(
-                    delta.old_value, delta.old_key, old_transform
-                )
+            if delta.old:
+                if self.patch_type == "full" or not delta.new:
+                    delta_as_json["-"] = feature_as_json(
+                        delta.old_value, delta.old_key, old_transform
+                    )
+
             if delta.new:
-                delta_as_json["+"] = feature_as_json(
-                    delta.new_value, delta.new_key, new_transform
-                )
+                feature = feature_as_json(delta.new_value, delta.new_key, new_transform)
+                if delta.old and self.patch_type == "minimal":
+                    # mark feature updates using a different key, otherwise they can
+                    # be easily confused with inserts, since minimal-style patches don't
+                    # include a `-` key.
+                    key = "*"
+                else:
+                    key = "+"
+                delta_as_json[key] = feature
             yield delta_as_json
 
 

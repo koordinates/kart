@@ -266,9 +266,7 @@ def points_patch(ds_edits):
     }
 
 
-def test_apply_minimal_style_patch_without_base(
-    data_archive, cli_runner, tmp_path
-):
+def test_apply_minimal_style_patch_without_base(data_archive, cli_runner, tmp_path):
     patch = points_patch(
         {
             "meta": {
@@ -292,7 +290,7 @@ def test_apply_minimal_style_meta_patch(data_archive, cli_runner, tmp_path):
         {
             "meta": {
                 "title": {
-                    "+": "new title:",
+                    "*": "new title:",
                 }
             }
         }
@@ -316,7 +314,7 @@ def test_apply_minimal_style_meta_patch(data_archive, cli_runner, tmp_path):
             {
                 "meta": {
                     "title": {
-                        "+": "differently new title:",
+                        "*": "differently new title:",
                     }
                 }
             }
@@ -334,8 +332,8 @@ def test_apply_minimal_style_feature_patch_with_edit(
         {
             "feature": [
                 {
-                    # one edit (in minimal style it looks like an insert, but FID 1182 already exists)
-                    "+": {
+                    # one edit (FID 1182 already exists)
+                    "*": {
                         "fid": 1182,
                         "geom": "01010000009933726825F76540140C370F236742C0",
                         "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
@@ -384,7 +382,7 @@ def test_apply_minimal_style_feature_patch_with_edit(
             {
                 "feature": [
                     {
-                        "+": {
+                        "*": {
                             "fid": 1182,
                             "geom": "01010000009933726825F76540140C370F236742C0",
                             "t50_fid": 2427426,

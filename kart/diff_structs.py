@@ -2,6 +2,8 @@ from collections import UserDict
 from dataclasses import dataclass
 from typing import Any
 
+from .exceptions import InvalidOperation
+
 
 class Conflict(Exception):
     pass
@@ -89,6 +91,24 @@ class Delta:
     @staticmethod
     def delete(old):
         return Delta(old, None)
+
+    @staticmethod
+    def from_key_and_plus_minus_dict(key, d, allow_minimal_updates=False):
+        if "*" in d:
+            if allow_minimal_updates:
+                return Delta(
+                    None,
+                    (key, d["*"]),
+                )
+            else:
+                raise InvalidOperation(
+                    "No 'base' commit specified in patch, can't accept '*' deltas"
+                )
+        else:
+            return Delta(
+                (key, d["-"]) if "-" in d else None,
+                (key, d["+"]) if "+" in d else None,
+            )
 
     def __invert__(self):
         return Delta(self.new, self.old)

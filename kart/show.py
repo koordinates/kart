@@ -151,8 +151,7 @@ def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
         [],
         output_path,
         json_style=json_style,
-        # include_unchanged_fields=(patch_type == "full"),
-        include_old_blobs_for_edits=(patch_type == "full"),
+        patch_type=patch_type,
     )
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()
