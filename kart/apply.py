@@ -179,9 +179,8 @@ def apply_patch(
         json_diff = patch.get("sno.diff/v1+hexwkb")
     if json_diff is None:
         raise click.FileError(
-            "Failed to parse JSON patch file: patch contains no diff information"
+            "Failed to parse JSON patch file: patch contains no `kart.diff/v1+hexwkb` object"
         )
-
     if ref != "HEAD":
         if not do_commit:
             raise click.UsageError("--no-commit and --ref are incompatible")
@@ -248,7 +247,7 @@ def apply_patch(
         if metadata is None:
             # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
             raise click.UsageError(
-                "Patch contains no author information, and --no-commit was not supplied"
+                "Patch contains no author information (`kart.patch/v1` object), and --no-commit was not supplied"
             )
 
         commit = rs.commit_diff(
