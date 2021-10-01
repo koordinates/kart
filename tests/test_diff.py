@@ -61,30 +61,30 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                '--- nz_pa_points_topo_150k:feature:1',
-                '+++ nz_pa_points_topo_150k:feature:9998',
-                '-                                      fid = 1',
-                '+                                      fid = 9998',
-                '--- nz_pa_points_topo_150k:feature:2',
-                '+++ nz_pa_points_topo_150k:feature:2',
-                '-                                  t50_fid = 2426272',
-                '+                                  t50_fid = ␀',
-                '-                                     name = ␀',
-                '+                                     name = test',
-                '--- nz_pa_points_topo_150k:feature:3',
-                '-                                      fid = 3',
-                '-                                     geom = POINT(...)',
-                '-                                  t50_fid = 2426273',
-                '-                               name_ascii = Tauwhare Pa',
-                '-                               macronated = N',
-                '-                                     name = Tauwhare Pa',
-                '+++ nz_pa_points_topo_150k:feature:9999',
-                '+                                      fid = 9999',
-                '+                                     geom = POINT(...)',
-                '+                                  t50_fid = 9999999',
-                '+                               name_ascii = Te Motu-a-kore',
-                '+                               macronated = N',
-                '+                                     name = Te Motu-a-kore',
+                "--- nz_pa_points_topo_150k:feature:1",
+                "+++ nz_pa_points_topo_150k:feature:9998",
+                "-                                      fid = 1",
+                "+                                      fid = 9998",
+                "--- nz_pa_points_topo_150k:feature:2",
+                "+++ nz_pa_points_topo_150k:feature:2",
+                "-                                  t50_fid = 2426272",
+                "+                                  t50_fid = ␀",
+                "-                                     name = ␀",
+                "+                                     name = test",
+                "--- nz_pa_points_topo_150k:feature:3",
+                "-                                      fid = 3",
+                "-                                     geom = POINT(...)",
+                "-                                  t50_fid = 2426273",
+                "-                               name_ascii = Tauwhare Pa",
+                "-                               macronated = N",
+                "-                                     name = Tauwhare Pa",
+                "+++ nz_pa_points_topo_150k:feature:9999",
+                "+                                      fid = 9999",
+                "+                                     geom = POINT(...)",
+                "+                                  t50_fid = 9999999",
+                "+                               name_ascii = Te Motu-a-kore",
+                "+                               macronated = N",
+                "+                                     name = Te Motu-a-kore",
             ]
         elif output_format == "geojson":
             assert r.exit_code == 0, r
@@ -378,28 +378,28 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                '--- nz_waca_adjustments:feature:1424927',
-                '+++ nz_waca_adjustments:feature:9998',
-                '-                                       id = 1424927',
-                '+                                       id = 9998',
-                '--- nz_waca_adjustments:feature:1443053',
-                '+++ nz_waca_adjustments:feature:1443053',
-                '-                            date_adjusted = 2011-05-10T12:09:10',
-                '+                            date_adjusted = 2019-01-01T00:00:00',
-                '-                         survey_reference = ␀',
-                '+                         survey_reference = test',
-                '--- nz_waca_adjustments:feature:1452332',
-                '-                                       id = 1452332',
-                '-                                     geom = MULTIPOLYGON(...)',
-                '-                            date_adjusted = 2011-06-07T15:22:58',
-                '-                         survey_reference = ␀',
-                '-                           adjusted_nodes = 558',
-                '+++ nz_waca_adjustments:feature:9999999',
-                '+                                       id = 9999999',
-                '+                                     geom = MULTIPOLYGON(...)',
-                '+                            date_adjusted = 2019-07-05T13:04:00',
-                '+                         survey_reference = Null Island™ 🗺',
-                '+                           adjusted_nodes = 123',
+                "--- nz_waca_adjustments:feature:1424927",
+                "+++ nz_waca_adjustments:feature:9998",
+                "-                                       id = 1424927",
+                "+                                       id = 9998",
+                "--- nz_waca_adjustments:feature:1443053",
+                "+++ nz_waca_adjustments:feature:1443053",
+                "-                            date_adjusted = 2011-05-10T12:09:10",
+                "+                            date_adjusted = 2019-01-01T00:00:00",
+                "-                         survey_reference = ␀",
+                "+                         survey_reference = test",
+                "--- nz_waca_adjustments:feature:1452332",
+                "-                                       id = 1452332",
+                "-                                     geom = MULTIPOLYGON(...)",
+                "-                            date_adjusted = 2011-06-07T15:22:58",
+                "-                         survey_reference = ␀",
+                "-                           adjusted_nodes = 558",
+                "+++ nz_waca_adjustments:feature:9999999",
+                "+                                       id = 9999999",
+                "+                                     geom = MULTIPOLYGON(...)",
+                "+                            date_adjusted = 2019-07-05T13:04:00",
+                "+                         survey_reference = Null Island™ 🗺",
+                "+                           adjusted_nodes = 123",
             ]
 
         elif output_format == "geojson":
@@ -728,42 +728,42 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
         elif output_format == "text":
             assert r.exit_code == 0, r
             assert r.stdout.splitlines() == [
-                '--- countiestbl:feature:1',
-                '+++ countiestbl:feature:9998',
-                '-                                 OBJECTID = 1',
-                '+                                 OBJECTID = 9998',
-                '--- countiestbl:feature:2',
-                '+++ countiestbl:feature:2',
-                '-                                     NAME = Ferry',
-                '+                                     NAME = test',
-                '-                                  POP2000 = 7199.0',
-                '+                                  POP2000 = 9867.0',
-                '--- countiestbl:feature:3',
-                '-                                 OBJECTID = 3',
-                '-                                     NAME = Stevens',
-                '-                               STATE_NAME = Washington',
-                '-                               STATE_FIPS = 53',
-                '-                                CNTY_FIPS = 065',
-                '-                                     FIPS = 53065',
-                '-                                     AREA = 2529.9794',
-                '-                                  POP1990 = 30948.0',
-                '-                                  POP2000 = 40652.0',
-                '-                               POP90_SQMI = 12',
-                '-                               Shape_Leng = 4.876296245235406',
-                '-                               Shape_Area = 0.7954858988987561',
-                '+++ countiestbl:feature:9999',
-                '+                                 OBJECTID = 9999',
-                '+                                     NAME = Lake of the Gruffalo',
-                '+                               STATE_NAME = Minnesota',
-                '+                               STATE_FIPS = 27',
-                '+                                CNTY_FIPS = 077',
-                '+                                     FIPS = 27077',
-                '+                                     AREA = 1784.0634',
-                '+                                  POP1990 = 4076.0',
-                '+                                  POP2000 = 4651.0',
-                '+                               POP90_SQMI = 2',
-                '+                               Shape_Leng = 4.05545998243992',
-                '+                               Shape_Area = 0.565449933741451',
+                "--- countiestbl:feature:1",
+                "+++ countiestbl:feature:9998",
+                "-                                 OBJECTID = 1",
+                "+                                 OBJECTID = 9998",
+                "--- countiestbl:feature:2",
+                "+++ countiestbl:feature:2",
+                "-                                     NAME = Ferry",
+                "+                                     NAME = test",
+                "-                                  POP2000 = 7199.0",
+                "+                                  POP2000 = 9867.0",
+                "--- countiestbl:feature:3",
+                "-                                 OBJECTID = 3",
+                "-                                     NAME = Stevens",
+                "-                               STATE_NAME = Washington",
+                "-                               STATE_FIPS = 53",
+                "-                                CNTY_FIPS = 065",
+                "-                                     FIPS = 53065",
+                "-                                     AREA = 2529.9794",
+                "-                                  POP1990 = 30948.0",
+                "-                                  POP2000 = 40652.0",
+                "-                               POP90_SQMI = 12",
+                "-                               Shape_Leng = 4.876296245235406",
+                "-                               Shape_Area = 0.7954858988987561",
+                "+++ countiestbl:feature:9999",
+                "+                                 OBJECTID = 9999",
+                "+                                     NAME = Lake of the Gruffalo",
+                "+                               STATE_NAME = Minnesota",
+                "+                               STATE_FIPS = 27",
+                "+                                CNTY_FIPS = 077",
+                "+                                     FIPS = 27077",
+                "+                                     AREA = 1784.0634",
+                "+                                  POP1990 = 4076.0",
+                "+                                  POP2000 = 4651.0",
+                "+                               POP90_SQMI = 2",
+                "+                               Shape_Leng = 4.05545998243992",
+                "+                               Shape_Area = 0.565449933741451",
             ]
 
         elif output_format == "geojson":
@@ -1211,6 +1211,49 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
         }
 
 
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_3d_diff_wc(data_archive, cli_runner, tmp_path, output_format):
+    with data_archive("gpkg-3d-points") as src:
+        src_gpkg_path = src / "points-3d.gpkg"
+        repo_path = tmp_path / "repo"
+        r = cli_runner.invoke(["init", "--import", src_gpkg_path, repo_path])
+        assert r.exit_code == 0, r.stderr
+        repo = KartRepo(repo_path)
+        with repo.working_copy.session() as sess:
+            r = sess.execute(
+                """UPDATE "points-3d" SET geometry = ST_GeomFromText('POINT Z(1 2 3)', 4326) WHERE id = 1"""
+            )
+            assert r.rowcount == 1
+        r = cli_runner.invoke(["-C", repo_path, "diff", "-o", output_format])
+        assert r.exit_code == 0, r.stderr
+        if output_format == "text":
+            assert r.stdout.splitlines() == [
+                "--- points-3d:feature:1",
+                "+++ points-3d:feature:1",
+                "-                                 geometry = POINT Z(...)",
+                "+                                 geometry = POINT Z(...)",
+            ]
+        elif output_format == "json":
+            assert json.loads(r.stdout) == {
+                "kart.diff/v1+hexwkb": {
+                    "points-3d": {
+                        "feature": [
+                            {
+                                "-": {
+                                    "id": 1,
+                                    "geometry": "01E90300002EB6B430EC7F46C03E08336CE8C844400000000000000000",
+                                },
+                                "+": {
+                                    "id": 1,
+                                    "geometry": "01E9030000000000000000F03F00000000000000400000000000000840",
+                                },
+                            }
+                        ]
+                    }
+                }
+            }
+
+
 def test_diff_object_add_empty():
     null_diff = DeltaDiff()
     assert len(null_diff) == 0
@@ -1525,12 +1568,12 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
             assert "+++ nz_waca_adjustments:feature:1424927" in lines
             index = lines.index("+++ nz_waca_adjustments:feature:1424927")
             assert lines[index : index + 6] == [
-                '+++ nz_waca_adjustments:feature:1424927',
-                '+                                       id = 1424927',
-                '+                                     geom = MULTIPOLYGON(...)',
-                '+                            date_adjusted = 2011-03-25T07:30:45',
-                '+                         survey_reference = ␀',
-                '+                           adjusted_nodes = 1122',
+                "+++ nz_waca_adjustments:feature:1424927",
+                "+                                       id = 1424927",
+                "+                                     geom = MULTIPOLYGON(...)",
+                "+                            date_adjusted = 2011-03-25T07:30:45",
+                "+                         survey_reference = ␀",
+                "+                           adjusted_nodes = 1122",
             ]
 
         elif output_format == "json":
