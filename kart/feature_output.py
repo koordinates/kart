@@ -19,7 +19,7 @@ def feature_field_as_text(row, key, prefix):
     val = row[key]
 
     if isinstance(val, Geometry):
-        geom_typ = GeometryType(val.geometry_type).name
+        geom_typ = val.geometry_type_name
         if val.is_empty():
             val = f"{geom_typ} EMPTY"
         else:

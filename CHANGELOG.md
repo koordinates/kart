@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.10.5 (UNRELEASED)
 
  * Fix for [#478](https://github.com/koordinates/kart/issues/478) `merge --dry-run` raises error
+ * Fix for [#483](https://github.com/koordinates/kart/issues/483) `diff` error with Z/M geometries
 
 ## 0.10.4
 

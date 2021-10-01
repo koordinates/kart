@@ -185,6 +185,17 @@ class Geometry(bytes):
         )
         return geom_type
 
+    @property
+    def geometry_type_name(self):
+        ogr_type = self.geometry_type
+        name = GeometryType(ogr.GT_Flatten(ogr_type)).name
+        z = ogr.GT_HasZ(ogr_type)
+        m = ogr.GT_HasM(ogr_type)
+        suffix = "Z" * z + "M" * m
+        if suffix:
+            name = f"{name} {suffix}"
+        return name
+
     def envelope(self, only_2d=False, calculate_if_missing=False):
         """
         Returns the envelope as a tuple of 4, 6, or 8 values, or None if no envelope is stored.
