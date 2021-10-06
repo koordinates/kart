@@ -10,9 +10,8 @@ from . import diff_estimation
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(
-        ["text", "json", "geojson", "quiet", "feature-count", "html", "json-lines"]
-    ),
+    # note: geojson isn't here because it doesn't work cleanly with multiple datasets.
+    type=click.Choice(["text", "json", "quiet", "feature-count", "html", "json-lines"]),
     default="text",
     help=(
         "Output format. 'quiet' disables all output and implies --exit-code.\n"
@@ -39,7 +38,7 @@ from . import diff_estimation
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
     default="pretty",
-    help="How to format the output. Only used with -o json or -o geojson",
+    help="How to format the output. Only used with -o json",
 )
 @click.option(
     "--only-feature-count",
