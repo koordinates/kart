@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.10.5 (UNRELEASED)
+## 0.10.5
 
  * Fixed regressions in `diff -o geojson` since Kart 0.10.1 [#487](https://github.com/koordinates/kart/issues/487)
  * Removed `kart show -o geojson` [#487](https://github.com/koordinates/kart/issues/487#issuecomment-933561924)
