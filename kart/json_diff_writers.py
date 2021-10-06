@@ -262,26 +262,29 @@ class GeojsonDiffWriter(BaseDiffWriter):
 
     @classmethod
     def _check_output_path(cls, repo, output_path):
+        if isinstance(output_path, Path):
+            if output_path.is_file():
+                raise click.BadParameter(
+                    "Output path should be a directory for geojson format.",
+                    param_hint="--output",
+                )
+            if not output_path.exists():
+                output_path.mkdir()
+            else:
+                for p in output_path.glob("*.geojson"):
+                    p.unlink()
+        else:
+            output_path = "-"
         return output_path
 
     def write_diff(self):
-        if isinstance(self.output_path, Path) and self.output_path.is_dir():
-            self.write_file_per_dataset()
-        else:
-            output_obj = {
-                "type": "FeatureCollection",
-                "features": self.filtered_repo_feature_deltas_as_geojson(),
-            }
-
-            dump_json_output(
-                output_obj,
-                self.output_path,
-                json_style=self.json_style,
-            )
-        self.write_warnings_footer()
-
-    def write_file_per_dataset(self):
         has_changes = False
+
+        if len(self.all_ds_paths) > 1 and not isinstance(self.output_path, Path):
+            raise click.BadParameter(
+                "Need to specify a directory for geojson with >1 dataset",
+                param_hint="--output",
+            )
         for ds_path in self.all_ds_paths:
             ds_diff = self.get_dataset_diff(ds_path)
             if not ds_diff:
@@ -291,26 +294,23 @@ class GeojsonDiffWriter(BaseDiffWriter):
             has_changes = True
             output_obj = {
                 "type": "FeatureCollection",
-                "features": self.filtered_ds_feature_deltas(ds_path, ds_diff),
+                "features": self.filtered_ds_feature_deltas_as_geojson(
+                    ds_path, ds_diff
+                ),
             }
 
-            ds_output_filename = str(ds_path).replace("/", "__") + ".geojson"
-            ds_output_path = self.output_path / ds_output_filename
+            if self.output_path == "-":
+                ds_output_path = "-"
+            else:
+                ds_output_filename = str(ds_path).replace("/", "__") + ".geojson"
+                ds_output_path = self.output_path / ds_output_filename
             dump_json_output(
                 output_obj,
                 ds_output_path,
                 json_style=self.json_style,
             )
         self.has_changes = has_changes
-
-    def filtered_repo_feature_deltas_as_geojson(self):
-        has_changes = False
-        for ds_path in self.all_ds_paths:
-            ds_diff = self.get_dataset_diff(ds_path)
-            has_changes |= bool(ds_diff)
-            self._warn_about_any_meta_diffs(ds_path, ds_diff)
-            yield from self.filtered_ds_feature_deltas_as_geojson(ds_path, ds_diff)
-        self.has_changes = has_changes
+        self.write_warnings_footer()
 
     def _warn_about_any_meta_diffs(self, ds_path, ds_diff):
         if "meta" in ds_diff:

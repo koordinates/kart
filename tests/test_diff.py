@@ -14,6 +14,7 @@ from kart.repo import KartRepo
 H = pytest.helpers.helpers()
 
 DIFF_OUTPUT_FORMATS = ["text", "geojson", "json", "json-lines", "quiet", "html"]
+SHOW_OUTPUT_FORMATS = ["text", "json", "json-lines", "quiet", "html"]
 
 
 def _check_html_output(s):
@@ -1428,7 +1429,7 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
         assert len(features) == 1
 
 
-@pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
+@pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
 def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
     """
     Show a patch; ref defaults to HEAD
@@ -1529,7 +1530,7 @@ def test_diff_filtered(data_archive_readonly, cli_runner):
         ]
 
 
-@pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
+@pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
 def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner):
     """Make sure we can show the initial commit"""
     with data_archive_readonly("polygons"):
@@ -1684,12 +1685,97 @@ def test_diff_streaming(data_archive_readonly):
 
 
 @pytest.mark.parametrize(
-    "output_format", [o for o in DIFF_OUTPUT_FORMATS if o not in {"html", "quiet"}]
+    "output_format", [o for o in SHOW_OUTPUT_FORMATS if o not in {"html", "quiet"}]
 )
-def test_diff_output_to_file(output_format, data_archive, cli_runner):
+def test_show_output_to_file(output_format, data_archive, cli_runner):
     with data_archive("points") as repo_path:
         r = cli_runner.invoke(
             ["show", f"--output-format={output_format}", "--output=out"]
         )
         assert r.exit_code == 0, r
         assert (repo_path / "out").exists()
+
+
+def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
+    with data_archive("points") as repo_path:
+        # output to stdout
+        r = cli_runner.invoke(
+            ["diff", "--output-format=geojson", "--output=-", "HEAD^..."]
+        )
+        assert r.exit_code == 0, r.stderr
+        # output to stdout (by default)
+        r = cli_runner.invoke(["diff", "--output-format=geojson", "HEAD^..."])
+        assert r.exit_code == 0, r.stderr
+
+        # output to a directory that doesn't yet exist
+        r = cli_runner.invoke(
+            [
+                "diff",
+                "--output-format=geojson",
+                f"--output={tmp_path / 'abc'}",
+                "HEAD^...",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert {p.name for p in (tmp_path / "abc").iterdir()} == {
+            "nz_pa_points_topo_150k.geojson"
+        }
+
+        # output to a directory that does exist
+        d = tmp_path / "def"
+        d.mkdir()
+        # this gets left alone
+        (d / "empty.file").write_bytes(b"")
+        # this gets deleted.
+        (d / "some.geojson").write_bytes(b"{}")
+        r = cli_runner.invoke(
+            [
+                "diff",
+                "--output-format=geojson",
+                f"--output={d}",
+                "HEAD^...",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert {p.name for p in d.iterdir()} == {
+            "nz_pa_points_topo_150k.geojson",
+            "empty.file",
+        }
+
+        # (add another dataset)
+        with data_archive("gpkg-3d-points") as src:
+            src_gpkg_path = src / "points-3d.gpkg"
+            r = cli_runner.invoke(["-C", repo_path, "import", src_gpkg_path])
+            assert r.exit_code == 0, r.stderr
+
+        # file/stdout output isn't allowed when there are multiple datasets
+        r = cli_runner.invoke(
+            [
+                "diff",
+                "--output-format=geojson",
+                "HEAD^...",
+            ]
+        )
+        assert r.exit_code == 2, r.stderr
+        assert (
+            r.stderr.splitlines()[-1]
+            == "Error: Invalid value for --output: Need to specify a directory for geojson with >1 dataset"
+        )
+
+        # Can't specify an (existing) regular file either
+        myfile = tmp_path / "ghi"
+        myfile.write_bytes(b"")
+        assert myfile.exists()
+        r = cli_runner.invoke(
+            [
+                "diff",
+                "--output-format=geojson",
+                f"--output={myfile}",
+                "HEAD^...",
+            ]
+        )
+        assert r.exit_code == 2, r.stderr
+        assert (
+            r.stderr.splitlines()[-1]
+            == "Error: Invalid value for --output: Output path should be a directory for geojson format."
+        )

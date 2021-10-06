@@ -6,6 +6,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.10.5 (UNRELEASED)
 
+ * Fixed regressions in `diff -o geojson` since Kart 0.10.1 [#487](https://github.com/koordinates/kart/issues/487)
+ * Removed `kart show -o geojson` [#487](https://github.com/koordinates/kart/issues/487#issuecomment-933561924)
  * Fix for [#478](https://github.com/koordinates/kart/issues/478) `merge --dry-run` raises error
  * Fix for [#483](https://github.com/koordinates/kart/issues/483) `diff` error with Z/M geometries
 
