@@ -1759,7 +1759,7 @@ def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
         assert r.exit_code == 2, r.stderr
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Invalid value for --output: Need to specify a directory for geojson with >1 dataset"
+            == "Error: Invalid value for --output: Need to specify a directory via --output-path for GeoJSON with more than one dataset"
         )
 
         # Can't specify an (existing) regular file either
@@ -1777,5 +1777,5 @@ def test_diff_geojson_usage(data_archive, cli_runner, tmp_path):
         assert r.exit_code == 2, r.stderr
         assert (
             r.stderr.splitlines()[-1]
-            == "Error: Invalid value for --output: Output path should be a directory for geojson format."
+            == "Error: Invalid value for --output-path: Output path should be a directory for GeoJSON format."
         )

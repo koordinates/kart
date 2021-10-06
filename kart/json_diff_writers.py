@@ -1,5 +1,6 @@
 from datetime import datetime, timezone, timedelta
 import json
+import logging
 from pathlib import Path
 
 import click
@@ -10,6 +11,8 @@ from .feature_output import feature_as_json, feature_as_geojson
 from .log import commit_obj_to_json
 from .output_util import dump_json_output, resolve_output_path
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
+
+L = logging.getLogger(__name__)
 
 
 class JsonDiffWriter(BaseDiffWriter):
@@ -265,13 +268,20 @@ class GeojsonDiffWriter(BaseDiffWriter):
         if isinstance(output_path, Path):
             if output_path.is_file():
                 raise click.BadParameter(
-                    "Output path should be a directory for geojson format.",
-                    param_hint="--output",
+                    "Output path should be a directory for GeoJSON format.",
+                    param_hint="--output-path",
                 )
             if not output_path.exists():
                 output_path.mkdir()
             else:
-                for p in output_path.glob("*.geojson"):
+                geojson_paths = list(output_path.glob("*.geojson"))
+                if geojson_paths:
+                    L.debug(
+                        "Cleaning %d *.geojson files from %s ...",
+                        len(geojson_paths),
+                        output_path,
+                    )
+                for p in geojson_paths:
                     p.unlink()
         else:
             output_path = "-"
@@ -282,7 +292,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
 
         if len(self.all_ds_paths) > 1 and not isinstance(self.output_path, Path):
             raise click.BadParameter(
-                "Need to specify a directory for geojson with >1 dataset",
+                "Need to specify a directory via --output-path for GeoJSON with more than one dataset",
                 param_hint="--output",
             )
         for ds_path in self.all_ds_paths:

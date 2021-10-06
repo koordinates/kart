@@ -10,7 +10,7 @@ from . import diff_estimation
 @click.option(
     "--output-format",
     "-o",
-    # note: geojson was removed from here because it doesn't work with multiple datasets.
+    # note: geojson isn't here because it doesn't work cleanly with multiple datasets.
     type=click.Choice(["text", "json", "quiet", "feature-count", "html", "json-lines"]),
     default="text",
     help=(
