@@ -2,9 +2,12 @@ from binascii import unhexlify
 import json
 from datetime import datetime
 from enum import Enum, auto
+from typing import Optional
 
 import click
 import pygit2
+
+from kart.structure import RepoStructure
 
 from .exceptions import (
     NO_TABLE,
@@ -39,16 +42,12 @@ class MetaChangeType(Enum):
     META_UPDATE = auto()
 
 
-def _meta_change_type(ds_diff_dict, resolve_missing_values_from_rs):
+def _meta_change_type(ds_diff_dict):
     meta_diff = ds_diff_dict.get("meta", {})
     if not meta_diff:
         return None
     schema_diff = meta_diff.get("schema.json", {})
-    if (
-        "+" in schema_diff
-        and "-" not in schema_diff
-        and not resolve_missing_values_from_rs
-    ):
+    if "+" in schema_diff and "-" not in schema_diff:
         return MetaChangeType.CREATE_DATASET
     elif "-" in schema_diff and "+" not in schema_diff:
         return MetaChangeType.DELETE_DATASET
@@ -242,9 +241,7 @@ def apply_patch(
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():
         dataset = rs.datasets.get(ds_path)
-        meta_change_type = _meta_change_type(
-            ds_diff_dict, resolve_missing_values_from_rs
-        )
+        meta_change_type = _meta_change_type(ds_diff_dict)
         check_change_supported(
             repo.version, dataset, ds_path, meta_change_type, do_commit
         )

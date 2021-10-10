@@ -343,6 +343,71 @@ class RichBaseDataset(BaseDataset):
             f"Meta changes are not supported for version {self.version}"
         )
 
+    def check_feature_insertion_for_conflicts(
+        self,
+        delta,
+        *,
+        new_path,
+        schema_changed_since_patch,
+        resolve_missing_values_from_ds,
+    ):
+        """
+        Given a delta with no old value, checks for conflicts.
+
+        Returns a boolean indicating whether there was a conflict.
+
+        A conflict occurs if either:
+            * a feature was already inserted with the same primary key value.
+            * this is a minimal style patch and the 'insertion' is actually an edit,
+              and the feature in the `resolve_missing_values_from_ds` dataset is not the
+              same as the feature with the same PK in this current dataset.
+        """
+
+        if resolve_missing_values_from_ds is None:
+            click.echo(
+                f"{self.path}: Trying to create feature that already exists: {delta.new_key}",
+                err=True,
+            )
+            return True
+        feature_conflict_since_patch = False
+        if schema_changed_since_patch:
+            # can't use feature OID check here, since schema changes mean that two objects with
+            # the same OID can actually resolve to different features.
+            # So we have to call get_feature() twice for every feature
+            old_feature = resolve_missing_values_from_ds.get_feature(path=new_path)
+            current_feature = self.get_feature(path=new_path)
+            feature_conflict_since_patch = old_feature != current_feature
+        else:
+            # Fast path - check old features against old features by just comparing OIDs, mostly.
+            current_blob = self.inner_tree / new_path
+            try:
+                old_blob = resolve_missing_values_from_ds.inner_tree / new_path
+            except KeyError:
+                # this really was an insert. but it's a conflict, because the PK has been used
+                # by a later insert (because new_path is in self.inner_tree)
+                feature_conflict_since_patch = True
+            else:
+                old_feature = None
+                current_feature = None
+
+                if current_blob.oid != old_blob.oid:
+                    # Two different blobs, but we still need to check the feature is different.
+                    old_feature = resolve_missing_values_from_ds.get_feature(
+                        path=new_path
+                    )
+                    current_feature = self.get_feature(path=new_path)
+                    current_feature.update(delta.new.value)
+
+                    feature_conflict_since_patch = old_feature != current_feature
+
+        if feature_conflict_since_patch:
+            click.echo(
+                f"{self.path}: Feature was modified since patch: {delta.new_key}",
+                err=True,
+            )
+
+        return feature_conflict_since_patch
+
     def apply_feature_diff(
         self,
         feature_diff,
@@ -395,62 +460,14 @@ class RichBaseDataset(BaseDataset):
                     continue
 
                 if delta.type == "insert" and new_path in tree:
-                    if resolve_missing_values_from_ds is None:
+                    if self.check_feature_insertion_for_conflicts(
+                        delta,
+                        new_path=new_path,
+                        schema_changed_since_patch=schema_changed_since_patch,
+                        resolve_missing_values_from_ds=resolve_missing_values_from_ds,
+                    ):
                         has_conflicts = True
-                        click.echo(
-                            f"{self.path}: Trying to create feature that already exists: {new_key}",
-                            err=True,
-                        )
                         continue
-                    else:
-                        feature_conflict_since_patch = False
-                        if schema_changed_since_patch:
-                            # can't use feature OID check here, since schema changes mean that two objects with
-                            # the same OID can actually resolve to different features.
-                            # So we have to call get_feature() twice for every feature
-                            old_feature = resolve_missing_values_from_ds.get_feature(
-                                path=new_path
-                            )
-                            current_feature = self.get_feature(path=new_path)
-                            feature_conflict_since_patch = (
-                                old_feature != current_feature
-                            )
-                        else:
-                            # Fast path - check old features against old features by just comparing OIDs, mostly.
-                            current_blob = self.inner_tree / new_path
-                            try:
-                                old_blob = (
-                                    resolve_missing_values_from_ds.inner_tree / new_path
-                                )
-                            except KeyError:
-                                # this really was an insert. but it's a conflict, because the PK has been used
-                                # by a later insert (because new_path is in self.inner_tree)
-                                feature_conflict_since_patch = True
-                            else:
-                                old_feature = None
-                                current_feature = None
-
-                                if current_blob.oid != old_blob.oid:
-                                    # Two different blobs, but we still need to check the feature is different.
-                                    old_feature = (
-                                        resolve_missing_values_from_ds.get_feature(
-                                            path=new_path
-                                        )
-                                    )
-                                    current_feature = self.get_feature(path=new_path)
-                                    current_feature.update(delta.new.value)
-
-                                    feature_conflict_since_patch = (
-                                        old_feature != current_feature
-                                    )
-
-                        if feature_conflict_since_patch:
-                            has_conflicts = True
-                            click.echo(
-                                f"{self.path}: Feature was modified since patch: {new_key}",
-                                err=True,
-                            )
-                            continue
 
                 if delta.type == "update" and old_path not in tree:
                     has_conflicts = True

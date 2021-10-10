@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+from typing import Optional
 
 import click
 import pygit2
@@ -178,14 +179,22 @@ class RepoStructure:
         obj = self.commit or self.tree
         return obj.short_id if obj is not None else None
 
-    def create_tree_from_diff(self, repo_diff, *, resolve_missing_values_from_rs=None):
+    def create_tree_from_diff(
+        self,
+        repo_diff,
+        *,
+        resolve_missing_values_from_rs: Optional["RepoStructure"] = None,
+    ):
         """
         Given a diff, returns a new tree created by applying the diff to self.tree -
         Doesn't create any commits or modify the working copy at all.
 
-        If resolve_missing_values_from_rs is provided, we check each delta for conflicts
-        by comparing the diff between  if 'insert' deltas
-        are actually updates from the given base RepoStructure.
+        If resolve_missing_values_from_rs is provided, we check each new-only delta
+        (i.e. an insertion) by pulling an old value for the same feature from the given
+        RepoStructure. If an old value is present, the delta is treated as an update rather
+        than an insert, and we check if that update conflicts with any changes for the same
+        feature in the current RepoStructure.
+
         This supports patches generated with `kart create-patch --patch-type=minimal`,
         which can be (significantly) smaller.
         """
@@ -289,7 +298,7 @@ class RepoStructure:
         author=None,
         committer=None,
         allow_empty=False,
-        resolve_missing_values_from_rs=None,
+        resolve_missing_values_from_rs: Optional["RepoStructure"] = None,
     ):
         """
         Update the repository structure and write the updated data to the tree
