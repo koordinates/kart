@@ -269,7 +269,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
             if output_path.is_file():
                 raise click.BadParameter(
                     "Output path should be a directory for GeoJSON format.",
-                    param_hint="--output-path",
+                    param_hint="--output",
                 )
             if not output_path.exists():
                 output_path.mkdir()
@@ -292,7 +292,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
 
         if len(self.all_ds_paths) > 1 and not isinstance(self.output_path, Path):
             raise click.BadParameter(
-                "Need to specify a directory via --output-path for GeoJSON with more than one dataset",
+                "Need to specify a directory via --output for GeoJSON with more than one dataset",
                 param_hint="--output",
             )
         for ds_path in self.all_ds_paths:

@@ -11,7 +11,9 @@ from . import diff_estimation
     "--output-format",
     "-o",
     # note: geojson isn't here because it doesn't work cleanly with multiple datasets.
-    type=click.Choice(["text", "json", "quiet", "feature-count", "html", "json-lines"]),
+    type=click.Choice(
+        ["text", "json", "geojson", "quiet", "feature-count", "html", "json-lines"]
+    ),
     default="text",
     help=(
         "Output format. 'quiet' disables all output and implies --exit-code.\n"
