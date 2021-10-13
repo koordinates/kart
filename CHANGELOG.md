@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.6 (UNRELEASED)
+
+ * Fix for [#491](https://github.com/koordinates/kart/issues/491) - make Kart more robust to manual edits to the GPKG working copy that don't leave the metatada exactly as Kart would leave it (such as by leaving unneeded table rows in `gpkg_contents`)
+
 ## 0.10.5
 
  * Fixed regressions in `diff -o geojson` since Kart 0.10.1 [#487](https://github.com/koordinates/kart/issues/487)

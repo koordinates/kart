@@ -200,13 +200,18 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             f"""CREATE TABLE {self.table_identifier(dataset)} ({table_spec});"""
         )
 
-    def _identifier_already_exists(self, sess, identifier):
-        # Returns truthy value if gpkg_contents already contains this identifier.
-        # Identifiers must be UNIQUE.
+    def _identifier_already_used(self, sess, table_name, identifier):
+        # Returns truthy value if gpkg_contents is already using this identifier
+        # for a different table. Identifiers must be UNIQUE.
         return sess.scalar(
             sa.select([sa.func.count()])
             .select_from(GpkgTables.gpkg_contents)
-            .where(GpkgTables.gpkg_contents.c.identifier == identifier)
+            .where(
+                sa.and_(
+                    GpkgTables.gpkg_contents.c.identifier == identifier,
+                    GpkgTables.gpkg_contents.c.table_name != table_name,
+                )
+            )
         )
 
     def _identifier_prefix(self, dataset):
@@ -232,12 +237,12 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             # Update GeoPackage core tables
             if gpkg_spatial_ref_sys:
                 sess.execute(
-                    GpkgTables.gpkg_spatial_ref_sys.insert().prefix_with("OR IGNORE"),
+                    GpkgTables.gpkg_spatial_ref_sys.insert().prefix_with("OR REPLACE"),
                     gpkg_spatial_ref_sys,
                 )
 
             new_identifier = gpkg_contents["identifier"]
-            if self._identifier_already_exists(sess, new_identifier):
+            if self._identifier_already_used(sess, table_name, new_identifier):
                 # Prefix the identifier with table_name in case of conflict.
                 gpkg_contents["identifier"] = (
                     self._identifier_prefix(dataset) + new_identifier
@@ -246,11 +251,15 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
             # Our repo copy doesn't include all fields from gpkg_contents
             # but the default value for last_change (now), and NULL for {min_x,max_x,min_y,max_y}
             # should deal with the remaining fields.
-            sess.execute(GpkgTables.gpkg_contents.insert(), gpkg_contents)
+            sess.execute(
+                GpkgTables.gpkg_contents.insert().prefix_with("OR REPLACE"),
+                gpkg_contents,
+            )
 
             if gpkg_geometry_columns:
                 sess.execute(
-                    GpkgTables.gpkg_geometry_columns.insert(), gpkg_geometry_columns
+                    GpkgTables.gpkg_geometry_columns.insert().prefix_with("OR REPLACE"),
+                    gpkg_geometry_columns,
                 )
 
             gpkg_metadata = gpkg_meta_items.get("gpkg_metadata")
@@ -426,6 +435,10 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         # since it only adds on-write triggers to update the index - it doesn't
         # add any pre-existing features to the index.
 
+        # Generally, there shouldn't be an existing spatial index at this stage.
+        # But if there is, we should clean it up and start over.
+        self._drop_spatial_index(sess, dataset)
+
         L = logging.getLogger(f"{self.__class__.__qualname__}._create_spatial_index")
         geom_col = dataset.geom_column_name
 
@@ -549,7 +562,7 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
 
     def _apply_meta_title(self, sess, dataset, src_value, dest_value):
         table_name = dataset.table_name
-        if self._identifier_already_exists(sess, dest_value):
+        if self._identifier_already_used(sess, table_name, dest_value):
             # Prefix the identifier with the table name in case of conflict:
             dest_value = self._identifier_prefix(dataset) + dest_value
         sess.execute(
