@@ -45,6 +45,32 @@ def test_data_ls_with_ref(data_archive_readonly, cli_runner):
         assert output == {"kart.data.ls/v1": ["nz_pa_points_topo_150k"]}
 
 
+def test_data_rm(data_archive, cli_runner):
+    with data_archive("points"):
+        r = cli_runner.invoke(["data", "ls"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == ["nz_pa_points_topo_150k"]
+
+        r = cli_runner.invoke(
+            ["data", "rm", "nz_pa_points_topo_150k", "-m", "deletion"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["data", "ls"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            'The commit at HEAD has no datasets.',
+            '  (use "kart import" to add some data)',
+        ]
+
+        r = cli_runner.invoke(["reset", "HEAD^"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["data", "ls"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == ["nz_pa_points_topo_150k"]
+
+
 @pytest.mark.parametrize("output_format", ("text", "json"))
 @pytest.mark.parametrize("version", (0, 1, 2, 3))
 def test_data_version(version, output_format, data_archive_readonly, cli_runner):
