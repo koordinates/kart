@@ -4,8 +4,9 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## (UNRELEASED)
+## 0.10.6 (UNRELEASED)
 
+ * New `kart data rm` command to simply delete datasets and commit the result [#490](https://github.com/koordinates/kart/issues/491)
  * Fix for [#491](https://github.com/koordinates/kart/issues/491) - make Kart more robust to manual edits to the GPKG working copy that don't leave the metadata exactly as Kart would leave it (such as by leaving unneeded table rows in `gpkg_contents`)
 * `kart create-patch` now supports `--patch-type minimal`, which creates a much-smaller patch; relying on the patch recipient having the HEAD commit in their repository [#482](https://github.com/koordinates/kart/issues/482)
 * `kart apply` now applies both types of patch.
