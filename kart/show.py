@@ -117,10 +117,20 @@ def show(
     help="Output to a specific file/directory instead of stdout.",
     type=click.Path(writable=True, allow_dash=True),
 )
+@click.option(
+    "--patch-type",
+    type=click.Choice(["full", "minimal"]),
+    default="full",
+    help=(
+        "Style of patch to produce. 'full' is the default and most applyable, but is quite a verbose patch. "
+        "'minimal' creates a much smaller patch by omitting the 'old' version of edits, "
+        "but 'minimal' patches are only applyable if the parent commit is present in the target repo."
+    ),
+)
 # NOTE: this is *required* for now.
 # A future version might create patches from working-copy changes.
 @click.argument("refish")
-def create_patch(ctx, *, refish, json_style, output_path, **kwargs):
+def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
     """
     Creates a JSON patch from the given ref.
     The patch can be applied with `kart apply`.
@@ -135,6 +145,13 @@ def create_patch(ctx, *, refish, json_style, output_path, **kwargs):
     commit_spec = f"{refish}^?...{refish}"
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    diff_writer = PatchWriter(repo, commit_spec, [], output_path, json_style=json_style)
+    diff_writer = PatchWriter(
+        repo,
+        commit_spec,
+        [],
+        output_path,
+        json_style=json_style,
+        patch_type=patch_type,
+    )
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()

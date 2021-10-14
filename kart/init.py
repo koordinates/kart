@@ -241,7 +241,7 @@ def import_(
     TABLE_SPEC: Import a particular table, optionally with a new name: "TABLE[:AS_NAME]"
     eg. "2019_08_06_median_waterlevel:waterlevel"
 
-    $ kart import GPKG:my.gpkg [table1[:new_name1] [table2[:new_name2]]
+    $ kart import GPKG:my.gpkg [table1[:new_name1]] [table2[:new_name2]]
 
     To show available tables in the import data, use
 

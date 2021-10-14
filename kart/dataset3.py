@@ -396,7 +396,7 @@ class Dataset3(RichBaseDataset):
                 yield self.encode_feature(feature, schema)
 
     def apply_meta_diff(
-        self, meta_diff, tree_builder, *, allow_missing_old_values=False
+        self, meta_diff, tree_builder, *, resolve_missing_values_from_ds=False
     ):
         """Apply a meta diff to this dataset. Checks for conflicts."""
         if not meta_diff:
@@ -411,7 +411,7 @@ class Dataset3(RichBaseDataset):
                 (d for d in meta_diff.values() if d.key not in ATTACHMENT_META_ITEMS),
                 tree_builder,
                 self.meta_tree if self.inner_tree is not None else None,
-                allow_missing_old_values=allow_missing_old_values,
+                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
         # Apply diff to visible attachment meta items: <dataset>/<item-name>
@@ -420,7 +420,7 @@ class Dataset3(RichBaseDataset):
                 (d for d in meta_diff.values() if d.key in ATTACHMENT_META_ITEMS),
                 tree_builder,
                 self.attachment_tree,
-                allow_missing_old_values=allow_missing_old_values,
+                resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
         if has_conflicts:
@@ -440,7 +440,12 @@ class Dataset3(RichBaseDataset):
             )
 
     def _apply_meta_deltas_to_tree(
-        self, deltas, tree_builder, existing_tree, *, allow_missing_old_values=False
+        self,
+        deltas,
+        tree_builder,
+        existing_tree,
+        *,
+        resolve_missing_values_from_ds=False,
     ):
         # Applying diffs works even if there is no tree yet created for the dataset,
         # as is the case when the dataset is first being created right now.
@@ -488,18 +493,28 @@ class Dataset3(RichBaseDataset):
                     err=True,
                 )
                 continue
-            if (
-                delta.type == "insert"
-                and (not allow_missing_old_values)
-                and name in existing_tree
-                and (existing_tree / name).data
-            ):
-                has_conflicts = True
-                click.echo(
-                    f"{self.path}: Trying to create meta item that already exists: {name}",
-                    err=True,
-                )
-                continue
+            if delta.type == "insert" and name in existing_tree:
+                current_data = (existing_tree / name).data
+                if current_data:
+                    if resolve_missing_values_from_ds is not None:
+                        old_data = (
+                            resolve_missing_values_from_ds.meta_tree / name
+                        ).data
+                        if old_data != current_data:
+                            has_conflicts = True
+                            click.echo(
+                                f"{self.path}: Meta item was modified since patch: {name}",
+                                err=True,
+                            )
+                            continue
+
+                    else:
+                        has_conflicts = True
+                        click.echo(
+                            f"{self.path}: Trying to create meta item that already exists: {name}",
+                            err=True,
+                        )
+                        continue
 
             if delta.type == "update" and name not in existing_tree:
                 has_conflicts = True

@@ -1,4 +1,6 @@
 import json
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -42,7 +44,8 @@ def test_apply_with_wrong_dataset_name(data_archive, cli_runner):
                     "featureChanges": [],
                     "metaChanges": [],
                 }
-            }
+            },
+            "kart.patch/v1": {"message": "hey"},
         }
     )
     with data_archive("points"):
@@ -156,6 +159,7 @@ def test_apply_user_info(data_archive, cli_runner):
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "title": {
+                            "-": "NZ Pa Points (Topo, 1:50k)",
                             "+": "new title:",
                         }
                     }
@@ -172,7 +176,7 @@ def test_apply_user_info(data_archive, cli_runner):
     )
     with data_archive("points"):
         r = cli_runner.invoke(
-            ["apply", "--allow-missing-old-values", "-"],
+            ["apply", "-"],
             input=patch_file,
         )
         assert r.exit_code == 0, r.stderr
@@ -193,6 +197,7 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
                 "nz_pa_points_topo_150k": {
                     "meta": {
                         "title": {
+                            "-": "NZ Pa Points (Topo, 1:50k)",
                             "+": "new title:",
                         }
                     }
@@ -213,7 +218,7 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(
-            ["apply", "--allow-missing-old-values", "--ref=otherbranch", "-"],
+            ["apply", "--ref=otherbranch", "-"],
             input=patch_file,
         )
         assert r.exit_code == 0, r.stderr
@@ -236,49 +241,207 @@ def test_apply_onto_other_ref(data_working_copy, cli_runner):
         )
 
 
-def test_apply_allow_missing_old_values(data_archive, cli_runner):
-    patch_file = json.dumps(
+@contextmanager
+def write_patch(patch_dict, tmp_path):
+    patch_path = tmp_path / "patch"
+    with patch_path.open(mode="w") as f:
+        f.write(json.dumps(patch_dict, indent=2, sort_keys=True))
+    # this is cleaned up by the tmp_path fixture at the end of the test
+    yield patch_path
+
+
+def points_patch(ds_edits):
+    return {
+        "kart.diff/v1+hexwkb": {
+            "nz_pa_points_topo_150k": ds_edits,
+        },
+        "kart.patch/v1": {
+            "authorEmail": "me@example.com",
+            "authorName": "Me",
+            "authorTime": "2100-01-01T01:01:01Z",
+            "authorTimeOffset": "+13:00",
+            "message": "a points patch",
+            "base": "1582725544d9122251acd4b3fc75b5c88ac3fd17",
+        },
+    }
+
+
+def test_apply_minimal_style_patch_without_base(data_archive, cli_runner, tmp_path):
+    patch = points_patch(
         {
-            "kart.diff/v1+hexwkb": {
-                "nz_pa_points_topo_150k": {
-                    "meta": {
-                        "title": {
-                            "+": "new title:",
-                        }
-                    }
-                },
-            },
-            "kart.patch/v1": {
-                "authorEmail": "robert@example.com",
-                "authorName": "Robert Coup",
-                "authorTime": "2019-06-20T14:28:33Z",
-                "authorTimeOffset": "+01:00",
-                "message": "Change the title",
-            },
+            "meta": {
+                "title": {
+                    "+": "new title:",
+                }
+            }
+        }
+    )
+    patch["kart.patch/v1"].pop("base")
+    with data_archive("points"):
+        # We can't apply this patch,
+        # because the "-" object for the title is missing.
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
+
+
+def test_apply_minimal_style_meta_patch(data_archive, cli_runner, tmp_path):
+    patch = points_patch(
+        {
+            "meta": {
+                "title": {
+                    "*": "new title:",
+                }
+            }
         }
     )
     with data_archive("points"):
-        # We ordinarily can't apply this patch,
-        # because the "-" object for the title is missing.
-        r = cli_runner.invoke(
-            ["apply", "-"],
-            input=patch_file,
-        )
-        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
-
-        # But --allow-missing-old-values lets us do it.
-        r = cli_runner.invoke(
-            ["apply", "--allow-missing-old-values", "-"],
-            input=patch_file,
-        )
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
         assert r.exit_code == 0, r.stderr
 
         # Check that the change was actually applied
-        r = cli_runner.invoke(["create-patch", "HEAD"])
+        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
         assert r.exit_code == 0
-        patch = json.loads(r.stdout)
-        meta = patch["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
+        show = json.loads(r.stdout)
+        meta = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["meta"]
         assert meta == {"title": {"+": "new title:", "-": "NZ Pa Points (Topo, 1:50k)"}}
+
+        # now check that a conflict gets rejected
+        # note: we change the title here but don't change the base,
+        # so this change now conflicts with the change we just applied.
+        patch = points_patch(
+            {
+                "meta": {
+                    "title": {
+                        "*": "differently new title:",
+                    }
+                }
+            }
+        )
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
+
+
+def test_apply_minimal_style_feature_patch_with_edit(
+    data_archive, cli_runner, tmp_path
+):
+
+    patch = points_patch(
+        {
+            "feature": [
+                {
+                    # one edit (FID 1182 already exists)
+                    "*": {
+                        "fid": 1182,
+                        "geom": "01010000009933726825F76540140C370F236742C0",
+                        "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
+                        "macronated": "Y",
+                        "name": "Ko Te R\u0101 Matiti (Wharekaho)",
+                        # (this is the edit)
+                        "t50_fid": 9999999,
+                    }
+                },
+            ]
+        }
+    )
+
+    with data_archive("points"):
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the change was actually applied
+        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
+        assert r.exit_code == 0
+        show = json.loads(r.stdout)
+        features = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+        assert len(features) == 1
+        assert features[0]["-"] == {
+            "fid": 1182,
+            "geom": "01010000009933726825F76540140C370F236742C0",
+            "t50_fid": 2427426,
+            "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
+            "macronated": "Y",
+            "name": "Ko Te Rā Matiti (Wharekaho)",
+        }
+        assert features[0]["+"] == {
+            "fid": 1182,
+            "geom": "01010000009933726825F76540140C370F236742C0",
+            "t50_fid": 9999999,
+            "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
+            "macronated": "Y",
+            "name": "Ko Te Rā Matiti (Wharekaho)",
+        }
+
+        # now check that a conflict gets rejected
+        # note: we change the feature here but don't change the base,
+        # so this change now conflicts with the change we just applied.
+        patch = points_patch(
+            {
+                "feature": [
+                    {
+                        "*": {
+                            "fid": 1182,
+                            "geom": "01010000009933726825F76540140C370F236742C0",
+                            "t50_fid": 2427426,
+                            "name_ascii": "Ko Te Ra Matiti (Wharekaho)",
+                            "name": "Ko Te Rā Matiti (Wharekaho)",
+                            # this is the edit
+                            "macronated": "N",
+                        }
+                    },
+                ]
+            }
+        )
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == PATCH_DOES_NOT_APPLY, r.stderr
+
+
+def test_apply_minimal_style_feature_patch_with_insert(
+    data_archive, cli_runner, tmp_path
+):
+
+    patch = points_patch(
+        {
+            "feature": [
+                {
+                    "+": {
+                        "fid": 123456,
+                        "geom": None,
+                        "name_ascii": "abc",
+                        "macronated": "N",
+                        "name": "abc",
+                        "t50_fid": 123456,
+                    }
+                },
+            ]
+        }
+    )
+
+    with data_archive("points"):
+        with write_patch(patch, tmp_path) as patch_path:
+            r = cli_runner.invoke(["apply", patch_path])
+        assert r.exit_code == 0, r.stderr
+
+        # Check that the change was actually applied
+        r = cli_runner.invoke(["show", "-o", "json", "HEAD"])
+        assert r.exit_code == 0
+        show = json.loads(r.stdout)
+        features = show["kart.diff/v1+hexwkb"]["nz_pa_points_topo_150k"]["feature"]
+        assert len(features) == 1
+        assert features[0] == {
+            "+": {
+                "fid": 123456,
+                "geom": None,
+                "name_ascii": "abc",
+                "macronated": "N",
+                "name": "abc",
+                "t50_fid": 123456,
+            }
+        }
 
 
 def test_apply_create_dataset(data_archive, cli_runner):

@@ -182,7 +182,7 @@ def meta_set(ctx, message, dataset, items):
                 "meta": {key: {"+": _parse(key, value)} for (key, value) in items}
             }
         },
-        "kart.patch/v1": {"message": message},
+        "kart.patch/v1": {"message": message, "base": repo.head.target.hex},
     }
     patch_file = io.StringIO()
     json.dump(patch, patch_file)
@@ -192,7 +192,6 @@ def meta_set(ctx, message, dataset, items):
         do_commit=True,
         patch_file=patch_file,
         allow_empty=False,
-        allow_missing_old_values=True,
     )
 
 

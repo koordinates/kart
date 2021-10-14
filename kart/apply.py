@@ -2,12 +2,17 @@ from binascii import unhexlify
 import json
 from datetime import datetime
 from enum import Enum, auto
+from typing import Optional
 
 import click
+import pygit2
+
+from kart.structure import RepoStructure
 
 from .exceptions import (
     NO_TABLE,
     NO_WORKING_COPY,
+    PATCH_DOES_NOT_APPLY,
     NotFound,
     NotYetImplemented,
     InvalidOperation,
@@ -37,12 +42,12 @@ class MetaChangeType(Enum):
     META_UPDATE = auto()
 
 
-def _meta_change_type(ds_diff_dict, allow_missing_old_values):
+def _meta_change_type(ds_diff_dict):
     meta_diff = ds_diff_dict.get("meta", {})
     if not meta_diff:
         return None
     schema_diff = meta_diff.get("schema.json", {})
-    if "+" in schema_diff and "-" not in schema_diff and not allow_missing_old_values:
+    if "+" in schema_diff and "-" not in schema_diff:
         return MetaChangeType.CREATE_DATASET
     elif "-" in schema_diff and "+" not in schema_diff:
         return MetaChangeType.DELETE_DATASET
@@ -121,19 +126,32 @@ class NullSchemaParser:
 class DeltaParser:
     """Parses JSON for a delta - ie {"-": old-value, "+": new-value} - into a Delta object."""
 
-    def __init__(self, old_schema, new_schema):
+    def __init__(self, old_schema, new_schema, *, allow_minimal_updates=False):
         self.old_parser = (
             KeyValueParser(old_schema) if old_schema else NullSchemaParser("old")
         )
         self.new_parser = (
             KeyValueParser(new_schema) if new_schema else NullSchemaParser("new")
         )
+        self.allow_minimal_updates = allow_minimal_updates
 
     def parse(self, change):
-        return Delta(
-            self.old_parser.parse(change.get("-")),
-            self.new_parser.parse(change.get("+")),
-        )
+        if "*" in change:
+            if self.allow_minimal_updates:
+                return Delta(
+                    None,
+                    self.new_parser.parse(change.get("*")),
+                )
+            else:
+                raise InvalidOperation(
+                    "No 'base' commit specified in patch, can't accept '*' deltas",
+                    exit_code=PATCH_DOES_NOT_APPLY,
+                )
+        else:
+            return Delta(
+                self.old_parser.parse(change.get("-")),
+                self.new_parser.parse(change.get("+")),
+            )
 
 
 def _build_signature(patch_metadata, person, repo):
@@ -165,7 +183,6 @@ def apply_patch(
     do_commit,
     patch_file,
     allow_empty,
-    allow_missing_old_values=False,
     ref="HEAD",
     **kwargs,
 ):
@@ -181,6 +198,27 @@ def apply_patch(
         raise click.FileError(
             "Failed to parse JSON patch file: patch contains no `kart.diff/v1+hexwkb` object"
         )
+
+    metadata = patch.get("kart.patch/v1")
+    if metadata is None:
+        metadata = patch.get("sno.patch/v1")
+    if metadata is None:
+        # Not all diffs are patches.
+        raise click.UsageError("Patch contains no author or head information")
+
+    resolve_missing_values_from_rs = None
+    if "base" in metadata:
+        # if the patch has a `base` that's present in this repo,
+        # then we allow the `-` blobs to be missing, because we can resolve the `-` blobs
+        # from that revision.
+        try:
+            # this only resolves if it's a commit or tree ID, not if it's a symref
+            patch_tree = repo.get(metadata["base"]).peel(pygit2.Tree)
+            resolve_missing_values_from_rs = repo.structure(patch_tree)
+        except KeyError:
+            # this might be fine (if it's a 'full' patch), but maybe we should warn?
+            pass
+
     if ref != "HEAD":
         if not do_commit:
             raise click.UsageError("--no-commit and --ref are incompatible")
@@ -203,7 +241,7 @@ def apply_patch(
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():
         dataset = rs.datasets.get(ds_path)
-        meta_change_type = _meta_change_type(ds_diff_dict, allow_missing_old_values)
+        meta_change_type = _meta_change_type(ds_diff_dict)
         check_change_supported(
             repo.version, dataset, ds_path, meta_change_type, do_commit
         )
@@ -211,10 +249,10 @@ def apply_patch(
         meta_changes = ds_diff_dict.get("meta", {})
 
         if meta_changes:
+            allow_minimal_updates = bool(resolve_missing_values_from_rs)
             meta_diff = DeltaDiff(
-                Delta(
-                    (k, v["-"]) if "-" in v else None,
-                    (k, v["+"]) if "+" in v else None,
+                Delta.from_key_and_plus_minus_dict(
+                    k, v, allow_minimal_updates=allow_minimal_updates
                 )
                 for (k, v) in meta_changes.items()
             )
@@ -234,28 +272,23 @@ def apply_patch(
             if schema_delta and schema_delta.new_value:
                 new_schema = Schema.from_column_dicts(schema_delta.new_value)
 
-            delta_parser = DeltaParser(old_schema, new_schema)
+            delta_parser = DeltaParser(
+                old_schema,
+                new_schema,
+                allow_minimal_updates=bool(resolve_missing_values_from_rs),
+            )
             feature_diff = DeltaDiff(
                 (delta_parser.parse(change) for change in feature_changes)
             )
             repo_diff.recursive_set([ds_path, "feature"], feature_diff)
 
     if do_commit:
-        metadata = patch.get("kart.patch/v1")
-        if metadata is None:
-            metadata = patch.get("sno.patch/v1")
-        if metadata is None:
-            # Not all diffs are patches. If we're given a raw diff, we can't commit it properly
-            raise click.UsageError(
-                "Patch contains no author information (`kart.patch/v1` object), and --no-commit was not supplied"
-            )
-
         commit = rs.commit_diff(
             repo_diff,
             metadata["message"],
             author=_build_signature(metadata, "author", repo),
             allow_empty=allow_empty,
-            allow_missing_old_values=allow_missing_old_values,
+            resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
         click.echo(f"Commit {commit.hex}")
 
@@ -267,7 +300,7 @@ def apply_patch(
     else:
         new_wc_target = rs.create_tree_from_diff(
             repo_diff,
-            allow_missing_old_values=allow_missing_old_values,
+            resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
 
     if wc and new_wc_target:
@@ -292,19 +325,6 @@ def apply_patch(
         "Usually recording a commit that has the exact same tree as its sole "
         "parent commit is a mistake, and the command prevents you from making "
         "such a commit. This option bypasses the safety"
-    ),
-)
-@click.option(
-    "--allow-missing-old-values",
-    is_flag=True,
-    default=False,
-    hidden=True,
-    help=(
-        "Treats deltas with no '-' value loosely, as either an "
-        "insert or an update. Doesn't check for conflicts with the old "
-        "version of the feature. For use in external patch generators that "
-        "don't have access to the old features, or which have extra "
-        "certainty about the applicability of the patch. Use with caution."
     ),
 )
 @click.option("--ref", default="HEAD", help="Which ref to apply the patch onto.")

@@ -34,6 +34,10 @@ class JsonDiffWriter(BaseDiffWriter):
     which contains information about the commit object.
     """
 
+    def __init__(self, *args, patch_type="full", **kwargs):
+        super().__init__(*args, **kwargs)
+        self.patch_type = patch_type
+
     @classmethod
     def _check_output_path(cls, repo, output_path):
         if isinstance(output_path, Path) and output_path.is_dir():
@@ -67,6 +71,13 @@ class JsonDiffWriter(BaseDiffWriter):
         )
         self.write_warnings_footer()
 
+    def _postprocess_meta_delta(self, delta):
+        r = delta.to_plus_minus_dict()
+        if self.patch_type == "minimal" and "+" in r and "-" in r:
+            r.pop("-")
+            r["*"] = r.pop("+")
+        return r
+
     def default(self, obj):
         # Part of JsonEncoder interface - adapt objects that couldn't otherwise be encoded.
         if isinstance(obj, DatasetDiff):
@@ -74,7 +85,7 @@ class JsonDiffWriter(BaseDiffWriter):
             result = {}
             if "meta" in ds_diff:
                 result["meta"] = {
-                    key: value.to_plus_minus_dict()
+                    key: self._postprocess_meta_delta(value)
                     for key, value in ds_diff["meta"].items()
                 }
             if "feature" in ds_diff:
@@ -92,14 +103,23 @@ class JsonDiffWriter(BaseDiffWriter):
         old_transform, new_transform = self.get_geometry_transforms(ds_path, ds_diff)
         for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
             delta_as_json = {}
+
             if delta.old:
-                delta_as_json["-"] = feature_as_json(
-                    delta.old_value, delta.old_key, old_transform
-                )
+                if self.patch_type == "full" or not delta.new:
+                    delta_as_json["-"] = feature_as_json(
+                        delta.old_value, delta.old_key, old_transform
+                    )
+
             if delta.new:
-                delta_as_json["+"] = feature_as_json(
-                    delta.new_value, delta.new_key, new_transform
-                )
+                feature = feature_as_json(delta.new_value, delta.new_key, new_transform)
+                if delta.old and self.patch_type == "minimal":
+                    # mark feature updates using a different key, otherwise they can
+                    # be easily confused with inserts, since minimal-style patches don't
+                    # include a `-` key.
+                    key = "*"
+                else:
+                    key = "+"
+                delta_as_json[key] = feature
             yield delta_as_json
 
 
@@ -112,7 +132,6 @@ class PatchWriter(JsonDiffWriter):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.nonmatching_feature_counts = {p: 0 for p in self.all_ds_paths}
 
     def add_json_header(self, obj):
@@ -121,12 +140,18 @@ class PatchWriter(JsonDiffWriter):
             author_time = datetime.fromtimestamp(author.time, timezone.utc)
             author_time_offset = timedelta(minutes=author.offset)
 
+            try:
+                original_parent = self.commit.parent_ids[0].hex
+            except IndexError:
+                original_parent = None
+
             obj["kart.patch/v1"] = {
                 "authorName": author.name,
                 "authorEmail": author.email,
                 "authorTime": datetime_to_iso8601_utc(author_time),
                 "authorTimeOffset": timedelta_to_iso8601_tz(author_time_offset),
                 "message": self.commit.message,
+                "base": original_parent,
             }
 
     def record_spatial_filter_stat(
