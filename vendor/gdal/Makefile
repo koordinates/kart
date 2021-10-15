@@ -43,6 +43,8 @@ SQLITE_PREFIX = /usr/local/opt/sqlite
 JSONC_PREFIX = /usr/local/opt/json-c
 PG_PREFIX = /usr/local/opt/libpq
 PKG_CONFIG_PATH := $(PKG_CONFIG_PATH):$(PG_PREFIX)/lib/pkgconfig
+SSL_PREFIX = /usr/local/opt/openssl@1.1
+PKG_CONFIG_PATH := $(PKG_CONFIG_PATH):$(SSL_PREFIX)/lib/pkgconfig
 else
 SQLITE_PREFIX := $(PREFIX)
 JSONC_PREFIX := $(PREFIX)
