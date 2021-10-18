@@ -79,6 +79,7 @@ env:
 	env/bin/pip install -U $(PYDEPS)
 
 # dependencies
+$(lib-git): $(lib-curl) $(lib-sqlite) $(lib-s2_py) git_build
 $(lib-proj): $(lib-sqlite) proj_build
 $(lib-libgit2): libgit2_build
 $(lib-spatialite): $(lib-sqlite) $(lib-geos) $(lib-proj) spatialite_build
@@ -112,7 +113,7 @@ ifeq ($(PLATFORM),Darwin)
 #
 # MacOS
 #
-brew-libs = $(lib-sqlite) $(lib-curl) $(lib-git) $(lib-spatialindex) $(lib-geos) $(lib-jsonc)
+brew-libs = $(lib-sqlite) $(lib-curl) $(lib-spatialindex) $(lib-geos) $(lib-jsonc)
 
 $(brew-deps): Brewfile
 	brew bundle
@@ -148,34 +149,6 @@ $(lib-pq): $(brew-deps) | env
 	cp -av /usr/local/opt/libpq/lib/libpq*.dylib .delocate
 	$(MAKE) delocate-deps
 
-$(lib-git): $(brew-deps) | env
-	mkdir -p env/share/git-core
-	cp -av /usr/local/opt/git/share/git-core/templates env/share/git-core/
-
-	$(MAKE) .delocate
-	mkdir -p env/libexec/git-core/
-	for F in `find /usr/local/opt/git/libexec/git-core -mindepth 1 -maxdepth 1`; do \
-		if [[ "`file -h $$F`" =~ "Mach-O" ]]; then \
-			cp -av "$$F" .delocate/; \
-		else \
-			cp -av "$$F" env/libexec/git-core/; \
-		fi; \
-	done
-	DELOCATE_OUT=env/libexec/git-core $(MAKE) delocate-deps
-	# move the .dylibs to env/lib/
-	for F in `find env/libexec/git-core/ -type f -name "*.dylib"`; do \
-		N=`basename "$$F"`; \
-		mv -fv "$$F" env/lib/; \
-		ln -sv "../../lib/$$N" "$$F"; \
-	done
-
-	$(MAKE) .delocate
-	mkdir -p .delocate/bin .delocate/lib
-	cp -av /usr/local/opt/git/bin/* .delocate/bin/
-	./mac-delocate-deps.sh .delocate/bin ../lib
-	mv -fv .delocate/lib/* env/lib/
-	mv -fv .delocate/bin/* env/bin/
-
 $(lib-curl): $(brew-deps) | env
 	$(MAKE) .delocate
 	cp -av /usr/local/opt/curl/lib/libcurl*.dylib .delocate
@@ -205,7 +178,6 @@ build-libs += $(lib-spatialindex) $(lib-curl) $(lib-pyodbc)
 
 $(lib-spatialindex): spatialindex_build
 $(lib-sqlite): sqlite_build
-$(lib-git): $(lib-curl) git_build
 $(lib-curl): curl_build
 $(lib-geos): geos_build
 $(lib-jsonc): jsonc_build

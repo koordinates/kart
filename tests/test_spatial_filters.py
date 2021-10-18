@@ -1,6 +1,8 @@
 import json
 import pytest
 
+from kart import is_windows
+
 from kart.repo import KartRepo
 from kart.exceptions import (
     INVALID_ARGUMENT,
@@ -415,3 +417,19 @@ def test_pk_conflict_due_to_spatial_filter(
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 302
+
+
+SKIP_REASON = "The git spatial-filter is not yet included in the kart windows build"
+
+
+@pytest.mark.skipif(is_windows, reason=SKIP_REASON)
+def test_git_spatial_filter_extension(data_archive_readonly):
+    with data_archive_readonly("points.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+        repo.invoke_git(
+            "rev-list",
+            "HEAD",
+            "--objects",
+            "--max-count=1",
+            "--filter=extension:spatial=1,2,3,4",
+        )

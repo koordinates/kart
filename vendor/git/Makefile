@@ -1,4 +1,6 @@
-GIT_VERSION = 2.33.0
+GIT_REF ?= kx-filter-extensions
+GIT_REPO ?= koordinates/git
+GIT_ARCHIVE := git-$(GIT_REF).tar.gz
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
@@ -9,41 +11,41 @@ else
 	PLATFORM := $(shell uname -s)
 endif
 
-GIT_ARCHIVE := git-$(GIT_VERSION).tar.gz
-
 ifeq ($(PLATFORM),Darwin)
-	CCACHE_PATH = /usr/local/opt/ccache/bin
 	LIBSUFFIX = dylib
+	CURL_PREFIX=/usr/local/opt/curl
+	CCACHE_PATH = /usr/local/opt/ccache/bin
+	LOADER_PATH = @loader_path
 else ifeq ($(PLATFORM),Linux)
-	CCACHE_PATH = /usr/lib/ccache
-	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	LIBSUFFIX = so
-endif
-
-# use ccache if available
-export PATH := $(CCACHE_PATH):$(PREFIX)/bin:$(PATH)
-
-export PKG_CONFIG_PATH := $(realpath $(PREFIX)/lib/pkgconfig)
-
-ifeq ($(PLATFORM),Linux)
 	CURL_PREFIX = $(PREFIX)
 	libcurl := $(PREFIX)/lib/libcurl.$(LIBSUFFIX)
 	libs += $(libcurl)
-# something is broken in git's LDFLAGS handling
-	export LDFLAGS := $(subst $$,$$$$,$(value LDFLAGS) -Wl,-rpath='$$ORIGIN/../../lib')
-else
-# on macOS, force to the Homebrew libcurl
-	CURL_PREFIX=/usr/local/opt/curl
+	CCACHE_PATH = /usr/lib/ccache
+	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
+	LOADER_PATH := $$ORIGIN
 endif
 
 CONFIG_FLAGS += CURL_CONFIG=$(CURL_PREFIX)/bin/curl-config
 CONFIG_FLAGS += NO_GETTEXT=YesPlease
 CONFIG_FLAGS += V=1
 CONFIG_FLAGS += INSTALL_SYMLINKS=1
+CONFIG_FLAGS += FILTER_EXTENSIONS=$(abspath ../spatial-filter/spatial.a)
+
+CFLAGS := -I$(abspath ../s2_py/src/s2geometry/src)
+CFLAGS += -I$(abspath src)
+
+LDFLAGS := -lstdc++
+LDFLAGS += -lsqlite3
+LDFLAGS += -ls2
+LDFLAGS += -L$(PREFIX)/lib
+LDFLAGS += -L$(PREFIX)/lib/python3.7/site-packages/s2_py
+
+RPATH1 := $(LOADER_PATH)/../lib
+RPATH2 := $(LOADER_PATH)/../lib/python3.7/site-packages/s2_py
+
 
 build-git := src/git
-configure-git = src/config.status
-
 
 # default target
 .PHONY: all
@@ -57,25 +59,16 @@ clean:
 .PHONY: cleaner
 cleaner: clean
 	-$(MAKE) -C src/ clean
-	# git reconfigures itself to clean...
-	$(MAKE) clean-configure
 
 .PHONY: cleanest
 cleanest:
 	-$(RM) -r src/
 
-.PHONY: clean-configure
-clean-configure:
-	-$(RM) $(configure-git)
-
 #
 # Download Archives
 #
-
 $(GIT_ARCHIVE):
-# 	FIXME: kernel.org didn't renew their TLS certificate :/
-# 	wget https://mirrors.edge.kernel.org/pub/software/scm/git/$@ -O $@
-	wget https://mirror.aarnet.edu.au/pub/ftp.kernel.org/software/scm/git/$@ -O $@
+	wget https://github.com/$(GIT_REPO)/archive/$(GIT_REF).tar.gz -O $@
 
 .PHONY: archive
 archive: $(GIT_ARCHIVE)
@@ -94,30 +87,21 @@ src: $(GIT_ARCHIVE)
 .PHONY: source
 source: src
 
-$(configure-git): export PKG_CONFIG_PATH=/dev/null
-$(configure-git): | src $(libs)
-	cd src/ && $(CONFIG_FLAGS) ./configure \
-		--prefix=$(PREFIX) \
-		--without-tcltk \
-		--without-python \
-		--with-curl=$(CURL_PREFIX)
-
-.PHONY: configure
-configure: clean-configure $(configure-git)
-
 $(build-git): export PKG_CONFIG_PATH=/dev/null
-$(build-git): $(configure-git)
-	$(MAKE) -C src -j 2 $(CONFIG_FLAGS) all strip
-	$(MAKE) print-lib-deps-$(PLATFORM)
-	$(MAKE) check-lib-deps-$(PLATFORM)
+$(build-git): | src $(libs)
+	$(MAKE) -C src -j 2 $(CONFIG_FLAGS) LINK=g++ CFLAGS='$(CFLAGS)' LDFLAGS='$(LDFLAGS)' all strip
 
 #
 # INSTALLATION
 #
 
 .PHONY: install
-install: $(build-git)
-	$(MAKE) -C src $(CONFIG_FLAGS) install
+install: export PKG_CONFIG_PATH=/dev/null
+install: | src $(libs)
+	$(MAKE) -C src prefix=$(PREFIX) $(CONFIG_FLAGS) LINK=g++ CFLAGS='$(CFLAGS)' LDFLAGS='$(LDFLAGS)' install
+	$(MAKE) print-lib-deps-$(PLATFORM)
+	$(MAKE) lib-fix-$(PLATFORM)
+	$(MAKE) check-lib-deps-$(PLATFORM)
 
 .PHONY: print-lib-deps
 print-lib-deps: print-lib-deps-$(PLATFORM)
@@ -125,12 +109,26 @@ print-lib-deps: print-lib-deps-$(PLATFORM)
 .PHONY: print-lib-deps-Darwin
 print-lib-deps-Darwin:
 	@echo -e "\nExamining library dependencies..."
-	cd src/ && find . -perm -o=x -type f -name "git*" -exec otool -L {} \;
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -exec otool -L {} \;
 
 .PHONY: print-lib-deps-Linux
 print-lib-deps-Linux:
 	@echo -e "\nExamining library dependencies..."
-	cd src/ && find . -perm -o=x -type f -name "git*" -print -exec sh -c "ldd {} && readelf -d {} | grep 'RPATH'" \;
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec sh -c "ldd {} && readelf -d {} | grep 'RPATH'" \;
+
+.PHONY: lib-fix-Darwin
+lib-fix-Darwin:
+	@echo fixing git libraries ...
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec sh -c \
+		"install_name_tool -change $(CURL_PREFIX)/lib/libcurl.4.dylib @rpath/libsqlite3.0.dylib {}" \;
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec sh -c \
+		"install_name_tool -add_rpath $(LOADER_PATH) -add_rpath $(RPATH1) -add_rpath $(RPATH2) {}" \;
+
+.PHONY: lib-fix-Linux
+lib-fix-Linux:
+	@echo fixing git libraries ...
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec \
+		patchelf --set-rpath '$(LOADER_PATH):$(RPATH1):$(RPATH2)' {} \;
 
 .PHONY: check-lib-deps
 check-lib-deps: check-lib-deps-$(PLATFORM)
@@ -138,9 +136,9 @@ check-lib-deps: check-lib-deps-$(PLATFORM)
 .PHONY: check-lib-deps-Darwin
 check-lib-deps-Darwin:
 	@echo -e "\nLooking for missing library dependencies..."
-	cd src/ && find . -perm -o=x -type f -name "git*" | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" | xargs -t -I % sh -c '! (otool -l % | grep /usr/local/ )'
 
 .PHONY: check-lib-deps-Linux
 check-lib-deps-Linux:
 	@echo -e "\nLooking for missing library dependencies..."
-	cd src/ && find . -perm -o=x -type f -name "git*" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'
+	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" | xargs -t -I % sh -c '! ( ldd % | grep -P " => /usr/(local|lib)/(?!x86_64-linux-gnu)" )'

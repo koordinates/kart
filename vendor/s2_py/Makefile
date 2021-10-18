@@ -34,13 +34,14 @@ ifeq ($(PLATFORM),Darwin)
 	export OPENSSL_ROOT_DIR ?= /usr/local/opt/openssl@1.1
 	export OPENSSL_INCLUDE_DIR ?= /usr/local/opt/openssl@1.1/include
 	export MACOSX_DEPLOYMENT_TARGET = 10.9
+	export LDFLAGS+=-Wl,-rpath,'@loader_path'
 	export LDFLAGS+=-Wl,-rpath,'@loader_path/../../../'
 else ifeq ($(PLATFORM),Linux)
 	CCACHE_PATH = /usr/lib/ccache
 	CCACHE_PATH := $(or $(CCACHE_PATH),/usr/lib64/ccache)
 	LIBSUFFIX = so
 	WHEELTOOL = auditwheel
-	export LDFLAGS := -Wl,-rpath='$$ORIGIN/../../..'
+	export LDFLAGS := -Wl,-rpath='$$ORIGIN:$$ORIGIN/../../..'
 endif
 
 PY3 := $(or $(PY3),python3.7)

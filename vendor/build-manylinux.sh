@@ -6,7 +6,7 @@ shift
 
 yum install -y epel-release
 
-yum install -y ccache openssl-devel gettext wget unixODBC-devel
+yum install -y ccache openssl-devel gettext wget unixODBC-devel expat-devel
 
 export PATH=/opt/python/cp37-cp37m-shared/bin:${PATH}
 export LD_LIBRARY_PATH=/build/env/lib:${LD_LIBRARY_PATH}
@@ -34,6 +34,8 @@ done
 # Vendor builds that have more than a simple Makefile as a basis.
 # sqlite
 cp -v sqlite/version.mk /build/sqlite/
+# spatial-filter
+cp -v spatial-filter/*.{h,c,cpp} /build/spatial-filter/
 
 cd /build
 if [ $# -gt 0 ]; then
