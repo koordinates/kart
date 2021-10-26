@@ -1,4 +1,4 @@
-SPATIALITE_VERSION ?= 5.0.0
+SPATIALITE_VERSION ?= 5.0.1
 
 SHELL = /bin/bash
 export PREFIX ?= $(abspath env)
@@ -107,7 +107,8 @@ $(configure-spatialite): | src $(libs)
 		--enable-knn=no \
 		--enable-libxml2=no \
 		--enable-mathsql=no \
-		--enable-minizip=no
+		--enable-minizip=no \
+		--enable-rttopo=no
 
 .PHONY: configure
 configure: clean-configure $(configure-spatialite)
