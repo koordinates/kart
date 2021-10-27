@@ -52,6 +52,7 @@ def test_status(
                 "abbrevCommit": H.POINTS.HEAD_SHA[:7],
                 "branch": "main",
                 "upstream": None,
+                "spatialFilter": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -70,6 +71,7 @@ def test_status(
                 "abbrevCommit": H.POINTS.HEAD1_SHA[:7],
                 "branch": None,
                 "upstream": None,
+                "spatialFilter": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -106,6 +108,7 @@ def test_status(
                     "ahead": 0,
                     "behind": 0,
                 },
+                "spatialFilter": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -141,6 +144,7 @@ def test_status(
                     "ahead": 0,
                     "behind": 1,
                 },
+                "spatialFilter": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -171,6 +175,7 @@ def test_status(
                     "ahead": 1,
                     "behind": 1,
                 },
+                "spatialFilter": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -199,6 +204,7 @@ def test_status(
                     "ahead": 2,
                     "behind": 0,
                 },
+                "spatialFilter": None,
                 "workingCopy": {"path": str(wc), "changes": None},
             }
         }
@@ -237,6 +243,7 @@ def test_status(
                     "ahead": 2,
                     "behind": 0,
                 },
+                "spatialFilter": None,
                 "workingCopy": {
                     "path": str(wc),
                     "changes": {
@@ -270,6 +277,7 @@ def test_status_empty(tmp_path, cli_runner, chdir):
                 "abbrevCommit": None,
                 "branch": "main",
                 "upstream": None,
+                "spatialFilter": None,
                 "workingCopy": None,
             }
         }
@@ -342,5 +350,6 @@ def test_status_merging(data_archive, cli_runner):
                     },
                 },
                 "conflicts": {"nz_pa_points_topo_150k": {"feature": 4}},
+                "spatialFilter": None,
             }
         }

@@ -121,6 +121,18 @@ def test_init_with_spatial_filter(cli_runner, tmp_path):
     )
     assert repo.config["kart.spatialfilter.crs"] == crs
 
+    r = cli_runner.invoke(["-C", repo_path, "status"])
+    assert (
+        "A spatial filter is active, limiting repo to a specific region inside [174.879, -37.978, 175.388, -37.499]"
+        in r.stdout
+    )
+    r = cli_runner.invoke(["-C", repo_path, "status", "-o", "json"])
+    spatial_filter = json.loads(r.stdout)["kart.status/v1"]["spatialFilter"]
+    assert spatial_filter["geometry"].startswith(
+        "01030000000100000009000000E3A59BC420DC65401973D7"
+    )
+    assert spatial_filter["crs"] == "EPSG:4167"
+
 
 def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]

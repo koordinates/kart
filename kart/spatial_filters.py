@@ -253,7 +253,7 @@ class SpatialFilter:
         return False
 
     @classmethod
-    def from_repo_config(cls, repo):
+    def load_repo_config(cls, repo):
         from kart.repo import KartConfigKeys
 
         geometry_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_GEOMETRY)
@@ -264,7 +264,7 @@ class SpatialFilter:
                     "Spatial filter CRS is missing from config",
                     exit_code=NO_SPATIAL_FILTER,
                 )
-            return SpatialFilter.from_spec(crs_spec, geometry_spec)
+            return {"geometry": geometry_spec, "crs": crs_spec}
 
         ref_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_REFERENCE)
         oid_spec = repo.get_config_str(KartConfigKeys.KART_SPATIALFILTER_OBJECTID)
@@ -290,8 +290,21 @@ class SpatialFilter:
                 )
 
             contents = repo[oid_spec].data.decode("utf-8")
-            parts = ReferenceSpatialFilterSpec.split_file(contents)
-            return SpatialFilter.from_spec(*parts)
+            crs_spec, geometry_spec = ReferenceSpatialFilterSpec.split_file(contents)
+            return {
+                "reference": ref_spec,
+                "objectId": oid_spec,
+                "geometry": geometry_spec,
+                "crs": crs_spec,
+            }
+
+        return None
+
+    @classmethod
+    def from_repo_config(cls, repo):
+        config = cls.load_repo_config(repo)
+        if config:
+            return SpatialFilter.from_spec(config["crs"], config["geometry"])
 
         return SpatialFilter.MATCH_ALL
 

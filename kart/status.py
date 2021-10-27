@@ -4,9 +4,13 @@ import click
 import pygit2
 
 from .conflicts import list_conflicts
+from .crs_util import make_crs
+from .exceptions import CrsError, GeometryError
+from .geometry import geometry_from_string
 from .output_util import dump_json_output
 from .merge_util import MergeContext, MergeIndex, merge_status_to_text
 from .repo import KartRepoState
+from .spatial_filters import SpatialFilter
 
 
 @click.command()
@@ -21,6 +25,9 @@ def status(ctx, output_format):
     """ Show the working copy status """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
+    jdict["spatialFilter"] = SpatialFilter.load_repo_config(repo)
+    if output_format == "json":
+        jdict["spatialFilter"] = spatial_filter_status_to_json(jdict["spatialFilter"])
 
     if repo.state == KartRepoState.MERGING:
         merge_index = MergeIndex.read_from_repo(repo)
@@ -86,19 +93,21 @@ def get_diff_status_json(diff):
 
 
 def status_to_text(jdict):
-    branch_status = branch_status_to_text(jdict)
+    status_list = [branch_status_to_text(jdict)]
+    is_spatial_filter = bool(jdict["spatialFilter"])
     is_empty = not jdict["commit"]
     is_merging = jdict.get("state", None) == KartRepoState.MERGING.value
 
+    if is_spatial_filter:
+        status_list.append(spatial_filter_status_to_text(jdict["spatialFilter"]))
+
     if is_merging:
-        merge_status = merge_status_to_text(jdict, fresh=False)
-        return "\n\n".join([branch_status, merge_status])
+        status_list.append(merge_status_to_text(jdict, fresh=False))
 
-    if not is_empty:
-        wc_status = working_copy_status_to_text(jdict["workingCopy"])
-        return "\n\n".join([branch_status, wc_status])
+    if not is_merging and not is_empty:
+        status_list.append(working_copy_status_to_text(jdict["workingCopy"]))
 
-    return branch_status
+    return "\n\n".join(status_list)
 
 
 def branch_status_to_text(jdict):
@@ -140,6 +149,59 @@ def upstream_status_to_text(jdict):
             "and can be fast-forwarded.\n"
             '  (use "kart pull" to update your local branch)'
         )
+
+
+def spatial_filter_status_to_json(jdict):
+    # We always try to return hexwkb geometries for JSON output, regardless of how the geometry is stored.
+    # Apart from that, the data we have is already dumpable as JSON.
+    if jdict is None or "geometry" not in jdict:
+        return jdict
+
+    result = jdict.copy()
+
+    ctx = "spatial filter"
+    if "reference" in jdict:
+        ctx += f" at reference {jdict['reference']} "
+
+    try:
+        geometry = geometry_from_string(jdict["geometry"], context=ctx)
+        assert geometry is not None
+        result["geometry"] = geometry.to_hex_wkb()
+    except GeometryError:
+        click.echo("Repo config contains unparseable spatial filter", err=True)
+
+    return result
+
+
+def spatial_filter_status_to_text(jdict):
+    from osgeo import osr
+
+    spatial_filter_desc = "spatial filter"
+    if "reference" in jdict:
+        spatial_filter_desc += f" at reference {jdict['reference']} "
+
+    ctx = spatial_filter_desc
+    try:
+        geometry = geometry_from_string(jdict["geometry"], context=ctx)
+    except GeometryError:
+        return "Repo config contains unparseable spatial filter"
+
+    try:
+        crs = make_crs(jdict["crs"], context=ctx)
+    except CrsError:
+        return "Repo config contains spatial filter with invalid CRS"
+
+    try:
+        transform = osr.CoordinateTransformation(crs, make_crs("EPSG:4326"))
+        geom_ogr = geometry.to_ogr()
+        geom_ogr.Transform(transform)
+        w, e, s, n = geom_ogr.GetEnvelope()
+        envelope = f"[{w:.3f}, {s:.3f}, {e:.3f}, {n:.3f}]"
+
+        return f"A {spatial_filter_desc} is active, limiting repo to a specific region inside {envelope}"
+
+    except RuntimeError:
+        return "Repo config contains unworkable spatial filter - can't reproject spatial filter into EPSG:4326"
 
 
 def working_copy_status_to_text(jdict):
