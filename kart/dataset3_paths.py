@@ -430,7 +430,10 @@ class IntPathEncoder(PathEncoder):
         be the number one higher than ALL existing PK values).
         """
 
-        # TODO - handle missing objects, once spatial filters are working as partial clones.
+        # NOTE - this assumes that all feature *trees* are present in the repository, but it
+        # doesn't require that all feature *blobs* are present - so these can be ommitted when
+        # spatial filtering. If spatial filtering is optimised to also omit trees, then this
+        # function will have to be updated to fetch any needed trees that are missing.
 
         feature_tree = dataset.feature_tree
         if not feature_tree:

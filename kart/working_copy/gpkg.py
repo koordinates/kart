@@ -478,8 +478,13 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
     def _initialise_sequence(self, sess, dataset):
         start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
         if start:
+            # Strangely, sqlite_sequence has no PK or unique constraints, so we just delete and then insert.
             sess.execute(
-                "INSERT OR REPLACE INTO sqlite_sequence (name, seq) VALUES (:table_name, :seq)",
+                "DELETE FROM sqlite_sequence WHERE name = :table_name;",
+                {"table_name": dataset.table_name},
+            )
+            sess.execute(
+                "INSERT INTO sqlite_sequence (name, seq) VALUES (:table_name, :seq)",
                 {"table_name": dataset.table_name, "seq": start - 1},
             )
 
