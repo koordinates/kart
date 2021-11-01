@@ -1,3 +1,7 @@
+# The contents of kart/vendor/ are hashed used as a cache-key for
+# built libraries and wheels in vendor-Windows, vendor-Darwin, vendor-Linux.
+# Making any change to this file will cause a cache-miss and a fresh build.
+
 SHELL = /bin/bash
 
 export PREFIX := $(abspath env)
