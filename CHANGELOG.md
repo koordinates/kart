@@ -10,6 +10,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
  * Fix for [#491](https://github.com/koordinates/kart/issues/491) - make Kart more robust to manual edits to the GPKG working copy that don't leave the metadata exactly as Kart would leave it (such as by leaving unneeded table rows in `gpkg_contents`)
 * `kart create-patch` now supports `--patch-type minimal`, which creates a much-smaller patch; relying on the patch recipient having the HEAD commit in their repository [#482](https://github.com/koordinates/kart/issues/482)
 * `kart apply` now applies both types of patch.
+* `kart log` now accepts a `--` marker to signal that all remaining arguments are dataset names. [#498](https://github.com/koordinates/kart/issues/498)
 
 ## 0.10.5
 
