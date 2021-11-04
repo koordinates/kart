@@ -46,6 +46,46 @@ class PreserveDoubleDash(click.Command):
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
 
 
+def parse_extra_args(repo, args):
+    """
+    Interprets positional `kart log` args, including "--", commits/refs, and paths.
+    Returns a two-tuple: (other_args, paths)
+    """
+    # As soon as we encounter a path, we assume all remaining args are also paths.
+    # i.e. the paths must be given *last*.
+    # If it's ambiguous whether something is a path or not, we assume it's a commit-ish.
+    # If you want to be unambiguous, provide the `--` arg to separate the list of commit-ish-es and paths.
+    # This behaviour should be consistent with git's behaviour.
+    if "--" in args:
+        dash_index = args.index("--")
+        paths = args[dash_index + 1 :]
+        other_args = args[:dash_index]
+    else:
+        other_args = []
+        paths = []
+        for i, arg in enumerate(args):
+            if arg.startswith("-"):
+                # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
+                # but this isn't a valid commit-ish.
+                #    $ git branch -c -- -x
+                #    fatal: '-x' is not a valid branch name.
+                # So we can assume it's a CLI flag, presumably for git rather than kart.
+                # It *could* be a path, but in that case the user should add a `--` before this option
+                # to disambiguate, and they haven't done so here.
+                other_args.append(arg)
+                continue
+            try:
+                repo.resolve_refish(arg)
+            except (KeyError, pygit2.InvalidSpecError):
+                # not a commit-ish.
+                # Treat remaining args as paths
+                paths = args[i:]
+                break
+            else:
+                other_args.append(arg)
+    return other_args, paths
+
+
 @click.command(
     context_settings=dict(
         ignore_unknown_options=True,
@@ -87,46 +127,11 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, 
     """ Show commit logs """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 
-    # Handle positional args.
-    # These could be refs, commits, trees, or paths.
-    #  * as soon as we encounter a path, we assume all remaining args are also paths.
-    #  * i.e. the paths must be given *last*.
-    #  * If it's ambiguous whether something is a path or not, we assume it's a commit-ish.
-    #  * If you want to be unambiguous, provide the `--` arg to separate the list of commit-ish-es and paths.
-    # This behaviour is consistent with git's behaviour.
-    try:
-        dash_index = args.index("--")
-    except ValueError:
-        other_args = []
-        paths = []
-        for i, arg in enumerate(args):
-            if arg.startswith("-"):
-                # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
-                # but this isn't a valid commit-ish.
-                #    $ git branch -c -- -x
-                #    fatal: '-x' is not a valid branch name.
-                # So we can assume it's a CLI flag, presumably for git rather than kart.
-                # It *could* be a path, but in that case the user should add a `--` before this option
-                # to disambiguate, and they haven't done so here.
-                other_args.append(arg)
-                continue
-            try:
-                repo.resolve_refish(arg)
-            except (KeyError, pygit2.InvalidSpecError):
-                # not a commit-ish.
-                # Treat remaining args as paths
-                paths = args[i:]
-                break
-            else:
-                other_args.append(arg)
-    else:
-        paths = args[dash_index + 1 :]
-        other_args = args[:dash_index]
+    other_args, paths = parse_extra_args(repo, args)
 
-    # TODO: should we check paths exist here? git doesn't! also we want to parse them differently
-
+    # TODO: should we check paths exist here? git doesn't!
     if output_format == "text":
-        git_args = ["git", "-C", ctx.obj.repo.path, "log", *other_args, "--", *paths]
+        git_args = ["git", "-C", repo.path, "log", *other_args, "--", *paths]
         execvp("git", git_args)
 
     elif output_format in ("json", "json-lines"):
