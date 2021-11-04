@@ -86,7 +86,7 @@ def test_commit(
         assert str(repo.head.target) == commit_id
         commit = repo.head_commit
         assert commit.message == "test-commit-1"
-        assert time.time() - commit.commit_time < 3
+        assert time.time() - commit.commit_time < 10
 
         tree = repo.head_tree
         assert dataset.encode_1pk_to_path(pk_del) not in tree
