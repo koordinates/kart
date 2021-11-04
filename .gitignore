@@ -66,7 +66,7 @@ vendor/Brewfile.lock.json
 /tests/data/upgrade/v2.sno/*/
 /coverage
 pytest.xml
-.coverage
+.coverage*
 /.pytest*
 /test-results/
 /dist
