@@ -1,6 +1,7 @@
 from datetime import datetime, timezone, timedelta
 import subprocess
 import sys
+import warnings
 
 import click
 
@@ -13,10 +14,42 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
 
 
+class PreserveDoubleDash(click.Command):
+    """
+    Preserves the double-dash ("--") arg from user input.
+
+    Click normally swallows this arg, but using this command class preserves it.
+    """
+
+    def parse_args(self, ctx, args):
+        from kart.cli import get_version_tuple
+
+        args = list(args)
+        for i in range(len(args)):
+            arg = args[i]
+            if arg == "--":
+                if "--" in args[i + 1 :] and get_version_tuple() <= ("0", "12"):
+                    # Before we added this shim, we had users using a workaround (adding the `--` twice themselves),
+                    # which ideally we'd like them to stop doing.
+                    warnings.warn(
+                        "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
+                        UserWarning,
+                    )
+                else:
+                    # Insert a second `--` arg.
+                    # One of the `--` gets consumed by Click during super() below.
+                    # Then the second one gets left alone and we can pass it to git.
+                    args.insert(i + 1, "--")
+                break
+
+        return super(PreserveDoubleDash, self).parse_args(ctx, args)
+
+
 @click.command(
     context_settings=dict(
         ignore_unknown_options=True,
-    )
+    ),
+    cls=PreserveDoubleDash,
 )
 @click.pass_context
 @click.option(
