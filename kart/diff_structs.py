@@ -296,6 +296,20 @@ class Diff(RichDict):
     When two diffs are concatenated, all their children with matching keys are recursively concatenated.
     """
 
+    @classmethod
+    def concatenated(cls, *diffs, overwrite_original=False):
+        result = None
+        for diff in diffs:
+            if diff is None:
+                continue
+            elif result is None:
+                result = diff
+            elif overwrite_original:
+                result += diff
+            else:
+                result = result + diff
+        return result if result is not None else cls()
+
     def __invert__(self):
         result = self.empty_copy()
         for key, value in self.items():
@@ -327,7 +341,25 @@ class Diff(RichDict):
         return result
 
     def __iadd__(self, other):
-        self.__add__(other, result=self)
+        """
+        Concatenate this Diff to the subsequent Diff, by concatenating all children with matching keys.
+        Slightly faster than __add__, modifies self in place.
+        """
+
+        if type(self) != type(other):
+            raise TypeError(f"Diff type mismatch: {type(self)} != {type(other)}")
+
+        for key in other.keys():
+            lhs = self.get(key)
+            rhs = other[key]
+            if lhs is not None:
+                both = lhs + rhs
+                if both:
+                    self[key] = both
+                else:
+                    self.pop(key, None)
+            else:
+                self[key] = rhs
         return self
 
     def to_filter(self):

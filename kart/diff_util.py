@@ -59,7 +59,8 @@ def get_dataset_diff(
         (in which case, target_rs must be the HEAD commit which the working copy is tracking).
     ds_filter - controls which PK values match and are included in the diff.
     """
-    ds_diff = None
+    base_target_diff = None
+    target_wc_diff = None
 
     if base_rs != target_rs:
         # diff += base_rs<>target_rs
@@ -73,24 +74,22 @@ def get_dataset_diff(
 
         base_target_diff = base_ds.diff(target_ds, ds_filter=ds_filter, **params)
         L.debug("base<>target diff (%s): %s", ds_path, repr(base_target_diff))
-        ds_diff = base_target_diff
 
     if working_copy:
         # diff += target_rs<>working_copy
         target_ds = target_rs.datasets.get(ds_path)
-        target_wc_diff = working_copy.diff_db_to_tree(target_ds, ds_filter=ds_filter)
-        L.debug(
-            "target<>working_copy diff (%s): %s",
-            ds_path,
-            repr(target_wc_diff),
-        )
-        if ds_diff is None:
-            ds_diff = target_wc_diff
-        else:
-            ds_diff += target_wc_diff
+        if target_ds:
+            target_wc_diff = working_copy.diff_db_to_tree(
+                target_ds, ds_filter=ds_filter
+            )
+            L.debug(
+                "target<>working_copy diff (%s): %s",
+                ds_path,
+                repr(target_wc_diff),
+            )
 
-    if ds_diff is None:
-        return DatasetDiff()
-    else:
-        ds_diff.prune()
-        return ds_diff
+    ds_diff = DatasetDiff.concatenated(
+        base_target_diff, target_wc_diff, overwrite_original=True
+    )
+    ds_diff.prune()
+    return ds_diff
