@@ -1,8 +1,10 @@
 from datetime import datetime, timezone, timedelta
 import subprocess
 import sys
+import warnings
 
 import click
+import pygit2
 
 from .cli_util import tool_environment
 from .exec import execvp
@@ -13,10 +15,82 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
 
 
+class PreserveDoubleDash(click.Command):
+    """
+    Preserves the double-dash ("--") arg from user input.
+
+    Click normally swallows this arg, but using this command class preserves it.
+    """
+
+    def parse_args(self, ctx, args):
+        from kart.cli import get_version_tuple
+
+        args = list(args)
+        for i in range(len(args)):
+            arg = args[i]
+            if arg == "--":
+                if "--" in args[i + 1 :] and get_version_tuple() <= ("0", "12"):
+                    # Before we added this shim, we had users using a workaround (adding the `--` twice themselves),
+                    # which ideally we'd like them to stop doing.
+                    warnings.warn(
+                        "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
+                        UserWarning,
+                    )
+                else:
+                    # Insert a second `--` arg.
+                    # One of the `--` gets consumed by Click during super() below.
+                    # Then the second one gets left alone and we can pass it to git.
+                    args.insert(i + 1, "--")
+                break
+
+        return super(PreserveDoubleDash, self).parse_args(ctx, args)
+
+
+def parse_extra_args(repo, args):
+    """
+    Interprets positional `kart log` args, including "--", commits/refs, and paths.
+    Returns a two-tuple: (other_args, paths)
+    """
+    # As soon as we encounter a path, we assume all remaining args are also paths.
+    # i.e. the paths must be given *last*.
+    # If it's ambiguous whether something is a path or not, we assume it's a commit-ish.
+    # If you want to be unambiguous, provide the `--` arg to separate the list of commit-ish-es and paths.
+    # This behaviour should be consistent with git's behaviour.
+    if "--" in args:
+        dash_index = args.index("--")
+        paths = args[dash_index + 1 :]
+        other_args = args[:dash_index]
+    else:
+        other_args = []
+        paths = []
+        for i, arg in enumerate(args):
+            if arg.startswith("-"):
+                # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
+                # but this isn't a valid commit-ish.
+                #    $ git branch -c -- -x
+                #    fatal: '-x' is not a valid branch name.
+                # So we can assume it's a CLI flag, presumably for git rather than kart.
+                # It *could* be a path, but in that case the user should add a `--` before this option
+                # to disambiguate, and they haven't done so here.
+                other_args.append(arg)
+                continue
+            try:
+                repo.resolve_refish(arg)
+            except (KeyError, pygit2.InvalidSpecError):
+                # not a commit-ish.
+                # Treat remaining args as paths
+                paths = args[i:]
+                break
+            else:
+                other_args.append(arg)
+    return other_args, paths
+
+
 @click.command(
     context_settings=dict(
         ignore_unknown_options=True,
-    )
+    ),
+    cls=PreserveDoubleDash,
 )
 @click.pass_context
 @click.option(
@@ -51,11 +125,16 @@ from . import diff_estimation
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, args):
     """ Show commit logs """
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+
+    other_args, paths = parse_extra_args(repo, args)
+
+    # TODO: should we check paths exist here? git doesn't!
     if output_format == "text":
-        execvp("git", ["git", "-C", ctx.obj.repo.path, "log"] + list(args))
+        git_args = ["git", "-C", repo.path, "log", *other_args, "--", *paths]
+        execvp("git", git_args)
 
     elif output_format in ("json", "json-lines"):
-        repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
         try:
             cmd = [
                 "git",
@@ -63,7 +142,10 @@ def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, 
                 repo.path,
                 "log",
                 "--pretty=format:%H,%D",
-            ] + list(args)
+                *other_args,
+                "--",
+                *paths,
+            ]
             r = subprocess.run(
                 cmd,
                 encoding="utf8",

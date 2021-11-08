@@ -66,6 +66,10 @@ def get_version():
         return version_file.read().strip()
 
 
+def get_version_tuple():
+    return tuple(get_version().split("."))
+
+
 def print_version(ctx):
     import osgeo
     import psycopg2

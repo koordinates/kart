@@ -1,3 +1,4 @@
+import re
 import json
 import pytest
 
@@ -164,3 +165,89 @@ def test_log_with_feature_count(data_archive, cli_runner):
             {"nz_pa_points_topo_150k": 5},
             {"nz_pa_points_topo_150k": 2176},
         ]
+
+
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_log_arg_handling(data_archive, cli_runner, output_format):
+    """ review commit history """
+
+    def num_commits(r):
+        if output_format == "text":
+            return len(re.findall(r"(?m)^commit [0-9a-f]{40}$", r.stdout))
+        else:
+            return len(json.loads(r.stdout))
+
+    with data_archive("points"):
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "HEAD^", "--", "nz_pa_points_topo_150k"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "HEAD^", "--", "nonexistent"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 0
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "HEAD^", "nz_pa_points_topo_150k"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        r = cli_runner.invoke(
+            [
+                "log",
+                "-o",
+                output_format,
+                "HEAD^",
+                "nz_pa_points_topo_150k/.table-dataset/feature/",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        r = cli_runner.invoke(
+            [
+                "log",
+                "-o",
+                output_format,
+                "nz_pa_points_topo_150k/.table-dataset/feature/",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        if output_format == "text":
+            # check that we support passing unknown options (e.g. `-p`) on to git log
+            r = cli_runner.invoke(
+                [
+                    "log",
+                    "-o",
+                    output_format,
+                    "1582725544d9122251acd4b3fc75b5c88ac3fd17",
+                    "-p",
+                    "nz_pa_points_topo_150k/.table-dataset/feature/A/A/A/R/kc0EQA==",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert "diff --git" in r.stdout
+
+        # NOTE: this will fail the 0.12 release ; at that point we need to remove the code that
+        # generates the warning.
+        with pytest.warns(
+            UserWarning,
+            match="Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
+        ):
+            r = cli_runner.invoke(
+                ["log", "-o", output_format, "--", "--", "nz_pa_points_topo_150k"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert num_commits(r) == 2
