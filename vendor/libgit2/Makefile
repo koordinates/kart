@@ -1,6 +1,7 @@
-LIBGIT2_REF ?= v1.1.0
-LIBGIT2_REPO ?= libgit2/libgit2
-LIBGIT2_ARCHIVE := libgit2-1.1.0.tar.gz
+# v1.3.0 + koordinates changes
+LIBGIT2_REF ?= bb69c8fa3d30c38e409771e388787d5ea38b7723
+LIBGIT2_REPO ?= koordinates/libgit2
+LIBGIT2_ARCHIVE := libgit2-$(LIBGIT2_REF).tar.gz
 
 CFLAGS += -g
 CXXFLAGS += -g

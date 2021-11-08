@@ -1,6 +1,6 @@
-# v1.3.0+
-PYGIT2_REF ?= da410961f0a426cdecbd36548c2b36dc13c674c2
-PYGIT2_REPO ?= libgit2/pygit2
+# v1.7.0 + koordinates changes
+PYGIT2_REF ?= 3443cd8fd2cead2de608f51ccb3cdee5167c1fd4
+PYGIT2_REPO ?= koordinates/pygit2
 PYGIT2_ARCHIVE := pygit2-$(PYGIT2_REF).tar.gz
 
 SHELL = /bin/bash

@@ -103,14 +103,14 @@ int sf_init(
             ss_arg.ignore();
     }
     if (rect.size() != 4) {
-        std::cerr << "spatial-filter: Error: invalid bounds, expected '<lat_s>,<lng_w>,<lat_n>,<lng_e>'\n";
+        std::cerr << "spatial-filter: Error: invalid bounds, expected '<lng_w>,<lat_s>,<lng_e>,<lat_n>'\n";
         return 2;
     }
-    S2LatLng sw = S2LatLng::FromDegrees(rect[0], rect[1]);
-    S2LatLng ne = S2LatLng::FromDegrees(rect[2], rect[3]);
+    S2LatLng sw = S2LatLng::FromDegrees(rect[1], rect[0]);
+    S2LatLng ne = S2LatLng::FromDegrees(rect[3], rect[2]);
 
     if (!sw.is_valid() || !ne.is_valid()) {
-        std::cerr << "spatial-filter: Error: invalid LatLng values, expected '<lat_s>,<lng_w>,<lat_n>,<lng_e>'\n";
+        std::cerr << "spatial-filter: Error: invalid LatLng values, expected '<lng_w>,<lat_s>,<lng_e>,<lat_n>'\n";
         return 2;
     }
     sw = sw.Normalized();

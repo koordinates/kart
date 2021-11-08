@@ -1,4 +1,5 @@
-GIT_REF ?= kx-filter-extensions
+# v2.33.0 + various git changes + koordinates changes
+GIT_REF ?= e1645ec76fb513918e35204a65d94524682b1445
 GIT_REPO ?= koordinates/git
 GIT_ARCHIVE := git-$(GIT_REF).tar.gz
 
@@ -41,9 +42,14 @@ LDFLAGS += -ls2
 LDFLAGS += -L$(PREFIX)/lib
 LDFLAGS += -L$(PREFIX)/lib/python3.7/site-packages/s2_py
 
-RPATH1 := $(LOADER_PATH)/../lib
-RPATH2 := $(LOADER_PATH)/../lib/python3.7/site-packages/s2_py
+SEARCH_PATHS := $(LOADER_PATH)/../ $(LOADER_PATH)/../../
+LIB_PATHS := $(patsubst %,%lib,$(SEARCH_PATHS))
+S2LIB_PATHS := $(patsubst %,%/python3.7/site-packages/s2_py,$(LIB_PATHS))
+RPATH := $(LOADER_PATH) $(SEARCH_PATHS) $(LIB_PATHS) $(S2LIB_PATHS)
 
+SPACE := $() $()
+RPATH_LINUX := $(subst $(SPACE),:,$(RPATH))
+RPATH_DARWIN := $(subst $(SPACE), -add_rpath ,$(RPATH))
 
 build-git := src/git
 
@@ -122,13 +128,13 @@ lib-fix-Darwin:
 	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec sh -c \
 		"install_name_tool -change $(CURL_PREFIX)/lib/libcurl.4.dylib @rpath/libsqlite3.0.dylib {}" \;
 	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec sh -c \
-		"install_name_tool -add_rpath $(LOADER_PATH) -add_rpath $(RPATH1) -add_rpath $(RPATH2) {}" \;
+		"install_name_tool -add_rpath $(RPATH_DARWIN) {}" \;
 
 .PHONY: lib-fix-Linux
 lib-fix-Linux:
 	@echo fixing git libraries ...
 	cd $(PREFIX) && find . -perm -o=x -type f -name "git*" -print -exec \
-		patchelf --set-rpath '$(LOADER_PATH):$(RPATH1):$(RPATH2)' {} \;
+		patchelf --set-rpath '$(RPATH_LINUX)' {} \;
 
 .PHONY: check-lib-deps
 check-lib-deps: check-lib-deps-$(PLATFORM)
