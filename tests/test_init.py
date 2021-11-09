@@ -4,12 +4,14 @@ import shutil
 
 import pytest
 
+from kart.base_dataset import BaseDataset
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.repo import KartRepo
 from kart.exceptions import (
     INVALID_OPERATION,
     NO_IMPORT_SOURCE,
     NO_TABLE,
+    InvalidOperation,
 )
 
 H = pytest.helpers.helpers()
@@ -697,7 +699,7 @@ def test_init_import(
                 """
             )
             if srs_definition:
-                srs_definition = re.sub(r',\s*', ', ', srs_definition)
+                srs_definition = re.sub(r",\s*", ", ", srs_definition)
             if table == "nz_pa_points_topo_150k":
                 assert srs_definition.startswith('GEOGCS["WGS 84", DATUM["WGS_1984"')
             elif table == "nz_waca_adjustments":
@@ -1051,3 +1053,60 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
             "MySQL",
             "Shapefile",
         ]
+
+
+@pytest.mark.parametrize(
+    "names,is_okay",
+    [
+        pytest.param(("",), False, id="empty-string"),
+        pytest.param(("a:b",), False, id="special-ascii-chars"),
+        pytest.param(("a\nb",), False, id="ascii-control-chars"),
+        pytest.param(("1a",), False, id="leading-numeral"),
+        pytest.param(("a1",), True, id="trailing-numeral"),
+        pytest.param((".a",), False, id="leading-dot"),
+        pytest.param(("a.",), False, id="trailing-dot"),
+        pytest.param(("a.b",), True, id="contains-dot"),
+        pytest.param(("a ",), False, id="trailing-space"),
+        pytest.param(("a b",), True, id="contains-space"),
+        pytest.param(("COM1",), False, id="windows-reserved-filename"),
+        pytest.param(("com1",), False, id="windows-reserved-filename-ignoring-case"),
+        pytest.param(("ⅶ",), False, id="leading-numeral-unicode"),
+        pytest.param(("Ἢⅶ",), True, id="trailing-numeral-unicode"),
+        pytest.param(("a", "a"), False, id="identical-names"),
+        pytest.param(("a", "A"), False, id="identical-names-ignoring-case"),
+        pytest.param(("a", "b"), True, id="disparate-names"),
+        pytest.param(
+            ("K", "\u212a"), False, id="identical-names-ignoring-case-unicode"
+        ),
+    ],
+)
+def test_validate_dataset_paths(names, is_okay):
+    if is_okay:
+        BaseDataset.validate_dataset_paths(names)
+    else:
+        with pytest.raises(InvalidOperation):
+            BaseDataset.validate_dataset_paths(names)
+
+
+def test_import_bad_dataset_path(data_archive, data_archive_readonly, cli_runner):
+    with data_archive_readonly("gpkg-polygons") as data:
+        with data_archive("points") as repo_path:
+            # importing as '1a' isn't allowed. See test_validate_dataset_paths for full coverage of these cases.
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    str(data / "nz-waca-adjustments.gpkg"),
+                    f"{H.POLYGONS.LAYER}:1a",
+                ]
+            )
+            assert r.exit_code == 20, r.stderr
+
+            # importing a path that's already in the repo (after case folding) isn't allowed, without --replace-existing
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    str(data / "nz-waca-adjustments.gpkg"),
+                    f"{H.POLYGONS.LAYER}:NZ_PA_POINTS_TOPO_150K",
+                ]
+            )
+            assert r.exit_code == 20, r.stderr
