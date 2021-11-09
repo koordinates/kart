@@ -122,11 +122,14 @@ def test_init_with_spatial_filter(cli_runner, tmp_path):
     assert repo.config["kart.spatialfilter.crs"] == crs
 
     r = cli_runner.invoke(["-C", repo_path, "status"])
+    assert r.exit_code == 0, r.stderr
     assert (
         "A spatial filter is active, limiting repo to a specific region inside [174.879, -37.978, 175.388, -37.499]"
         in r.stdout
     )
+
     r = cli_runner.invoke(["-C", repo_path, "status", "-o", "json"])
+    assert r.exit_code == 0, r.stderr
     spatial_filter = json.loads(r.stdout)["kart.status/v1"]["spatialFilter"]
     assert spatial_filter["geometry"].startswith(
         "01030000000100000009000000E3A59BC420DC65401973D7"
@@ -180,6 +183,33 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
         blob_sha = r.stdout.strip()
         r = cli_runner.invoke(["git", "update-ref", "refs/filters/octagon", blob_sha])
         assert r.exit_code == 0, r.stderr
+
+        # Spatial filter is now stored with ref "octagon".
+        # Test spatial-filter resolve:
+        r = cli_runner.invoke(["spatial-filter", "resolve", "octagon"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.startswith(f"{crs}\n\nPOLYGON((174.879 -37.8277,")
+
+        r = cli_runner.invoke(["spatial-filter", "resolve", "octagon", "--envelope"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout == "174.879,-37.9783,175.3878,-37.4987\n"
+
+        r = cli_runner.invoke(["spatial-filter", "resolve", "octagon", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        jdict = json.loads(r.stdout)
+        assert jdict["reference"] == "refs/filters/octagon"
+        assert jdict["objectId"] == blob_sha
+        assert jdict["geometry"].startswith(
+            "01030000000100000009000000E3A59BC420DC65401973D7"
+        )
+        assert jdict["crs"] == crs
+
+        r = cli_runner.invoke(
+            ["spatial-filter", "resolve", "octagon", "-o", "json", "--envelope"]
+        )
+        assert r.exit_code == 0, r.stderr
+        envelope = json.loads(r.stdout)
+        assert envelope == [174.879, -37.9783, 175.3878, -37.4987]
 
         # Clone repo using spatial filter reference
         repo2_path = tmp_path / "repo2"

@@ -1,13 +1,16 @@
 import re
 import functools
 import logging
+import sys
 
 import click
 
-from .cli_util import StringFromFile
+from .cli_util import add_help_subcommand, StringFromFile
 from .crs_util import make_crs
 from .exceptions import CrsError, GeometryError, NotFound, NO_SPATIAL_FILTER
 from .geometry import geometry_from_string, GeometryType
+from .output_util import dump_json_output
+from .repo import KartRepoState
 from .serialise_util import hexhash
 
 
@@ -43,6 +46,62 @@ def spatial_filter_help_text(allow_reference=True):
     return result
 
 
+@add_help_subcommand
+@click.group(hidden=True)
+@click.pass_context
+def spatial_filter(ctx, **kwargs):
+    """
+    Extra commands for working with spatial filters. Generally, kart clone and kart checkout are sufficient.
+    """
+
+
+@spatial_filter.command()
+@click.option(
+    "--envelope",
+    "do_envelope",
+    is_flag=True,
+    default=False,
+    help=(
+        "Output only the spatial filter's envelope in WGS 84, in the following format: lng_w,lat_s,lng_e,lat_n)"
+    ),
+)
+@click.option(
+    "--output-format",
+    "-o",
+    type=click.Choice(["text", "json"]),
+    default="text",
+)
+@click.argument("reference")
+@click.pass_context
+def resolve(ctx, reference, do_envelope, output_format):
+    """
+    Outputs the spatial filter definition stored in the repo at the given reference.
+    """
+
+    do_json = output_format == "json"
+
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    ref_spec = ReferenceSpatialFilterSpec(reference)
+
+    if do_envelope:
+        envelope = ref_spec.resolve(repo).envelope_wgs84()
+        if do_json:
+            dump_json_output(envelope, sys.stdout)
+        else:
+            click.echo("{0},{1},{2},{3}".format(*envelope))
+    else:
+        data = ref_spec.resolved_data(repo)
+        if do_json:
+            from kart.status import spatial_filter_status_to_json
+
+            data = spatial_filter_status_to_json(data)
+            dump_json_output(data, sys.stdout)
+        else:
+            click.echo(data["crs"])
+            click.echo()
+            click.echo(data["geometry"])
+
+
 class SpatialFilterString(StringFromFile):
     """Click option to specify a SpatialFilter."""
 
@@ -51,7 +110,7 @@ class SpatialFilterString(StringFromFile):
         self.allow_reference = allow_reference
 
     def convert(self, value, param, ctx):
-        if not value:
+        if not value or value.upper() == "NONE":
             return ResolvedSpatialFilterSpec(None, None, match_all=True)
 
         try:
@@ -97,12 +156,24 @@ class SpatialFilterSpec:
         self.REF_KEY = KartConfigKeys.KART_SPATIALFILTER_REFERENCE
         self.OID_KEY = KartConfigKeys.KART_SPATIALFILTER_OBJECTID
 
-    def resolve(self):
+    def write_config(self, repo):
+        """Writes this user-provied spatial-filter specification to the given repository's config."""
+        raise NotImplementedError()
+
+    def resolve(self, repo):
         """
         Returns an equivalent ResolvedSpatialFilterSpec that directly contains the geometry and CRS
         (as opposed to a ReferenceSpatialFilterSpec that contains a reference to some other object
         that in turn contains the geometry and CRS).
         """
+        raise NotImplementedError()
+
+    def envelope_wgs84(self):
+        """Returns the envelope of the spatial filter geometry as a tuple (lng_w, lat_s, lng_e, lat_n), using WGS 84."""
+        raise NotImplementedError()
+
+    def git_spatial_filter_extension_spec(self):
+        """Approximates this spatial-filter so it can be parsed by git's custom spatial filter extension."""
         raise NotImplementedError()
 
 
@@ -152,6 +223,23 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
             return None
         return hexhash(self.crs_spec.strip(), self.geometry.to_wkb())
 
+    def envelope_wgs84(self):
+        from osgeo import osr
+
+        try:
+            transform = osr.CoordinateTransformation(self.crs, make_crs("EPSG:4326"))
+            geom_ogr = self.geometry.to_ogr()
+            geom_ogr.Transform(transform)
+            w, e, s, n = geom_ogr.GetEnvelope()
+            return w, s, e, n
+
+        except RuntimeError as e:
+            raise CrsError(f"Can't reproject spatial filter into EPSG:4326:\n{e}")
+
+    def git_spatial_filter_extension_spec(self):
+        envelope = self.envelope_wgs84()
+        return "--filter=extension:spatial={0},{1},{2},{3}".format(*envelope)
+
 
 class ReferenceSpatialFilterSpec(SpatialFilterSpec):
     """
@@ -163,60 +251,64 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
         super().__init__()
         self.ref_or_oid = ref_or_oid
 
-    def _resolve_object_contents(self, obj):
-        contents = obj.data.decode("utf-8")
-        parts = self.split_file(contents)
-        return ResolvedSpatialFilterSpec(*parts)
-
     @functools.lru_cache(maxsize=1)
-    def _resolve_target(self, repo):
+    def _resolve_ref_oid_blob(self, repo):
         """
-        Returns a tuple of strings (reference, object_id, ResolvedSpatialFilterSpec).
-        # Returned reference will be None if ref_or_oid is an object-id.
+        Returns a tuple (ref, oid, blob), where ref, oid and blob are the reference, object ID and blob
+        indicated by self.ref_or_oid (but ref will be None if self.ref_or_oid is an object ID).
         """
 
-        # TODO - handle missing objects (try to make sure they are fetched from the remote).
-
+        ref = None
+        oid = None
         obj = None
-        oid = self.ref_or_oid
         try:
+            oid = self.ref_or_oid
             obj = repo[oid]
         except (KeyError, ValueError):
             pass
 
-        if obj is not None:
-            return None, oid, self._resolve_object_contents(obj)
+        if obj is None:
+            ref = self.ref_or_oid
+            if not ref.startswith("refs/"):
+                ref = f"refs/filters/{ref}"
 
-        ref = self.ref_or_oid
-        if not ref.startswith("refs/"):
-            ref = f"refs/filters/{ref}"
-
-        if ref in repo.references:
-            oid = str(repo.references[ref].resolve().target)
+            if ref in repo.references:
+                oid = str(repo.references[ref].resolve().target)
             try:
                 obj = repo[oid]
             except (KeyError, ValueError):
                 pass
 
-        if obj is not None:
-            return ref, oid, self._resolve_object_contents(obj)
+        if obj is None or obj.type_str != "blob":
+            ref_desc = " or ".join(set([oid, ref]))
+            raise NotFound(
+                f"No spatial filter object was found in the repository at {ref_desc}",
+                exit_code=NO_SPATIAL_FILTER,
+            )
 
-        ref_desc = " or ".join(set([oid, ref]))
-        raise NotFound(
-            f"No spatial filter object was found in the repository at {ref_desc}",
-            exit_code=NO_SPATIAL_FILTER,
-        )
+        return ref, oid, obj
+
+    def resolved_data(self, repo):
+        ref, oid, obj = self._resolve_ref_oid_blob(repo)
+        crs, geometry = self.split_file(obj.data.decode("utf-8"))
+        return {
+            "reference": ref,
+            "objectId": oid,
+            "geometry": geometry,
+            "crs": crs,
+        }
 
     def resolve(self, repo):
-        ref, oid, resolved_spatial_filter_spec = self._resolve_target(repo)
-        return resolved_spatial_filter_spec
+        data = self.resolved_data(repo)
+        return ResolvedSpatialFilterSpec(data["crs"], data["geometry"])
 
     def write_config(self, repo):
-        ref, oid, resolved_spatial_filter_spec = self._resolve_target(repo)
+        ref, oid, blob = self._resolve_ref_oid_blob(repo)
         if ref is None:
-            # Found an object - the object is immutable, so no reason to store a pointer to it.
-            # Just resolve the reference to geometry + CRS and store that.
-            resolved_spatial_filter_spec.write_config(repo)
+            # Found an object by object ID - objects are immutable including their OIDs, so storing the OID
+            # is just storing a pointer to an immutable CRS and geometry. It makes more sense to resolve
+            # this OID to its geometry and CRS, and store those in the config directly.
+            self.resolve(repo).write_config(repo)
 
         else:
             # Found a reference. The reference is mutable, so we store it (and the object it points to).
@@ -226,16 +318,19 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
             repo.del_config(self.CRS_KEY)
 
     def matches_working_copy(self, repo):
-        return self.resolve().matches_working_copy(repo)
+        return self.resolve(repo).matches_working_copy(repo)
+
+    def git_spatial_filter_extension_spec(self):
+        return f"--filter=extension:spatial={self.ref_or_oid}"
 
     @classmethod
     def split_file(cls, contents):
-        parts = re.split(r"\n\r?\n", contents, maxsplit=1)
+        parts = re.split(r"\r?\n\r?\n", contents, maxsplit=1)
         if len(parts) != 2:
             raise click.UsageError(
                 "Spatial filter file must contain the CRS, then an empty line, then the geometry."
             )
-        return parts
+        return [p.strip() for p in parts]
 
 
 class SpatialFilter:

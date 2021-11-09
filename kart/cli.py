@@ -36,6 +36,7 @@ MODULE_COMMANDS = {
     "pull": {"pull"},
     "resolve": {"resolve"},
     "show": {"create-patch", "show"},
+    "spatial_filters": {"spatial-filter"},
     "spatial_tree": {"spatial-tree"},
     "status": {"status"},
     "query": {"query"},
