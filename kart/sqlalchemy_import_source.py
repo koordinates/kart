@@ -152,7 +152,9 @@ class SqlAlchemyImportSource(ImportSource):
         return desc
 
     def default_dest_path(self):
-        return self.table_location_within_source or self.table
+        return self._normalise_dataset_path(
+            self.table_location_within_source or self.table
+        )
 
     @functools.lru_cache(maxsize=1)
     def get_tables(self):

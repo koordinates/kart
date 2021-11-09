@@ -1061,6 +1061,10 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
         pytest.param(("",), False, id="empty-string"),
         pytest.param(("a:b",), False, id="special-ascii-chars"),
         pytest.param(("a\nb",), False, id="ascii-control-chars"),
+        pytest.param(("a/b/c",), True, id="slash-separated"),
+        pytest.param(("a/b/",), False, id="trailing-slash"),
+        pytest.param(("a//b",), False, id="empty-component"),
+        pytest.param((r"a\b\c",), True, id="backslash-separated"),
         pytest.param(("1a",), False, id="leading-numeral"),
         pytest.param(("a1",), True, id="trailing-numeral"),
         pytest.param((".a",), False, id="leading-dot"),
@@ -1110,3 +1114,23 @@ def test_import_bad_dataset_path(data_archive, data_archive_readonly, cli_runner
                 ]
             )
             assert r.exit_code == 20, r.stderr
+
+
+def test_import_backslash_in_dataset_path(
+    data_archive, data_archive_readonly, cli_runner
+):
+    with data_archive_readonly("gpkg-polygons") as data:
+        with data_archive("points") as repo_path:
+            # importing as '1a' isn't allowed. See test_validate_dataset_paths for full coverage of these cases.
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    str(data / "nz-waca-adjustments.gpkg"),
+                    f"{H.POLYGONS.LAYER}:a\\b\\c",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["data", "ls"])
+            assert r.exit_code == 0, r.stderr
+            assert "a/b/c" in r.stdout.splitlines()

@@ -132,6 +132,11 @@ class BaseDataset(ImportSource):
                 f"Dataset path {path!r} may not contain any of these characters: {other}"
             )
         components = path.upper().split("/")
+        if any(not c for c in components):
+            raise InvalidOperation(
+                f"Dataset path {path!r} may not contain empty components"
+            )
+
         bad_parts = sorted(cls._RESERVED_WINDOWS_FILENAMES.intersection(components))
         if bad_parts:
             raise InvalidOperation(

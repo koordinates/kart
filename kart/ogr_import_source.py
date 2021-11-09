@@ -200,7 +200,7 @@ class OgrImportSource(ImportSource):
         }
 
     def default_dest_path(self):
-        return self.table
+        return self._normalise_dataset_path(self.table)
 
     def import_source_desc(self):
         return f"Import from {self.source_name}:{self.table} to {self.dest_path}/"
