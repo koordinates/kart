@@ -75,3 +75,4 @@ pytest.xml
 .vscode/
 
 *.p12
+kart/_env.py

@@ -2,7 +2,63 @@
 
 We welcome all contributions, bug reports, and suggestions!
 
-## Installing the development version
+* Ask support and usage questions in [Discussions](https://github.com/koordinates/kart/discussions)
+* Read and submit bug reports or feature requests at [Issues](https://github.com/koordinates/kart/issues)
+
+We're moving to CMake as a better system for building Kart and its
+dependencies. Currently CMake is still a work in progress, only supports macOS
+and Linux, and doesn't yet create packages suitable for distribution.
+
+## Installing the development version with CMake
+
+Requirements:
+* CMake >= v3.21
+* GDAL >= v3.3.2
+* Git >= v2.31
+* LibGit2 >= v1.1.0
+* OpenSSL >= v1.1
+* PostgreSQL client library (libpq)
+* Python 3.7
+* Spatialindex >= v1.9.3
+* SpatiaLite >= v5.0.1
+* SQLite3 >= v3.31.1
+* SWIG
+* unixODBC >= v2.3.9 (macOS/Linux only)
+
+### Installing dependencies on macOS
+
+If you're a Homebrew user, you can get all of those via:
+
+```console
+$ brew install --upgrade cmake gdal git libgit2 openssl@1.1 libpq python@3.7 \
+    spatialindex libspatialite sqlite3 swig unixodbc
+```
+
+### Building
+
+```console
+$ mkdir build && cd build
+$ cmake ..
+$ make
+$ ./kart --version
+$ ctest -V
+```
+
+### Downloading vendor dependencies from CI
+
+If you're having issues with the above, you can download a [recent master-branch
+vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (`vendor-Darwin` for macOS,
+or `vendor-Linux` for Linux). Then:
+
+```console
+$ mkdir build && cd build
+$ cmake .. -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip
+$ make
+$ ./kart --version
+$ ctest -V
+```
+
+## Installing the development version the legacy way
 
 By default, vendored dependencies are downloaded from recent CI artifacts to save you a lot of time and effort building them.
 
