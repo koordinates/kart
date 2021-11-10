@@ -2,7 +2,6 @@ from __future__ import annotations
 import functools
 import logging
 import time
-import unicodedata
 
 from . import crs_util
 from .import_source import ImportSource
@@ -119,11 +118,6 @@ class BaseDataset(ImportSource):
         if not path_bytes:
             raise InvalidOperation(f"Dataset path {path!r} may not be empty")
 
-        if not (path[0] == "_" or unicodedata.category(path[0]).startswith("L")):
-            raise InvalidOperation(
-                f"Dataset path {path!r} must begin with a letter or an underscore"
-            )
-
         if path_bytes.intersection(control_chars):
             raise InvalidOperation(
                 f"Dataset path {path!r} may not contain ASCII control characters"
@@ -133,6 +127,10 @@ class BaseDataset(ImportSource):
             raise InvalidOperation(
                 f"Dataset path {path!r} may not contain any of these characters: {other}"
             )
+
+        if path.startswith("/"):
+            raise InvalidOperation(f"Dataset path {path!r} may not start with a '/'")
+
         components = path.upper().split("/")
         if any(not c for c in components):
             raise InvalidOperation(

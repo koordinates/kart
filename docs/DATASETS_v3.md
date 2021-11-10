@@ -381,9 +381,12 @@ Datasets have names, which can actually be hierarchical paths, e.g. `hydro/sound
 
 * Paths may contain most unicode characters
 * Paths must not contain any ASCII control characters (codepoints 00 to 1F), or any of the characters `:`, `<`, `>`, `"`, `|`, `?`, or `*`
-* Paths must begin with a letter or an underscore (`_`).
-* No path component may end with a `.` or a ` ` (space)
-* Path components may not be any of these [reserved Windows filenames](https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN#naming-conventions): `CON`, `PRN`, `AUX`, `NUL`, `COM1`, `COM2`, `COM3`, `COM4`, `COM5`, `COM6`, `COM7`, `COM8`, `COM9`, `LPT1`, `LPT2`, `LPT3`, `LPT4`, `LPT5`, `LPT6`, `LPT7`, `LPT8`, `LPT9`.
+* Paths must not start or end with a `/`
+* No path component (`/`-separated) may:
+  - be empty
+  - start or end with a `.`
+  - end with a ` ` (space)
+  - be any of these [reserved Windows filenames](https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file?redirectedfrom=MSDN#naming-conventions): `CON`, `PRN`, `AUX`, `NUL`, `COM1`, `COM2`, `COM3`, `COM4`, `COM5`, `COM6`, `COM7`, `COM8`, `COM9`, `LPT1`, `LPT2`, `LPT3`, `LPT4`, `LPT5`, `LPT6`, `LPT7`, `LPT8`, `LPT9`.
 * Repositories may not contain more than one dataset with names that differ only by case.
 
 Additionally, backslashes (`\`) in dataset paths are converted to forward slashes (`/`) when imported.

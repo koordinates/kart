@@ -283,7 +283,6 @@ def import_(
             dest_path = table
 
         meta_overrides = table_info.get(dest_path, {})
-        dest_path = dest_path.replace(".", "/")
         if is_windows:
             dest_path = dest_path.replace("\\", "/")  # git paths use / as a delimiter
 

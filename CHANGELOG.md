@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
   - `kart create-patch` now supports `--patch-type minimal`, which creates a much-smaller patch; relying on the patch recipient having the HEAD commit in their repository [#482](https://github.com/koordinates/kart/issues/482)
   - `kart apply` now applies both types of patch.
 * `kart log` now accepts a `--` marker to signal that all remaining arguments are dataset names. [#498](https://github.com/koordinates/kart/issues/498)
+* `import` from a Postgres or MSSQL source will no longer prepend the database schema name to the imported dataset path.
 * Bugfix: Diffing between an old commit and the current working copy no longer fails when datasets have been deleted in the intervening commits.
 * Bugfix: Existing auto-incrementing integer PK sequences are now overwritten properly in GPKG working copies. [#468](https://github.com/koordinates/kart/pull/468)
 
