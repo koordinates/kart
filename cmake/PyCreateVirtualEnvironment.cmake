@@ -87,7 +87,7 @@ function(CreateVirtualEnvironment TARGET)
     set(PIP ${EXEC} ${BIN_DIR}/pip)
   endif()
 
-  set(PIP_INSTALL ${PIP} install --disable-pip-version-check)
+  set(PIP_INSTALL ${PIP} install --isolated --quiet --disable-pip-version-check)
 
   if(ARG_NO_UPGRADE_PIP)
     set(PIP_UPGRADE "")
@@ -110,14 +110,14 @@ function(CreateVirtualEnvironment TARGET)
   set(CFG_FILE ${VENV}/pyvenv.cfg)
   add_custom_command(
     OUTPUT ${CFG_FILE}
-    COMMAND ${Python3_EXECUTABLE} -m venv ${VENV}
+    COMMAND ${Python3_EXECUTABLE} -m venv --clear ${VENV}
     COMMENT "${ARG_ENV_NAME}: creating virtualenv...")
   set(OUTPUT_FILE ${VENV}/.requirements)
   add_custom_command(
     OUTPUT ${OUTPUT_FILE}
     COMMAND ${PIP_UPGRADE}
     COMMAND ${DEPS_INSTALL}
-    COMMAND ${BIN_DIR}/pip freeze > ${OUTPUT_FILE}
+    COMMAND ${PIP} freeze > ${OUTPUT_FILE}
     DEPENDS ${CFG_FILE} ${ARG_SOURCES} ${ARG_REQUIREMENTS_TXT}
     COMMENT "${ARG_ENV_NAME}: installing requirements...")
 

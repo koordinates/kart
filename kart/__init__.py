@@ -15,12 +15,12 @@ import sys
 L = logging.getLogger("kart.__init__")
 
 try:
-    from . import _env
+    import _kart_env
 
-    L.debug("Found kart._env configuration")
+    L.debug("Found _kart_env configuration module")
 except ImportError:
-    L.debug("No kart._env configuration found")
-    _env = None
+    L.debug("No _kart_env configuration module found")
+    _kart_env = None
 
 is_frozen = getattr(sys, "frozen", None) and hasattr(sys, "_MEIPASS")
 is_darwin = platform.system() == "Darwin"
@@ -39,15 +39,15 @@ prefix = os.path.abspath(sys.prefix)
 
 # Rtree / Libspatialindex
 if not is_windows:
-    if _env:
-        os.environ["SPATIALINDEX_C_LIBRARY"] = _env.SPATIALINDEX_C_LIBRARY
+    if _kart_env:
+        os.environ["SPATIALINDEX_C_LIBRARY"] = _kart_env.SPATIALINDEX_C_LIBRARY
     else:
         os.environ["SPATIALINDEX_C_LIBRARY"] = os.path.join(
             prefix, "" if is_frozen else "lib", f"libspatialindex_c.{libsuffix}"
         )
 
-if _env:
-    spatialite_path = os.path.splitext(_env.SPATIALITE_EXTENSION)[0]
+if _kart_env:
+    spatialite_path = os.path.splitext(_kart_env.SPATIALITE_EXTENSION)[0]
 else:
     spatialite_path = os.path.join(
         prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
@@ -64,9 +64,9 @@ os.environ["PATH"] = (
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 os.environ["XDG_CONFIG_HOME"] = prefix
-if _env:
+if _kart_env:
     os.environ["PATH"] = (
-        os.path.split(_env.GIT_EXECUTABLE)[0] + os.pathsep + os.environ["PATH"]
+        os.path.split(_kart_env.GIT_EXECUTABLE)[0] + os.pathsep + os.environ["PATH"]
     )
 elif is_windows:
     os.environ["PATH"] = (
@@ -81,9 +81,9 @@ else:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
 # GDAL Data
-if _env:
-    os.environ["GDAL_DATA"] = _env.GDAL_DATA
-    os.environ["PROJ_LIB"] = _env.PROJ_LIB
+if _kart_env:
+    os.environ["GDAL_DATA"] = _kart_env.GDAL_DATA
+    os.environ["PROJ_LIB"] = _kart_env.PROJ_LIB
 else:
     if is_windows:
         if prefix.endswith("venv"):

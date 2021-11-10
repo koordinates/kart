@@ -6,7 +6,7 @@ include(GetPrerequisites)
 include(CheckSymbolExists)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
-find_package(Python3 3.7...<3.8 REQUIRED COMPONENTS Interpreter)
+find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
 
 if(UNIX)
   find_package(PkgConfig REQUIRED)
@@ -48,7 +48,7 @@ endif()
 find_package(Git 2.31 REQUIRED)
 find_package(GDAL 3.3.2 REQUIRED)
 find_package(Spatialindex 1.9.3 REQUIRED)
-find_package(SpatiaLite 5.0.1 REQUIRED)
+find_package(SpatiaLite 5.0.0 REQUIRED)
 message(VERBOSE "SpatiaLite extension: ${SpatiaLite_EXTENSION}")
 if(NOT SpatiaLite_EXTENSION)
   message(
@@ -57,7 +57,7 @@ if(NOT SpatiaLite_EXTENSION)
   )
 endif()
 
-find_package(SQLite3 3.31.1 REQUIRED)
+find_package(SQLite3 3.31 REQUIRED)
 if(NOT SQLite3_HAS_LOAD_EXTENSION)
   if(MACOS)
     message(
@@ -72,7 +72,7 @@ endif()
 find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL 1.1 REQUIRED)
 find_package(ODBC 2.3.9 REQUIRED)
-find_package(LibGit2 1.1.0 REQUIRED)
+find_package(LibGit2 1.3.0 REQUIRED)
 find_package(SWIG REQUIRED COMPONENTS python)
 
 if(NOT GDAL_CONFIG)
@@ -81,10 +81,10 @@ endif()
 
 # find GDAL's data directory
 execute_process(
-  COMMAND ${GDAL_CONFIG} --datadir
+  COMMAND ${GDAL_CONFIG} --datadir COMMAND_ERROR_IS_FATAL ANY
   OUTPUT_VARIABLE GDAL_DATADIR
   OUTPUT_STRIP_TRAILING_WHITESPACE)
-message(VERBOSE "GDAL data directory: ${GDAL_DATADIR}")
+message(STATUS "Found GDAL data directory: ${GDAL_DATADIR}")
 
 #
 # Find PROJ's data directory For the PROJ that GDAL links against
@@ -131,7 +131,7 @@ endif()
 if(NOT PROJ_DATADIR)
   message(FATAL_ERROR "Couldn't find PROJ proj.db. Set PROJ_DATADIR.")
 else()
-  message("Found PROJ data directory in ${PROJ_DATADIR}")
+  message(STATUS "Found PROJ data directory: ${PROJ_DATADIR}")
 endif()
 
 #
@@ -161,7 +161,7 @@ ExternalProject_Add(
           --bdist-dir <TMP_DIR>
   INSTALL_COMMAND "")
 ExternalProject_Get_Property(pysqlite3 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${PY_WHEELID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pysqlite3-${PYSQLITE3_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # psycopg2
@@ -184,12 +184,14 @@ ExternalProject_Add(
           --bdist-dir <TMP_DIR>
   INSTALL_COMMAND "")
 ExternalProject_Get_Property(psycopg2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${PY_WHEELID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # pygit2
 #
-cmake_path(GET LibGit2_LIBRARY PARENT_PATH LIBGIT2_LIB_DIR)
+if(NOT LibGit2_ROOT)
+  cmake_path(GET LibGit2_INCLUDE_DIR PARENT_PATH LibGit2_ROOT)
+endif()
 set(PYGIT2_WHEEL_VER 1.7.0)
 ExternalProject_Add(
   pygit2
@@ -199,15 +201,14 @@ ExternalProject_Add(
   DEPENDS wheelBuildEnv LibGit2::LibGit2
   EXCLUDE_FROM_ALL ON
   CONFIGURE_COMMAND ""
-  BUILD_COMMAND
-    ${EXT_BUILD_ENV} ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build_ext --include-dirs
-    ${LibGit2_INCLUDE_DIR} --library-dirs ${LIBGIT2_LIB_DIR} --build-temp <TMP_DIR>
+  BUILD_COMMAND ${EXT_BUILD_ENV} "LIBGIT2=${LibGit2_ROOT}" ${wheelBuildEnv_PYTHON} setup.py
+                --no-user-cfg build_ext --build-temp <TMP_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg build --build-temp <TMP_DIR>
   COMMAND ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --dist-dir <INSTALL_DIR>
           --bdist-dir <TMP_DIR>
   INSTALL_COMMAND "")
 ExternalProject_Get_Property(pygit2 INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${PY_WHEELID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/pygit2-${PYGIT2_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # pyodbc
@@ -251,19 +252,19 @@ ExternalProject_Add(
   EXCLUDE_FROM_ALL ON)
 ExternalProject_Get_Property(googletest_src SOURCE_DIR)
 set(GOOGLETEST_SRC_DIR ${SOURCE_DIR})
-# Includes the S2 library as a submodule
+# s2-py includes the S2 library code as a submodule
 set(S2PY_BUILD_ENV # "VERBOSE=1"
     "GTEST_ROOT=googletest" "OPENSSL_ROOT_DIR=${OpenSSL_ROOT}" "SWIG_EXECUTABLE=${SWIG_EXECUTABLE}"
-    "SWIG_DIR=${SWIG_DIR}")
+    "SWIG_DIR=${SWIG_DIR}" "CMAKE_WARN_DEPRECATED=FALSE")
 if(MACOS)
-  list(APPEND S2PY_BUILD_ENV "MACOSX_DEPLOYMENT_TARGET=${PY_MACOS_DEPLOYMENT}")
+  list(APPEND S2PY_BUILD_ENV "MACOSX_DEPLOYMENT_TARGET=${Python3_MACOS_DEPLOYMENT_TARGET}")
 endif()
 
 set(S2PY_WHEEL_VER 0.11.0)
 ExternalProject_Add(
   s2_py
   GIT_REPOSITORY https://github.com/koordinates/s2-py.git
-  GIT_TAG 4815e08d0c92c4aedffed05910b47ba862088433
+  GIT_TAG 8df94850ef2e68bdf923a8683c334316232431e0
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv OpenSSL::SSL googletest_src
   EXCLUDE_FROM_ALL ON
@@ -274,12 +275,12 @@ ExternalProject_Add(
                 bdist_wheel --dist-dir <INSTALL_DIR> --bdist-dir <TMP_DIR>
   INSTALL_COMMAND "")
 ExternalProject_Get_Property(s2_py INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/s2_py-${S2PY_WHEEL_VER}-${PY_WHEELID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/s2_py-${S2PY_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # GDAL Python module We download the bindings associated with the version we picked up via FindGDAL
 #
-message("Will download & build GDAL Python bindings for v${GDAL_VERSION}")
+message(STATUS "GDAL: Will download & build Python bindings for v${GDAL_VERSION}")
 ExternalProject_Add(
   gdal_py
   URL https://pypi.io/packages/source/G/GDAL/GDAL-${GDAL_VERSION}.tar.gz
@@ -294,7 +295,7 @@ ExternalProject_Add(
           --bdist-dir <TMP_DIR>
   INSTALL_COMMAND "")
 ExternalProject_Get_Property(gdal_py INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${PY_WHEELID}.whl)
+list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.whl)
 
 #
 # General target
@@ -305,11 +306,12 @@ add_custom_target(
   COMMENT "Python vendor wheels")
 
 #
-set(VENDOR_CONFIG _env.py)
+set(VENDOR_CONFIG _kart_env.py)
 set(VENDOR_CONFIG
-    vendor/_env.py
+    vendor/_kart_env.py
     PARENT_SCOPE)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/template/_env.py.in ${VENDOR_CONFIG} ESCAPE_QUOTES)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/template/_kart_env.py.in ${VENDOR_CONFIG}
+               ESCAPE_QUOTES)
 
 #
 # Vendor Dist Archive

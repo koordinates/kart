@@ -34,14 +34,37 @@ $ brew install --upgrade cmake gdal git libgit2 openssl@1.1 libpq python@3.7 \
     spatialindex libspatialite sqlite3 swig unixodbc
 ```
 
+### Installing dependencies on Linux
+
+Ubuntu Focal using [UbuntuGIS](https://wiki.ubuntu.com/UbuntuGIS):
+```console
+$ sudo apt-get install software-properties-common
+$ wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - \
+    | sudo tee /etc/apt/trusted.gpg.d/kitware.gpg >/dev/null
+$ sudo apt-add-repository "deb https://apt.kitware.com/ubuntu/ $(lsb_release -cs) main"
+$ sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+$ sudo add-apt-repository ppa:git-core/ppa
+$ sudo apt-get install build-essential cmake ccache libgdal-dev gdal-data git \
+    libssl-dev libpq-dev python3.8-dev python3.8-venv \
+    libspatialindex-dev libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
+```
+
+Then [build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.3.
+
+Then build Kart:
+```console
+$ cmake -B build -S . \
+    -DSpatiaLite_EXTENSION=/usr/lib/x86_64-linux-gnu/mod_spatialite.so \
+    -DPROJ_DATADIR=/usr/share/proj
+```
+
 ### Building
 
 ```console
-$ mkdir build && cd build
-$ cmake ..
+$ cmake -B build -S .
+$ cd build
 $ make
 $ ./kart --version
-$ ctest -V
 ```
 
 ### Downloading vendor dependencies from CI
@@ -51,12 +74,42 @@ vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.
 or `vendor-Linux` for Linux). Then:
 
 ```console
-$ mkdir build && cd build
-$ cmake .. -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip
+$ cmake -B build -S . -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip
+$ cd build
 $ make
 $ ./kart --version
-$ ctest -V
 ```
+
+Note you'll need to have (and configure) the same version of Python that CI
+currently uses (3.7).
+
+### Running the tests
+
+```console
+$ ctest -V  # run the tests
+```
+
+If you don't use the CI vendor dependencies archive, currently a few test failures are expected.
+This will be cleaned up soon.
+
+* macOS
+
+    ```
+    tests/test_core.py::test_proj_transformation_grid
+    tests/test_spatial_tree.py::test_index_points_all
+    tests/test_spatial_tree.py::test_index_points_commit_by_commit
+    tests/test_spatial_tree.py::test_index_points_idempotent
+    tests/test_spatial_tree.py::test_index_polygons_all
+    tests/test_spatial_filters.py::test_git_spatial_filter_extension
+    ```
+
+* Linux
+
+    ```
+    tests/test_annotations.py::test_diff_feature_count_with_readonly_repo_dir
+    tests/test_annotations.py::test_diff_feature_count_with_readonly_annotations
+    tests/test_spatial_filters.py::test_git_spatial_filter_extension
+    ```
 
 ## Installing the development version the legacy way
 

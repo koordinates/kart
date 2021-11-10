@@ -4,10 +4,13 @@ project(
   KART
   VERSION 0.10.6
   LANGUAGES C CXX)
+
 enable_testing()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 set(KART_CMAKE_TEMPLATE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cmake/template)
+
+include(PythonGetABIInfo)
 
 # find_package(Git REQUIRED) execute_process( COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
 # RESULT_VARIABLE result OUTPUT_VARIABLE KART_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
@@ -49,30 +52,8 @@ endif()
 
 # OSX: prefer Homebrew over Frameworks
 set(Python3_FIND_IMPLEMENTATIONS "CPython")
-find_package(Python3 3.7...<3.8 REQUIRED COMPONENTS Interpreter)
-# FIXME: Is this really the best way?
-set(PY_VER_CODE
-    "cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}-cp${Python3_VERSION_MAJOR}${Python3_VERSION_MINOR}m"
-)
-if(MACOS)
-  if(NOT PY_MACOS_DEPLOYMENT)
-    execute_process(
-      COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos_get_deployment.sh "${Python3_EXECUTABLE}"
-      OUTPUT_VARIABLE PY_MACOS_DEPLOYMENT
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if((NOT ${RESULT_VARIABLE} EQUAL 0) OR (NOT ${PY_MACOS_DEPLOYMENT}))
-      message(
-        FATAL_ERROR
-          "Can't determine MacOS Deployment target for ${Python3_EXECUTABLE}. Set via PY_MACOS_DEPLOYMENT=X.Y"
-      )
-    endif()
-  endif()
-  string(REPLACE "." "_" PY_MACOS_DEPLOYMENT_ID ${PY_MACOS_DEPLOYMENT})
-  set(PY_WHEELID "${PY_VER_CODE}-macosx_${PY_MACOS_DEPLOYMENT_ID}_${CMAKE_SYSTEM_PROCESSOR}")
-elseif(LINUX)
-  set(PY_WHEELID "${PY_VER_CODE}-linux_${CMAKE_SYSTEM_PROCESSOR}")
-endif()
-message(VERBOSE "Python wheel identifier: ${PY_WHEELID}")
+find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
+pythongetabiinfo()
 
 # version configure_file(${KART_CMAKE_TEMPLATE_DIR}/VERSION.in kart/VERSION @ONLY)
 
@@ -89,12 +70,18 @@ if(VENDOR_ARCHIVE)
   # if it's a .zip, extract it to get the inner archive
   cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
   if(vendor_ext STREQUAL ".zip")
-    set(VENDOR_TMP ${CMAKE_CURRENT_BINARY_DIR}/vendor-tmp)
-    message("Extracting CI artifact ${VENDOR_ARCHIVE} to ${VENDOR_TMP} ...")
-    file(REMOVE_RECURSE ${VENDOR_TMP})
+    message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
     # cmake-lint: disable=E1126
-    file(ARCHIVE_EXTRACT INPUT ${VENDOR_ARCHIVE} DESTINATION ${VENDOR_TMP} VERBOSE)
-    set(VENDOR_ARCHIVE ${VENDOR_TMP}/vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+    file(
+      ARCHIVE_EXTRACT
+      INPUT
+      ${VENDOR_ARCHIVE}
+      DESTINATION
+      ${CMAKE_CURRENT_BINARY_DIR}
+      PATTERNS
+      vendor-${CMAKE_SYSTEM_NAME}.tar.gz
+      VERBOSE)
+    set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
   endif()
   set(VENDOR_TARGET ${VENDOR_ARCHIVE})
 else()
