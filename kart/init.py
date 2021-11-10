@@ -8,6 +8,7 @@ from osgeo import gdal
 
 from kart import is_windows
 from . import checkout
+from .base_dataset import BaseDataset
 from .core import check_git_user
 from .cli_util import (
     call_and_exit_flag,
@@ -16,10 +17,10 @@ from .cli_util import (
     JsonFromFile,
 )
 from .exceptions import InvalidOperation
+from .fast_import import fast_import_tables, ReplaceExisting
 from .import_source import ImportSource
 from .ogr_import_source import FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
-from .fast_import import fast_import_tables, ReplaceExisting
 from .repo import KartRepo, PotentialRepo
 from .spatial_filters import SpatialFilterString, spatial_filter_help_text
 from .utils import get_num_available_cores
@@ -339,6 +340,12 @@ def import_(
         import_sources.append(import_source)
 
     ImportSource.check_valid(import_sources, param_hint="tables")
+
+    all_ds_paths = [s.dest_path for s in import_sources]
+    if not replace_existing:
+        all_ds_paths[:0] = [ds.path for ds in repo.datasets()]
+    BaseDataset.validate_dataset_paths(all_ds_paths)
+
     replace_existing_enum = (
         ReplaceExisting.GIVEN if replace_existing else ReplaceExisting.DONT_REPLACE
     )
@@ -481,6 +488,7 @@ def init(
     )
 
     if import_from:
+        BaseDataset.validate_dataset_paths([s.dest_path for s in sources])
         fast_import_tables(
             repo,
             sources,

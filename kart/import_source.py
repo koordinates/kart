@@ -71,9 +71,15 @@ class ImportSource:
             return self._dest_path
         return self.default_dest_path()
 
+    @classmethod
+    def _normalise_dataset_path(cls, path):
+        # we treat back-slash and forward-slash as equivalent at import time.
+        # (but we only ever import forward-slashes)
+        return path.strip("/").replace("\\", "/")
+
     @dest_path.setter
     def dest_path(self, dest_path):
-        self._dest_path = dest_path.strip("/")
+        self._dest_path = self._normalise_dataset_path(dest_path)
 
     def default_dest_path(self):
         """
