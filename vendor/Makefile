@@ -253,6 +253,9 @@ lib-gdal: $(lib-gdal)
 .PHONY: lib-pygit2
 lib-pygit2: $(lib-pygit2)
 
+.PHONY: lib-libgit2
+lib-libgit2: $(lib-libgit2)
+
 .PHONY: lib-git
 lib-git: $(lib-git)
 
