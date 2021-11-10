@@ -638,13 +638,11 @@ class BaseWorkingCopy:
 
         if schema_diff and schema_diff.type == "delete":
             # The entire table has been deleted - add delete deltas for every feature.
-            feature_diff = DeltaDiff()
-            for feature in dataset.features():
-                if feature[pk_field] in feature_filter:
-                    delta = Delta.delete((feature[pk_field], feature))
-                    delta.flags = WORKING_COPY_EDIT
-                    feature_diff.add_delta(delta)
-            return feature_diff
+            return dataset.all_features_diff(
+                feature_filter=feature_filter,
+                delta_type=Delta.delete,
+                flags=WORKING_COPY_EDIT,
+            )
 
         find_renames = self.can_find_renames(meta_diff)
 

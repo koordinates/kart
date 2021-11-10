@@ -99,15 +99,9 @@ def data_rm(ctx, message, output_format, datasets):
     repo_diff = RepoDiff()
     for ds_path in datasets:
         dataset = repo.datasets()[ds_path]
-        pk_field = dataset.schema.pk_columns[0].name
-        feature_diff = DeltaDiff()
-        for feature in dataset.features():
-            delta = Delta.delete((feature[pk_field], feature))
-            feature_diff.add_delta(delta)
-
         ds_diff = DatasetDiff()
         ds_diff["meta"] = DeltaDiff.diff_dicts(dataset.meta_items(), {})
-        ds_diff["feature"] = feature_diff
+        ds_diff["feature"] = dataset.all_features_diff(delta_type=Delta.delete)
         repo_diff[ds_path] = ds_diff
 
     do_json = output_format == "json"

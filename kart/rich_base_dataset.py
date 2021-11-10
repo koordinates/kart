@@ -502,3 +502,21 @@ class RichBaseDataset(BaseDataset):
                     "Patch does not apply",
                     exit_code=PATCH_DOES_NOT_APPLY,
                 )
+
+    def all_features_diff(
+        self,
+        feature_filter=FeatureKeyFilter.MATCH_ALL,
+        delta_type=Delta.insert,
+        flags=0,
+    ):
+        assert delta_type in (Delta.insert, Delta.delete)
+        feature_diff = DeltaDiff()
+        for blob in self.feature_blobs():
+            pk = self.decode_path_to_1pk(blob.name)
+            if pk not in feature_filter:
+                continue
+            feature_promise = functools.partial(self.get_feature_from_blob, blob)
+            delta = delta_type((pk, feature_promise))
+            delta.flags = flags
+            feature_diff.add_delta(delta)
+        return feature_diff

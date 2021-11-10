@@ -5,7 +5,6 @@ from typing import Optional
 import click
 import pygit2
 
-from .diff_util import get_repo_diff
 from .exceptions import (
     InvalidOperation,
     NotFound,

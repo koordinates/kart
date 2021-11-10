@@ -228,6 +228,37 @@ class BaseDataset(ImportSource):
             self._schema = super().schema
         return self._schema
 
+    def get_blob_at(self, rel_path, missing_ok=False, tree=None):
+        """
+        Return the blob at the given relative path from within this dataset.
+
+        If missing_ok is true, we return None instead of raising a KeyError for
+        missing data.
+
+        If tree is set, the caller can override the tree in which to look for the data.
+        """
+        leaf = None
+        key_error = None
+        tree = tree or self.inner_tree
+        try:
+            leaf = tree / str(rel_path)
+            if leaf is not None and leaf.type_str == "blob":
+                return leaf
+        except KeyError as e:
+            key_error = e
+        except (AttributeError, TypeError):
+            pass
+
+        # If we got here, that means leaf wasn't a blob, or one of the above
+        # exceptions happened...
+        if missing_ok:
+            return None
+        else:
+            detail = f": {key_error.args[0]}" if key_error is not None else ''
+            raise KeyError(
+                f"No data found at rel-path {rel_path}, type={type(leaf)}" + detail
+            )
+
     def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False, tree=None):
         """
         Return the data at the given relative path from within this dataset.
@@ -241,31 +272,10 @@ class BaseDataset(ImportSource):
 
         If tree is set, the caller can override the tree in which to look for the data.
         """
-        leaf = None
-        tree = tree or self.inner_tree
-        try:
-            leaf = tree / str(rel_path)
-        except KeyError:
-            pass
-
-        if leaf is not None and leaf.type_str == "blob":
-            if as_memoryview:
-                try:
-                    return memoryview(leaf)
-                except TypeError:
-                    pass
-            else:
-                try:
-                    return leaf.data
-                except AttributeError:
-                    pass
-
-        # If we got here, that means leaf wasn't a blob, or one of the above
-        # exceptions happened...
-        if missing_ok:
-            return None
-        else:
-            raise KeyError(f"No data found at rel-path {rel_path}, type={type(leaf)}")
+        blob = self.get_blob_at(rel_path, missing_ok=missing_ok, tree=tree)
+        if blob is not None:
+            return memoryview(blob) if as_memoryview else blob.data
+        return None
 
     def get_json_data_at(self, rel_path, missing_ok=False):
         data = self.get_data_at(rel_path, missing_ok=missing_ok)
@@ -480,6 +490,9 @@ class BaseDataset(ImportSource):
         redundant work. Similarly, if the caller knows data, they can supply that too to avoid redundant work.
         """
         raise NotImplementedError()
+
+    def get_feature_from_blob(self, feature_blob):
+        return self.get_feature(path=feature_blob.name, data=memoryview(feature_blob))
 
 
 class IntegrityError(ValueError):
