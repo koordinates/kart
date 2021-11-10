@@ -32,8 +32,10 @@ static const int S2_LEVEL_MOD = 1;
 // But this value can be changed at any time:
 static const int S2_MAX_CELLS_QUERY = 25;
 
+static const int OBJ_COMMIT = 1;
 static const int OBJ_TREE = 2;
 static const int OBJ_BLOB = 3;
+static const int OBJ_TAG = 4;
 
 enum match_result {
     MR_MATCH,
@@ -237,6 +239,14 @@ enum list_objects_filter_result sf_filter_object(
         default:
             std::cerr << "spatial-filter: unknown filter_situation: " << filter_situation << "\n";
             abort();
+
+        case LOFS_COMMIT:
+            assert(sf_obj2type(obj) == OBJ_COMMIT);
+            return LOFR_MARK_SEEN_AND_DO_SHOW;
+
+        case LOFS_TAG:
+            assert(sf_obj2type(obj) == OBJ_TAG);
+            return LOFR_MARK_SEEN_AND_DO_SHOW;
 
         case LOFS_BEGIN_TREE:
             assert(sf_obj2type(obj) == OBJ_TREE);

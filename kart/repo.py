@@ -293,6 +293,13 @@ class KartRepo(pygit2.Repository):
                 "-c",
                 "remote.origin.fetch=+refs/filters/*:refs/filters/*",
             ]
+            extension_spec = spatial_filter_spec.git_spatial_filter_extension_spec()
+            if extension_spec and os.environ.get("X_KART_SPATIAL_FILTERED_CLONE"):
+                click.echo(
+                    f"Cloning using git spatial filter extension: {extension_spec}",
+                    err=True,
+                )
+                extra_args.append(extension_spec)
 
         if bare:
             kart_repo = cls._create_with_git_command(
