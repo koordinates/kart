@@ -119,8 +119,10 @@ class BaseDataset(ImportSource):
         if not path_bytes:
             raise InvalidOperation(f"Dataset path {path!r} may not be empty")
 
-        if not unicodedata.category(path[0]).startswith("L"):
-            raise InvalidOperation(f"Dataset path {path!r} must begin with a letter")
+        if not (path[0] == "_" or unicodedata.category(path[0]).startswith("L")):
+            raise InvalidOperation(
+                f"Dataset path {path!r} must begin with a letter or an underscore"
+            )
 
         if path_bytes.intersection(control_chars):
             raise InvalidOperation(

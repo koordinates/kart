@@ -1067,6 +1067,7 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
         pytest.param((r"a\b\c",), True, id="backslash-separated"),
         pytest.param(("1a",), False, id="leading-numeral"),
         pytest.param(("a1",), True, id="trailing-numeral"),
+        pytest.param(("_1",), True, id="leading-underscore"),
         pytest.param((".a",), False, id="leading-dot"),
         pytest.param(("a.",), False, id="trailing-dot"),
         pytest.param(("a.b",), True, id="contains-dot"),
