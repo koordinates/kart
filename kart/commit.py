@@ -64,12 +64,12 @@ class CommitDiffWriter(BaseDiffWriter):
         return repo_diff
 
     def record_spatial_filter_stat(
-        self, ds_path, key, delta, old_value_matches, new_value_matches
+        self, ds_path, key, delta, old_match_result, new_match_result
     ):
         super().record_spatial_filter_stat(
-            ds_path, key, delta, old_value_matches, new_value_matches
+            ds_path, key, delta, old_match_result, new_match_result
         )
-        if not new_value_matches:
+        if delta.new is not None and not new_match_result:
             self.remove_from_wc_post_commit[ds_path].append(key)
 
 

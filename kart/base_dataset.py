@@ -7,6 +7,7 @@ from . import crs_util
 from .import_source import ImportSource
 from . import meta_items
 from .exceptions import InvalidOperation
+from .promisor_utils import LibgitSubcode
 from .serialise_util import json_unpack, ensure_text
 from .spatial_filters import SpatialFilter
 from .utils import ungenerator
@@ -253,9 +254,15 @@ class BaseDataset(ImportSource):
             return None
         else:
             detail = f": {key_error.args[0]}" if key_error is not None else ''
-            raise KeyError(
-                f"No data found at rel-path {rel_path}, type={type(leaf)}" + detail
+            k = KeyError(
+                f"No data found at rel-path {rel_path}, type={type(leaf)}{detail}"
             )
+            if hasattr(key_error, "subcode"):
+                k.subcode = key_error.subcode
+            elif key_error is not None and leaf is None:
+                # TODO - remove this clause once windows also has libgit subcodes.
+                k.subcode = LibgitSubcode.ENOSUCHPATH
+            raise k
 
     def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False, tree=None):
         """
@@ -411,11 +418,17 @@ class BaseDataset(ImportSource):
             plog("0.0%% 0/%d features... @0.0s", n_total)
 
         for blob in self.feature_blobs():
-            feature = self.get_feature(path=blob.name, data=memoryview(blob))
             n_read += 1
             n_chunk += 1
+            try:
+                feature = self.get_feature_from_blob(blob)
+            except KeyError as e:
+                if spatial_filter.feature_is_prefiltered(e):
+                    feature = None
+                else:
+                    raise
 
-            if spatial_filter.matches(feature):
+            if feature is not None and spatial_filter.matches(feature):
                 n_matched += 1
                 yield feature
 
@@ -466,14 +479,15 @@ class BaseDataset(ImportSource):
         If ignore_missing is True, then failing to find a specified feature does not raise a KeyError.
         If the spatial filter is set, only features which match the spatial filter will be returned.
         """
+
         spatial_filter = spatial_filter.transform_for_dataset(self)
         for pk_values in row_pks:
             try:
                 feature = self.get_feature(pk_values)
                 if spatial_filter.matches(feature):
                     yield feature
-            except KeyError:
-                if ignore_missing:
+            except KeyError as e:
+                if ignore_missing or spatial_filter.feature_is_prefiltered(e):
                     continue
                 else:
                     raise

@@ -7,6 +7,7 @@ from osgeo import osr
 
 
 from . import crs_util
+from .base_dataset import BaseDataset
 from .diff_structs import DatasetDiff, DeltaDiff, Delta
 from .exceptions import (
     InvalidOperation,
@@ -16,9 +17,7 @@ from .exceptions import (
 from .key_filters import DatasetKeyFilter, FeatureKeyFilter
 from .schema import Schema
 from .spatial_filters import SpatialFilter
-
-
-from .base_dataset import BaseDataset
+from .promisor_utils import object_is_promised, fetch_promised_blobs
 
 
 class RichBaseDataset(BaseDataset):
@@ -281,20 +280,18 @@ class RichBaseDataset(BaseDataset):
                 self.L.debug("diff(): delete %s %s", old_path, old_pk)
 
             if d.status in self._UPDATE_DELETE:
+                old_feature_blob = old.get_blob_at(old_path)
                 old_feature_promise = functools.partial(
-                    old.get_feature,
-                    old_pk,
-                    path=old_path,
+                    old.get_feature_from_blob, old_feature_blob
                 )
                 old_half_delta = old_pk, old_feature_promise
             else:
                 old_half_delta = None
 
             if d.status in self._INSERT_UPDATE:
+                new_feature_blob = new.get_blob_at(new_path)
                 new_feature_promise = functools.partial(
-                    new.get_feature,
-                    new_pk,
-                    path=new_path,
+                    new.get_feature_from_blob, new_feature_blob
                 )
                 new_half_delta = new_pk, new_feature_promise
             else:
@@ -520,3 +517,27 @@ class RichBaseDataset(BaseDataset):
             delta.flags = flags
             feature_diff.add_delta(delta)
         return feature_diff
+
+    def fetch_missing_dirty_features(self, working_copy):
+        """Fetch all the promised features in this dataset that are marked as dirty in the working copy."""
+
+        # Attempting this more than once in a single kart invocation will waste time and have no effect.
+        if getattr(self, 'fetch_missing_dirty_features_attempted', False):
+            return False
+        self.fetch_missing_dirty_features_attempted = True
+
+        click.echo(f"Fetching missing but required features in {self.path}", err=True)
+        dirty_pks = working_copy.get_dirty_pks(self)
+        if self.schema.pk_columns[0].data_type == "integer":
+            dirty_pks = (int(pk) for pk in dirty_pks)
+        dirty_paths = (self.encode_1pk_to_path(pk, relative=True) for pk in dirty_pks)
+        promised_blob_ids = []
+        for dirty_path in dirty_paths:
+            dirty_blob = None
+            try:
+                dirty_blob = self.inner_tree / dirty_path
+                dirty_blob.size
+            except KeyError as e:
+                if dirty_blob is not None and object_is_promised(e):
+                    promised_blob_ids.append(dirty_blob.oid.hex)
+        fetch_promised_blobs(self.repo, promised_blob_ids)
