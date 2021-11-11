@@ -22,7 +22,7 @@ from .utils import chunk, ungenerator
 class SqlAlchemyImportSource(ImportSource):
     """
     ImportSource that uses SqlAlchemy directly to import into Kart.
-    Currently only GPKG is supported, but in theory should work for Postgis, SQL Server, MySQL.
+    Supports GPKG, Postgres (+ PostGIS), SQL Server, MySQL.
     """
 
     CURSOR_SIZE = 10000
@@ -152,9 +152,7 @@ class SqlAlchemyImportSource(ImportSource):
         return desc
 
     def default_dest_path(self):
-        return self._normalise_dataset_path(
-            self.table_location_within_source or self.table
-        )
+        return self._normalise_dataset_path(self.table)
 
     @functools.lru_cache(maxsize=1)
     def get_tables(self):
