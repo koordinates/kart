@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.10.6 (UNRELEASED)
+## 0.10.6
 
 * Information about the current spatial filter is now shown in `status`. [#456](https://github.com/koordinates/kart/issues/456)
 * Added a specification for allowed characters & path components in dataset names - see [Valid Dataset Names](https://github.com/koordinates/kart/blob/master/docs/DATASETS_v3.md#valid-dataset-names).
