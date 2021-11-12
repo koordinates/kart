@@ -196,10 +196,13 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
     def _initialise_sequence(self, sess, dataset):
         start = dataset.feature_path_encoder.find_start_of_unassigned_range(dataset)
         if start:
+            quoted_table_name = ".".join(
+                [self.quote(self.db_schema), self.quote(dataset.table_name)]
+            )
             quoted_seq_identifier = sess.scalar(
                 "SELECT pg_get_serial_sequence(:table_name, :col_name);",
                 {
-                    "table_name": f"{self.db_schema}.{dataset.table_name}",
+                    "table_name": quoted_table_name,
                     "col_name": dataset.primary_key,
                 },
             )
