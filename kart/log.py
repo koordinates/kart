@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+import re
 import subprocess
 import sys
 import warnings
@@ -74,8 +75,17 @@ def parse_extra_args(repo, args):
                 # to disambiguate, and they haven't done so here.
                 other_args.append(arg)
                 continue
+
+            range_parts = re.split(r"\.\.\.?", arg)
+            if len(range_parts) > 2:
+                # not a valid range or ref, must be a path
+                # Treat remaining args as paths
+                paths = args[i:]
+                break
+
             try:
-                repo.resolve_refish(arg)
+                for part in range_parts:
+                    repo.resolve_refish(part or "HEAD")
             except (KeyError, pygit2.InvalidSpecError):
                 # not a commit-ish.
                 # Treat remaining args as paths
