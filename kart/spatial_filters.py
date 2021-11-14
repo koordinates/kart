@@ -1,3 +1,4 @@
+from enum import Enum, auto
 import re
 import functools
 import logging
@@ -10,6 +11,7 @@ from .crs_util import make_crs
 from .exceptions import CrsError, GeometryError, NotFound, NO_SPATIAL_FILTER
 from .geometry import geometry_from_string, GeometryType
 from .output_util import dump_json_output
+from .promisor_utils import object_is_promised
 from .repo import KartRepoState
 from .serialise_util import hexhash
 
@@ -333,6 +335,25 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
         return [p.strip() for p in parts]
 
 
+class MatchResult(Enum):
+    """Stores a bit more detail about whether a feature matches or doesn't match the spatial filter."""
+
+    # The given feature...
+    # Doesn't match any spatial filter because it is null / None / non-existent:
+    IS_NONE = auto()
+    # Isn't present locally, but is promised. From this we infer it doesn't match the repo's current spatial filter:
+    IS_PROMISED = auto()
+    # Exists and is present and does NOT match the given spatial filter:
+    NON_MATCHING = auto()
+    # Exists and is present and DOES match the given spatial filter.
+    # This includes the case where a feature matches the "match-all" spatial-filter, which matches everything,
+    # and it includes the case where a feature has no geometry (and so matches all spatial filters).
+    MATCHING = auto()
+
+    def __bool__(self):
+        return self is self.MATCHING
+
+
 class SpatialFilter:
     """
     Responsible for deciding whether a feature or feature-geometry does or does not match the user's specified area.
@@ -442,12 +463,14 @@ class SpatialFilter:
         feature_geometry - either a feature dict (in which case self.geom_column_name must be set)
             or a geometry.Geometry object.
         """
-        if self.match_all or feature is None:
-            return True
+        if feature is None:
+            return MatchResult.IS_NONE
+        if self.match_all:
+            return MatchResult.MATCHING
 
         feature_geometry = feature[self.geom_column_name]
         if feature_geometry is None:
-            return True
+            return MatchResult.MATCHING
 
         err = None
         feature_env = None
@@ -468,7 +491,7 @@ class SpatialFilter:
 
                 if not bbox_intersects_fast(self.filter_env, feature_env):
                     # Geometries definitely don't intersect if envelopes don't intersect.
-                    return False
+                    return MatchResult.NON_MATCHING
             except Exception as e:
                 raise
                 L.warn(e)
@@ -478,14 +501,33 @@ class SpatialFilter:
         try:
             if feature_ogr is None:
                 feature_ogr = feature_geometry.to_ogr()
-            return self.filter_prep.Intersects(feature_ogr)
+            intersects = self.filter_prep.Intersects(feature_ogr)
+            return MatchResult.MATCHING if intersects else MatchResult.NON_MATCHING
         except Exception as e:
             L.warn(e)
             err = e
 
         # If we fail to apply the spatial filter - perhaps the geometry is corrupt? - we assume it matches.
         click.echo(f"Error applying spatial filter to geometry:\n{err}", err=True)
-        return True
+        return MatchResult.MATCHING
+
+    def matches_delta_value(self, delta_key_value):
+        # Returns a MatchResult describing whether the feature contained by the given Delta KeyValue matches this
+        # spatial filter. The feature may need to be lazily loaded, or it may turn out not to be present in this repo,
+        # in which case IS_PROMISED is returned.
+        if delta_key_value is None:
+            return MatchResult.IS_NONE
+        try:
+            value = delta_key_value.get_lazy_value()
+            return self.matches(value)
+        except KeyError as e:
+            if self.feature_is_prefiltered(e):
+                return MatchResult.IS_PROMISED
+            raise
+
+    def feature_is_prefiltered(self, feature_error):
+        # If no spatial filter is active, features should not be missing due to the spatial filter.
+        return (not self.match_all) and object_is_promised(feature_error)
 
 
 class OriginalSpatialFilter(SpatialFilter):

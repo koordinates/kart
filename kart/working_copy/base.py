@@ -16,6 +16,7 @@ from kart.exceptions import (
     NO_WORKING_COPY,
 )
 from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
+from kart.promisor_utils import LibgitSubcode
 from kart.schema import Schema, DefaultRoundtripContext
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.utils import chunk
@@ -659,12 +660,7 @@ class BaseWorkingCopy:
                 if db_obj[pk_field] is None:
                     db_obj = None
 
-                try:
-                    # TODO - this feature doesn't necessarily match the spatial filter.
-                    # If it doesn't, that generally means the user has accidentally reused a PK.
-                    repo_obj = dataset.get_feature(track_pk)
-                except KeyError:
-                    repo_obj = None
+                repo_obj = self._get_feature_and_fetch_if_needed(dataset, track_pk)
 
                 if repo_obj == db_obj:
                     # DB was changed and then changed back - eg INSERT then DELETE.
@@ -693,6 +689,27 @@ class BaseWorkingCopy:
             self.find_renames(feature_diff, dataset)
 
         return feature_diff
+
+    def _get_feature_and_fetch_if_needed(self, dataset, feature_pk):
+        try:
+            return dataset.get_feature(feature_pk)
+        except KeyError as e:
+            # Couldn't find the feature.
+            subcode = getattr(e, 'subcode', 0)
+
+            if subcode == LibgitSubcode.ENOSUCHPATH:
+                # There is no such feature. This is okay: it just means the user has inserted
+                # the feature into the working copy and it has not yet been committed.
+                return None
+            elif subcode == LibgitSubcode.EOBJECTPROMISED:
+                # A feature with this PK exists, but we don't have it locally right now. Fetch it.
+                # Note that this means the feature presumably doesn't match the user's spatial filter,
+                # so it was probably a mistake by the user that they have reused the existing feature's PK.
+                dataset.fetch_missing_dirty_features(self)
+                return dataset.get_feature(feature_pk)
+            else:
+                # Some other error has happened, or no subcode was found. Re-raise the error.
+                raise
 
     @property
     def _tracking_table_requires_cast(self):
@@ -749,6 +766,16 @@ class BaseWorkingCopy:
             )
 
         return sess.execute(query)
+
+    def get_dirty_pks(self, dataset):
+        kart_track = self.kart_tables.kart_track
+        with self.session() as sess:
+            r = sess.execute(
+                sa.select(columns=[kart_track.c.pk])
+                .select_from(kart_track)
+                .where(kart_track.c.table_name == dataset.table_name)
+            )
+            return (row[0] for row in r)
 
     def reset_tracking_table(self, repo_key_filter=RepoKeyFilter.MATCH_ALL):
         """Delete the rows from the tracking table that match the given filter."""

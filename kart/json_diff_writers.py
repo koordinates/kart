@@ -155,13 +155,13 @@ class PatchWriter(JsonDiffWriter):
             }
 
     def record_spatial_filter_stat(
-        self, ds_path, key, delta, old_value_matches, new_value_matches
+        self, ds_path, key, delta, old_match_result, new_match_result
     ):
         """
         Records which / how many features were inside / outside the spatial filter for which reasons.
         These records are used by write_warnings_footer to show warnings to the user.
         """
-        if not old_value_matches and not new_value_matches:
+        if not old_match_result and not new_match_result:
             self.nonmatching_feature_counts[ds_path] += 1
 
     def write_warnings_footer(self):

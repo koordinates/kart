@@ -1,4 +1,5 @@
 import json
+import os
 import pytest
 
 from kart import is_windows
@@ -12,6 +13,8 @@ from kart.exceptions import (
 )
 
 H = pytest.helpers.helpers()
+
+SKIP_REASON = "The git spatial-filter is not yet included in the kart windows build"
 
 
 def ring_as_wkt(*points):
@@ -95,6 +98,28 @@ SPATIAL_FILTER_CRS = {
 }
 
 
+def local_features(dataset):
+    # Returns the number of features that are available locally in this dataset.
+    local_count = 0
+    for blob in dataset.feature_blobs():
+        try:
+            blob.size
+            local_count += 1
+        except KeyError:
+            continue
+    return local_count
+
+
+def is_local_feature(dataset, pk):
+    # Returns True if the feature with the given PK is available locally.
+    try:
+        path = dataset.encode_1pk_to_path(pk, relative=True)
+        blob = dataset.inner_tree / path
+        return blob.size is not None
+    except KeyError:
+        return False
+
+
 def test_init_with_spatial_filter(cli_runner, tmp_path):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
@@ -161,7 +186,98 @@ def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
     assert not repo_path.exists()
 
 
+@pytest.mark.skipif(is_windows, reason=SKIP_REASON)
+def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path, insert):
+    geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+    crs = SPATIAL_FILTER_CRS["polygons"]
+
+    file_path = (tmp_path / "spatialfilter.txt").resolve()
+    file_path.write_text(f"{crs}\n\n{geom}\n", encoding="utf-8")
+
+    with data_archive("polygons-with-s2index") as repo1_path:
+        repo1_url = f"file://{repo1_path.resolve()}"
+        # Clone repo using spatial filter
+        repo2_path = tmp_path / "repo2"
+        r = cli_runner.invoke(
+            ["clone", repo1_url, repo2_path, f"--spatial-filter=@{file_path}"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        # The resulting repo has the spatial filter configured locally.
+        repo2 = KartRepo(repo2_path)
+        assert repo2.config["kart.spatialfilter.geometry"].startswith(
+            "POLYGON ((174.879 -37.8277,"
+        )
+        assert repo2.config["kart.spatialfilter.crs"] == crs
+
+        with repo2.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+
+        # However, the entire polygons layer was cloned.
+        # Spatial filters are currently only applied locally... all features are still present.
+        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
+
+        # Unless you use an experimental environment variable:
+        # TODO: Always apply spatial filters during the clone, then clean up this test.
+        try:
+            os.environ["X_KART_SPATIAL_FILTERED_CLONE"] = "1"
+            repo3_path = tmp_path / "repo3"
+            r = cli_runner.invoke(
+                ["clone", repo1_url, repo3_path, f"--spatial-filter=@{file_path}"]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            repo3 = KartRepo(repo3_path)
+            assert repo3.config["kart.spatialfilter.geometry"].startswith(
+                "POLYGON ((174.879 -37.8277,"
+            )
+            assert repo3.config["kart.spatialfilter.crs"] == crs
+            ds = repo3.datasets()[H.POLYGONS.LAYER]
+
+            local_feature_count = local_features(ds)
+            assert local_feature_count != H.POLYGONS.ROWCOUNT
+            assert local_feature_count == 52
+
+            with repo3.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+
+                # Inserting features that are in the dataset, but don't match the spatial filter,
+                # so they are not loaded locally nor written to the working copy.
+                for pk in H.POLYGONS.SAMPLE_PKS:
+                    if not is_local_feature(ds, pk):
+                        insert(sess, with_pk=pk, commit=False)
+
+            r = cli_runner.invoke(["-C", repo3_path, "status"])
+            assert r.exit_code == 0, r.stderr
+            # TODO - label pk-conflicts as being different to updates in kart status
+            assert "6 updates" in r.stdout
+            # All of the 6 featues that are conflicts / were "updated" in the WC have been loaded:
+            assert local_features(ds) == 58
+
+            with repo3.working_copy.session() as sess:
+                sess.execute(f"DROP TABLE {H.POLYGONS.LAYER};")
+
+            r = cli_runner.invoke(["-C", repo3_path, "status"])
+            assert r.exit_code == 0, r.stderr
+            assert f"{H.POLYGONS.ROWCOUNT} deletes" in r.stdout
+            assert local_features(ds) == 58
+
+            r = cli_runner.invoke(["-C", repo3_path, "diff"])
+            assert r.exit_code == 0, r.stderr
+            # All of the deleted features have now been loaded to show in the diff output:
+            assert local_features(ds) == H.POLYGONS.ROWCOUNT
+
+        finally:
+            if "X_KART_SPATIAL_FILTERED_CLONE" in os.environ:
+                del os.environ["X_KART_SPATIAL_FILTERED_CLONE"]
+
+
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):
+    # TODO - this currently tests that the spatial filter is correctly applied locally after
+    # the entire repo is cloned. Eventually it should test to see if the spatial filter
+    # is correctly applied remotely, during the clone step - but this is not yet supported
+    # (particularly for reference spatial filters.)
+
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
 
@@ -217,9 +333,15 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
             ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
         )
         assert r.exit_code == 0, r.stderr
+
+        # The resulting repo has the spatial filter configured locally.
         repo2 = KartRepo(repo2_path)
         assert repo2.config["kart.spatialfilter.reference"] == "refs/filters/octagon"
         assert repo2.config["kart.spatialfilter.objectid"] == blob_sha
+
+        # However, the entire polygons layer was cloned.
+        # TODO: Only clone the features that match the spatial filter.
+        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
 
         with repo2.working_copy.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 44
@@ -459,9 +581,6 @@ def test_pk_conflict_due_to_spatial_filter(
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 302
-
-
-SKIP_REASON = "The git spatial-filter is not yet included in the kart windows build"
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
