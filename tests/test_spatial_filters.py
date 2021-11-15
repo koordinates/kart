@@ -10,7 +10,7 @@ from kart.exceptions import (
     INVALID_OPERATION,
     SPATIAL_FILTER_PK_CONFLICT,
 )
-from kart.promisor_utils import FetchPromisedBlobsProcess
+from kart.promisor_utils import FetchPromisedBlobsProcess, LibgitSubcode
 from kart.repo import KartRepo
 
 H = pytest.helpers.helpers()
@@ -188,20 +188,7 @@ def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
-def test_clone_with_spatial_filter(
-    data_archive, cli_runner, tmp_path, insert, monkeypatch
-):
-    # Keep track of how many features we fetch lazily after the partial clone.
-    orig_fetch_func = FetchPromisedBlobsProcess.fetch
-    fetch_count = 0
-
-    def _fetch(*args, **kwargs):
-        nonlocal fetch_count
-        fetch_count += 1
-        return orig_fetch_func(*args, **kwargs)
-
-    monkeypatch.setattr(FetchPromisedBlobsProcess, "fetch", _fetch)
-
+def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
 
@@ -255,13 +242,94 @@ def test_clone_with_spatial_filter(
             with repo3.working_copy.session() as sess:
                 assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
+        finally:
+            del os.environ["X_KART_SPATIAL_FILTERED_CLONE"]
+
+        # The next test delves further into testing how spatial-filtered clones behave, but
+        # it loads the same spatially filtered repo from the test data folder so that we can
+        # test spatially filtered cloning separately from spatially filtered clone behaviour.
+
+
+def test_spatially_filtered_partial_clone(data_archive, cli_runner):
+    crs = SPATIAL_FILTER_CRS["polygons"]
+
+    with data_archive("polygons-with-s2index") as repo1_path:
+        repo1_url = f"file://{repo1_path.resolve()}"
+
+        with data_archive("polygons-spatial-filtered") as repo2_path:
+            repo2 = KartRepo(repo2_path)
+            repo2.config["remote.origin.url"] = repo1_url
+
+            assert repo2.config["kart.spatialfilter.geometry"].startswith(
+                "POLYGON ((174.879 -37.8277,"
+            )
+            assert repo2.config["kart.spatialfilter.crs"] == crs
+            ds = repo2.datasets()[H.POLYGONS.LAYER]
+
+            local_feature_count = local_features(ds)
+            assert local_feature_count != H.POLYGONS.ROWCOUNT
+            assert local_feature_count == 52
+
+            r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
+            assert r.exit_code == 0, r.stderr
+
+            with repo2.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+
+            def _get_key_error(ds, pk):
+                try:
+                    ds.get_feature(pk)
+                    return None
+                except KeyError as e:
+                    return e
+
+            assert _get_key_error(ds, 1424927) is None
+            assert _get_key_error(ds, 9999999).subcode == LibgitSubcode.ENOSUCHPATH
+            assert _get_key_error(ds, 1443053).subcode == LibgitSubcode.EOBJECTPROMISED
+
+
+# Fetch also doesn't on spatial filtered repos without custom git.
+@pytest.mark.skipif(is_windows, reason=SKIP_REASON)
+def test_spatially_filtered_fetch_promised(
+    data_archive, cli_runner, insert, monkeypatch
+):
+
+    # Keep track of how many features we fetch lazily after the partial clone.
+    orig_fetch_func = FetchPromisedBlobsProcess.fetch
+    fetch_count = 0
+
+    def _fetch(*args, **kwargs):
+        nonlocal fetch_count
+        fetch_count += 1
+        return orig_fetch_func(*args, **kwargs)
+
+    monkeypatch.setattr(FetchPromisedBlobsProcess, "fetch", _fetch)
+
+    with data_archive("polygons-with-s2index") as repo1_path:
+        repo1_url = f"file://{repo1_path.resolve()}"
+
+        with data_archive("polygons-spatial-filtered") as repo2_path:
+            repo2 = KartRepo(repo2_path)
+            repo2.config["remote.origin.url"] = repo1_url
+
+            ds = repo2.datasets()[H.POLYGONS.LAYER]
+
+            local_feature_count = local_features(ds)
+            assert local_feature_count != H.POLYGONS.ROWCOUNT
+            assert local_feature_count == 52
+
+            r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
+            assert r.exit_code == 0, r.stderr
+
+            with repo2.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
                 # Inserting features that are in the dataset, but don't match the spatial filter,
                 # so they are not loaded locally nor written to the working copy.
                 for pk in H.POLYGONS.SAMPLE_PKS:
                     if not is_local_feature(ds, pk):
                         insert(sess, with_pk=pk, commit=False)
 
-            r = cli_runner.invoke(["-C", repo3_path, "status"])
+            r = cli_runner.invoke(["-C", repo2_path, "status"])
             assert r.exit_code == 0, r.stderr
             # TODO - label pk-conflicts as being different to updates in kart status
             assert "6 updates" in r.stdout
@@ -269,22 +337,19 @@ def test_clone_with_spatial_filter(
             assert fetch_count == 6
             assert local_features(ds) == 58
 
-            with repo3.working_copy.session() as sess:
+            with repo2.working_copy.session() as sess:
                 sess.execute(f"DROP TABLE {H.POLYGONS.LAYER};")
 
-            r = cli_runner.invoke(["-C", repo3_path, "status"])
+            r = cli_runner.invoke(["-C", repo2_path, "status"])
             assert r.exit_code == 0, r.stderr
             assert f"{H.POLYGONS.ROWCOUNT} deletes" in r.stdout
             assert local_features(ds) == 58
 
-            r = cli_runner.invoke(["-C", repo3_path, "diff"])
+            r = cli_runner.invoke(["-C", repo2_path, "diff"])
             assert r.exit_code == 0, r.stderr
             # All of the deleted features have now been loaded to show in the diff output:
             assert local_features(ds) == H.POLYGONS.ROWCOUNT
             assert fetch_count == H.POLYGONS.ROWCOUNT - 52
-
-        finally:
-            del os.environ["X_KART_SPATIAL_FILTERED_CLONE"]
 
 
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):

@@ -1,9 +1,18 @@
 PATH=$(MAKEDIR)\env\Scripts;$(PATH);C:\Program Files\7-zip;
 
 GIT_VER=2.29.2
-LIBGIT_REF=v1.1.0
-PYGIT2_REF=da410961f0a426cdecbd36548c2b36dc13c674c2
-PYGIT2_VER=1.3.0
+
+# v1.3.0 + koordinates changes
+LIBGIT2_REF=bb69c8fa3d30c38e409771e388787d5ea38b7723
+LIBGIT2_REPO=koordinates/libgit2
+LIBGIT2_ARCHIVE=libgit2-$(LIBGIT2_REF).zip
+
+# v1.7.0 + koordinates changes
+PYGIT2_REF=3443cd8fd2cead2de608f51ccb3cdee5167c1fd4
+PYGIT2_REPO=koordinates/pygit2
+PYGIT2_ARCHIVE=pygit2-$(PYGIT2_REF).zip
+PYGIT2_VER=1.7.0
+
 SQLITE_VER=3.31.1
 SQLITE_URL=https://www.sqlite.org/2020/sqlite-amalgamation-3310100.zip
 
@@ -150,7 +159,7 @@ wheels: wheelhouse
 	copy /Y wheelhouse\*.whl dist\wheelhouse
 
 # Libgit2
-LIBGIT2_URL="https://github.com/libgit2/libgit2/archive/$(LIBGIT_REF).zip"
+LIBGIT2_URL="https://github.com/$(LIBGIT2_REPO)/archive/$(LIBGIT2_REF).zip"
 libgit2_src=libgit2\src
 libgit2=libgit2\env\bin\git2.dll
 
@@ -181,7 +190,7 @@ $(libgit2): $(libgit2_src)
 libgit2: $(libgit2)
 
 # Pygit2
-PYGIT2_URL="https://github.com/libgit2/pygit2/archive/$(PYGIT2_REF).zip"
+PYGIT2_URL="https://github.com/$(PYGIT2_REPO)/archive/$(PYGIT2_REF).zip"
 pygit2_src=pygit2\src
 pygit2=dist\wheelhouse\pygit2-$(PYGIT2_VER)-cp37-cp37m-win_amd64.whl
 
