@@ -6,9 +6,15 @@
 file(REMOVE_RECURSE rm -rf vendor-tmp/)
 file(MAKE_DIRECTORY vendor-tmp/)
 
+if(WIN32)
+  set(PY "venv/Scripts/Python.exe")
+else()
+  set(PY "venv/bin/python")
+endif()
+
 # get the path to the site-packages directory
 execute_process(
-  COMMAND venv/bin/python -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
+  COMMAND ${PY} -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
           COMMAND_ERROR_IS_FATAL ANY
   OUTPUT_VARIABLE venv_purelib
   OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -21,7 +27,7 @@ file(
   GLOB wheels
   LIST_DIRECTORIES false
   "vendor-tmp/wheelhouse/*.whl")
-execute_process(COMMAND venv/bin/pip install --isolated --disable-pip-version-check
+execute_process(COMMAND ${PY} -m pip install --isolated --disable-pip-version-check
                         --force-reinstall --no-deps ${wheels} COMMAND_ERROR_IS_FATAL ANY)
 
 # install other env files (libraries, binaries, data)

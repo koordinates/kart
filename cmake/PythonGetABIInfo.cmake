@@ -23,12 +23,12 @@ function(PythonGetABIInfo)
   if(NOT DEFINED Python3_ABIFLAGS)
     # ABI flags are 'd'/'m'/''/etc
     execute_process(
-      COMMAND ${Python3_EXECUTABLE} -c "import sys; print(sys.abiflags)" COMMAND_ERROR_IS_FATAL ANY
+      COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('abiflags'))" COMMAND_ERROR_IS_FATAL ANY
       OUTPUT_VARIABLE py_ABIFLAGS
       OUTPUT_STRIP_TRAILING_WHITESPACE)
     set(Python3_ABIFLAGS
         ${py_ABIFLAGS}
-        CACHE STRING "Python3 ABI flags")
+        CACHE INTERNAL "Python3 ABI flags")
     message(STATUS "Python3 ABI flags: [${py_ABIFLAGS}]")
   endif()
 
@@ -76,7 +76,7 @@ function(PythonGetABIInfo)
     # Python3_WHEEL_ID
     set(Python3_WHEEL_ID
         ${py_wheelid}
-        CACHE STRING "Python3 wheel identifier")
+        CACHE INTERNAL "Python3 wheel identifier")
     message(STATUS "Python3 Wheel identifier: ${py_wheelid}")
   endif()
 endfunction()

@@ -1,9 +1,19 @@
 # Virtualenv helper variables
-set(VENV_BIN ${CMAKE_CURRENT_BINARY_DIR}/venv/bin)
-# this is needed sometimes for bad setup.py files that invoke Python again
-set(VENV_EXEC_ENV ${CMAKE_COMMAND} -E env "PATH=${VENV_BIN}:$ENV{PATH}")
-set(VENV_PY ${VENV_EXEC_ENV} python)
-set(VENV_PIP_INSTALL ${VENV_EXEC_ENV} pip install --isolated --disable-pip-version-check)
+if(WIN32)
+  set(VENV_BIN ${CMAKE_CURRENT_BINARY_DIR}/venv/Scripts)
+  # seems ok without this on Windows, but enabling it has ;-expansion issues
+  # might need VERBATIM on the custom commands...
+  #set(VENV_EXEC_ENV ${CMAKE_COMMAND} -E env "PATH=${VENV_BIN};$ENV{PATH}")
+  set(VENV_PY ${VENV_EXEC_ENV} ${VENV_BIN}/Python.exe)
+  set(KART_EXE kart.exe)
+else()
+  set(VENV_BIN ${CMAKE_CURRENT_BINARY_DIR}/venv/bin)
+  # this is needed sometimes for bad setup.py files that invoke Python again
+  set(VENV_EXEC_ENV ${CMAKE_COMMAND} -E env "PATH=${VENV_BIN}:$ENV{PATH}")
+  set(VENV_PY ${VENV_EXEC_ENV} ${VENV_BIN}/python)
+  set(KART_EXE kart)
+endif()
+set(VENV_PIP_INSTALL ${VENV_PY} -m pip install --isolated --disable-pip-version-check)
 
 add_custom_command(
   OUTPUT venv
@@ -25,21 +35,22 @@ add_custom_command(
 add_custom_command(
   OUTPUT venv.stamp
   DEPENDS venv vendor.stamp requirements.txt requirements/dev.txt requirements/test.txt
-  COMMAND ${VENV_PIP_INSTALL} --no-deps -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt
-  COMMAND ${VENV_PIP_INSTALL} --no-deps -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements/test.txt
-  COMMAND ${VENV_PIP_INSTALL} --no-deps -r ${CMAKE_CURRENT_SOURCE_DIR}/requirements/dev.txt
+  COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt"
+  COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/test.txt"
+  COMMAND ${VENV_PIP_INSTALL} --no-deps -r "${CMAKE_CURRENT_SOURCE_DIR}/requirements/dev.txt"
   COMMAND ${CMAKE_COMMAND} -E touch venv.stamp
   COMMENT "Installing Python dependencies...")
 
 add_custom_command(
-  OUTPUT kart sno venv/bin/kart venv/bin/sno
+  OUTPUT ${VENV_BIN}/${KART_EXE}
   DEPENDS venv.stamp setup.py
-  COMMAND ${VENV_PIP_INSTALL} --force-reinstall --no-deps --editable ${CMAKE_CURRENT_SOURCE_DIR}
-  COMMAND ${CMAKE_COMMAND} -E create_symlink venv/bin/kart kart
-  COMMAND ${CMAKE_COMMAND} -E create_symlink venv/bin/sno sno
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${VENV_PIP_INSTALL} --force-reinstall --no-deps --editable "${CMAKE_CURRENT_SOURCE_DIR}"
+  COMMAND ${CMAKE_COMMAND} "-DTARGET=${VENV_BIN}/${KART_EXE}" "-DLINK_NAME=kart" -P
+          ${CMAKE_CURRENT_SOURCE_DIR}/cmake/exe_symlink_or_bat.cmake
   COMMENT "Installing Kart...")
 
 add_custom_target(
   cli ALL
-  DEPENDS kart
+  DEPENDS ${VENV_BIN}/${KART_EXE}
   COMMENT "Kart CLI")

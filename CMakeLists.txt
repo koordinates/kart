@@ -69,7 +69,7 @@ if(VENDOR_ARCHIVE)
   endif()
   # if it's a .zip, extract it to get the inner archive
   cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
-  if(vendor_ext STREQUAL ".zip")
+  if(vendor_ext STREQUAL ".zip" AND NOT (WIN32 AND DEFINED ENV{CI}))
     message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
     # cmake-lint: disable=E1126
     file(
@@ -79,9 +79,13 @@ if(VENDOR_ARCHIVE)
       DESTINATION
       ${CMAKE_CURRENT_BINARY_DIR}
       PATTERNS
-      vendor-${CMAKE_SYSTEM_NAME}.tar.gz
+      vendor-${CMAKE_SYSTEM_NAME}.*
       VERBOSE)
-    set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+    if(WIN32)
+      set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.zip)
+    else()
+      set(VENDOR_ARCHIVE vendor-${CMAKE_SYSTEM_NAME}.tar.gz)
+    endif()
   endif()
   set(VENDOR_TARGET ${VENDOR_ARCHIVE})
 else()

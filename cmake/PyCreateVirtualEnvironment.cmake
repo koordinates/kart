@@ -75,7 +75,7 @@ function(CreateVirtualEnvironment TARGET)
 
   if(WIN32)
     set(BIN_DIR ${VENV}/Scripts)
-    set(EXEC ${CMAKE_COMMAND} -E env "PATH=${BIN_DIR}:$ENV{PATH}")
+    set(EXEC ${CMAKE_COMMAND} -E env "PATH=${BIN_DIR};$ENV{PATH}")
     set(PYTHON_EXE ${BIN_DIR}/python.exe)
     set(PYTHON ${EXEC} ${PYTHON_EXE})
     set(PIP ${EXEC} ${BIN_DIR}/pip)
@@ -111,14 +111,14 @@ function(CreateVirtualEnvironment TARGET)
   add_custom_command(
     OUTPUT ${CFG_FILE}
     COMMAND ${Python3_EXECUTABLE} -m venv --clear ${VENV}
-    COMMENT "${ARG_ENV_NAME}: creating virtualenv...")
+    COMMENT "${ARG_ENV_NAME}: creating virtualenv at ${VENV}...")
   set(OUTPUT_FILE ${VENV}/.requirements)
   add_custom_command(
     OUTPUT ${OUTPUT_FILE}
+    DEPENDS ${CFG_FILE} ${ARG_SOURCES} ${ARG_REQUIREMENTS_TXT}
     COMMAND ${PIP_UPGRADE}
     COMMAND ${DEPS_INSTALL}
-    COMMAND ${PIP} freeze > ${OUTPUT_FILE}
-    DEPENDS ${CFG_FILE} ${ARG_SOURCES} ${ARG_REQUIREMENTS_TXT}
+    COMMAND ${PIP} freeze > "${OUTPUT_FILE}"
     COMMENT "${ARG_ENV_NAME}: installing requirements...")
 
   add_custom_target(

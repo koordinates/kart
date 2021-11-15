@@ -53,6 +53,12 @@ else:
         prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
     )
 if is_windows:
+    # FIXME: cmake builds stick it in lib/
+    if not os.path.exists(spatialite_path + ".dll"):
+        spatialite_path = os.path.join(
+            prefix, "lib", f"mod_spatialite"
+        )
+
     # sqlite doesn't appear to like backslashes
     spatialite_path = spatialite_path.replace("\\", "/")
 
