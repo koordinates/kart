@@ -339,10 +339,13 @@ class MatchResult(Enum):
     """Stores a bit more detail about whether a feature matches or doesn't match the spatial filter."""
 
     # The given feature...
-    # Doesn't match any spatial filter because it is null / None / non-existent:
-    IS_NONE = auto()
+    # Does not exist: (This result is used in when matching feature deltas where we make a distinction as to whether
+    # the old value or the new value matches the spatial filter (or both, or neither). When categorising these deltas,
+    # we also keep the possibility that the old or new value doesn't exist at all (as happens for inserts and deletes)
+    # separate from the non-matching and matching categories)
+    NONEXISTENT = auto()
     # Isn't present locally, but is promised. From this we infer it doesn't match the repo's current spatial filter:
-    IS_PROMISED = auto()
+    PROMISED = auto()
     # Exists and is present and does NOT match the given spatial filter:
     NON_MATCHING = auto()
     # Exists and is present and DOES match the given spatial filter.
@@ -464,7 +467,7 @@ class SpatialFilter:
             or a geometry.Geometry object.
         """
         if feature is None:
-            return MatchResult.IS_NONE
+            return MatchResult.NONEXISTENT
         if self.match_all:
             return MatchResult.MATCHING
 
@@ -516,13 +519,13 @@ class SpatialFilter:
         # spatial filter. The feature may need to be lazily loaded, or it may turn out not to be present in this repo,
         # in which case IS_PROMISED is returned.
         if delta_key_value is None:
-            return MatchResult.IS_NONE
+            return MatchResult.NONEXISTENT
         try:
             value = delta_key_value.get_lazy_value()
             return self.matches(value)
         except KeyError as e:
             if self.feature_is_prefiltered(e):
-                return MatchResult.IS_PROMISED
+                return MatchResult.PROMISED
             raise
 
     def feature_is_prefiltered(self, feature_error):

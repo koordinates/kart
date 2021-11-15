@@ -4,13 +4,14 @@ import pytest
 
 from kart import is_windows
 
-from kart.repo import KartRepo
 from kart.exceptions import (
     INVALID_ARGUMENT,
     NO_SPATIAL_FILTER,
     INVALID_OPERATION,
     SPATIAL_FILTER_PK_CONFLICT,
 )
+from kart.promisor_utils import FetchPromisedBlobsProcess
+from kart.repo import KartRepo
 
 H = pytest.helpers.helpers()
 
@@ -187,7 +188,20 @@ def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
 
 
 @pytest.mark.skipif(is_windows, reason=SKIP_REASON)
-def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path, insert):
+def test_clone_with_spatial_filter(
+    data_archive, cli_runner, tmp_path, insert, monkeypatch
+):
+    # Keep track of how many features we fetch lazily after the partial clone.
+    orig_fetch_func = FetchPromisedBlobsProcess.fetch
+    fetch_count = 0
+
+    def _fetch(*args, **kwargs):
+        nonlocal fetch_count
+        fetch_count += 1
+        return orig_fetch_func(*args, **kwargs)
+
+    monkeypatch.setattr(FetchPromisedBlobsProcess, "fetch", _fetch)
+
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
 
@@ -219,8 +233,8 @@ def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path, insert):
 
         # Unless you use an experimental environment variable:
         # TODO: Always apply spatial filters during the clone, then clean up this test.
+        os.environ["X_KART_SPATIAL_FILTERED_CLONE"] = "1"
         try:
-            os.environ["X_KART_SPATIAL_FILTERED_CLONE"] = "1"
             repo3_path = tmp_path / "repo3"
             r = cli_runner.invoke(
                 ["clone", repo1_url, repo3_path, f"--spatial-filter=@{file_path}"]
@@ -252,6 +266,7 @@ def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path, insert):
             # TODO - label pk-conflicts as being different to updates in kart status
             assert "6 updates" in r.stdout
             # All of the 6 featues that are conflicts / were "updated" in the WC have been loaded:
+            assert fetch_count == 6
             assert local_features(ds) == 58
 
             with repo3.working_copy.session() as sess:
@@ -266,10 +281,10 @@ def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path, insert):
             assert r.exit_code == 0, r.stderr
             # All of the deleted features have now been loaded to show in the diff output:
             assert local_features(ds) == H.POLYGONS.ROWCOUNT
+            assert fetch_count == H.POLYGONS.ROWCOUNT - 52
 
         finally:
-            if "X_KART_SPATIAL_FILTERED_CLONE" in os.environ:
-                del os.environ["X_KART_SPATIAL_FILTERED_CLONE"]
+            del os.environ["X_KART_SPATIAL_FILTERED_CLONE"]
 
 
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):

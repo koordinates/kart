@@ -15,7 +15,7 @@ from .exceptions import (
     NO_WORKING_COPY,
 )
 from .key_filters import RepoKeyFilter
-from .promisor_utils import object_is_promised, fetch_promised_blobs_process
+from .promisor_utils import object_is_promised, FetchPromisedBlobsProcess
 from .spatial_filters import SpatialFilter
 
 
@@ -489,15 +489,12 @@ class DeltaFetcher:
     @property
     def fetch_process(self):
         if not hasattr(self, "_fetch_process"):
-            self._fetch_process_ctx = fetch_promised_blobs_process(
-                self.diff_writer.repo
-            )
-            self._fetch_process = self._fetch_process_ctx.__enter__()
+            self._fetch_process = FetchPromisedBlobsProcess(self.diff_writer.repo)
         return self._fetch_process
 
     def _start_fetch(self, delta_key_value):
         blob = delta_key_value.value.args[0]
-        self.fetch_process.stdin.write(f"{blob.id.hex}\n".encode())
+        self.fetch_process.fetch(blob.id.hex)
 
     def finish_fetching_deltas(self):
         """Blocks until all the deltas that were requested finish fetching, then yields them all."""
@@ -512,7 +509,7 @@ class DeltaFetcher:
             f"Fetching missing but required features in {self.ds_path}", err=True
         )
 
-        self._fetch_process_ctx.__exit__(None, None, None)
+        self._fetch_process.finish()
         yield from self.buffered_deltas
 
     def _is_delta_value_ready(self, delta_key_value):

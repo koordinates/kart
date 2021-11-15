@@ -38,44 +38,66 @@ def get_promisor_remote(repo):
     )
 
 
+class FetchPromisedBlobsProcess:
+    """
+    Fetches requested blobs from the promisor remote in a git fetch process.
+    Any number of blobs can be requested asynchronously by calling fetch,
+    all the fetches will block until complete when finish is called.
+    """
+
+    def __init__(self, repo):
+        self.repo = repo
+        self.promisor_remote = get_promisor_remote(self.repo)
+        self.cmd = [
+            "git",
+            "-c",
+            "fetch.negotiationAlgorithm=noop",
+            "fetch",
+            self.promisor_remote,
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--recurse-submodules=no",
+            "--filter=blob:none",
+            "--stdin",
+        ]
+        self.proc = subprocess.Popen(
+            self.cmd,
+            cwd=self.repo.path,
+            stdin=subprocess.PIPE,
+            env=tool_environment(),
+            text=True,
+            bufsize=1,  # Line buffering
+        )
+
+    def fetch(self, promised_blob_id):
+        try:
+            self.proc.stdin.write(f"{promised_blob_id}\n")
+        except BrokenPipeError:
+            # if git-fetch dies early, we get an EPIPE here
+            # we'll deal with it below
+            pass
+
+    def finish(self):
+        try:
+            self.proc.stdin.close()
+        except BrokenPipeError:
+            pass
+        self.proc.wait()
+        return_code = self.proc.returncode
+        if return_code != 0:
+            raise SubprocessError(
+                f"git-fetch error! {return_code}", exit_code=return_code
+            )
+
+
 @contextmanager
 def fetch_promised_blobs_process(repo):
-    cmd = [
-        "git",
-        "-c",
-        "fetch.negotiationAlgorithm=noop",
-        "fetch",
-        get_promisor_remote(repo),
-        "--no-tags",
-        "--no-write-fetch-head",
-        "--recurse-submodules=no",
-        "--filter=blob:none",
-        "--stdin",
-    ]
-
-    p = subprocess.Popen(
-        cmd,
-        cwd=repo.path,
-        stdin=subprocess.PIPE,
-        env=tool_environment(),
-        bufsize=128 * 1024,
-    )
-    try:
-        yield p
-    except BrokenPipeError:
-        # if git-fetch dies early, we get an EPIPE here
-        # we'll deal with it below
-        pass
-    else:
-        p.stdin.close()
-    p.wait()
-    if p.returncode != 0:
-        raise SubprocessError(
-            f"git-fetch error! {p.returncode}", exit_code=p.returncode
-        )
+    fetch_proc = FetchPromisedBlobsProcess(repo)
+    yield fetch_proc
+    fetch_proc.finish()
 
 
 def fetch_promised_blobs(repo, promised_blob_ids):
     with fetch_promised_blobs_process(repo) as p:
         for promised_blob_id in promised_blob_ids:
-            p.stdin.write(f"{promised_blob_id}\n".encode())
+            p.fetch(promised_blob_id)
