@@ -84,6 +84,22 @@ def test_log(output_format, data_archive_readonly, cli_runner):
             }
 
 
+def test_log_arg_parsing_with_range(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points"):
+        EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+        r = cli_runner.invoke(
+            [
+                "log",
+                f"--output-format=json",
+                f"{EMPTY_TREE_SHA}..{H.POINTS.HEAD1_SHA}",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        commits = json.loads(r.stdout)
+        assert len(commits) == 1
+        assert commits[0]["commit"] == H.POINTS.HEAD1_SHA
+
+
 @pytest.mark.parametrize("output_format", ["text", "json"])
 def test_log_shallow_clone(
     output_format, data_archive_readonly, cli_runner, tmp_path, chdir
