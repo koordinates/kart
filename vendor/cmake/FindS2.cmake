@@ -56,3 +56,12 @@ find_package_handle_standard_args(
   S2
   FOUND_VAR S2_FOUND
   REQUIRED_VARS S2_LIBRARY S2_INCLUDE_DIR)
+
+if(S2_FOUND AND NOT TARGET S2::S2)
+  add_library(S2::S2 INTERFACE IMPORTED)
+  set_target_properties(
+    S2::S2
+    PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${S2_INCLUDE_DIR}"
+               IMPORTED_LINK_INTERFACE_LANGUAGES "CXX"
+               IMPORTED_LOCATION "${S2_LIBRARY}")
+endif()

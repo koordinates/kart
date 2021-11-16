@@ -329,8 +329,9 @@ set(VENDOR_ARCHIVE
 add_custom_command(
   OUTPUT ${VENDOR_ARCHIVE}
   DEPENDS vendor_wheels ${VENDOR_CONFIG}
+  COMMAND ${CMAKE_COMMAND} -E rm -rf wheelhouse env
   COMMAND ${CMAKE_COMMAND} -E make_directory wheelhouse env
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different ${WHEEL_LIST} wheelhouse
+  COMMAND ${CMAKE_COMMAND} -E copy ${WHEEL_LIST} wheelhouse
   COMMAND ${CMAKE_COMMAND} -E tar czf ${VENDOR_ARCHIVE} -- wheelhouse env ${VENDOR_CONFIG}
   COMMENT "Vendor dependency archive")
 add_custom_target(
