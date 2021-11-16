@@ -3,7 +3,6 @@ include(FetchContent)
 include(ExternalProject)
 include(PyCreateVirtualEnvironment)
 include(GetPrerequisites)
-include(CheckSymbolExists)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/)
 find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
@@ -73,6 +72,13 @@ find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL 1.1 REQUIRED)
 find_package(ODBC 2.3.9 REQUIRED)
 find_package(LibGit2 1.3.0 REQUIRED)
+if(NOT LibGit2_HAS_ERROR_SUBCODE)
+  message(
+    FATAL_ERROR
+      "Found LibGit2 v${LibGit2_VERSION}, but git_error_subcode isn't defined. Build & install from https://github.com/koordinates/libgit2/tree/kx-latest"
+  )
+endif()
+
 find_package(SWIG REQUIRED COMPONENTS python)
 
 if(NOT GDAL_CONFIG)
@@ -195,8 +201,8 @@ endif()
 set(PYGIT2_WHEEL_VER 1.7.0)
 ExternalProject_Add(
   pygit2
-  GIT_REPOSITORY https://github.com/libgit2/pygit2.git
-  GIT_TAG v${PYGIT2_WHEEL_VER}
+  GIT_REPOSITORY https://github.com/koordinates/pygit2.git
+  GIT_TAG 3443cd8fd2cead2de608f51ccb3cdee5167c1fd4
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv LibGit2::LibGit2
   EXCLUDE_FROM_ALL ON

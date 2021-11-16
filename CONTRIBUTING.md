@@ -30,8 +30,13 @@ Requirements:
 If you're a Homebrew user, you can get all of those via:
 
 ```console
-$ brew install --upgrade cmake gdal git libgit2 openssl@1.1 libpq python@3.7 \
+$ brew install --upgrade cmake gdal git openssl@1.1 libpq python@3.7 \
     spatialindex libspatialite sqlite3 swig unixodbc
+```
+
+Then configure Kart:
+```
+$ cmake -B build -S .
 ```
 
 ### Installing dependencies on Linux
@@ -49,9 +54,18 @@ $ sudo apt-get install build-essential cmake ccache libgdal-dev gdal-data git \
     libspatialindex-dev libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
 ```
 
-Then [build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.3.
+Then [build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.3
+from the [Koordinates `kx-latest` branch](https://github.com/koordinates/libgit2/tree/kx-latest):
 
-Then build Kart:
+```console
+$ git clone --branch=kx-latest https://github.com/koordinates/libgit2.git
+$ cd libgit2
+$ cmake -B build -S . -DBUILD_CLAR=OFF
+$ cmake --build build
+$ cmake --install build
+```
+
+Then configure Kart:
 ```console
 $ cmake -B build -S . \
     -DSpatiaLite_EXTENSION=/usr/lib/x86_64-linux-gnu/mod_spatialite.so \
@@ -61,7 +75,6 @@ $ cmake -B build -S . \
 ### Building
 
 ```console
-$ cmake -B build -S .
 $ cd build
 $ make
 $ ./kart --version

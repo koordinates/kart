@@ -40,6 +40,7 @@ The following cache variables may also be set:
   The path to the LibGit2 library.
 
 #]=======================================================================]
+include(CheckTypeSize)
 
 find_package(PkgConfig)
 pkg_check_modules(PC_libgit2 QUIET libgit2)
@@ -62,11 +63,36 @@ find_package_handle_standard_args(
   REQUIRED_VARS LibGit2_LIBRARY LibGit2_INCLUDE_DIR
   VERSION_VAR LibGit2_VERSION)
 
-if(NOT TARGET LibGit2::LibGit2)
-  add_library(LibGit2::LibGit2 UNKNOWN IMPORTED)
-  set_target_properties(
-    LibGit2::LibGit2
-    PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LibGit2_INCLUDE_DIR}"
-               IMPORTED_LINK_INTERFACE_LANGUAGES "C"
-               IMPORTED_LOCATION "${LibGit2_LIBRARY}")
+if(LibGit2_FOUND)
+  # check whether it has error subcodes ie: whether it's the Koordinates fork or it's been merged
+  # into upstream
+  set(CMAKE_REQUIRED_INCLUDES ${LibGit2_INCLUDE_DIR})
+  set(CMAKE_EXTRA_INCLUDE_FILES "git2/errors.h")
+  set(CMAKE_REQUIRED_QUIET ON)
+  check_type_size("git_error_subcode" error_subcode)
+  unset(CMAKE_REQUIRED_INCLUDES)
+  unset(CMAKE_EXTRA_INCLUDE_FILES)
+  unset(CMAKE_REQUIRED_QUIET)
+
+  if(HAVE_error_subcode)
+    set(LibGit2_HAS_ERROR_SUBCODE ON)
+  endif()
+
+  mark_as_advanced(LibGit2_LIBRARY LibGit2_INCLUDE_DIR LibGit2_HAS_ERROR_SUBCODE)
+
+  if(NOT TARGET LibGit2::LibGit2)
+    add_library(LibGit2::LibGit2 UNKNOWN IMPORTED)
+    set_target_properties(
+      LibGit2::LibGit2
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LibGit2_INCLUDE_DIR}"
+                 IMPORTED_LINK_INTERFACE_LANGUAGES "C"
+                 IMPORTED_LOCATION "${LibGit2_LIBRARY}")
+
+    if(LibGit2_HAS_ERROR_SUBCODE)
+      set_property(
+        TARGET LibGit2::LibGit2
+        APPEND
+        PROPERTY INTERFACE_COMPILE_DEFINITIONS "LibGit2_HAS_ERROR_SUBCODE")
+    endif()
+  endif()
 endif()
