@@ -95,6 +95,11 @@ jobs:
           restore-keys: |
             pip-Linux-
 
+      - name: "python"
+        uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+
       #
       # vendor build
       #
@@ -108,11 +113,6 @@ jobs:
         with:
           path: vendor/dist/
           key: vendor-dist-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
-
-      - name: "python"
-        uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
 
       - name: "vendor: ccache"
         uses: actions/cache@v1
