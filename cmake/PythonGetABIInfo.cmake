@@ -23,7 +23,9 @@ function(PythonGetABIInfo)
   if(NOT DEFINED Python3_ABIFLAGS)
     # ABI flags are 'd'/'m'/''/etc
     execute_process(
-      COMMAND ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('abiflags'))" COMMAND_ERROR_IS_FATAL ANY
+      COMMAND
+        ${Python3_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_config_var('abiflags'))"
+        COMMAND_ERROR_IS_FATAL ANY
       OUTPUT_VARIABLE py_ABIFLAGS
       OUTPUT_STRIP_TRAILING_WHITESPACE)
     set(Python3_ABIFLAGS
@@ -63,12 +65,16 @@ function(PythonGetABIInfo)
     elseif(LINUX)
       set(py_wheelid "${py_ver_code}-linux_${CMAKE_SYSTEM_PROCESSOR}")
     elseif(WIN32)
-      if(${CMAKE_GENERATOR_PLATFORM} STREQUAL Win32)
+      set(win_platform ${CMAKE_GENERATOR_PLATFORM})
+      if(NOT CMAKE_GENERATOR_PLATFORM)
+        set(win_platform ${CMAKE_VS_PLATFORM_NAME})
+      endif()
+      if(win_platform STREQUAL "Win32")
         set(py_wheelid "${py_ver_code}-win32")
-      elseif(${CMAKE_GENERATOR_PLATFORM} STREQUAL x64)
+      elseif(win_platform STREQUAL "x64")
         set(py_wheelid "${py_ver_code}-win_amd64")
       else()
-        message(FATAL_ERROR "Couldn't determine Windows arch? (${CMAKE_GENERATOR_PLATFORM})")
+        message(FATAL_ERROR "Couldn't determine Windows arch from CMAKE_GENERATOR_PLATFORM/CMAKE_VS_PLATFORM_NAME")
       endif()
     else()
       message(FATAL_ERROR "PythonGetABIInfo: Unknown OS")

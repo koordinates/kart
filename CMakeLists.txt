@@ -61,15 +61,15 @@ pythongetabiinfo()
 # dependencies
 #
 if(VENDOR_ARCHIVE)
-  message("Using prebuilt vendor dependencies...")
+  message("Using prebuilt vendor dependencies from ${VENDOR_ARCHIVE} ...")
   if(NOT EXISTS ${VENDOR_ARCHIVE})
     message(
       FATAL_ERROR
         "${VENDOR_ARCHIVE} not found. Download from https://github.com/koordinates/kart/actions")
   endif()
-  # if it's a .zip, extract it to get the inner archive
+  # CI artifacts are zips: extract it to get the inner vendor archive
   cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
-  if(vendor_ext STREQUAL ".zip" AND NOT (WIN32 AND DEFINED ENV{CI}))
+  if(vendor_ext STREQUAL ".zip")
     message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
     # cmake-lint: disable=E1126
     file(
