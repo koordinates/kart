@@ -119,11 +119,7 @@ jobs:
         if: steps.cache-dist.outputs.cache-hit != 'true'
         with:
           path: .ccache
-          key: vendor-ccache-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
-          restore-keys: |
-            vendor-ccache-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
-            vendor-ccache-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-
-            vendor-ccache-Linux-
+          key: vendor-ccache-Linux
 
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
@@ -578,11 +574,7 @@ jobs:
         if: steps.cache-dist.outputs.cache-hit != 'true'
         with:
           path: .ccache
-          key: vendor-ccache-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
-          restore-keys: |
-            vendor-ccache-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
-            vendor-ccache-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-
-            vendor-ccache-Darwin-
+          key: vendor-ccache-Darwin
 
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
