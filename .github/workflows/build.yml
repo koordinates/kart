@@ -31,8 +31,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: "1"
-      PY3_PKG: python-3.7.6-macosx10.9.pkg
-      PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
+      PY_VER: "3.7"
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
     services:
@@ -72,7 +71,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: .cache/vendor-source
-          key: vendor-source-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+          key: vendor-source-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
 
       - name: "vendor-source: download"
         if: steps.cache-vendor.outputs.cache-hit != 'true'
@@ -98,7 +97,7 @@ jobs:
       - name: "python"
         uses: actions/setup-python@v1
         with:
-          python-version: '3.7'
+          python-version: ${{ env.PY_VER }}
 
       #
       # vendor build
@@ -112,7 +111,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: vendor/dist/
-          key: vendor-dist-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
+          key: vendor-dist-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
 
       - name: "vendor: ccache"
         uses: actions/cache@v1
@@ -487,6 +486,7 @@ jobs:
     env:
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       CCACHE_COMPRESS: "1"
+      PY_VER: "3.7"
       PY3_PKG: python-3.7.6-macosx10.9.pkg
       PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
@@ -503,7 +503,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: .cache/vendor-source
-          key: vendor-source-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+          key: vendor-source-Darwin-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
 
       - name: "vendor-source: download"
         if: steps.cache-vendor.outputs.cache-hit != 'true'
@@ -543,16 +543,6 @@ jobs:
       # vendor build
       #
 
-      # get last time's vendor bundle
-      # a hit here leads to skipping the rest of this job
-
-      - name: "vendor-dist: cache"
-        id: cache-dist
-        uses: actions/cache@v1
-        with:
-          path: vendor/dist/
-          key: vendor-dist-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
-
       - name: "homebrew cache"
         id: cache-brew
         uses: actions/cache@v1
@@ -568,6 +558,19 @@ jobs:
           brew upgrade python@3.9 || echo "The link step of `brew upgrade python@3.9` fails. This is okay."
           brew install --force ccache pkg-config sqlite3 pandoc
           brew install --force --cask Packages
+          brew bundle install --file=vendor/Brewfile
+          echo "Currently installed vendor dependencies:"
+          cat vendor/Brewfile | xargs brew list --versions --formulae | sort | tee vendor/Brewfile.lock
+
+      # get last time's vendor bundle
+      # a hit here leads to skipping the rest of this job
+
+      - name: "vendor-dist: cache"
+        id: cache-dist
+        uses: actions/cache@v1
+        with:
+          path: vendor/dist/
+          key: vendor-dist-Darwin-${{ env.PY_VER }}-${{ hashfiles('vendor/Brewfile.lock') }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
 
       - name: "vendor: ccache"
         uses: actions/cache@v1
