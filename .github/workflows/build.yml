@@ -7,52 +7,16 @@ env:
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
 
 jobs:
-  posix:
-    name: ${{ matrix.platform.name }}
-    runs-on: ${{ matrix.platform.os }}
+  #
+  # Linux Builds
+  #
+  Linux:
+    runs-on: ubuntu-20.04
 
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: Linux
-            id: Linux
-            os: ubuntu-20.04
-            package-formats: deb rpm
-            services:
-              postgis:
-                image: postgis/postgis
-                options: >-
-                  --health-cmd pg_isready
-                  --health-interval 2s
-                  --health-timeout 2s
-                  --health-retries 5
-                  -e POSTGRES_HOST_AUTH_METHOD=trust
-                ports:
-                  - 5432:5432
-              sqlserver:
-                image: mcr.microsoft.com/mssql/server
-                options: >-
-                  -e ACCEPT_EULA=Y
-                  -e SA_PASSWORD=PassWord1
-                ports:
-                  - 1433:1433
-              mysql:
-                image: mysql
-                options: >-
-                  -e MYSQL_ROOT_PASSWORD=PassWord1
-                ports:
-                  - 3306:3306
-
-          - name: macOS
-            id: Darwin
-            os: macos-latest
-            package-formats: pkg
-            services: {}
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Linux/macOS builds with `[ci only windows]` unless it's master or a release tag.
+    # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
     if: >
       (
         github.event_name == 'push'
@@ -61,6 +25,7 @@ jobs:
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
         || !contains(github.event.head_commit.message, '[ci only windows]')
+        || !contains(github.event.head_commit.message, '[ci only macos]')
       )
 
     env:
@@ -70,7 +35,31 @@ jobs:
       PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
       HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
       HOMEBREW_NO_INSTALL_CLEANUP: "1"
-    services: ${{ matrix.platform.services }}
+    services:
+      postgis:
+        image: postgis/postgis
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 5
+          -e POSTGRES_HOST_AUTH_METHOD=trust
+        ports:
+          - 5432:5432
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server
+        options: >-
+          -e ACCEPT_EULA=Y
+          -e SA_PASSWORD=PassWord1
+        ports:
+          - 1433:1433
+      mysql:
+        image: mysql
+        options: >-
+          -e MYSQL_ROOT_PASSWORD=PassWord1
+        ports:
+          - 3306:3306
+
     steps:
       - uses: actions/checkout@v2
 
@@ -83,7 +72,7 @@ jobs:
         uses: actions/cache@v1
         with:
           path: .cache/vendor-source
-          key: vendor-source-${{ matrix.platform.id }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+          key: vendor-source-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
 
       - name: "vendor-source: download"
         if: steps.cache-vendor.outputs.cache-hit != 'true'
@@ -98,27 +87,13 @@ jobs:
       # python distribution
       #
 
-      - name: "🍎 python: cache"
-        id: cache-pydist
-        uses: actions/cache@v1
-        if: runner.os == 'macOS'
-        with:
-          path: .cache/pydist
-          key: pydist-${{ matrix.platform.id}}-${{ env.PY3_PKG }}
-
-      - name: "🍎 python: download"
-        if: runner.os == 'macOS' && steps.cache-pydist.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p .cache/pydist
-          wget -nv ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
-
       - name: "python: pip cache"
         uses: actions/cache@v1
         with:
           path: .cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
+          key: pip-Linux-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
           restore-keys: |
-            pip-${{ runner.os }}-
+            pip-Linux-
 
       #
       # vendor build
@@ -132,55 +107,36 @@ jobs:
         uses: actions/cache@v1
         with:
           path: vendor/dist/
-          key: vendor-dist-${{ matrix.platform.id}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
+          key: vendor-dist-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
 
-      - name: "🐧 python"
+      - name: "python"
         uses: actions/setup-python@v1
-        if: runner.os != 'macOS'
         with:
           python-version: '3.7'
-
-      - name: "🍎 homebrew cache"
-        id: cache-brew
-        uses: actions/cache@v1
-        if: runner.os == 'macOS'
-        with:
-          path: .cache/brew
-          key: brew
-
-      - name: "🍎 prerequisites"
-        if: runner.os == 'macOS'
-        run: |
-          brew uninstall --force php composer
-          brew update-reset
-          sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
-          brew upgrade python@3.9 || echo "The link step of `brew upgrade python@3.9` fails. This is okay."
-          brew install --force ccache pkg-config sqlite3 pandoc
-          brew install --force --cask Packages
 
       - name: "vendor: ccache"
         uses: actions/cache@v1
         if: steps.cache-dist.outputs.cache-hit != 'true'
         with:
           path: .ccache
-          key: vendor-ccache-${{ matrix.platform.id}}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
+          key: vendor-ccache-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
           restore-keys: |
-            vendor-ccache-${{ matrix.platform.id }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
-            vendor-ccache-${{ matrix.platform.id }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-
-            vendor-ccache-${{ matrix.platform.id }}-
+            vendor-ccache-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
+            vendor-ccache-Linux-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-
+            vendor-ccache-Linux-
 
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
         run: |
           tar xvf .cache/vendor-source/vendor.tar
           echo 'verbose = off' >> $HOME/.wgetrc
-          make -C vendor build-${{ matrix.platform.id }}
+          make -C vendor build-Linux
 
       - name: "vendor: save library bundle"
         uses: actions/upload-artifact@v2
         with:
-          name: vendor-${{ matrix.platform.id }}
-          path: vendor/dist/vendor-${{ matrix.platform.id }}.tar.gz
+          name: vendor-Linux
+          path: vendor/dist/vendor-Linux.tar.gz
 
       #
       # App Build
@@ -228,8 +184,7 @@ jobs:
         run: |
           make py-deps-dev
 
-      - name: "🐧 app: install database drivers for tests"
-        if: runner.os == 'Linux'
+      - name: "app: install database drivers for tests"
         run: |
           curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
           curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
@@ -247,55 +202,14 @@ jobs:
       - name: "app: save test coverage"
         uses: actions/upload-artifact@v2
         with:
-          name: test-results-${{ matrix.platform.id }}
+          name: test-results-Linux
           path: test-results/
 
       #
       # Packaging
       #
-      - name: "🍎 package: setup app signing certificate"
-        id: keychain
-        uses: apple-actions/import-codesign-certs@v1
-        if: "runner.os == 'macOS' && steps.version.outputs.is_fork == 0"
-        with:
-          p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
-          p12-password: ${{ secrets.MACOS_CERT_PW }}
-
-      - name: "🍎 package: setup installer signing certificate"
-        uses: apple-actions/import-codesign-certs@v1
-        if: "runner.os == 'macOS' && steps.version.outputs.is_release == 1"
-        with:
-          create-keychain: false
-          keychain-password: ${{ steps.keychain.outputs.keychain-password }}
-          p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
-          p12-password: ${{ secrets.MACOS_CERT_PW }}
-
-      - name: "🍎 package: assemble"
-        id: package-Darwin
-        if: runner.os == 'macOS'
-        env:
-          NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
-          NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
-          NOTARIZE_PASSWORD: "@env:NOTARIZE_PW"
-        run: |
-          make py-tools
-
-          if (( ! ${{ steps.version.outputs.is_fork }} )); then
-            export CODESIGN="${{ secrets.MACOS_CODESIGN_ID }}"
-          fi
-
-          if (( ${{ steps.version.outputs.is_release }} )); then
-            export PKGSIGN="${{ secrets.MACOS_PKGSIGN_ID }}"
-            make -C platforms ci-pkg-notarize
-          else
-            make -C platforms pkg
-          fi
-          ls -la platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg
-          echo "::set-output name=file::platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg"
-
-      - name: "🐧 package: assemble"
+      - name: "package: assemble"
         id: package-Linux
-        if: runner.os == 'Linux'
         run: |
           make -C platforms deb rpm
           ls -la platforms/linux/dist/*.rpm platforms/linux/dist/*.deb
@@ -304,37 +218,28 @@ jobs:
 
       - name: "package: cleanup"
         run: |
-          sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-*.tar.gz" -exec rm -rf {} \;
+          sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-Linux.tar.gz" -exec rm -rf {} \;
 
       #
       # Uploading packages
       #
 
-      - name: "🍎 package: save pkg"
+      - name: "package: save deb"
         uses: actions/upload-artifact@v2
-        if: matrix.platform.id == 'Darwin'
         with:
-          name: ${{ matrix.platform.name }}-pkg
-          path: ${{ steps.package-Darwin.outputs.file }}
-
-      - name: "🐧 package: save deb"
-        uses: actions/upload-artifact@v2
-        if: matrix.platform.id == 'Linux'
-        with:
-          name: ${{ matrix.platform.name }}-deb
+          name: Linux-deb
           path: platforms/linux/dist/*.deb
 
-      - name: "🐧 package: save rpm"
+      - name: "package: save rpm"
         uses: actions/upload-artifact@v2
-        if: matrix.platform.id == 'Linux'
         with:
-          name: ${{ matrix.platform.name }}-rpm
+          name: Linux-rpm
           path: platforms/linux/dist/*.rpm
 
       - name: "package: save packaging logs"
         uses: actions/upload-artifact@v2
         with:
-          name: packaging-logs-${{ matrix.platform.name }}
+          name: packaging-logs-Linux
           path: |
             platforms/*/build/kart/*.toc
             platforms/*/build/kart/*.txt
@@ -344,16 +249,7 @@ jobs:
       # Package tests
       #
 
-      - name: "🍎 package: tests"
-        if: matrix.platform.id == 'Darwin'
-        run: |
-          sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
-          readlink $(which kart)
-          tests/scripts/distcheck.sh
-          PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
-
-      - name: "🐧 package: tests"
-        if: matrix.platform.id == 'Linux'
+      - name: "package: tests"
         run: |
           make -C platforms test-deb-all test-rpm-all
 
@@ -369,17 +265,19 @@ jobs:
         with:
           draft: true
           files: |
-            platforms/macos/dist/Kart-*.pkg
             platforms/linux/dist/*.deb
             platforms/linux/dist/*.rpm
 
+  #
+  # Windows Builds
+  #
   windows:
     name: Windows
     runs-on: windows-2016
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
-    # Skip Windows builds with `[ci only posix]` unless it's master or a release tag.
+    # Skip Windows builds with eg: `[ci only linux]` unless it's master or a release tag.
     if: >
       (
         github.event_name == 'push'
@@ -387,7 +285,8 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only posix]')
+        || !contains(github.event.head_commit.message, '[ci only linux]')
+        || !contains(github.event.head_commit.message, '[ci only macos]')
       )
     steps:
       - name: "msvc setup"
@@ -411,9 +310,9 @@ jobs:
         uses: actions/cache@v1
         with:
           path: .cache/pip
-          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('makefile.vc') }}
+          key: pip-windows-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('makefile.vc') }}
           restore-keys: |
-            pip-${{ runner.os }}-
+            pip-windows-
 
       #
       # vendor build
@@ -567,3 +466,285 @@ jobs:
           draft: true
           files: |
             ${{ steps.package.outputs.msi }}
+
+  #
+  # macOS Builds
+  #
+  macOS:
+    runs-on: macos-latest
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    # Skip macOS builds with eg: `[ci only linux]` unless it's master or a release tag.
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      ) && (
+        startsWith(github.ref, 'refs/tags/v')
+        || github.ref == 'refs/heads/master'
+        || !contains(github.event.head_commit.message, '[ci only linux]')
+        || !contains(github.event.head_commit.message, '[ci only windows]')
+      )
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_COMPRESS: "1"
+      PY3_PKG: python-3.7.6-macosx10.9.pkg
+      PY3_URL: https://www.python.org/ftp/python/3.7.6/python-3.7.6-macosx10.9.pkg
+      HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v2
+
+      #
+      # vendor source
+      #
+
+      - name: "vendor-source: cache"
+        id: cache-vendor
+        uses: actions/cache@v1
+        with:
+          path: .cache/vendor-source
+          key: vendor-source-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+
+      - name: "vendor-source: download"
+        if: steps.cache-vendor.outputs.cache-hit != 'true'
+        run: |
+          tar xvf .cache/vendor-source/vendor.tar || true
+          echo 'verbose = off' >> $HOME/.wgetrc
+          make -C vendor sources
+          mkdir -p .cache/vendor-source
+          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
+
+      #
+      # python distribution
+      #
+
+      - name: "python: cache"
+        id: cache-pydist
+        uses: actions/cache@v1
+        with:
+          path: .cache/pydist
+          key: pydist-Darwin-${{ env.PY3_PKG }}
+
+      - name: "python: download"
+        if: steps.cache-pydist.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .cache/pydist
+          wget -nv ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
+
+      - name: "python: pip cache"
+        uses: actions/cache@v1
+        with:
+          path: .cache/pip
+          key: pip-macOS-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
+          restore-keys: |
+            pip-macOS-
+
+      #
+      # vendor build
+      #
+
+      # get last time's vendor bundle
+      # a hit here leads to skipping the rest of this job
+
+      - name: "vendor-dist: cache"
+        id: cache-dist
+        uses: actions/cache@v1
+        with:
+          path: vendor/dist/
+          key: vendor-dist-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
+
+      - name: "homebrew cache"
+        id: cache-brew
+        uses: actions/cache@v1
+        with:
+          path: .cache/brew
+          key: brew
+
+      - name: "prerequisites"
+        run: |
+          brew uninstall --force php composer
+          brew update-reset
+          sudo installer -pkg .cache/pydist/${{ env.PY3_PKG }} -dumplog -target /
+          brew upgrade python@3.9 || echo "The link step of `brew upgrade python@3.9` fails. This is okay."
+          brew install --force ccache pkg-config sqlite3 pandoc
+          brew install --force --cask Packages
+
+      - name: "vendor: ccache"
+        uses: actions/cache@v1
+        if: steps.cache-dist.outputs.cache-hit != 'true'
+        with:
+          path: .ccache
+          key: vendor-ccache-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
+          restore-keys: |
+            vendor-ccache-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-${{ github.sha }}
+            vendor-ccache-Darwin-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}-
+            vendor-ccache-Darwin-
+
+      - name: "vendor: build"
+        if: steps.cache-dist.outputs.cache-hit != 'true'
+        run: |
+          tar xvf .cache/vendor-source/vendor.tar
+          echo 'verbose = off' >> $HOME/.wgetrc
+          make -C vendor build-Darwin
+
+      - name: "vendor: save library bundle"
+        uses: actions/upload-artifact@v2
+        with:
+          name: vendor-Darwin
+          path: vendor/dist/vendor-Darwin.tar.gz
+
+      #
+      # App Build
+      #
+
+      - name: "app: version"
+        id: version
+        run: |
+          if [[ '${{ github.repository }}' != 'koordinates/kart' ]]; then
+            IS_FORK=1  # some other repo
+          elif [[ -n '${{ github.event.pull_request.id }}' ]] && [[ '${{ github.event.pull_request.head.repo.full_name }}' != '${{ github.repository }}' ]]; then
+            IS_FORK=1  # pr not on main repo
+          else
+            IS_FORK=0
+          fi
+          if (( ! $IS_FORK )) && [[ '${{ github.ref }}' =~ ^refs/tags/v(.*) ]]; then
+            VER="${BASH_REMATCH[1]}"
+            IS_RELEASE=1
+          else
+            VER=$(sed -E "s/(.*)/\1+ci.${{ github.run_number }}.git${GITHUB_SHA::8}/" kart/VERSION)
+            IS_RELEASE=0
+          fi
+          echo "App Version: $VER"
+          echo "Is Release? $IS_RELEASE"
+          echo "Is Fork PR? $IS_FORK"
+          echo "$VER" > kart/VERSION
+          echo "::set-output name=value::$VER"
+          echo "::set-output name=is_release::$IS_RELEASE"
+          echo "::set-output name=is_fork::$IS_FORK"
+
+      - name: "app: install python dependencies"
+        run: |
+          make py-deps
+
+      - name: "app: build"
+        run: |
+          make release
+          venv/bin/kart --version
+
+      #
+      # App tests & checks
+      #
+
+      - name: "app: install test dependencies"
+        run: |
+          make py-deps-dev
+
+      - name: "app: license check"
+        run: |
+          make py-license-check
+
+      - name: "app: unit tests"
+        run: |
+          make ci-test
+
+      - name: "app: save test coverage"
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-results-macOS
+          path: test-results/
+
+      #
+      # Packaging
+      #
+      - name: "package: setup app signing certificate"
+        id: keychain
+        uses: apple-actions/import-codesign-certs@v1
+        if: "steps.version.outputs.is_fork == 0"
+        with:
+          p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
+          p12-password: ${{ secrets.MACOS_CERT_PW }}
+
+      - name: "package: setup installer signing certificate"
+        uses: apple-actions/import-codesign-certs@v1
+        if: "steps.version.outputs.is_release == 1"
+        with:
+          create-keychain: false
+          keychain-password: ${{ steps.keychain.outputs.keychain-password }}
+          p12-file-base64: ${{ secrets.MACOS_INSTALLER_CERT }}
+          p12-password: ${{ secrets.MACOS_CERT_PW }}
+
+      - name: "package: assemble"
+        id: package-Darwin
+        env:
+          NOTARIZE_USER: ${{ secrets.MACOS_NOTARIZE_USER }}
+          NOTARIZE_PW: ${{ secrets.MACOS_NOTARIZE_PW }}
+          NOTARIZE_PASSWORD: "@env:NOTARIZE_PW"
+        run: |
+          make py-tools
+
+          if (( ! ${{ steps.version.outputs.is_fork }} )); then
+            export CODESIGN="${{ secrets.MACOS_CODESIGN_ID }}"
+          fi
+
+          if (( ${{ steps.version.outputs.is_release }} )); then
+            export PKGSIGN="${{ secrets.MACOS_PKGSIGN_ID }}"
+            make -C platforms ci-pkg-notarize
+          else
+            make -C platforms pkg
+          fi
+          ls -la platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg
+          echo "::set-output name=file::platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg"
+
+      # Pre-cache cleanup
+
+      - name: "package: cleanup"
+        run: |
+          sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-Darwin.tar.gz" -exec rm -rf {} \;
+
+      #
+      # Uploading packages
+      #
+
+      - name: "package: save pkg"
+        uses: actions/upload-artifact@v2
+        with:
+          name: macos-pkg
+          path: ${{ steps.package-Darwin.outputs.file }}
+
+      - name: "package: save packaging logs"
+        uses: actions/upload-artifact@v2
+        with:
+          name: packaging-logs-macOS
+          path: |
+            platforms/*/build/kart/*.toc
+            platforms/*/build/kart/*.txt
+            platforms/*/build/kart/*.html
+
+      #
+      # Package tests
+      #
+
+      - name: "package: tests"
+        run: |
+          sudo installer -pkg ${{ steps.package-Darwin.outputs.file }} -dumplog -target /
+          readlink $(which kart)
+          tests/scripts/distcheck.sh
+          PATH=/usr/local/opt/sqlite3/bin:$PATH tests/scripts/e2e-1.sh
+
+      #
+      # Github release
+      #
+
+      - name: release
+        uses: softprops/action-gh-release@v1
+        if: "steps.version.outputs.is_release == 1"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          draft: true
+          files: |
+            platforms/macos/dist/Kart-*.pkg
