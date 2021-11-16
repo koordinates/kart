@@ -118,6 +118,7 @@ jobs:
       - name: "vendor: build"
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         run: |
+          sudo apt-get install -q -y ccache
           tar xvf .cache/vendor-source/vendor.tar
           echo 'verbose = off' >> $HOME/.wgetrc
           mkdir -p ${{ env.CCACHE_DIR }}
@@ -179,8 +180,8 @@ jobs:
         run: |
           curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
           curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
-          sudo apt-get update
-          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql17
+          sudo apt-get update -q
+          sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
 
       - name: "app: license check"
         run: |
