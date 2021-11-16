@@ -57,7 +57,8 @@ def json_pack(data):
 
 def json_unpack(bytestring):
     """bytes -> data (any type)"""
-    return json.loads(bytestring, encoding="utf8")
+    # The input encoding should be UTF-8, UTF-16 or UTF-32.
+    return json.loads(bytestring)
 
 
 def b64encode_str(bytestring):
