@@ -29,11 +29,9 @@ jobs:
       )
 
     env:
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
       PY_VER: "3.7"
-      HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
-      HOMEBREW_NO_INSTALL_CLEANUP: "1"
     services:
       postgis:
         image: postgis/postgis
@@ -114,7 +112,7 @@ jobs:
         uses: actions/cache@v1
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-Linux
 
       - name: "vendor: build"
@@ -122,6 +120,7 @@ jobs:
         run: |
           tar xvf .cache/vendor-source/vendor.tar
           echo 'verbose = off' >> $HOME/.wgetrc
+          mkdir -p ${{ env.CCACHE_DIR }}
           make -C vendor build-Linux
 
       - name: "vendor: save library bundle"
@@ -481,7 +480,7 @@ jobs:
       )
 
     env:
-      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
       PY_VER: "3.7"
       PY3_PKG: python-3.7.6-macosx10.9.pkg
@@ -570,7 +569,7 @@ jobs:
         uses: actions/cache@v1
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: vendor-ccache-Darwin
 
       - name: "vendor: build"
@@ -578,6 +577,7 @@ jobs:
         run: |
           tar xvf .cache/vendor-source/vendor.tar
           echo 'verbose = off' >> $HOME/.wgetrc
+          mkdir -p ${{ env.CCACHE_DIR }}
           make -C vendor build-Darwin
 
       - name: "vendor: save library bundle"
