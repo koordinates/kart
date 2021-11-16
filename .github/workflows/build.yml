@@ -63,26 +63,6 @@ jobs:
       - uses: actions/checkout@v2
 
       #
-      # vendor source
-      #
-
-      - name: "vendor-source: cache"
-        id: cache-vendor
-        uses: actions/cache@v1
-        with:
-          path: .cache/vendor-source
-          key: vendor-source-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
-
-      - name: "vendor-source: download"
-        if: steps.cache-vendor.outputs.cache-hit != 'true'
-        run: |
-          tar xvf .cache/vendor-source/vendor.tar || true
-          echo 'verbose = off' >> $HOME/.wgetrc
-          make -C vendor sources
-          mkdir -p .cache/vendor-source
-          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
-
-      #
       # python distribution
       #
 
@@ -104,24 +84,41 @@ jobs:
       #
 
       # get last time's vendor bundle
-      # a hit here leads to skipping the rest of this job
+      # a hit here leads to skipping the rest of this phase
 
-      - name: "vendor-dist: cache"
-        id: cache-dist
+      - name: "vendor: dist cache"
+        id: cache-vendor-dist
         uses: actions/cache@v1
         with:
           path: vendor/dist/
           key: vendor-dist-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
 
+      - name: "vendor: source cache"
+        id: cache-vendor-source
+        uses: actions/cache@v1
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
+        with:
+          path: .cache/vendor-source
+          key: vendor-source-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+
+      - name: "vendor: source download"
+        if: "steps.cache-vendor-dist.outputs.cache-hit != 'true' && steps.cache-vendor-source.outputs.cache-hit != 'true'"
+        run: |
+          tar xvf .cache/vendor-source/vendor.tar || true
+          echo 'verbose = off' >> $HOME/.wgetrc
+          make -C vendor sources
+          mkdir -p .cache/vendor-source
+          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
+
       - name: "vendor: ccache"
         uses: actions/cache@v1
-        if: steps.cache-dist.outputs.cache-hit != 'true'
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: .ccache
           key: vendor-ccache-Linux
 
       - name: "vendor: build"
-        if: steps.cache-dist.outputs.cache-hit != 'true'
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         run: |
           tar xvf .cache/vendor-source/vendor.tar
           echo 'verbose = off' >> $HOME/.wgetrc
@@ -495,26 +492,6 @@ jobs:
       - uses: actions/checkout@v2
 
       #
-      # vendor source
-      #
-
-      - name: "vendor-source: cache"
-        id: cache-vendor
-        uses: actions/cache@v1
-        with:
-          path: .cache/vendor-source
-          key: vendor-source-Darwin-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
-
-      - name: "vendor-source: download"
-        if: steps.cache-vendor.outputs.cache-hit != 'true'
-        run: |
-          tar xvf .cache/vendor-source/vendor.tar || true
-          echo 'verbose = off' >> $HOME/.wgetrc
-          make -C vendor sources
-          mkdir -p .cache/vendor-source
-          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
-
-      #
       # python distribution
       #
 
@@ -563,24 +540,41 @@ jobs:
           cat vendor/Brewfile | xargs brew list --versions --formulae | sort | tee vendor/Brewfile.lock
 
       # get last time's vendor bundle
-      # a hit here leads to skipping the rest of this job
+      # a hit here leads to skipping the rest of this phase
 
-      - name: "vendor-dist: cache"
-        id: cache-dist
+      - name: "vendor: dist cache"
+        id: cache-vendor-dist
         uses: actions/cache@v1
         with:
           path: vendor/dist/
           key: vendor-dist-Darwin-${{ env.PY_VER }}-${{ hashfiles('vendor/Brewfile.lock') }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
 
+      - name: "vendor: source cache"
+        id: cache-vendor-source
+        uses: actions/cache@v1
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
+        with:
+          path: .cache/vendor-source
+          key: vendor-source-Darwin-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+
+      - name: "vendor: source download"
+        if: "steps.cache-vendor-dist.outputs.cache-hit != 'true' && steps.cache-vendor-source.outputs.cache-hit != 'true'"
+        run: |
+          tar xvf .cache/vendor-source/vendor.tar || true
+          echo 'verbose = off' >> $HOME/.wgetrc
+          make -C vendor sources
+          mkdir -p .cache/vendor-source
+          tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
+
       - name: "vendor: ccache"
         uses: actions/cache@v1
-        if: steps.cache-dist.outputs.cache-hit != 'true'
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: .ccache
           key: vendor-ccache-Darwin
 
       - name: "vendor: build"
-        if: steps.cache-dist.outputs.cache-hit != 'true'
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         run: |
           tar xvf .cache/vendor-source/vendor.tar
           echo 'verbose = off' >> $HOME/.wgetrc
