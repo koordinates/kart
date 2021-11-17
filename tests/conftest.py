@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import hashlib
 import io
@@ -38,20 +39,26 @@ L = logging.getLogger("kart.tests")
 
 
 def pytest_addoption(parser):
-    if "CI" in os.environ:
-        # pytest.ini sets --numprocesses=auto
-        # for parallelism in local dev.
-        # But in CI we disable xdist because it causes a crash in windows builds.
-        # (simply doing --numprocesses=0 is insufficient; the plugin needs to be
-        # disabled completely)
-        # However, there's no way to *remove* an option that's in pytest.ini's addopts.
+    # pytest.ini sets --numprocesses=auto for parallelism in local dev.
+    # But in CI we disable xdist because it causes a crash in windows builds.
+    # (simply doing --numprocesses=0 is insufficient; the plugin needs to be
+    # disabled completely via -p no:xdist)
+    # However, there's no way to *remove* an option that's in pytest.ini's addopts.
+    xdist_parser = next((g for g in parser._groups if g.name == "xdist"), None)
+    if xdist_parser and any(
+        o for o in xdist_parser.options if "--numprocesses" in o._long_opts
+    ):
+        # xdist is enabled
+        pass
+    else:
         # So here we just define the option so it parses, and then ignore it.
         parser.addoption(
             "--numprocesses",
             action="store",
             default=0,
-            help="<ignored>",
+            help=argparse.SUPPRESS,
         )
+
     parser.addoption(
         "--preserve-data",
         action="store_true",

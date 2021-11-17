@@ -869,7 +869,7 @@ jobs:
 
       - name: "app: unit tests"
         run: |
-          build/venv/bin/pytest -v
+          build/venv/bin/pytest -v -p no:xdist
 
 
   #
@@ -979,7 +979,7 @@ jobs:
 
       - name: "app: unit tests"
         run: |
-          build/venv/bin/pytest -v
+          build/venv/bin/pytest -v -p no:xdist
 
 
   #
@@ -1065,4 +1065,4 @@ jobs:
 
       - name: "app: unit tests"
         run: |
-          .\build\venv\Scripts\pytest.exe -v
+          .\build\venv\Scripts\pytest.exe -v -p no:xdist
