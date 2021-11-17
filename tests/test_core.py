@@ -71,7 +71,7 @@ def test_walk_tree_1(data_archive):
                     / "A"
                 )
                 assert dirs == []
-                assert blobs[0:5] == ['kQ0=', 'kQ4=', 'kQ8=', 'kQE=', 'kQI=']
+                assert blobs[0:5] == ["kQ0=", "kQ4=", "kQ8=", "kQE=", "kQI="]
 
         o = subprocess.check_output(["git", "ls-tree", "-r", "-d", "HEAD"])
         count = len(o.splitlines())
@@ -176,7 +176,7 @@ def test_walk_tree_3(data_archive):
                     / "A"
                 )
                 assert dirs == []
-                assert blobs[0:5] == ['kQ0=', 'kQ4=', 'kQ8=', 'kQE=', 'kQI=']
+                assert blobs[0:5] == ["kQ0=", "kQ4=", "kQ8=", "kQE=", "kQI="]
             elif i == 1:
                 assert path == "/".join(
                     [
@@ -201,7 +201,7 @@ def test_walk_tree_3(data_archive):
                     / "B"
                 )
                 assert dirs == []
-                assert blobs[0:5] == ['kU0=', 'kU4=', 'kU8=', 'kUA=', 'kUE=']
+                assert blobs[0:5] == ["kU0=", "kU4=", "kU8=", "kUA=", "kUE="]
             elif i == 34:
                 assert path == "/".join(
                     [
@@ -287,6 +287,19 @@ def test_proj_transformation_grid():
     import kart  # noqa
     from osgeo import osr
 
+    # note kart.__init__ sets PROJ_NETWORK=ON and PROJ_LIB to the proj data files
+    # during tests $HOME is changed to a temporary dir, so downloaded grids in the
+    # user proj data dir will be empty/missing
+    # TODO: except for windows where somehow it's buggy and we get a network error
+    print("PROJ/GDAL-related environment variables:")
+    for k, v in os.environ.items():
+        if re.match(r"^(GDAL|PROJ|CPL)_", k):
+            print(f"${k}={v}")
+
+    print("osr.GetPROJSearchPaths():", osr.GetPROJSearchPaths())
+    print("osr.GetPROJAuxDbPaths():", osr.GetPROJAuxDbPaths())
+    # print("osr.GetPROJEnableNetwork():", osr.GetPROJEnableNetwork())  # not in the Python bindings yet
+
     # Do a test conversion to check the transformation grids are available
     nzgd49 = osr.SpatialReference()
     nzgd49.ImportFromEPSG(4272)  # NZGD1949
@@ -296,10 +309,17 @@ def test_proj_transformation_grid():
     # Test point from: https://www.linz.govt.nz/data/geodetic-system/coordinate-conversion/geodetic-datum-conversions/datum-transformation-examples
     pt = ct.TransformPoint(-36.5, 175.0)
 
+    # Equivalent commands:
+    # $ echo 175.0 -36.5 | PROJ_DEBUG=2 CPL_DEBUG=ON gdaltransform -s_srs EPSG:4272 -t_srs EPSG:4167
+    # $ echo -36.5 175.0 0 | PROJ_DEBUG=2 cs2cs -v -f "%.8f" EPSG:4272 EPSG:4167
+
     if not is_windows:
-        # This is the accurate result expected when the transformation grid is available:
+        # This is the (desired) accurate result expected when the transformation grid is available:
         assert pt == pytest.approx((-36.49819023, 175.00019297, 0.0), abs=1e-8)
     else:
         # This is the less accurate result which uses the 7-parameter transform,
-        # which indicates that the transformation grid is not available (currently the case on Windows)
+        # which indicates that the transformation grid is not available
+        #
+        # Currently the Windows proj libraries are built without network
+        # support, so we can't auto-fetch grids
         assert pt == pytest.approx((-36.49819267, 175.00018527, 0.0), abs=1e-8)

@@ -55,9 +55,7 @@ else:
 if is_windows:
     # FIXME: cmake builds stick it in lib/
     if not os.path.exists(spatialite_path + ".dll"):
-        spatialite_path = os.path.join(
-            prefix, "lib", f"mod_spatialite"
-        )
+        spatialite_path = os.path.join(prefix, "lib", f"mod_spatialite")
 
     # sqlite doesn't appear to like backslashes
     spatialite_path = spatialite_path.replace("\\", "/")
@@ -102,6 +100,9 @@ else:
     os.environ["GDAL_DATA"] = os.path.join(data_prefix, "gdal")
     os.environ["PROJ_LIB"] = os.path.join(data_prefix, "proj")
 
+if not is_windows:
+    # TODO: something's wrong with proj networking in our windows library
+    os.environ.setdefault("PROJ_NETWORK", "ON")
 
 # GPKG optimisation:
 if "OGR_SQLITE_PRAGMA" not in os.environ:

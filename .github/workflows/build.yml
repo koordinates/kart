@@ -1046,12 +1046,11 @@ jobs:
       # vendor bundle
       #
 
-      - name: "vendor-dist: cache"
-        id: cache-dist
-        uses: actions/cache@v2
+      - name: "vendor-dist: download"
+        uses: actions/download-artifact@v2
         with:
+          name: vendor-Windows
           path: vendor/dist/
-          key: vendor-dist-${{ runner.os }}-${{ hashFiles('vendor/makefile.vc') }}
 
       #
       # App Build
