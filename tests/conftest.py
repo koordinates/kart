@@ -846,7 +846,9 @@ def postgis_db():
         KART_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k postgis --pdb -vvs -n 0
     """
     if "KART_POSTGRES_URL" not in os.environ:
-        raise pytest.skip("Requires PostGIS - read docstring at conftest.postgis_db")
+        raise pytest.skip(
+            "PostGIS tests require configuration - read docstring at conftest.postgis_db"
+        )
     engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
     with engine.connect() as conn:
         # test connection and postgis support
@@ -893,7 +895,7 @@ def sqlserver_db():
     """
     if "KART_SQLSERVER_URL" not in os.environ:
         raise pytest.skip(
-            "Requires SQL Server - read docstring at conftest.sqlserver_db"
+            "SQL Server tests require configuration - read docstring at conftest.sqlserver_db"
         )
     engine = Db_SqlServer.create_engine(os.environ["KART_SQLSERVER_URL"])
     with engine.connect() as conn:
@@ -943,7 +945,9 @@ def mysql_db():
         KART_MYSQL_URL='mysql://root:PassWord1@localhost:13306' pytest -k mysql --pdb -vvs
     """
     if "KART_MYSQL_URL" not in os.environ:
-        raise pytest.skip("Requires MySQL - read docstring at conftest.mysql_db")
+        raise pytest.skip(
+            "MySQL tests require configuration - read docstring at conftest.mysql_db"
+        )
     engine = Db_MySql.create_engine(os.environ["KART_MYSQL_URL"])
     with engine.connect() as conn:
         # test connection:

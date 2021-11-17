@@ -24,14 +24,16 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only windows]')
-        || !contains(github.event.head_commit.message, '[ci only macos]')
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
       PY_VER: "3.7"
+      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
     services:
       postgis:
         image: postgis/postgis
@@ -274,8 +276,7 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only linux]')
-        || !contains(github.event.head_commit.message, '[ci only macos]')
+        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
     steps:
       - name: "msvc setup"
@@ -386,6 +387,8 @@ jobs:
           nmake /D /NoLogo /F makefile.vc venv\.test.installed
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOFILTEREXTENSION: 1
         run: |
           nmake /D /NoLogo /F makefile.vc ci-test
 
@@ -483,8 +486,7 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only linux]')
-        || !contains(github.event.head_commit.message, '[ci only windows]')
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
       )
 
     env:
@@ -645,6 +647,8 @@ jobs:
           make py-license-check
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_NOMSSQLDRIVER: 1
         run: |
           make ci-test
 
@@ -758,14 +762,16 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only windows]')
-        || !contains(github.event.head_commit.message, '[ci only macos]')
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
       PY_VER: "3.7"
+      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
     services:
       postgis:
         image: postgis/postgis
@@ -868,6 +874,8 @@ jobs:
           sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOFILTEREXTENSION: 1
         run: |
           build/venv/bin/pytest -v -p no:xdist
 
@@ -890,8 +898,7 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only windows]')
-        || !contains(github.event.head_commit.message, '[ci only linux]')
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
       )
 
     env:
@@ -978,6 +985,9 @@ jobs:
       #
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOFILTEREXTENSION: 1
+          KART_EXPECT_NOMSSQLDRIVER: 1
         run: |
           build/venv/bin/pytest -v -p no:xdist
 
@@ -1003,8 +1013,7 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only linux]')
-        || !contains(github.event.head_commit.message, '[ci only macos]')
+        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
     steps:
       - name: "msvc setup"
@@ -1064,5 +1073,7 @@ jobs:
       #
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOFILTEREXTENSION: 1
         run: |
           .\build\venv\Scripts\pytest.exe -v -p no:xdist
