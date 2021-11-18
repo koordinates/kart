@@ -65,12 +65,12 @@ jobs:
       #
 
       - name: "python: pip cache"
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: .cache/pip
-          key: pip-Linux-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
           restore-keys: |
-            pip-Linux-
+            pip-${{ runner.os }}-
 
       - name: "python"
         uses: actions/setup-python@v1
@@ -86,18 +86,18 @@ jobs:
 
       - name: "vendor: dist cache"
         id: cache-vendor-dist
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
-          path: vendor/dist/
-          key: vendor-dist-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}-${{ hashFiles('vendor/build-manylinux.sh') }}
+          path: vendor/dist/vendor-Linux.tar.gz
+          key: vendor-dist1-${{ runner.os }}-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile', 'vendor/Makefile', 'vendor/build-manylinux.sh') }}
 
       - name: "vendor: source cache"
         id: cache-vendor-source
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: .cache/vendor-source
-          key: vendor-source-Linux-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+          key: vendor-source-${{ runner.os }}-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile', 'vendor/Makefile') }}
 
       - name: "vendor: source download"
         if: "steps.cache-vendor-dist.outputs.cache-hit != 'true' && steps.cache-vendor-source.outputs.cache-hit != 'true'"
@@ -109,11 +109,11 @@ jobs:
           tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
 
       - name: "vendor: ccache"
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-Linux
+          key: vendor-ccache-${{ runner.os }}
 
       - name: "vendor: build"
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
@@ -206,12 +206,6 @@ jobs:
           make -C platforms deb rpm
           ls -la platforms/linux/dist/*.rpm platforms/linux/dist/*.deb
 
-      # Pre-cache cleanup
-
-      - name: "package: cleanup"
-        run: |
-          sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-Linux.tar.gz" -exec rm -rf {} \;
-
       #
       # Uploading packages
       #
@@ -299,12 +293,12 @@ jobs:
           echo "PY3=$PY3" >> $Env:GITHUB_ENV
 
       - name: "python: pip cache"
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: .cache/pip
-          key: pip-windows-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('makefile.vc') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'makefile.vc') }}
           restore-keys: |
-            pip-windows-
+            pip-${{ runner.os }}-
 
       #
       # vendor build
@@ -315,10 +309,10 @@ jobs:
 
       - name: "vendor-dist: cache"
         id: cache-dist
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: vendor/dist/
-          key: vendor-dist-Windows-${{ hashFiles('vendor/makefile.vc') }}
+          key: vendor-dist2-${{ runner.os }}-${{ hashFiles('vendor/makefile.vc') }}
 
       - name: "vendor: build"
         if: steps.cache-dist.outputs.cache-hit != 'true'
@@ -497,10 +491,10 @@ jobs:
 
       - name: "python: cache"
         id: cache-pydist
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: .cache/pydist
-          key: pydist-Darwin-${{ env.PY3_PKG }}
+          key: pydist-${{ runner.os }}-${{ env.PY3_PKG }}
 
       - name: "python: download"
         if: steps.cache-pydist.outputs.cache-hit != 'true'
@@ -509,12 +503,12 @@ jobs:
           wget -nv ${{ env.PY3_URL }} -O .cache/pydist/${{ env.PY3_PKG }}
 
       - name: "python: pip cache"
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: .cache/pip
-          key: pip-macOS-${{ hashFiles('requirements.txt') }}-${{ hashFiles('requirements/*.txt') }}-${{ hashFiles('Makefile') }}
+          key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
           restore-keys: |
-            pip-macOS-
+            pip-${{ runner.os }}-
 
       #
       # vendor build
@@ -522,10 +516,10 @@ jobs:
 
       - name: "homebrew cache"
         id: cache-brew
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
           path: .cache/brew
-          key: brew
+          key: brew-${{ runner.os }}
 
       - name: "prerequisites"
         run: |
@@ -544,18 +538,18 @@ jobs:
 
       - name: "vendor: dist cache"
         id: cache-vendor-dist
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         with:
-          path: vendor/dist/
-          key: vendor-dist-Darwin-${{ env.PY_VER }}-${{ hashfiles('vendor/Brewfile.lock') }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+          path: vendor/dist/vendor-Darwin.tar.gz
+          key: vendor-dist1-${{ runner.os }}-${{ env.PY_VER }}-${{ hashfiles('vendor/Brewfile.lock', 'vendor/**/Makefile', 'vendor/Makefile') }}
 
       - name: "vendor: source cache"
         id: cache-vendor-source
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: .cache/vendor-source
-          key: vendor-source-Darwin-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile') }}-${{ hashFiles('vendor/Makefile') }}
+          key: vendor-source-${{ runner.os }}-${{ env.PY_VER }}-${{ hashFiles('vendor/**/Makefile', 'vendor/Makefile') }}
 
       - name: "vendor: source download"
         if: "steps.cache-vendor-dist.outputs.cache-hit != 'true' && steps.cache-vendor-source.outputs.cache-hit != 'true'"
@@ -567,11 +561,11 @@ jobs:
           tar cvf .cache/vendor-source/vendor.tar vendor/*/*.tar.* vendor/*/*.zip
 
       - name: "vendor: ccache"
-        uses: actions/cache@v1
+        uses: actions/cache@v2
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: vendor-ccache-Darwin
+          key: vendor-ccache-${{ runner.os }}
 
       - name: "vendor: build"
         if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
@@ -688,12 +682,6 @@ jobs:
           fi
           ls -la platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg
           echo "::set-output name=file::platforms/macos/dist/Kart-${{ steps.version.outputs.value }}.pkg"
-
-      # Pre-cache cleanup
-
-      - name: "package: cleanup"
-        run: |
-          sudo find vendor/dist -mindepth 1 -maxdepth 1 ! -name "vendor-Darwin.tar.gz" -exec rm -rf {} \;
 
       #
       # Uploading packages
