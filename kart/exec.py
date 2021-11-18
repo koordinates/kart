@@ -15,7 +15,9 @@ def execvpe(cmd, args, env):
             [cmd] + args[1:], capture_output=True, encoding="utf-8", env=env
         )
         sys.stdout.write(p.stdout)
+        sys.stdout.flush()
         sys.stderr.write(p.stderr)
+        sys.stderr.flush()
         sys.exit(p.returncode)
     elif is_windows:
         p = subprocess.run([cmd] + args[1:], env=env)

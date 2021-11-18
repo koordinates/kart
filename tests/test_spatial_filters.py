@@ -353,9 +353,8 @@ def test_spatially_filtered_fetch_promised(
 
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):
     # TODO - this currently tests that the spatial filter is correctly applied locally after
-    # the entire repo is cloned. Eventually it should test to see if the spatial filter
-    # is correctly applied remotely, during the clone step - but this is not yet supported
-    # (particularly for reference spatial filters.)
+    # the entire repo is cloned. Applying a reference spatial filter remotely to do a
+    # partial clone is not yet supported.
 
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
@@ -673,14 +672,21 @@ def test_pk_conflict_due_to_spatial_filter(
             assert H.row_count(sess, H.POINTS.LAYER) == 302
 
 
-@pytest.mark.skipif(is_windows, reason=SKIP_REASON)
-def test_git_spatial_filter_extension(data_archive_readonly):
-    with data_archive_readonly("points.tgz") as repo_path:
-        repo = KartRepo(repo_path)
-        repo.invoke_git(
-            "rev-list",
-            "HEAD",
-            "--objects",
-            "--max-count=1",
-            "--filter=extension:spatial=1,2,3,4",
+def test_git_spatial_filter_extension(data_archive_readonly, cli_runner):
+    with data_archive_readonly("points.tgz"):
+        r = cli_runner.invoke(
+            [
+                "git",
+                "rev-list",
+                "HEAD",
+                "--objects",
+                "--max-count=1",
+                "--filter=extension:spatial=1,2,3,4",
+            ]
         )
+        if is_windows:
+            # Windows build recognises filter extensions, but it doesn't have any installed.
+            assert r.exit_code == 128
+            assert "fatal: No filter extension found with name spatial" in r.stderr
+        else:
+            assert r.exit_code == 0, r.stderr
