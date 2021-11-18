@@ -267,3 +267,55 @@ def test_log_arg_handling(data_archive, cli_runner, output_format):
             )
             assert r.exit_code == 0, r.stderr
             assert num_commits(r) == 2
+
+
+@pytest.mark.parametrize(
+    "args,expected_commits",
+    [
+        pytest.param(["-n", "0"], [], id="-n 0"),
+        pytest.param(["-n", "1"], [H.POINTS.HEAD_SHA], id="-n 1"),
+        pytest.param(["-n1"], [H.POINTS.HEAD_SHA], id="-n1"),
+        pytest.param(["-n", "99"], [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA], id="-n 99"),
+        pytest.param(["--skip", "1"], [H.POINTS.HEAD1_SHA], id="skip-1"),
+        pytest.param(["--", "--skip", "1"], [], id="skip-interpreted-as-path"),
+        pytest.param(
+            ["--skip", "1", "--"],
+            [H.POINTS.HEAD1_SHA],
+            id="skip-1-followed-by-doubledash",
+        ),
+        pytest.param(["--since", "a-broken-date"], [], id="since-broken"),
+        pytest.param(["--since", "9999-01-01"], [], id="since-future"),
+        pytest.param(
+            ["--since", "2000-01-01"],
+            [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA],
+            id="since-ancient-past",
+        ),
+        pytest.param(
+            ["--since", "2019-06-15"], [H.POINTS.HEAD_SHA], id="since-halfway"
+        ),
+        pytest.param(
+            ["--until", "2019-06-15"], [H.POINTS.HEAD1_SHA], id="until-halfway"
+        ),
+        pytest.param(
+            ["--author", "Robert"],
+            [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA],
+            id="author-match",
+        ),
+        pytest.param(["--author", "Telemachus"], [], id="author-no-match"),
+        pytest.param(
+            ["--committer", "Robert"],
+            [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA],
+            id="committer-match",
+        ),
+        pytest.param(["--committer", "Telemachus"], [], id="committer-no-match"),
+        pytest.param(["--grep", "Coromandel.*coast"], [H.POINTS.HEAD_SHA], id="grep"),
+    ],
+)
+def test_extra_git_log_options(data_archive, cli_runner, args, expected_commits):
+    def get_log_hashes(r):
+        return re.findall(r"(?m)^commit ([0-9a-f]{40})$", r.stdout)
+
+    with data_archive("points"):
+        r = cli_runner.invoke(["log", *args])
+        assert r.exit_code == 0, r.stderr
+        assert get_log_hashes(r) == expected_commits
