@@ -16,6 +16,10 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
 
 
+class RemovalInKart012Warning(UserWarning):
+    pass
+
+
 class PreserveDoubleDash(click.Command):
     """
     Preserves the double-dash ("--") arg from user input.
@@ -35,7 +39,7 @@ class PreserveDoubleDash(click.Command):
                     # which ideally we'd like them to stop doing.
                     warnings.warn(
                         "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
-                        UserWarning,
+                        RemovalInKart012Warning,
                     )
                 else:
                     # Insert a second `--` arg.
@@ -47,7 +51,18 @@ class PreserveDoubleDash(click.Command):
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
 
 
-def parse_extra_args(repo, args):
+def parse_extra_args(
+    repo,
+    args,
+    *,
+    max_count,
+    skip,
+    since,
+    until,
+    author,
+    committer,
+    grep,
+):
     """
     Interprets positional `kart log` args, including "--", commits/refs, and paths.
     Returns a two-tuple: (other_args, paths)
@@ -60,7 +75,7 @@ def parse_extra_args(repo, args):
     if "--" in args:
         dash_index = args.index("--")
         paths = args[dash_index + 1 :]
-        other_args = args[:dash_index]
+        other_args = list(args[:dash_index])
     else:
         other_args = []
         paths = []
@@ -73,6 +88,12 @@ def parse_extra_args(repo, args):
                 # So we can assume it's a CLI flag, presumably for git rather than kart.
                 # It *could* be a path, but in that case the user should add a `--` before this option
                 # to disambiguate, and they haven't done so here.
+                issue_link = "https://github.com/koordinates/kart/issues/508"
+                warnings.warn(
+                    f"{arg!r} is unknown to Kart and will be passed directly to git. "
+                    f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
+                    RemovalInKart012Warning,
+                )
                 other_args.append(arg)
                 continue
 
@@ -93,7 +114,23 @@ def parse_extra_args(repo, args):
                 break
             else:
                 other_args.append(arg)
-    return other_args, paths
+
+    if max_count is not None:
+        other_args.append(f"--max-count={max_count}")
+    if skip is not None:
+        other_args.append(f"--skip={skip}")
+    if since is not None:
+        other_args.append(f"--since={since}")
+    if until is not None:
+        other_args.append(f"--until={until}")
+    # These ones can be specified more than once
+    if author:
+        other_args.extend(f"--author={a}" for a in author)
+    if committer:
+        other_args.extend(f"--committer={c}" for c in committer)
+    if grep:
+        other_args.extend(f"--grep={g}" for g in grep)
+    return other_args, list(paths)
 
 
 @click.command(
@@ -132,12 +169,72 @@ def parse_extra_args(repo, args):
         "Otherwise, the feature count will be approximated with varying levels of accuracy."
     ),
 )
+# Some standard git options
+@click.option(
+    "-n",
+    "--max-count",
+    type=int,
+    nargs=1,
+    help="Limit the number of commits to output.",
+)
+@click.option(
+    "--skip",
+    type=int,
+    nargs=1,
+    metavar="INTEGER",
+    help="Skip INTEGER commits before starting to show the commit output.",
+)
+@click.option(
+    "--since",
+    "--after",
+    nargs=1,
+    metavar="DATE",
+    help="Show commits more recent than a specific date.",
+)
+@click.option(
+    "--until",
+    "--before",
+    nargs=1,
+    metavar="DATE",
+    help="Show commits older than a specific date.",
+)
+@click.option(
+    "--author",
+    nargs=1,
+    metavar="PATTERN",
+    multiple=True,
+    help="Limit the commits output to ones with author matching the specified pattern (regular expression)",
+)
+@click.option(
+    "--committer",
+    nargs=1,
+    metavar="PATTERN",
+    multiple=True,
+    help="Limit the commits output to ones with committer matching the specified pattern (regular expression)",
+)
+@click.option(
+    "--grep",
+    nargs=1,
+    metavar="PATTERN",
+    multiple=True,
+    help="Limit the commits output to ones with log message matching the specified pattern (regular expression)",
+)
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
-def log(ctx, output_format, json_style, do_dataset_changes, with_feature_count, args):
-    """ Show commit logs """
+def log(
+    ctx,
+    output_format,
+    json_style,
+    do_dataset_changes,
+    with_feature_count,
+    args,
+    **kwargs,
+):
+    """
+    Show commit logs
+    """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 
-    other_args, paths = parse_extra_args(repo, args)
+    other_args, paths = parse_extra_args(repo, args, **kwargs)
 
     # TODO: should we check paths exist here? git doesn't!
     if output_format == "text":
