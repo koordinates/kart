@@ -47,7 +47,18 @@ class PreserveDoubleDash(click.Command):
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
 
 
-def parse_extra_args(repo, args):
+def parse_extra_args(
+    repo,
+    args,
+    *,
+    max_count,
+    skip,
+    since,
+    until,
+    author,
+    committer,
+    grep,
+):
     """
     Interprets positional `kart log` args, including "--", commits/refs, and paths.
     Returns a two-tuple: (other_args, paths)
@@ -93,6 +104,22 @@ def parse_extra_args(repo, args):
                 break
             else:
                 other_args.append(arg)
+
+    if max_count is not None:
+        other_args.append(f"--max-count={max_count}")
+    if skip is not None:
+        other_args.append(f"--skip={skip}")
+    if since is not None:
+        other_args.append(f"--since={since}")
+    if until is not None:
+        other_args.append(f"--until={until}")
+    # These ones can be specified more than once
+    if author:
+        other_args.extend(f"--author={a}" for a in author)
+    if committer:
+        other_args.extend(f"--committer={c}" for c in committer)
+    if grep:
+        other_args.extend(f"--grep={g}" for g in grep)
     return list(other_args), list(paths)
 
 
@@ -189,36 +216,15 @@ def log(
     json_style,
     do_dataset_changes,
     with_feature_count,
-    max_count,
-    skip,
-    since,
-    until,
-    author,
-    committer,
-    grep,
     args,
+    **kwargs,
 ):
     """
     Show commit logs
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 
-    other_args, paths = parse_extra_args(repo, args)
-    if max_count is not None:
-        other_args.append(f"--max-count={max_count}")
-    if skip is not None:
-        other_args.append(f"--skip={skip}")
-    if since is not None:
-        other_args.append(f"--since={since}")
-    if until is not None:
-        other_args.append(f"--until={until}")
-    # These ones can be specified more than once
-    if author:
-        other_args.extend(f"--author={a}" for a in author)
-    if committer:
-        other_args.extend(f"--committer={c}" for c in committer)
-    if grep:
-        other_args.extend(f"--grep={g}" for g in grep)
+    other_args, paths = parse_extra_args(repo, args, **kwargs)
 
     # TODO: should we check paths exist here? git doesn't!
     if output_format == "text":
