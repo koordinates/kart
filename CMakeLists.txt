@@ -69,7 +69,7 @@ if(VENDOR_ARCHIVE)
   endif()
   # CI artifacts are zips: extract it to get the inner vendor archive
   cmake_path(GET VENDOR_ARCHIVE EXTENSION LAST_ONLY vendor_ext)
-  if(vendor_ext STREQUAL ".zip")
+  if(vendor_ext STREQUAL ".zip" AND NOT (WIN32 AND DEFINED ENV{CI}))
     message("Extracting CI artifact ${VENDOR_ARCHIVE}...")
     # cmake-lint: disable=E1126
     file(

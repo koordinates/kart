@@ -20,6 +20,7 @@ execute_process(
   OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # extract the archive
+message(STATUS "Extracting vendor archive...")
 file(ARCHIVE_EXTRACT INPUT ${VENDOR_ARCHIVE} DESTINATION vendor-tmp)
 
 # install wheels
@@ -32,7 +33,13 @@ execute_process(COMMAND ${PY} -m pip install --isolated --disable-pip-version-ch
 
 # install other env files (libraries, binaries, data)
 message(STATUS "Installing environment files...")
-file(COPY vendor-tmp/env/ DESTINATION venv)
+# FIXME: why is this different between platforms?
+if (WIN32)
+  file(COPY vendor-tmp/env/lib/ DESTINATION venv)
+  file(COPY vendor-tmp/git/ DESTINATION venv/git/)
+else()
+  file(COPY vendor-tmp/env/ DESTINATION venv)
+endif()
 
 # install a _kart_env.py configuration file
 if(EXISTS vendor-tmp/_kart_env.py)

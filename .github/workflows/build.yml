@@ -371,12 +371,13 @@ jobs:
 
       - name: "app: install python dependencies"
         run: |
-          nmake /D /NoLogo /F makefile.vc venv\.requirements.installed
+          & nmake /D /NoLogo /F makefile.vc venv\.requirements.installed
 
       - name: "app: build"
         run: |
-          nmake /D /NoLogo /F makefile.vc
-          venv\Scripts\kart.exe --version
+          & nmake /D /NoLogo /F makefile.vc
+          if (-not $?) {throw "Build failed"}
+          & .\venv\Scripts\kart.exe --version
 
       #
       # App tests & checks
@@ -384,13 +385,13 @@ jobs:
 
       - name: "app: install test dependencies"
         run: |
-          nmake /D /NoLogo /F makefile.vc venv\.test.installed
+          & nmake /D /NoLogo /F makefile.vc venv\.test.installed
 
       - name: "app: unit tests"
         env:
           KART_EXPECT_GITNOFILTEREXTENSION: 1
         run: |
-          nmake /D /NoLogo /F makefile.vc ci-test
+          & nmake /D /NoLogo /F makefile.vc ci-test
 
       - name: "app: save test coverage"
         uses: actions/upload-artifact@v2
@@ -414,12 +415,13 @@ jobs:
         run: |
           $ErrorView = 'NormalView'
           If ( ${{ steps.version.outputs.is_release }} -eq 1 ) {
-            dotnet tool install --global AzureSignTool --version 2.0.17
-
+            & dotnet tool install --global AzureSignTool --version 2.0.17
+            if (-not $?) {throw "Code-signing failed"}
             $Env:SIGN_AZURE_CERTIFICATE=$Env:WIN_SIGN_AZURE_CERTIFICATE
           }
 
-          nmake /D /NoLogo /F makefile.vc package
+          & nmake /D /NoLogo /F makefile.vc package
+          if (-not $?) {throw "Packaging failed"}
           echo "::set-output name=msi::platforms\windows\dist\Kart-${{ steps.version.outputs.value }}.msi"
 
       #
@@ -452,8 +454,11 @@ jobs:
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & kart --version
+          if (-not $?) {throw "Smoke test Failed"}
           & tests\scripts\distcheck.ps1
+          if (-not $?) {throw "Distribution test Failed"}
           & tests\scripts\e2e-1.ps1
+          if (-not $?) {throw "E2E test Failed"}
 
       #
       # Github release
@@ -1000,7 +1005,7 @@ jobs:
     runs-on: windows-2016
     continue-on-error: true
     env:
-      PY_VER: "3.7"  # needs to match the Windows job since we use it's vendor archive.
+      PY_VER: "3.7"  # needs to match the Windows job since we use its vendor archive.
 
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
@@ -1016,12 +1021,6 @@ jobs:
         || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
     steps:
-      - name: "msvc setup"
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-          toolset: 14.0
-
       - uses: actions/checkout@v2
 
       #
@@ -1059,13 +1058,18 @@ jobs:
       - name: "configure"
         run: |
           $ErrorView = 'NormalView'
-          cmake --log-level=VERBOSE -B build -S . -G "Visual Studio 15 2017" -A x64 -DVENDOR_ARCHIVE=${{ github.workspace }}\vendor\dist\vendor-Windows.zip -DPython3_ROOT=${{ env.pythonLocation }}
+          # Python3.exe gets found by FindPython3, but it's a symlink
+          # and this breaks virtualenv creation
+          # https://github.com/actions/virtual-environments/issues/2690
+          & cmake --log-level=VERBOSE -B build -S . -G "Visual Studio 15 2017" -A x64 -DVENDOR_ARCHIVE=${{ github.workspace }}\vendor\dist\vendor-Windows.zip -DPython3_ROOT=${{ env.pythonLocation }} -DPython3_EXECUTABLE=${{ env.pythonLocation }}\Python.exe
 
       - name: "build"
         run: |
           $ErrorView = 'NormalView'
-          cmake --build build --config Release --verbose
+          & cmake --build build --config Release
+          if (-not $?) {throw "Build failed"}
           & .\build\kart --version
+          if (-not $?) {throw "Smoke test failed"}
 
       #
       # App tests & checks
@@ -1075,4 +1079,4 @@ jobs:
         env:
           KART_EXPECT_GITNOFILTEREXTENSION: 1
         run: |
-          .\build\venv\Scripts\pytest.exe -v -p no:xdist
+          & .\build\venv\Scripts\pytest.exe -v -p no:xdist

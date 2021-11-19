@@ -53,34 +53,27 @@ else:
         prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
     )
 if is_windows:
-    # FIXME: cmake builds stick it in lib/
-    if not os.path.exists(spatialite_path + ".dll"):
-        spatialite_path = os.path.join(prefix, "lib", f"mod_spatialite")
-
     # sqlite doesn't appear to like backslashes
     spatialite_path = spatialite_path.replace("\\", "/")
 
-os.environ["PATH"] = (
-    prefix + os.pathsep + os.path.join(prefix, "bin") + os.pathsep + os.environ["PATH"]
-)
+# $PATH is used for DLL lookups on Windows
+path_extras = [prefix]
 
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 os.environ["XDG_CONFIG_HOME"] = prefix
 if _kart_env:
-    os.environ["PATH"] = (
-        os.path.split(_kart_env.GIT_EXECUTABLE)[0] + os.pathsep + os.environ["PATH"]
-    )
+    path_extras.append(os.path.split(_kart_env.GIT_EXECUTABLE)[0])
 elif is_windows:
-    os.environ["PATH"] = (
-        os.path.join(prefix, "git", "cmd") + os.pathsep + os.environ["PATH"]
-    )
+    path_extras.append(os.path.join(prefix, "git", "cmd"))
 else:
-    os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
-    os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
-        prefix, "share", "git-core", "templates"
-    )
+    path_extras.append(os.path.join(prefix, "bin"))
+
+os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
+os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
+    prefix, "share", "git-core", "templates"
+)
 # See locked_git_index in.repo.py:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
@@ -107,6 +100,9 @@ if not is_windows:
 # GPKG optimisation:
 if "OGR_SQLITE_PRAGMA" not in os.environ:
     os.environ["OGR_SQLITE_PRAGMA"] = "page_size=65536"
+
+# Write our various additions to $PATH
+os.environ['PATH'] = os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr
