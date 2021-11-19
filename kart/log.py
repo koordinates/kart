@@ -16,6 +16,10 @@ from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
 
 
+class RemovalInKart012Warning(UserWarning):
+    pass
+
+
 class PreserveDoubleDash(click.Command):
     """
     Preserves the double-dash ("--") arg from user input.
@@ -35,7 +39,7 @@ class PreserveDoubleDash(click.Command):
                     # which ideally we'd like them to stop doing.
                     warnings.warn(
                         "Using '--' twice is no longer needed, and will behave differently or fail in Kart 0.12",
-                        UserWarning,
+                        RemovalInKart012Warning,
                     )
                 else:
                     # Insert a second `--` arg.
@@ -71,7 +75,7 @@ def parse_extra_args(
     if "--" in args:
         dash_index = args.index("--")
         paths = args[dash_index + 1 :]
-        other_args = args[:dash_index]
+        other_args = list(args[:dash_index])
     else:
         other_args = []
         paths = []
@@ -84,6 +88,12 @@ def parse_extra_args(
                 # So we can assume it's a CLI flag, presumably for git rather than kart.
                 # It *could* be a path, but in that case the user should add a `--` before this option
                 # to disambiguate, and they haven't done so here.
+                issue_link = "https://github.com/koordinates/kart/issues/508"
+                warnings.warn(
+                    f"{arg!r} is unknown to Kart and will be passed directly to git. "
+                    f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
+                    RemovalInKart012Warning,
+                )
                 other_args.append(arg)
                 continue
 
@@ -120,7 +130,7 @@ def parse_extra_args(
         other_args.extend(f"--committer={c}" for c in committer)
     if grep:
         other_args.extend(f"--grep={g}" for g in grep)
-    return list(other_args), list(paths)
+    return other_args, list(paths)
 
 
 @click.command(
