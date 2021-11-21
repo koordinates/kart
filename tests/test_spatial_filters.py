@@ -331,8 +331,7 @@ def test_spatially_filtered_fetch_promised(
 
             r = cli_runner.invoke(["-C", repo2_path, "status"])
             assert r.exit_code == 0, r.stderr
-            # TODO - label pk-conflicts as being different to updates in kart status
-            assert "6 updates" in r.stdout
+            assert "6 primary key conflicts" in r.stdout
             # All of the 6 featues that are conflicts / were "updated" in the WC have been loaded:
             assert fetch_count == 6
             assert local_features(ds) == 58
@@ -633,18 +632,29 @@ def test_pk_conflict_due_to_spatial_filter(
             insert(sess, commit=False, with_pk=98001)
             assert H.row_count(sess, H.POINTS.LAYER) == 304
 
+        r = cli_runner.invoke(["status", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        change_status = json.loads(r.stdout)["kart.status/v1"]["workingCopy"]["changes"]
+        feature_changes = change_status["nz_pa_points_topo_150k"]["feature"]
+        assert feature_changes == {"inserts": 1, "primaryKeyConflicts": 1}
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "1 inserts" in r.stdout
+        assert "1 primary key conflicts" in r.stdout
+
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0
         assert "Warning: " in r.stderr
         assert (
-            "In dataset nz_pa_points_topo_150k the conflicting PK values are: 1"
+            "In dataset nz_pa_points_topo_150k the conflicting primary key values are: 1"
             in r.stderr
         )
 
         r = cli_runner.invoke(["commit", "-m", "test"])
         assert r.exit_code == SPATIAL_FILTER_PK_CONFLICT
         assert (
-            "In dataset nz_pa_points_topo_150k the conflicting PK values are: 1"
+            "In dataset nz_pa_points_topo_150k the conflicting primary key values are: 1"
             in r.stderr
         )
         assert "Aborting commit due to conflicting primary key values" in r.stderr

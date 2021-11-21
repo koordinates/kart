@@ -82,14 +82,40 @@ def get_working_copy_status_json(repo):
 
     wc_diff = working_copy.diff_to_tree()
     if wc_diff:
-        output["changes"] = get_diff_status_json(wc_diff)
+        output["changes"] = get_diff_status_including_pk_conflicts_json(wc_diff, repo)
 
     return output
 
 
-def get_diff_status_json(diff):
-    """Given a diff.Diff object, returns a JSON object describing the diff status."""
-    return diff.type_counts()
+def get_diff_status_json(wc_diff):
+    """Returns a structured count of all the inserts, updates, and deletes for meta items / features in each dataset."""
+    return wc_diff.type_counts()
+
+
+def get_diff_status_including_pk_conflicts_json(wc_diff, repo):
+    """
+    Like get_diff_status_json, but update deltas where the old value is outside the repo's spatial filter are *also*
+    considered to be primaryKeyConflicts (that is, the user is probably accidentally reusing existing primary keys
+    of the features outside the filter that they can't see.)
+    """
+    result = get_diff_status_json(wc_diff)
+
+    from kart.base_diff_writer import BaseDiffWriter
+
+    diff_writer = BaseDiffWriter(repo)
+    for ds_path, ds_diff in wc_diff.items():
+        old_filter, new_filter = diff_writer.get_spatial_filters(ds_path, ds_diff)
+        conflicts = 0
+        for d in ds_diff.get("feature", {}).values():
+            if d.type == "update" and not old_filter.matches_delta_value(d.old):
+                conflicts += 1
+        if conflicts:
+            result[ds_path]["feature"]["primaryKeyConflicts"] = conflicts
+            result[ds_path]["feature"]["updates"] -= conflicts
+            if not result[ds_path]["feature"]["updates"]:
+                del result[ds_path]["feature"]["updates"]
+
+    return result
 
 
 def status_to_text(jdict):
@@ -220,6 +246,13 @@ def working_copy_status_to_text(jdict):
 
 
 def diff_status_to_text(jdict):
+    change_types = (
+        ("inserts", "inserts"),
+        ("updates", "updates"),
+        ("deletes", "deletes"),
+        ("primaryKeyConflicts", "primary key conflicts"),
+    )
+
     message = []
     for dataset_path, dataset_changes in jdict.items():
         message.append(f"  {dataset_path}:")
@@ -228,10 +261,10 @@ def diff_status_to_text(jdict):
                 continue
             message.append(f"    {dataset_part}:")
             dataset_part_changes = dataset_changes[dataset_part]
-            for change_type in ("inserts", "updates", "deletes"):
-                if change_type not in dataset_part_changes:
+            for json_type, change_type in change_types:
+                if json_type not in dataset_part_changes:
                     continue
-                change_type_count = dataset_part_changes[change_type]
+                change_type_count = dataset_part_changes[json_type]
                 message.append(f"      {change_type_count} {change_type}")
 
     return "\n".join(message)

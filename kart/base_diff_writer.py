@@ -199,18 +199,28 @@ class BaseDiffWriter:
         pk_conflicts = self.spatial_filter_pk_conflicts
         if pk_conflicts and any(pk_conflicts.values()):
             click.secho(
-                "Warning: There are new features inserted in the working copy that have primary key values that "
-                "conflict with existing features that are outside the current spatial filter: ",
+                "Warning: Some primary keys of newly-inserted features in the working copy conflict with other features "
+                "outside the spatial filter - if committed, they would overwrite those features.",
                 bold=True,
                 err=True,
             )
             for ds_path, pk_list in pk_conflicts.items():
                 if pk_list:
-                    pk_list = ", ".join(str(pk) for pk in pk_list)
+                    if len(pk_list) <= 100:
+                        pk_list = ", ".join(str(pk) for pk in pk_list)
+                    else:
+                        pk_list = (
+                            ", ".join(str(pk) for pk in pk_list[0:50])
+                            + f", (... {len(pk_list) - 50} more)"
+                        )
                     click.echo(
-                        f"  In dataset {ds_path} the conflicting PK values are: {pk_list}",
+                        f"  In dataset {ds_path} the conflicting primary key values are: {pk_list}",
                         err=True,
                     )
+            click.echo(
+                "  To continue, change the primary key values of those features.",
+                err=True,
+            )
 
     def write_diff(self):
         """Default implementation for writing a diff. Subclasses can override."""
