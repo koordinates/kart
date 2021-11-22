@@ -8,9 +8,10 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ### Bugs fixed
 
-* `log`: Fixed two regressions in 0.10.6 involving argument parsing:
+* `log`: Fixed some regressions in 0.10.6 involving argument parsing:
   - range arguments (`x..y` or `x...y`) were handled incorrectly. [#504](https://github.com/koordinates/kart/pull/504)
   - `-n INTEGER` caused an error [#507](https://github.com/koordinates/kart/pull/507)
+  - `kart log @` was empty (`@` is supposed to be handled as a synonym for `HEAD`) [#510](https://github.com/koordinates/kart/pull/510)
 * Auto-incrementing PK sequences now work in PostGIS working copies for table names containing the `.` character. [#468](https://github.com/koordinates/kart/pull/468)
 
 ## 0.10.6
