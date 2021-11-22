@@ -60,19 +60,20 @@ class FetchPromisedBlobsProcess:
             "--filter=blob:none",
             "--stdin",
         ]
+        # We have to use binary mode since git always expects '\n' line endings, even on windows.
+        # This means we can't use line buffering, except that we know each line is 41 bytes long.
         self.proc = subprocess.Popen(
             self.cmd,
             cwd=self.repo.path,
             stdin=subprocess.PIPE,
             env=tool_environment(),
-            text=True,
-            bufsize=1,  # Line buffering
+            bufsize=41,  # Works as line buffering
         )
 
     def fetch(self, promised_blob_id):
         try:
-            self.proc.stdin.write(f"{promised_blob_id}\n")
-        except BrokenPipeError:
+            self.proc.stdin.write(f"{promised_blob_id}\n".encode())
+        except (BrokenPipeError, OSError):
             # if git-fetch dies early, we get an EPIPE here
             # we'll deal with it below
             pass
@@ -80,7 +81,7 @@ class FetchPromisedBlobsProcess:
     def finish(self):
         try:
             self.proc.stdin.close()
-        except BrokenPipeError:
+        except (BrokenPipeError, OSError):
             pass
         self.proc.wait()
         return_code = self.proc.returncode

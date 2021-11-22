@@ -288,8 +288,6 @@ def test_spatially_filtered_partial_clone(data_archive, cli_runner):
             assert _get_key_error(ds, 1443053).subcode == LibgitSubcode.EOBJECTPROMISED
 
 
-# Fetch also doesn't on spatial filtered repos without custom git.
-@pytest.mark.skipif(is_windows, reason=SKIP_REASON)
 def test_spatially_filtered_fetch_promised(
     data_archive, cli_runner, insert, monkeypatch
 ):
@@ -311,7 +309,6 @@ def test_spatially_filtered_fetch_promised(
         with data_archive("polygons-spatial-filtered") as repo2_path:
             repo2 = KartRepo(repo2_path)
             repo2.config["remote.origin.url"] = repo1_url
-
             ds = repo2.datasets()[H.POLYGONS.LAYER]
 
             local_feature_count = local_features(ds)
