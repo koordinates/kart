@@ -309,6 +309,9 @@ def test_log_arg_handling(data_archive, cli_runner, output_format):
         ),
         pytest.param(["--committer", "Telemachus"], [], id="committer-no-match"),
         pytest.param(["--grep", "Coromandel.*coast"], [H.POINTS.HEAD_SHA], id="grep"),
+        pytest.param(["HEAD"], [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA], id="HEAD"),
+        pytest.param(["@"], [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA], id="@"),
+        pytest.param(["@{0}"], [H.POINTS.HEAD_SHA, H.POINTS.HEAD1_SHA], id="@{0}"),
     ],
 )
 def test_extra_git_log_options(data_archive, cli_runner, args, expected_commits):

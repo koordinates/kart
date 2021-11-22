@@ -715,6 +715,18 @@ class KartRepo(pygit2.Repository):
             return
         path.unlink()
 
+    def revparse_single(self, revision):
+        # FIXME: Overridden to work around https://github.com/libgit2/libgit2/issues/6123
+        if revision == "@":
+            revision = "HEAD"
+        return super().revparse_single(revision)
+
+    def revparse_ext(self, revision):
+        # FIXME: Overridden to work around https://github.com/libgit2/libgit2/issues/6123
+        if revision == "@":
+            revision = "HEAD"
+        return super().revparse_ext(revision)
+
     KART_COMMON_README = [
         "",
         "kart status",
