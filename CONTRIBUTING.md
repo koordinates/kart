@@ -6,24 +6,31 @@ We welcome all contributions, bug reports, and suggestions!
 * Read and submit bug reports or feature requests at [Issues](https://github.com/koordinates/kart/issues)
 
 We're moving to CMake as a better system for building Kart and its
-dependencies. Currently CMake is still a work in progress, only supports macOS
-and Linux, and doesn't yet create packages suitable for distribution.
+dependencies. Currently CMake is still a work in progress and doesn't yet build
+all the vendor dependencies or create packages suitable for distribution.
 
-## Installing the development version with CMake
+## Building the development version with CMake (macOS & Linux)
 
-Requirements:
+Requirements for macOS & Linux:
 * CMake >= v3.21
 * GDAL >= v3.3.2
 * Git >= v2.31
 * LibGit2 >= v1.1.0
 * OpenSSL >= v1.1
 * PostgreSQL client library (libpq)
-* Python 3.7
+* Python >= 3.7
 * Spatialindex >= v1.9.3
 * SpatiaLite >= v5.0.1
 * SQLite3 >= v3.31.1
 * SWIG
 * unixODBC >= v2.3.9 (macOS/Linux only)
+
+Clone Kart from Github:
+
+```console
+$ git clone https://github.com/koordinates/kart.git
+$ cd kart
+```
 
 ### Installing dependencies on macOS
 
@@ -84,7 +91,7 @@ $ ./kart --version
 
 If you're having issues with the above, you can download a [recent master-branch
 vendor CI artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess) for your platform (`vendor-Darwin` for macOS,
-or `vendor-Linux` for Linux). Then:
+or `vendor-Linux` for Linux. Then:
 
 ```console
 $ cmake -B build -S . -DVENDOR_ARCHIVE=/path/to/downloaded/vendor-Darwin.zip
@@ -93,36 +100,56 @@ $ make
 $ ./kart --version
 ```
 
-Note you'll need to have (and configure) the same version of Python that CI
-currently uses (3.7).
+Note you'll need to have the same version of Python that Kart CI currently uses
+(Python 3.7). Get CMake to pick up the right Python using `-DPython3_ROOT=...`.
 
 ### Running the tests
 
 ```console
-$ ctest -V  # run the tests
+$ cd build
+$ ctest -V
 ```
 
-If you don't use the CI vendor dependencies archive, currently a few test failures are expected.
-This will be cleaned up soon.
+## Building the development version with CMake (Windows)
 
-* macOS
+Currently Windows CMake builds are restricted to using vendor artifacts from
+Kart's CI. Download a [recent master-branch vendor artifact](https://github.com/koordinates/kart/actions/workflows/build.yml?query=branch%3Amaster+is%3Asuccess)
+for Windows (`vendor-Windows`).
 
-    ```
-    tests/test_core.py::test_proj_transformation_grid
-    tests/test_spatial_tree.py::test_index_points_all
-    tests/test_spatial_tree.py::test_index_points_commit_by_commit
-    tests/test_spatial_tree.py::test_index_points_idempotent
-    tests/test_spatial_tree.py::test_index_polygons_all
-    tests/test_spatial_filters.py::test_git_spatial_filter_extension
-    ```
+Requirements:
+* Windows 64-bit 8.1 / Windows Server 64-bit 2016; or newer
+* MS Visual Studio 2017 or newer, with C++ tools installed
+* Python 3.7
+* CMake >= v3.21
+* Git for Windows
 
-* Linux
+Clone Kart from Github:
 
-    ```
-    tests/test_annotations.py::test_diff_feature_count_with_readonly_repo_dir
-    tests/test_annotations.py::test_diff_feature_count_with_readonly_annotations
-    tests/test_spatial_filters.py::test_git_spatial_filter_extension
-    ```
+```console
+> git clone https://github.com/koordinates/kart.git
+> cd kart
+```
+
+Configure and build Kart:
+
+```console
+> cmake --log-level=VERBOSE -B build -S . -A x64 -DVENDOR_ARCHIVE=X:\Path\To\vendor-Windows.zip -DPython3_ROOT=X:\Path\To\Python37
+> cmake --build build --config Release
+> .\build\kart --version
+```
+
+The commands above should be run from within a Visual Studio 64-bit command
+prompt; an SDK prompt will not work. CMake is generating a Visual Studio
+solution file and several project files, and by default it chooses the latest
+version of Visual Studio that’s installed on your machine. Use CMake-GUI or the
+`-G` flag to CMake to select an alternative compiler.
+
+### Running the tests
+
+```console
+> cd build
+> ctest -V -C Release
+```
 
 ## Installing the development version the legacy way
 

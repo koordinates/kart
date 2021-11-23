@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.8 (UNRELEASED)
+
+* Simpler developer builds using CMake, see the [contributing notes](./CONTRIBUTING.md).
+
 ## 0.10.7
 
 ### Bugs fixed
