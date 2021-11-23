@@ -19,6 +19,9 @@ endif()
 
 set(VENV_PIP_INSTALL ${VENV_PY} -m pip install --isolated --disable-pip-version-check)
 
+cmake_path(SET VENV_PYTEST ${VENV_BIN}/pytest)
+cmake_path(NATIVE_PATH VENV_PYTEST VENV_PYTEST)
+
 add_custom_command(
   OUTPUT venv.stamp
   BYPRODUCTS venv

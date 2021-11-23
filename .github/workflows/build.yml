@@ -881,8 +881,9 @@ jobs:
       - name: "app: unit tests"
         env:
           KART_EXPECT_GITNOFILTEREXTENSION: 1
+        working-directory: build
         run: |
-          build/venv/bin/pytest -v -p no:xdist
+          ctest -V
 
 
   #
@@ -993,8 +994,9 @@ jobs:
         env:
           KART_EXPECT_GITNOFILTEREXTENSION: 1
           KART_EXPECT_NOMSSQLDRIVER: 1
+        working-directory: build
         run: |
-          build/venv/bin/pytest -v -p no:xdist
+          ctest -V
 
 
   #
@@ -1078,5 +1080,6 @@ jobs:
       - name: "app: unit tests"
         env:
           KART_EXPECT_GITNOFILTEREXTENSION: 1
+        working-directory: build
         run: |
-          & .\build\venv\Scripts\pytest.exe -v -p no:xdist
+          & ctest -V -C Release -j2

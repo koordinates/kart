@@ -104,9 +104,44 @@ include(KartPy)
 #
 # Tests
 #
-add_test(
-  NAME pytest
-  COMMAND ${VENV_EXEC_ENV} pytest -v
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+if(WIN32 OR DEFINED ENV{CI})
+  # xdist isn't reliable in CI
+  set(PYTEST_DEFAULT_ARGS -p no:xdist)
+endif()
+set(PYTEST_ARGS
+    ${PYTEST_DEFAULT_ARGS}
+    CACHE STRING "pytest arguments")
+
+if(DEFINED ENV{CI})
+  message(STATUS "CTest: configuring for CI")
+  if(WIN32 OR DEFINED ENV{PYTEST_SHARDS})
+    set(PYTEST_SHARDS
+        20
+        CACHE STRING "Number of pytest shards")
+    message(STATUS "CTest: using ${PYTEST_SHARDS} shards")
+
+    foreach(shard RANGE 1 ${PYTEST_SHARDS} 1)
+      math(EXPR shardIdx "${shard} - 1")
+      add_test(
+        NAME pytest-shard-${shard}
+        COMMAND ${VENV_PYTEST} -vv --log-level=DEBUG ${PYTEST_ARGS} -p no:sugar --no-cov
+                --num-shards ${PYTEST_SHARDS} --shard-id ${shardIdx} --benchmark-enable
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+    endforeach()
+  else()
+    add_test(
+      NAME pytest
+      COMMAND
+        ${VENV_PYTEST} -vv --log-level=DEBUG -p no:sugar ${PYTEST_ARGS} --cov-report term
+        --cov-report "html:${CMAKE_CURRENT_BINARY_DIR}/test-results/coverage/" --junit-xml
+        "${CMAKE_CURRENT_BINARY_DIR}/test-results/junit.xml" --benchmark-enable
+      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+  endif()
+else()
+  add_test(
+    NAME pytest
+    COMMAND ${VENV_PYTEST} -v ${PYTEST_ARGS}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
 
 # packaging
