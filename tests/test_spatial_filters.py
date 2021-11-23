@@ -309,6 +309,13 @@ def test_spatially_filtered_fetch_promised(
         with data_archive("polygons-spatial-filtered") as repo2_path:
             repo2 = KartRepo(repo2_path)
             repo2.config["remote.origin.url"] = repo1_url
+            if is_windows:
+                # While testing this on Windows, the remote is at repo1_url and so is also on Windows -
+                # and so doesn't understand the "spatial" filter. But, we can do this test without it:
+                repo2.config['remote.origin.partialclonefilter'] = "blob:none"
+
+            orig_config_dict = {c.name: c.value for c in repo2.config}
+
             ds = repo2.datasets()[H.POLYGONS.LAYER]
 
             local_feature_count = local_features(ds)
@@ -346,6 +353,10 @@ def test_spatially_filtered_fetch_promised(
             # All of the deleted features have now been loaded to show in the diff output:
             assert local_features(ds) == H.POLYGONS.ROWCOUNT
             assert fetch_count == H.POLYGONS.ROWCOUNT - 52
+
+            final_config_dict = {c.name: c.value for c in repo2.config}
+            # Making these fetches shouldn't change any repo config:
+            assert final_config_dict == orig_config_dict
 
 
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):

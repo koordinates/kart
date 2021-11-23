@@ -32,7 +32,7 @@ def get_promisor_remote(repo):
     for r in repo.remotes:
         key = f"remote.{r.name}.promisor"
         if key in config and config.get_bool(key):
-            return r.url
+            return r.name
     raise NotFound(
         "Some objects are missing+promised, but no promisor remote is configured"
     )
@@ -57,7 +57,6 @@ class FetchPromisedBlobsProcess:
             "--no-tags",
             "--no-write-fetch-head",
             "--recurse-submodules=no",
-            "--filter=blob:none",
             "--stdin",
         ]
         # We have to use binary mode since git always expects '\n' line endings, even on windows.
