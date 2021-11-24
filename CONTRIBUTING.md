@@ -15,7 +15,6 @@ Requirements for macOS & Linux:
 * CMake >= v3.21
 * GDAL >= v3.3.2
 * Git >= v2.31
-* LibGit2 >= v1.1.0
 * OpenSSL >= v1.1
 * PostgreSQL client library (libpq)
 * Python >= 3.7
@@ -32,12 +31,23 @@ $ git clone https://github.com/koordinates/kart.git
 $ cd kart
 ```
 
+[Build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.3
+from the [Koordinates `kx-latest` branch](https://github.com/koordinates/libgit2/tree/kx-latest):
+
+```console
+$ git clone --branch=kx-latest https://github.com/koordinates/libgit2.git
+$ cd libgit2
+$ cmake -B build -S . -DBUILD_CLAR=OFF -Wno-dev
+$ cmake --build build
+$ cmake --install build
+```
+
 ### Installing dependencies on macOS
 
 If you're a Homebrew user, you can get all of those via:
 
 ```console
-$ brew install --upgrade cmake gdal git openssl@1.1 libpq python@3.7 \
+$ brew install cmake gdal git openssl@1.1 libpq python@3.7 \
     spatialindex libspatialite sqlite3 swig unixodbc
 ```
 
@@ -59,17 +69,6 @@ $ sudo add-apt-repository ppa:git-core/ppa
 $ sudo apt-get install build-essential cmake ccache libgdal-dev gdal-data git \
     libssl-dev libpq-dev python3.8-dev python3.8-venv \
     libspatialindex-dev libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
-```
-
-Then [build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.3
-from the [Koordinates `kx-latest` branch](https://github.com/koordinates/libgit2/tree/kx-latest):
-
-```console
-$ git clone --branch=kx-latest https://github.com/koordinates/libgit2.git
-$ cd libgit2
-$ cmake -B build -S . -DBUILD_CLAR=OFF
-$ cmake --build build
-$ cmake --install build
 ```
 
 Then configure Kart:

@@ -2,13 +2,14 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
   KART
-  VERSION 0.10.6
+  VERSION 0.10.8
+  DESCRIPTION "Version control for geospatial data"
+  HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)
 
 enable_testing()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-set(KART_CMAKE_TEMPLATE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cmake/template)
 
 include(PythonGetABIInfo)
 
@@ -54,8 +55,6 @@ endif()
 set(Python3_FIND_IMPLEMENTATIONS "CPython")
 find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
 pythongetabiinfo()
-
-# version configure_file(${KART_CMAKE_TEMPLATE_DIR}/VERSION.in kart/VERSION @ONLY)
 
 #
 # dependencies
