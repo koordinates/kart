@@ -430,7 +430,9 @@ class IntPathEncoder(PathEncoder):
         be the number one higher than ALL existing PK values).
         """
 
-        # TODO - handle missing objects, once spatial filters are working as partial clones.
+        # NOTE - currently partial clones are missing only blobs, not trees, so we at least
+        # know the names of all the blobs, which is sufficient for this code. If we ever
+        # implement partial clones with missing trees, we will need to fetch some trees here.
 
         feature_tree = dataset.feature_tree
         if not feature_tree:
@@ -454,13 +456,17 @@ class IntPathEncoder(PathEncoder):
             return 0
 
         current_tree = feature_tree[best_last_seen]
-        while next(iter(current_tree)).type_str == "tree":
+
+        while any(current_tree) and next(iter(current_tree)).type_str == "tree":
             max_child = next(
                 current_tree[c] for c in reversed(self.alphabet) if c in current_tree
             )
             current_tree = max_child
-        max_pk = max(dataset.decode_path_to_1pk(c.name) for c in current_tree)
 
+        if not any(current_tree):
+            return 0
+
+        max_pk = max(dataset.decode_path_to_1pk(c.name) for c in current_tree)
         return max_pk + 1
 
 

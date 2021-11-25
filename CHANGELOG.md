@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.8 (UNRELEASED)
+
+* Bugfix: fixed the error when merging a commit where every feature in a dataset is deleted. [#506](https://github.com/koordinates/kart/pull/506)
+
 ## 0.10.7
 
 ### Bugs fixed
