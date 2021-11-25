@@ -4,6 +4,7 @@ import pygit2
 from .exceptions import (
     InvalidOperation,
     NotFound,
+    NotYetImplemented,
     NO_BRANCH,
     NO_COMMIT,
     NO_WORKING_COPY,
@@ -12,6 +13,7 @@ from .exceptions import (
 from .exceptions import DbConnectionError
 from .key_filters import RepoKeyFilter
 from .output_util import InputMode, get_input_mode
+from .promisor_utils import get_partial_clone_envelope
 from .spatial_filters import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
 from .working_copy import WorkingCopyStatus
@@ -126,9 +128,17 @@ def checkout(
 
     do_switch_spatial_filter = False
     if spatial_filter_spec is not None:
-        do_switch_spatial_filter = not spatial_filter_spec.resolve(
-            repo
-        ).matches_working_copy(repo)
+        resolved_spatial_filter_spec = spatial_filter_spec.resolve(repo)
+        do_switch_spatial_filter = (
+            not resolved_spatial_filter_spec.matches_working_copy(repo)
+        )
+        fetched_envelope = get_partial_clone_envelope(repo)
+        if fetched_envelope and not resolved_spatial_filter_spec.is_within_envelope(
+            fetched_envelope
+        ):
+            raise NotYetImplemented(
+                "Sorry, enlarging the spatial filter for a spatially filtered clone is not yet supported"
+            )
 
     force = force or discard_changes
     if (do_switch_commit or do_switch_spatial_filter) and not force:

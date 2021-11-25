@@ -21,6 +21,7 @@ class LibgitSubcode(IntEnum):
 
 
 def object_is_promised(object_error):
+    """Given an error loading an object, returns True if it signals EOBJECTPROMISED."""
     return (
         isinstance(object_error, KeyError)
         and getattr(object_error, 'subcode', 0) == LibgitSubcode.EOBJECTPROMISED
@@ -28,6 +29,7 @@ def object_is_promised(object_error):
 
 
 def get_promisor_remote(repo):
+    """Returns the name of the remote from which promised objects should be fetched."""
     config = repo.config
     for r in repo.remotes:
         key = f"remote.{r.name}.promisor"
@@ -36,6 +38,38 @@ def get_promisor_remote(repo):
     raise NotFound(
         "Some objects are missing+promised, but no promisor remote is configured"
     )
+
+
+def get_partial_clone_envelope(repo):
+    """
+    Parses the envelope from remote.(promisor-remote).partialclonefilter, which tells us
+    the spatial filter envelope that was used during the clone operation.
+    """
+    config = repo.config
+    try:
+        name = get_promisor_remote(repo)
+    except NotFound:
+        return None
+
+    key = f"remote.{name}.partialclonefilter"
+    if key not in config:
+        return None
+    value = config[key]
+    prefix = "extension:spatial="
+    if not value.startswith(prefix):
+        return None
+    value = value[len(prefix) :]
+    parts = value.split(",", maxsplit=4)
+
+    if len(parts) != 4:
+        raise ValueError(f"Repository config contains invalid spatial filter: {value}")
+
+    try:
+        envelope = [float(p) for p in parts]
+    except ValueError:
+        raise ValueError(f"Repository config contains invalid spatial filter: {value}")
+
+    return envelope
 
 
 class FetchPromisedBlobsProcess:
