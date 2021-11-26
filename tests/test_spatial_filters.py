@@ -413,46 +413,57 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
         envelope = json.loads(r.stdout)
         assert envelope == [174.879, -37.9783, 175.3878, -37.4987]
 
-        # Clone repo using spatial filter reference
-        repo2_path = tmp_path / "repo2"
-        r = cli_runner.invoke(
-            ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
-        )
-        assert r.exit_code == 0, r.stderr
+        # This is disabled by default as it is still not fully supported.
+        os.environ["X_KART_SPATIAL_FILTER_REFERENCE"] = "1"
+        try:
+            # Clone repo using spatial filter reference
+            repo2_path = tmp_path / "repo2"
+            r = cli_runner.invoke(
+                ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
+            )
+            assert r.exit_code == 0, r.stderr
 
-        # The resulting repo has the spatial filter configured locally.
-        repo2 = KartRepo(repo2_path)
-        assert repo2.config["kart.spatialfilter.reference"] == "refs/filters/octagon"
-        assert repo2.config["kart.spatialfilter.objectid"] == blob_sha
+            # The resulting repo has the spatial filter configured locally.
+            repo2 = KartRepo(repo2_path)
+            assert (
+                repo2.config["kart.spatialfilter.reference"] == "refs/filters/octagon"
+            )
+            assert repo2.config["kart.spatialfilter.objectid"] == blob_sha
 
-        # However, the entire polygons layer was cloned.
-        # TODO: Only clone the features that match the spatial filter.
-        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
+            # However, the entire polygons layer was cloned.
+            # TODO: Only clone the features that match the spatial filter.
+            assert (
+                local_features(repo2.datasets()[H.POLYGONS.LAYER])
+                == H.POLYGONS.ROWCOUNT
+            )
 
-        with repo2.working_copy.session() as sess:
-            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+            with repo2.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
-        # Clone repo using spatial filter object ID
-        repo3_path = tmp_path / "repo3"
-        r = cli_runner.invoke(
-            ["clone", repo1_path, repo3_path, f"--spatial-filter={blob_sha}"]
-        )
-        assert r.exit_code == 0, r.stderr
-        repo3 = KartRepo(repo3_path)
-        assert repo3.config["kart.spatialfilter.geometry"].startswith(
-            "POLYGON ((174.879 -37.8277,"
-        )
-        assert repo3.config["kart.spatialfilter.crs"] == crs
+            # Clone repo using spatial filter object ID
+            repo3_path = tmp_path / "repo3"
+            r = cli_runner.invoke(
+                ["clone", repo1_path, repo3_path, f"--spatial-filter={blob_sha}"]
+            )
+            assert r.exit_code == 0, r.stderr
+            repo3 = KartRepo(repo3_path)
+            assert repo3.config["kart.spatialfilter.geometry"].startswith(
+                "POLYGON ((174.879 -37.8277,"
+            )
+            assert repo3.config["kart.spatialfilter.crs"] == crs
 
-        with repo3.working_copy.session() as sess:
-            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+            with repo3.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
-        # Missing spatial filter:
-        repo4_path = tmp_path / "repo4"
-        r = cli_runner.invoke(
-            ["clone", repo1_path, repo4_path, "--spatial-filter=dodecahedron"]
-        )
-        assert r.exit_code == NO_SPATIAL_FILTER, r.stderr
+            # Missing spatial filter:
+            repo4_path = tmp_path / "repo4"
+            r = cli_runner.invoke(
+                ["clone", repo1_path, repo4_path, "--spatial-filter=dodecahedron"]
+            )
+            assert r.exit_code == NO_SPATIAL_FILTER, r.stderr
+
+        finally:
+            del os.environ["X_KART_SPATIAL_FILTER_REFERENCE"]
 
 
 @pytest.mark.parametrize(

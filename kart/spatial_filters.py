@@ -2,13 +2,20 @@ from enum import Enum, auto
 import re
 import functools
 import logging
+import os
 import sys
 
 import click
 
 from .cli_util import add_help_subcommand, StringFromFile
 from .crs_util import make_crs
-from .exceptions import CrsError, GeometryError, NotFound, NO_SPATIAL_FILTER
+from .exceptions import (
+    CrsError,
+    GeometryError,
+    NotFound,
+    NotYetImplemented,
+    NO_SPATIAL_FILTER,
+)
 from .geometry import geometry_from_string, GeometryType
 from .output_util import dump_json_output
 from .promisor_utils import object_is_promised
@@ -129,6 +136,10 @@ class SpatialFilterString(StringFromFile):
                 return ResolvedSpatialFilterSpec(*parts)
 
             else:
+                if not os.environ.get("X_KART_SPATIAL_FILTER_REFERENCE"):
+                    raise NotYetImplemented(
+                        "Sorry, loading spatial references by reference is not yet supported"
+                    )
                 if not self.allow_reference:
                     self.fail(
                         "Invalid spatial filter definition - "
