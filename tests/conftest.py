@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import hashlib
 import io
@@ -38,20 +39,26 @@ L = logging.getLogger("kart.tests")
 
 
 def pytest_addoption(parser):
-    if "CI" in os.environ:
-        # pytest.ini sets --numprocesses=auto
-        # for parallelism in local dev.
-        # But in CI we disable xdist because it causes a crash in windows builds.
-        # (simply doing --numprocesses=0 is insufficient; the plugin needs to be
-        # disabled completely)
-        # However, there's no way to *remove* an option that's in pytest.ini's addopts.
+    # pytest.ini sets --numprocesses=auto for parallelism in local dev.
+    # But in CI we disable xdist because it causes a crash in windows builds.
+    # (simply doing --numprocesses=0 is insufficient; the plugin needs to be
+    # disabled completely via -p no:xdist)
+    # However, there's no way to *remove* an option that's in pytest.ini's addopts.
+    xdist_parser = next((g for g in parser._groups if g.name == "xdist"), None)
+    if xdist_parser and any(
+        o for o in xdist_parser.options if "--numprocesses" in o._long_opts
+    ):
+        # xdist is enabled
+        pass
+    else:
         # So here we just define the option so it parses, and then ignore it.
         parser.addoption(
             "--numprocesses",
             action="store",
             default=0,
-            help="<ignored>",
+            help=argparse.SUPPRESS,
         )
+
     parser.addoption(
         "--preserve-data",
         action="store_true",
@@ -839,7 +846,9 @@ def postgis_db():
         KART_POSTGRES_URL='postgresql://postgres:@localhost:15432/postgres' pytest -k postgis --pdb -vvs -n 0
     """
     if "KART_POSTGRES_URL" not in os.environ:
-        raise pytest.skip("Requires PostGIS - read docstring at conftest.postgis_db")
+        raise pytest.skip(
+            "PostGIS tests require configuration - read docstring at conftest.postgis_db"
+        )
     engine = Db_Postgis.create_engine(os.environ["KART_POSTGRES_URL"])
     with engine.connect() as conn:
         # test connection and postgis support
@@ -886,7 +895,7 @@ def sqlserver_db():
     """
     if "KART_SQLSERVER_URL" not in os.environ:
         raise pytest.skip(
-            "Requires SQL Server - read docstring at conftest.sqlserver_db"
+            "SQL Server tests require configuration - read docstring at conftest.sqlserver_db"
         )
     engine = Db_SqlServer.create_engine(os.environ["KART_SQLSERVER_URL"])
     with engine.connect() as conn:
@@ -936,7 +945,9 @@ def mysql_db():
         KART_MYSQL_URL='mysql://root:PassWord1@localhost:13306' pytest -k mysql --pdb -vvs
     """
     if "KART_MYSQL_URL" not in os.environ:
-        raise pytest.skip("Requires MySQL - read docstring at conftest.mysql_db")
+        raise pytest.skip(
+            "MySQL tests require configuration - read docstring at conftest.mysql_db"
+        )
     engine = Db_MySql.create_engine(os.environ["KART_MYSQL_URL"])
     with engine.connect() as conn:
         # test connection:

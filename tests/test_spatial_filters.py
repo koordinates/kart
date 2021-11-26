@@ -1,9 +1,11 @@
 import json
 import os
+import subprocess
+import tempfile
+
 import pytest
 
-from kart import is_windows
-
+from kart.cli_util import tool_environment
 from kart.exceptions import (
     INVALID_ARGUMENT,
     NO_SPATIAL_FILTER,
@@ -15,7 +17,100 @@ from kart.repo import KartRepo
 
 H = pytest.helpers.helpers()
 
-SKIP_REASON = "The git spatial-filter is not yet included in the kart windows build"
+
+# Feature detection for our custom git that has filter extension support
+@pytest.fixture(scope="session")
+def git_supports_filter_extensions():
+    with tempfile.TemporaryDirectory() as td:
+        subprocess.run(
+            ["git", "-C", td, "init", "--quiet", "."],
+            env=tool_environment(),
+            check=True,
+        )
+
+        p = subprocess.run(
+            ["git", "-C", td, "rev-list", "--filter=extension:z", "--objects"],
+            env=tool_environment(),
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if p.returncode == 0:
+            raise ValueError(
+                f"git_supports_filter_extensions: unexpected return code {p.returncode}"
+            )
+
+        err = p.stderr.strip()
+        if err == "fatal: invalid filter-spec 'extension:z'":
+            return False
+        elif err == "fatal: No filter extension found with name z":
+            return True
+        else:
+            raise ValueError("git_supports_filter_extensions: unexpected output: {err}")
+
+
+# using a fixture instead of a skipif decorator means we get one aggregated skip
+# message rather than one per test
+@pytest.fixture(scope="session")
+def git_with_filter_extension_support(git_supports_filter_extensions):
+    if not git_supports_filter_extensions:
+        if "CI" in os.environ and "KART_EXPECT_GITNOFILTEREXTENSION" not in os.environ:
+            pytest.fail(
+                "The in-use git doesn't support filter extensions, but we're in CI and KART_EXPECT_GITNOFILTEREXTENSION isn't set"
+            )
+        else:
+            raise pytest.skip("The in-use git doesn't support filter extensions")
+
+
+# Feature detection for our custom git that has a spatial filter extension
+@pytest.fixture(scope="session")
+def git_supports_spatial_filter(git_supports_filter_extensions):
+    if not git_supports_filter_extensions:
+        return False
+
+    with tempfile.TemporaryDirectory() as td:
+        subprocess.run(
+            ["git", "-C", td, "init", "--quiet", "."],
+            env=tool_environment(),
+            check=True,
+        )
+
+        p = subprocess.run(
+            [
+                "git",
+                "rev-list",
+                "HEAD",
+                "--objects",
+                "--max-count=1",
+                "--filter=extension:spatial=1,2,3,4",
+            ],
+            env=tool_environment(),
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        err = p.stderr.strip()
+        if err == "fatal: No filter extension found with name spatial":
+            return False
+        elif p.returncode == 0:
+            return True
+        else:
+            raise ValueError(
+                "git_supports_spatial_filter: unexpected output {p.returncode}: {err}"
+            )
+
+
+# using a fixture instead of a skipif decorator means we get one aggregated skip
+# message rather than one per test
+@pytest.fixture(scope="session")
+def git_with_spatial_filter_support(
+    git_with_filter_extension_support, git_supports_spatial_filter
+):
+    if not git_supports_spatial_filter:
+        if "CI" in os.environ and "KART_EXPECT_GITNOSPATIALFILTER" not in os.environ:
+            pytest.fail(
+                "The in-use git doesn't support spatial filters, but we're in CI and KART_EXPECT_GITNOSPATIALFILTER isn't set"
+            )
+        else:
+            raise pytest.skip("The in-use git doesn't support spatial filters")
 
 
 def ring_as_wkt(*points):
@@ -121,6 +216,22 @@ def is_local_feature(dataset, pk):
         return False
 
 
+def test_git_filter_extension(git_with_filter_extension_support):
+    # makes sure git_with_filter_extension_support gets exercised in CI
+    # regardless of how other tests here are defined/changed.
+
+    # will skip/fail in the decorator
+    pass
+
+
+def test_git_spatial_filter_extension(git_with_spatial_filter_support):
+    # makes sure git_with_spatial_filter_support gets exercised in CI regardless
+    # of how other tests here are defined/changed.
+
+    # will skip/fail in the decorator
+    pass
+
+
 def test_init_with_spatial_filter(cli_runner, tmp_path):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
@@ -187,8 +298,9 @@ def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
     assert not repo_path.exists()
 
 
-@pytest.mark.skipif(is_windows, reason=SKIP_REASON)
-def test_clone_with_spatial_filter(data_archive, cli_runner, tmp_path):
+def test_clone_with_spatial_filter(
+    git_with_spatial_filter_support, data_archive, cli_runner, tmp_path
+):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
 
@@ -289,7 +401,7 @@ def test_spatially_filtered_partial_clone(data_archive, cli_runner):
 
 
 def test_spatially_filtered_fetch_promised(
-    data_archive, cli_runner, insert, monkeypatch
+    data_archive, cli_runner, insert, monkeypatch, git_supports_spatial_filter
 ):
 
     # Keep track of how many features we fetch lazily after the partial clone.
@@ -309,10 +421,12 @@ def test_spatially_filtered_fetch_promised(
         with data_archive("polygons-spatial-filtered") as repo2_path:
             repo2 = KartRepo(repo2_path)
             repo2.config["remote.origin.url"] = repo1_url
-            if is_windows:
-                # While testing this on Windows, the remote is at repo1_url and so is also on Windows -
-                # and so doesn't understand the "spatial" filter. But, we can do this test without it:
-                repo2.config['remote.origin.partialclonefilter'] = "blob:none"
+
+            if not git_supports_spatial_filter:
+                # Git doesn't understand the "spatial" filter.
+                # But we can do this test without it:
+                print("Git doesn't support spatial filters, using blob:none instead")
+                repo2.config["remote.origin.partialclonefilter"] = "blob:none"
 
             orig_config_dict = {c.name: c.value for c in repo2.config}
 
@@ -689,23 +803,3 @@ def test_pk_conflict_due_to_spatial_filter(
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 302
-
-
-def test_git_spatial_filter_extension(data_archive_readonly, cli_runner):
-    with data_archive_readonly("points.tgz"):
-        r = cli_runner.invoke(
-            [
-                "git",
-                "rev-list",
-                "HEAD",
-                "--objects",
-                "--max-count=1",
-                "--filter=extension:spatial=1,2,3,4",
-            ]
-        )
-        if is_windows:
-            # Windows build recognises filter extensions, but it doesn't have any installed.
-            assert r.exit_code == 128
-            assert "fatal: No filter extension found with name spatial" in r.stderr
-        else:
-            assert r.exit_code == 0, r.stderr

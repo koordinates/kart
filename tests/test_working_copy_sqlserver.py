@@ -1,5 +1,6 @@
-import pytest
+import os
 
+import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
 
@@ -23,11 +24,11 @@ def test_no_odbc():
     except ImportError:
         pass
     else:
-        pytest.skip("ODBC is installed")
+        pytest.skip("ODBC is installed, so we can't test the no-ODBC error message")
 
     with pytest.raises(
         NotFound, match=r"^ODBC support for SQL Server is required but was not found."
-    ) as e:
+    ):
         Db_SqlServer.get_odbc_drivers()
 
 
@@ -37,7 +38,12 @@ def test_odbc_drivers():
     try:
         import pyodbc  # noqa
     except ImportError:
-        pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
+        if "CI" in os.environ and "KART_EXPECT_NOODBC" not in os.environ:
+            pytest.fail(
+                "ODBC isn't available, but we're in CI and KART_EXPECT_NOODBC isn't set"
+            )
+        else:
+            pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
 
     num_drivers = len(Db_SqlServer.get_odbc_drivers())
     # Eventually we should assert that we have useful drivers - eg MSSQL.
@@ -46,11 +52,16 @@ def test_odbc_drivers():
     print(f"Found {num_drivers} ODBC drivers")
 
 
-@pytest.mark.xfail(
-    reason="MSSQL driver is not included in the build - SQL Server tests will fail unless it is installed manually."
-)
 def test_sqlserver_driver():
-    assert Db_SqlServer.get_sqlserver_driver() is not None
+    try:
+        assert Db_SqlServer.get_sqlserver_driver() is not None
+    except NotFound:
+        if "CI" in os.environ and "KART_EXPECT_NOMSSQLDRIVER" not in os.environ:
+            pytest.fail(
+                "MSSQL driver isn't available, but we're in CI and KART_EXPECT_NOMSSQLDRIVER isn't set"
+            )
+        else:
+            raise pytest.skip("MSSQL driver isn't available.")
 
 
 # All of the following tests will also fail unless a MSSQL driver has been installed manually.
@@ -567,7 +578,7 @@ def test_checkout_custom_crs(
             # the custom definition, so we don't know what it is.
             r = cli_runner.invoke(["diff"])
             assert r.stdout.splitlines() == [
-                '--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt',
+                "--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt",
                 '- GEOGCS["WGS 84",',
                 '-     DATUM["WGS_1984",',
                 '-         SPHEROID["WGS 84", 6378137, 298.257223563,',
@@ -578,48 +589,48 @@ def test_checkout_custom_crs(
                 '-     UNIT["degree", 0.0174532925199433,',
                 '-         AUTHORITY["EPSG", "9122"]],',
                 '-     AUTHORITY["EPSG", "4326"]]',
-                '- ',
-                '--- nz_pa_points_topo_150k:meta:schema.json',
-                '+++ nz_pa_points_topo_150k:meta:schema.json',
-                '  [',
-                '    {',
+                "- ",
+                "--- nz_pa_points_topo_150k:meta:schema.json",
+                "+++ nz_pa_points_topo_150k:meta:schema.json",
+                "  [",
+                "    {",
                 '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
                 '      "name": "fid",',
                 '      "dataType": "integer",',
                 '      "primaryKeyIndex": 0,',
                 '      "size": 64',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
                 '      "name": "geom",',
                 '      "dataType": "geometry",',
                 '      "geometryType": "POINT",',
                 '-     "geometryCRS": "EPSG:4326",',
                 '+     "geometryCRS": "CUSTOM:100002",',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
                 '      "name": "t50_fid",',
                 '      "dataType": "integer",',
                 '      "size": 32',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
                 '      "name": "name_ascii",',
                 '      "dataType": "text",',
                 '      "length": 75',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
                 '      "name": "macronated",',
                 '      "dataType": "text",',
                 '      "length": 1',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
                 '      "name": "name",',
                 '      "dataType": "text",',
                 '      "length": 75',
-                '    },',
-                '  ]',
+                "    },",
+                "  ]",
             ]

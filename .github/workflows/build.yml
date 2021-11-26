@@ -24,14 +24,16 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only windows]')
-        || !contains(github.event.head_commit.message, '[ci only macos]')
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
 
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_COMPRESS: "1"
       PY_VER: "3.7"
+      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
     services:
       postgis:
         image: postgis/postgis
@@ -64,6 +66,11 @@ jobs:
       # python distribution
       #
 
+      - name: "python"
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PY_VER }}
+
       - name: "python: pip cache"
         uses: actions/cache@v2
         with:
@@ -71,11 +78,6 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
           restore-keys: |
             pip-${{ runner.os }}-
-
-      - name: "python"
-        uses: actions/setup-python@v1
-        with:
-          python-version: ${{ env.PY_VER }}
 
       #
       # vendor build
@@ -260,6 +262,9 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-2016
+    env:
+      PY_VER: "3.7"
+
     # We want to run on external PRs, but not on our own internal PRs as they'll be run
     # by the push to the branch.
     # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
@@ -271,8 +276,7 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only linux]')
-        || !contains(github.event.head_commit.message, '[ci only macos]')
+        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
       )
     steps:
       - name: "msvc setup"
@@ -288,9 +292,10 @@ jobs:
       #
 
       - name: "python"
-        run: |
-          $PY3=(Get-Command python).Definition
-          echo "PY3=$PY3" >> $Env:GITHUB_ENV
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PY_VER }}
+          architecture: x64
 
       - name: "python: pip cache"
         uses: actions/cache@v2
@@ -299,6 +304,11 @@ jobs:
           key: pip-${{ runner.os }}-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'makefile.vc') }}
           restore-keys: |
             pip-${{ runner.os }}-
+
+      - name: "python: env"
+        run: |
+          $PY3=(Get-Command python).Definition
+          echo "PY3=$PY3" >> $Env:GITHUB_ENV
 
       #
       # vendor build
@@ -320,6 +330,7 @@ jobs:
         env:
           PWSH: pwsh.exe
         run: |
+          $ErrorView = 'NormalView'
           nmake /D /NoLogo /F makefile.vc
 
       - name: "vendor: save library bundle"
@@ -335,6 +346,7 @@ jobs:
       - name: "app: version"
         id: version
         run: |
+          $ErrorView = 'NormalView'
           $IS_FORK = ( ('${{ github.repository }}' -ne 'koordinates/kart') -or ( '${{ github.event.pull_request.id }}' -and ( '${{ github.event.pull_request.head.repo.full_name }}' -ne '${{ github.repository }}') ) ) ? 1 : 0
 
           If ( (-not $IS_FORK) -and ('${{ github.ref }}'.StartsWith('refs/tags/v')) ) {
@@ -359,12 +371,13 @@ jobs:
 
       - name: "app: install python dependencies"
         run: |
-          nmake /D /NoLogo /F makefile.vc venv\.requirements.installed
+          & nmake /D /NoLogo /F makefile.vc venv\.requirements.installed
 
       - name: "app: build"
         run: |
-          nmake /D /NoLogo /F makefile.vc
-          venv\Scripts\kart.exe --version
+          & nmake /D /NoLogo /F makefile.vc
+          if (-not $?) {throw "Build failed"}
+          & .\venv\Scripts\kart.exe --version
 
       #
       # App tests & checks
@@ -372,11 +385,13 @@ jobs:
 
       - name: "app: install test dependencies"
         run: |
-          nmake /D /NoLogo /F makefile.vc venv\.test.installed
+          & nmake /D /NoLogo /F makefile.vc venv\.test.installed
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOSPATIALFILTER: 1
         run: |
-          nmake /D /NoLogo /F makefile.vc ci-test
+          & nmake /D /NoLogo /F makefile.vc ci-test
 
       - name: "app: save test coverage"
         uses: actions/upload-artifact@v2
@@ -398,13 +413,15 @@ jobs:
           SIGN_AZURE_CLIENTID: ${{ secrets.WIN_SIGN_AZURE_CLIENTID }}
           SIGN_AZURE_CLIENTSECRET: ${{ secrets.WIN_SIGN_AZURE_CLIENTSECRET }}
         run: |
+          $ErrorView = 'NormalView'
           If ( ${{ steps.version.outputs.is_release }} -eq 1 ) {
-            dotnet tool install --global AzureSignTool --version 2.0.17
-
+            & dotnet tool install --global AzureSignTool --version 2.0.17
+            if (-not $?) {throw "Code-signing failed"}
             $Env:SIGN_AZURE_CERTIFICATE=$Env:WIN_SIGN_AZURE_CERTIFICATE
           }
 
-          nmake /D /NoLogo /F makefile.vc package
+          & nmake /D /NoLogo /F makefile.vc package
+          if (-not $?) {throw "Packaging failed"}
           echo "::set-output name=msi::platforms\windows\dist\Kart-${{ steps.version.outputs.value }}.msi"
 
       #
@@ -432,12 +449,16 @@ jobs:
 
       - name: "package: tests"
         run: |
+          $ErrorView = 'NormalView'
           Start-Process msiexec.exe -Wait -ArgumentList '/I ${{github.workspace}}\${{ steps.package.outputs.msi }} /quiet /norestart /l* install.log'
           if (Test-Path install.log -PathType leaf) { Get-Content install.log }
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +[System.Environment]::GetEnvironmentVariable("Path", "User")
           & kart --version
+          if (-not $?) {throw "Smoke test Failed"}
           & tests\scripts\distcheck.ps1
+          if (-not $?) {throw "Distribution test Failed"}
           & tests\scripts\e2e-1.ps1
+          if (-not $?) {throw "E2E test Failed"}
 
       #
       # Github release
@@ -470,8 +491,7 @@ jobs:
       ) && (
         startsWith(github.ref, 'refs/tags/v')
         || github.ref == 'refs/heads/master'
-        || !contains(github.event.head_commit.message, '[ci only linux]')
-        || !contains(github.event.head_commit.message, '[ci only windows]')
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
       )
 
     env:
@@ -632,6 +652,8 @@ jobs:
           make py-license-check
 
       - name: "app: unit tests"
+        env:
+          KART_EXPECT_NOMSSQLDRIVER: 1
         run: |
           make ci-test
 
@@ -726,3 +748,338 @@ jobs:
           draft: true
           files: |
             platforms/macos/dist/Kart-*.pkg
+
+  #
+  # Linux via CMake
+  #
+  Linux-cmake:
+    runs-on: ubuntu-20.04
+    continue-on-error: true
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      ) && (
+        startsWith(github.ref, 'refs/tags/v')
+        || github.ref == 'refs/heads/master'
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only macos]'))
+      )
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_COMPRESS: "1"
+      PY_VER: "3.7"
+      KART_POSTGRES_URL: "postgresql://postgres:@localhost:5432/postgres"
+      KART_SQLSERVER_URL: "mssql://sa:PassWord1@localhost:1433/master"
+      KART_MYSQL_URL: "mysql://root:PassWord1@localhost:3306"
+    services:
+      postgis:
+        image: postgis/postgis
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 5
+          -e POSTGRES_HOST_AUTH_METHOD=trust
+        ports:
+          - 5432:5432
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server
+        options: >-
+          -e ACCEPT_EULA=Y
+          -e SA_PASSWORD=PassWord1
+        ports:
+          - 1433:1433
+      mysql:
+        image: mysql
+        options: >-
+          -e MYSQL_ROOT_PASSWORD=PassWord1
+        ports:
+          - 3306:3306
+
+    steps:
+      - uses: actions/checkout@v2
+
+      #
+      # setup
+      #
+
+      - name: "python"
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PY_VER }}
+
+      - name: "python: pip cache"
+        uses: actions/cache@v2
+        with:
+          path: .cache/pip
+          key: pip-${{ runner.os }}-cmake-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
+          restore-keys: |
+            pip-Linux-cmake
+
+      - name: "ccache"
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: vendor-ccache-${{ runner.os }}-cmake
+
+      #
+      # Dependencies
+      #
+
+      - name: "build dependencies"
+        run: |
+          sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
+          sudo apt-get install -q -y --no-install-recommends ccache \
+            libgdal-dev gdal-data libssl-dev libpq-dev libspatialindex-dev \
+            libsqlite3-mod-spatialite sqlite3 swig4.0 unixodbc
+          mkdir -p ${{ env.CCACHE_DIR }}
+
+      - name: "dependency: libgit2"
+        run: |
+          git clone -q --branch=kx-latest --depth=1 https://github.com/koordinates/libgit2.git ${{ runner.temp }}/libgit2
+          cd ${{ runner.temp }}/libgit2
+          cmake -Wno-dev -B build -S . \
+            -DBUILD_CLAR=OFF \
+            -DCMAKE_C_COMPILER=/usr/lib/ccache/cc \
+            -DCMAKE_CXX_COMPILER=/usr/lib/ccache/c++
+          cmake --build build
+          sudo cmake --install build
+          sudo ldconfig
+
+      #
+      # App Build
+      #
+
+      - name: "app: configure"
+        run: |
+          cmake -B build -S . \
+            -DSpatiaLite_EXTENSION=/usr/lib/x86_64-linux-gnu/mod_spatialite.so \
+            -DPROJ_DATADIR=/usr/share/proj
+
+      - name: "app: build"
+        run: |
+          cmake --build build
+          ./build/kart --version
+
+      #
+      # App tests & checks
+      #
+
+      - name: "app: install database drivers for tests"
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list > /dev/null
+          sudo apt-get update -q -y
+          sudo ACCEPT_EULA=Y apt-get install -q -y msodbcsql17
+
+      - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOFILTEREXTENSION: 1
+        working-directory: build
+        run: |
+          ctest -V
+
+
+  #
+  # macOS via CMake
+  #
+  macOS-cmake:
+    runs-on: macos-11
+    continue-on-error: true
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    # Skip Linux builds with eg: `[ci only windows]` unless it's master or a release tag.
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      ) && (
+        startsWith(github.ref, 'refs/tags/v')
+        || github.ref == 'refs/heads/master'
+        || !(contains(github.event.head_commit.message, '[ci only windows]') || contains(github.event.head_commit.message, '[ci only linux]'))
+      )
+
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_COMPRESS: "1"
+      PY_VER: "3.7"
+      HOMEBREW_CACHE: ${{ github.workspace }}/.cache/brew
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+
+    steps:
+      - uses: actions/checkout@v2
+
+      #
+      # setup
+      #
+
+      - name: "python"
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PY_VER }}
+
+      - name: "homebrew cache"
+        id: cache-brew
+        uses: actions/cache@v2
+        with:
+          path: .cache/brew
+          key: brew-cmake-${{ runner.os }}
+
+      - name: "vendor: ccache"
+        uses: actions/cache@v2
+        if: steps.cache-vendor-dist.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: vendor-ccache-${{ runner.os }}
+
+      #
+      # python distribution
+      #
+
+      - name: "python: pip cache"
+        uses: actions/cache@v2
+        with:
+          path: .cache/pip
+          key: pip-${{ runner.os }}-cmake-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'Makefile') }}
+          restore-keys: |
+            pip-${{ runner.os }}-cmake
+
+      #
+      # Dependencies
+      #
+
+      - name: "build dependencies"
+        run: |
+          brew install cmake ccache gdal openssl@1.1 libpq \
+            spatialindex libspatialite sqlite3 swig unixodbc
+          mkdir -p ${{ env.CCACHE_DIR }}
+
+      - name: "dependency: libgit2"
+        run: |
+          git clone -q --branch=kx-latest --depth=1 https://github.com/koordinates/libgit2.git ${{ runner.temp }}/libgit2
+          cd ${{ runner.temp }}/libgit2
+          cmake -Wno-dev -B build -S . \
+            -DBUILD_CLAR=OFF \
+            -DCMAKE_C_COMPILER=/usr/local/opt/ccache/libexec/cc \
+            -DCMAKE_CXX_COMPILER=/usr/local/opt/ccache/libexec/c++
+          cmake --build build
+          cmake --install build
+
+      #
+      # App Build
+      #
+
+      - name: "app: configure"
+        run: |
+          cmake -B build -S .
+
+      - name: "app: build"
+        run: |
+          cmake --build build
+          ./build/kart --version
+
+      #
+      # App tests & checks
+      #
+
+      - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOFILTEREXTENSION: 1
+          KART_EXPECT_NOMSSQLDRIVER: 1
+        working-directory: build
+        run: |
+          ctest -V
+
+
+  #
+  # Windows via CMake
+  #
+  Windows-cmake:
+    needs: Windows
+    runs-on: windows-2016
+    continue-on-error: true
+    env:
+      PY_VER: "3.7"  # needs to match the Windows job since we use its vendor archive.
+
+    # We want to run on external PRs, but not on our own internal PRs as they'll be run
+    # by the push to the branch.
+    # https://github.community/t/duplicate-checks-on-push-and-pull-request-simultaneous-event/18012/7
+    # Skip Windows builds with eg: `[ci only linux]` unless it's master or a release tag.
+    if: >
+      (
+        github.event_name == 'push'
+        || github.event.pull_request.head.repo.full_name != github.repository
+      ) && (
+        startsWith(github.ref, 'refs/tags/v')
+        || github.ref == 'refs/heads/master'
+        || !(contains(github.event.head_commit.message, '[ci only linux]') || contains(github.event.head_commit.message, '[ci only macos]'))
+      )
+    steps:
+      - uses: actions/checkout@v2
+
+      #
+      # python distribution
+      #
+
+      - name: "python"
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ env.PY_VER }}
+          architecture: x64
+
+      - name: "python: pip cache"
+        uses: actions/cache@v2
+        with:
+          path: .cache/pip
+          key: pip-${{ runner.os }}-cmake-${{ hashFiles('requirements.txt', 'requirements/*.txt', 'makefile.vc') }}
+          restore-keys: |
+            pip-${{ runner.os }}-cmake-
+
+      #
+      # vendor bundle
+      #
+
+      - name: "vendor-dist: download"
+        uses: actions/download-artifact@v2
+        with:
+          name: vendor-Windows
+          path: vendor/dist/
+
+      #
+      # App Build
+      #
+
+      - name: "configure"
+        run: |
+          $ErrorView = 'NormalView'
+          # Python3.exe gets found by FindPython3, but it's a symlink
+          # and this breaks virtualenv creation
+          # https://github.com/actions/virtual-environments/issues/2690
+          & cmake --log-level=VERBOSE -B build -S . -G "Visual Studio 15 2017" -A x64 -DVENDOR_ARCHIVE=${{ github.workspace }}\vendor\dist\vendor-Windows.zip -DPython3_ROOT=${{ env.pythonLocation }} -DPython3_EXECUTABLE=${{ env.pythonLocation }}\Python.exe
+
+      - name: "build"
+        run: |
+          $ErrorView = 'NormalView'
+          & cmake --build build --config Release
+          if (-not $?) {throw "Build failed"}
+          & .\build\kart --version
+          if (-not $?) {throw "Smoke test failed"}
+
+      #
+      # App tests & checks
+      #
+
+      - name: "app: unit tests"
+        env:
+          KART_EXPECT_GITNOSPATIALFILTER: 1
+        working-directory: build
+        run: |
+          & ctest -V -C Release -j2

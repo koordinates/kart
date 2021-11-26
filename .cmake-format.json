@@ -1,0 +1,12 @@
+{
+  "format": {
+    "line_width": 100
+  },
+  "lint": {
+    "disabled_codes": [
+      "C0103",
+      "C0301",
+      "C0307"
+    ]
+  }
+}

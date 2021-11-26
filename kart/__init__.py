@@ -14,6 +14,14 @@ import sys
 
 L = logging.getLogger("kart.__init__")
 
+try:
+    import _kart_env
+
+    L.debug("Found _kart_env configuration module")
+except ImportError:
+    L.debug("No _kart_env configuration module found")
+    _kart_env = None
+
 is_frozen = getattr(sys, "frozen", None) and hasattr(sys, "_MEIPASS")
 is_darwin = platform.system() == "Darwin"
 is_linux = platform.system() == "Linux"
@@ -31,53 +39,70 @@ prefix = os.path.abspath(sys.prefix)
 
 # Rtree / Libspatialindex
 if not is_windows:
-    os.environ["SPATIALINDEX_C_LIBRARY"] = os.path.join(
-        prefix, "" if is_frozen else "lib", f"libspatialindex_c.{libsuffix}"
-    )
+    if _kart_env:
+        os.environ["SPATIALINDEX_C_LIBRARY"] = _kart_env.SPATIALINDEX_C_LIBRARY
+    else:
+        os.environ["SPATIALINDEX_C_LIBRARY"] = os.path.join(
+            prefix, "" if is_frozen else "lib", f"libspatialindex_c.{libsuffix}"
+        )
 
-spatialite_path = os.path.join(
-    prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
-)
+if _kart_env:
+    spatialite_path = os.path.splitext(_kart_env.SPATIALITE_EXTENSION)[0]
+else:
+    spatialite_path = os.path.join(
+        prefix, "" if (is_frozen or is_windows) else "lib", f"mod_spatialite"
+    )
 if is_windows:
     # sqlite doesn't appear to like backslashes
     spatialite_path = spatialite_path.replace("\\", "/")
 
-os.environ["PATH"] = (
-    prefix + os.pathsep + os.path.join(prefix, "bin") + os.pathsep + os.environ["PATH"]
-)
+# $PATH is used for DLL lookups on Windows
+path_extras = [prefix]
 
 # Git
 # https://git-scm.com/book/en/v2/Git-Internals-Environment-Variables
 os.environ["GIT_CONFIG_NOSYSTEM"] = "1"
 os.environ["XDG_CONFIG_HOME"] = prefix
-if is_windows:
-    os.environ["PATH"] = (
-        os.path.join(prefix, "git", "cmd") + os.pathsep + os.environ["PATH"]
-    )
+if _kart_env:
+    path_extras.append(os.path.split(_kart_env.GIT_EXECUTABLE)[0])
+elif is_windows:
+    path_extras.append(os.path.join(prefix, "git", "cmd"))
 else:
-    os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
-    os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
-        prefix, "share", "git-core", "templates"
-    )
+    path_extras.append(os.path.join(prefix, "bin"))
+
+os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
+os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
+    prefix, "share", "git-core", "templates"
+)
 # See locked_git_index in.repo.py:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
 # GDAL Data
-if is_windows:
-    if prefix.endswith("venv"):
-        data_prefix = os.path.join(prefix, "Lib", "site-packages", "osgeo", "data")
-    else:
-        data_prefix = os.path.join(prefix, "osgeo", "data")
+if _kart_env:
+    os.environ["GDAL_DATA"] = _kart_env.GDAL_DATA
+    os.environ["PROJ_LIB"] = _kart_env.PROJ_LIB
 else:
-    data_prefix = os.path.join(prefix, "share")
+    if is_windows:
+        if prefix.endswith("venv"):
+            data_prefix = os.path.join(prefix, "Lib", "site-packages", "osgeo", "data")
+        else:
+            data_prefix = os.path.join(prefix, "osgeo", "data")
+    else:
+        data_prefix = os.path.join(prefix, "share")
 
-os.environ["GDAL_DATA"] = os.path.join(data_prefix, "gdal")
-os.environ["PROJ_LIB"] = os.path.join(data_prefix, "proj")
+    os.environ["GDAL_DATA"] = os.path.join(data_prefix, "gdal")
+    os.environ["PROJ_LIB"] = os.path.join(data_prefix, "proj")
 
+if not is_windows:
+    # TODO: something's wrong with proj networking in our windows library
+    os.environ.setdefault("PROJ_NETWORK", "ON")
 
 # GPKG optimisation:
 if "OGR_SQLITE_PRAGMA" not in os.environ:
     os.environ["OGR_SQLITE_PRAGMA"] = "page_size=65536"
+
+# Write our various additions to $PATH
+os.environ['PATH'] = os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
 
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr
@@ -116,9 +141,9 @@ def _configure_process_cleanup_windows():
     # which is recommended - but we can't do anything about if they haven't done it properly.
     # But, we do need to handle CTRL-C events - the call below "restores normal processing of CTRL-C events"
     # (ie,  don't ignore them) and this is also inherited by child processes.
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     if not kernel32.SetConsoleCtrlHandler(None, False):
-        L.warn('Error calling SetConsoleCtrlHandler: ', ctypes.get_last_error())
+        L.warn("Error calling SetConsoleCtrlHandler: ", ctypes.get_last_error())
 
 
 def _configure_process_cleanup_nonwindows():
