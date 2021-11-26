@@ -389,7 +389,7 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_GITNOFILTEREXTENSION: 1
+          KART_EXPECT_GITNOSPATIALFILTER: 1
         run: |
           & nmake /D /NoLogo /F makefile.vc ci-test
 
@@ -1079,7 +1079,7 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_GITNOFILTEREXTENSION: 1
+          KART_EXPECT_GITNOSPATIALFILTER: 1
         working-directory: build
         run: |
           & ctest -V -C Release -j2

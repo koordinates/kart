@@ -21,6 +21,7 @@ class LibgitSubcode(IntEnum):
 
 
 def object_is_promised(object_error):
+    """Given an error loading an object, returns True if it signals EOBJECTPROMISED."""
     return (
         isinstance(object_error, KeyError)
         and getattr(object_error, 'subcode', 0) == LibgitSubcode.EOBJECTPROMISED
@@ -28,14 +29,47 @@ def object_is_promised(object_error):
 
 
 def get_promisor_remote(repo):
+    """Returns the name of the remote from which promised objects should be fetched."""
     config = repo.config
     for r in repo.remotes:
         key = f"remote.{r.name}.promisor"
         if key in config and config.get_bool(key):
-            return r.url
+            return r.name
     raise NotFound(
         "Some objects are missing+promised, but no promisor remote is configured"
     )
+
+
+def get_partial_clone_envelope(repo):
+    """
+    Parses the envelope from remote.(promisor-remote).partialclonefilter, which tells us
+    the spatial filter envelope that was used during the clone operation.
+    """
+    config = repo.config
+    try:
+        name = get_promisor_remote(repo)
+    except NotFound:
+        return None
+
+    key = f"remote.{name}.partialclonefilter"
+    if key not in config:
+        return None
+    value = config[key]
+    prefix = "extension:spatial="
+    if not value.startswith(prefix):
+        return None
+    value = value[len(prefix) :]
+    parts = value.split(",", maxsplit=4)
+
+    if len(parts) != 4:
+        raise ValueError(f"Repository config contains invalid spatial filter: {value}")
+
+    try:
+        envelope = [float(p) for p in parts]
+    except ValueError:
+        raise ValueError(f"Repository config contains invalid spatial filter: {value}")
+
+    return envelope
 
 
 class FetchPromisedBlobsProcess:
@@ -57,22 +91,22 @@ class FetchPromisedBlobsProcess:
             "--no-tags",
             "--no-write-fetch-head",
             "--recurse-submodules=no",
-            "--filter=blob:none",
             "--stdin",
         ]
+        # We have to use binary mode since git always expects '\n' line endings, even on windows.
+        # This means we can't use line buffering, except that we know each line is 41 bytes long.
         self.proc = subprocess.Popen(
             self.cmd,
             cwd=self.repo.path,
             stdin=subprocess.PIPE,
             env=tool_environment(),
-            text=True,
-            bufsize=1,  # Line buffering
+            bufsize=41,  # Works as line buffering
         )
 
     def fetch(self, promised_blob_id):
         try:
-            self.proc.stdin.write(f"{promised_blob_id}\n")
-        except BrokenPipeError:
+            self.proc.stdin.write(f"{promised_blob_id}\n".encode())
+        except (BrokenPipeError, OSError):
             # if git-fetch dies early, we get an EPIPE here
             # we'll deal with it below
             pass
@@ -80,7 +114,7 @@ class FetchPromisedBlobsProcess:
     def finish(self):
         try:
             self.proc.stdin.close()
-        except BrokenPipeError:
+        except (BrokenPipeError, OSError):
             pass
         self.proc.wait()
         return_code = self.proc.returncode

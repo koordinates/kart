@@ -2,13 +2,20 @@ from enum import Enum, auto
 import re
 import functools
 import logging
+import os
 import sys
 
 import click
 
 from .cli_util import add_help_subcommand, StringFromFile
 from .crs_util import make_crs
-from .exceptions import CrsError, GeometryError, NotFound, NO_SPATIAL_FILTER
+from .exceptions import (
+    CrsError,
+    GeometryError,
+    NotFound,
+    NotYetImplemented,
+    NO_SPATIAL_FILTER,
+)
 from .geometry import geometry_from_string, GeometryType
 from .output_util import dump_json_output
 from .promisor_utils import object_is_promised
@@ -129,6 +136,10 @@ class SpatialFilterString(StringFromFile):
                 return ResolvedSpatialFilterSpec(*parts)
 
             else:
+                if not os.environ.get("X_KART_SPATIAL_FILTER_REFERENCE"):
+                    raise NotYetImplemented(
+                        "Sorry, loading spatial references by reference is not yet supported"
+                    )
                 if not self.allow_reference:
                     self.fail(
                         "Invalid spatial filter definition - "
@@ -174,7 +185,7 @@ class SpatialFilterSpec:
         """Returns the envelope of the spatial filter geometry as a tuple (lng_w, lat_s, lng_e, lat_n), using WGS 84."""
         raise NotImplementedError()
 
-    def git_spatial_filter_extension_spec(self):
+    def partial_clone_filter_spec(self):
         """Approximates this spatial-filter so it can be parsed by git's custom spatial filter extension."""
         raise NotImplementedError()
 
@@ -238,9 +249,17 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
         except RuntimeError as e:
             raise CrsError(f"Can't reproject spatial filter into EPSG:4326:\n{e}")
 
-    def git_spatial_filter_extension_spec(self):
+    def partial_clone_filter_spec(self):
         envelope = self.envelope_wgs84()
-        return "--filter=extension:spatial={0},{1},{2},{3}".format(*envelope)
+        return "extension:spatial={0},{1},{2},{3}".format(*envelope)
+
+    def is_within_envelope(self, envelope_wgs84):
+        assert len(envelope_wgs84) == 4
+        if self.match_all:
+            return False
+        w, s, e, n = self.envelope_wgs84()
+        w_, s_, e_, n_ = envelope_wgs84
+        return w >= w_ and s >= s_ and e <= e_ and n <= n_
 
 
 class ReferenceSpatialFilterSpec(SpatialFilterSpec):
@@ -322,7 +341,7 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
     def matches_working_copy(self, repo):
         return self.resolve(repo).matches_working_copy(repo)
 
-    def git_spatial_filter_extension_spec(self):
+    def partial_clone_filter_spec(self):
         return f"--filter=extension:spatial={self.ref_or_oid}"
 
     @classmethod

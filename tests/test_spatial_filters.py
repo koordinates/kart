@@ -19,26 +19,24 @@ H = pytest.helpers.helpers()
 
 
 # Feature detection for our custom git that has filter extension support
+@pytest.fixture(scope="session")
 def git_supports_filter_extensions():
     with tempfile.TemporaryDirectory() as td:
         subprocess.run(
             ["git", "-C", td, "init", "--quiet", "."],
-            capture_output=True,
             env=tool_environment(),
             check=True,
         )
 
         p = subprocess.run(
             ["git", "-C", td, "rev-list", "--filter=extension:z", "--objects"],
-            capture_output=True,
-            text=True,
             env=tool_environment(),
+            stderr=subprocess.PIPE,
+            text=True,
         )
         if p.returncode == 0:
             raise ValueError(
-                f"git_supports_filter_extensions: unexpected return code: {p.returncode}"
-            ) from subprocess.CalledProcessError(
-                p.returncode, p.args, p.stdout, p.stderr
+                f"git_supports_filter_extensions: unexpected return code {p.returncode}"
             )
 
         err = p.stderr.strip()
@@ -47,24 +45,72 @@ def git_supports_filter_extensions():
         elif err == "fatal: No filter extension found with name z":
             return True
         else:
-            raise ValueError(
-                "git_supports_filter_extensions: unexpected output"
-            ) from subprocess.CalledProcessError(
-                p.returncode, p.args, p.stdout, p.stderr
-            )
+            raise ValueError("git_supports_filter_extensions: unexpected output: {err}")
 
 
 # using a fixture instead of a skipif decorator means we get one aggregated skip
 # message rather than one per test
 @pytest.fixture(scope="session")
-def git_with_filter_extension_support():
-    if not git_supports_filter_extensions():
+def git_with_filter_extension_support(git_supports_filter_extensions):
+    if not git_supports_filter_extensions:
         if "CI" in os.environ and "KART_EXPECT_GITNOFILTEREXTENSION" not in os.environ:
             pytest.fail(
                 "The in-use git doesn't support filter extensions, but we're in CI and KART_EXPECT_GITNOFILTEREXTENSION isn't set"
             )
         else:
             raise pytest.skip("The in-use git doesn't support filter extensions")
+
+
+# Feature detection for our custom git that has a spatial filter extension
+@pytest.fixture(scope="session")
+def git_supports_spatial_filter(git_supports_filter_extensions):
+    if not git_supports_filter_extensions:
+        return False
+
+    with tempfile.TemporaryDirectory() as td:
+        subprocess.run(
+            ["git", "-C", td, "init", "--quiet", "."],
+            env=tool_environment(),
+            check=True,
+        )
+
+        p = subprocess.run(
+            [
+                "git",
+                "rev-list",
+                "HEAD",
+                "--objects",
+                "--max-count=1",
+                "--filter=extension:spatial=1,2,3,4",
+            ],
+            env=tool_environment(),
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        err = p.stderr.strip()
+        if err == "fatal: No filter extension found with name spatial":
+            return False
+        elif p.returncode == 0:
+            return True
+        else:
+            raise ValueError(
+                "git_supports_spatial_filter: unexpected output {p.returncode}: {err}"
+            )
+
+
+# using a fixture instead of a skipif decorator means we get one aggregated skip
+# message rather than one per test
+@pytest.fixture(scope="session")
+def git_with_spatial_filter_support(
+    git_with_filter_extension_support, git_supports_spatial_filter
+):
+    if not git_supports_spatial_filter:
+        if "CI" in os.environ and "KART_EXPECT_GITNOSPATIALFILTER" not in os.environ:
+            pytest.fail(
+                "The in-use git doesn't support spatial filters, but we're in CI and KART_EXPECT_GITNOSPATIALFILTER isn't set"
+            )
+        else:
+            raise pytest.skip("The in-use git doesn't support spatial filters")
 
 
 def ring_as_wkt(*points):
@@ -170,6 +216,22 @@ def is_local_feature(dataset, pk):
         return False
 
 
+def test_git_filter_extension(git_with_filter_extension_support):
+    # makes sure git_with_filter_extension_support gets exercised in CI
+    # regardless of how other tests here are defined/changed.
+
+    # will skip/fail in the decorator
+    pass
+
+
+def test_git_spatial_filter_extension(git_with_spatial_filter_support):
+    # makes sure git_with_spatial_filter_support gets exercised in CI regardless
+    # of how other tests here are defined/changed.
+
+    # will skip/fail in the decorator
+    pass
+
+
 def test_init_with_spatial_filter(cli_runner, tmp_path):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
@@ -237,7 +299,7 @@ def test_init_with_invalid_spatial_filter(cli_runner, tmp_path):
 
 
 def test_clone_with_spatial_filter(
-    git_with_filter_extension_support, data_archive, cli_runner, tmp_path
+    git_with_spatial_filter_support, data_archive, cli_runner, tmp_path
 ):
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
@@ -339,7 +401,7 @@ def test_spatially_filtered_partial_clone(data_archive, cli_runner):
 
 
 def test_spatially_filtered_fetch_promised(
-    git_with_filter_extension_support, data_archive, cli_runner, insert, monkeypatch
+    data_archive, cli_runner, insert, monkeypatch, git_supports_spatial_filter
 ):
 
     # Keep track of how many features we fetch lazily after the partial clone.
@@ -359,6 +421,14 @@ def test_spatially_filtered_fetch_promised(
         with data_archive("polygons-spatial-filtered") as repo2_path:
             repo2 = KartRepo(repo2_path)
             repo2.config["remote.origin.url"] = repo1_url
+
+            if not git_supports_spatial_filter:
+                # Git doesn't understand the "spatial" filter.
+                # But we can do this test without it:
+                print("Git doesn't support spatial filters, using blob:none instead")
+                repo2.config["remote.origin.partialclonefilter"] = "blob:none"
+
+            orig_config_dict = {c.name: c.value for c in repo2.config}
 
             ds = repo2.datasets()[H.POLYGONS.LAYER]
 
@@ -398,12 +468,15 @@ def test_spatially_filtered_fetch_promised(
             assert local_features(ds) == H.POLYGONS.ROWCOUNT
             assert fetch_count == H.POLYGONS.ROWCOUNT - 52
 
+            final_config_dict = {c.name: c.value for c in repo2.config}
+            # Making these fetches shouldn't change any repo config:
+            assert final_config_dict == orig_config_dict
+
 
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):
     # TODO - this currently tests that the spatial filter is correctly applied locally after
-    # the entire repo is cloned. Eventually it should test to see if the spatial filter
-    # is correctly applied remotely, during the clone step - but this is not yet supported
-    # (particularly for reference spatial filters.)
+    # the entire repo is cloned. Applying a reference spatial filter remotely to do a
+    # partial clone is not yet supported.
 
     geom = SPATIAL_FILTER_GEOMETRY["polygons"]
     crs = SPATIAL_FILTER_CRS["polygons"]
@@ -454,46 +527,57 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
         envelope = json.loads(r.stdout)
         assert envelope == [174.879, -37.9783, 175.3878, -37.4987]
 
-        # Clone repo using spatial filter reference
-        repo2_path = tmp_path / "repo2"
-        r = cli_runner.invoke(
-            ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
-        )
-        assert r.exit_code == 0, r.stderr
+        # This is disabled by default as it is still not fully supported.
+        os.environ["X_KART_SPATIAL_FILTER_REFERENCE"] = "1"
+        try:
+            # Clone repo using spatial filter reference
+            repo2_path = tmp_path / "repo2"
+            r = cli_runner.invoke(
+                ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
+            )
+            assert r.exit_code == 0, r.stderr
 
-        # The resulting repo has the spatial filter configured locally.
-        repo2 = KartRepo(repo2_path)
-        assert repo2.config["kart.spatialfilter.reference"] == "refs/filters/octagon"
-        assert repo2.config["kart.spatialfilter.objectid"] == blob_sha
+            # The resulting repo has the spatial filter configured locally.
+            repo2 = KartRepo(repo2_path)
+            assert (
+                repo2.config["kart.spatialfilter.reference"] == "refs/filters/octagon"
+            )
+            assert repo2.config["kart.spatialfilter.objectid"] == blob_sha
 
-        # However, the entire polygons layer was cloned.
-        # TODO: Only clone the features that match the spatial filter.
-        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
+            # However, the entire polygons layer was cloned.
+            # TODO: Only clone the features that match the spatial filter.
+            assert (
+                local_features(repo2.datasets()[H.POLYGONS.LAYER])
+                == H.POLYGONS.ROWCOUNT
+            )
 
-        with repo2.working_copy.session() as sess:
-            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+            with repo2.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
-        # Clone repo using spatial filter object ID
-        repo3_path = tmp_path / "repo3"
-        r = cli_runner.invoke(
-            ["clone", repo1_path, repo3_path, f"--spatial-filter={blob_sha}"]
-        )
-        assert r.exit_code == 0, r.stderr
-        repo3 = KartRepo(repo3_path)
-        assert repo3.config["kart.spatialfilter.geometry"].startswith(
-            "POLYGON ((174.879 -37.8277,"
-        )
-        assert repo3.config["kart.spatialfilter.crs"] == crs
+            # Clone repo using spatial filter object ID
+            repo3_path = tmp_path / "repo3"
+            r = cli_runner.invoke(
+                ["clone", repo1_path, repo3_path, f"--spatial-filter={blob_sha}"]
+            )
+            assert r.exit_code == 0, r.stderr
+            repo3 = KartRepo(repo3_path)
+            assert repo3.config["kart.spatialfilter.geometry"].startswith(
+                "POLYGON ((174.879 -37.8277,"
+            )
+            assert repo3.config["kart.spatialfilter.crs"] == crs
 
-        with repo3.working_copy.session() as sess:
-            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+            with repo3.working_copy.session() as sess:
+                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
-        # Missing spatial filter:
-        repo4_path = tmp_path / "repo4"
-        r = cli_runner.invoke(
-            ["clone", repo1_path, repo4_path, "--spatial-filter=dodecahedron"]
-        )
-        assert r.exit_code == NO_SPATIAL_FILTER, r.stderr
+            # Missing spatial filter:
+            repo4_path = tmp_path / "repo4"
+            r = cli_runner.invoke(
+                ["clone", repo1_path, repo4_path, "--spatial-filter=dodecahedron"]
+            )
+            assert r.exit_code == NO_SPATIAL_FILTER, r.stderr
+
+        finally:
+            del os.environ["X_KART_SPATIAL_FILTER_REFERENCE"]
 
 
 @pytest.mark.parametrize(
@@ -719,17 +803,3 @@ def test_pk_conflict_due_to_spatial_filter(
 
         with repo.working_copy.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 302
-
-
-def test_git_spatial_filter_extension(
-    git_with_filter_extension_support, data_archive_readonly
-):
-    with data_archive_readonly("points.tgz") as repo_path:
-        repo = KartRepo(repo_path)
-        repo.invoke_git(
-            "rev-list",
-            "HEAD",
-            "--objects",
-            "--max-count=1",
-            "--filter=extension:spatial=1,2,3,4",
-        )

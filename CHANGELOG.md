@@ -7,6 +7,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.10.8 (UNRELEASED)
 
 * Simpler developer builds using CMake, see the [contributing notes](./CONTRIBUTING.md).
+* Bugfix: fixed the error when merging a commit where every feature in a dataset is deleted. [#506](https://github.com/koordinates/kart/pull/506)
 
 ## 0.10.7
 
