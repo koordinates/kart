@@ -99,6 +99,9 @@ def get_diff_status_including_pk_conflicts_json(wc_diff, repo):
     of the features outside the filter that they can't see.)
     """
     result = get_diff_status_json(wc_diff)
+    if repo.spatial_filter.match_all:
+        # There can be not primaryKeyConflicts if there's no spatial filter.
+        return result
 
     from kart.base_diff_writer import BaseDiffWriter
 
