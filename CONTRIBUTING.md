@@ -35,6 +35,7 @@ $ cd kart
 from the [Koordinates `kx-latest` branch](https://github.com/koordinates/libgit2/tree/kx-latest):
 
 ```console
+# do this outside your Kart checkout/directory
 $ git clone --branch=kx-latest https://github.com/koordinates/libgit2.git
 $ cd libgit2
 $ cmake -B build -S . -DBUILD_CLAR=OFF -Wno-dev
@@ -105,8 +106,7 @@ Note you'll need to have the same version of Python that Kart CI currently uses
 ### Running the tests
 
 ```console
-$ cd build
-$ ctest -V
+$ ./build/venv/bin/pytest -v
 ```
 
 ## Building the development version with CMake (Windows)
@@ -146,8 +146,7 @@ version of Visual Studio that’s installed on your machine. Use CMake-GUI or th
 ### Running the tests
 
 ```console
-> cd build
-> ctest -V -C Release
+$ .\build\venv\Scripts\pytest -v
 ```
 
 ## Installing the development version the legacy way
