@@ -269,6 +269,60 @@ def test_log_arg_handling(data_archive, cli_runner, output_format):
             assert num_commits(r) == 2
 
 
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_path_handling(data_archive, cli_runner, output_format):
+    def num_commits(r):
+        if output_format == "text":
+            return len(re.findall(r"(?m)^commit [0-9a-f]{40}$", r.stdout))
+        else:
+            return len(json.loads(r.stdout))
+
+    with data_archive("points"):
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k:feature:1"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k:1"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+        # Path syntax still works:
+        PK_1_PATH = "nz_pa_points_topo_150k/.table-dataset/feature/A/A/A/A/kQ0="
+        r = cli_runner.invoke(["log", "-o", output_format, "--", PK_1_PATH])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 1
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k:feature:1095"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k:feature:123456"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 0
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k:feature:123456"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 0
+
+        r = cli_runner.invoke(
+            ["log", "-o", output_format, "--", "nz_pa_points_topo_150k"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 2
+
+        r = cli_runner.invoke(["log", "-o", output_format, "--", "non-existant"])
+        assert r.exit_code == 0, r.stderr
+        assert num_commits(r) == 0
+
+
 @pytest.mark.parametrize(
     "args,expected_commits",
     [

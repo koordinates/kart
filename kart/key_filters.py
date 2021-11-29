@@ -111,18 +111,19 @@ class RepoKeyFilter(KeyFilterDict):
     )
 
     @classmethod
-    def build_from_user_patterns(cls, user_patterns):
+    def build_from_user_patterns(cls, user_patterns, implicit_meta=True):
         """
         Given a list of strings like ["datasetA:1", "datasetA:2", "datasetB"],
         builds a RepoKeyFilter with the appropriate entries for "datasetA" and "datasetB".
         If no patterns are specified, returns RepoKeyFilter.MATCH_ALL.
+        If implicit_meta is True, then all meta changes are matched as soon as any feature changes are requested.
         """
         result = cls()
         for user_pattern in user_patterns:
-            result.add_user_pattern(user_pattern)
+            result.add_user_pattern(user_pattern, implicit_meta=implicit_meta)
         return result if result else cls.MATCH_ALL
 
-    def add_user_pattern(self, user_pattern):
+    def add_user_pattern(self, user_pattern, implicit_meta=True):
         for p in (self._ENTIRE_DATASET_PATTERN, self._SINGLE_FEATURE_PATTERN):
             match = p.match(user_pattern)
             if match:
@@ -143,8 +144,8 @@ class RepoKeyFilter(KeyFilterDict):
             ds_filter = self.get(ds_path)
             if not ds_filter:
                 ds_filter = DatasetKeyFilter()
-                # We always match all meta items right now:
-                ds_filter["meta"] = UserStringKeyFilter.MATCH_ALL
+                if implicit_meta:
+                    ds_filter["meta"] = UserStringKeyFilter.MATCH_ALL
                 ds_filter["feature"] = UserStringKeyFilter()
                 self[ds_path] = ds_filter
 
