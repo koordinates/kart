@@ -389,7 +389,7 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_GITNOSPATIALFILTER: 1
+          KART_EXPECT_GITSPATIALFILTER: 0
         run: |
           & nmake /D /NoLogo /F makefile.vc ci-test
 
@@ -653,7 +653,7 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_NOMSSQLDRIVER: 1
+          KART_EXPECT_MSSQLDRIVER: 0
         run: |
           make ci-test
 
@@ -880,7 +880,7 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_GITNOFILTEREXTENSION: 1
+          KART_EXPECT_GITFILTEREXTENSION: 0
         working-directory: build
         run: |
           ctest -V
@@ -992,8 +992,8 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_GITNOFILTEREXTENSION: 1
-          KART_EXPECT_NOMSSQLDRIVER: 1
+          KART_EXPECT_GITFILTEREXTENSION: 0
+          KART_EXPECT_MSSQLDRIVER: 0
         working-directory: build
         run: |
           ctest -V
@@ -1079,7 +1079,7 @@ jobs:
 
       - name: "app: unit tests"
         env:
-          KART_EXPECT_GITNOSPATIALFILTER: 1
+          KART_EXPECT_GITSPATIALFILTER: 0
         working-directory: build
         run: |
           & ctest -V -C Release -j2

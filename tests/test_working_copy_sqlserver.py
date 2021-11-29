@@ -24,7 +24,7 @@ def test_no_odbc():
     except ImportError:
         pass
     else:
-        pytest.skip("ODBC is installed, so we can't test the no-ODBC error message")
+        pytest.skip("ODBC is available, so we can't test the no-ODBC error message")
 
     with pytest.raises(
         NotFound, match=r"^ODBC support for SQL Server is required but was not found."
@@ -37,13 +37,12 @@ def test_odbc_drivers():
     # use a try/except so we get a better message than via pytest.importorskip
     try:
         import pyodbc  # noqa
+
+        has_odbc = True
     except ImportError:
-        if "CI" in os.environ and "KART_EXPECT_NOODBC" not in os.environ:
-            pytest.fail(
-                "ODBC isn't available, but we're in CI and KART_EXPECT_NOODBC isn't set"
-            )
-        else:
-            pytest.skip("Can't import pyodbc — unixODBC likely isn't installed.")
+        has_odbc = False
+
+    pytest.helpers.feature_assert_or_skip("ODBC support", "KART_EXPECT_ODBC", has_odbc)
 
     num_drivers = len(Db_SqlServer.get_odbc_drivers())
     # Eventually we should assert that we have useful drivers - eg MSSQL.
@@ -55,13 +54,13 @@ def test_odbc_drivers():
 def test_sqlserver_driver():
     try:
         assert Db_SqlServer.get_sqlserver_driver() is not None
+        has_mssql_driver = True
     except NotFound:
-        if "CI" in os.environ and "KART_EXPECT_NOMSSQLDRIVER" not in os.environ:
-            pytest.fail(
-                "MSSQL driver isn't available, but we're in CI and KART_EXPECT_NOMSSQLDRIVER isn't set"
-            )
-        else:
-            raise pytest.skip("MSSQL driver isn't available.")
+        has_mssql_driver = False
+
+    pytest.helpers.feature_assert_or_skip(
+        "MSSQL driver", "KART_EXPECT_MSSQLDRIVER", has_mssql_driver
+    )
 
 
 # All of the following tests will also fail unless a MSSQL driver has been installed manually.

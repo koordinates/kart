@@ -452,6 +452,75 @@ def helpers():
     return TestHelpers
 
 
+@pytest.helpers.register
+def get_env_flag(env_var, ci_default=True):
+    """
+    Helper to parse environment flags used in tests. This is used to
+    assert optional features are present/absent in CI, or ignored in dev.
+
+    ci_default is the value to return if $CI is set and the environment variable
+    is not.
+
+    Usage:
+
+        expect_foo = pytest.helpers.get_env_flag("KART_EXPECT_FOO"):
+        if expect_foo is not None:
+            assert has_foo == expect_foo
+        elif not has_foo:
+            pytest.skip("foo is not available")
+    """
+    if env_var in os.environ:
+        try:
+            return bool(int(os.environ[env_var]))
+        except ValueError as e:
+            raise ValueError(
+                f"${env_var} should be set to 0 or 1, was {os.environ[env_var]!r}"
+            )
+    elif "CI" in os.environ:
+        return ci_default
+    else:
+        return None
+
+
+@pytest.helpers.register
+def feature_assert_or_skip(name, env_var, has_feature, ci_require=True):
+    """
+    Helper to enable conditional behaviour in tests based on feature detection.
+
+    This is used to assert optional features are present/absent in CI, or
+    ignored in dev using environment variables.
+
+    * if ${env_var}=1, or $CI and ci_require=True: fail if has_feature=False
+    * if ${env_var}=0, or $CI and ci_require=False: fail if has_feature=True
+    * else skip if has_feature = False
+
+    Usage:
+
+        # figure out whether we have foo
+        has_foo = ...
+        pytest.helpers.feature_assert_or_skip("foo", "KART_EXPECT_FOO", has_foo)
+
+        # test things that depend on foo being available
+    """
+    __tracebackhide__ = True
+
+    expect_feature = get_env_flag(env_var, ci_default=ci_require)
+
+    if expect_feature is not None:
+        if has_feature ^ expect_feature:
+            via = f"${env_var}"
+            if ci_require is not None:
+                via += "/$CI"
+
+            if has_feature:
+                pytest.fail(f"{name}: not expected (via {via}) but available")
+            else:
+                pytest.fail(f"{name}: expected (via {via}) but not available")
+
+    if not has_feature:
+        pytest.skip(f"{name}: not available")
+
+
 class TestHelpers:
 
     # Test Dataset (gpkg-points / points)

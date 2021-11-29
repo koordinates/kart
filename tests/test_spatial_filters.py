@@ -52,13 +52,11 @@ def git_supports_filter_extensions():
 # message rather than one per test
 @pytest.fixture(scope="session")
 def git_with_filter_extension_support(git_supports_filter_extensions):
-    if not git_supports_filter_extensions:
-        if "CI" in os.environ and "KART_EXPECT_GITNOFILTEREXTENSION" not in os.environ:
-            pytest.fail(
-                "The in-use git doesn't support filter extensions, but we're in CI and KART_EXPECT_GITNOFILTEREXTENSION isn't set"
-            )
-        else:
-            raise pytest.skip("The in-use git doesn't support filter extensions")
+    pytest.helpers.feature_assert_or_skip(
+        "Git with filter extensions",
+        "KART_EXPECT_GITFILTEREXTENSION",
+        git_supports_filter_extensions,
+    )
 
 
 # Feature detection for our custom git that has a spatial filter extension
@@ -101,16 +99,12 @@ def git_supports_spatial_filter(git_supports_filter_extensions):
 # using a fixture instead of a skipif decorator means we get one aggregated skip
 # message rather than one per test
 @pytest.fixture(scope="session")
-def git_with_spatial_filter_support(
-    git_with_filter_extension_support, git_supports_spatial_filter
-):
-    if not git_supports_spatial_filter:
-        if "CI" in os.environ and "KART_EXPECT_GITNOSPATIALFILTER" not in os.environ:
-            pytest.fail(
-                "The in-use git doesn't support spatial filters, but we're in CI and KART_EXPECT_GITNOSPATIALFILTER isn't set"
-            )
-        else:
-            raise pytest.skip("The in-use git doesn't support spatial filters")
+def git_with_spatial_filter_support(git_supports_spatial_filter):
+    pytest.helpers.feature_assert_or_skip(
+        "Git with spatial filters",
+        "KART_EXPECT_GITSPATIALFILTER",
+        git_supports_spatial_filter,
+    )
 
 
 def ring_as_wkt(*points):
