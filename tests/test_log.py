@@ -323,6 +323,80 @@ def test_path_handling(data_archive, cli_runner, output_format):
         assert num_commits(r) == 0
 
 
+@pytest.mark.parametrize("output_format", ["text", "json"])
+def test_path_handling_where_dataset_needs_finding(
+    data_archive, cli_runner, output_format
+):
+    # Make sure the user can still get the history of a particular feature even when
+    # it's not immediately obvious where the feature or the dataset that contains it is.
+    def num_commits(r):
+        if output_format == "text":
+            return len(re.findall(r"(?m)^commit [0-9a-f]{40}$", r.stdout))
+        else:
+            return len(json.loads(r.stdout))
+
+    with data_archive("gpkg-points") as data:
+        with data_archive("polygons"):
+            r = cli_runner.invoke(["data", "ls"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == ["nz_waca_adjustments"]
+
+            r = cli_runner.invoke(["checkout", "-b", "other"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["import", data / "nz-pa-points-topo-150k.gpkg"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["data", "ls"])
+            assert r.exit_code == 0, r.stderr
+            assert set(r.stdout.splitlines()) == set(
+                [
+                    "nz_waca_adjustments",
+                    "nz_pa_points_topo_150k",
+                ]
+            )
+
+            r = cli_runner.invoke(
+                ["data", "rm", "nz_pa_points_topo_150k", "-m", "delete-dataset"]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["commit", "-m", "empty-commit", "--allow-empty"])
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["checkout", "main"])
+            assert r.exit_code == 0, r.stderr
+            # At this point the dataset is hard to find for two reasons:
+            # It's not present our HEAD branch (main) at all.
+            # It is present in the "other" branch but not at the HEAD of that
+            # (it was deleted in the commit before last).
+
+            r = cli_runner.invoke(
+                ["log", "HEAD", "-o", output_format, "--", "nz_pa_points_topo_150k:1"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert num_commits(r) == 0
+
+            r = cli_runner.invoke(
+                ["log", "other", "-o", output_format, "--", "nz_pa_points_topo_150k:1"]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert num_commits(r) == 2
+
+            r = cli_runner.invoke(
+                [
+                    "log",
+                    "other",
+                    "-o",
+                    output_format,
+                    "--",
+                    "nz_pa_points_topo_150k:123456",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+            assert num_commits(r) == 0
+
+
 @pytest.mark.parametrize(
     "args,expected_commits",
     [

@@ -183,12 +183,20 @@ def find_dataset(ds_path, repo, commits):
         raise SubprocessError(
             f"There was a problem with git log: {e}", called_process_error=e
         )
-    if r.stdout:
+    commit = r.stdout.strip()
+    if not commit:
+        # Nothing ever existed at the given dataset path.
+        return None
+
+    try:
+        return repo.datasets(commit)[ds_path]
+    except KeyError:
+        # This happens if the dataset was deleted at the commit we found - we'll try the parent:
         try:
-            return repo.datasets(r.stdout.strip())[ds_path]
+            return repo.datasets(f"{commit}^")[ds_path]
         except KeyError:
-            pass
-    return None
+            # We failed find the dataset. Most likely reason is that it doesn't exist.
+            return None
 
 
 def convert_user_patterns_to_raw_paths(paths, repo, commits):
