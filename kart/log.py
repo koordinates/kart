@@ -1,4 +1,5 @@
 from datetime import datetime, timezone, timedelta
+from enum import Enum, auto
 import re
 import subprocess
 import sys
@@ -10,6 +11,7 @@ import pygit2
 from .cli_util import tool_environment
 from .exec import execvp
 from .exceptions import SubprocessError
+from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
@@ -51,6 +53,50 @@ class PreserveDoubleDash(click.Command):
         return super(PreserveDoubleDash, self).parse_args(ctx, args)
 
 
+class LogArgType(Enum):
+    # What to log - a commit, ref, range, etc:
+    COMMIT = auto()
+    # How to log it.
+    OPTION = auto()
+    # Which path(s) the user is interested in. Paths must come last.
+    PATH = auto()
+
+
+def get_arg_type(repo, arg, allow_paths=True):
+    """Decides what some user-supplied argument to kart log is supposed to do."""
+    if arg.startswith("-"):
+        # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
+        # but this isn't a valid commit-ish.
+        #    $ git branch -c -- -x
+        #    fatal: '-x' is not a valid branch name.
+        # So we can assume it's a CLI flag, presumably for git rather than kart.
+        # It *could* be a path, but in that case the user should add a `--` before this option
+        # to disambiguate, and they haven't done so here.
+        issue_link = "https://github.com/koordinates/kart/issues/508"
+        warnings.warn(
+            f"{arg!r} is unknown to Kart and will be passed directly to git. "
+            f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
+            RemovalInKart012Warning,
+        )
+        return LogArgType.OPTION
+
+    range_parts = re.split(r"\.\.\.?", arg)
+    if len(range_parts) <= 2:
+        try:
+            for part in range_parts:
+                repo.resolve_refish(part or "HEAD")
+            return LogArgType.COMMIT
+        except (KeyError, pygit2.InvalidSpecError):
+            pass
+
+    if allow_paths:
+        return LogArgType.PATH
+
+    raise click.UsageError(
+        f"Argument not recognised as a valid commit, ref, or range: {arg}"
+    )
+
+
 def parse_extra_args(
     repo,
     args,
@@ -72,65 +118,118 @@ def parse_extra_args(
     # If it's ambiguous whether something is a path or not, we assume it's a commit-ish.
     # If you want to be unambiguous, provide the `--` arg to separate the list of commit-ish-es and paths.
     # This behaviour should be consistent with git's behaviour.
+
     if "--" in args:
         dash_index = args.index("--")
-        paths = args[dash_index + 1 :]
-        other_args = list(args[:dash_index])
+        paths = list(args[dash_index + 1 :])
+        args = args[:dash_index]
     else:
-        other_args = []
+        dash_index = None
         paths = []
-        for i, arg in enumerate(args):
-            if arg.startswith("-"):
-                # It's not explicitly stated by https://git-scm.com/docs/git-check-ref-format
-                # but this isn't a valid commit-ish.
-                #    $ git branch -c -- -x
-                #    fatal: '-x' is not a valid branch name.
-                # So we can assume it's a CLI flag, presumably for git rather than kart.
-                # It *could* be a path, but in that case the user should add a `--` before this option
-                # to disambiguate, and they haven't done so here.
-                issue_link = "https://github.com/koordinates/kart/issues/508"
-                warnings.warn(
-                    f"{arg!r} is unknown to Kart and will be passed directly to git. "
-                    f"This will be removed in Kart 0.12! Please comment on {issue_link} if you need to use this option.",
-                    RemovalInKart012Warning,
-                )
-                other_args.append(arg)
-                continue
 
-            range_parts = re.split(r"\.\.\.?", arg)
-            if len(range_parts) > 2:
-                # not a valid range or ref, must be a path
-                # Treat remaining args as paths
-                paths = args[i:]
-                break
-
-            try:
-                for part in range_parts:
-                    repo.resolve_refish(part or "HEAD")
-            except (KeyError, pygit2.InvalidSpecError):
-                # not a commit-ish.
-                # Treat remaining args as paths
-                paths = args[i:]
-                break
-            else:
-                other_args.append(arg)
+    options = []
+    commits = []
+    allow_paths = dash_index is None
+    for arg in args:
+        arg_type = get_arg_type(repo, arg, allow_paths=allow_paths)
+        {
+            LogArgType.OPTION: options,
+            LogArgType.COMMIT: commits,
+            LogArgType.PATH: paths,
+        }[arg_type].append(arg)
 
     if max_count is not None:
-        other_args.append(f"--max-count={max_count}")
+        options.append(f"--max-count={max_count}")
     if skip is not None:
-        other_args.append(f"--skip={skip}")
+        options.append(f"--skip={skip}")
     if since is not None:
-        other_args.append(f"--since={since}")
+        options.append(f"--since={since}")
     if until is not None:
-        other_args.append(f"--until={until}")
+        options.append(f"--until={until}")
     # These ones can be specified more than once
     if author:
-        other_args.extend(f"--author={a}" for a in author)
+        options.extend(f"--author={a}" for a in author)
     if committer:
-        other_args.extend(f"--committer={c}" for c in committer)
+        options.extend(f"--committer={c}" for c in committer)
     if grep:
-        other_args.extend(f"--grep={g}" for g in grep)
-    return other_args, list(paths)
+        options.extend(f"--grep={g}" for g in grep)
+    return options, commits, paths
+
+
+def find_dataset(ds_path, repo, commits):
+    """Finds a dataset by name, so long as it is found somewhere in the given commits / refs / ranges."""
+    if ds_path in repo.datasets():
+        return repo.datasets()[ds_path]
+    cmd = [
+        "git",
+        "-C",
+        repo.path,
+        "log",
+        "--max-count=1",
+        "--format=%H",
+        *commits,
+        "--",
+        ds_path,
+    ]
+    try:
+        r = subprocess.run(
+            cmd,
+            encoding="utf8",
+            check=True,
+            capture_output=True,
+            env=tool_environment(),
+        )
+    except subprocess.CalledProcessError as e:
+        raise SubprocessError(
+            f"There was a problem with git log: {e}", called_process_error=e
+        )
+    commit = r.stdout.strip()
+    if not commit:
+        # Nothing ever existed at the given dataset path.
+        return None
+
+    try:
+        return repo.datasets(commit)[ds_path]
+    except KeyError:
+        # This happens if the dataset was deleted at the commit we found - we'll try the parent:
+        try:
+            return repo.datasets(f"{commit}^")[ds_path]
+        except KeyError:
+            # We failed find the dataset. Most likely reason is that it doesn't exist.
+            return None
+
+
+def convert_user_patterns_to_raw_paths(paths, repo, commits):
+    """
+    Given some user-supplied filter patterns like "path/to/dataset:feature:123" or its equivalent "path/to/dataset:123",
+    finds the path encoding for the dataset they apply to and converts them to the feature's path, eg:
+    path/to/dataset/.table-dataset/feature/F/9/o/6/kc4F9o6L
+    """
+    repo_filter = RepoKeyFilter.build_from_user_patterns(paths, implicit_meta=False)
+    if repo_filter.match_all:
+        return []
+    result = []
+    for ds_path, ds_filter in repo_filter.items():
+        if ds_filter.match_all:
+            result.append(ds_path)
+            continue
+        ds = find_dataset(ds_path, repo, commits)
+        if not ds:
+            result.append(ds_path)
+            continue
+        for ds_part, part_filter in ds_filter.items():
+            if part_filter.match_all:
+                result.append(f"{ds.inner_path}/{ds_part}")
+                continue
+
+            for item_key in part_filter:
+                if ds_part == "feature":
+                    result.append(
+                        ds.encode_pks_to_path(ds.schema.sanitise_pks(item_key))
+                    )
+                else:
+                    result.append(f"{ds.inner_path}/{ds_part}/{item_key}")
+    return result
 
 
 @click.command(
@@ -219,7 +318,9 @@ def parse_extra_args(
     multiple=True,
     help="Limit the commits output to ones with log message matching the specified pattern (regular expression)",
 )
-@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+@click.argument(
+    "args", metavar="[REVISION RANGE] [--] [FEATURES]", nargs=-1, type=click.UNPROCESSED
+)
 def log(
     ctx,
     output_format,
@@ -230,15 +331,22 @@ def log(
     **kwargs,
 ):
     """
-    Show commit logs
+    Show commit logs.
+    The REVISION RANGE can be a commit, a set of commits, or references to commits. A log containing those commits
+    and all their ancestors will be output. The log of a particular range of commits can also be requested
+    using the format <commit1>..<commit2> - for more details, see https://git-scm.com/docs/git-log.
+    If FEATURES are specified, then only commits where those features were changed will be output. Entire
+    datasets can be specified by name, or individual features can be specified using the format
+    <dataset-name>:<feature-primary-key>.
     """
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 
-    other_args, paths = parse_extra_args(repo, args, **kwargs)
+    options, commits, paths = parse_extra_args(repo, args, **kwargs)
+    paths = convert_user_patterns_to_raw_paths(paths, repo, commits)
 
     # TODO: should we check paths exist here? git doesn't!
     if output_format == "text":
-        git_args = ["git", "-C", repo.path, "log", *other_args, "--", *paths]
+        git_args = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
         execvp("git", git_args)
 
     elif output_format in ("json", "json-lines"):
@@ -248,8 +356,9 @@ def log(
                 "-C",
                 repo.path,
                 "log",
-                "--pretty=format:%H,%D",
-                *other_args,
+                "--format=%H,%D",
+                *options,
+                *commits,
                 "--",
                 *paths,
             ]
