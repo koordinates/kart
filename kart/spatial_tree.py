@@ -2,6 +2,7 @@ import functools
 import logging
 import re
 import subprocess
+import sys
 import time
 
 import click
@@ -350,7 +351,9 @@ def _format_commits(repo, commit_ids):
     return " ".join(c[:length] for c in commit_ids)
 
 
-def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
+def update_spatial_tree(
+    repo, commits, verbosity=1, clear_existing=False, dry_run=False
+):
     """
     Index the commits given in commit_spec, and write them to the s2_index.db repo file.
 
@@ -394,6 +397,10 @@ def update_spatial_tree(repo, commits, verbosity=1, clear_existing=False):
         click.echo(f"Indexing from the very start up to {current_desc} ...")
     else:
         click.echo(f"Indexing from {ancestor_desc} up to {current_desc} ...")
+
+    if dry_run:
+        click.echo("(Not performing the indexing due to --dry-run.")
+        sys.exit(0)
 
     t0 = time.monotonic()
     i = 0
@@ -581,14 +588,20 @@ def spatial_tree(ctx, **kwargs):
     "--clear-existing",
     is_flag=True,
     default=False,
-    help=("Clear existing index before re-indexing"),
+    help="Clear existing index before re-indexing",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Don't do any indexing, instead just output what would be indexed.",
 )
 @click.argument(
     "commits",
     nargs=-1,
 )
 @click.pass_context
-def index(ctx, clear_existing, commits):
+def index(ctx, clear_existing, dry_run, commits):
     """
     Indexes all features added by the supplied commits and their ancestors.
     If no commits are supplied, indexes all features in all commits.
@@ -604,4 +617,5 @@ def index(ctx, clear_existing, commits):
         commits,
         verbosity=ctx.obj.verbosity + 1,
         clear_existing=clear_existing,
+        dry_run=dry_run,
     )
