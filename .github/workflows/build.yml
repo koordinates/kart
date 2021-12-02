@@ -669,7 +669,7 @@ jobs:
       - name: "package: setup app signing certificate"
         id: keychain
         uses: apple-actions/import-codesign-certs@v1
-        if: "steps.version.outputs.is_fork == 0"
+        if: "steps.version.outputs.is_fork == 0 && github.actor != 'dependabot[bot]'"
         with:
           p12-file-base64: ${{ secrets.MACOS_APP_CERT }}
           p12-password: ${{ secrets.MACOS_CERT_PW }}
