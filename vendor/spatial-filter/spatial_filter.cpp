@@ -24,12 +24,7 @@ namespace {
 
 static const string INDEX_FILENAME = "s2_index.db";
 
-// These three values must match the values used to generate the s2-index:
-static const int S2_MIN_LEVEL = 4;
-static const int S2_MAX_LEVEL = 16;
-static const int S2_LEVEL_MOD = 1;
-
-// But this value can be changed at any time:
+// This value can be tweaked at any time without changing the index.
 static const int S2_MAX_CELLS_QUERY = 25;
 
 static const int OBJ_COMMIT = 1;
@@ -137,11 +132,36 @@ int sf_init(
         return 0;
     }
 
+    int sql_err;
+    sqlite3_stmt *stmt;
+
+    // Look up the parameters used to generate the index
+    const string parameters_sql("SELECT min_level, max_level, level_mod FROM parameters;");
+    sql_err = sqlite3_prepare_v2(ctx->db, parameters_sql.c_str(), -1, &stmt, NULL);
+
+    if (sql_err) {
+        std::cerr << "spatial-filter: Error: reading parameters (1." << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
+        return 1;
+    }
+
+    sql_err = sqlite3_step(stmt);
+    if (sql_err != SQLITE_ROW) {
+        std::cerr << "spatial-filter: Error: reading parameters (2." << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
+        sqlite3_finalize(stmt);
+        return 1;
+    }
+    int min_level = sqlite3_column_int(stmt, 0);
+    int max_level = sqlite3_column_int(stmt, 1);
+    int level_mod = sqlite3_column_int(stmt, 2);
+    sqlite3_finalize(stmt);
+
+    sf_trace_printf("Index parameters: min_level=%d max_level=%d level_mod=%d\n", min_level, max_level, level_mod);
+
     // Prepare the query terms.
     S2RegionTermIndexer::Options indexer_options;
-    indexer_options.set_min_level(S2_MIN_LEVEL);
-    indexer_options.set_max_level(S2_MAX_LEVEL);
-    indexer_options.set_level_mod(S2_LEVEL_MOD);
+    indexer_options.set_min_level(min_level);
+    indexer_options.set_max_level(max_level);
+    indexer_options.set_level_mod(level_mod);
     indexer_options.set_max_cells(S2_MAX_CELLS_QUERY);
 
     S2RegionTermIndexer indexer(indexer_options);
@@ -152,7 +172,6 @@ int sf_init(
     std::copy(query_terms.begin(), query_terms.end(), std::ostream_iterator<string>(all_query_terms, ", "));
     sf_trace_printf(" Query terms: %s\n", all_query_terms.str().c_str());
 
-    int sql_err;
 
     // Create and populate a temporary in-memory table with the query terms.
     sql_err = sqlite3_exec(ctx->db,
@@ -160,29 +179,28 @@ int sf_init(
                            "CREATE TEMP TABLE _query_tokens (s2_token TEXT PRIMARY KEY);",
                            NULL, NULL, NULL);
     if (sql_err) {
-        std::cerr << "spatial-filter: Error: preparing query-tokens (1/" << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
+        std::cerr << "spatial-filter: Error: preparing query-tokens (3." << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
         return 1;
     }
 
-    sqlite3_stmt *stmt;
     sql_err = sqlite3_prepare_v2(ctx->db,
                                  "INSERT INTO _query_tokens VALUES (?);",
                                  -1, &stmt, NULL);
     if (sql_err) {
-        std::cerr << "spatial-filter: Error: preparing query-tokens (2/" << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
+        std::cerr << "spatial-filter: Error: preparing query-tokens (4." << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
         return 1;
     }
     for (auto t: query_terms) {
         sql_err = sqlite3_bind_text(stmt, 1, t.c_str(), -1, SQLITE_TRANSIENT);
         if (sql_err) {
-            std::cerr << "\nspatial-filter: Error: preparing query-tokens (3/" << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
+            std::cerr << "\nspatial-filter: Error: preparing query-tokens (5." << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
             sqlite3_finalize(stmt);
             return 1;
         }
 
         sql_err = sqlite3_step(stmt);
         if (sql_err != SQLITE_DONE) {
-            std::cerr << "\nspatial-filter: Error: populating query-tokens (" << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
+            std::cerr << "\nspatial-filter: Error: populating query-tokens (6." << sql_err << "): " << sqlite3_errmsg(ctx->db) << "\n";
             sqlite3_finalize(stmt);
             return 1;
         }
@@ -191,20 +209,20 @@ int sf_init(
     sqlite3_finalize(stmt);
 
     // prepare the lookup db query
-    const string querySql("SELECT EXISTS("
+    const string query_sql("SELECT EXISTS("
                           "SELECT 1 "
                           "FROM blobs "
                           "INNER JOIN blob_tokens ON (blobs.rowid=blob_tokens.blob_rowid) "
                           "INNER JOIN _query_tokens ON (blob_tokens.s2_token=_query_tokens.s2_token) "
                           "WHERE blobs.blob_id=?);");
     sql_err = sqlite3_prepare_v3(ctx->db,
-                                 querySql.c_str(),
-                                 static_cast<int>(querySql.size()+1),
+                                 query_sql.c_str(),
+                                 static_cast<int>(query_sql.size()+1),
                                  SQLITE_PREPARE_PERSISTENT,
                                  &ctx->lookup_stmt,
                                  NULL);
     if (sql_err) {
-        std::cerr << "spatial-filter: Error: preparing lookup (" << sql_err << ")" << sqlite3_errmsg(ctx->db) << "\n";
+        std::cerr << "spatial-filter: Error: preparing lookup (7." << sql_err << ")" << sqlite3_errmsg(ctx->db) << "\n";
         return 1;
     }
 

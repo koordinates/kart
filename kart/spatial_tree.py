@@ -26,10 +26,12 @@ from .sqlalchemy.sqlite import sqlite_engine
 
 L = logging.getLogger("kart.spatial_tree")
 
-# These three values cannot be changed without rewriting the entire index:
+# These three parameters cannot be changed without rewriting the entire index:
 S2_MIN_LEVEL = 4
 S2_MAX_LEVEL = 16
 S2_LEVEL_MOD = 1
+# When the index is written, these parameters are stored with the index, so that we can continue to update and use
+# that existing index without rewriting it even if we decide to tweak these numbers to better values for new repos.
 
 S2_PARAMETERS = {
     "min_level": S2_MIN_LEVEL,
