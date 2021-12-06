@@ -97,14 +97,21 @@ class CrsHelper:
             return self.ds_to_transforms[ds_path]
 
         crs_oids = set(self.iter_crs_oids(ds_path))
+        distinct_crs_list = []
         transforms = []
         descs = []
         for crs_oid in crs_oids:
             try:
-                transform, desc = self.transform_from_oid(crs_oid)
-                if transform not in transforms:
-                    transforms.append(transform)
-                    descs.append(desc)
+                crs = self.crs_from_oid(crs_oid)
+                if crs in distinct_crs_list or any(
+                    crs.IsSame(c) for c in distinct_crs_list
+                ):
+                    continue
+                distinct_crs_list.append(crs)
+
+                transform, desc = self.transform_from_src_crs(crs)
+                transforms.append(transform)
+                descs.append(desc)
             except Exception as e:
                 L.warning(
                     f"Couldn't load transform for CRS {crs_oid} at {ds_path}\n{e}"
@@ -143,13 +150,11 @@ class CrsHelper:
         yield f"{ds_path}/.table-dataset/meta/crs/"
 
     @functools.lru_cache()
-    def transform_from_oid(self, crs_oid):
+    def crs_from_oid(self, crs_oid):
         wkt = normalise_wkt(self.repo[crs_oid].data.decode("utf-8"))
-        return self.transform_from_wkt(wkt)
+        return make_crs(wkt)
 
-    @functools.lru_cache()
-    def transform_from_wkt(self, wkt):
-        src_crs = make_crs(wkt)
+    def transform_from_src_crs(self, src_crs):
         if src_crs.IsSame(self.target_crs):
             transform = None
             desc = f"IDENTITY({src_crs.GetAuthorityCode(None)})"
