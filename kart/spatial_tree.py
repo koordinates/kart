@@ -489,65 +489,61 @@ def _find_geometry_column(fields):
 
 
 def get_s2_tokens(s2_indexer, geom, transforms):
-    is_point = geom.geometry_type == GeometryType.POINT
+    envelope = get_envelope_for_indexing(geom, transforms)
+    return envelope_to_s2_tokens(s2_indexer, envelope)
 
-    return (
-        _point_s2_tokens(s2_indexer, geom, transforms)
-        if is_point
-        else _general_s2_tokens(s2_indexer, geom, transforms)
+
+INF = float("inf")
+
+
+def get_envelope_for_indexing(geom, transforms):
+    # TODO: Make this more rigorous - ie, make sure that:
+    # -90 <= S <= N <= +90
+    # -180 <= W <= +180
+    # 0 <= (E - W) <= 360 ; therefore -180 <= W <= +540
+
+    # Result initialised to an infinite and negative area which disappears when unioned with.
+    result = [+INF, +INF, -INF, -INF]
+
+    # FIXME: For correctness, this should transform the original geometries before taking their bounding box.
+    # The downside of that approach is that it is maybe 10x slower.
+    w, e, s, n = geom.envelope(only_2d=True, calculate_if_missing=True)
+    raw_envelope = w, s, e, n
+    for transform in transforms:
+        if transform is not None:
+            envelope = _transform_envelope(raw_envelope, transform)
+        else:
+            envelope = raw_envelope
+        result = _union_of_envelopes(result, envelope)
+    return result
+
+
+def _transform_envelope(envelope, transform):
+    corners = ogr.Geometry(ogr.wkbLineString)
+    corners.AddPoint_2D(envelope[0], envelope[1])
+    corners.AddPoint_2D(envelope[2], envelope[3])
+    corners.Transform(transform)
+    a, b = corners.GetPoint_2D(0), corners.GetPoint_2D(1)
+    return min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])
+
+
+def _union_of_envelopes(a, b):
+    # Note that this overwrites envelope a.
+    a[0] = min(a[0], b[0])
+    a[1] = min(a[1], b[1])
+    a[2] = max(a[2], b[2])
+    a[3] = max(a[3], b[3])
+    return a
+
+
+def envelope_to_s2_tokens(s2_indexer, envelope):
+    import s2_py as s2
+
+    s2_llrect = s2.S2LatLngRect.FromPointPair(
+        s2.S2LatLng.FromDegrees(envelope[1], envelope[0]),
+        s2.S2LatLng.FromDegrees(envelope[3], envelope[2]),
     )
-
-
-def _apply_transform(original, transform, overwrite_original=False):
-    if transform is None:
-        return original
-    result = original if overwrite_original else original.Clone()
-    result.Transform(transform)
-    return result
-
-
-def _point_s2_tokens(s2_indexer, geom, transforms):
-    import s2_py as s2
-
-    g = gpkg_geom_to_ogr(geom)
-    one_transform = len(transforms) == 1
-
-    result = set()
-    for transform in transforms:
-        g_transformed = _apply_transform(g, transform, overwrite_original=one_transform)
-        p = g_transformed.GetPoint()[:2]
-        s2_ll = s2.S2LatLng.FromDegrees(p[1], p[0]).Normalized()
-        query_terms = s2_indexer.GetIndexTerms(s2_ll.ToPoint(), "")
-        result.update(query_terms)
-
-    return result
-
-
-def _general_s2_tokens(s2_indexer, geom, transforms):
-    import s2_py as s2
-
-    e = geom_envelope(geom)
-    if e is None:
-        return ()  # Empty.
-
-    sw_src = e[0], e[2]
-    ne_src = e[1], e[3]
-
-    result = set()
-    for transform in transforms:
-        s2_ll = []
-        for p_src in (sw_src, ne_src):
-            g = ogr.Geometry(ogr.wkbPoint)
-            g.AddPoint(*p_src)
-            _apply_transform(g, transform, overwrite_original=True)
-            p_dest = g.GetPoint()[:2]
-            s2_ll.append(s2.S2LatLng.FromDegrees(p_dest[1], p_dest[0]).Normalized())
-
-        s2_llrect = s2.S2LatLngRect.FromPointPair(*s2_ll)
-        query_terms = s2_indexer.GetIndexTerms(s2_llrect, "")
-        result.update(query_terms)
-
-    return result
+    return s2_indexer.GetIndexTerms(s2_llrect, "")
 
 
 def _resolve_all_commit_refs(repo):
