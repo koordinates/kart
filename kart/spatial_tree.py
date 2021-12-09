@@ -462,14 +462,15 @@ def get_envelope_for_indexing(geom, transforms, feature_oid):
     It is always true that s <= n. Normally w <= e unless it crosses the anti-meridian, in which case e < w.
     """
 
-    # Result initialised to an infinite and negative area which disappears when unioned.
     result = None
 
     try:
-        raw_envelope = geom.envelope(only_2d=True, calculate_if_missing=True)
+        minmax_envelope = _transpose_gpkg_envelope(
+            geom.envelope(only_2d=True, calculate_if_missing=True)
+        )
 
         for transform in transforms:
-            envelope = _transform_envelope(raw_envelope, transform)
+            envelope = transform_minmax_envelope(minmax_envelope, transform)
             result = union_of_envelopes(result, envelope)
         return result
     except Exception as e:
@@ -477,26 +478,102 @@ def get_envelope_for_indexing(geom, transforms, feature_oid):
         return None
 
 
-def _transform_envelope(raw_envelope, transform):
+def _transpose_gpkg_envelope(envelope):
+    """
+    GPKG uses the envelope format (min-x, max-x, min-y, max-y). We use the envelope format (w, s, e, n).
+    We transpose GPKG envelope to (min-x, min-y, max-x, max-y), so that it least it has the same axis-order as our
+    format, and we handle anti-meridian issues seperately (see transform_minmax_envelope).
+    """
+    return envelope[0], envelope[2], envelope[1], envelope[3]
+
+
+def transform_minmax_envelope(minmax_envelope, transform):
+    """
+    Given an envelope in (min-x, min-y, max-x, max-y) format in any CRS, transforms it to EPSG:4326 using the given
+    transform, then returns an axis-aligned envelope in EPSG:4326 in (w, s, e, n) order that bounds the original
+    (but which may have a slightly larger area due to the axis-aligned edges not lining up with the original).
+    The returned envelope has w <= e unless it crosses the antimeridian, in which case e < w.
+    """
+
     # FIXME: This function is not 100% correct - it should segmentize each edge of the envelope and transform
     # all the segments, to account for the fact that these edges should sometimes curve when reprojected.
-    # But right now we just reproject the corners and draw lines between them - in rare cases the result
+    # But right now we just reproject the corners and assume straight lines between them - in rare cases the result
     # won't cover the entire geometry.
-    corners = ogr.Geometry(ogr.wkbLineString)
-    # At least we transform all 4 corners, which avoids some errors caused by only transforming 2 of them.
 
-    # The raw_envelope that we get from GPKG / OGR has the following format: min-x, max-x, min-y, max-y.
-    corners.AddPoint_2D(raw_envelope[0], raw_envelope[2])
-    corners.AddPoint_2D(raw_envelope[0], raw_envelope[3])
-    corners.AddPoint_2D(raw_envelope[1], raw_envelope[2])
-    corners.AddPoint_2D(raw_envelope[1], raw_envelope[3])
-    corners.Transform(transform)
-    values = [corners.GetPoint_2D(c) for c in range(4)]
-    x_values = [v[0] for v in values]
-    y_values = [v[1] for v in values]
-    # FIXME: This also assumes the geometry doesn't cross the anti-meridian.
-    # Return w, s, e, n:
-    return min(x_values), min(y_values), max(x_values), max(y_values)
+    ring = anticlockwise_ring_from_minmax_envelope(minmax_envelope)
+    ring.Transform(transform)
+    ring_points = [ring.GetPoint_2D(i) for i in range(5)]
+
+    if _is_clockwise(ring_points):
+        # The ring was anticlockwise, but when projected and EPSG:4326 into the range [-180, 180] it became clockwise.
+        # We need to try different interprerations of the ring until we find one where it is anticlockwise (this will
+        # cross the meridian). Once we've found this interpretation, we can treat the min-x and max-x as w and e.
+        ring_points = _fix_ring_winding_order(ring_points)
+
+    x_values = [p[0] for p in ring_points]
+    y_values = [p[1] for p in ring_points]
+
+    w = _wrap_lon(min(x_values))
+    s = min(y_values)
+    e = _wrap_lon(max(x_values))
+    n = max(y_values)
+
+    return (w, s, e, n)
+
+
+def anticlockwise_ring_from_minmax_envelope(minmax_envelope):
+    """Given an envelope in (min-x, min-y, max-x, max-y) format, builds an anticlockwise ring around it."""
+    ring = ogr.Geometry(ogr.wkbLinearRing)
+    # The envelope has the following format: min-x, min-y, max-x, max-ys.
+    # We start at min-x, min-y and travel around it in an anti-clockwise direction:
+    ring.AddPoint_2D(minmax_envelope[0], minmax_envelope[1])
+    ring.AddPoint_2D(minmax_envelope[2], minmax_envelope[1])
+    ring.AddPoint_2D(minmax_envelope[2], minmax_envelope[3])
+    ring.AddPoint_2D(minmax_envelope[0], minmax_envelope[3])
+    ring.AddPoint_2D(minmax_envelope[0], minmax_envelope[1])
+    return ring
+
+
+def _is_clockwise(ring_points):
+    """
+    Does a polygon area calculation to determine whether the given ring or polygon is clockwise.
+    For explanation see https://en.wikipedia.org/wiki/Shoelace_formula
+    Ring_points should be a list of (x, y) tuples where the first and last point are the same.
+    """
+    result = 0
+    for i in range(len(ring_points) - 1):
+        result += (
+            ring_points[i][0] * ring_points[i + 1][1]
+            - ring_points[i][1] * ring_points[i + 1][0]
+        )
+    return result < 0
+
+
+def _is_anticlockwise(ring_points):
+    return not _is_clockwise(ring_points)
+
+
+def _fix_ring_winding_order(ring_points):
+    """
+    Shifts each point in turn eastwards by 360 degrees around the globe until the winding order is fixed
+    to be anticlockwise. This works on any ring, but has O(n^2) efficiency, so ideally should only be
+    used on geometries with few points.
+    Ring_points should be a list of (x, y) tuples where the first and last point are the same.
+    """
+    if _is_anticlockwise(ring_points):
+        return ring_points
+
+    # Make a copy of points, and make each point a list not a tuple so it can be modified easily.
+    ring_points = [list(p) for p in ring_points]
+
+    sorted_x_values = sorted(set(p[0] for p in ring_points))
+    for x in sorted_x_values:
+        for p in ring_points:
+            if p[0] <= x:
+                p[0] += 360
+        if _is_anticlockwise(ring_points):
+            return ring_points
+    raise AssertionError("This should never happen")
 
 
 def _unwrap_lon_envelope(w, e):

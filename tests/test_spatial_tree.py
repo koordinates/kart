@@ -1,8 +1,16 @@
 from dataclasses import dataclass
 import pytest
 
+from osgeo import osr
+
+from kart.crs_util import make_crs
 from kart.sqlalchemy.sqlite import sqlite_engine
-from kart.spatial_tree import EnvelopeEncoder, union_of_envelopes
+from kart.spatial_tree import (
+    EnvelopeEncoder,
+    anticlockwise_ring_from_minmax_envelope,
+    transform_minmax_envelope,
+    union_of_envelopes,
+)
 from sqlalchemy.orm import sessionmaker
 
 H = pytest.helpers.helpers()
@@ -188,6 +196,65 @@ def _get_index_summary(repo_path):
         return IndexSummary(
             features, first_blob_id, first_envelope, last_blob_id, last_envelope
         )
+
+
+# This transform leaves every point exactly where it is, even points past the antimeridian eg (185, 0)
+# We need to test this since its a special case - no other transform will result in longitudes outside
+# the range [-180, 180].
+EPSG_4326 = make_crs("EPSG:4326")
+IDENTITY_TRANSFORM = osr.CoordinateTransformation(EPSG_4326, EPSG_4326)
+
+# This transform leaves points more-or-less where they are, but it does ensure the output longitude
+# values are -180 <= x <= 180, which is what most transforms will do, so this is helps test that
+# we handle anti-meridians properly in the general case.
+NZGD2000 = make_crs("EPSG:2193")
+NZGD2000_TRANSFORM = osr.CoordinateTransformation(NZGD2000, EPSG_4326)
+
+
+@pytest.mark.parametrize(
+    "minmax_envelope,transform,expected_result",
+    [
+        ((1, 2, 3, 4), IDENTITY_TRANSFORM, (1, 2, 3, 4)),
+        ((177, -10, 184, 10), IDENTITY_TRANSFORM, (177, -10, -176, 10)),
+        ((185, 10, 190, 20), IDENTITY_TRANSFORM, (-175, 10, -170, 20)),
+        ((-190, -20, -185, -10), IDENTITY_TRANSFORM, (170, -20, 175, -10)),
+        (
+            (1347679, 5456907, 2021025, 6117225),
+            NZGD2000_TRANSFORM,
+            (170, -41, 178, -35),
+        ),
+        (
+            (1347679, 5456907, 2532792, 5740667),
+            NZGD2000_TRANSFORM,
+            (170, -41, -176, -38),
+        ),
+        (
+            (2367133, 5308558, 2513805, 5517072),
+            NZGD2000_TRANSFORM,
+            (-178, -42, -176, -40),
+        ),
+    ],
+)
+def test_transform_raw_envelope(transform, minmax_envelope, expected_result):
+    # This first part of the test just tests our assumptions about transforms:
+    # we need to be sure that the IDENTITY_TRANSFORM works differently to the other
+    # transforms, so that we can be sure the code handles both possibilities properly.
+    ring = anticlockwise_ring_from_minmax_envelope(minmax_envelope)
+    ring.Transform(transform)
+    x_values = [ring.GetPoint_2D(i)[0] for i in range(5)]
+
+    if transform == IDENTITY_TRANSFORM:
+        # IDENTITY_TRANSFORM leaves x-values as they are.
+        # This means output values can be > 180 or < -180.
+        assert set(x_values) == set([minmax_envelope[0], minmax_envelope[2]])
+    else:
+        # Any other transform will output x-values within this range,
+        # which means detecting anti-meridian crossings works a little differently.
+        assert all(-180 <= x <= 180 for x in x_values)
+
+    # This is the actual test that the transform works.
+    actual_result = transform_minmax_envelope(minmax_envelope, transform)
+    assert actual_result == pytest.approx(expected_result, abs=1e-5)
 
 
 @pytest.mark.parametrize(
