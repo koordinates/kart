@@ -10,6 +10,7 @@ from kart.spatial_tree import (
     anticlockwise_ring_from_minmax_envelope,
     transform_minmax_envelope,
     union_of_envelopes,
+    get_ogr_envelope,
 )
 from sqlalchemy.orm import sessionmaker
 
@@ -75,12 +76,13 @@ def test_roundtrip_envelope(envelope, expected_encoded):
     _check_envelope(roundtripped, envelope)
 
 
-def _check_envelope(roundtripped, original):
-    assert roundtripped == pytest.approx(original, abs=1e-3)
-    assert roundtripped[0] <= original[0]
-    assert roundtripped[1] <= original[1]
-    assert roundtripped[2] >= original[2]
-    assert roundtripped[3] >= original[3]
+def _check_envelope(roundtripped, original, abs=1e-3):
+    assert roundtripped == pytest.approx(original, abs=abs)
+    if original is not None:
+        assert roundtripped[0] <= original[0]
+        assert roundtripped[1] <= original[1]
+        assert roundtripped[2] >= original[2]
+        assert roundtripped[3] >= original[3]
 
 
 def test_index_points_all(data_archive, cli_runner):
@@ -145,11 +147,11 @@ def test_index_points_idempotent(data_archive, cli_runner):
         _check_index(s, EXPECTED_POINTS_INDEX)
 
 
-def _check_index(actual, expected):
+def _check_index(actual, expected, abs=1e-3):
     assert actual.first_blob_id == expected.first_blob_id
-    _check_envelope(actual.first_envelope, expected.first_envelope)
+    _check_envelope(actual.first_envelope, expected.first_envelope, abs=abs)
     assert actual.last_blob_id == expected.last_blob_id
-    _check_envelope(actual.last_envelope, expected.last_envelope)
+    _check_envelope(actual.last_envelope, expected.last_envelope, abs=abs)
 
 
 def test_index_polygons_all(data_archive, cli_runner):
@@ -159,7 +161,9 @@ def test_index_polygons_all(data_archive, cli_runner):
 
         s = _get_index_summary(repo_path)
         assert s.features == 228
-        _check_index(s, EXPECTED_POLYGONS_INDEX)
+        # The buffer-for-curvature (buffer added to compensate for possible curvature of line segments)
+        # means the polygon index is not as accurate.
+        _check_index(s, EXPECTED_POLYGONS_INDEX, 1e-2)
 
 
 def test_index_table_all(data_archive, cli_runner):
@@ -204,57 +208,135 @@ def _get_index_summary(repo_path):
 EPSG_4326 = make_crs("EPSG:4326")
 IDENTITY_TRANSFORM = osr.CoordinateTransformation(EPSG_4326, EPSG_4326)
 
-# This transform leaves points more-or-less where they are, but it does ensure the output longitude
-# values are -180 <= x <= 180, which is what most transforms will do, so this is helps test that
-# we handle anti-meridians properly in the general case.
-NZGD2000 = make_crs("EPSG:2193")
-NZGD2000_TRANSFORM = osr.CoordinateTransformation(NZGD2000, EPSG_4326)
+# This transform tests the general case - like most transforms, the end result will be points with
+# longitudes wrapped into the range [-180, 180]. It also is valid over an area that crosses the
+# anti-meridian, so we can test that too.
+NZTM = make_crs("EPSG:2193")
+NZTM_TRANSFORM = osr.CoordinateTransformation(NZTM, EPSG_4326)
 
 
 @pytest.mark.parametrize(
-    "minmax_envelope,transform,expected_result",
+    "input,transform,expected_result",
     [
         ((1, 2, 3, 4), IDENTITY_TRANSFORM, (1, 2, 3, 4)),
         ((177, -10, 184, 10), IDENTITY_TRANSFORM, (177, -10, -176, 10)),
         ((185, 10, 190, 20), IDENTITY_TRANSFORM, (-175, 10, -170, 20)),
         ((-190, -20, -185, -10), IDENTITY_TRANSFORM, (170, -20, 175, -10)),
-        (
-            (1347679, 5456907, 2021025, 6117225),
-            NZGD2000_TRANSFORM,
-            (170, -41, 178, -35),
-        ),
-        (
-            (1347679, 5456907, 2532792, 5740667),
-            NZGD2000_TRANSFORM,
-            (170, -41, -176, -38),
-        ),
-        (
-            (2367133, 5308558, 2513805, 5517072),
-            NZGD2000_TRANSFORM,
-            (-178, -42, -176, -40),
-        ),
+        ((1347679, 5456907, 2021026, 6117225), NZTM_TRANSFORM, (170, -41, 178, -35)),
+        ((1347679, 5456907, 2532792, 5740668), NZTM_TRANSFORM, (170, -41, -176, -38)),
+        ((2367133, 5308557, 2513805, 5517073), NZTM_TRANSFORM, (-178, -42, -176, -40)),
+        # If the original geometry representation is split into two pieces by the anti-meridian,
+        # we can't calculate a useful envelope from the original geometry's minmax-envelope:
+        ((-179, -10, 179, 10), IDENTITY_TRANSFORM, None),
+        # If the geometry's envelope is really wide (>180 degrees) then we can't necessarily
+        # distinguish it from the above case except by inspecting geometry itself, instead of its
+        # envelope, and even then we run into some ambiguities. But we've chosen to keep it simple
+        # and just not index these geometries:
+        ((-95, -10, 95, 10), IDENTITY_TRANSFORM, None),
+        ((160, -10, 350, 10), IDENTITY_TRANSFORM, None),
+        ((0, 1_000_000, 15_000_000, 1_100_000), NZTM_TRANSFORM, None),
     ],
 )
-def test_transform_raw_envelope(transform, minmax_envelope, expected_result):
+def test_transform_minmax_envelope_area(input, transform, expected_result):
     # This first part of the test just tests our assumptions about transforms:
     # we need to be sure that the IDENTITY_TRANSFORM works differently to the other
     # transforms, so that we can be sure the code handles both possibilities properly.
-    ring = anticlockwise_ring_from_minmax_envelope(minmax_envelope)
+    ring = anticlockwise_ring_from_minmax_envelope(input)
     ring.Transform(transform)
     x_values = [ring.GetPoint_2D(i)[0] for i in range(5)]
 
     if transform == IDENTITY_TRANSFORM:
         # IDENTITY_TRANSFORM leaves x-values as they are.
         # This means output values can be > 180 or < -180.
-        assert set(x_values) == set([minmax_envelope[0], minmax_envelope[2]])
+        assert set(x_values) == set([input[0], input[2]])
     else:
         # Any other transform will output x-values within this range,
         # which means detecting anti-meridian crossings works a little differently.
         assert all(-180 <= x <= 180 for x in x_values)
 
     # This is the actual test that the transform works.
-    actual_result = transform_minmax_envelope(minmax_envelope, transform)
+    # We test it without buffer-for-curvature first since that has only one right answer, so we can check
+    # that the logic is working accurately without giving a large amount of arbitrary leeway for buffering.
+    actual_result = transform_minmax_envelope(
+        input, transform, buffer_for_curvature=False
+    )
+    _check_envelope(actual_result, expected_result, abs=1e-5)
+
+    # Now we test it with a buffer added. We just make sure it's roughly the same or larger - there's
+    # a separate test where we specifically check that the buffering works when its needed.
+    buffered_result = transform_minmax_envelope(
+        input, transform, buffer_for_curvature=True
+    )
+    _check_envelope(buffered_result, expected_result, abs=0.2)
+
+
+@pytest.mark.parametrize(
+    "input,transform,expected_result",
+    [
+        ((1, 2, 1, 2), IDENTITY_TRANSFORM, (1, 2, 1, 2)),
+        ((185, 85, 185, 85), IDENTITY_TRANSFORM, (-175, 85, -175, 85)),
+        ((1347679, 5456907, 1347679, 5456907), NZTM_TRANSFORM, (170, -41, 170, -41)),
+        ((2567196, 5736624, 2567196, 5736624), NZTM_TRANSFORM, (-176, -38, -176, -38)),
+    ],
+)
+def test_transform_minmax_envelope_point(input, transform, expected_result):
+    actual_result = transform_minmax_envelope(
+        input, transform, buffer_for_curvature=False
+    )
     assert actual_result == pytest.approx(expected_result, abs=1e-5)
+
+    # For points, no buffer is added, since there can be no curved lines.
+    buffered_result = transform_minmax_envelope(
+        input, transform, buffer_for_curvature=True
+    )
+    assert buffered_result == pytest.approx(expected_result, abs=1e-5)
+    assert buffered_result == actual_result
+
+
+def test_transform_minmax_envelope_buffer_for_curvature():
+    # This envelope is defined in NZTM. When coverted to EPSG:4326, this envelope's straight-line edges should be
+    # curved, in theory. In practise, the way transforms work is by converting vertices only, and then assuming
+    # straight lines between them all - hence the need to segmentise long straight lines so they have lots of
+    # vertices which when transformed will approximate the curve.
+    # But back to theory: when transformed to EPSG:4326, this rectangle will become 4 corners connected by 4 curves.
+    # The corners, in anticlockwise order, are at (91.7, -76.7) -> (-105.0, -75.7) -> (-171.1, -26.2) -> (158.3, -26.3)
+    # The first curve - from (91.7, -76.7) -> (-105.0, -75.7) is convex - it passes through (180, -87.9),
+    # which is a long way south of any of the corner vertices. The other three curves are concave, and stay well within
+    # the convex-hull described by the 4 conrner vertices - so it is the southernmost edge of the envelope where we
+    # need to make sure we are segmenting and buffering conservatively enough.
+    input = (120_000, 230_000, 3_200_000, 7_000_000)
+    transform = NZTM_TRANSFORM
+
+    transformed_no_buffer = transform_minmax_envelope(
+        input, transform, buffer_for_curvature=False
+    )
+
+    # This mostly works but it has the wrong southern boundary due to not taking edge curvature into account:
+    assert transformed_no_buffer == pytest.approx(
+        (91.678236, -76.703577, -105.024329, -26.221904), abs=1e-5
+    )
+
+    # Performing the transform manually with a highly segmented rectangle that follows the envelope:
+    ring = anticlockwise_ring_from_minmax_envelope(input)
+    ring.Segmentize(100_000)  # Sements no more than 100km long.
+    ring.Transform(NZTM_TRANSFORM)
+    transformed_manually = get_ogr_envelope(ring)
+    # This envelope's x-values are useless due to antimeridian issues, but it's y values are accurate.
+    # Note that it's south border is outside the south border calculated above with buffer_for_curvature=False.
+    assert transformed_manually == pytest.approx(
+        (-179.900476, -87.956105, 179.105089, -26.221904), abs=1e-5
+    )
+
+    # This is the correct answer: it has the x-values from transformed_no_buffer, and the y_values
+    # from the envelope we just transformed manually with highly segmented edges:
+    correct_envelope = (91.678236, -87.956105, -105.024329, -26.221904)
+
+    transformed_with_buffer = transform_minmax_envelope(
+        input, transform, buffer_for_curvature=True
+    )
+
+    # Check that transformed_with_buffer is pretty close to correct, and it is no smaller than the correct envelope.
+    _check_envelope(transformed_with_buffer, correct_envelope, abs=0.2)
 
 
 @pytest.mark.parametrize(
