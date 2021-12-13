@@ -66,9 +66,8 @@ lib-pygit2 := env/lib/python3.7/site-packages/pygit2/__init__.py
 lib-pysqlite3 := env/lib/python3.7/site-packages/pysqlite3/__init__.py
 lib-psycopg2 := env/lib/python3.7/site-packages/psycopg2/__init__.py
 lib-pyodbc := env/lib/python3.7/site-packages/pyodbc.$(LIBINFIX).so
-lib-s2_py := env/lib/python3.7/site-packages/s2_py/__init__.py
 
-build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3) $(lib-s2_py)
+build-libs := $(lib-gdal) $(lib-spatialite) $(lib-pygit2) $(lib-git) $(lib-libgit2) $(lib-psycopg2) $(lib-pysqlite3)
 
 
 # default target
@@ -85,7 +84,7 @@ env:
 	env/bin/pip install -U $(PYDEPS)
 
 # dependencies
-$(lib-git): $(lib-curl) $(lib-sqlite) $(lib-s2_py) git_build
+$(lib-git): $(lib-curl) $(lib-sqlite) git_build
 $(lib-proj): $(lib-sqlite) proj_build
 $(lib-libgit2): libgit2_build
 $(lib-spatialite): $(lib-sqlite) $(lib-geos) $(lib-proj) spatialite_build
@@ -109,10 +108,6 @@ $(lib-pysqlite3): $(lib-sqlite)
 $(lib-pyodbc):
 	$(MAKE) -C pyodbc wheel
 	pip3 install --force-reinstall pyodbc/wheel/pyodbc-*$(WHEELID).whl
-
-$(lib-s2_py):
-	$(MAKE) -C s2_py wheel
-	pip3 install --force-reinstall s2_py/wheel/s2_py-*$(WHEELID).whl
 
 
 ifeq ($(PLATFORM),Darwin)
@@ -286,9 +281,6 @@ lib-psycopg2: $(lib-psycopg2)
 .PHONY: lib-pyodbc
 lib-pyodbc: $(lib-pyodbc)
 
-.PHONY: lib-s2_py
-lib-s2_py: $(lib-s2_py)
-
 .PHONY: build-Darwin
 build-Darwin: VENDOR:=build/vendor-Darwin
 build-Darwin: VENDOR_ENV:=$(VENDOR)/env
@@ -305,7 +297,6 @@ build-Darwin: $(build-libs) $(brew-libs)
 	cp -vf pygit2/wheel/pygit2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf psycopg2/wheel/psycopg2-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 	cp -vf pysqlite3/wheel/pysqlite3-*$(WHEELID).whl $(VENDOR)/wheelhouse/
-	cp -vf s2_py/wheel/s2_py-*$(WHEELID).whl $(VENDOR)/wheelhouse/
 
 	cp -vaf env/lib/*.{dylib,so} $(VENDOR_ENV)/lib/
 

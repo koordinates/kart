@@ -33,19 +33,15 @@ CONFIG_FLAGS += V=1
 CONFIG_FLAGS += INSTALL_SYMLINKS=1
 CONFIG_FLAGS += FILTER_EXTENSIONS=$(abspath ../spatial-filter/spatial.a)
 
-CFLAGS := -I$(abspath ../s2_py/src/s2geometry/src)
 CFLAGS += -I$(abspath src)
 
 LDFLAGS := -lstdc++
 LDFLAGS += -lsqlite3
-LDFLAGS += -ls2
 LDFLAGS += -L$(PREFIX)/lib
-LDFLAGS += -L$(PREFIX)/lib/python3.7/site-packages/s2_py
 
 SEARCH_PATHS := $(LOADER_PATH)/../ $(LOADER_PATH)/../../
 LIB_PATHS := $(patsubst %,%lib,$(SEARCH_PATHS))
-S2LIB_PATHS := $(patsubst %,%/python3.7/site-packages/s2_py,$(LIB_PATHS))
-RPATH := $(LOADER_PATH) $(SEARCH_PATHS) $(LIB_PATHS) $(S2LIB_PATHS)
+RPATH := $(LOADER_PATH) $(SEARCH_PATHS) $(LIB_PATHS)
 
 SPACE := $() $()
 RPATH_LINUX := $(subst $(SPACE),:,$(RPATH))

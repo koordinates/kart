@@ -77,10 +77,6 @@ else
     make lib-psycopg2
     cp -fav psycopg2/wheel/psycopg2-*.whl "$OUTPUT/wheelhouse"
 
-    echo ">>> Building s2_py ..."
-    make lib-s2_py
-    cp -fav s2_py/wheel/s2_py-*.whl "$OUTPUT/wheelhouse"
-
     echo ">>> Bundling libraries ..."
     env/bin/python3 ./linux-delocate-deps.py env/lib/
     cp -fav env/lib/*.so* "$OUTPUT/env/lib/"
