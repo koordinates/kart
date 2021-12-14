@@ -7,6 +7,7 @@ from sqlalchemy import Column, Integer, Text, UniqueConstraint
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.schema import CreateTable
 
 from kart.sqlalchemy.sqlite import sqlite_engine
 
@@ -61,7 +62,7 @@ def _annotations_session(db_path):
     with sm() as s:
         s.is_readonly = None
         try:
-            Base.metadata.create_all(engine)
+            s.execute(CreateTable(KartAnnotation.__table__, if_not_exists=True))
         except OperationalError as e:
             # ignore errors from readonly databases.
             if "readonly database" in str(e):
