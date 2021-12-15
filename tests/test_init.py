@@ -1138,3 +1138,59 @@ def test_import_backslash_in_dataset_path(
             r = cli_runner.invoke(["data", "ls"])
             assert r.exit_code == 0, r.stderr
             assert "a/b/c" in r.stdout.splitlines()
+
+
+def test_replace_existing_with_primary_key_change(
+    data_archive, data_archive_readonly, cli_runner
+):
+    with data_archive_readonly("gpkg-polygons") as data:
+        with data_archive("string-pks"):
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    str(data / "nz-waca-adjustments.gpkg"),
+                    "--replace-existing",
+                    "--replace-ids=1,2,3",
+                ]
+            )
+            assert r.exit_code == INVALID_OPERATION
+            assert (
+                "--replace-ids is not supported when the primary key column is being changed"
+                in r.stderr
+            )
+
+            r = cli_runner.invoke(
+                [
+                    "import",
+                    str(data / "nz-waca-adjustments.gpkg"),
+                    "--replace-existing",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show"])
+            assert r.exit_code == 0, r.stderr
+            lines = r.stdout.splitlines()
+            assert (
+                sum(
+                    1 for l in lines if l.startswith("+++ nz_waca_adjustments:feature:")
+                )
+                == 228
+            )
+            assert (
+                sum(
+                    1
+                    for l in lines
+                    if l.startswith("--- nz_waca_adjustments:feature:POLY")
+                )
+                == 228
+            )
+
+            r = cli_runner.invoke(
+                ["meta", "get", "nz_waca_adjustments", "schema.json", "-o", "json"]
+            )
+            assert r.exit_code == 0, r.stderr
+            jdict = json.loads(r.stdout)
+            col0 = jdict["nz_waca_adjustments"]["schema.json"][0]
+            assert col0["primaryKeyIndex"] == 0
+            assert col0["dataType"] == "integer"

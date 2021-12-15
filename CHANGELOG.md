@@ -9,6 +9,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 * Simpler developer builds using CMake, see the [contributing notes](./CONTRIBUTING.md).
 * `kart log`: can now output the history of individual features using syntax `kart log -- <dataset-name>:feature:<feature-primary-key>`. [#496](https://github.com/koordinates/kart/issues/496)
 * Bugfix: fixed the error when merging a commit where every feature in a dataset is deleted. [#506](https://github.com/koordinates/kart/pull/506)
+* Bugfix: Don't allow `--replace-ids` to be specified during an import where the primary key is changing type. [#521](https://github.com/koordinates/kart/issues/521)
 
 ## 0.10.7
 
