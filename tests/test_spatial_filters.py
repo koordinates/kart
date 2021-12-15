@@ -301,7 +301,7 @@ def test_clone_with_spatial_filter(
     file_path = (tmp_path / "spatialfilter.txt").resolve()
     file_path.write_text(f"{crs}\n\n{geom}\n", encoding="utf-8")
 
-    with data_archive("polygons-with-s2index") as repo1_path:
+    with data_archive("polygons-with-feature-envelopes") as repo1_path:
         repo1_url = f"file://{repo1_path.resolve()}"
         # Clone repo using spatial filter
         repo2_path = tmp_path / "repo2"
@@ -343,7 +343,7 @@ def test_clone_with_spatial_filter(
 
             local_feature_count = local_features(ds)
             assert local_feature_count != H.POLYGONS.ROWCOUNT
-            assert local_feature_count == 52
+            assert local_feature_count == 46
 
             with repo3.working_copy.session() as sess:
                 assert H.row_count(sess, H.POLYGONS.LAYER) == 44
@@ -359,7 +359,7 @@ def test_clone_with_spatial_filter(
 def test_spatially_filtered_partial_clone(data_archive, cli_runner):
     crs = SPATIAL_FILTER_CRS["polygons"]
 
-    with data_archive("polygons-with-s2index") as repo1_path:
+    with data_archive("polygons-with-feature-envelopes") as repo1_path:
         repo1_url = f"file://{repo1_path.resolve()}"
 
         with data_archive("polygons-spatial-filtered") as repo2_path:
@@ -409,7 +409,7 @@ def test_spatially_filtered_fetch_promised(
 
     monkeypatch.setattr(FetchPromisedBlobsProcess, "fetch", _fetch)
 
-    with data_archive("polygons-with-s2index") as repo1_path:
+    with data_archive("polygons-with-feature-envelopes") as repo1_path:
         repo1_url = f"file://{repo1_path.resolve()}"
 
         with data_archive("polygons-spatial-filtered") as repo2_path:

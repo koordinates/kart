@@ -1,5 +1,6 @@
 import functools
 import logging
+import math
 import re
 import subprocess
 import sys
@@ -8,7 +9,7 @@ import time
 import click
 from osgeo import osr, ogr
 from pysqlite3 import dbapi2 as sqlite
-from sqlalchemy import Column, ForeignKey, Integer, Table, Text
+from sqlalchemy import Column, Table
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import BLOB
 
@@ -16,7 +17,7 @@ from sqlalchemy.types import BLOB
 from .cli_util import add_help_subcommand, tool_environment
 from .crs_util import make_crs, normalise_wkt
 from .exceptions import SubprocessError
-from .geometry import Geometry, GeometryType, geom_envelope, gpkg_geom_to_ogr
+from .geometry import Geometry
 from .repo import KartRepoState, KartRepoFiles
 from .serialise_util import msg_unpack
 from .structs import CommitWithReference
@@ -25,22 +26,6 @@ from .sqlalchemy.sqlite import sqlite_engine
 
 
 L = logging.getLogger("kart.spatial_tree")
-
-# These three parameters cannot be changed without rewriting the entire index:
-S2_MIN_LEVEL = 4
-S2_MAX_LEVEL = 16
-S2_LEVEL_MOD = 1
-# When the index is written, these parameters are stored with the index, so that we can continue to update and use
-# that existing index without rewriting it even if we decide to tweak these numbers to better values for new repos.
-
-S2_PARAMETERS = {
-    "min_level": S2_MIN_LEVEL,
-    "max_level": S2_MAX_LEVEL,
-    "level_mod": S2_LEVEL_MOD,
-}
-
-# But this value can be changed at any time.
-S2_MAX_CELLS_INDEX = 8
 
 
 def _revlist_command(repo):
@@ -112,9 +97,10 @@ class CrsHelper:
                 transform, desc = self.transform_from_src_crs(crs)
                 transforms.append(transform)
                 descs.append(desc)
-            except Exception as e:
+            except Exception:
                 L.warning(
-                    f"Couldn't load transform for CRS {crs_oid} at {ds_path}\n{e}"
+                    f"Couldn't load transform for CRS {crs_oid} at {ds_path}",
+                    exc_info=True,
                 )
         L.info(f"Loaded CRS transforms for {ds_path}: {', '.join(descs)}")
         return transforms
@@ -155,11 +141,10 @@ class CrsHelper:
         return make_crs(wkt)
 
     def transform_from_src_crs(self, src_crs):
+        transform = osr.CoordinateTransformation(src_crs, self.target_crs)
         if src_crs.IsSame(self.target_crs):
-            transform = None
             desc = f"IDENTITY({src_crs.GetAuthorityCode(None)})"
         else:
-            transform = osr.CoordinateTransformation(src_crs, self.target_crs)
             desc = f"{src_crs.GetAuthorityCode(None)} -> {self.target_crs.GetAuthorityCode(None)}"
         return transform, desc
 
@@ -170,16 +155,6 @@ class SpatialTreeTables(TableSet):
     def __init__(self):
         super().__init__()
 
-        # "parameters" records the parameters used to create this index. The same parameters must be used
-        # when updating the index and when querying the index - it won't work if not kept consistent.
-        self.parameters = Table(
-            "parameters",
-            self.sqlalchemy_metadata,
-            Column("min_level", Integer, nullable=False),
-            Column("max_level", Integer, nullable=False),
-            Column("level_mod", Integer, nullable=False),
-        )
-
         # "commits" tracks all the commits we have indexed.
         # A commit is only considered indexed if ALL of its ancestors are also indexed - this means
         # relatively few commits need to be recorded as being indexed in this table.
@@ -189,49 +164,19 @@ class SpatialTreeTables(TableSet):
             # "commit_id" is the commit ID (the SHA-1 hash), in binary (20 bytes).
             # Is equivalent to 40 chars of hex eg: d08c3dd220eea08d8dfd6d4adb84f9936c541d7a
             Column("commit_id", BLOB, nullable=False, primary_key=True),
+            sqlite_with_rowid=False,
         )
 
-        # "blobs" tracks all the features we have indexed (even if they have no associated S2 tokens).
+        # "feature_envelopes" maps every feature to its encoded envelope.
+        # If a feature has no envelope (eg no geometry), then it is not found in this table.
         self.blobs = Table(
-            "blobs",
+            "feature_envelopes",
             self.sqlalchemy_metadata,
-            # From a user-perspective, "rowid" isjust an arbitrary integer primary key.
-            # In more detail: This column aliases to the sqlite rowid of the table.
-            # See https://www.sqlite.org/lang_createtable.html#rowid
-            # Using the rowid directly as a foreign key (see "blob_tokens") means faster joins.
-            # The rowid can be used without creating a column that aliases to it, but you shouldn't -
-            # rowids might change if they are not aliased. See https://sqlite.org/lang_vacuum.html)
-            Column("rowid", Integer, nullable=False, primary_key=True),
             # "blob_id" is the git object ID (the SHA-1 hash) of a feature, in binary (20 bytes).
             # Is equivalent to 40 chars of hex eg: d08c3dd220eea08d8dfd6d4adb84f9936c541d7a
-            Column("blob_id", BLOB, nullable=False, unique=True),
-            sqlite_autoincrement=True,
-        )
-
-        # "blob_tokens" associates 0 or more S2 cell tokens with each feature that we have indexed.
-        # Technically these are "index terms" not S2 cell tokens since they are slightly more complicated
-        # - there are two types of term, ANCESTOR and COVERING. COVERING terms start with a "$" prefix.
-        # For more details on how indexing works, consult the S2RegionTermIndexer documentation.
-        self.blob_tokens = Table(
-            "blob_tokens",
-            self.sqlalchemy_metadata,
-            # Reference to blobs.rowid.
-            Column(
-                "blob_rowid",
-                Integer,
-                ForeignKey("blobs.rowid"),
-                nullable=False,
-                primary_key=True,
-            ),
-            # S2 index term eg "6d6dd90351b31cbf" or "$6e1".
-            # To locate an S2 cell by token, see https://s2.sidewalklabs.com/regioncoverer/
-            # (and remove any $ prefix from these index terms so that they are simply S2 cell tokens).
-            Column(
-                "s2_token",
-                Text,
-                nullable=False,
-                primary_key=True,
-            ),
+            Column("blob_id", BLOB, nullable=False, primary_key=True),
+            Column("envelope", BLOB, nullable=False),
+            sqlite_with_rowid=False,
         )
 
 
@@ -239,10 +184,8 @@ SpatialTreeTables.copy_tables_to_class()
 
 
 def drop_tables(sess):
-    sess.execute("DROP TABLE IF EXISTS parameters;")
     sess.execute("DROP TABLE IF EXISTS commits;")
-    sess.execute("DROP TABLE IF EXISTS blob_tokens;")
-    sess.execute("DROP TABLE IF EXISTS blobs;")
+    sess.execute("DROP TABLE IF EXISTS feature_envelopes;")
 
 
 def iter_feature_oids(repo, start_commits, stop_commits):
@@ -318,39 +261,6 @@ def _build_on_last_index(repo, start_commits, engine, clear_existing=False):
     return (start_commits, stop_commits, all_independent_commits)
 
 
-def _create_indexer_from_parameters(sess):
-    """
-    Return an S2RegionTermIndexer configured according to the parameters table.
-    Storing these parameters in a table means we can change them if needed without breaking Kart.
-    """
-
-    import s2_py as s2
-
-    parameters_count = sess.scalar("SELECT COUNT(*) FROM parameters;")
-    assert parameters_count <= 1
-    if not parameters_count:
-        sess.execute(
-            """
-            INSERT INTO parameters (min_level, max_level, level_mod)
-            VALUES (:min_level, :max_level, :level_mod);
-            """,
-            S2_PARAMETERS,
-        )
-
-    row = sess.execute(
-        "SELECT min_level, max_level, level_mod FROM parameters;"
-    ).fetchone()
-    assert row is not None
-    min_level, max_level, level_mod = row
-
-    s2_indexer = s2.S2RegionTermIndexer()
-    s2_indexer.set_min_level(min_level)
-    s2_indexer.set_max_level(max_level)
-    s2_indexer.set_level_mod(level_mod)
-    s2_indexer.set_max_cells(S2_MAX_CELLS_INDEX)
-    return s2_indexer
-
-
 def _format_commits(repo, commit_ids):
     if not commit_ids:
         return None
@@ -362,7 +272,7 @@ def update_spatial_tree(
     repo, commits, verbosity=1, clear_existing=False, dry_run=False
 ):
     """
-    Index the commits given in commit_spec, and write them to the s2_index.db repo file.
+    Index the commits given in commit_spec, and write them to the feature_envelopes.db repo file.
 
     repo - the Kart repo containing the commits to index, and in which to write the index file.
     commits - a set of commit IDs to index (ancestors of these are implicitly included).
@@ -371,7 +281,7 @@ def update_spatial_tree(
     """
     crs_helper = CrsHelper(repo)
 
-    db_path = repo.gitdir_file(KartRepoFiles.S2_INDEX)
+    db_path = repo.gitdir_file(KartRepoFiles.FEATURE_ENVELOPES)
     engine = sqlite_engine(db_path)
 
     # Find out where we were up to last time, don't reindex anything that's already indexed.
@@ -394,7 +304,12 @@ def update_spatial_tree(
             drop_tables(sess)
 
         SpatialTreeTables.create_all(sess)
-        s2_indexer = _create_indexer_from_parameters(sess)
+        envelope_length = sess.scalar(
+            "SELECT length(envelope) FROM feature_envelopes LIMIT 1;"
+        )
+
+    bits_per_value = envelope_length * 8 // 4 if envelope_length else None
+    encoder = EnvelopeEncoder(bits_per_value)
 
     # We index from the most recent commits, and stop at the already-indexed ancestors -
     # but in terms of logging it makes more sense to say: indexing from <ANCESTORS> to <CURRENT>.
@@ -427,30 +342,15 @@ def update_spatial_tree(
             if not transforms:
                 continue
             geom = get_geometry(repo, feature_oid)
-            if geom is None:
+            if geom is None or geom.is_empty():
                 continue
-            try:
-                s2_tokens = get_s2_tokens(s2_indexer, geom, transforms)
-            except Exception as e:
-                L.warning(f"Couldn't generate S2 index for {feature_oid}:\n{e}")
+            envelope = get_envelope_for_indexing(geom, transforms, feature_oid)
+            if envelope is None:
                 continue
 
-            params = (bytes.fromhex(feature_oid),)
-            row = dbcur.execute(
-                "SELECT rowid FROM blobs WHERE blob_id = ?;", params
-            ).fetchone()
-            if row:
-                rowid = row[0]
-            else:
-                dbcur.execute("INSERT INTO blobs (blob_id) VALUES (?);", params)
-                rowid = dbcur.lastrowid
-
-            if not s2_tokens:
-                continue
-
-            params = [(rowid, token) for token in s2_tokens]
-            dbcur.executemany(
-                "INSERT OR IGNORE INTO blob_tokens (blob_rowid, s2_token) VALUES (?, ?);",
+            params = (bytes.fromhex(feature_oid), encoder.encode(envelope))
+            dbcur.execute(
+                "INSERT OR REPLACE INTO feature_envelopes (blob_id, envelope) VALUES (?, ?);",
                 params,
             )
 
@@ -488,62 +388,346 @@ def _find_geometry_column(fields):
     return result
 
 
-def get_s2_tokens(s2_indexer, geom, transforms):
-    envelope = get_envelope_for_indexing(geom, transforms)
-    return envelope_to_s2_tokens(s2_indexer, envelope)
+class EnvelopeEncoder:
+    """Encodes and decodes bounding boxes - (w, s, e, n) tuples in degrees longitude / latitude."""
+
+    # This is the number of bits-per-value used to store envelopes when writing to a fresh database.
+    # When writing to an existing database, it will look to see how envelopes have been stored previously.
+    # Increasing this parameter increases the accuracy of the envelopes, but each one takes more space.
+    # This number must be even, so that four values take up a whole number of bytes.
+    DEFAULT_BITS_PER_VALUE = 20
+
+    def __init__(self, bits_per_value=None):
+        if bits_per_value is None:
+            bits_per_value = self.DEFAULT_BITS_PER_VALUE
+
+        assert bits_per_value % 2 == 0  # bits_per_value must be even.
+        self.BITS_PER_VALUE = bits_per_value
+        self.BITS_PER_ENVELOPE = 4 * self.BITS_PER_VALUE
+        self.BYTES_PER_ENVELOPE = self.BITS_PER_ENVELOPE // 8
+        self.VALUE_MAX_INT = 2 ** self.BITS_PER_VALUE - 1
+        self.ENVELOPE_MAX_INT = 2 ** self.BITS_PER_ENVELOPE - 1
+
+        self.BYTE_ORDER = "big"
+
+    def encode(self, envelope):
+        """
+        Encodes a (w, s, e, n) envelope where -180 <= w, e <= 180 and -90 <= s, n <= 90.
+        Scale each value to a unsigned integer of bitlength BITS_PER_VALUE such that 0 represents the min value (eg -180
+        for longitude) and 2**BITS_PER_VALUE - 1 represents the max value (eg 180 for longitude), then concatenates
+        the values together into a single unsigned integer of bitlength BITS_PER_VALUE, which is encoded to a byte array
+        of length BYTES_PER_ENVELOPE using a big-endian encoding.
+        """
+        integer = self._encode_value(envelope[0], -180, 180, math.floor)
+        integer <<= self.BITS_PER_VALUE
+        integer |= self._encode_value(envelope[1], -90, 90, math.floor)
+        integer <<= self.BITS_PER_VALUE
+        integer |= self._encode_value(envelope[2], -180, 180, math.ceil)
+        integer <<= self.BITS_PER_VALUE
+        integer |= self._encode_value(envelope[3], -90, 90, math.ceil)
+        assert 0 <= integer <= self.ENVELOPE_MAX_INT
+        return integer.to_bytes(self.BYTES_PER_ENVELOPE, self.BYTE_ORDER)
+
+    def _encode_value(self, value, min_value, max_value, round_fn):
+        assert min_value <= value <= max_value
+        normalised = (value - min_value) / (max_value - min_value)
+        encoded = round_fn(normalised * self.VALUE_MAX_INT)
+        assert 0 <= encoded <= self.VALUE_MAX_INT
+        return encoded
+
+    def decode(self, encoded):
+        """Inverse of encode_envelope."""
+        integer = int.from_bytes(encoded, self.BYTE_ORDER)
+        assert 0 <= integer <= self.ENVELOPE_MAX_INT
+        n = self._decode_value(integer & self.VALUE_MAX_INT, -90, 90)
+        integer >>= self.BITS_PER_VALUE
+        e = self._decode_value(integer & self.VALUE_MAX_INT, -180, 180)
+        integer >>= self.BITS_PER_VALUE
+        s = self._decode_value(integer & self.VALUE_MAX_INT, -90, 90)
+        integer >>= self.BITS_PER_VALUE
+        w = self._decode_value(integer & self.VALUE_MAX_INT, -180, 180)
+        return w, s, e, n
+
+    def _decode_value(self, encoded, min_value, max_value):
+        assert 0 <= encoded <= self.VALUE_MAX_INT
+        normalised = encoded / self.VALUE_MAX_INT
+        return normalised * (max_value - min_value) + min_value
+
+
+def get_envelope_for_indexing(geom, transforms, feature_oid):
+    """
+    Returns an envelope in EPSG:4326 that contains the entire geometry. Tries all of the given transforms to convert
+    to EPSG:4326 and returns an envelope containing all of the possibilities. This is so we can find all features that
+    potentially intersect a region even if their CRS has changed at some point, so they could be in more than one place.
+    The returned envelope is ordered (w, s, e, n), with longitudes in the range [-180, 180] and latitudes [-90, 90].
+    It is always true that s <= n. Normally w <= e unless it crosses the anti-meridian, in which case e < w.
+    If the envelope cannot be calculated efficiently or at all, None is returned - a None result can be treated as
+    equivalent to [-180, -90, 90, 180].
+    """
+
+    result = None
+
+    try:
+        minmax_envelope = _transpose_gpkg_or_ogr_envelope(
+            geom.envelope(only_2d=True, calculate_if_missing=True)
+        )
+
+        for transform in transforms:
+            envelope = transform_minmax_envelope(minmax_envelope, transform)
+            if envelope is None:
+                L.info("Skipped indexing feature %s", feature_oid)
+                return None
+
+            result = union_of_envelopes(result, envelope)
+        return result
+    except Exception:
+        L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
+        return None
+
+
+def _transpose_gpkg_or_ogr_envelope(envelope):
+    """
+    GPKG uses the envelope format (min-x, max-x, min-y, max-y). We use the envelope format (w, s, e, n).
+    We transpose GPKG envelope to (min-x, min-y, max-x, max-y), so that it least it has the same axis-order as our
+    format, and we handle anti-meridian issues seperately (see transform_minmax_envelope).
+    """
+    return envelope[0], envelope[2], envelope[1], envelope[3]
+
+
+def get_ogr_envelope(ogr_geometry):
+    """Returns the envelope of the given OGR geometry in (min-x, max-x, min-y, max-y) format."""
+    return _transpose_gpkg_or_ogr_envelope(ogr_geometry.GetEnvelope())
+
+
+def transform_minmax_envelope(envelope, transform, buffer_for_curvature=True):
+    """
+    Given an envelope in (min-x, min-y, max-x, max-y) format in any CRS, transforms it to EPSG:4326 using the given
+    transform, then returns an axis-aligned envelope in EPSG:4326 in (w, s, e, n) order that bounds the original
+    (but which may have a slightly larger area due to the axis-aligned edges not lining up with the original).
+    The returned envelope has w <= e unless it crosses the antimeridian, in which case e < w.
+    If buffer_for_curvature is True, the resulting envelope has a buffer-area added to all sides to ensure that
+    not only the vertices, but also the curved edges of the original envelope are contained in the projected envelope.
+    """
+    # Handle points / envelopes with 0 area:
+    if envelope[0] == envelope[2] and envelope[1] == envelope[3]:
+        x, y, _ = transform.TransformPoint(envelope[0], envelope[1])
+        x = _wrap_lon(x)
+        return (x, y, x, y)
+
+    ring = anticlockwise_ring_from_minmax_envelope(envelope)
+    ring.Transform(transform)
+    # At this point, depending on the transform used, the geometry could be in one piece, or it could be split into
+    # two by the antimeridian - transforms almost always result in all longitude values being in the range [-180, 180].
+    # We try to fix it up so that it's contiguous, which will mean that it has a useful min-max envelope.
+
+    transformed_envelope = get_ogr_envelope(ring)
+    width, height = _minmax_envelope_dimensions(transformed_envelope)
+    split_x = None
+    if width >= 180 and _is_clockwise(ring):
+        # The ring was anticlockwise, but when projected and EPSG:4326 into the range [-180, 180] it became clockwise.
+        # We need to try different interprerations of the ring until we find one where it is anticlockwise (this will
+        # cross the meridian). Once we've found this interpretation, we can treat the min-x and max-x as w and e.
+        split_x = _fix_ring_winding_order(ring)
+        transformed_envelope = get_ogr_envelope(ring)
+        width, height = _minmax_envelope_dimensions(transformed_envelope)
+
+    if width >= 180:
+        # When this happens, it's likely because the original geometry crossed the antimeridian AND it was stored
+        # in a non-contiguous way (ie in two halves, one near -180 and one near 180). If that happens, it means
+        # the min-x and max-x values we got aren't useful for calculating the western- and eastern-most points -
+        # they'll just be roughly -180 and 180. Rather than inspecting the original geometry to try and find
+        # the true envelope, we just give up - returning None is allowed if we can't easily calculate the envelope.
+        # (It could also genuinely be a geometry wider than 180 degrees, but we can't easily tell the difference.)
+        return None
+
+    if buffer_for_curvature:
+        biggest_dimension = max(width, height)
+        if biggest_dimension < 1.0:
+            # Geometry is less than one degree by one degree - line curvature is minimal.
+            # Add an extra 1/10th of envelope size to all edges.
+            transformed_envelope = _buffer_minmax_envelope(
+                transformed_envelope, 0.1 * biggest_dimension
+            )
+        else:
+            # Redo some (but not all) of our calculations with a segmented envelope.
+            # Envelope is segmented to ensure line segments don't span more than a degree.
+            segments_per_side = max(10, math.ceil(biggest_dimension))
+            ring = anticlockwise_ring_from_minmax_envelope(
+                envelope, segments_per_side=segments_per_side
+            )
+            ring.Transform(transform)
+            if split_x is not None:
+                _reinterpret_to_be_east_of(split_x, ring)
+            transformed_envelope = get_ogr_envelope(ring)
+            # Add an extra 1/10th of a degree to all edges.
+            transformed_envelope = _buffer_minmax_envelope(transformed_envelope, 0.1)
+
+    w = _wrap_lon(transformed_envelope[0])
+    s = transformed_envelope[1]
+    e = _wrap_lon(transformed_envelope[2])
+    n = transformed_envelope[3]
+
+    return (w, s, e, n)
+
+
+def anticlockwise_ring_from_minmax_envelope(envelope, segments_per_side=None):
+    """Given an envelope in (min-x, min-y, max-x, max-y) format, builds an anticlockwise ring around it."""
+    ring = ogr.Geometry(ogr.wkbLinearRing)
+    # The envelope has the following format: min-x, min-y, max-x, max-ys.
+    # We start at min-x, min-y and travel around it in an anti-clockwise direction:
+    ring.AddPoint_2D(envelope[0], envelope[1])
+    ring.AddPoint_2D(envelope[2], envelope[1])
+    ring.AddPoint_2D(envelope[2], envelope[3])
+    ring.AddPoint_2D(envelope[0], envelope[3])
+    ring.AddPoint_2D(envelope[0], envelope[1])
+
+    if segments_per_side is not None:
+        width, height = _minmax_envelope_dimensions(envelope)
+        larger_side = max(width, height)
+        smaller_side = min(width, height)
+        if smaller_side < larger_side / 4:
+            segment_length = larger_side / segments_per_side
+        else:
+            segment_length = smaller_side / segments_per_side
+        ring.Segmentize(segment_length)
+
+    return ring
+
+
+def _is_clockwise(ring):
+    """
+    Given a simple OGR ring, does a polygon area calculation to determine whether it is clockwise.
+    The first and last point of the ring must be the same.
+    For explanation see https://en.wikipedia.org/wiki/Shoelace_formula
+    """
+    result = 0
+    for i in range(ring.GetPointCount() - 1):
+        result += ring.GetX(i) * ring.GetY(i + 1) - ring.GetX(i + 1) * ring.GetY(i)
+    return result < 0
+
+
+def _is_anticlockwise(ring):
+    return not _is_clockwise(ring)
+
+
+def _fix_ring_winding_order(ring):
+    """
+    Given an OGR ring, shifts each point in turn eastwards by 360 degrees around the globe until the winding order
+    is anticlockwise. This works on rings with any number of points, but has O(n^2) efficiency, so is best used on
+    rectangles or other rings with few points. The first and last point of the ring must be the same.
+    Returns an x point that all points were shifted to be east of, or None if no shifting was needed.
+    """
+    if _is_anticlockwise(ring):
+        return None
+
+    sorted_x_values = sorted(set(ring.GetX(i) for i in range(ring.GetPointCount())))
+    split_x_options = (
+        (sorted_x_values[i] + sorted_x_values[i + 1]) / 2
+        for i in range(len(sorted_x_values) - 1)
+    )
+    for split_x in split_x_options:
+        _reinterpret_to_be_east_of(split_x, ring)
+        if _is_anticlockwise(ring):
+            return split_x
+    raise AssertionError("This should never happen")
+
+
+def _reinterpret_to_be_east_of(split_x, ring):
+    """
+    Adds 360 degrees to all points that are east of the given X value. The resulting points will be in the same
+    place on Earth, but this can change the winding order of the resulting polygon, and it can change which
+    edges appear to cross the antimeridian.
+    """
+    for i in range(ring.GetPointCount()):
+        if ring.GetX(i) < split_x:
+            ring.SetPoint_2D(i, ring.GetX(i) + 360, ring.GetY(i))
+
+
+def _buffer_minmax_envelope(envelope, buffer):
+    """
+    Adds a buffer onto all sides of an lat-lon envelope in the format (min-x, min-y, max-x, max-y).
+    The buffer is in degrees latitude / longitude.
+    """
+    return (
+        envelope[0] - buffer,
+        max(envelope[1] - buffer, -90),
+        envelope[2] + buffer,
+        min(envelope[3] + buffer, 90),
+    )
+
+
+def _minmax_envelope_dimensions(envelope):
+    """Returns (width, height) for an envelope in the format (min-x, min-y, max-x, max-y)."""
+    return envelope[2] - envelope[0], envelope[3] - envelope[1]
+
+
+def _unwrap_lon_envelope(w, e):
+    """
+    Given a longitude envelope in the format (w, e) where -180 <= w, e <= 180, and w <= e unless it crosses the
+    antimeridian, in which case e < w:
+    This returns an equivalent longitude range where w remains the same, and e exceeds w by the true size of the range.
+    The result will follow these three rules: -180 <= w <= 180 and 0 <= (e - w) <= 360 and -180 <= e <= 540.
+    """
+    return (w, e) if w <= e else (w, e + 360)
+
+
+def _wrap_lon(x):
+    """Puts any longitude in the range -180 <= x < 180 without moving its position on earth."""
+    return (x + 180) % 360 - 180
+
+
+def _wrap_lon_envelope(w, e):
+    """
+    Given a longitude envelope where w <= e, such as [0, 20] or [170, 190], where all x values w <= x <= e are inside the range:
+    this wraps it so that -180 <= w, e <= 180, and w <= e unless the range crosses the antimeridian, in which case e < w.
+    """
+    wrapped_w = _wrap_lon(w)
+    wrapped_e = _wrap_lon(e)
+
+    min_x = min(wrapped_w, wrapped_e)
+    max_x = max(wrapped_w, wrapped_e)
+    if math.isclose(max_x - min_x, e - w, abs_tol=1e-3):
+        return min_x, max_x
+    else:
+        return max_x, min_x
 
 
 INF = float("inf")
 
 
-def get_envelope_for_indexing(geom, transforms):
-    # TODO: Make this more rigorous - ie, make sure that:
-    # -90 <= S <= N <= +90
-    # -180 <= W <= +180
-    # 0 <= (E - W) <= 360 ; therefore -180 <= W <= +540
+def union_of_envelopes(env1, env2):
+    """
+    Returns the union of two envelopes where both are in (w, s, e, n) order and both are "wrapped" -
+    that is, longitude values are in the range [-180, 180] and w <= e unless it crosses the antimeridian, in which case e < w.
+    """
+    if env1 is None:
+        return env2
+    if env2 is None:
+        return env1
 
-    # Result initialised to an infinite and negative area which disappears when unioned with.
-    result = [+INF, +INF, -INF, -INF]
+    w1, e1 = _unwrap_lon_envelope(env1[0], env1[2])
+    w2, e2 = _unwrap_lon_envelope(env2[0], env2[2])
+    width = INF
 
-    # FIXME: For correctness, this should transform the original geometries before taking their bounding box.
-    # The downside of that approach is that it is maybe 10x slower.
-    w, e, s, n = geom.envelope(only_2d=True, calculate_if_missing=True)
-    raw_envelope = w, s, e, n
-    for transform in transforms:
-        if transform is not None:
-            envelope = _transform_envelope(raw_envelope, transform)
-        else:
-            envelope = raw_envelope
-        result = _union_of_envelopes(result, envelope)
-    return result
+    for shift in (-360, 0, 360):
+        shifted_w2 = w2 + shift
+        shifted_e2 = e2 + shift
+        potential_w = min(w1, shifted_w2)
+        potential_e = max(e1, shifted_e2)
+        potential_width = potential_e - potential_w
 
+        if potential_width < width:
+            width = potential_width
+            result_w = potential_w
+            result_e = potential_e
 
-def _transform_envelope(envelope, transform):
-    corners = ogr.Geometry(ogr.wkbLineString)
-    corners.AddPoint_2D(envelope[0], envelope[1])
-    corners.AddPoint_2D(envelope[2], envelope[3])
-    corners.Transform(transform)
-    a, b = corners.GetPoint_2D(0), corners.GetPoint_2D(1)
-    return min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1])
-
-
-def _union_of_envelopes(a, b):
-    # Note that this overwrites envelope a.
-    a[0] = min(a[0], b[0])
-    a[1] = min(a[1], b[1])
-    a[2] = max(a[2], b[2])
-    a[3] = max(a[3], b[3])
-    return a
-
-
-def envelope_to_s2_tokens(s2_indexer, envelope):
-    import s2_py as s2
-
-    s2_llrect = s2.S2LatLngRect.FromPointPair(
-        s2.S2LatLng.FromDegrees(envelope[1], envelope[0]),
-        s2.S2LatLng.FromDegrees(envelope[3], envelope[2]),
-    )
-    return s2_indexer.GetIndexTerms(s2_llrect, "")
+    result_s = min(env1[1], env2[1])
+    result_n = max(env1[3], env2[3])
+    if width >= 360:
+        return (-180, result_s, 180, result_n)
+    else:
+        result_w, result_e = _wrap_lon_envelope(result_w, result_e)
+        return (result_w, result_s, result_e, result_n)
 
 
 def _resolve_all_commit_refs(repo):

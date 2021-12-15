@@ -243,45 +243,6 @@ ExternalProject_Add(
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
-#
-# s2_py
-#
-# Using a GoogleTest binary distribution doesn't appear to satisfy S2, it wants access to the source
-# CMake config. Nevermind that GoogleTest is documented as being optional...
-ExternalProject_Add(
-  googletest_src
-  GIT_REPOSITORY https://github.com/google/googletest.git
-  GIT_TAG release-1.11.0
-  CONFIGURE_COMMAND ""
-  BUILD_COMMAND ""
-  INSTALL_COMMAND ""
-  EXCLUDE_FROM_ALL ON)
-ExternalProject_Get_Property(googletest_src SOURCE_DIR)
-set(GOOGLETEST_SRC_DIR ${SOURCE_DIR})
-# s2-py includes the S2 library code as a submodule
-set(S2PY_BUILD_ENV # "VERBOSE=1"
-    "GTEST_ROOT=googletest" "OPENSSL_ROOT_DIR=${OpenSSL_ROOT}" "SWIG_EXECUTABLE=${SWIG_EXECUTABLE}"
-    "SWIG_DIR=${SWIG_DIR}" "CMAKE_WARN_DEPRECATED=FALSE")
-if(MACOS)
-  list(APPEND S2PY_BUILD_ENV "MACOSX_DEPLOYMENT_TARGET=${Python3_MACOS_DEPLOYMENT_TARGET}")
-endif()
-
-set(S2PY_WHEEL_VER 0.11.0)
-ExternalProject_Add(
-  s2_py
-  GIT_REPOSITORY https://github.com/koordinates/s2-py.git
-  GIT_TAG 8df94850ef2e68bdf923a8683c334316232431e0
-  BUILD_IN_SOURCE ON
-  DEPENDS wheelBuildEnv OpenSSL::SSL googletest_src
-  EXCLUDE_FROM_ALL ON
-  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E create_symlink ${GOOGLETEST_SRC_DIR} googletest
-  # something weird happens here - `bdist_wheel` always ends up re-running build/build_ext, so we do
-  # it once
-  BUILD_COMMAND ${EXT_BUILD_ENV} ${S2PY_BUILD_ENV} ${wheelBuildEnv_PYTHON} setup.py --no-user-cfg
-                bdist_wheel --dist-dir <INSTALL_DIR> --bdist-dir <TMP_DIR>
-  INSTALL_COMMAND "")
-ExternalProject_Get_Property(s2_py INSTALL_DIR)
-list(APPEND WHEEL_LIST ${INSTALL_DIR}/s2_py-${S2PY_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
 
 #
 # GDAL Python module We download the bindings associated with the version we picked up via FindGDAL
@@ -308,7 +269,7 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/GDAL-${GDAL_VERSION}-${Python3_WHEEL_ID}.w
 #
 add_custom_target(
   vendor_wheels
-  DEPENDS gdal_py s2_py pygit2 psycopg2 pysqlite3 pyodbc
+  DEPENDS gdal_py pygit2 psycopg2 pysqlite3 pyodbc
   COMMENT "Python vendor wheels")
 
 #
