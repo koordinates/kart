@@ -87,6 +87,13 @@ def get_default_num_processes():
     return max(1, int(math.ceil(num_processes)))
 
 
+def any_at_all(iterable):
+    # Returns True if anything exists in iterable - even falsey values like None or 0.
+    # Advances the iterable by one if non-empty, so is best used like so:
+    # >> if any_at_all(iterable): raise Error("Iterable should be empty.")
+    return any(True for _ in iterable)
+
+
 @click.command("import")
 @click.pass_context
 @click.argument("source")
@@ -302,11 +309,7 @@ def import_(
                 )
             if not import_source.schema.pk_columns:
                 # non-PK datasets can use this if it's only ever an empty list.
-                try:
-                    next(replace_ids)
-                except StopIteration:
-                    replace_ids = iter([])
-                else:
+                if any_at_all(replace_ids):
                     raise InvalidOperation(
                         "--replace-ids requires an import source with a primary key"
                     )
@@ -336,6 +339,14 @@ def import_(
                     similarity_detection_limit=similarity_detection_limit,
                 )
                 import_source.align_schema_to_existing_schema(existing_ds.schema)
+                if (
+                    import_source.schema.legend.pk_columns
+                    != existing_ds.schema.legend.pk_columns
+                    and replace_ids is not None
+                ):
+                    raise InvalidOperation(
+                        "--replace-ids is not supported when the primary key column is being changed"
+                    )
         import_sources.append(import_source)
 
     ImportSource.check_valid(import_sources, param_hint="tables")
