@@ -16,7 +16,7 @@ from .exceptions import (
 )
 from .key_filters import DatasetKeyFilter, FeatureKeyFilter
 from .schema import Schema
-from .spatial_filters import SpatialFilter
+from .spatial_filter import SpatialFilter
 from .promisor_utils import object_is_promised, fetch_promised_blobs
 
 

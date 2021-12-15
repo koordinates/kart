@@ -22,7 +22,7 @@ from .import_source import ImportSource
 from .ogr_import_source import FORMAT_TO_OGR_MAP
 from .pk_generation import PkGeneratingImportSource
 from .repo import KartRepo, PotentialRepo
-from .spatial_filters import SpatialFilterString, spatial_filter_help_text
+from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 

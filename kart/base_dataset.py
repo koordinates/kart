@@ -9,7 +9,7 @@ from . import meta_items
 from .exceptions import InvalidOperation
 from .promisor_utils import LibgitSubcode
 from .serialise_util import json_unpack, ensure_text
-from .spatial_filters import SpatialFilter
+from .spatial_filter import SpatialFilter
 from .utils import ungenerator
 
 L = logging.getLogger("kart.base_dataset")

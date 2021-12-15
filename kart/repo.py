@@ -513,7 +513,7 @@ class KartRepo(pygit2.Repository):
 
     @property
     def spatial_filter(self):
-        from .spatial_filters import SpatialFilter
+        from .spatial_filter import SpatialFilter
 
         return SpatialFilter.from_repo_config(self)
 

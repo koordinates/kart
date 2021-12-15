@@ -7,23 +7,23 @@ import sys
 
 import click
 
-from .cli_util import add_help_subcommand, StringFromFile
-from .crs_util import make_crs
-from .exceptions import (
+from kart.cli_util import add_help_subcommand, StringFromFile
+from kart.crs_util import make_crs
+from kart.exceptions import (
     CrsError,
     GeometryError,
     NotFound,
     NotYetImplemented,
     NO_SPATIAL_FILTER,
 )
-from .geometry import geometry_from_string, GeometryType
-from .output_util import dump_json_output
-from .promisor_utils import object_is_promised
-from .repo import KartRepoState
-from .serialise_util import hexhash
+from kart.geometry import geometry_from_string, GeometryType
+from kart.output_util import dump_json_output
+from kart.promisor_utils import object_is_promised
+from kart.repo import KartRepoState
+from kart.serialise_util import hexhash
 
 
-L = logging.getLogger("kart.spatial_filters")
+L = logging.getLogger("kart.spatial_filter")
 
 
 # TODO(https://github.com/koordinates/kart/issues/456) - need to handle the following issues:
@@ -109,6 +109,51 @@ def resolve(ctx, reference, do_envelope, output_format):
             click.echo(data["crs"])
             click.echo()
             click.echo(data["geometry"])
+
+
+@spatial_filter.command()
+@click.option(
+    "--clear-existing",
+    is_flag=True,
+    default=False,
+    help="Clear existing index before re-indexing",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Don't do any indexing, instead just output what would be indexed.",
+)
+@click.argument(
+    "commits",
+    nargs=-1,
+)
+@click.pass_context
+def index(ctx, clear_existing, dry_run, commits):
+    """
+    Maintains the index needed to perform a spatially-filtered clone using this repo as the server.
+    Indexes all features added by the supplied commits and their ancestors.
+    If no commits are supplied, indexes all features in all commits.
+    """
+    from .index import (
+        resolve_all_commit_refs,
+        resolve_commits,
+        update_spatial_filter_index,
+    )
+
+    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+    if not commits:
+        commits = resolve_all_commit_refs(repo)
+    else:
+        commits = resolve_commits(repo, commits)
+
+    update_spatial_filter_index(
+        repo,
+        commits,
+        verbosity=ctx.obj.verbosity + 1,
+        clear_existing=clear_existing,
+        dry_run=dry_run,
+    )
 
 
 class SpatialFilterString(StringFromFile):

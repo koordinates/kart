@@ -8,7 +8,7 @@ import click
 from . import checkout
 from .exceptions import InvalidOperation
 from .repo import KartRepo, PotentialRepo
-from .spatial_filters import SpatialFilterString, spatial_filter_help_text
+from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 
 
 def get_directory_from_url(url):

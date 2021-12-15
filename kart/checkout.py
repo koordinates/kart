@@ -14,7 +14,7 @@ from .exceptions import DbConnectionError
 from .key_filters import RepoKeyFilter
 from .output_util import InputMode, get_input_mode
 from .promisor_utils import get_partial_clone_envelope
-from .spatial_filters import SpatialFilterString, spatial_filter_help_text
+from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
 from .working_copy import WorkingCopyStatus
 

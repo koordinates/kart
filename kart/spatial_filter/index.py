@@ -14,18 +14,18 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.types import BLOB
 
 
-from .cli_util import add_help_subcommand, tool_environment
-from .crs_util import make_crs, normalise_wkt
-from .exceptions import SubprocessError
-from .geometry import Geometry
-from .repo import KartRepoState, KartRepoFiles
-from .serialise_util import msg_unpack
-from .structs import CommitWithReference
-from .sqlalchemy import TableSet
-from .sqlalchemy.sqlite import sqlite_engine
+from kart.cli_util import tool_environment
+from kart.crs_util import make_crs, normalise_wkt
+from kart.exceptions import SubprocessError
+from kart.geometry import Geometry
+from kart.repo import KartRepoFiles
+from kart.serialise_util import msg_unpack
+from kart.structs import CommitWithReference
+from kart.sqlalchemy import TableSet
+from kart.sqlalchemy.sqlite import sqlite_engine
 
 
-L = logging.getLogger("kart.spatial_tree")
+L = logging.getLogger("kart.spatial_filter.index")
 
 
 def _revlist_command(repo):
@@ -268,7 +268,7 @@ def _format_commits(repo, commit_ids):
     return " ".join(c[:length] for c in commit_ids)
 
 
-def update_spatial_tree(
+def update_spatial_filter_index(
     repo, commits, verbosity=1, clear_existing=False, dry_run=False
 ):
     """
@@ -730,7 +730,8 @@ def union_of_envelopes(env1, env2):
         return (result_w, result_s, result_e, result_n)
 
 
-def _resolve_all_commit_refs(repo):
+def resolve_all_commit_refs(repo):
+    """Returns the set of all branch heads, refs, HEAD, as commit SHAs."""
     cmd = ["git", "-C", repo.path, "show-ref", "--hash", "--head"]
     try:
         r = subprocess.run(
@@ -754,55 +755,9 @@ def _resolve_all_commit_refs(repo):
     return result
 
 
-def _resolve_commits(repo, commitish_list):
+def resolve_commits(repo, commitish_list):
+    """Resolves the given strings into a set of commit SHAs."""
     return set(
         CommitWithReference.resolve(repo, commitish).id.hex
         for commitish in commitish_list
-    )
-
-
-@add_help_subcommand
-@click.group()
-@click.pass_context
-def spatial_tree(ctx, **kwargs):
-    """
-    Commands for maintaining an S2-cell based spatial index.
-    """
-
-
-@spatial_tree.command()
-@click.option(
-    "--clear-existing",
-    is_flag=True,
-    default=False,
-    help="Clear existing index before re-indexing",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    default=False,
-    help="Don't do any indexing, instead just output what would be indexed.",
-)
-@click.argument(
-    "commits",
-    nargs=-1,
-)
-@click.pass_context
-def index(ctx, clear_existing, dry_run, commits):
-    """
-    Indexes all features added by the supplied commits and their ancestors.
-    If no commits are supplied, indexes all features in all commits.
-    """
-    repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    if not commits:
-        commits = _resolve_all_commit_refs(repo)
-    else:
-        commits = _resolve_commits(repo, commits)
-
-    update_spatial_tree(
-        repo,
-        commits,
-        verbosity=ctx.obj.verbosity + 1,
-        clear_existing=clear_existing,
-        dry_run=dry_run,
     )

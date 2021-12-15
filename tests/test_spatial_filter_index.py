@@ -5,7 +5,7 @@ from osgeo import osr
 
 from kart.crs_util import make_crs
 from kart.sqlalchemy.sqlite import sqlite_engine
-from kart.spatial_tree import (
+from kart.spatial_filter.index import (
     EnvelopeEncoder,
     anticlockwise_ring_from_minmax_envelope,
     transform_minmax_envelope,
@@ -89,7 +89,7 @@ def test_index_points_all(data_archive, cli_runner):
     # Indexing --all should give the same results every time.
     # For points, every point should have only one long S2 cell token.
     with data_archive("points.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index"])
+        r = cli_runner.invoke(["spatial-filter", "index"])
         assert r.exit_code == 0, r.stderr
         s = _get_index_summary(repo_path)
         assert s.features == 2148
@@ -99,12 +99,12 @@ def test_index_points_all(data_archive, cli_runner):
 def test_index_points_commit_by_commit(data_archive, cli_runner):
     # Indexing one commit at a time should get the same results as indexing --all.
     with data_archive("points.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD1_SHA])
+        r = cli_runner.invoke(["spatial-filter", "index", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r.stderr
         s = _get_index_summary(repo_path)
         assert s.features == 2143
 
-        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD_SHA])
+        r = cli_runner.invoke(["spatial-filter", "index", H.POINTS.HEAD_SHA])
         assert r.exit_code == 0, r.stderr
         s = _get_index_summary(repo_path)
         assert s.features == 2148
@@ -115,18 +115,18 @@ def test_index_points_idempotent(data_archive, cli_runner):
     # Indexing the commits one at a time and then indexing all commits again will also give the same result.
     # (We force everything to be indexed twice by deleting the record of whats been indexed).
     with data_archive("points.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD1_SHA])
+        r = cli_runner.invoke(["spatial-filter", "index", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r.stderr
         s = _get_index_summary(repo_path)
         assert s.features == 2143
 
-        r = cli_runner.invoke(["spatial-tree", "index", H.POINTS.HEAD_SHA])
+        r = cli_runner.invoke(["spatial-filter", "index", H.POINTS.HEAD_SHA])
         assert r.exit_code == 0, r.stderr
         s = _get_index_summary(repo_path)
         assert s.features == 2148
 
         # Trying to reindex shouldn't do anything since we remember where we are up to.
-        r = cli_runner.invoke(["spatial-tree", "index"])
+        r = cli_runner.invoke(["spatial-filter", "index"])
         assert r.exit_code == 0, r.stderr
         assert "Nothing to do" in r.stdout
         s = _get_index_summary(repo_path)
@@ -139,7 +139,7 @@ def test_index_points_idempotent(data_archive, cli_runner):
         with sessionmaker(bind=engine)() as sess:
             sess.execute("DELETE FROM commits;")
 
-        r = cli_runner.invoke(["spatial-tree", "index"])
+        r = cli_runner.invoke(["spatial-filter", "index"])
         assert r.exit_code == 0, r.stderr
         assert "Nothing to do" not in r.stdout
         s = _get_index_summary(repo_path)
@@ -156,7 +156,7 @@ def _check_index(actual, expected, abs=1e-3):
 
 def test_index_polygons_all(data_archive, cli_runner):
     with data_archive("polygons.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index"])
+        r = cli_runner.invoke(["spatial-filter", "index"])
         assert r.exit_code == 0, r.stderr
 
         s = _get_index_summary(repo_path)
@@ -168,7 +168,7 @@ def test_index_polygons_all(data_archive, cli_runner):
 
 def test_index_table_all(data_archive, cli_runner):
     with data_archive("table.tgz") as repo_path:
-        r = cli_runner.invoke(["spatial-tree", "index"])
+        r = cli_runner.invoke(["spatial-filter", "index"])
         assert r.exit_code == 0, r.stderr
 
         s = _get_index_summary(repo_path)

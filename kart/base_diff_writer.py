@@ -16,7 +16,7 @@ from .exceptions import (
 )
 from .key_filters import RepoKeyFilter
 from .promisor_utils import object_is_promised, FetchPromisedBlobsProcess
-from .spatial_filters import SpatialFilter
+from .spatial_filter import SpatialFilter
 
 
 L = logging.getLogger("kart.diff_writer")
