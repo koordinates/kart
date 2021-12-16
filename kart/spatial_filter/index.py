@@ -396,12 +396,13 @@ def _debug_feature(repo, arg):
     else:
         commit, ds_path, pk = parts
 
+    ds = repo.datasets(commit)[ds_path]
+
     try:
         _ = repo[pk]
     except KeyError as e:
         if object_is_promised(e):
             raise InvalidOperation("Can't index promised object")
-        ds = repo.datasets(commit)[ds_path]
         path = ds.encode_pks_to_path(ds.schema.sanitise_pks(pk), relative=True)
         feature_oid = ds.get_blob_at(path).id.hex
         click.echo(f"Feature OID: {feature_oid}")

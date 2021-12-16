@@ -18,30 +18,141 @@ H = pytest.helpers.helpers()
 
 
 @dataclass
+class Entry:
+    blob_id: str
+    envelope: tuple
+
+
+@dataclass
 class IndexSummary:
     features: int
-    first_blob_id: str
-    first_envelope: tuple
-    last_blob_id: str
-    last_envelope: tuple
+    first_blob_id: Entry
+    last_blob_id: Entry
+    westernmost: Entry
+    southernmost: Entry
+    easternmost: Entry
+    northernmost: Entry
+    widest: Entry
 
 
 EXPECTED_POINTS_INDEX = IndexSummary(
-    2148,
-    "0075ca2608a7ea5a8883123d4767eb0056dc9fbe",
-    (174.37455884775878, -35.81883419068709, 174.37455884775878, -35.81883419068709),
-    "ffefdaa2170c33397e147d9c521dbd0e83362cfc",
-    (174.5172939396111, -38.899534524681165, 174.5172939396111, -38.899534524681165),
+    features=2148,
+    first_blob_id=Entry(
+        blob_id='0075ca2608a7ea5a8883123d4767eb0056dc9fbe',
+        envelope=(174.37455885, -35.81883419, 174.37455885, -35.81883419),
+    ),
+    last_blob_id=Entry(
+        blob_id='ffefdaa2170c33397e147d9c521dbd0e83362cfc',
+        envelope=(174.51729394, -38.89953452, 174.51729394, -38.89953452),
+    ),
+    westernmost=Entry(
+        blob_id='ea098c7b7bbbb57d5069bbfefe332300bc5af316',
+        envelope=(170.61676942, -45.73477461, 170.61676942, -45.73477461),
+    ),
+    southernmost=Entry(
+        blob_id='ea098c7b7bbbb57d5069bbfefe332300bc5af316',
+        envelope=(170.61676942, -45.73477461, 170.61676942, -45.73477461),
+    ),
+    easternmost=Entry(
+        blob_id='6523dde7f3b2172c6090563d9e99b32918703017',
+        envelope=(178.43023198, -37.64119695, 178.43023198, -37.64119695),
+    ),
+    northernmost=Entry(
+        blob_id='81e591a2e7c4985e2b82b6ef3e74a3a1b298e472',
+        envelope=(172.99773191, -34.40609417, 172.99773191, -34.40609417),
+    ),
+    widest=None,
 )
-
 
 EXPECTED_POLYGONS_INDEX = IndexSummary(
-    228,
-    "0299357eda50165abaec3c59b34334a02d4edbc6",
-    (175.3581076167, -37.8013959833, 175.38388545, -37.7817686333),
-    "ff7dacd17bc855fdb29873dc25f5c3853bdfcf7f",
-    (172.5777264167, -43.3007339833, 172.5845793667, -43.2968427333),
+    features=228,
+    first_blob_id=Entry(
+        blob_id='0299357eda50165abaec3c59b34334a02d4edbc6',
+        envelope=(175.35810762, -37.80139598, 175.38388545, -37.78176863),
+    ),
+    last_blob_id=Entry(
+        blob_id='ff7dacd17bc855fdb29873dc25f5c3853bdfcf7f',
+        envelope=(172.57772642, -43.30073398, 172.58457937, -43.29684273),
+    ),
+    westernmost=Entry(
+        blob_id='091eb2f16039471a6cc15adb8ae1fd4218ec751d',
+        envelope=(172.31957762, -43.59000687, 172.38531723, -43.55415243),
+    ),
+    southernmost=Entry(
+        blob_id='03f318186b6d7eef401c11465c443e7054e52123',
+        envelope=(172.36927828, -43.63570298, 172.39867563, -43.61338377),
+    ),
+    easternmost=Entry(
+        blob_id='ad9512b11f524e36237128fedd58f9ef71d07063',
+        envelope=(176.95962540, -37.95628630, 176.98604958, -37.93726660),
+    ),
+    northernmost=Entry(
+        blob_id='b8a2aed7d91fa91ad5aea47e3d0dea38027a4266',
+        envelope=(174.27367710, -35.70618512, 174.29895293, -35.68906918),
+    ),
+    widest=Entry(
+        blob_id='c150c29a1606f9b3d6ad572d7f4bdf5352cc0d70',
+        envelope=(175.17343175, -37.93850625, 175.30657743, -37.89814838),
+    ),
 )
+
+EXPECTED_ANTIMERIDIAN_INDEX = IndexSummary(
+    features=625,
+    first_blob_id=Entry(
+        blob_id='0008f607b7bb404c9d2d73e7377e7d10c5d04a6a',
+        envelope=(-164.12204700, -14.00730160, -164.01131600, -13.89563250),
+    ),
+    last_blob_id=Entry(
+        blob_id='fe5af2ef96140331795504608fa7e22c4c18432b',
+        envelope=(-156.83539010, -17.26248740, -155.63135470, -17.08319900),
+    ),
+    westernmost=Entry(
+        blob_id='8b7f0d336356de4418274fc6c4e22235cca6a481',
+        envelope=(161.73579840, -41.96151070, 161.95505280, -41.62362810),
+    ),
+    southernmost=Entry(
+        blob_id='88a069204c1c0f763aef1ec283a12404f927a6c6',
+        envelope=(-175.33739650, -67.52500030, -175.12571240, -67.44136820),
+    ),
+    easternmost=Entry(
+        blob_id='38939239f7995decd10d082e8cc27e2e3c3f2b25',
+        envelope=(-148.19130080, -37.97096460, -143.83333330, -34.37675740),
+    ),
+    northernmost=Entry(
+        blob_id='13718b1889a591319c1f72e93b6c2412890b5026',
+        envelope=(-160.57510810, -17.34120320, -153.50000000, -7.50000000),
+    ),
+    widest=Entry(
+        blob_id='3d7f1d09b02d3e3df1dc22777193535ebc38d0c1',
+        envelope=(-162.10558360, -42.50000000, -148.61019660, -36.61721010),
+    ),
+)
+
+
+def _check_index(actual, expected, abs=1e-3, widest_abs=None):
+    assert actual.features == expected.features
+    _check_entry(actual.first_blob_id, expected.first_blob_id, abs=abs)
+    _check_entry(actual.last_blob_id, expected.last_blob_id, abs=abs)
+    _check_entry(actual.westernmost, expected.westernmost, abs=abs)
+    _check_entry(actual.southernmost, expected.southernmost, abs=abs)
+    _check_entry(actual.easternmost, expected.easternmost, abs=abs)
+    _check_entry(actual.northernmost, expected.northernmost, abs=abs)
+    if expected.widest is not None:
+        _check_entry(actual.widest, expected.widest, abs=(widest_abs or abs))
+
+
+def _check_entry(actual, expected, abs=abs):
+    assert actual.blob_id == expected.blob_id
+    _check_envelope(actual.envelope, expected.envelope, abs=abs)
+
+
+def _check_envelope(roundtripped, original, abs=1e-3):
+    assert roundtripped == pytest.approx(original, abs=abs)
+    if original is not None:
+        assert roundtripped[0] <= original[0]
+        assert roundtripped[1] <= original[1]
+        assert roundtripped[2] >= original[2]
+        assert roundtripped[3] >= original[3]
 
 
 @pytest.mark.parametrize(
@@ -74,15 +185,6 @@ def test_roundtrip_envelope(envelope, expected_encoded):
 
     roundtripped = encoder.decode(actual_encoded)
     _check_envelope(roundtripped, envelope)
-
-
-def _check_envelope(roundtripped, original, abs=1e-3):
-    assert roundtripped == pytest.approx(original, abs=abs)
-    if original is not None:
-        assert roundtripped[0] <= original[0]
-        assert roundtripped[1] <= original[1]
-        assert roundtripped[2] >= original[2]
-        assert roundtripped[3] >= original[3]
 
 
 def test_index_points_all(data_archive, cli_runner):
@@ -147,13 +249,6 @@ def test_index_points_idempotent(data_archive, cli_runner):
         _check_index(s, EXPECTED_POINTS_INDEX)
 
 
-def _check_index(actual, expected, abs=1e-3):
-    assert actual.first_blob_id == expected.first_blob_id
-    _check_envelope(actual.first_envelope, expected.first_envelope, abs=abs)
-    assert actual.last_blob_id == expected.last_blob_id
-    _check_envelope(actual.last_envelope, expected.last_envelope, abs=abs)
-
-
 def test_index_polygons_all(data_archive, cli_runner):
     with data_archive("polygons.tgz") as repo_path:
         r = cli_runner.invoke(["spatial-filter", "index"])
@@ -162,8 +257,8 @@ def test_index_polygons_all(data_archive, cli_runner):
         s = _get_index_summary(repo_path)
         assert s.features == 228
         # The buffer-for-curvature (buffer added to compensate for possible curvature of line segments)
-        # means the polygon index is not as accurate.
-        _check_index(s, EXPECTED_POLYGONS_INDEX, 1e-2)
+        # means the polygon index is not quite as accurate - and a lot less accurate for the widest polygon.
+        _check_index(s, EXPECTED_POLYGONS_INDEX, 1e-2, widest_abs=0.2)
 
 
 def test_index_table_all(data_archive, cli_runner):
@@ -175,31 +270,74 @@ def test_index_table_all(data_archive, cli_runner):
         assert s.features == 0
 
 
-def _get_index_summary(repo_path):
+def test_index_antimeridian_all(data_archive, cli_runner):
+    with data_archive("antimeridian.tgz") as repo_path:
+        r = cli_runner.invoke(["spatial-filter", "index"])
+        assert r.exit_code == 0, r.stderr
+
+        s = _get_index_summary(repo_path, unwrap_lon=0.0)
+        assert s.features == 625
+        # The buffer-for-curvature (buffer added to compensate for possible curvature of line segments)
+        # means the antimeridian index is not as accurate (since each features has a large envelope).
+        _check_index(s, EXPECTED_ANTIMERIDIAN_INDEX, 0.2)
+
+
+def _get_index_summary(repo_path, unwrap_lon=-180):
     db_path = repo_path / ".kart" / "feature_envelopes.db"
     engine = sqlite_engine(db_path)
     with sessionmaker(bind=engine)() as sess:
         features = sess.scalar("SELECT COUNT(*) FROM feature_envelopes;")
 
         if not features:
-            return IndexSummary(features, None, None, None, None)
+            return IndexSummary(features, *([None] * 7))
+
+        first_blob_id = lambda blob_id, envelope: -int(blob_id, 16)
+        last_blob_id = lambda blob_id, envelope: int(blob_id, 16)
+
+        def westernmost(blob_id, envelope):
+            return -(envelope[0] + 360 if envelope[0] < unwrap_lon else envelope[0])
+
+        def southernmost(blob_id, envelope):
+            return -envelope[1]
+
+        def easternmost(blob_id, envelope):
+            return envelope[2] + 360 if envelope[2] < unwrap_lon else envelope[2]
+
+        def northernmost(blob_id, envelope):
+            return envelope[3]
+
+        def widest(blob_id, envelope):
+            return (
+                envelope[2] - envelope[0]
+                if envelope[2] >= envelope[0]
+                else envelope[2] + 360 - envelope[0]
+            )
+
+        score_funcs = [
+            first_blob_id,
+            last_blob_id,
+            westernmost,
+            southernmost,
+            easternmost,
+            northernmost,
+            widest,
+        ]
+
+        winners = [None] * len(score_funcs)
+        winning_scores = [-float('INF')] * len(score_funcs)
 
         encoder = EnvelopeEncoder()
-        row = sess.execute(
-            "SELECT blob_id, envelope FROM feature_envelopes ORDER BY blob_id LIMIT 1;"
-        ).fetchone()
-        first_blob_id = row[0].hex()
-        first_envelope = encoder.decode(row[1])
+        r = sess.execute("SELECT blob_id, envelope FROM feature_envelopes;")
+        for row in r:
+            blob_id = row[0].hex()
+            envelope = encoder.decode(row[1])
+            for i in range(len(score_funcs)):
+                score = score_funcs[i](blob_id, envelope)
+                if score > winning_scores[i]:
+                    winning_scores[i] = score
+                    winners[i] = Entry(blob_id, envelope)
 
-        row = sess.execute(
-            "SELECT blob_id, envelope FROM feature_envelopes ORDER BY blob_id DESC LIMIT 1;"
-        ).fetchone()
-        last_blob_id = row[0].hex()
-        last_envelope = encoder.decode(row[1])
-
-        return IndexSummary(
-            features, first_blob_id, first_envelope, last_blob_id, last_envelope
-        )
+        return IndexSummary(features, *winners)
 
 
 # This transform leaves every point exactly where it is, even points past the antimeridian eg (185, 0)
