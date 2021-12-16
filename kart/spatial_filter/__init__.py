@@ -124,24 +124,35 @@ def resolve(ctx, reference, do_envelope, output_format):
     default=False,
     help="Don't do any indexing, instead just output what would be indexed.",
 )
+@click.option(
+    "--debug",
+    hidden=True,
+    help="Don't do any indexing, instead just calculate the envelope for this feature / encode or decode this envelope.",
+)
 @click.argument(
     "commits",
     nargs=-1,
 )
 @click.pass_context
-def index(ctx, clear_existing, dry_run, commits):
+def index(ctx, clear_existing, dry_run, debug, commits):
     """
     Maintains the index needed to perform a spatially-filtered clone using this repo as the server.
     Indexes all features added by the supplied commits and their ancestors.
     If no commits are supplied, indexes all features in all commits.
     """
     from .index import (
+        debug_index,
         resolve_all_commit_refs,
         resolve_commits,
         update_spatial_filter_index,
     )
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
+
+    if debug:
+        debug_index(repo, debug)
+        return
+
     if not commits:
         commits = resolve_all_commit_refs(repo)
     else:

@@ -16,7 +16,7 @@ from sqlalchemy.types import BLOB
 
 from kart.cli_util import tool_environment
 from kart.crs_util import make_crs, normalise_wkt
-from kart.exceptions import SubprocessError
+from kart.exceptions import SubprocessError, InvalidOperation
 from kart.geometry import Geometry
 from kart.repo import KartRepoFiles
 from kart.serialise_util import msg_unpack
@@ -70,14 +70,14 @@ class CrsHelper:
         self.ds_to_transforms = {}
         self.target_crs = make_crs("EPSG:4326")
 
-    def transforms_for_dataset(self, ds_path):
+    def transforms_for_dataset(self, ds_path, verbose=False):
         transforms = self.ds_to_transforms.get(ds_path)
         if transforms is None:
-            transforms = self._load_transforms_for_dataset(ds_path)
+            transforms = self._load_transforms_for_dataset(ds_path, verbose=verbose)
             self.ds_to_transforms[ds_path] = transforms
         return transforms
 
-    def _load_transforms_for_dataset(self, ds_path):
+    def _load_transforms_for_dataset(self, ds_path, verbose=False):
         if ds_path in self.ds_to_transforms:
             return self.ds_to_transforms[ds_path]
 
@@ -94,15 +94,16 @@ class CrsHelper:
                     continue
                 distinct_crs_list.append(crs)
 
-                transform, desc = self.transform_from_src_crs(crs)
+                transform = self.transform_from_src_crs(crs)
                 transforms.append(transform)
-                descs.append(desc)
+                descs.append(getattr(transform, "desc"))
             except Exception:
                 L.warning(
                     f"Couldn't load transform for CRS {crs_oid} at {ds_path}",
                     exc_info=True,
                 )
-        L.info(f"Loaded CRS transforms for {ds_path}: {', '.join(descs)}")
+        info = click.echo if verbose else L.info
+        info(f"Loaded CRS transforms for {ds_path}: {', '.join(descs)}")
         return transforms
 
     def iter_crs_oids(self, ds_path):
@@ -146,7 +147,8 @@ class CrsHelper:
             desc = f"IDENTITY({src_crs.GetAuthorityCode(None)})"
         else:
             desc = f"{src_crs.GetAuthorityCode(None)} -> {self.target_crs.GetAuthorityCode(None)}"
-        return transform, desc
+        transform.desc = desc
+        return transform
 
 
 class SpatialTreeTables(TableSet):
@@ -363,6 +365,97 @@ def update_spatial_filter_index(
     click.echo(f"Indexed {i} features in {t1-t0:.1f}s")
 
 
+def debug_index(repo, arg):
+    """
+    Use kart spatial-filter index --debug=OBJECT to learn more about how a particular object is being indexed.
+    Usage:
+        --debug=[COMMIT:]DATASET_PATH:FEATURE_OID
+        --debug=[COMMIT:]DATASET_PATH:FEATURE_PRIMARY_KEY
+        --debug=HEX_ENCODED_BINARY_ENVELOPE
+        --debug=W,S,E,N  (4 floats)
+    """
+
+    if ":" in arg:
+        _debug_feature(repo, arg)
+    elif "," in arg:
+        _debug_envelope(arg)
+    elif all(c in "0123456789abcdefABCDEF" for c in arg):
+        _debug_encoded_envelope(arg)
+    elif arg.startswith('b"') or arg.startswith("b'"):
+        _debug_encoded_envelope(arg)
+    else:
+        raise click.UsageError(debug_index.__doc__)
+
+
+def _debug_feature(repo, arg):
+    from kart.promisor_utils import object_is_promised
+
+    parts = arg.split(":", maxsplit=2)
+    if len(parts) == 2:
+        commit, ds_path, pk = "HEAD", *parts
+    else:
+        commit, ds_path, pk = parts
+
+    try:
+        _ = repo[pk]
+    except KeyError as e:
+        if object_is_promised(e):
+            raise InvalidOperation("Can't index promised object")
+        ds = repo.datasets(commit)[ds_path]
+        path = ds.encode_pks_to_path(ds.schema.sanitise_pks(pk), relative=True)
+        feature_oid = ds.get_blob_at(path).id.hex
+        click.echo(f"Feature OID: {feature_oid}")
+    else:
+        # Actually this is a feature_oid
+        feature_oid = pk
+
+    crs_helper = CrsHelper(repo)
+    transforms = crs_helper.transforms_for_dataset(ds_path, verbose=True)
+
+    geometry = get_geometry(repo, feature_oid)
+    envelope = _get_envelope_for_indexing_verbose(geometry, transforms, feature_oid)
+
+    if envelope is not None:
+        click.echo()
+        click.echo(f"Final envelope: {envelope}")
+        _debug_envelope(envelope)
+
+
+def _debug_envelope(arg):
+    import binascii
+
+    if isinstance(arg, str):
+        envelope = [float(s) for s in arg.split(",")]
+    else:
+        envelope = arg
+    assert len(envelope) == 4
+    assert all(isinstance(p, float) for p in envelope)
+
+    encoder = EnvelopeEncoder()
+    encoded = encoder.encode(envelope)
+    encoded_hex = binascii.hexlify(encoded).decode()
+    roundtripped = encoder.decode(encoded)
+    click.echo(f"Encoded as {encoded_hex}\t\t({encoded})")
+    click.echo(f"(which decodes as {roundtripped})")
+
+
+def _debug_encoded_envelope(arg):
+    import ast
+    import binascii
+
+    if arg.startswith("b'") or arg.startswith('b"'):
+        encoded = ast.literal_eval(arg)
+    else:
+        encoded = binascii.unhexlify(arg.encode())
+
+    encoder = EnvelopeEncoder(len(encoded) * 8 // 4)
+    encoded_hex = binascii.hexlify(encoded).decode()
+    decoded = encoder.decode(encoded)
+
+    click.echo(f"Encoded as {encoded_hex}\t\t({encoded})")
+    click.echo(f"Which decodes as: {decoded}")
+
+
 NO_GEOMETRY_COLUMN = object()
 
 
@@ -479,6 +572,49 @@ def get_envelope_for_indexing(geom, transforms, feature_oid):
                 return None
 
             result = union_of_envelopes(result, envelope)
+        return result
+    except Exception:
+        L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
+        return None
+
+
+def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
+    # Keep in sync with get_envelope_for_indexing above. Lots of debug output added.
+    result = None
+
+    try:
+        minmax_envelope = _transpose_gpkg_or_ogr_envelope(
+            geom.envelope(only_2d=True, calculate_if_missing=True)
+        )
+        click.echo()
+        click.echo(f"Geometry envelope: {minmax_envelope}")
+
+        for transform in transforms:
+
+            desc = getattr(transform, "desc") or str(transform)
+            click.echo()
+            click.echo(f"Applying transform {desc}...")
+
+            first_envelope = transform_minmax_envelope(
+                minmax_envelope, transform, buffer_for_curvature=False
+            )
+            envelope = transform_minmax_envelope(
+                minmax_envelope, transform, buffer_for_curvature=True
+            )
+
+            if first_envelope and first_envelope != envelope:
+                click.echo(f"First attempt: {first_envelope}")
+                click.echo(f"With buffer-for-curvature: {envelope}")
+            else:
+                click.echo(f"Result: {envelope}")
+
+            if envelope is None:
+                click.echo("Skipped indexing feature %s", feature_oid)
+                return None
+
+            result = union_of_envelopes(result, envelope)
+            if result != envelope:
+                click.echo(f"Total envelope so far: {result}")
         return result
     except Exception:
         L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
