@@ -1,3 +1,4 @@
+import binascii
 from dataclasses import dataclass
 import pytest
 
@@ -96,8 +97,8 @@ EXPECTED_POLYGONS_INDEX = IndexSummary(
     ),
 )
 
-EXPECTED_ANTIMERIDIAN_INDEX = IndexSummary(
-    features=625,
+EXPECTED_ANTIMERIDIAN_3994_INDEX = IndexSummary(
+    features=616,
     first_blob_id=Entry(
         blob_id='0008f607b7bb404c9d2d73e7377e7d10c5d04a6a',
         envelope=(-164.12204700, -14.00730160, -164.01131600, -13.89563250),
@@ -129,6 +130,39 @@ EXPECTED_ANTIMERIDIAN_INDEX = IndexSummary(
 )
 
 
+EXPECTED_ANTIMERIDIAN_3832_INDEX = IndexSummary(
+    features=616,
+    first_blob_id=Entry(
+        blob_id='00178a825ca904cd73fc144719205d523ee8bcbe',
+        envelope=(-153.75143160, -9.77738980, -153.50000000, -9.47359470),
+    ),
+    last_blob_id=Entry(
+        blob_id='fe9ccd848e82e73eddfc765a7dee93e2f533e719',
+        envelope=(-171.45524940, -27.56882660, -170.74683640, -26.80289790),
+    ),
+    westernmost=Entry(
+        blob_id='9162f81b135232560874e4a095ce7718d9293f5b',
+        envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.westernmost.envelope,
+    ),
+    southernmost=Entry(
+        blob_id='d0d91483159910ac42f791d0cf73d1e799c81144',
+        envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.southernmost.envelope,
+    ),
+    easternmost=Entry(
+        blob_id='8b6dfa16dbcd51639e417e756a324c9ce865a845',
+        envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.easternmost.envelope,
+    ),
+    northernmost=Entry(
+        blob_id='590f40c2aeeec46832ea23cf94cbf563b774245c',
+        envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.northernmost.envelope,
+    ),
+    widest=Entry(
+        blob_id='1347b4ea194e641c5ea745ca84e38ade9a82de0b',
+        envelope=EXPECTED_ANTIMERIDIAN_3994_INDEX.widest.envelope,
+    ),
+)
+
+
 def _check_index(actual, expected, abs=1e-3, widest_abs=None):
     assert actual.features == expected.features
     _check_entry(actual.first_blob_id, expected.first_blob_id, abs=abs)
@@ -156,29 +190,30 @@ def _check_envelope(roundtripped, original, abs=1e-3):
 
 
 @pytest.mark.parametrize(
-    "envelope,expected_encoded",
+    "envelope,expected_encoded_hex",
     [
-        ((0, 0, 0, 0), b"\x7f\xff\xf7\xff\xff\x80\x00\x08\x00\x00"),
-        ((1e-10, 1e-10, 1e-10, 1e-10), b"\x7f\xff\xf7\xff\xff\x80\x00\x08\x00\x00"),
-        ((-1e-10, -1e-10, -1e-10, -1e-10), b"\x7f\xff\xf7\xff\xff\x80\x00\x08\x00\x00"),
-        ((-180, -90, 180, 90), b"\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff"),
-        ((-90, -10, 90, 10), b"\x3f\xff\xf7\x1c\x71\xc0\x00\x08\xe3\x8e"),
-        ((90, -20, -90, 20), b"\xbf\xff\xf6\x38\xe3\x40\x00\t\xc7\x1c"),
+        ((0, 0, 0, 0), b"7ffff7ffff8000080000"),
+        ((1e-10, 1e-10, 1e-10, 1e-10), b"7ffff7ffff8000080000"),
+        ((-1e-10, -1e-10, -1e-10, -1e-10), b"7ffff7ffff8000080000"),
+        ((-180, -90, 180, 90), b"0000000000ffffffffff"),
+        ((-90, -10, 90, 10), b"3ffff71c71c00008e38e"),
+        ((90, -20, -90, 20), b"bffff638e3400009c71c"),
         (
             (-45.830, 65.173, -43.232, 65.745),
-            b"\x5f\x68\xed\xcb\x0b\x61\x41\xed\xd8\x10",
+            b"5f68edcb0b6141edd810",
         ),
         (
             (174.958, -37.198, 174.992, -37.190),
-            b"\xfc\x6a\x14\xb1\x89\xfc\x70\x54\xb1\xb9",
+            b"fc6a14b189fc7054b1b9",
         ),
         (
             (178.723, 0.148, -175.234, 2.538),
-            b"\xff\x17\x78\x03\x5d\x03\x63\xa8\x39\xc1",
+            b"ff1778035d0363a839c1",
         ),
     ],
 )
-def test_roundtrip_envelope(envelope, expected_encoded):
+def test_roundtrip_envelope(envelope, expected_encoded_hex):
+    expected_encoded = binascii.unhexlify(expected_encoded_hex)
     encoder = EnvelopeEncoder()
     actual_encoded = encoder.encode(envelope)
     assert actual_encoded == expected_encoded
@@ -270,16 +305,28 @@ def test_index_table_all(data_archive, cli_runner):
         assert s.features == 0
 
 
-def test_index_antimeridian_all(data_archive, cli_runner):
-    with data_archive("antimeridian.tgz") as repo_path:
+def test_index_antimeridian_3994(data_archive, cli_runner):
+    with data_archive("antimeridian-3994.tgz") as repo_path:
         r = cli_runner.invoke(["spatial-filter", "index"])
         assert r.exit_code == 0, r.stderr
 
         s = _get_index_summary(repo_path, unwrap_lon=0.0)
-        assert s.features == 625
+        assert s.features == 616
         # The buffer-for-curvature (buffer added to compensate for possible curvature of line segments)
         # means the antimeridian index is not as accurate (since each features has a large envelope).
-        _check_index(s, EXPECTED_ANTIMERIDIAN_INDEX, 0.2)
+        _check_index(s, EXPECTED_ANTIMERIDIAN_3994_INDEX, 0.2)
+
+
+def test_index_antimeridian_3882(data_archive, cli_runner):
+    with data_archive("antimeridian-3832.tgz") as repo_path:
+        r = cli_runner.invoke(["spatial-filter", "index"])
+        assert r.exit_code == 0, r.stderr
+
+        s = _get_index_summary(repo_path, unwrap_lon=0.0)
+        assert s.features == 616
+        # The buffer-for-curvature (buffer added to compensate for possible curvature of line segments)
+        # means the antimeridian index is not as accurate (since each features has a large envelope).
+        _check_index(s, EXPECTED_ANTIMERIDIAN_3832_INDEX, 0.2)
 
 
 def _get_index_summary(repo_path, unwrap_lon=-180):
