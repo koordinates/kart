@@ -23,7 +23,7 @@ Download the .msi installer from the [release page](https://github.com/koordinat
 
 Download the .pkg installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.10.7);
 
-Or use [Homebrew](https://brew.sh) to install: `brew cask install koordinates/kart/kart`
+Or use [Homebrew](https://brew.sh) to install: `brew install koordinates/kart/kart`
 
 ### Linux
 
