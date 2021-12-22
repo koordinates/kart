@@ -1,13 +1,18 @@
 certifi
 Click~=7.0
 cryptography
-jsonschema
 msgpack~=0.6.1
 pymysql
 Pygments
 Rtree~=0.9.4
 sqlalchemy
 pyodbc ; platform_system!="Linux"
+
+# jsonschema>=4.2 pulls in importlib_resources, which breaks PyInstaller<4.8
+# https://github.com/pyinstaller/pyinstaller/pull/6195
+# https://github.com/koordinates/kart/issues/425
+jsonschema<4.2
+
 
 # these are only here for dependencies
 psycopg2==2.8.5
