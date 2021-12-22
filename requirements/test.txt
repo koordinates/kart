@@ -29,8 +29,6 @@ importlib-metadata==4.0.1
     #   pytest
 iniconfig==1.1.1
     # via pytest
-lovely-pytest-docker==0.2.1
-    # via -r requirements/test.in
 packaging==20.9
     # via
     #   pytest
@@ -46,7 +44,6 @@ pyparsing==2.4.7
 pytest==6.2.5
     # via
     #   -r requirements/test.in
-    #   lovely-pytest-docker
     #   pytest-benchmark
     #   pytest-cov
     #   pytest-helpers-namespace
