@@ -24,9 +24,7 @@ importlib-metadata==4.10.0
     # via
     #   jsonschema
     #   sqlalchemy
-importlib-resources==5.4.0
-    # via jsonschema
-jsonschema==4.3.2
+jsonschema==4.1.2
     # via -r requirements/requirements.in
 msgpack==0.6.2
     # via -r requirements/requirements.in
@@ -49,13 +47,9 @@ rtree==0.9.7
 sqlalchemy==1.4.28
     # via -r requirements/requirements.in
 typing-extensions==4.0.1
-    # via
-    #   importlib-metadata
-    #   jsonschema
+    # via importlib-metadata
 zipp==3.6.0
-    # via
-    #   importlib-metadata
-    #   importlib-resources
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 setuptools==49.1.3
