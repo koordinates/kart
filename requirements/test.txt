@@ -29,7 +29,7 @@ importlib-metadata==4.0.1
     #   pytest
 iniconfig==1.1.1
     # via pytest
-lovely-pytest-docker==0.2.1
+lovely-pytest-docker==0.3.0
     # via -r requirements/test.in
 packaging==20.9
     # via
@@ -69,6 +69,7 @@ six==1.15.0
     # via
     #   -c requirements/../requirements.txt
     #   html5lib
+    #   lovely-pytest-docker
     #   pytest-profiling
 termcolor==1.1.0
     # via pytest-sugar
