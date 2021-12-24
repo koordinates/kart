@@ -86,10 +86,7 @@ class BaseDiffWriter:
         )
 
         self.user_key_filters = user_key_filters
-        self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(
-            user_key_filters,
-            implicit_meta=False,
-        )
+        self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
 
         self.spatial_filter = repo.spatial_filter
 

@@ -208,9 +208,7 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     # Specially handle raw paths, because we can and it's nice for Kart developers
     result = [p for p in paths if "/.table-dataset/" in p]
     normal_paths = [p for p in paths if "/.table-dataset/" not in p]
-    repo_filter = RepoKeyFilter.build_from_user_patterns(
-        normal_paths, implicit_meta=False
-    )
+    repo_filter = RepoKeyFilter.build_from_user_patterns(normal_paths)
     if repo_filter.match_all:
         return result
     for ds_path, ds_filter in repo_filter.items():

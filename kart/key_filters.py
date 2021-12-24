@@ -150,34 +150,30 @@ class RepoKeyFilter(KeyFilterDict):
         return groups["dataset_glob"], subdataset, groups["rest"] or None
 
     @classmethod
-    def build_from_user_patterns(cls, user_patterns, implicit_meta=True):
+    def build_from_user_patterns(cls, user_patterns):
         """
         Given a list of strings like ["datasetA:1", "datasetA:2", "datasetB"],
         builds a RepoKeyFilter with the appropriate entries for "datasetA" and "datasetB".
         If no patterns are specified, returns RepoKeyFilter.MATCH_ALL.
-        If implicit_meta is True, then all meta changes are matched as soon as any feature changes are requested.
         """
         result = cls()
         for user_pattern in user_patterns:
-            result.add_user_pattern(user_pattern, implicit_meta=implicit_meta)
+            result.add_user_pattern(user_pattern)
         return result if result else cls.MATCH_ALL
 
-    def add_user_pattern(self, user_pattern, implicit_meta=True):
+    def add_user_pattern(self, user_pattern):
         dataset_glob, subdataset, rest = self._parse_user_pattern(user_pattern)
 
         if subdataset is None:
             # whole dataset
             self[dataset_glob] = DatasetKeyFilter.MATCH_ALL
             return
-        # meta or feature filter
+        # Either a meta or feature filter
         ds_filter = self.get(dataset_glob)
         if not ds_filter:
             ds_filter = DatasetKeyFilter()
-            # TODO: remove this? what is it for?
-            # if implicit_meta:
-            #     ds_filter["meta"] = UserStringKeyFilter.MATCH_ALL
             if rest:
-                # Specific feature or specific meta item
+                # Specific feature or meta item
                 ds_filter[subdataset] = UserStringKeyFilter()
             else:
                 # All features, or all meta items
