@@ -205,10 +205,14 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     finds the path encoding for the dataset they apply to and converts them to the feature's path, eg:
     path/to/dataset/.table-dataset/feature/F/9/o/6/kc4F9o6L
     """
-    repo_filter = RepoKeyFilter.build_from_user_patterns(paths, implicit_meta=False)
+    # Specially handle raw paths, because we can and it's nice for Kart developers
+    result = [p for p in paths if "/.table-dataset/" in p]
+    normal_paths = [p for p in paths if "/.table-dataset/" not in p]
+    repo_filter = RepoKeyFilter.build_from_user_patterns(
+        normal_paths, implicit_meta=False
+    )
     if repo_filter.match_all:
-        return []
-    result = []
+        return result
     for ds_path, ds_filter in repo_filter.items():
         if ds_filter.match_all:
             result.append(ds_path)

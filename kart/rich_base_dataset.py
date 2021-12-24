@@ -14,7 +14,7 @@ from .exceptions import (
     NotYetImplemented,
     PATCH_DOES_NOT_APPLY,
 )
-from .key_filters import DatasetKeyFilter, FeatureKeyFilter
+from .key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
 from .schema import Schema
 from .spatial_filter import SpatialFilter
 from .promisor_utils import object_is_promised, fetch_promised_blobs
@@ -173,14 +173,15 @@ class RichBaseDataset(BaseDataset):
         If reverse is true, generates a diff from other -> self.
         """
         ds_diff = DatasetDiff()
-        ds_diff["meta"] = self.diff_meta(other, reverse=reverse)
+        meta_filter = ds_filter.get("meta", ds_filter.child_type())
+        ds_diff["meta"] = self.diff_meta(other, meta_filter, reverse=reverse)
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
         ds_diff["feature"] = DeltaDiff(
             self.diff_feature(other, feature_filter, reverse=reverse)
         )
         return ds_diff
 
-    def diff_meta(self, other, reverse=False):
+    def diff_meta(self, other, meta_filter=MetaKeyFilter.MATCH_ALL, reverse=False):
         """
         Returns a diff from self -> other, but only for meta items.
         If reverse is true, generates a diff from other -> self.
@@ -190,8 +191,16 @@ class RichBaseDataset(BaseDataset):
         else:
             old, new = self, other
 
-        meta_old = dict(old.meta_items()) if old else {}
-        meta_new = dict(new.meta_items()) if new else {}
+        meta_old = (
+            {k: v for k, v in old.meta_items().items() if k in meta_filter}
+            if old
+            else {}
+        )
+        meta_new = (
+            {k: v for k, v in new.meta_items().items() if k in meta_filter}
+            if new
+            else {}
+        )
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     _INSERT_UPDATE_DELETE = (
@@ -522,7 +531,7 @@ class RichBaseDataset(BaseDataset):
         """Fetch all the promised features in this dataset that are marked as dirty in the working copy."""
 
         # Attempting this more than once in a single kart invocation will waste time and have no effect.
-        if getattr(self, 'fetch_missing_dirty_features_attempted', False):
+        if getattr(self, "fetch_missing_dirty_features_attempted", False):
             return False
         self.fetch_missing_dirty_features_attempted = True
 

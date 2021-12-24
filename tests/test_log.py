@@ -288,7 +288,7 @@ def test_path_handling(data_archive, cli_runner, output_format):
         )
         assert r.exit_code == 0, r.stderr
         assert num_commits(r) == 1
-        # Path syntax still works:
+        # Raw path syntax still works:
         PK_1_PATH = "nz_pa_points_topo_150k/.table-dataset/feature/A/A/A/A/kQ0="
         r = cli_runner.invoke(["log", "-o", output_format, "--", PK_1_PATH])
         assert r.exit_code == 0, r.stderr

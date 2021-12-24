@@ -1,3 +1,4 @@
+import fnmatch
 import re
 
 import click
@@ -105,10 +106,48 @@ class RepoKeyFilter(KeyFilterDict):
     child_type = DatasetKeyFilter
     child_that_matches_all = DatasetKeyFilter(match_all=True)
 
-    _ENTIRE_DATASET_PATTERN = re.compile(r"^[^:]+$")
-    _SINGLE_FEATURE_PATTERN = re.compile(
-        r"^(?P<dataset>[^:]+):(feature:)?(?P<pk>[^:]+)$"
+    # https://github.com/koordinates/kart/blob/master/docs/DATASETS_v3.md#valid-dataset-names
+    # note: we allow '*' here; it's not a valid dataset name character but it's used in the filter
+    # pattern.
+    FILTER_PATTERN = re.compile(
+        # dataset part
+        r'^(?P<dataset_glob>[^:<>"|?\x00-\x1f]+)'
+        # optional sub-dataset part. This is optional; if a PK is given and ':feature' isn't, we assume feature anyway.
+        # (i.e. 'datasetname:123' is equivalent to 'datasetname:feature:123'
+        r"(?::(?P<subdataset>feature|meta))?"
+        # The rest of the pattern is  either a meta key or a PK
+        r"(?::(?P<rest>.*))?"
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dataset_glob_filters = {}
+
+    def _bad_pattern(self, user_pattern):
+        return click.UsageError(
+            f"Invalid filter format, should be '<dataset>' or '<dataset>:<primary_key>': got {user_pattern!r}"
+        )
+
+    def _parse_user_pattern(self, user_pattern):
+        match = self.FILTER_PATTERN.match(user_pattern)
+        if not match:
+            raise self._bad_pattern(user_pattern)
+        groups = match.groupdict()
+        dataset_glob = groups["dataset_glob"]
+        if (
+            dataset_glob.startswith(("/", "."))
+            or dataset_glob.endswith(("/", "."))
+            or "./" in dataset_glob
+            or "/." in dataset_glob
+        ):
+            raise self._bad_pattern(user_pattern)
+
+        subdataset = groups["subdataset"]
+        if not subdataset:
+            if groups["rest"]:
+                subdataset = "feature"
+
+        return groups["dataset_glob"], subdataset, groups["rest"] or None
 
     @classmethod
     def build_from_user_patterns(cls, user_patterns, implicit_meta=True):
@@ -124,32 +163,76 @@ class RepoKeyFilter(KeyFilterDict):
         return result if result else cls.MATCH_ALL
 
     def add_user_pattern(self, user_pattern, implicit_meta=True):
-        for p in (self._ENTIRE_DATASET_PATTERN, self._SINGLE_FEATURE_PATTERN):
-            match = p.match(user_pattern)
-            if match:
-                break
-        else:
-            raise click.UsageError(
-                f"Invalid filter format, should be <dataset> or <dataset>:<primary_key> - {user_pattern}"
-            )
+        dataset_glob, subdataset, rest = self._parse_user_pattern(user_pattern)
 
-        if p is self._ENTIRE_DATASET_PATTERN:
-            ds_path = user_pattern
-            self[ds_path] = DatasetKeyFilter.MATCH_ALL
+        if subdataset is None:
+            # whole dataset
+            self[dataset_glob] = DatasetKeyFilter.MATCH_ALL
+            return
+        # meta or feature filter
+        ds_filter = self.get(dataset_glob)
+        if not ds_filter:
+            ds_filter = DatasetKeyFilter()
+            # TODO: remove this? what is it for?
+            # if implicit_meta:
+            #     ds_filter["meta"] = UserStringKeyFilter.MATCH_ALL
+            if rest:
+                # Specific feature or specific meta item
+                ds_filter[subdataset] = UserStringKeyFilter()
+            else:
+                # All features, or all meta items
+                ds_filter[subdataset] = UserStringKeyFilter.MATCH_ALL
+            self[dataset_glob] = ds_filter
+        ds_filter[subdataset].add(rest)
 
-        if p is self._SINGLE_FEATURE_PATTERN:
-            ds_path = match.group("dataset")
-            pk = match.group("pk")
+    def _dataset_glob_pattern_matching_key(self, key):
+        if self._dataset_glob_filters:
+            for glob_pattern in self._dataset_glob_filters.keys():
+                if fnmatch.fnmatch(key, glob_pattern):
+                    return glob_pattern
+        return False
 
-            ds_filter = self.get(ds_path)
-            if not ds_filter:
-                ds_filter = DatasetKeyFilter()
-                if implicit_meta:
-                    ds_filter["meta"] = UserStringKeyFilter.MATCH_ALL
-                ds_filter["feature"] = UserStringKeyFilter()
-                self[ds_path] = ds_filter
+    def filter_keys(self, keys: set):
+        matched_keys = keys & self.keys()
+        matched_keys.update(
+            {
+                k
+                for k in keys - matched_keys
+                if self._dataset_glob_pattern_matching_key(k)
+            }
+        )
+        return matched_keys
 
-            ds_filter["feature"].add(pk)
+    def __contains__(self, key):
+        return super().__contains__(key) or self._dataset_glob_pattern_matching_key(key)
+
+    def __getitem__(self, key):
+        if self.match_all:
+            return self.child_that_matches_all
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            glob_pattern = self._dataset_glob_pattern_matching_key(key)
+            if not glob_pattern:
+                raise
+            return self._dataset_glob_filters[glob_pattern]
+
+    def get(self, key, default_value=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default_value
+
+    def __setitem__(self, key, value):
+        if self.match_all:
+            return
+        if "*" in key:
+            # escape the glob for passing to fnmatch later.
+            # This is because fnmatch actually processes '*?[]' chars specially, but we only want to support '*' for now.
+            for char in "?[]":
+                key = key.replace(char, f"[{char}]")
+            self._dataset_glob_filters[key] = value
+        super().__setitem__(key, value)
 
 
 RepoKeyFilter.MATCH_ALL = RepoKeyFilter(match_all=True)

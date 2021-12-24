@@ -1514,7 +1514,7 @@ def test_show_points_HEAD(output_format, data_archive_readonly, cli_runner):
             }
 
 
-def test_diff_filtered(data_archive_readonly, cli_runner):
+def test_diff_filtered_text(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
         r = cli_runner.invoke(["diff", "HEAD^...", "nz_pa_points_topo_150k:1182"])
         assert r.exit_code == 0, r.stderr
@@ -1528,6 +1528,107 @@ def test_diff_filtered(data_archive_readonly, cli_runner):
             "-                                     name = ␀",
             "+                                     name = Ko Te Rā Matiti (Wharekaho)",
         ]
+
+
+def test_diff_wildcard_dataset_filters(data_archive, cli_runner):
+    with data_archive("polygons") as repo_path:
+        # Add another dataset at "second/dataset"
+        with data_archive("gpkg-polygons") as src:
+            src_gpkg_path = src / "nz-waca-adjustments.gpkg"
+            r = cli_runner.invoke(
+                [
+                    "-C",
+                    repo_path,
+                    "import",
+                    src_gpkg_path,
+                    "nz_waca_adjustments:second/dataset",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+        # Find all meta changes for datasets matching a filter
+        r = cli_runner.invoke(["diff", "HEAD^^?...", "second/*:meta", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
+        assert diff.keys() == {"second/dataset"}
+        assert diff["second/dataset"].keys() == {"meta"}
+        assert diff["second/dataset"]["meta"].keys() == {
+            "title",
+            "metadata.xml",
+            "crs/EPSG:4167.wkt",
+            "schema.json",
+            "description",
+        }
+
+        # Find title changes for all datasets
+        r = cli_runner.invoke(["diff", "HEAD^^?...", "*:meta:title", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "kart.diff/v1+hexwkb": {
+                "nz_waca_adjustments": {
+                    "meta": {"title": {"+": "NZ WACA Adjustments"}}
+                },
+                "second/dataset": {"meta": {"title": {"+": "NZ WACA Adjustments"}}},
+            }
+        }
+
+        # Wildcard dataset filter for specific feature ID in all datasets.
+        # This mostly exists for consistency with the meta ones shown above, but might be useful for ... something?
+        r = cli_runner.invoke(["diff", "HEAD^^?...", "*:feature:4408145", "-o", "json"])
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "kart.diff/v1+hexwkb": {
+                "nz_waca_adjustments": {
+                    "feature": [
+                        {
+                            "+": {
+                                "id": 4408145,
+                                "geom": "0106000000010000000103000000010000000A000000D7D232C2528C6540224B1CB992CC45C035AC93FE308C6540AED61AE518CC45C077BF65A9308C65400CE8853B17CC45C0F188658E208C654079F5E0A49FCB45C03C3B141A248C654006E470019FCB45C0896DFC19278C6540671929E5A3CB45C0DF597160288C654000A7080BA6CB45C064B3C319648C65408C0F44B114CC45C0C885FE1E988C6540B64D609F81CC45C0D7D232C2528C6540224B1CB992CC45C0",
+                                "date_adjusted": "2016-12-15T12:37:17",
+                                "survey_reference": None,
+                                "adjusted_nodes": 891,
+                            }
+                        }
+                    ]
+                },
+                "second/dataset": {
+                    "feature": [
+                        {
+                            "+": {
+                                "id": 4408145,
+                                "geom": "0106000000010000000103000000010000000A000000D7D232C2528C6540224B1CB992CC45C035AC93FE308C6540AED61AE518CC45C077BF65A9308C65400CE8853B17CC45C0F188658E208C654079F5E0A49FCB45C03C3B141A248C654006E470019FCB45C0896DFC19278C6540671929E5A3CB45C0DF597160288C654000A7080BA6CB45C064B3C319648C65408C0F44B114CC45C0C885FE1E988C6540B64D609F81CC45C0D7D232C2528C6540224B1CB992CC45C0",
+                                "date_adjusted": "2016-12-15T12:37:17",
+                                "survey_reference": None,
+                                "adjusted_nodes": 891,
+                            }
+                        }
+                    ]
+                },
+            }
+        }
+
+        # Filter for features in datasets whose name matches a pattern
+        r = cli_runner.invoke(
+            ["diff", "HEAD^^?...", "*/dataset:feature:4408145", "-o", "json"]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert json.loads(r.stdout) == {
+            "kart.diff/v1+hexwkb": {
+                "second/dataset": {
+                    "feature": [
+                        {
+                            "+": {
+                                "id": 4408145,
+                                "geom": "0106000000010000000103000000010000000A000000D7D232C2528C6540224B1CB992CC45C035AC93FE308C6540AED61AE518CC45C077BF65A9308C65400CE8853B17CC45C0F188658E208C654079F5E0A49FCB45C03C3B141A248C654006E470019FCB45C0896DFC19278C6540671929E5A3CB45C0DF597160288C654000A7080BA6CB45C064B3C319648C65408C0F44B114CC45C0C885FE1E988C6540B64D609F81CC45C0D7D232C2528C6540224B1CB992CC45C0",
+                                "date_adjusted": "2016-12-15T12:37:17",
+                                "survey_reference": None,
+                                "adjusted_nodes": 891,
+                            }
+                        }
+                    ]
+                }
+            }
+        }
 
 
 @pytest.mark.parametrize("output_format", SHOW_OUTPUT_FORMATS)
