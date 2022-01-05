@@ -5,9 +5,7 @@
 #    make py-requirements
 #
 appnope==0.1.2
-    # via
-    #   -r requirements/dev.in
-    #   ipython
+    # via -r requirements/dev.in
 attrs==21.2.0
     # via
     #   -c requirements/../requirements.txt
@@ -37,7 +35,7 @@ iniconfig==1.1.1
     #   pytest
 ipdb==0.13.9
     # via -r requirements/dev.in
-ipython==7.30.1
+ipython==7.31.0
     # via
     #   -r requirements/dev.in
     #   ipdb
@@ -78,15 +76,15 @@ pyparsing==3.0.6
     # via
     #   -c requirements/test.txt
     #   packaging
-pytest-forked==1.4.0
-    # via pytest-xdist
-pytest-xdist==2.5.0
-    # via -r requirements/dev.in
 pytest==6.2.5
     # via
     #   -c requirements/test.txt
     #   pytest-forked
     #   pytest-xdist
+pytest-forked==1.4.0
+    # via pytest-xdist
+pytest-xdist==2.5.0
+    # via -r requirements/dev.in
 toml==0.10.2
     # via
     #   -c requirements/test.txt
