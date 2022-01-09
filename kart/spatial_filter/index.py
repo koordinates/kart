@@ -465,7 +465,9 @@ def get_geometry(repo, feature_oid):
     col_id = get_geometry.legend_to_col_id.get(legend)
     if col_id is None:
         col_id = _find_geometry_column(fields)
-        get_geometry.legend_to_col_id[legend] = col_id
+    if col_id is None:
+        return None
+    get_geometry.legend_to_col_id[legend] = col_id
     return fields[col_id] if col_id is not NO_GEOMETRY_COLUMN else None
 
 
