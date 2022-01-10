@@ -19,6 +19,8 @@ class Upsert(ValuesBase):
     in which case, performs an UPDATE.
     """
 
+    inherit_cache = True
+
     def __init__(self, table):
         ValuesBase.__init__(self, table, None, None)
         self._returning = None
