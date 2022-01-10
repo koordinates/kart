@@ -575,10 +575,25 @@ def get_envelope_for_indexing(geom, transforms, feature_oid):
                 return None
 
             result = union_of_envelopes(result, envelope)
+        if not _is_valid_envelope(envelope):
+            L.warning(
+                "Couldn't index feature %s - resulting envelope not valid", feature_oid
+            )
+            return None
         return result
     except Exception:
         L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
         return None
+
+
+def _is_valid_envelope(env):
+    return (
+        (-180 <= env[0] <= 180)
+        and (-90 <= env[1] <= 90)
+        and (-180 <= env[2] <= 180)
+        and (-90 < env[3] <= 90)
+        and (env[1] <= env[3])
+    )
 
 
 def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
@@ -618,6 +633,11 @@ def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
             result = union_of_envelopes(result, envelope)
             if result != envelope:
                 click.echo(f"Total envelope so far: {result}")
+        if not _is_valid_envelope(envelope):
+            L.warning(
+                "Couldn't index feature %s - resulting envelope not valid", feature_oid
+            )
+            return None
         return result
     except Exception:
         L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
