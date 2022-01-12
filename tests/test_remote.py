@@ -20,45 +20,62 @@ def test_clone_empty_repo(tmp_path, cli_runner, chdir):
 
 
 def test_get_directory_from_url():
-    assert get_directory_from_url("kart@example.com:def/abc") == "abc"
-    assert get_directory_from_url("kart@example.com:abc") == "abc"
-    assert get_directory_from_url("kart@example.com:def/abc.git") == "abc"
-    assert get_directory_from_url("kart@example.com:def/abc.d") == "abc.d"
-    assert get_directory_from_url("https://example.com/def/abc") == "abc"
-    assert get_directory_from_url("https://example.com/abc") == "abc"
-    assert get_directory_from_url("https://example.com/abc.git") == "abc"
-    assert get_directory_from_url("https://example.com/abc.d") == "abc.d"
-    assert get_directory_from_url("abc") == "abc"
-    assert get_directory_from_url("abc/") == "abc"
-    assert get_directory_from_url("def/abc") == "abc"
-    assert get_directory_from_url("def/abc/") == "abc"
-    assert get_directory_from_url("/def/abc") == "abc"
-    assert get_directory_from_url("/def/abc/") == "abc"
-    assert get_directory_from_url("file:/def/abc") == "abc"
-    assert get_directory_from_url("file:/def/abc/") == "abc"
-    assert get_directory_from_url("file://def/abc") == "abc"
-    assert get_directory_from_url("file://def/abc/") == "abc"
-    assert get_directory_from_url("file:///def/abc") == "abc"
-    assert get_directory_from_url("file:///def/abc/") == "abc"
+    assert get_directory_from_url("kart@example.com:def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("kart@example.com:abc", is_bare=False) == "abc"
+    assert (
+        get_directory_from_url("kart@example.com:def/abc.git", is_bare=False) == "abc"
+    )
+    assert (
+        get_directory_from_url("kart@example.com:def/abc.d", is_bare=False) == "abc.d"
+    )
+    assert get_directory_from_url("https://example.com/def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("https://example.com/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("https://example.com/abc.git", is_bare=False) == "abc"
+    assert get_directory_from_url("https://example.com/abc.d", is_bare=False) == "abc.d"
+    assert get_directory_from_url("abc", is_bare=False) == "abc"
+    assert get_directory_from_url("abc/", is_bare=False) == "abc"
+    assert get_directory_from_url("def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("def/abc/", is_bare=False) == "abc"
+    assert get_directory_from_url("/def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("/def/abc/", is_bare=False) == "abc"
+    assert get_directory_from_url("file:/def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("file:/def/abc/", is_bare=False) == "abc"
+    assert get_directory_from_url("file://def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("file://def/abc/", is_bare=False) == "abc"
+    assert get_directory_from_url("file:///def/abc", is_bare=False) == "abc"
+    assert get_directory_from_url("file:///def/abc/", is_bare=False) == "abc"
 
-    assert get_directory_from_url(PureWindowsPath("C:/def/abc")) == "abc"
-    assert get_directory_from_url(PureWindowsPath("C:\\def\\abc")) == "abc"
-    assert get_directory_from_url(PureWindowsPath("C:\\def\\abc\\")) == "abc"
-    assert get_directory_from_url(PureWindowsPath("C:\\def\\abc/")) == "abc"
+    assert get_directory_from_url(PureWindowsPath("C:/def/abc"), is_bare=False) == "abc"
+    assert (
+        get_directory_from_url(PureWindowsPath("C:\\def\\abc"), is_bare=False) == "abc"
+    )
+    assert (
+        get_directory_from_url(PureWindowsPath("C:\\def\\abc\\"), is_bare=False)
+        == "abc"
+    )
+    assert (
+        get_directory_from_url(PureWindowsPath("C:\\def\\abc/"), is_bare=False) == "abc"
+    )
 
     if is_windows:
-        assert get_directory_from_url("C:/def/abc") == "abc"
-        assert get_directory_from_url("C:/def/abc/") == "abc"
-        assert get_directory_from_url("C:\\def\\abc") == "abc"
-        assert get_directory_from_url("C:\\def\\abc\\") == "abc"
-        assert get_directory_from_url("file:/C:/def/abc") == "abc"
-        assert get_directory_from_url("file:/C:/def/abc/") == "abc"
-        assert get_directory_from_url("file:/C:\\def\\abc") == "abc"
-        assert get_directory_from_url("file:/C:\\def\\abc\\") == "abc"
-        assert get_directory_from_url("file://C:\\def\\abc") == "abc"
-        assert get_directory_from_url("file://C:\\def\\abc\\") == "abc"
-        assert get_directory_from_url("file:///C:\\def\\abc") == "abc"
-        assert get_directory_from_url("file:///C:\\def\\abc\\") == "abc"
+        assert get_directory_from_url("C:/def/abc", is_bare=False) == "abc"
+        assert get_directory_from_url("C:/def/abc/", is_bare=False) == "abc"
+        assert get_directory_from_url("C:\\def\\abc", is_bare=False) == "abc"
+        assert get_directory_from_url("C:\\def\\abc\\", is_bare=False) == "abc"
+        assert get_directory_from_url("file:/C:/def/abc", is_bare=False) == "abc"
+        assert get_directory_from_url("file:/C:/def/abc/", is_bare=False) == "abc"
+        assert get_directory_from_url("file:/C:\\def\\abc", is_bare=False) == "abc"
+        assert get_directory_from_url("file:/C:\\def\\abc\\", is_bare=False) == "abc"
+        assert get_directory_from_url("file://C:\\def\\abc", is_bare=False) == "abc"
+        assert get_directory_from_url("file://C:\\def\\abc\\", is_bare=False) == "abc"
+        assert get_directory_from_url("file:///C:\\def\\abc", is_bare=False) == "abc"
+        assert get_directory_from_url("file:///C:\\def\\abc\\", is_bare=False) == "abc"
+
+    assert get_directory_from_url("kart@example.com:def/abc", is_bare=True) == "abc.git"
+    assert (
+        get_directory_from_url("kart@example.com:def/abc.git", is_bare=True)
+        == "abc.git"
+    )
 
 
 @pytest.mark.parametrize(
@@ -162,7 +179,7 @@ def test_clone_filter(
             r = cli_runner.invoke(args)
             assert r.exit_code == 0, r.stderr
 
-            repo_path = tmp_path / "points"
+            repo_path = tmp_path / "points.git"
             assert repo_path.is_dir()
 
             # it's kind of hard to tell if `--filter` succeeded tbh.
