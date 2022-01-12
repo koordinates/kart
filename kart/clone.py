@@ -32,7 +32,12 @@ def get_directory_from_url(url):
         path = PurePath(path)
 
     # Return the directory name.
-    return str(path.name or path.parent.name)
+    name = str(path.name or path.parent.name)
+
+    # Strip trailing ".git". Some hosts (notably github) add this to the end of URLs
+    if name.endswith(".git"):
+        name = name[:-4]
+    return name
 
 
 @click.command()

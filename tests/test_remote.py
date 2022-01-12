@@ -22,8 +22,12 @@ def test_clone_empty_repo(tmp_path, cli_runner, chdir):
 def test_get_directory_from_url():
     assert get_directory_from_url("kart@example.com:def/abc") == "abc"
     assert get_directory_from_url("kart@example.com:abc") == "abc"
+    assert get_directory_from_url("kart@example.com:def/abc.git") == "abc"
+    assert get_directory_from_url("kart@example.com:def/abc.d") == "abc.d"
     assert get_directory_from_url("https://example.com/def/abc") == "abc"
     assert get_directory_from_url("https://example.com/abc") == "abc"
+    assert get_directory_from_url("https://example.com/abc.git") == "abc"
+    assert get_directory_from_url("https://example.com/abc.d") == "abc.d"
     assert get_directory_from_url("abc") == "abc"
     assert get_directory_from_url("abc/") == "abc"
     assert get_directory_from_url("def/abc") == "abc"
