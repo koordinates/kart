@@ -7,6 +7,7 @@ from osgeo import osr
 from kart.crs_util import make_crs
 from kart.sqlalchemy.sqlite import sqlite_engine
 from kart.spatial_filter.index import (
+    CannotIndex,
     EnvelopeEncoder,
     anticlockwise_ring_from_minmax_envelope,
     transform_minmax_envelope,
@@ -438,6 +439,11 @@ def test_transform_minmax_envelope_area(input, transform, expected_result):
         # Any other transform will output x-values within this range,
         # which means detecting anti-meridian crossings works a little differently.
         assert all(-180 <= x <= 180 for x in x_values)
+
+    if expected_result is None:
+        with pytest.raises(CannotIndex):
+            transform_minmax_envelope(input, transform)
+        return
 
     # This is the actual test that the transform works.
     # We test it without buffer-for-curvature first since that has only one right answer, so we can check
