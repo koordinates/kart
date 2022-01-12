@@ -71,9 +71,7 @@ else:
     path_extras.append(os.path.join(prefix, "bin"))
 
 os.environ["GIT_EXEC_PATH"] = os.path.join(prefix, "libexec", "git-core")
-os.environ["GIT_TEMPLATE_DIR"] = os.path.join(
-    prefix, "share", "git-core", "templates"
-)
+os.environ["GIT_TEMPLATE_DIR"] = os.path.join(prefix, "share", "git-core", "templates")
 # See locked_git_index in.repo.py:
 os.environ["GIT_INDEX_FILE"] = os.path.join(".kart", "unlocked_index")
 
@@ -102,7 +100,9 @@ if "OGR_SQLITE_PRAGMA" not in os.environ:
     os.environ["OGR_SQLITE_PRAGMA"] = "page_size=65536"
 
 # Write our various additions to $PATH
-os.environ['PATH'] = os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
+os.environ["PATH"] = (
+    os.pathsep.join(path_extras) + os.pathsep + os.environ.get("PATH", "")
+)
 
 # GDAL Error Handling
 from osgeo import gdal, ogr, osr
@@ -128,6 +128,7 @@ pygit2.option(pygit2.GIT_OPT_SET_CACHE_OBJECT_LIMIT, 2, 100000)
 if is_linux:
     import certifi
 
+    # note: cli_util.py also sets this in git's `http.sslCAInfo` config var
     pygit2.settings.ssl_cert_file = certifi.where()
 
 
