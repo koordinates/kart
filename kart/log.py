@@ -10,7 +10,7 @@ import pygit2
 
 from .cli_util import tool_environment
 from .exec import execvp
-from .exceptions import SubprocessError
+from .exceptions import NotYetImplemented, SubprocessError
 from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .repo import KartRepoState
@@ -205,30 +205,51 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     finds the path encoding for the dataset they apply to and converts them to the feature's path, eg:
     path/to/dataset/.table-dataset/feature/F/9/o/6/kc4F9o6L
     """
-    repo_filter = RepoKeyFilter.build_from_user_patterns(paths, implicit_meta=False)
+    DATASET_DIRNAME = repo.dataset_class.DATASET_DIRNAME
+    # Specially handle raw paths, because we can and it's nice for Kart developers
+    result = [p for p in paths if f"/{DATASET_DIRNAME}/" in p]
+    normal_paths = [p for p in paths if f"/{DATASET_DIRNAME}/" not in p]
+    repo_filter = RepoKeyFilter.build_from_user_patterns(normal_paths)
     if repo_filter.match_all:
-        return []
-    result = []
+        return result
     for ds_path, ds_filter in repo_filter.items():
         if ds_filter.match_all:
             result.append(ds_path)
             continue
-        ds = find_dataset(ds_path, repo, commits)
-        if not ds:
-            result.append(ds_path)
-            continue
-        for ds_part, part_filter in ds_filter.items():
-            if part_filter.match_all:
-                result.append(f"{ds.inner_path}/{ds_part}")
-                continue
 
-            for item_key in part_filter:
-                if ds_part == "feature":
-                    result.append(
-                        ds.encode_pks_to_path(ds.schema.sanitise_pks(item_key))
-                    )
-                else:
-                    result.append(f"{ds.inner_path}/{ds_part}/{item_key}")
+        for char in "?[]":
+            # git pathspecs actually treat '*?[]' specially but we only want to support '*' for now
+            ds_path = ds_path.replace(char, f"[{char}]")
+
+        # NOTE: git's interpretation of '*' is pretty loose.
+        # It matches all characters in a path *including slashes*, so '*abc' will match 'foo/bar/abc'
+        # This is pretty much what we want though 👍
+        if ds_filter.match_all:
+            result.append(f"{ds_path}/*")
+        else:
+            for ds_part, part_filter in ds_filter.items():
+                if part_filter.match_all:
+                    result.append(f"{ds_path}/{DATASET_DIRNAME}/{ds_part}/*")
+                    continue
+
+                for item_key in part_filter:
+                    if ds_part == "feature":
+                        if "*" in ds_path:
+                            raise NotYetImplemented(
+                                "`kart log` doesn't currently support filters with both wildcards and feature IDs"
+                            )
+                        else:
+                            ds = find_dataset(ds_path, repo, commits)
+                            if not ds:
+                                result.append(ds_path)
+                                continue
+                            result.append(
+                                ds.encode_pks_to_path(ds.schema.sanitise_pks(item_key))
+                            )
+                    else:
+                        result.append(
+                            f"{ds_path}/{DATASET_DIRNAME}/{ds_part}/{item_key}"
+                        )
     return result
 
 

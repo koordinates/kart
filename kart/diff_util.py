@@ -19,7 +19,7 @@ def get_all_ds_paths(base_rs, target_rs, repo_key_filter=RepoKeyFilter.MATCH_ALL
     all_ds_paths = base_ds_paths | target_ds_paths
 
     if not repo_key_filter.match_all:
-        all_ds_paths = all_ds_paths & repo_key_filter.keys()
+        all_ds_paths = repo_key_filter.filter_keys(all_ds_paths)
 
     return sorted(list(all_ds_paths))
 
