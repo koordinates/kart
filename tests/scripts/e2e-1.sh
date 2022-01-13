@@ -53,4 +53,7 @@ kart status
 kart merge edit-1 --no-ff -m merge-1
 kart log
 
+# Briefly try a remote to ensure the CA cert bundle is working
+kart git ls-remote https://github.com/koordinates/kart.git HEAD
+
 { echo -e "\n✅ E2E: Success"; } 2>/dev/null
