@@ -250,6 +250,8 @@ class ConverterType(UserDefinedType):
         # Returns a converter function for post-processing python values.
     """
 
+    cache_ok = True
+
 
 def aliased_converter_type(cls):
     """
@@ -297,4 +299,5 @@ def aliased_converter_type(cls):
 
         cls.result_processor = result_processor
 
+    cls.cache_ok = True
     return cls
