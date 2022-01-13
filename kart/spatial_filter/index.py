@@ -28,6 +28,25 @@ from kart.sqlalchemy.sqlite import sqlite_engine
 L = logging.getLogger("kart.spatial_filter.index")
 
 
+def buffered_bulk_warn(self, message):
+    """For logging lots of identical warnings, but only actually outputs once per time flush_bulk_warns is called."""
+    self.bulk_warns.setdefault(message, 0)
+    self.bulk_warns[message] = abs(self.bulk_warns[message]) + 1
+
+
+def flush_bulk_warns(self):
+    """Output the number of occurrences of each type of buffered_bulk_warn message."""
+    for message, occurrences in self.bulk_warns.items():
+        if occurrences > 0:
+            self.warn(f"{message} ({occurrences} total occurences)")
+            self.bulk_warns[message] = -occurrences
+
+
+L.buffered_bulk_warn = buffered_bulk_warn.__get__(L)
+L.flush_bulk_warns = flush_bulk_warns.__get__(L)
+L.bulk_warns = {}
+
+
 def _revlist_command(repo):
     return [
         "git",
@@ -84,7 +103,6 @@ class CrsHelper:
         crs_oids = set(self.iter_crs_oids(ds_path))
         distinct_crs_list = []
         transforms = []
-        descs = []
         for crs_oid in crs_oids:
             try:
                 crs = self.crs_from_oid(crs_oid)
@@ -96,12 +114,13 @@ class CrsHelper:
 
                 transform = self.transform_from_src_crs(crs)
                 transforms.append(transform)
-                descs.append(getattr(transform, "desc"))
             except Exception:
                 L.warning(
                     f"Couldn't load transform for CRS {crs_oid} at {ds_path}",
                     exc_info=True,
                 )
+        transforms = sorted(transforms, key=lambda t: getattr(t, "desc"))
+        descs = [getattr(t, "desc") for t in transforms]
         info = click.echo if verbose else L.info
         info(f"Loaded CRS transforms for {ds_path}: {', '.join(descs)}")
         return transforms
@@ -339,6 +358,7 @@ def update_spatial_filter_index(
         for i, (ds_path, feature_oid) in enumerate(feature_oid_iter):
             if i and progress_every and i % progress_every == 0:
                 click.echo(f"  {i:,d} features... @{time.monotonic()-t0:.1f}s")
+                L.flush_bulk_warns()
 
             transforms = crs_helper.transforms_for_dataset(ds_path)
             if not transforms:
@@ -356,6 +376,9 @@ def update_spatial_filter_index(
                 params,
             )
 
+        click.echo(f"  {i:,d} features... @{time.monotonic()-t0:.1f}s")
+        L.flush_bulk_warns()
+
         # Update indexed commits.
         params = [(bytes.fromhex(commit_id),) for commit_id in all_independent_commits]
         dbcur.execute("DELETE FROM commits;")
@@ -371,16 +394,25 @@ def debug_index(repo, arg):
     Usage:
         --debug=[COMMIT:]DATASET_PATH:FEATURE_OID
         --debug=[COMMIT:]DATASET_PATH:FEATURE_PRIMARY_KEY
+        --debug=FEATURE_OID
         --debug=HEX_ENCODED_BINARY_ENVELOPE
         --debug=W,S,E,N  (4 floats)
     """
+    from kart.promisor_utils import object_is_promised
 
     if ":" in arg:
         _debug_feature(repo, arg)
     elif "," in arg:
         _debug_envelope(arg)
     elif all(c in "0123456789abcdefABCDEF" for c in arg):
-        _debug_encoded_envelope(arg)
+        try:
+            _ = repo[arg]
+        except KeyError as e:
+            if object_is_promised(e):
+                raise InvalidOperation("Can't index promised object")
+            _debug_encoded_envelope(arg)
+        else:
+            _debug_feature(repo, arg)
     elif arg.startswith('b"') or arg.startswith("b'"):
         _debug_encoded_envelope(arg)
     else:
@@ -391,7 +423,17 @@ def _debug_feature(repo, arg):
     from kart.promisor_utils import object_is_promised
 
     parts = arg.split(":", maxsplit=2)
-    if len(parts) == 2:
+    if len(parts) == 1:
+        commit = "HEAD"
+        all_ds = repo.datasets(commit)
+        if len(all_ds) != 1:
+            raise click.UsageError(
+                "--debug=FEATURE_OID is only supported if there is only one dataset - try --debug=DATASET_PATH:FEATURE_OID"
+            )
+        ds_path = next(iter(all_ds)).path
+        click.echo(f"Assuming feature is found in only dataset: {ds_path}")
+        pk = arg
+    elif len(parts) == 2:
         commit, ds_path, pk = "HEAD", *parts
     else:
         commit, ds_path, pk = parts
@@ -569,13 +611,24 @@ def get_envelope_for_indexing(geom, transforms, feature_oid):
         )
 
         for transform in transforms:
-            envelope = transform_minmax_envelope(minmax_envelope, transform)
-            if envelope is None:
-                L.info("Skipped indexing feature %s", feature_oid)
+            try:
+                envelope = transform_minmax_envelope(minmax_envelope, transform)
+            except CannotIndex as e:
+                if isinstance(e, CannotIndexDueToWrongCrs) and len(transforms) > 1:
+                    L.buffered_bulk_warn(
+                        f"Skipped obviously bad transform {transform.desc}"
+                    )
+                    continue
+                L.warning("Skipped indexing feature %s", feature_oid)
                 return None
 
             result = union_of_envelopes(result, envelope)
-        if not _is_valid_envelope(envelope):
+
+        if result is None:
+            L.warning("Skipped indexing feature %s", feature_oid)
+            return None
+
+        if not _is_valid_envelope(result):
             L.warning(
                 "Couldn't index feature %s - resulting envelope not valid", feature_oid
             )
@@ -613,27 +666,33 @@ def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
             click.echo()
             click.echo(f"Applying transform {desc}...")
 
-            first_envelope = transform_minmax_envelope(
-                minmax_envelope, transform, buffer_for_curvature=False
-            )
-            envelope = transform_minmax_envelope(
-                minmax_envelope, transform, buffer_for_curvature=True
-            )
+            try:
+                first_envelope = transform_minmax_envelope(
+                    minmax_envelope, transform, buffer_for_curvature=False
+                )
+                envelope = transform_minmax_envelope(
+                    minmax_envelope, transform, buffer_for_curvature=True
+                )
 
-            if first_envelope and first_envelope != envelope:
-                click.echo(f"First attempt: {first_envelope}")
-                click.echo(f"With buffer-for-curvature: {envelope}")
-            else:
-                click.echo(f"Result: {envelope}")
-
-            if envelope is None:
-                click.echo("Skipped indexing feature %s", feature_oid)
+                if first_envelope and first_envelope != envelope:
+                    click.echo(f"First attempt: {first_envelope}")
+                    click.echo(f"With buffer-for-curvature: {envelope}")
+                else:
+                    click.echo(f"Result: {envelope}")
+            except CannotIndex as e:
+                click.echo(f"Transform resulted in bad envelope: {e.bad_envelope}")
+                if isinstance(e, CannotIndexDueToWrongCrs) and len(transforms) > 1:
+                    click.echo(
+                        f"Skipped obviously wrong transform {transform.desc} for feature {feature_oid}"
+                    )
+                    continue
+                click.echo(f"Skipped indexing feature {feature_oid}")
                 return None
 
             result = union_of_envelopes(result, envelope)
             if result != envelope:
                 click.echo(f"Total envelope so far: {result}")
-        if not _is_valid_envelope(envelope):
+        if not _is_valid_envelope(result):
             L.warning(
                 "Couldn't index feature %s - resulting envelope not valid", feature_oid
             )
@@ -658,6 +717,21 @@ def get_ogr_envelope(ogr_geometry):
     return _transpose_gpkg_or_ogr_envelope(ogr_geometry.GetEnvelope())
 
 
+class CannotIndex(Exception):
+    """
+    Raised if the transformed envelope fails the sanity check by being larger than the planet or not on the planet,
+    but also if it is smaller than the planet but apparently wider than a hemisphere, which we can't interpret
+    unambiguously - it may or may not cross the antimeridian.
+    """
+
+    def __init__(self, bad_envelope):
+        self.bad_envelope = bad_envelope
+
+
+class CannotIndexDueToWrongCrs(CannotIndex):
+    """Raised if the transformed envelope fails the sanity check so spectacularly that it is clear the wrong CRS was used."""
+
+
 def transform_minmax_envelope(envelope, transform, buffer_for_curvature=True):
     """
     Given an envelope in (min-x, min-y, max-x, max-y) format in any CRS, transforms it to EPSG:4326 using the given
@@ -671,7 +745,14 @@ def transform_minmax_envelope(envelope, transform, buffer_for_curvature=True):
     if envelope[0] == envelope[2] and envelope[1] == envelope[3]:
         x, y, _ = transform.TransformPoint(envelope[0], envelope[1])
         x = _wrap_lon(x)
-        return (x, y, x, y)
+        result = (x, y, x, y)
+        polarmost_y = abs(y)
+        # See comments below in the general case:
+        if polarmost_y > 1000:
+            raise CannotIndexDueToWrongCrs(result)
+        elif polarmost_y > 90:
+            raise CannotIndex(result)
+        return result
 
     ring = anticlockwise_ring_from_minmax_envelope(envelope)
     ring.Transform(transform)
@@ -690,14 +771,29 @@ def transform_minmax_envelope(envelope, transform, buffer_for_curvature=True):
         transformed_envelope = get_ogr_envelope(ring)
         width, height = _minmax_envelope_dimensions(transformed_envelope)
 
+    polarmost_y = _max_abs_y(transformed_envelope)
+
+    if width > 1000 or height > 1000 or polarmost_y > 1000:
+        # If this happens its pretty certain that the wrong CRS has been used - this envelope is a lot larger than the
+        # planet and/or a long way too far north or south to be on the planet. A threshold of 1000 is used since if
+        # the envelope was only slightly larger than Earth or slightly too far north or south, then we can't be sure its
+        # the wrong CRS - the data itself might just be slightly wrong.
+        raise CannotIndexDueToWrongCrs(transformed_envelope)
+
     if width >= 180:
         # When this happens, it's likely because the original geometry crossed the antimeridian AND it was stored
         # in a non-contiguous way (ie in two halves, one near -180 and one near 180). If that happens, it means
         # the min-x and max-x values we got aren't useful for calculating the western- and eastern-most points -
         # they'll just be roughly -180 and 180. Rather than inspecting the original geometry to try and find
-        # the true envelope, we just give up - returning None is allowed if we can't easily calculate the envelope.
-        # (It could also genuinely be a geometry wider than 180 degrees, but we can't easily tell the difference.)
-        return None
+        # the true envelope, we just give up - raising CannotIndex is allowed if we can't easily calculate the envelope.
+        # (It could also genuinely be a geometry wider than 180 degrees, but we can't easily tell the difference.
+        # Or, it could be CRS issues again.)
+        raise CannotIndex(transformed_envelope)
+
+    if polarmost_y > 90:
+        # Envelope extends too far north or south. This could be due to the wrong CRS or it could be bad data or
+        # rounding errors.
+        raise CannotIndex(transformed_envelope)
 
     if buffer_for_curvature:
         biggest_dimension = max(width, height)
@@ -722,10 +818,9 @@ def transform_minmax_envelope(envelope, transform, buffer_for_curvature=True):
             transformed_envelope = _buffer_minmax_envelope(transformed_envelope, 0.1)
 
     w = _wrap_lon(transformed_envelope[0])
-    s = transformed_envelope[1]
+    s = _clamp_lat(transformed_envelope[1])
     e = _wrap_lon(transformed_envelope[2])
-    n = transformed_envelope[3]
-
+    n = _clamp_lat(transformed_envelope[3])
     return (w, s, e, n)
 
 
@@ -820,6 +915,11 @@ def _minmax_envelope_dimensions(envelope):
     return envelope[2] - envelope[0], envelope[3] - envelope[1]
 
 
+def _max_abs_y(envelope):
+    """Returns the greatest magnitude y value of the envelope (how far it extends away from the equator)."""
+    return max(abs(envelope[1]), abs(envelope[3]))
+
+
 def _unwrap_lon_envelope(w, e):
     """
     Given a longitude envelope in the format (w, e) where -180 <= w, e <= 180, and w <= e unless it crosses the
@@ -833,6 +933,11 @@ def _unwrap_lon_envelope(w, e):
 def _wrap_lon(x):
     """Puts any longitude in the range -180 <= x < 180 without moving its position on earth."""
     return (x + 180) % 360 - 180
+
+
+def _clamp_lat(y):
+    """Clamps any latitude to the range -90 <= y <= 90. Use with care as this could hide problems eg CRS issues."""
+    return max(-90, min(90, y))
 
 
 def _wrap_lon_envelope(w, e):

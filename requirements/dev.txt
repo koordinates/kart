@@ -5,8 +5,10 @@
 #    make py-requirements
 #
 appnope==0.1.2
-    # via -r requirements/dev.in
-attrs==21.2.0
+    # via
+    #   -r requirements/dev.in
+    #   ipython
+attrs==21.4.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/test.txt
@@ -17,7 +19,7 @@ colorama==0.4.4
     # via
     #   -c requirements/test.txt
     #   -r requirements/dev.in
-decorator==5.1.0
+decorator==5.1.1
     # via
     #   ipdb
     #   ipython
@@ -68,7 +70,7 @@ py==1.11.0
     #   -c requirements/test.txt
     #   pytest
     #   pytest-forked
-pygments==2.10.0
+pygments==2.11.2
     # via
     #   -c requirements/../requirements.txt
     #   ipython
@@ -76,15 +78,15 @@ pyparsing==3.0.6
     # via
     #   -c requirements/test.txt
     #   packaging
+pytest-forked==1.4.0
+    # via pytest-xdist
+pytest-xdist==2.5.0
+    # via -r requirements/dev.in
 pytest==6.2.5
     # via
     #   -c requirements/test.txt
     #   pytest-forked
     #   pytest-xdist
-pytest-forked==1.4.0
-    # via pytest-xdist
-pytest-xdist==2.5.0
-    # via -r requirements/dev.in
 toml==0.10.2
     # via
     #   -c requirements/test.txt
@@ -101,7 +103,7 @@ typing-extensions==4.0.1
     #   importlib-metadata
 wcwidth==0.2.5
     # via prompt-toolkit
-zipp==3.6.0
+zipp==3.7.0
     # via
     #   -c requirements/../requirements.txt
     #   -c requirements/test.txt

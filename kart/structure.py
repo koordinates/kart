@@ -377,6 +377,9 @@ class Datasets:
         except KeyError:
             return None
 
+    def __len__(self):
+        return sum(1 for _ in self)
+
     def __iter__(self):
         """Iterate over all available datasets in self.tree."""
         if self.tree is None:

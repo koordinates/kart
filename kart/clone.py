@@ -11,7 +11,7 @@ from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 
 
-def get_directory_from_url(url):
+def get_directory_from_url(url, is_bare):
     if isinstance(url, PurePath):
         path = url
     elif "://" in str(url):
@@ -32,7 +32,14 @@ def get_directory_from_url(url):
         path = PurePath(path)
 
     # Return the directory name.
-    return str(path.name or path.parent.name)
+    name = str(path.name or path.parent.name)
+
+    # Strip trailing ".git". Some hosts (notably github) add this to the end of URLs
+    if name.endswith(".git"):
+        name = name[:-4]
+    if is_bare:
+        name += ".git"
+    return name
 
 
 @click.command()
@@ -119,7 +126,7 @@ def clone(
     directory,
 ):
     """ Clone a repository into a new directory """
-    repo_path = Path(directory or get_directory_from_url(url)).resolve()
+    repo_path = Path(directory or get_directory_from_url(url, is_bare=bare)).resolve()
 
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
