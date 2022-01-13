@@ -62,9 +62,9 @@ To reference a spatial filter file on your filesystem, use an @ symbol followed 
 ### Current limitations
 
 - The spatial filter can be changed at any time but it cannot be enlarged beyond the spatial filter that was originally used during `kart clone`. [#537](https://github.com/koordinates/kart/issues/537)
-- If the repository you are cloning from has not been spatially indexed, all features will be downloaded regardless of the filter specified. See [Indexing](#Indexing)
+- If the repository you are cloning from has not been spatially indexed, all features must be downloaded before the filter can be applied. See [Indexing](#indexing)
 - The spatial filter cannot be set to a geometry that can't be transformed into the CRS for every dataset in the repository.
-- Currently indexing isn't very clever with respect to CRS changes. If the CRS for a dataset has been drastically changed at some point, then the index generated for that dataset, although accurate, can be very inefficient, resulting in inefficient clones. (If the CRS is changed but the new CRS is similar to the old one in that the features are all in approximately the same place regardless of which CRS is used to interpret them, then an efficient index will still be generated). [#538](https://github.com/koordinates/kart/issues/538)
+- Currently indexing isn't very clever with respect to certain CRS changes. If the CRS for a dataset has been drastically changed at some point, then the index generated for that dataset, although accurate, can be very inefficient, resulting in inefficient clones. (If the CRS is changed but the new CRS is similar to the old one in that the features are all in approximately the same place regardless of which CRS is used to interpret them, then an efficient index will still be generated). [#538](https://github.com/koordinates/kart/issues/538)
 - Spatial filtered cloning is currently only supported on the server-side on the MacOS and Linux versions of Kart. It is currently not supported when the server is running Windows. [#539](https://github.com/koordinates/kart/issues/539)
 
 ### Effects of setting the spatial filter
@@ -81,7 +81,7 @@ As a result, a current limitation is that the spatial filter can be changed at a
 
 There are two more qualifications regarding spatial filtering during clone and fetch operations -
 - All features that are needed will be downloaded, but some features may be downloaded that are not actually needed. Since the spatial-filter is applied precisely in the other two stages (Kart command output and working copy creation) any extra features will be hidden from you. The cloned data on disk may contain any number of features that are outside the spatial filter without any adverse effects.
-- No filtering will occur at all if there is no spatial index on the repository which you are cloning from - instead you will the entire repository. See [indexing](#Indexing) for more details.
+- A spatial-filtered clone is not possible if no spatial index has been generated at the remote you are cloning from (see [Indexing](#indexing) for more details). In this case your only option is to clone the entire repository. Add the flag `--spatial-filter-after-clone` to the `kart clone` command to clone the entire repository and then apply the specified spatial filter immediately afterwards (before the working copy is created).
 
 #### During command output
 
@@ -113,6 +113,8 @@ As more data is added to the repository, running the same command again will ind
 
 Indexing is performed on a best effort basis - certain features may fail to index due to geometry or CRS issues and so these features will always be cloned regardless of any spatial filter. This has no adverse effects apart from reduced efficiency and so will not be noticeable as long as these features aren't numerous.
 
+Indexing a repository automatically enables the Git config setting `uploadpack.allowAnySHA1InWant`. This is necessary to allow clients who have made a spatial-filtered clone to separately fetch individual features that they are missing, for the case that a particular operation requires a particular feature that hasn't yet been fetched since it is outside of the spatial filter.
+
 ### Implementation
 
 #### During clone / fetch
@@ -129,14 +131,14 @@ The custom build of git which supports filter extensions is found on GitHub at [
 
 There is also a custom build of git for Windows [here](https://github.com/koordinates/git/tree/windows-list-objects-filter-extensions) which supports filter extensions generally but doesn't include the spatial filter extension specifically. This is sufficient so that spatial filtered clones can be made with a Windows client, but they cannot currently be made using a Windows server.
 
-For more details, see [Building Custom Git](BUILDING_CUSTOM_GIT.md)
+For more details, see [Building Git for Kart](BUILDING_GIT_FOR_KART.md)
 
 #### During command output / working copy creation
 
-Once the data is on the client, the index is no longer needed. Instead, Kart applies the spatial filter precisely to each dataset in turn by transforming the spatial filter geometry to the dataset's CRS, and outputting only those features that intersect with the resulting geometry.
+Once the data is on the client, the index is no longer used. Instead, Kart applies the spatial filter precisely to each dataset in turn by transforming the spatial filter geometry to the dataset's CRS, and outputting only those features that intersect with the resulting geometry.
 
 Kart also needs to skip over any features that have not fetched - since they are not present locally, Kart doesn't know exactly what those features are, but can infer that they must be features somewhere outside the spatial filter, or they would have been fetched. Kart is only willing to skip over missing features in this
-way if a spatial filter was active during the clone operation, and the missing features are in "promisor" packfiles, which are packfiles which can have missing objects - partial clones result in these types of packfiles. Standard packfiles (non-promisor) by contrast are guaranteed to not have any missing objects, so Kart will abort immediately if it encounters a missing object in such a packfile - since the guarantee has been broken, the repository must be corrupt in some way.
+way if a spatial filter was active during the clone operation, and the missing features are in "promisor" packfiles, which are packfiles which can have missing objects - partial clones result in these types of packfiles. Standard packfiles (non-promisor) by contrast are guaranteed to not have any missing objects, so Kart will abort immediately if it encounters a missing object in such a packfile - since the guarantee has been unexpectedly broken, the repository must be corrupt in some way.
 
 The third party libraries that Kart uses for reading Git repositories - pygit2 and libgit2 - currently don't have full support for partial clones, so they don't have a way of separating objects that are missing-but-promised (as in promisor packfiles) and objects that are unexpectedly missing (that is, corrupt). Kart maintains a fork of each project which has this functionality added, but which has not yet been merged upstream. These are found here:
 
