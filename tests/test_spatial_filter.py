@@ -88,7 +88,7 @@ def git_supports_spatial_filter(git_supports_filter_extensions):
         err = p.stderr.strip()
         if err == "fatal: No filter extension found with name spatial":
             return False
-        elif p.returncode == 0:
+        elif "No spatial index found" in err or p.returncode == 0:
             return True
         else:
             raise ValueError(

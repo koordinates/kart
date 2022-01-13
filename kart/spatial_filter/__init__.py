@@ -307,7 +307,7 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
 
     def partial_clone_filter_spec(self):
         envelope = self.envelope_wgs84()
-        return "extension:spatial={0},{1},{2},{3}".format(*envelope)
+        return "--filter=extension:spatial={0},{1},{2},{3}".format(*envelope)
 
     def is_within_envelope(self, envelope_wgs84):
         assert len(envelope_wgs84) == 4

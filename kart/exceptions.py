@@ -35,6 +35,7 @@ NO_TABLE = 49
 NO_CONFLICT = 50
 NO_DRIVER = 51
 NO_SPATIAL_FILTER = 52
+NO_SPATIAL_FILTER_INDEX = 53
 
 CONNECTION_ERROR = 60
 
@@ -119,10 +120,12 @@ class SubprocessError(BaseException):
         param=None,
         param_hint=None,
         called_process_error=None,
+        stderr=None,
     ):
         super(SubprocessError, self).__init__(
             message, param=param, param_hint=param_hint
         )
+        self.stderr = stderr
         if exit_code:
             self.set_exit_code(exit_code)
         elif called_process_error:

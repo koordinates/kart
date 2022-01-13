@@ -296,10 +296,10 @@ int sf_init(
     ctx->n = rect[3];
 
     if (sqlite3_open_v2(ss_db.str().c_str(), &ctx->db, SQLITE_OPEN_READONLY, NULL)) {
-        std::cerr << "spatial-filter: Warning: not available for this repository - no objects will be omitted.\n";
+        std::cerr << "spatial-filter: No spatial index found for this repository.\n";
         sqlite3_close(ctx->db);
         ctx->db = nullptr;
-        return 0;
+        return 1;
     }
 
     int sql_err;
@@ -394,7 +394,7 @@ void sf_free(const struct repository* r, void *context) {
     struct filter_context *ctx = static_cast<struct filter_context*>(context);
 
     double elapsed = (getnanotime() - ctx->started_at) / 1e9;
-    std::cerr << "spatial-filter: " << ctx->count << "\n";
+    std::cerr << "Enumerating objects: " << ctx->match_count << "    (Spatial-filter has tested " << ctx->count << " objects)\n";
     sf_trace_printf(
         "count=%d matched=%d elapsed=%fs rate=%f/s average=%fus\n",
         ctx->count, ctx->match_count, elapsed, ctx->count/elapsed, elapsed/ctx->count*1e6

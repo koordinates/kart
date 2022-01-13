@@ -17,7 +17,9 @@ from .exceptions import (
     translate_subprocess_exit_code,
     InvalidOperation,
     NotFound,
+    SubprocessError,
     NO_REPOSITORY,
+    NO_SPATIAL_FILTER_INDEX,
 )
 from .repo_version import (
     DEFAULT_NEW_REPO_VERSION,
@@ -275,6 +277,7 @@ class KartRepo(pygit2.Repository):
         wc_location=None,
         bare=False,
         spatial_filter_spec=None,
+        spatial_filter_after_clone=False,
     ):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
@@ -286,6 +289,7 @@ class KartRepo(pygit2.Repository):
             )
 
         extra_args = []
+        is_spatial_filter_clone = False
         if spatial_filter_spec is not None:
             # Make sure we fetch any spatial filters that might exist - we need those straight away.
             # TODO - This is a bit magic, look into further. We might need it always - or there might be another way.
@@ -293,16 +297,20 @@ class KartRepo(pygit2.Repository):
                 "-c",
                 "remote.origin.fetch=+refs/filters/*:refs/filters/*",
             ]
-            partial_clone_spec = spatial_filter_spec.partial_clone_filter_spec()
-            if partial_clone_spec and os.environ.get("X_KART_SPATIAL_FILTERED_CLONE"):
+            if (
+                os.environ.get("X_KART_SPATIAL_FILTERED_CLONE")
+                and not spatial_filter_after_clone
+            ):
+                is_spatial_filter_clone = True
+                partial_clone_spec = spatial_filter_spec.partial_clone_filter_spec()
+                extra_args.append(partial_clone_spec)
                 click.echo(
                     f"Cloning using git spatial filter extension: {partial_clone_spec}",
                     err=True,
                 )
-                extra_args.append(f"--filter={partial_clone_spec}")
 
         if bare:
-            kart_repo = cls._create_with_git_command(
+            kart_repo = cls._clone_with_git_command(
                 [
                     "git",
                     "clone",
@@ -313,6 +321,7 @@ class KartRepo(pygit2.Repository):
                     str(repo_root_path),
                 ],
                 gitdir_path=repo_root_path,
+                is_spatial_filter_clone=is_spatial_filter_clone,
             )
 
         else:
@@ -321,7 +330,7 @@ class KartRepo(pygit2.Repository):
             )
             dot_clone_path = repo_root_path / ".clone"
 
-            kart_repo = cls._create_with_git_command(
+            kart_repo = cls._clone_with_git_command(
                 [
                     "git",
                     "clone",
@@ -334,6 +343,7 @@ class KartRepo(pygit2.Repository):
                 ],
                 gitdir_path=dot_kart_path,
                 temp_workdir_path=dot_clone_path,
+                is_spatial_filter_clone=is_spatial_filter_clone,
             )
             kart_repo.lock_git_index()
 
@@ -344,10 +354,13 @@ class KartRepo(pygit2.Repository):
 
     @classmethod
     def _create_with_git_command(cls, cmd, gitdir_path, temp_workdir_path=None):
-        try:
-            subprocess.check_call(cmd, env=tool_environment())
-        except subprocess.CalledProcessError as e:
-            sys.exit(translate_subprocess_exit_code(e.returncode))
+        from .subprocess_util import subprocess_tee
+
+        returncode, stdout, stderr = subprocess_tee(cmd, env=tool_environment())
+        if returncode != 0:
+            raise SubprocessError(
+                f"Error calling {cmd[0]} {cmd[1]}", exit_code=returncode, stderr=stderr
+            )
 
         result = KartRepo(gitdir_path, validate=False)
 
@@ -358,6 +371,28 @@ class KartRepo(pygit2.Repository):
             temp_workdir_path.rmdir()
 
         return result
+
+    @classmethod
+    def _clone_with_git_command(
+        cls, cmd, gitdir_path, temp_workdir_path=None, is_spatial_filter_clone=False
+    ):
+        try:
+            return cls._create_with_git_command(cmd, gitdir_path, temp_workdir_path)
+        except SubprocessError as e:
+            if is_spatial_filter_clone and (
+                b"invalid filter-spec" in e.stderr
+                or b"No filter extension found" in e.stderr
+                or b"No spatial index found" in e.stderr
+                or b"error reading section header" in e.stderr
+            ):
+                # This error was caused (or probably caused) by the remote not supporting spatial filters.
+                raise InvalidOperation(
+                    "Remote doesn't appear to support the spatial filter extension. To clone the entire repository and "
+                    "apply the spatial filter afterwards, add the flag `--spatial-filter-after-clone`.",
+                    exit_code=NO_SPATIAL_FILTER_INDEX,
+                )
+            else:
+                raise
 
     @property
     @lru_cache(maxsize=1)

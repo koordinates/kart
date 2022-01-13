@@ -106,6 +106,16 @@ def get_directory_from_url(url, is_bare):
     type=SpatialFilterString(encoding="utf-8"),
     help=spatial_filter_help_text(),
 )
+@click.option(
+    "--spatial-filter-after-clone",
+    is_flag=True,
+    default=False,
+    help=(
+        "Only apply the spatial filter once the entire remote repository has been cloned. This option means the "
+        "spatial filter can easily be changed later without downloading any more data. This option may be necessary "
+        "if the remote doesn't support spatially filtered clones."
+    ),
+)
 @click.argument("url", nargs=1)
 @click.argument(
     "directory",
@@ -122,6 +132,7 @@ def clone(
     filterspec,
     branch,
     spatial_filter_spec,
+    spatial_filter_after_clone,
     url,
     directory,
 ):
@@ -151,7 +162,13 @@ def clone(
         args.append(f"--filter={filterspec}")
 
     repo = KartRepo.clone_repository(
-        url, repo_path, args, wc_location, bare, spatial_filter_spec=spatial_filter_spec
+        url,
+        repo_path,
+        args,
+        wc_location,
+        bare,
+        spatial_filter_spec=spatial_filter_spec,
+        spatial_filter_after_clone=spatial_filter_after_clone,
     )
 
     # Create working copy, if needed.
