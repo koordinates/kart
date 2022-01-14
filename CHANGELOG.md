@@ -4,7 +4,7 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.10.8 (UNRELEASED)
+## 0.10.8
 
 * More advanced filters for `log`, `diff` and `commit`: All of these now work:
   - Wildcard (`*`) filters for dataset names, e.g. `kart diff -- *parcel*:meta:schema.json` will show only schema changes for all datasets with `parcel` in their names. `*` by itself matches all datasets. [#532](https://github.com/koordinates/kart/issues/532)
