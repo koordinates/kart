@@ -11,6 +11,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
   - You can now output the history of individual features: `kart log -- <dataset-name>:feature:<feature-primary-key>`. [#496](https://github.com/koordinates/kart/issues/496)
 * `kart clone` now strips `.git` off the end of automatically-generated repo paths, if `--bare` is not specified. [#540](https://github.com/koordinates/kart/issues/540)
 * Simpler developer builds using CMake, see the [contributing notes](./CONTRIBUTING.md).
+* Bugfix: fixed certificate verification errors when cloning HTTPS repositories on some Linux distributions. [#541](https://github.com/koordinates/kart/pull/541)
 * Bugfix: fixed the error when merging a commit where every feature in a dataset is deleted. [#506](https://github.com/koordinates/kart/pull/506)
 * Bugfix: Don't allow `--replace-ids` to be specified during an import where the primary key is changing. [#521](https://github.com/koordinates/kart/issues/521)
 

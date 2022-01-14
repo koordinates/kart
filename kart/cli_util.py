@@ -44,6 +44,11 @@ GIT_CONFIG_DEFAULT_OVERRIDES = {
     "pack.depth": 0,
     "pack.window": 0,
 }
+if platform.system() == "Linux":
+    import certifi
+
+    GIT_CONFIG_DEFAULT_OVERRIDES["http.sslCAInfo"] = certifi.where()
+
 # These are the settings that Kart always *overrides* in git config.
 # i.e. regardless of your local git settings, kart will use these settings instead.
 GIT_CONFIG_FORCE_OVERRIDES = {
