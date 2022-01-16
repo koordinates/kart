@@ -8,6 +8,7 @@ import time
 
 import click
 from osgeo import osr, ogr
+import pygit2
 from pysqlite3 import dbapi2 as sqlite
 from sqlalchemy import Column, Table
 from sqlalchemy.orm import sessionmaker
@@ -28,23 +29,26 @@ from kart.sqlalchemy.sqlite import sqlite_engine
 L = logging.getLogger("kart.spatial_filter.index")
 
 
-def buffered_bulk_warn(self, message):
+def buffered_bulk_warn(self, message, sample):
     """For logging lots of identical warnings, but only actually outputs once per time flush_bulk_warns is called."""
     self.bulk_warns.setdefault(message, 0)
     self.bulk_warns[message] = abs(self.bulk_warns[message]) + 1
+    self.bulk_warn_samples[message] = sample
 
 
 def flush_bulk_warns(self):
     """Output the number of occurrences of each type of buffered_bulk_warn message."""
     for message, occurrences in self.bulk_warns.items():
         if occurrences > 0:
-            self.warn(f"{message} ({occurrences} total occurences)")
+            sample = self.bulk_warn_samples[message]
+            self.warn(f"{message} ({occurrences} total occurences)\nSample: {sample}")
             self.bulk_warns[message] = -occurrences
 
 
 L.buffered_bulk_warn = buffered_bulk_warn.__get__(L)
 L.flush_bulk_warns = flush_bulk_warns.__get__(L)
 L.bulk_warns = {}
+L.bulk_warn_samples = {}
 
 
 def _revlist_command(repo):
@@ -54,7 +58,7 @@ def _revlist_command(repo):
         repo.path,
         "rev-list",
         "--objects",
-        "--filter=object:type=blob",
+        "--in-commit-order",
         "--missing=allow-promisor",
     ]
 
@@ -62,104 +66,151 @@ def _revlist_command(repo):
 DS_PATH_PATTERN = r'(.+)/\.(sno|table)-dataset/'
 
 
-def _parse_revlist_output(line_iter, rel_path_pattern):
+def _parse_revlist_output(repo, line_iter, rel_path_pattern):
     full_path_pattern = re.compile(DS_PATH_PATTERN + rel_path_pattern)
 
+    commit_id = None
     for line in line_iter:
         parts = line.split(" ", maxsplit=1)
-        if len(parts) != 2:
+        if len(parts) == 1:
+            oid = parts[0].strip()
+            if repo[oid].type_str == "commit":
+                commit_id = oid
             continue
-        oid, path = parts
 
+        oid, path = parts
         m = full_path_pattern.match(path)
         if not m:
             continue
         ds_path = m.group(1)
-        yield ds_path, oid
+        obj = repo[oid]
+        if obj.type_str == "blob":
+            yield commit_id, ds_path, obj
 
 
 class CrsHelper:
     """
-    Loads all CRS definitions for a particular dataset,
-    and creates transforms
+    Loads all CRS definitions for a particular dataset, and creates a set of transforms for each commit.
+    The transforms for a dataset at a particular commit include the transform for the CRS at that commit,
+    and the transform for each future commit. This is because a feature added at a particular commit has
+    the current CRS applied to it, but may also later have a future CRS applied to it if that feature
+    still exists when that CRS becomes current (and we do not check when individual features are deleted).
+    The feature will not have a previous CRS applied to it, since that CRS was already removed before
+    the feature was added (ie, we can be sure there is no overlap).
     """
 
-    def __init__(self, repo):
+    def __init__(self, repo, start_commits=None, stop_commits=None):
         self.repo = repo
         self.ds_to_transforms = {}
         self.target_crs = make_crs("EPSG:4326")
+        self._distinct_crs_list = []
+        if start_commits is not None:
+            self.start_stop_spec = [*start_commits, "--not", *stop_commits]
+        else:
+            self.start_stop_spec = ["--all"]
 
-    def transforms_for_dataset(self, ds_path, verbose=False):
+    def transforms_for_dataset_at_commit(self, ds_path, commit_id, verbose=False):
         transforms = self.ds_to_transforms.get(ds_path)
         if transforms is None:
             transforms = self._load_transforms_for_dataset(ds_path, verbose=verbose)
-            self.ds_to_transforms[ds_path] = transforms
-        return transforms
+        result = transforms[commit_id]
+        if verbose:
+            descs = [t.desc for t in result]
+            click.echo(
+                f"Applying the following CRS transforms for {ds_path} at commit {commit_id}: {', '.join(descs)}"
+            )
+        return result
 
     def _load_transforms_for_dataset(self, ds_path, verbose=False):
         if ds_path in self.ds_to_transforms:
             return self.ds_to_transforms[ds_path]
 
-        crs_oids = set(self.iter_crs_oids(ds_path))
-        distinct_crs_list = []
-        transforms = []
-        for crs_oid in crs_oids:
-            try:
-                crs = self.crs_from_oid(crs_oid)
-                if crs in distinct_crs_list or any(
-                    crs.IsSame(c) for c in distinct_crs_list
-                ):
-                    continue
-                distinct_crs_list.append(crs)
+        seen_crs_oid_set = set()
+        transform_set = set()
+        transform_list = []
+        commit_id_to_transform_list = {}
 
-                transform = self.transform_from_src_crs(crs)
-                transforms.append(transform)
-            except Exception:
-                L.warning(
-                    f"Couldn't load transform for CRS {crs_oid} at {ds_path}",
-                    exc_info=True,
+        for commit_id in self._all_commits():
+            crs_tree = self._get_crs_tree_for_ds_at_commit(ds_path, commit_id)
+            if crs_tree is not None and crs_tree.id.hex not in seen_crs_oid_set:
+                seen_crs_oid_set.add(crs_tree.id.hex)
+                for crs_blob in crs_tree:
+                    crs_blob_oid = crs_blob.id.hex
+                    if crs_blob.type_str != "blob" or crs_blob_oid in seen_crs_oid_set:
+                        continue
+                    seen_crs_oid_set.add(crs_blob_oid)
+                    try:
+                        crs = self.crs_from_oid(crs_blob.id.hex)
+                        transform = self.transform_from_src_crs(crs)
+                        if transform not in transform_set:
+                            transform_set.add(transform)
+                            transform_list = transform_list + [transform]
+                    except Exception:
+                        L.warning(
+                            f"Couldn't load transform for CRS {crs_blob_oid} ({crs_blob.name} at {ds_path})",
+                            exc_info=True,
+                        )
+            commit_id_to_transform_list[commit_id] = transform_list
+            if verbose:
+                descs = [t.desc for t in transform_list]
+                trunc = _truncate_oid(self.repo)
+                click.echo(
+                    f"Transforms for {ds_path} at {commit_id[:trunc]}: {', '.join(descs)}"
                 )
-        transforms = sorted(transforms, key=lambda t: getattr(t, "desc"))
-        descs = [getattr(t, "desc") for t in transforms]
+
+        descs = [t.desc for t in transform_list]
         info = click.echo if verbose else L.info
         info(f"Loaded CRS transforms for {ds_path}: {', '.join(descs)}")
-        return transforms
 
-    def iter_crs_oids(self, ds_path):
+        self.ds_to_transforms[ds_path] = commit_id_to_transform_list
+        return commit_id_to_transform_list
+
+    def _get_crs_tree_for_ds_at_commit(self, ds_path, commit_id):
+        root_tree = self.repo[commit_id].peel(pygit2.Tree)
+        result = self._safe_get_obj(root_tree, f"{ds_path}/.table-dataset/meta/crs/")
+        if result is None:
+            # Delete this fall-back if we drop Datasets V2 support.
+            result = self._safe_get_obj(root_tree, f"{ds_path}/.sno-dataset/meta/crs/")
+        return result
+
+    def _safe_get_obj(self, root_tree, path):
+        try:
+            return root_tree / path
+        except KeyError:
+            return None
+
+    @functools.lru_cache(maxsize=1)
+    def _all_commits(self):
         cmd = [
-            *_revlist_command(self.repo),
-            "--all",
-            "--",
-            *self.all_crs_paths(ds_path),
+            "git",
+            "-C",
+            self.repo.path,
+            "rev-list",
+            *self.start_stop_spec,
         ]
         try:
-            r = subprocess.run(
+            commits = subprocess.check_output(
                 cmd,
                 encoding="utf8",
-                check=True,
-                capture_output=True,
                 env=tool_environment(),
             )
         except subprocess.CalledProcessError as e:
             raise SubprocessError(
                 f"There was a problem with git rev-list: {e}", called_process_error=e
             )
-        for d, crs_oid in _parse_revlist_output(
-            r.stdout.splitlines(), r"meta/crs/[^/]+"
-        ):
-            assert d == ds_path
-            yield crs_oid
-
-    def all_crs_paths(self, ds_path):
-        # Delete .sno-dataset if we drop V2 support.
-        yield f"{ds_path}/.sno-dataset/meta/crs/"
-        yield f"{ds_path}/.table-dataset/meta/crs/"
+        return commits.splitlines()
 
     @functools.lru_cache()
     def crs_from_oid(self, crs_oid):
         wkt = normalise_wkt(self.repo[crs_oid].data.decode("utf-8"))
-        return make_crs(wkt)
+        result = make_crs(wkt)
+        for prior_result in self._distinct_crs_list:
+            if result.IsSame(prior_result):
+                return prior_result
+        self._distinct_crs_list.append(result)
+        return result
 
+    @functools.lru_cache()
     def transform_from_src_crs(self, src_crs):
         transform = osr.CoordinateTransformation(src_crs, self.target_crs)
         if src_crs.IsSame(self.target_crs):
@@ -209,7 +260,7 @@ def drop_tables(sess):
     sess.execute("DROP TABLE IF EXISTS feature_envelopes;")
 
 
-def iter_feature_oids(repo, start_commits, stop_commits):
+def iter_feature_blobs(repo, start_commits, stop_commits):
     cmd = [*_revlist_command(repo), *start_commits, "--not", *stop_commits]
     try:
         p = subprocess.Popen(
@@ -218,7 +269,7 @@ def iter_feature_oids(repo, start_commits, stop_commits):
             encoding="utf8",
             env=tool_environment(),
         )
-        yield from _parse_revlist_output(p.stdout, r"feature/.+")
+        yield from _parse_revlist_output(repo, p.stdout, r"feature/.+")
     except subprocess.CalledProcessError as e:
         raise SubprocessError(
             f"There was a problem with git rev-list: {e}", called_process_error=e
@@ -300,8 +351,6 @@ def update_spatial_filter_index(
     verbosity - how much non-essential information to output.
     clear_existing - when true, deletes any pre-existing data before re-indexing.
     """
-    crs_helper = CrsHelper(repo)
-
     db_path = repo.gitdir_file(KartRepoFiles.FEATURE_ENVELOPES)
     engine = sqlite_engine(db_path)
 
@@ -310,11 +359,13 @@ def update_spatial_filter_index(
         repo, commits, engine, clear_existing=clear_existing
     )
 
+    crs_helper = CrsHelper(repo, start_commits, stop_commits)
+
     if not start_commits:
         click.echo("Nothing to do: index already up to date.")
         return
 
-    feature_oid_iter = iter_feature_oids(repo, start_commits, stop_commits)
+    feature_blob_iter = iter_feature_blobs(repo, start_commits, stop_commits)
 
     progress_every = None
     if verbosity >= 1:
@@ -347,6 +398,7 @@ def update_spatial_filter_index(
 
     t0 = time.monotonic()
     i = 0
+    trunc = _truncate_oid(repo)
 
     # Using sqlite directly here instead of sqlalchemy is about 10x faster.
     # Possibly due to huge number of unbatched queries.
@@ -355,18 +407,23 @@ def update_spatial_filter_index(
     with db:
         dbcur = db.cursor()
 
-        for i, (ds_path, feature_oid) in enumerate(feature_oid_iter):
+        for i, (commit_id, ds_path, feature_blob) in enumerate(feature_blob_iter):
             if i and progress_every and i % progress_every == 0:
                 click.echo(f"  {i:,d} features... @{time.monotonic()-t0:.1f}s")
                 L.flush_bulk_warns()
 
-            transforms = crs_helper.transforms_for_dataset(ds_path)
+            transforms = crs_helper.transforms_for_dataset_at_commit(
+                ds_path,
+                commit_id,
+            )
             if not transforms:
                 continue
-            geom = get_geometry(repo, feature_oid)
+            geom = get_geometry(repo, feature_blob)
             if geom is None or geom.is_empty():
                 continue
-            envelope = get_envelope_for_indexing(geom, transforms, feature_oid)
+            feature_oid = feature_blob.id.hex
+            feature_desc = f"{commit_id[:trunc]}:{ds_path}:{feature_oid[:trunc]}"
+            envelope = get_envelope_for_indexing(geom, transforms, feature_desc)
             if envelope is None:
                 continue
 
@@ -392,9 +449,8 @@ def debug_index(repo, arg):
     """
     Use kart spatial-filter index --debug=OBJECT to learn more about how a particular object is being indexed.
     Usage:
-        --debug=[COMMIT:]DATASET_PATH:FEATURE_OID
-        --debug=[COMMIT:]DATASET_PATH:FEATURE_PRIMARY_KEY
-        --debug=FEATURE_OID
+        --debug=COMMIT:DATASET_PATH:FEATURE_OID
+        --debug=COMMIT:DATASET_PATH:FEATURE_PRIMARY_KEY
         --debug=HEX_ENCODED_BINARY_ENVELOPE
         --debug=W,S,E,N  (4 floats)
     """
@@ -423,22 +479,14 @@ def _debug_feature(repo, arg):
     from kart.promisor_utils import object_is_promised
 
     parts = arg.split(":", maxsplit=2)
-    if len(parts) == 1:
-        commit = "HEAD"
-        all_ds = repo.datasets(commit)
-        if len(all_ds) != 1:
-            raise click.UsageError(
-                "--debug=FEATURE_OID is only supported if there is only one dataset - try --debug=DATASET_PATH:FEATURE_OID"
-            )
-        ds_path = next(iter(all_ds)).path
-        click.echo(f"Assuming feature is found in only dataset: {ds_path}")
-        pk = arg
-    elif len(parts) == 2:
-        commit, ds_path, pk = "HEAD", *parts
-    else:
-        commit, ds_path, pk = parts
+    if len(parts) < 3:
+        raise click.UsageError(
+            "--debug=FEATURE_OID is not supported - try --debug=COMMIT:DATASET_PATH:FEATURE_OID"
+        )
 
-    ds = repo.datasets(commit)[ds_path]
+    commit_id, ds_path, pk = parts
+    commit_id = repo[commit_id].peel(pygit2.Commit).id.hex
+    ds = repo.datasets(commit_id)[ds_path]
 
     try:
         _ = repo[pk]
@@ -447,15 +495,20 @@ def _debug_feature(repo, arg):
             raise InvalidOperation("Can't index promised object")
         path = ds.encode_pks_to_path(ds.schema.sanitise_pks(pk), relative=True)
         feature_oid = ds.get_blob_at(path).id.hex
-        click.echo(f"Feature OID: {feature_oid}")
     else:
         # Actually this is a feature_oid
         feature_oid = pk
 
-    crs_helper = CrsHelper(repo)
-    transforms = crs_helper.transforms_for_dataset(ds_path, verbose=True)
+    trunc = _truncate_oid(repo)
+    feature_desc = f"{commit_id[:trunc]}:{ds_path}:{feature_oid[:trunc]}"
+    click.echo(f"Feature {feature_desc}")
 
-    geometry = get_geometry(repo, feature_oid)
+    crs_helper = CrsHelper(repo)
+    transforms = crs_helper.transforms_for_dataset_at_commit(
+        ds_path, commit_id, verbose=True
+    )
+
+    geometry = get_geometry(repo, repo[feature_oid])
     envelope = _get_envelope_for_indexing_verbose(geometry, transforms, feature_oid)
 
     if envelope is not None:
@@ -502,8 +555,8 @@ def _debug_encoded_envelope(arg):
 NO_GEOMETRY_COLUMN = object()
 
 
-def get_geometry(repo, feature_oid):
-    legend, fields = msg_unpack(repo[feature_oid])
+def get_geometry(repo, feature_blob):
+    legend, fields = msg_unpack(feature_blob)
     col_id = get_geometry.legend_to_col_id.get(legend)
     if col_id is None:
         col_id = _find_geometry_column(fields)
@@ -524,6 +577,13 @@ def _find_geometry_column(fields):
         if field is None:
             result = None
     return result
+
+
+def _truncate_oid(repo):
+    try:
+        return len(repo.head.peel(pygit2.Tree).short_id)
+    except Exception:
+        return None
 
 
 class EnvelopeEncoder:
@@ -592,7 +652,7 @@ class EnvelopeEncoder:
         return normalised * (max_value - min_value) + min_value
 
 
-def get_envelope_for_indexing(geom, transforms, feature_oid):
+def get_envelope_for_indexing(geom, transforms, feature_desc):
     """
     Returns an envelope in EPSG:4326 that contains the entire geometry. Tries all of the given transforms to convert
     to EPSG:4326 and returns an envelope containing all of the possibilities. This is so we can find all features that
@@ -616,26 +676,27 @@ def get_envelope_for_indexing(geom, transforms, feature_oid):
             except CannotIndex as e:
                 if isinstance(e, CannotIndexDueToWrongCrs) and len(transforms) > 1:
                     L.buffered_bulk_warn(
-                        f"Skipped obviously bad transform {transform.desc}"
+                        f"Skipped obviously bad transform {transform.desc}",
+                        feature_desc,
                     )
                     continue
-                L.warning("Skipped indexing feature %s", feature_oid)
+                L.buffered_bulk_warn("Skipped indexing feature", feature_desc)
                 return None
 
             result = union_of_envelopes(result, envelope)
 
         if result is None:
-            L.warning("Skipped indexing feature %s", feature_oid)
+            L.buffered_bulk_warn("Skipped indexing feature", feature_desc)
             return None
 
         if not _is_valid_envelope(result):
-            L.warning(
-                "Couldn't index feature %s - resulting envelope not valid", feature_oid
+            L.buffered_bulk_warn(
+                "Couldn't index feature - resulting envelope not valid", feature_desc
             )
             return None
         return result
     except Exception:
-        L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
+        L.warning("Couldn't index feature %s", feature_desc, exc_info=True)
         return None
 
 
@@ -649,7 +710,7 @@ def _is_valid_envelope(env):
     )
 
 
-def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
+def _get_envelope_for_indexing_verbose(geom, transforms, feature_desc):
     # Keep in sync with get_envelope_for_indexing above. Lots of debug output added.
     result = None
 
@@ -683,10 +744,10 @@ def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
                 click.echo(f"Transform resulted in bad envelope: {e.bad_envelope}")
                 if isinstance(e, CannotIndexDueToWrongCrs) and len(transforms) > 1:
                     click.echo(
-                        f"Skipped obviously wrong transform {transform.desc} for feature {feature_oid}"
+                        f"Skipped obviously wrong transform {transform.desc} for feature {feature_desc}"
                     )
                     continue
-                click.echo(f"Skipped indexing feature {feature_oid}")
+                click.echo(f"Skipped indexing feature {feature_desc}")
                 return None
 
             result = union_of_envelopes(result, envelope)
@@ -694,12 +755,12 @@ def _get_envelope_for_indexing_verbose(geom, transforms, feature_oid):
                 click.echo(f"Total envelope so far: {result}")
         if not _is_valid_envelope(result):
             L.warning(
-                "Couldn't index feature %s - resulting envelope not valid", feature_oid
+                "Couldn't index feature %s - resulting envelope not valid", feature_desc
             )
             return None
         return result
     except Exception:
-        L.warning("Couldn't index feature %s", feature_oid, exc_info=True)
+        L.warning("Couldn't index feature %s", feature_desc, exc_info=True)
         return None
 
 
