@@ -95,6 +95,16 @@ def feature_count_diff(
         "Otherwise, the feature count will be approximated with varying levels of accuracy."
     ),
 )
+@click.option(
+    "--add-feature-count-estimate",
+    default=None,
+    type=click.Choice(diff_estimation.ACCURACY_CHOICES),
+    help=(
+        "Adds a feature count estimate to this diff (used with `--output-format json-lines` only.) "
+        "The estimate will be calculated while the diff is being generated, and will be added to "
+        "the stream when it is ready. If the estimate is not ready before the process exits, it will not be added."
+    ),
+)
 @click.argument("commit_spec", required=False, nargs=1)
 @click.argument("filters", nargs=-1)
 def diff(
@@ -107,6 +117,7 @@ def diff(
     only_feature_count,
     commit_spec,
     filters,
+    add_feature_count_estimate,
 ):
     """
     Show changes between two commits, or between a commit and the working copy.
@@ -140,7 +151,13 @@ def diff(
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_format)
     diff_writer = diff_writer_class(
-        repo, commit_spec, filters, output_path, json_style=json_style, target_crs=crs
+        repo,
+        commit_spec,
+        filters,
+        output_path,
+        json_style=json_style,
+        target_crs=crs,
+        diff_estimate_accuracy=add_feature_count_estimate,
     )
     diff_writer.write_diff()
 
