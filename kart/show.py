@@ -1,5 +1,6 @@
 import click
 
+from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
 from .repo import KartRepoState
 from . import diff_estimation
@@ -10,9 +11,22 @@ from . import diff_estimation
 @click.option(
     "--output-format",
     "-o",
-    # note: geojson isn't here because it doesn't work cleanly with multiple datasets.
-    type=click.Choice(
-        ["text", "json", "geojson", "quiet", "feature-count", "html", "json-lines"]
+    type=OutputFormatType(
+        output_types=[
+            "text",
+            "json",
+            "geojson",
+            "quiet",
+            "feature-count",
+            "html",
+            "json-lines",
+        ],
+        # TODO: minor thing, but this should really be True.
+        # `git show --format=%H` works; no particular reason it shouldn't in Kart.
+        # (except I didn't get around to implementing it.
+        # it might be easier to do after moving `log` implementation in-house, since we'll
+        # presumably have some function that interprets the formatstrings.)
+        allow_text_formatstring=False,
     ),
     default="text",
     help=(
@@ -39,8 +53,7 @@ from . import diff_estimation
 @click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
-    default="pretty",
-    help="How to format the output. Only used with -o json",
+    help="[deprecated] How to format the output. Only used with -o json",
 )
 @click.option(
     "--only-feature-count",
@@ -76,30 +89,32 @@ def show(
 
     commit_spec = f"{refish}^?...{refish}"
 
+    output_type, fmt = parse_output_format(output_format, json_style)
+
     if only_feature_count:
         from .diff import feature_count_diff
 
         return feature_count_diff(
             ctx,
-            output_format,
+            output_type,
             commit_spec,
             output_path,
             exit_code,
-            json_style,
+            fmt,
             only_feature_count,
         )
 
     from .base_diff_writer import BaseDiffWriter
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_format)
+    diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_type)
     diff_writer = diff_writer_class(
-        repo, commit_spec, filters, output_path, json_style=json_style, target_crs=crs
+        repo, commit_spec, filters, output_path, json_style=fmt, target_crs=crs
     )
     diff_writer.include_target_commit_as_header()
     diff_writer.write_diff()
 
-    if exit_code or output_format == "quiet":
+    if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()
 
 

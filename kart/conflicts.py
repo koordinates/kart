@@ -3,6 +3,7 @@ import sys
 
 import click
 
+from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .key_filters import RepoKeyFilter
@@ -22,7 +23,7 @@ _CONFLICT_PLACEHOLDER = object()
 def list_conflicts(
     merge_index,
     merge_context,
-    output_format="text",
+    output_type="text",
     conflict_filter=RepoKeyFilter.MATCH_ALL,
     summarise=0,
     flat=False,
@@ -46,7 +47,7 @@ def list_conflicts(
 
     merge_index - MergeIndex object containing the conflicts found.
     merge_context - MergeContext object containing RepoStructures.
-    output_format - one of 'text', 'json', 'geojson'
+    output_type - one of 'text', 'json', 'geojson'
     summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
     categorise - if True, adds another layer between feature and ID which is the type of conflict, eg "edit/edit"
     flat - if True, put all features at the top level, with the entire path as the key eg:
@@ -55,7 +56,7 @@ def list_conflicts(
     output_dict = {}
     conflict_output = _CONFLICT_PLACEHOLDER
 
-    if output_format == "geojson":
+    if output_type == "geojson":
         flat = True  # geojson must be flat or it is not valid geojson
         summarise = 0
 
@@ -66,7 +67,7 @@ def list_conflicts(
     for conflict in conflicts:
         if not summarise:
             conflict_output = conflict.output(
-                output_format, include_label=flat, target_crs=target_crs
+                output_type, include_label=flat, target_crs=target_crs
             )
 
         if flat:
@@ -80,9 +81,9 @@ def list_conflicts(
     if summarise:
         output_dict = summarise_conflicts(output_dict, summarise)
 
-    if output_format == "text":
+    if output_type == "text":
         return conflicts_json_as_text(output_dict)
-    elif output_format == "geojson":
+    elif output_type == "geojson":
         return conflicts_json_as_geojson(output_dict)
     else:
         return output_dict
@@ -221,7 +222,10 @@ def conflicts_json_as_geojson(json_obj):
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json", "geojson", "quiet"]),
+    type=OutputFormatType(
+        output_types=["text", "json", "geojson", "quiet"],
+        allow_text_formatstring=False,
+    ),
     default="text",
     help="Output format. 'quiet' disables all output and implies --exit-code.",
 )
@@ -233,8 +237,7 @@ def conflicts_json_as_geojson(json_obj):
 @click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
-    default="pretty",
-    help="How to format the output. Only used with `-o json` and `-o geojson`",
+    help="[deprecated] How to format the output. Only used with `-o json` and `-o geojson`",
 )
 @click.option(
     "--exit-code",
@@ -279,7 +282,9 @@ def conflicts(
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
     merge_index = MergeIndex.read_from_repo(repo)
 
-    if output_format == "quiet":
+    output_type, fmt = parse_output_format(output_format, json_style)
+
+    if output_type == "quiet":
         ctx.exit(SUCCESS_WITH_FLAG if merge_index.conflicts else SUCCESS)
 
     merge_context = MergeContext.read_from_repo(repo)
@@ -287,19 +292,19 @@ def conflicts(
     result = list_conflicts(
         merge_index,
         merge_context,
-        output_format,
+        output_type,
         conflict_filter,
         summarise,
         flat,
         crs,
     )
 
-    if output_format == "text":
+    if output_type == "text":
         click.echo(result)
-    elif output_format == "json":
-        dump_json_output({"kart.conflicts/v1": result}, sys.stdout, json_style)
-    elif output_format == "geojson":
-        dump_json_output(result, sys.stdout, json_style)
+    elif output_type == "json":
+        dump_json_output({"kart.conflicts/v1": result}, sys.stdout, fmt)
+    elif output_type == "geojson":
+        dump_json_output(result, sys.stdout, fmt)
 
     if exit_code:
         ctx.exit(SUCCESS_WITH_FLAG if merge_context.conflicts else SUCCESS)
