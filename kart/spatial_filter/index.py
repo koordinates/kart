@@ -351,6 +351,12 @@ def update_spatial_filter_index(
     verbosity - how much non-essential information to output.
     clear_existing - when true, deletes any pre-existing data before re-indexing.
     """
+
+    # This is needed to allow just-in-time fetching features that are outside the spatial filter,
+    # but are needed by the client for some specific operation:
+    if "uploadpack.allowAnySHA1InWant" not in repo.config:
+        repo.config["uploadpack.allowAnySHA1InWant"] = True
+
     db_path = repo.gitdir_file(KartRepoFiles.FEATURE_ENVELOPES)
     engine = sqlite_engine(db_path)
 
