@@ -1194,3 +1194,24 @@ def test_replace_existing_with_primary_key_change(
             col0 = jdict["nz_waca_adjustments"]["schema.json"][0]
             assert col0["primaryKeyIndex"] == 0
             assert col0["dataType"] == "integer"
+
+
+def test_init_import_with_no_crs(
+    data_archive,
+    tmp_path,
+    cli_runner,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    with data_archive("gpkg-points-no-crs") as data:
+        r = cli_runner.invoke(
+            [
+                "init",
+                "--bare",
+                "--import",
+                f"gpkg:{data / 'nz-pa-points-topo-150k.gpkg'}",
+                str(repo_path),
+            ]
+        )
+        assert r.exit_code == 0, r.stderr

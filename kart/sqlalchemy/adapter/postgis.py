@@ -206,7 +206,7 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
             ).fetchone()
             if row:
                 sampled_info = cls._filter_row_to_dict(row)
-                sampled_info['zm'] = cls.ZM_FLAG_TO_STRING.get(sampled_info.get('zm'))
+                sampled_info["zm"] = cls.ZM_FLAG_TO_STRING.get(sampled_info.get("zm"))
                 # Original col_info from geometry_columns takes precedence, where it exists:
                 col_info.update({**sampled_info, **col_info})
 
@@ -214,7 +214,11 @@ class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):
         yield "schema.json", schema.to_column_dicts() if schema else None
 
         for col_info in geom_cols_info:
-            wkt = col_info["srtext"]
+            try:
+                wkt = col_info["srtext"]
+            except KeyError:
+                # no CRS defined for this geometry column
+                continue
             id_str = crs_util.get_identifier_str(wkt)
             yield f"crs/{id_str}.wkt", crs_util.normalise_wkt(wkt)
 

@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.10.9 (UNRELEASED)
+
+* Bugfix: fixed errors with Postgres working copies when one or more datasets have no CRS defined. [#529](https://github.com/koordinates/kart/issues/529)
+
 ## 0.10.8
 
 * More advanced filters for `log`, `diff` and `commit`: All of these now work:

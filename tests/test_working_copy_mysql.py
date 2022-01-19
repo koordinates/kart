@@ -440,7 +440,7 @@ def test_checkout_custom_crs(
 
             r = cli_runner.invoke(["diff"])
             assert r.stdout.splitlines() == [
-                '--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt',
+                "--- nz_pa_points_topo_150k:meta:crs/EPSG:4326.wkt",
                 '- GEOGCS["WGS 84",',
                 '-     DATUM["WGS_1984",',
                 '-         SPHEROID["WGS 84", 6378137, 298.257223563,',
@@ -451,13 +451,13 @@ def test_checkout_custom_crs(
                 '-     UNIT["degree", 0.0174532925199433,',
                 '-         AUTHORITY["EPSG", "9122"]],',
                 '-     AUTHORITY["EPSG", "4326"]]',
-                '- ',
-                '+++ nz_pa_points_topo_150k:meta:crs/koordinates.com:100002.wkt',
+                "- ",
+                "+++ nz_pa_points_topo_150k:meta:crs/koordinates.com:100002.wkt",
                 '+ PROJCS["NAD83 / Austin",',
                 '+     GEOGCS["NAD83",',
                 '+         DATUM["North_American_Datum_1983",',
                 '+             SPHEROID["GRS 1980", 6378137.0, 298.257222101],',
-                '+             TOWGS84[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],',
+                "+             TOWGS84[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]],",
                 '+         PRIMEM["Greenwich", 0.0],',
                 '+         UNIT["degree", 0.017453292519943295],',
                 '+         AXIS["Lon", EAST],',
@@ -473,48 +473,70 @@ def test_checkout_custom_crs(
                 '+     AXIS["x", EAST],',
                 '+     AXIS["y", NORTH],',
                 '+     AUTHORITY["koordinates.com", "100002"]]',
-                '+ ',
-                '--- nz_pa_points_topo_150k:meta:schema.json',
-                '+++ nz_pa_points_topo_150k:meta:schema.json',
-                '  [',
-                '    {',
+                "+ ",
+                "--- nz_pa_points_topo_150k:meta:schema.json",
+                "+++ nz_pa_points_topo_150k:meta:schema.json",
+                "  [",
+                "    {",
                 '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
                 '      "name": "fid",',
                 '      "dataType": "integer",',
                 '      "primaryKeyIndex": 0,',
                 '      "size": 64',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
                 '      "name": "geom",',
                 '      "dataType": "geometry",',
                 '      "geometryType": "POINT",',
                 '-     "geometryCRS": "EPSG:4326",',
                 '+     "geometryCRS": "koordinates.com:100002",',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
                 '      "name": "t50_fid",',
                 '      "dataType": "integer",',
                 '      "size": 32',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
                 '      "name": "name_ascii",',
                 '      "dataType": "text",',
                 '      "length": 75',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
                 '      "name": "macronated",',
                 '      "dataType": "text",',
                 '      "length": 1',
-                '    },',
-                '    {',
+                "    },",
+                "    {",
                 '      "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
                 '      "name": "name",',
                 '      "dataType": "text",',
                 '      "length": 75',
-                '    },',
-                '  ]',
+                "    },",
+                "  ]",
             ]
+
+
+def test_checkout_and_status_with_no_crs(
+    new_mysql_db_schema,
+    data_archive,
+    tmp_path,
+    cli_runner,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    with data_archive("points-no-crs") as repo_path:
+        with new_mysql_db_schema() as (mysql_url, mysql_schema):
+            r = cli_runner.invoke(["create-workingcopy", mysql_url])
+            r = cli_runner.invoke(
+                [
+                    "-C",
+                    str(repo_path),
+                    "status",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
