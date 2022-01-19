@@ -13,38 +13,6 @@ ACCURACY_SUBTREE_SAMPLES = {
 }
 
 
-def _feature_count_sample_trees(repo, git_rev_spec, tree_paths_sample, num_trees):
-    p = subprocess.Popen(
-        [
-            "git",
-            "-C",
-            repo.path,
-            "diff",
-            "--name-only",
-            "--no-renames",
-            git_rev_spec,
-            "--",
-            *tree_paths_sample,
-        ],
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    )
-    tree_samples = {}
-    for line in p.stdout:
-        # path/to/dataset/.sno-dataset/feature/ab/cd/abcdef123
-        # --> ab/cd
-        root, tree, subtree, basename = line.rsplit("/", 3)
-        k = f"{tree}/{subtree}"
-        tree_samples.setdefault(k, 0)
-        tree_samples[k] += 1
-    retcode = p.wait()
-    if retcode != 0:
-        raise SubprocessError("Error calling git diff", retcode)
-    r = list(tree_samples.values())
-    r.extend([0] * (num_trees - len(r)))
-    return r
-
-
 ACCURACY_CHOICES = ("veryfast", "fast", "medium", "good", "exact")
 
 
