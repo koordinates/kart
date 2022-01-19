@@ -1,5 +1,5 @@
 # v1.3.0 + koordinates changes
-LIBGIT2_REF ?= bb69c8fa3d30c38e409771e388787d5ea38b7723
+LIBGIT2_REF ?= kart-0.11.0
 LIBGIT2_REPO ?= koordinates/libgit2
 LIBGIT2_ARCHIVE := libgit2-$(LIBGIT2_REF).tar.gz
 

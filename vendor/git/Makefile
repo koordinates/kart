@@ -1,5 +1,5 @@
 # v2.33.0 + various git changes + koordinates changes
-GIT_REF ?= e1645ec76fb513918e35204a65d94524682b1445
+GIT_REF ?= kart-0.11.0
 GIT_REPO ?= koordinates/git
 GIT_ARCHIVE := git-$(GIT_REF).tar.gz
 
