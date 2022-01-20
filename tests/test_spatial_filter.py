@@ -324,32 +324,34 @@ def test_clone_with_spatial_filter(
         # Spatial filters are currently only applied locally... all features are still present.
         assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
 
-        # Unless you use an experimental environment variable:
-        # TODO: Always apply spatial filters during the clone, then clean up this test.
-        os.environ["X_KART_SPATIAL_FILTERED_CLONE"] = "1"
-        try:
-            repo3_path = tmp_path / "repo3"
-            r = cli_runner.invoke(
-                ["clone", repo1_url, repo3_path, f"--spatial-filter=@{file_path}"]
-            )
-            assert r.exit_code == 0, r.stderr
+        # Unless you explicitly set --spatial-filter-during-clone, which is not the default until
+        # the official launch of Kart spatial filters.
+        # TODO: Invert some of this test when --spatial-filter-during-clone is inverted.
+        repo3_path = tmp_path / "repo3"
+        r = cli_runner.invoke(
+            [
+                "clone",
+                repo1_url,
+                repo3_path,
+                f"--spatial-filter=@{file_path}",
+                "--spatial-filter-during-clone",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
 
-            repo3 = KartRepo(repo3_path)
-            assert repo3.config["kart.spatialfilter.geometry"].startswith(
-                "POLYGON ((174.879 -37.8277,"
-            )
-            assert repo3.config["kart.spatialfilter.crs"] == crs
-            ds = repo3.datasets()[H.POLYGONS.LAYER]
+        repo3 = KartRepo(repo3_path)
+        assert repo3.config["kart.spatialfilter.geometry"].startswith(
+            "POLYGON ((174.879 -37.8277,"
+        )
+        assert repo3.config["kart.spatialfilter.crs"] == crs
+        ds = repo3.datasets()[H.POLYGONS.LAYER]
 
-            local_feature_count = local_features(ds)
-            assert local_feature_count != H.POLYGONS.ROWCOUNT
-            assert local_feature_count == 46
+        local_feature_count = local_features(ds)
+        assert local_feature_count != H.POLYGONS.ROWCOUNT
+        assert local_feature_count == 46
 
-            with repo3.working_copy.session() as sess:
-                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
-
-        finally:
-            del os.environ["X_KART_SPATIAL_FILTERED_CLONE"]
+        with repo3.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
         # The next test delves further into testing how spatial-filtered clones behave, but
         # it loads the same spatially filtered repo from the test data folder so that we can

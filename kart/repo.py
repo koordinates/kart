@@ -297,10 +297,7 @@ class KartRepo(pygit2.Repository):
                 "-c",
                 "remote.origin.fetch=+refs/filters/*:refs/filters/*",
             ]
-            if (
-                os.environ.get("X_KART_SPATIAL_FILTERED_CLONE")
-                and not spatial_filter_after_clone
-            ):
+            if not spatial_filter_after_clone:
                 is_spatial_filter_clone = True
                 partial_clone_spec = spatial_filter_spec.partial_clone_filter_spec()
                 extra_args.append(partial_clone_spec)
