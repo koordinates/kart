@@ -512,6 +512,10 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         if len(xml_list) == 1:
             return xml_list[0]
 
+        sole_useful_xml = cls.find_sole_useful_xml(xml_list)
+        if sole_useful_xml is not None:
+            return sole_useful_xml
+
         # We can't actually commit a whole list of XML, but we need to return something that makes sense.
         # Simply throwing an error here stops dirty-detection working, and stops commands that would fix the situation
         # from working, like `kart reset --discard-changes` or `kart create-workingcopy --discard-changes`.
@@ -528,6 +532,33 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
             AND MR.column_name IS NULL
             AND MR.row_id_value IS NULL;
         """
+
+    @classmethod
+    def find_sole_useful_xml(cls, xml_list):
+        """
+        Given a list containing more than one piece of metadata XML, returns the only piece XML that is actually useful,
+        if one can be decided on using a heuristic.
+        """
+        # Currently only the following heuristic is implemented:
+        # If there are two pieces of XML and the second piece of XML is the same as the first XML, but wrapped inside a
+        # `<GDALMultiDomainMetadata>` structure, then we just return the first piece of XML (or vice versa).
+        # In all other cases we have no opinion on which piece(s) of XML are useful or useless.
+        if len(xml_list) != 2:
+            return None
+        from html import unescape
+
+        for first, second in ((xml_list[0], xml_list[1]), (xml_list[1], xml_list[0])):
+            wrapper = unescape(second).split(first, maxsplit=1)
+            if len(wrapper) != 2:
+                continue
+            if re.match(
+                r"^\s*<GDALMultiDomainMetadata>\s*<Metadata>\s*<MDI[^>]*>\s*$",
+                wrapper[0],
+            ) and re.match(
+                r"^\s*</MDI>\s*</Metadata>\s*</GDALMultiDomainMetadata>\s*$", wrapper[1]
+            ):
+                return first
+        return None
 
     @classmethod
     @ungenerator(dict)

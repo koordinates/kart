@@ -7,6 +7,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.10.9 (UNRELEASED)
 
 * Bugfix: fixed errors with Postgres working copies when one or more datasets have no CRS defined. [#529](https://github.com/koordinates/kart/issues/529)
+* Bugfix: better error message when `kart import` fails due to multiple XML metadata files for a single dataset, which Kart does not support [#547](https://github.com/koordinates/kart/issues/547)
+* When there are two pieces of XML metadata for a single dataset, but one is simply a GDALMultiDomainMetadata wrapping the other, the wrapped version is ignored. [#547](https://github.com/koordinates/kart/issues/547)
 
 ## 0.10.8
 
