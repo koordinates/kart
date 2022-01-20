@@ -439,6 +439,16 @@ class Dataset3(RichBaseDataset):
                 "Sorry, committing more than one XML metadata file is not supported"
             )
 
+    @classmethod
+    def check_source_is_importable(cls, source):
+        # This is currently the only case where we sometimes generate meta items we cannot import -
+        # if there is more than one XML metadata blob attached to a single dataset.
+        metadata_xml = source.meta_items().get("metadata.xml")
+        if isinstance(metadata_xml, list):
+            raise NotYetImplemented(
+                f"Sorry, importing more than one XML metadata file for a single dataset ({source.dest_path}) is not supported"
+            )
+
     def _apply_meta_deltas_to_tree(
         self,
         deltas,

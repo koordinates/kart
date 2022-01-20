@@ -1,3 +1,5 @@
+import html
+
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.schema import Schema
 
@@ -91,3 +93,84 @@ def test_adapt_schema():
             "dflt_value": None,
         },
     ]
+
+
+SAMPLE_XML = """<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis version=\"3.20.3-Odense\">
+  <identifier></identifier>
+  <parentidentifier></parentidentifier>
+  <language></language>
+  <type></type>
+  <title></title>
+  <abstract></abstract>
+  <contact>
+    <name></name>
+    <organization></organization>
+    <position></position>
+    <voice></voice>
+    <fax></fax>
+    <email></email>
+    <role></role>
+  </contact>
+  <links/>
+  <fees></fees>
+  <encoding></encoding>
+  <crs>
+    <spatialrefsys>
+      <wkt></wkt>
+      <proj4></proj4>
+      <srsid>0</srsid>
+      <srid>0</srid>
+      <authid></authid>
+      <description></description>
+      <projectionacronym></projectionacronym>
+      <ellipsoidacronym></ellipsoidacronym>
+      <geographicflag>false</geographicflag>
+    </spatialrefsys>
+  </crs>
+  <extent>
+    <spatial minx=\"0\" miny=\"0\" dimensions=\"2\" maxz=\"0\" crs=\"\" maxy=\"0\" minz=\"0\" maxx=\"0\"/>
+    <temporal>
+      <period>
+        <start></start>
+        <end></end>
+      </period>
+    </temporal>
+  </extent>
+    </qgis>
+"""
+
+WRAPPED_SAMPLE_XML = f"""<GDALMultiDomainMetadata>
+  <Metadata>
+    <MDI key="GPKG_METADATA_ITEM_1">
+{html.escape(SAMPLE_XML)}
+    </MDI>
+  </Metadata>
+    </GDALMultiDomainMetadata>
+"""
+
+REPEATED_WRAPPED_SAMPLE_XML = f"""<GDALMultiDomainMetadata>
+  <Metadata>
+    <MDI key="GPKG_METADATA_ITEM_1">
+{html.escape(SAMPLE_XML)}
+    </MDI>
+    <MDI key="GPKG_METADATA_ITEM_2">
+{html.escape(SAMPLE_XML)}
+    </MDI>
+  </Metadata>
+    </GDALMultiDomainMetadata>
+"""
+
+
+def test_find_sole_useful_xml():
+    find_sole_useful_xml = KartAdapter_GPKG.find_sole_useful_xml
+    # We can find the sole useful XML if the other XML is just the useful XML wrapped in a GDALMultiDomainMetadata.
+    assert find_sole_useful_xml([SAMPLE_XML, WRAPPED_SAMPLE_XML]) == SAMPLE_XML
+    assert find_sole_useful_xml([WRAPPED_SAMPLE_XML, SAMPLE_XML]) == SAMPLE_XML
+
+    # We give up as soon as things get more complicated
+    assert find_sole_useful_xml([SAMPLE_XML, REPEATED_WRAPPED_SAMPLE_XML]) is None
+    assert (
+        find_sole_useful_xml([SAMPLE_XML, WRAPPED_SAMPLE_XML, WRAPPED_SAMPLE_XML])
+        is None
+    )

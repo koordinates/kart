@@ -39,11 +39,13 @@ class ImportSource:
             return OgrImportSource.open(full_spec, table=table)
 
     @classmethod
-    def check_valid(cls, import_sources, param_hint=None):
+    def check_valid(cls, import_sources, dataset_class=None, param_hint=None):
         """Given an iterable of ImportSources, checks that all are fully specified and none of their dest_paths collide."""
         dest_paths = {}
         for s1 in import_sources:
             s1.check_fully_specified()
+            if dataset_class is not None:
+                dataset_class.check_source_is_importable(s1)
             dest_path = s1.dest_path
             if dest_path not in dest_paths:
                 dest_paths[dest_path] = s1
