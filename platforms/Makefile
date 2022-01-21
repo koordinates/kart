@@ -239,7 +239,7 @@ pkg: $(pkg)
 
 # docker images don't have sqlite3 in them - download a precompiled binary
 linux/sqlite3:
-	wget https://github.com/boramalper/sqlite3-x64/releases/download/3240000--2018-08-05T15.32.14Z/sqlite3 -O $@
+	wget https://github.com/koordinates/sqlite3-x64/releases/download/3.37.2--2022-01-06/sqlite3 -O $@
 	chmod +x $@
 
 .PHONY: test-deb-all
