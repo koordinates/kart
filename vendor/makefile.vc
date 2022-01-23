@@ -2,17 +2,17 @@ PATH=$(MAKEDIR)\env\Scripts;$(PATH);C:\Program Files\7-zip;
 
 # v2.34.0
 GIT_VER=2.34.0
-GIT_REF="e9f0148c2467ba3d7b634278106fb743bc9550c0"
-GIT_REPO="koordinates/git"
-GIT_ARCHIVE=git-$(GIT_REF).zip
+GIT_REPO=koordinates/git
+GIT_ARCHIVE=MinGit-v2.34.0.windows.1-64-bit.zip
+GIT_RELEASE=kart-0.11.0-windows-mingit-build
 
 # v1.3.0 + koordinates changes
-LIBGIT2_REF=bb69c8fa3d30c38e409771e388787d5ea38b7723
+LIBGIT2_REF=kart-0.11.0
 LIBGIT2_REPO=koordinates/libgit2
 LIBGIT2_ARCHIVE=libgit2-$(LIBGIT2_REF).zip
 
 # v1.7.0 + koordinates changes
-PYGIT2_REF=3443cd8fd2cead2de608f51ccb3cdee5167c1fd4
+PYGIT2_REF=kart-0.11.0
 PYGIT2_REPO=koordinates/pygit2
 PYGIT2_ARCHIVE=pygit2-$(PYGIT2_REF).zip
 PYGIT2_VER=1.7.0
@@ -69,14 +69,11 @@ env:
 
 # We use a prebuilt MinGit hosted on our own repo.
 
-GIT_URL="https://github.com/$(GIT_REPO)/archive/$(GIT_REF).zip"
+GIT_URL="https://github.com/$(GIT_REPO)/releases/download/$(GIT_RELEASE)/$(GIT_ARCHIVE)"
 git=dist\git
 
-git\MinGit.zip:
+git\$(GIT_ARCHIVE):
 	$(_PSDL) -Uri $(GIT_URL) -OutFile $@ $(_PSDLE)
-
-git\MinGit-v$(GIT_VER).windows.1-64-bit.zip: git/MinGit.zip
-	7z e %s -ogit -r *.zip
 
 $(git): git\MinGit-v$(GIT_VER).windows.1-64-bit.zip
 	if not exist dist mkdir dist
