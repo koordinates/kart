@@ -37,13 +37,13 @@ def spatial_filter_help_text(allow_reference=True):
     result = (
         "Specify a spatial filter geometry to restrict this repository for working on features that intersect that"
         "geometry - features outside this area are not shown. Both the user and computer can benefit by not thinking "
-        "about features outside the area of interest. It should consist of the CRS name, follwed by a semicolon, "
+        "about features outside the area of interest. It should consist of the CRS name, followed by a semicolon, "
         "followed by a valid Polygon or Multipolygon encoded using WKT or hex-encoded WKB. For example: "
         "EPSG:4326;POLYGON((...)) or EPSG:4269;01030000...\n"
         "Alternatively you may reference a file that contains the data, which should contain either the CRS name "
-        "CRS name or the entire CRS definition in WKT, followed by a blank line, followed by a valid Polygon or "
-        "Multipolygon encoded using WKT or hex-encoded WKB. To reference a file on your filesystem, set this flag "
-        "to an @ symbol followed by the file path. For example: @myfile.txt"
+        "or the entire CRS definition in WKT, followed by a blank line, followed by a valid Polygon or Multipolygon "
+        "encoded using WKT or hex-encoded WKB. To reference a file on your filesystem, set this flag to an @ symbol "
+        "followed by the file path. For example: @myfile.txt"
     )
     if allow_reference:
         result += (
