@@ -527,7 +527,13 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
             # Clone repo using spatial filter reference
             repo2_path = tmp_path / "repo2"
             r = cli_runner.invoke(
-                ["clone", repo1_path, repo2_path, "--spatial-filter=octagon"]
+                [
+                    "clone",
+                    repo1_path,
+                    repo2_path,
+                    "--spatial-filter=octagon",
+                    "--spatial-filter-after-clone",
+                ]
             )
             assert r.exit_code == 0, r.stderr
 
@@ -551,7 +557,13 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
             # Clone repo using spatial filter object ID
             repo3_path = tmp_path / "repo3"
             r = cli_runner.invoke(
-                ["clone", repo1_path, repo3_path, f"--spatial-filter={blob_sha}"]
+                [
+                    "clone",
+                    repo1_path,
+                    repo3_path,
+                    f"--spatial-filter={blob_sha}",
+                    "--spatial-filter-after-clone",
+                ]
             )
             assert r.exit_code == 0, r.stderr
             repo3 = KartRepo(repo3_path)
@@ -566,7 +578,13 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
             # Missing spatial filter:
             repo4_path = tmp_path / "repo4"
             r = cli_runner.invoke(
-                ["clone", repo1_path, repo4_path, "--spatial-filter=dodecahedron"]
+                [
+                    "clone",
+                    repo1_path,
+                    repo4_path,
+                    "--spatial-filter=dodecahedron",
+                    "--spatial-filter-after-clone",
+                ]
             )
             assert r.exit_code == NO_SPATIAL_FILTER, r.stderr
 
