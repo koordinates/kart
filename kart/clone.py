@@ -109,12 +109,11 @@ def get_directory_from_url(url, is_bare):
 @click.option(
     "--spatial-filter-after-clone/--spatial-filter-during-clone",
     is_flag=True,
-    default=True,
+    default=False,
     help=(
         "Spatial-filter-after-clone only applies the spatial filter once the entire remote repository has been cloned. "
         "This option means the spatial filter can easily be changed later without downloading any more data. This option "
-        "may be necessary if the remote doesn't support spatially filtered clones. "
-        "Spatial-filter-after-clone is the default until spatial filters is launched with Kart 0.11.0)"
+        "may be necessary if the remote doesn't support spatially filtered clones."
     ),
 )
 @click.argument("url", nargs=1)
