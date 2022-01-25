@@ -1,12 +1,14 @@
 import functools
 import json
 import re
+import time
 
 import html5lib
 import pytest
 
 import kart
 from kart.diff_structs import Delta, DeltaDiff
+from kart.json_diff_writers import JsonLinesDiffWriter
 from kart.geometry import hex_wkb_to_ogr
 from kart.repo import KartRepo
 
@@ -269,6 +271,43 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
 
         elif output_format == "html":
             _check_html_output(r.stdout)
+
+
+@pytest.mark.slow
+def test_diff_json_lines_with_feature_count_estimate(
+    data_working_copy, cli_runner, monkeypatch
+):
+    with data_working_copy("points") as (repo_path, wc):
+
+        def slow_down_the_diff(self, ds_path, ds_diff):
+            time.sleep(1)
+
+        # this is a tiny diff, but we make it arbitrarily slower so that we have time to generate the estimate and insert it into the stream
+        monkeypatch.setattr(JsonLinesDiffWriter, "write_ds_diff", slow_down_the_diff)
+
+        r = cli_runner.invoke(
+            [
+                "diff",
+                f"--output-format=json-lines",
+                "--add-feature-count-estimate=exact",
+                "HEAD^^?...",
+            ]
+        )
+
+        assert r.exit_code == 0
+        lines = [json.loads(line) for line in r.stdout.splitlines()]
+        assert lines == [
+            {
+                "type": "version",
+                "version": "kart.diff/v2",
+                "outputFormat": "JSONL+hexwkb",
+            },
+            {
+                "type": "featureCountEstimate",
+                "accuracy": "exact",
+                "datasets": {"nz_pa_points_topo_150k": 2143},
+            },
+        ]
 
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
