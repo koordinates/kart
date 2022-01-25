@@ -1,4 +1,5 @@
 import subprocess
+import threading
 
 import pygit2
 
@@ -61,6 +62,13 @@ def get_approximate_diff_blob_count(
     )
 
 
+terminate_estimate_thread = threading.Event()
+
+
+class ThreadTerminated(RuntimeError):
+    pass
+
+
 def estimate_diff_feature_counts(
     repo,
     base,
@@ -101,6 +109,9 @@ def estimate_diff_feature_counts(
 
     dataset_change_counts = {}
     for dataset_path in all_ds_paths:
+        if terminate_estimate_thread.is_set():
+            raise ThreadTerminated()
+
         base_ds = base_rs.datasets.get(dataset_path)
         target_ds = target_rs.datasets.get(dataset_path)
         if not base_ds and not target_ds:
@@ -148,5 +159,8 @@ def estimate_diff_feature_counts(
             annotation_type=annotation_type,
             data=dataset_change_counts,
         )
+
+    if terminate_estimate_thread.is_set():
+        raise ThreadTerminated()
 
     return dataset_change_counts
