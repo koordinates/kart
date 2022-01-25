@@ -16,7 +16,7 @@ class Db_GPKG(BaseDb):
     preparer = SQLiteIdentifierPreparer(SQLiteDialect())
 
     @classmethod
-    def create_engine(cls, path):
+    def create_engine(cls, path, **kwargs):
         def _on_connect(pysqlite_conn, connection_record):
             pysqlite_conn.isolation_level = None
             pysqlite_conn.enable_load_extension(True)
@@ -28,7 +28,7 @@ class Db_GPKG(BaseDb):
             dbcur.execute(f"PRAGMA cache_size = -{cls.GPKG_CACHE_SIZE_MiB * 1024};")
 
         path = os.path.expanduser(path)
-        engine = sqlalchemy.create_engine(f"sqlite:///{path}", module=sqlite)
+        engine = sqlalchemy.create_engine(f"sqlite:///{path}", module=sqlite, **kwargs)
         sqlalchemy.event.listen(engine, "connect", _on_connect)
         return engine
 
@@ -50,7 +50,7 @@ class Db_GPKG(BaseDb):
                 ORDER BY SM.name;
                 """
             )
-            return {row['name']: row['identifier'] for row in r}
+            return {row["name"]: row["identifier"] for row in r}
 
         r = sess.execute(
             """
@@ -59,7 +59,7 @@ class Db_GPKG(BaseDb):
             ORDER BY name;
             """
         )
-        return {row['name']: None for row in r}
+        return {row["name"]: None for row in r}
 
     @classmethod
     def pk_name(cls, sess, db_schema=None, table=None):

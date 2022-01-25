@@ -39,7 +39,16 @@ class WorkingCopy_GPKG(BaseWorkingCopy):
         self.repo = repo
         self.path = self.location = location
         self.adapter = KartAdapter_GPKG
-        self.engine = self.adapter.create_engine(self.full_path)
+        self.engine = self.adapter.create_engine(
+            self.full_path,
+            # Don't prevent us from re-using the connections in new threads.
+            # This is here to support `kart diff -o json-lines --add-feature-count-estimate=...`,
+            # which runs a thread to insert the estimate into the output.
+            # That's safe because the workingcopy connection there never writes.
+            # If we ever need to add threads which might write simultaneously, we'll need to turn
+            # this back on.
+            connect_args={"check_same_thread": False},
+        )
         self.sessionmaker = sessionmaker(bind=self.engine)
         self.preparer = SQLiteIdentifierPreparer(self.engine.dialect)
 
