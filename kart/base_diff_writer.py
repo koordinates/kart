@@ -78,6 +78,8 @@ class BaseDiffWriter:
         *,
         json_style="pretty",
         target_crs=None,
+        # used by json-lines diffs only
+        diff_estimate_accuracy=None,
     ):
         self.repo = repo
         self.commit_spec = commit_spec

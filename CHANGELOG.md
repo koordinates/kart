@@ -11,9 +11,10 @@ Support for spatial filters - the spatial filter can be updated during an `init`
 ### Other changes
 * Expanded `--output-format`/`-o` to accept format specifiers; e.g. `-o json:compact`. `kart log` now accepts text formatstrings, e.g. `-o text:%H` [#544](https://github.com/koordinates/kart/issues/544)
 * Deprecated `--json-style` in favour of `-o json:{style}`
+* diff: Added `--add-feature-count-estimate=<accuracy>` to `json-lines` diffs. This lazily inserts an estimate of the total number of features into the output stream. [#543](https://github.com/koordinates/kart/issues/543)
 * Bugfix: fixed errors with Postgres working copies when one or more datasets have no CRS defined. [#529](https://github.com/koordinates/kart/issues/529)
 * Bugfix: better error message when `kart import` fails due to multiple XML metadata files for a single dataset, which Kart does not support [#547](https://github.com/koordinates/kart/issues/547)
-* When there are two pieces of XML metadata for a single dataset, but one is simply a GDALMultiDomainMetadata wrapping the other, the wrapped version is ignored. [#547](https://github.com/koordinates/kart/issues/547)
+* When there are two pieces of XML metadata for a single dataset, but one is simply a `GDALMultiDomainMetadata` wrapping the other, the wrapped version is ignored. [#547](https://github.com/koordinates/kart/issues/547)
 
 ## 0.10.8
 

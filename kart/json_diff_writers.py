@@ -1,11 +1,17 @@
 from datetime import datetime, timezone, timedelta
 import json
 import logging
+import threading
 from pathlib import Path
 
 import click
 
 from .base_diff_writer import BaseDiffWriter
+from .diff_estimation import (
+    estimate_diff_feature_counts,
+    terminate_estimate_thread,
+    ThreadTerminated,
+)
 from .diff_structs import DatasetDiff
 from .feature_output import feature_as_json, feature_as_geojson
 from .log import commit_obj_to_json
@@ -209,14 +215,17 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             )
         return output_path
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, diff_estimate_accuracy=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fp = resolve_output_path(self.output_path)
         self.separators = (",", ":") if self.json_style == "extracompact" else None
+        self._diff_estimate_accuracy = diff_estimate_accuracy
+        self._output_lock = threading.RLock()
 
     def dump(self, obj):
-        json.dump(obj, self.fp, separators=self.separators)
-        self.fp.write("\n")
+        with self._output_lock:
+            json.dump(obj, self.fp, separators=self.separators)
+            self.fp.write("\n")
 
     def write_header(self):
         self.dump(
@@ -226,8 +235,37 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                 "outputFormat": "JSONL+hexwkb",
             }
         )
+        if self._diff_estimate_accuracy is not None:
+            t = threading.Thread(
+                target=self._calculate_and_feature_count_estimate,
+            )
+            t.start()
         if self.commit:
             self.dump({"type": "commit", "value": commit_obj_to_json(self.commit)})
+
+    def _calculate_and_feature_count_estimate(self):
+        """
+        Runs in a separate thread. Calculates the diff estimate for this diff, and inserts it
+        into the JSON-Lines stream when it is calculated. Doesn't otherwise block the main thread.
+        """
+        try:
+            est = estimate_diff_feature_counts(
+                self.repo,
+                self.base_rs.tree,
+                self.target_rs.tree,
+                working_copy=self.working_copy,
+                accuracy=self._diff_estimate_accuracy,
+            )
+        except ThreadTerminated:
+            return
+        else:
+            self.dump(
+                {
+                    "type": "featureCountEstimate",
+                    "accuracy": self._diff_estimate_accuracy,
+                    "datasets": est,
+                }
+            )
 
     def write_ds_diff(self, ds_path, ds_diff):
         if "schema.json" not in ds_diff.get("meta", {}):
@@ -274,6 +312,11 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                 )
             obj["change"] = change
             self.dump(obj)
+
+    def write_warnings_footer(self):
+        # If there's an estimate thread running (see write_header()), ask it to terminate
+        terminate_estimate_thread.set()
+        super().write_warnings_footer()
 
 
 class GeojsonDiffWriter(BaseDiffWriter):
