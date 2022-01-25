@@ -209,7 +209,7 @@ def test_commit_files_remove_empty(data_archive, cli_runner):
 
 def test_commit_files_amend(data_archive, cli_runner):
     with data_archive("points"):
-        r = cli_runner.invoke(["log", "--pretty=%s"])
+        r = cli_runner.invoke(["log", "--output-format=text:%s"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
             "Improve naming on Coromandel East coast",
@@ -228,7 +228,7 @@ def test_commit_files_amend(data_archive, cli_runner):
         )
         assert r.exit_code == 0, r.stderr
 
-        r = cli_runner.invoke(["log", "--pretty=%t"])
+        r = cli_runner.invoke(["log", "--output-format=text:%t"])
         assert r.exit_code == 0, r.stderr
         actual_tree_contents = r.stdout.splitlines()
 
@@ -243,7 +243,7 @@ def test_commit_files_amend(data_archive, cli_runner):
             ]
         )
 
-        r = cli_runner.invoke(["log", "--pretty=%s"])
+        r = cli_runner.invoke(["log", "--output-format=text:%s"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
             "A more informative commit message",
@@ -254,13 +254,13 @@ def test_commit_files_amend(data_archive, cli_runner):
         )
         assert myfile == "myfile"
 
-        r = cli_runner.invoke(["log", "--pretty=%t"])
+        r = cli_runner.invoke(["log", "--output-format=text:%t"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == actual_tree_contents
 
         # --amend without a message just uses the same message as previous commit
         r = cli_runner.invoke(["commit-files", "--amend", "x=y"])
-        r = cli_runner.invoke(["log", "--pretty=%s"])
+        r = cli_runner.invoke(["log", "--output-format=text:%s"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
             "A more informative commit message",

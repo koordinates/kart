@@ -1700,7 +1700,7 @@ def test_show_polygons_initial(output_format, data_archive_readonly, cli_runner)
 
 def test_show_json_format(data_archive_readonly, cli_runner):
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["show", f"-o", "json", "--json-style=compact", "HEAD"])
+        r = cli_runner.invoke(["show", f"-o", "json:compact", "HEAD"])
 
         assert r.exit_code == 0, r.stderr
         # output is compact, no indentation
@@ -1712,7 +1712,7 @@ def test_show_json_coloured(data_archive_readonly, cli_runner, monkeypatch):
     monkeypatch.setattr(kart.output_util, "can_output_colour", always_output_colour)
 
     with data_archive_readonly("points"):
-        r = cli_runner.invoke(["show", f"-o", "json", "--json-style=pretty", "HEAD"])
+        r = cli_runner.invoke(["show", f"-o", "json:pretty", "HEAD"])
         assert r.exit_code == 0, r.stderr
         # No asserts about colour codes - that would be system specific. Just a basic check:
         assert '"kart.diff/v1+hexwkb"' in r.stdout

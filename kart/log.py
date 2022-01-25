@@ -8,7 +8,12 @@ import warnings
 import click
 import pygit2
 
-from .cli_util import tool_environment
+from .cli_util import (
+    tool_environment,
+    parse_output_format,
+    OutputFormatType,
+    RemovalInKart012Warning,
+)
 from .exec import execvp
 from .exceptions import NotYetImplemented, SubprocessError
 from .key_filters import RepoKeyFilter
@@ -16,10 +21,6 @@ from .output_util import dump_json_output
 from .repo import KartRepoState
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
 from . import diff_estimation
-
-
-class RemovalInKart012Warning(UserWarning):
-    pass
 
 
 class PreserveDoubleDash(click.Command):
@@ -263,14 +264,16 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json", "json-lines"]),
+    type=OutputFormatType(
+        output_types=["text", "json", "json-lines"],
+        allow_text_formatstring=True,
+    ),
     default="text",
 )
 @click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
-    default="pretty",
-    help="How to format the output. Only used with --output-format=json",
+    help="[deprecated] How to format the output. Only used with --output-format=json",
 )
 @click.option(
     "--dataset-changes",
@@ -364,13 +367,16 @@ def log(
 
     options, commits, paths = parse_extra_args(repo, args, **kwargs)
     paths = convert_user_patterns_to_raw_paths(paths, repo, commits)
+    output_type, fmt = parse_output_format(output_format, json_style)
 
     # TODO: should we check paths exist here? git doesn't!
-    if output_format == "text":
+    if output_type == "text":
+        if fmt:
+            options.append(f"--format={fmt}")
         git_args = ["git", "-C", repo.path, "log", *options, *commits, "--", *paths]
         execvp("git", git_args)
 
-    elif output_format in ("json", "json-lines"):
+    elif output_type in ("json", "json-lines"):
         try:
             cmd = [
                 "git",
@@ -409,13 +415,13 @@ def log(
             )
             for (commit_id, refs) in commit_ids_and_refs_log
         )
-        if output_format == "json-lines":
+        if output_type == "json-lines":
             for item in commit_log:
                 # hardcoded style here; each item must be on one line.
                 dump_json_output(item, sys.stdout, "compact")
 
         else:
-            dump_json_output(commit_log, sys.stdout, json_style)
+            dump_json_output(commit_log, sys.stdout, fmt)
 
 
 def _parse_git_log_output(lines):
