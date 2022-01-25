@@ -2,6 +2,7 @@ import sys
 
 import click
 
+from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
 
 from .output_util import dump_json_output
@@ -54,8 +55,17 @@ def feature_count_diff(
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(
-        ["text", "json", "geojson", "quiet", "feature-count", "html", "json-lines"]
+    type=OutputFormatType(
+        output_types=[
+            "text",
+            "json",
+            "geojson",
+            "quiet",
+            "feature-count",
+            "html",
+            "json-lines",
+        ],
+        allow_text_formatstring=False,
     ),
     default="text",
     help=(
@@ -82,8 +92,7 @@ def feature_count_diff(
 @click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
-    default="pretty",
-    help="How to format the output. Only used with -o json or -o geojson",
+    help="[deprecated] How to format the output. Only used with -o json or -o geojson",
 )
 @click.option(
     "--only-feature-count",
@@ -135,31 +144,33 @@ def diff(
 
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
+    output_type, fmt = parse_output_format(output_format, json_style)
+
     if only_feature_count:
         return feature_count_diff(
             ctx,
-            output_format,
+            output_type,
             commit_spec,
             output_path,
             exit_code,
-            json_style,
+            fmt,
             only_feature_count,
         )
 
     from .base_diff_writer import BaseDiffWriter
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_format)
+    diff_writer_class = BaseDiffWriter.get_diff_writer_class(output_type)
     diff_writer = diff_writer_class(
         repo,
         commit_spec,
         filters,
         output_path,
-        json_style=json_style,
+        json_style=fmt,
         target_crs=crs,
         diff_estimate_accuracy=add_feature_count_estimate,
     )
     diff_writer.write_diff()
 
-    if exit_code or output_format == "quiet":
+    if exit_code or output_type == "quiet":
         diff_writer.exit_with_code()

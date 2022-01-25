@@ -10,6 +10,8 @@ from .cli_util import (
     add_help_subcommand,
     value_optionally_from_text_file,
     value_optionally_from_binary_file,
+    OutputFormatType,
+    parse_output_format,
 )
 from .checkout import reset_wc_if_needed
 from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
@@ -46,14 +48,19 @@ def meta(ctx, **kwargs):
 @click.option(
     "--output-format",
     "-o",
-    type=click.Choice(["text", "json"]),
+    type=OutputFormatType(
+        output_types=[
+            "text",
+            "json",
+        ],
+        allow_text_formatstring=False,
+    ),
     default="text",
 )
 @click.option(
     "--json-style",
     type=click.Choice(["extracompact", "compact", "pretty"]),
-    default="pretty",
-    help="How to format the JSON output. Only used with -o json",
+    help="[deprecated] How to format the JSON output. Only used with -o json",
 )
 @click.option("--ref", default="HEAD")
 @click.argument("dataset", required=False)
@@ -84,14 +91,18 @@ def meta_get(ctx, output_format, json_style, ref, dataset, keys):
         else:
             all_items[ds.path] = ds.meta_items()
 
-    if output_format == "text":
+    output_type, fmt = parse_output_format(output_format, json_style)
+
+    if output_type == "text":
         for ds_path, items in all_items.items():
             click.secho(ds_path, bold=True)
             for key, value in items.items():
                 click.secho(f"    {key}", bold=True)
                 value_indent = "        "
                 if key.endswith(".json") or not isinstance(value, str):
-                    value = format_json_for_output(value, fp, json_style=json_style)
+                    value = format_json_for_output(
+                        value, fp, json_style=fmt or "pretty"
+                    )
                     write_with_indent(fp, value, indent=value_indent)
                 elif key.endswith(".wkt"):
                     value = format_wkt_for_output(value, fp)
@@ -99,7 +110,7 @@ def meta_get(ctx, output_format, json_style, ref, dataset, keys):
                 else:
                     fp.write(wrap_text_to_terminal(value, indent=value_indent))
     else:
-        dump_json_output(all_items, fp, json_style=json_style)
+        dump_json_output(all_items, fp, json_style=fmt)
 
 
 def get_meta_items(ds, keys):

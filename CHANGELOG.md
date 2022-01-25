@@ -9,7 +9,8 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ### Major changes
 Support for spatial filters - the spatial filter can be updated during an `init`, `clone` or `checkout` by supplying the option `--spatial-filter=CRS;GEOMETRY` where CRS is a string such as `EPSG:4326` and GEOMETRY is a polygon or multigon specified using WKT or hex-encoded WKB. When a spatial filter is set, the working copy will only contain features that intersect the spatial filter, and changes that happened outside the working copy are not shown to the user unless specifically required. Starting with Kart 0.11.0, only the features that are inside the specified spatial filter are downloaded during a clone. [Spatial filter docs](docs/SPATIAL_FILTERS.md) | [#456](https://github.com/koordinates/kart/issues/456)
 ### Other changes
-
+* Expanded `--output-format`/`-o` to accept format specifiers; e.g. `-o json:compact`. `kart log` now accepts text formatstrings, e.g. `-o text:%H` [#544](https://github.com/koordinates/kart/issues/544)
+* Deprecated `--json-style` in favour of `-o json:{style}`
 * diff: Added `--add-feature-count-estimate=<accuracy>` to `json-lines` diffs. This lazily inserts an estimate of the total number of features into the output stream. [#543](https://github.com/koordinates/kart/issues/543)
 * Bugfix: fixed errors with Postgres working copies when one or more datasets have no CRS defined. [#529](https://github.com/koordinates/kart/issues/529)
 * Bugfix: better error message when `kart import` fails due to multiple XML metadata files for a single dataset, which Kart does not support [#547](https://github.com/koordinates/kart/issues/547)

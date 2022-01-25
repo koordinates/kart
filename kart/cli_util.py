@@ -4,6 +4,7 @@ import json
 import jsonschema
 import os
 import platform
+import warnings
 from pathlib import Path
 
 import click
@@ -279,3 +280,85 @@ def call_and_exit_flag(*args, callback, is_eager=True, **kwargs):
         is_eager=is_eager,
         **kwargs,
     )
+
+
+class OutputFormatType(click.ParamType):
+    """
+    An output format. Loosely divided into two parts: '<type>[:<format>]'
+    e.g.
+        json
+        text
+        geojson
+        html
+        json:compact
+        text:%H
+        "text:%H %s"
+
+    For text formatstrings, see the 'PRETTY FORMATS' section of `git help log`
+    """
+
+    name = "string"
+
+    JSON_STYLE_CHOICES = ("compact", "extracompact", "pretty")
+
+    def __init__(self, *, output_types, allow_text_formatstring):
+        self.output_types = tuple(output_types)
+        self.allow_text_formatstring = allow_text_formatstring
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, tuple):
+            return value
+        if ":" in value:
+            output_type, fmt = value.split(":", 1)
+        else:
+            output_type = value
+            fmt = None
+
+        if output_type not in self.output_types:
+            self.fail(
+                "invalid choice: {}. (choose from {})".format(
+                    output_type, ", ".join(self.output_types)
+                ),
+                param,
+                ctx,
+            )
+        fmt = self.validate_fmt(ctx, param, output_type, fmt)
+        return output_type, fmt
+
+    def validate_fmt(self, ctx, param, output_type, fmt):
+        fmt = fmt or None
+        if output_type in ("json", "json-lines", "geojson"):
+            fmt = fmt or "pretty"
+            if fmt not in self.JSON_STYLE_CHOICES:
+                self.fail(
+                    "invalid choice: {}. (choose from {})".format(
+                        fmt, ", ".join(self.JSON_STYLE_CHOICES)
+                    ),
+                    ctx=ctx,
+                    param=param,
+                )
+            return fmt
+        elif output_type == "text" and self.allow_text_formatstring:
+            return fmt
+        if fmt:
+            self.fail(
+                f"Output format '{output_type}' doesn't currently accept any qualifiers (got: ':{fmt}'",
+                ctx=ctx,
+                param=param,
+            )
+
+
+def parse_output_format(output_format, json_style):
+    output_type, fmt = output_format
+    if json_style is not None:
+        warnings.warn(
+            f"--json-style is deprecated and will be removed in Kart 0.12. use --output-format={output_type}:{json_style} instead",
+            RemovalInKart012Warning,
+        )
+        if output_type in ("json", "json-lines", "geojson"):
+            fmt = json_style
+    return output_type, fmt
+
+
+class RemovalInKart012Warning(UserWarning):
+    pass
