@@ -236,7 +236,6 @@ class JsonLinesDiffWriter(BaseDiffWriter):
             }
         )
         if self._diff_estimate_accuracy is not None:
-
             t = threading.Thread(
                 target=self._calculate_and_feature_count_estimate,
             )

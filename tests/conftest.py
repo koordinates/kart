@@ -25,6 +25,7 @@ import sqlalchemy
 # Pytest sets up its own keyboard interrupt handler - don't mess with that.
 os.environ["NO_CONFIGURE_PROCESS_CLEANUP"] = "1"  # noqa
 
+from kart.diff_estimation import terminate_estimate_thread
 from kart.geometry import Geometry  # noqa: E402
 from kart.repo import KartRepo  # noqa: E402
 from kart.sqlalchemy.postgis import Db_Postgis  # noqa: E402
@@ -389,6 +390,9 @@ class KartCliRunner(CliRunner):
         params.update(kwargs)
 
         load_commands_from_args(args)
+
+        terminate_estimate_thread.clear()
+
         r = super().invoke(cli, args=args, **params)
 
         L.debug("Command result: %s (%s)", r.exit_code, repr(r))
