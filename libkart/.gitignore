@@ -1,0 +1,4 @@
+build/
+*.so
+libkart.cpp
+*.egg-info

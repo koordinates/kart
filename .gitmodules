@@ -1,0 +1,4 @@
+[submodule "libkart/cppgit2"]
+	path = libkart/cppgit2
+	url = https://github.com/koordinates/cppgit2.git
+	branch = master
