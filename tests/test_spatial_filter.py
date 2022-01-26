@@ -469,6 +469,48 @@ def test_spatially_filtered_fetch_promised(
             assert final_config_dict == orig_config_dict
 
 
+@pytest.mark.xfail(reason="https://github.com/koordinates/kart/issues/552")
+def test_spatially_filtered_commit(data_archive, cli_runner):
+    # We use the points layer for this test since it uses consecutive integer PKs.
+    # This means that promised features and locally features are likely to both be stored in the
+    # same tree, which highlights a potential issue: https://github.com/koordinates/kart/issues/552
+    with data_archive("points-with-feature-envelopes") as repo1_path:
+        repo1_url = f"file://{repo1_path.resolve()}"
+
+        with data_archive("points-spatial-filtered") as repo2_path:
+            repo2 = KartRepo(repo2_path)
+            repo2.config["remote.origin.url"] = repo1_url
+
+            ds = repo2.datasets()[H.POINTS.LAYER]
+
+            local_feature_count = local_features(ds)
+            assert local_feature_count != H.POINTS.ROWCOUNT
+            assert local_feature_count == 817
+
+            r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
+            assert r.exit_code == 0, r.stderr
+
+            with repo2.working_copy.session() as sess:
+                assert H.row_count(sess, H.POINTS.LAYER) == 302
+                sess.execute(f"DELETE FROM {H.POINTS.LAYER}")
+
+            r = cli_runner.invoke(["-C", repo2_path, "commit", "-m", "delete-matching"])
+            assert r.exit_code == 0, r.stderr
+
+            ds = repo2.datasets()[H.POINTS.LAYER]
+            assert ds.feature_count == H.POINTS.ROWCOUNT - 302
+            assert local_features(ds) == 817 - 302
+
+            # Make sure we can do a full-read of the new commit without any problems -
+            # See https://github.com/koordinates/kart/issues/552 which explains why running create-workingcopy
+            # can fail after a commit in a spatial-filted repo (unless we are careful and use promisor-packfiles),
+            # whereas running diff will generally succeed regardless.
+            r = cli_runner.invoke(
+                ["-C", repo2_path, "create-workingcopy", "--delete-existing"]
+            )
+            assert r.exit_code == 0, r.stderr
+
+
 def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path):
     # TODO - this currently tests that the spatial filter is correctly applied locally after
     # the entire repo is cloned. Applying a reference spatial filter remotely to do a
