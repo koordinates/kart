@@ -1,5 +1,5 @@
 *.egg-info
-*.py?
+*.py[oc]
 /data
 /venv
 /pip-wheel-metadata

@@ -30,7 +30,10 @@ find_package(fmt)
 add_subdirectory(cppgit2 EXCLUDE_FROM_ALL)
 
 # build our own library
-add_library(kart SHARED src/kart.cpp)
+add_library(
+  kart SHARED
+  # need to list *ALL* cpp files here
+  src/kart.cpp src/kart/repo.cpp src/kart/structure.cpp src/kart/dataset3.cpp)
 set_target_properties(kart PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(kart PUBLIC "include")
 target_include_directories(kart PUBLIC cppgit2)
