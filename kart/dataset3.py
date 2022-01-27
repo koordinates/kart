@@ -396,7 +396,7 @@ class Dataset3(RichBaseDataset):
                 yield self.encode_feature(feature, schema)
 
     def apply_meta_diff(
-        self, meta_diff, tree_builder, *, resolve_missing_values_from_ds=False
+        self, meta_diff, object_builder, *, resolve_missing_values_from_ds=False
     ):
         """Apply a meta diff to this dataset. Checks for conflicts."""
         if not meta_diff:
@@ -406,19 +406,19 @@ class Dataset3(RichBaseDataset):
         has_conflicts = False
 
         # Apply diff to hidden meta items folder: <dataset>/.table-dataset/meta/<item-name>
-        with tree_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
+        with object_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
             has_conflicts |= self._apply_meta_deltas_to_tree(
                 (d for d in meta_diff.values() if d.key not in ATTACHMENT_META_ITEMS),
-                tree_builder,
+                object_builder,
                 self.meta_tree if self.inner_tree is not None else None,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
         # Apply diff to visible attachment meta items: <dataset>/<item-name>
-        with tree_builder.chdir(self.path):
+        with object_builder.chdir(self.path):
             has_conflicts |= self._apply_meta_deltas_to_tree(
                 (d for d in meta_diff.values() if d.key in ATTACHMENT_META_ITEMS),
-                tree_builder,
+                object_builder,
                 self.attachment_tree,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
@@ -452,7 +452,7 @@ class Dataset3(RichBaseDataset):
     def _apply_meta_deltas_to_tree(
         self,
         deltas,
-        tree_builder,
+        object_builder,
         existing_tree,
         *,
         resolve_missing_values_from_ds=False,
@@ -481,7 +481,7 @@ class Dataset3(RichBaseDataset):
                         )
                 if new_schema:
                     legend = new_schema.legend
-                    tree_builder.insert(
+                    object_builder.insert(
                         f"{self.LEGEND_DIRNAME}/{legend.hexhash()}",
                         legend.dumps(),
                     )
@@ -491,7 +491,7 @@ class Dataset3(RichBaseDataset):
                     and not existing_tree
                     and path_encoder is not PathEncoder.LEGACY_ENCODER
                 ):
-                    tree_builder.insert(
+                    object_builder.insert(
                         "path-structure.json", json_pack(path_encoder.to_dict())
                     )
 
@@ -547,8 +547,8 @@ class Dataset3(RichBaseDataset):
                     new_value = json_pack(new_value)
                 else:
                     new_value = ensure_bytes(new_value)
-                tree_builder.insert(name, new_value)
+                object_builder.insert(name, new_value)
             else:
-                tree_builder.remove(name)
+                object_builder.remove(name)
 
         return has_conflicts

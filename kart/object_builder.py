@@ -3,9 +3,11 @@ import contextlib
 import pygit2
 
 
-class RichTreeBuilder:
+class ObjectBuilder:
     """
-    Like a pygit2.TreeBuilder, but more powerful - the client can buffer any number of writes to any paths
+    Useful for creating new commit, tree, and blob objects.
+
+    A lot like a pygit2.TreeBuilder, but more powerful - the client can buffer any number of writes to any paths
     whereas a pygit2.TreeBuilder only lets you modify one tree at a time.
     Also a bit like a pygit2.Index, but much more performant since it uses dicts instead of sorted vectors.
     Conflicts are not detected.
@@ -13,8 +15,10 @@ class RichTreeBuilder:
 
     def __init__(self, repo, initial_root_tree):
         """
-        The repo and an initial root tree which will be updated.
-        All paths are specified relative to this tree - the root tree at a particular commit is a good choice.
+        repo - The repository containing the initial_root_tree.
+        initial_root_tree - the root tree that is being modified. All paths are specified relative to this tree.
+            The root tree at a particular commit is a good choice, since modifying this tree and its children is the
+            only way to create a new commit based on an old commit.
         """
         self.repo = repo
         self.root_tree = (
@@ -32,7 +36,7 @@ class RichTreeBuilder:
         """
         if isinstance(path, str):
             if path.startswith("/"):
-                raise RuntimeError("RichTreeBuilder does not support absolute paths")
+                raise RuntimeError("ObjectBuilder does not support absolute paths")
             if "\\" in path:
                 raise RuntimeError(f"Paths should be '/' separated: {path}")
             path = path.strip("/").split("/")
@@ -45,9 +49,9 @@ class RichTreeBuilder:
         Returns a context manager - when the context manager is closed, the original current directory is restored.
 
         Example:
-        >>> with rich_tree_builder.chdir("a/b/c/.sno-dataset"):
+        >>> with object_builder.chdir("a/b/c/.sno-dataset"):
         >>>    # Make edits inside a/b/c/.sno-dataset:
-        >>>    rich_tree_builder.remove("meta/title")
+        >>>    object_builder.remove("meta/title")
         >>> # Context manager closes, current path is reset to the default.
         """
         path = self._resolve_path(path)
@@ -88,6 +92,14 @@ class RichTreeBuilder:
         self.root_dict = {}
         return self.root_tree
 
+    def commit(self, ref_name, author, committer, message, parent_oids):
+        """Create a new commit that points to the current root tree (once all the changes have been flushed)."""
+        tree_oid = self.flush().id
+        commit_oid = self.repo.create_commit(
+            ref_name, author, committer, message, tree_oid, parent_oids
+        )
+        return self.repo[commit_oid]
+
     def _ensure_writeable(self, writeable):
         if not isinstance(writeable, (pygit2.Tree, pygit2.Blob, bytes, type(None))):
             raise ValueError(f"Expected a writeable type but found {type(writeable)}")
@@ -105,7 +117,7 @@ def copy_and_modify_tree(repo, tree, changes):
     if not changes:
         return tree
 
-    pygit_builder = repo.TreeBuilder(tree)
+    tree_builder = repo.TreeBuilder(tree)
     for name, new_value in changes.items():
         if isinstance(new_value, dict):
             try:
@@ -113,21 +125,23 @@ def copy_and_modify_tree(repo, tree, changes):
             except KeyError:
                 subtree = None
             subtree = copy_and_modify_tree(repo, subtree, new_value)
-            pygit_builder.insert(name, subtree.oid, pygit2.GIT_FILEMODE_TREE)
+            tree_builder.insert(name, subtree.oid, pygit2.GIT_FILEMODE_TREE)
         elif isinstance(new_value, pygit2.Tree):
-            pygit_builder.insert(name, new_value.oid, pygit2.GIT_FILEMODE_TREE)
+            tree_builder.insert(name, new_value.oid, pygit2.GIT_FILEMODE_TREE)
         elif isinstance(new_value, pygit2.Blob):
-            pygit_builder.insert(name, new_value.oid, pygit2.GIT_FILEMODE_BLOB)
+            tree_builder.insert(name, new_value.oid, pygit2.GIT_FILEMODE_BLOB)
         elif isinstance(new_value, bytes):
             blob_oid = repo.create_blob(new_value)
-            pygit_builder.insert(name, blob_oid, pygit2.GIT_FILEMODE_BLOB)
+            tree_builder.insert(name, blob_oid, pygit2.GIT_FILEMODE_BLOB)
         elif new_value is None:
             try:
-                pygit_builder.remove(name)
+                tree_builder.remove(name)
             except pygit2.GitError:
                 pass  # Conflicts are not detected.
 
-    return repo.get(pygit_builder.write())
+    tree_oid = tree_builder.write()
+    tree = repo[tree_oid]
+    return tree
 
 
 def _empty_tree(repo):

@@ -40,11 +40,8 @@ def get_promisor_remote(repo):
     )
 
 
-def get_partial_clone_envelope(repo):
-    """
-    Parses the envelope from remote.(promisor-remote).partialclonefilter, which tells us
-    the spatial filter envelope that was used during the clone operation.
-    """
+def get_partial_clone_filter(repo):
+    """Returns the value stored at remote.(promisor-remote).partialclonefilter, if any."""
     config = repo.config
     try:
         name = get_promisor_remote(repo)
@@ -54,20 +51,34 @@ def get_partial_clone_envelope(repo):
     key = f"remote.{name}.partialclonefilter"
     if key not in config:
         return None
-    value = config[key]
-    prefix = "extension:spatial="
-    if not value.startswith(prefix):
+    return config[key]
+
+
+def get_partial_clone_envelope(repo):
+    """
+    Parses the envelope from remote.(promisor-remote).partialclonefilter, which tells us
+    the spatial filter envelope that was used during the clone operation.
+    """
+    pcf = get_partial_clone_filter(repo)
+    if not pcf:
         return None
-    value = value[len(prefix) :]
-    parts = value.split(",", maxsplit=4)
+    prefix = "extension:spatial="
+    if not pcf.startswith(prefix):
+        return None
+    spatial_str = pcf[len(prefix) :]
+    parts = spatial_str.split(",", maxsplit=4)
 
     if len(parts) != 4:
-        raise ValueError(f"Repository config contains invalid spatial filter: {value}")
+        raise ValueError(
+            f"Repository config contains invalid spatial filter: {spatial_str}"
+        )
 
     try:
         envelope = [float(p) for p in parts]
     except ValueError:
-        raise ValueError(f"Repository config contains invalid spatial filter: {value}")
+        raise ValueError(
+            f"Repository config contains invalid spatial filter: {spatial_str}"
+        )
 
     return envelope
 

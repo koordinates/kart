@@ -14,7 +14,7 @@ from .exceptions import (
     PATCH_DOES_NOT_APPLY,
     SCHEMA_VIOLATION,
 )
-from .rich_tree_builder import RichTreeBuilder
+from .object_builder import ObjectBuilder
 from .repo_version import extra_blobs_for_version
 from .schema import Schema
 from .structs import CommitWithReference
@@ -178,11 +178,16 @@ class RepoStructure:
         obj = self.commit or self.tree
         return obj.short_id if obj is not None else None
 
+    def object_builder(self):
+        """Returns an ObjectBuilder for creating new repository objects."""
+        return ObjectBuilder(self.repo, self.tree)
+
     def create_tree_from_diff(
         self,
         repo_diff,
         *,
         resolve_missing_values_from_rs: Optional["RepoStructure"] = None,
+        object_builder=None,
     ):
         """
         Given a diff, returns a new tree created by applying the diff to self.tree -
@@ -196,15 +201,18 @@ class RepoStructure:
 
         This supports patches generated with `kart create-patch --patch-type=minimal`,
         which can be (significantly) smaller.
+
+        object_builder - if supplied, this ObjectBuilder will be used instead of the default.
         """
-        tree_builder = RichTreeBuilder(self.repo, self.tree)
+        if object_builder is None:
+            object_builder = self.object_builder()
 
         if not self.tree:
             # This is the first commit to this branch - we may need to add extra blobs
             # to the tree to mark this data as being of a particular version.
             extra_blobs = extra_blobs_for_version(self.version)
             for path, blob in extra_blobs:
-                tree_builder.insert(path, blob)
+                object_builder.insert(path, blob)
 
         for ds_path, ds_diff in repo_diff.items():
             schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
@@ -215,7 +223,7 @@ class RepoStructure:
                 )
 
             if schema_delta and schema_delta.type == "delete":
-                tree_builder.remove(ds_path)
+                object_builder.remove(ds_path)
                 continue
 
             if schema_delta and schema_delta.type == "insert":
@@ -235,12 +243,12 @@ class RepoStructure:
 
             dataset.apply_diff(
                 ds_diff,
-                tree_builder,
+                object_builder,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
-            tree_builder.flush()
+            object_builder.flush()
 
-        tree = tree_builder.flush()
+        tree = object_builder.flush()
         L.info(f"Tree sha: {tree.hex}")
         return tree
 
@@ -313,9 +321,11 @@ class RepoStructure:
 
         self.check_values_match_schema(wcdiff)
 
+        object_builder = self.object_builder()
         new_tree = self.create_tree_from_diff(
             wcdiff,
             resolve_missing_values_from_rs=resolve_missing_values_from_rs,
+            object_builder=object_builder,
         )
         if (not allow_empty) and new_tree == self.tree:
             raise NotFound("No changes to commit", exit_code=NO_CHANGES)
@@ -329,17 +339,15 @@ class RepoStructure:
         parents = [parent_commit.oid] if parent_commit is not None else []
 
         # This will also update the ref (branch) to point to the new commit
-        new_commit_id = self.repo.create_commit(
+        new_commit = object_builder.commit(
             self.ref,
             author or self.repo.author_signature(),
             committer or self.repo.committer_signature(),
             message,
-            new_tree.id,
             parents,
         )
-        new_commit = self.repo[new_commit_id]
 
-        L.info(f"Commit: {new_commit.hex}")
+        L.info(f"Commit: {new_commit.id.hex}")
         return new_commit
 
 

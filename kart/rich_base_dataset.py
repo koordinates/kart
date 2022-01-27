@@ -309,7 +309,7 @@ class RichBaseDataset(BaseDataset):
             yield Delta(old_half_delta, new_half_delta)
 
     def apply_diff(
-        self, dataset_diff, tree_builder, *, resolve_missing_values_from_ds=None
+        self, dataset_diff, object_builder, *, resolve_missing_values_from_ds=None
     ):
         """
         Given a diff that only affects this dataset, write it to the given treebuilder.
@@ -322,7 +322,7 @@ class RichBaseDataset(BaseDataset):
         if meta_diff:
             self.apply_meta_diff(
                 meta_diff,
-                tree_builder,
+                object_builder,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
@@ -333,13 +333,13 @@ class RichBaseDataset(BaseDataset):
         if feature_diff:
             self.apply_feature_diff(
                 feature_diff,
-                tree_builder,
+                object_builder,
                 schema=schema,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,
             )
 
     def apply_meta_diff(
-        self, meta_diff, tree_builder, *, resolve_missing_values_from_ds=None
+        self, meta_diff, object_builder, *, resolve_missing_values_from_ds=None
     ):
         """Applies a meta diff. Not supported until Datasets V2"""
         if not meta_diff:
@@ -417,7 +417,7 @@ class RichBaseDataset(BaseDataset):
     def apply_feature_diff(
         self,
         feature_diff,
-        tree_builder,
+        object_builder,
         *,
         schema=None,
         resolve_missing_values_from_ds=None,
@@ -432,7 +432,7 @@ class RichBaseDataset(BaseDataset):
                 resolve_missing_values_from_ds.schema != self.schema
             )
 
-        with tree_builder.chdir(self.inner_path):
+        with object_builder.chdir(self.inner_path):
             # Applying diffs works even if there is no tree yet created for the dataset,
             # as is the case when the dataset is first being created right now.
             tree = self.inner_tree or ()
@@ -496,12 +496,12 @@ class RichBaseDataset(BaseDataset):
 
                 # Actually write the feature diff:
                 if old_path and old_path != new_path:
-                    tree_builder.remove(old_path)
+                    object_builder.remove(old_path)
                 if delta.new_value:
                     path, data = self.encode_feature(
                         delta.new.value, relative=True, **encode_kwargs
                     )
-                    tree_builder.insert(path, data)
+                    object_builder.insert(path, data)
 
             if has_conflicts:
                 raise InvalidOperation(

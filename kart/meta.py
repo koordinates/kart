@@ -15,8 +15,8 @@ from .cli_util import (
 )
 from .checkout import reset_wc_if_needed
 from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
-from .rich_tree_builder import RichTreeBuilder
 from .meta_items import META_ITEM_NAMES
+from .object_builder import ObjectBuilder
 from .output_util import (
     dump_json_output,
     format_json_for_output,
@@ -267,15 +267,15 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
         message = parent_commit.message
 
     original_tree = parent_commit.peel(pygit2.Tree)
-    tree_builder = RichTreeBuilder(repo, original_tree)
+    object_builder = ObjectBuilder(repo, original_tree)
     for key, value in items:
         value = value_optionally_from_binary_file(value, key, ctx, encoding="utf-8")
         if remove_empty_files and not value:
-            tree_builder.remove(key)
+            object_builder.remove(key)
         else:
-            tree_builder.insert(key, value)
+            object_builder.insert(key, value)
 
-    new_tree = tree_builder.flush()
+    new_tree = object_builder.flush()
     if new_tree == original_tree and not amend and not allow_empty:
         raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
@@ -288,15 +288,13 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
 
     # This will also update the ref (branch) to point to the new commit,
     # (if commit_to_ref is not None).
-    new_commit_id = repo.create_commit(
+    new_commit = object_builder.commit(
         commit_to_ref,
         author,
         repo.committer_signature(),
         message,
-        new_tree.id,
         parents,
     )
-    new_commit = repo[new_commit_id]
 
     if amend:
         if ref == "HEAD" and repo.head_branch is None:

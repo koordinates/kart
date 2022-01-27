@@ -16,7 +16,7 @@ from .repo_version import (
     SUPPORTED_REPO_VERSIONS,
     dataset_class_for_version,
 )
-from .rich_tree_builder import RichTreeBuilder
+from .object_builder import ObjectBuilder
 from .structure import Datasets
 from .timestamps import minutes_to_tz_offset
 from .pk_generation import PkGeneratingImportSource
@@ -357,7 +357,7 @@ def fast_import_tables(
             if len(import_refs) > 1:
                 click.echo(f"Joining {len(import_refs)} parallel-imported trees...")
                 t1 = time.monotonic()
-                builder = RichTreeBuilder(repo, trees[0])
+                builder = ObjectBuilder(repo, trees[0])
                 for t in trees[1:]:
                     datasets = Datasets(
                         repo, t, dataset_class_for_version(repo.version)

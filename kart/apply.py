@@ -2,12 +2,9 @@ from binascii import unhexlify
 import json
 from datetime import datetime
 from enum import Enum, auto
-from typing import Optional
 
 import click
 import pygit2
-
-from kart.structure import RepoStructure
 
 from .exceptions import (
     NO_TABLE,

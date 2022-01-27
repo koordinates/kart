@@ -563,6 +563,12 @@ class KartRepo(pygit2.Repository):
         bare_key = self.BARE_CONFIG_KEY
         return repo_cfg.get_bool(bare_key) if bare_key in repo_cfg else False
 
+    @property
+    def is_partial_clone(self):
+        from . import promisor_utils
+
+        return promisor_utils.get_partial_clone_filter(self) is not None
+
     def lock_git_index(self):
         index_contents = LOCKED_GIT_INDEX_CONTENTS[self.branding]
         (self.gitdir_path / KartRepoFiles.INDEX).write_bytes(index_contents)
