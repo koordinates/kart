@@ -48,7 +48,7 @@ extern "C"
 		delete repo;
 	}
 
-	const int kart::kart_repo_version(const KartRepo *repo)
+	int kart::kart_repo_version(KartRepo *repo)
 	{
 		try
 		{

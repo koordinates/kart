@@ -16,6 +16,22 @@ RepoStructure::RepoStructure(repository *repo, tree root_tree)
 {
 }
 
+int kart::RepoStructure::Version()
+{
+    auto entry = root_tree.lookup_entry_by_path(".kart.repostructure.version");
+    //	clog << "got entry " << entry.type() << "\n";
+
+    if (entry.type() != object::object_type::blob)
+    {
+        throw LibKartError("kart repo version didn't resolve to a blob");
+    }
+
+    auto blob = repo->tree_entry_to_object(entry).as_blob();
+    //	clog << "got blob\n";
+    string content = string(static_cast<const char *>(blob.raw_contents()), blob.raw_size());
+
+    return stoi(content);
+}
 vector<Dataset3 *> *RepoStructure::GetDatasets()
 {
     auto result = new vector<Dataset3 *>();
