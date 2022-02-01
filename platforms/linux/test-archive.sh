@@ -30,7 +30,7 @@ DEB_ALL=(
 RPM_ALL=(
     fedora:latest
     centos:7
-    centos:8
+#   centos:8                # red-build - no mirrors found
 )
 
 ARCHIVE_PATH="/src/platforms/linux/dist/$ARCHIVE"
