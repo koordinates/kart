@@ -21,9 +21,7 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 
         r = cli_runner.invoke(["checkout", "-b", "one"])
         assert r.exit_code == 0, r.stderr
-        r = cli_runner.invoke(["checkout", "HEAD^"])
-        assert r.exit_code == 0, r.stderr
-        r = cli_runner.invoke(["switch", "--create", "two"])
+        r = cli_runner.invoke(["checkout", "-b", "two", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
         r = cli_runner.invoke(["checkout", "one", "-b", "three"])

@@ -150,7 +150,7 @@ def checkout(
                 f"A branch named '{new_branch}' already exists.", param_hint="branch"
             )
 
-        if refish and refish in repo.branches.remote:
+        if _is_in_branches(refish, repo.branches.remote):
             click.echo(f"Creating new branch '{new_branch}' to track '{refish}'...")
             new_branch = repo.create_branch(new_branch, commit, force)
             new_branch.upstream = repo.branches.remote[refish]
@@ -240,13 +240,13 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
                 f"A branch named '{new_branch}' already exists.", param_hint="create"
             )
 
-        if start_point and start_point in repo.branches.remote:
+        if _is_in_branches(start_point, repo.branches.remote):
             click.echo(
                 f"Creating new branch '{new_branch}' to track '{start_point}'..."
             )
             b_new = repo.create_branch(new_branch, commit, is_force)
             b_new.upstream = repo.branches.remote[start_point]
-        elif start_point and start_point in repo.branches:
+        elif _is_in_branches(start_point, repo.branches):
             click.echo(f"Creating new branch '{new_branch}' from '{start_point}'...")
             b_new = repo.create_branch(new_branch, commit, is_force)
         else:
@@ -265,7 +265,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
         if not refish:
             raise click.UsageError("Missing argument: REFISH")
 
-        if refish in repo.branches.remote:
+        if _is_in_branches(refish, repo.branches.remote):
             # User specified something like "origin/main"
             raise click.BadParameter(
                 f"A branch is expected, got remote branch {refish}",
@@ -273,7 +273,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             )
 
         existing_branch = None
-        if refish in repo.branches.local:
+        if _is_in_branches(refish, repo.branches.local):
             existing_branch = repo.branches[refish]
         elif do_guess:
             # Guess: that the user wants create a new local branch to track a remote
@@ -287,7 +287,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
         if do_switch_commit and not discard_changes:
             ctx.obj.check_not_dirty(_DISCARD_CHANGES_HELP_MESSAGE)
 
-        if existing_branch.shorthand in repo.branches.local:
+        if _is_in_branches(existing_branch.shorthand, repo.branches.local):
             branch = existing_branch
         else:
             # Create new local branch to track remote
@@ -316,6 +316,15 @@ def _find_remote_branch_by_name(repo, name):
         if len(parts) == 2 and parts[1] == name:
             results.append(remotes[b])
     return results[0] if len(results) == 1 else None
+
+
+def _is_in_branches(branch_name, branches):
+    if not branch_name:
+        return False
+    try:
+        return branch_name in branches
+    except pygit2.InvalidSpecError:
+        return False
 
 
 @click.command()
