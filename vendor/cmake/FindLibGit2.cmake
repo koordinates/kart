@@ -97,6 +97,7 @@ if(LibGit2_FOUND)
 
   if(NOT TARGET LibGit2::LibGit2)
     add_library(LibGit2::LibGit2 UNKNOWN IMPORTED)
+    add_library(git2 ALIAS LibGit2::LibGit2)
     set_target_properties(
       LibGit2::LibGit2
       PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LibGit2_INCLUDE_DIR}"
