@@ -1,8 +1,9 @@
 # cython: c_string_type=unicode, c_string_encoding=utf8
 
 from cython.operator cimport dereference as deref
-from libcpp.memory cimport shared_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.utility cimport move
 
 from libkart_ cimport *
 
@@ -28,7 +29,7 @@ cdef class Dataset3:
 
 
 cdef class RepoStructure:
-    cdef shared_ptr[CppRepoStructure] thisptr
+    cdef unique_ptr[CppRepoStructure] thisptr
 
     # FIXME: RepoStructure doesn't really *need* a constructor.
     # The only way to create one is to call KartRepo.structure(...)
@@ -41,9 +42,9 @@ cdef class RepoStructure:
     # TODO: figure out how to improve this.
 
     @staticmethod
-    cdef RepoStructure _wrap(shared_ptr[CppRepoStructure] cpp):
+    cdef RepoStructure _wrap(unique_ptr[CppRepoStructure] cpp):
         cdef RepoStructure rs = RepoStructure()
-        rs.thisptr = cpp
+        rs.thisptr = move(cpp)
         return rs
 
     def datasets(self):
@@ -63,7 +64,7 @@ cdef class KartRepo:
 
     def structure(self, treeish: str = "HEAD"):
         structure = deref(self.thisptr).Structure(treeish)
-        return RepoStructure._wrap(structure)
+        return RepoStructure._wrap(move(structure))
 
     def __dealloc__(self):
         if self.thisptr:

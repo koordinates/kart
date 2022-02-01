@@ -20,8 +20,8 @@ namespace kart
 		KartRepo(const char *path);
 		~KartRepo(){};
 		int Version();
-		shared_ptr<RepoStructure> Structure();
-		shared_ptr<RepoStructure> Structure(string treeish);
+		unique_ptr<RepoStructure> Structure();
+		unique_ptr<RepoStructure> Structure(string treeish);
 
 	private:
 		repository repo;

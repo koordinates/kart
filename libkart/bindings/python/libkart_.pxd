@@ -1,4 +1,4 @@
-from libcpp.memory cimport shared_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
@@ -11,7 +11,7 @@ cdef extern from "kart.hpp" namespace "kart":
     cdef cppclass CppKartRepo "kart::KartRepo":
         CppKartRepo(const char *path)
         int Version()
-        shared_ptr[CppRepoStructure] Structure(string treeish)
+        unique_ptr[CppRepoStructure] Structure(string treeish)
 
 
     # KartRepo* kart_open_repository(const char *path)

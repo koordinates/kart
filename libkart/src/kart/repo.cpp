@@ -20,13 +20,13 @@ int kart::KartRepo::Version()
     auto structure = Structure("HEAD");
     return structure->Version();
 }
-shared_ptr<RepoStructure> KartRepo::Structure()
+unique_ptr<RepoStructure> KartRepo::Structure()
 {
     return KartRepo::Structure("HEAD");
 }
-shared_ptr<RepoStructure> KartRepo::Structure(string treeish)
+unique_ptr<RepoStructure> KartRepo::Structure(string treeish)
 {
     auto object = repo.revparse_to_object(treeish);
     auto tree = object.peel_until(object::object_type::tree).as_tree();
-    return make_shared<RepoStructure>(&repo, tree);
+    return make_unique<RepoStructure>(&repo, tree);
 }
