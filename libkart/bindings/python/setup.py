@@ -22,14 +22,6 @@ setup(
             language="c++",
             extra_compile_args=["--std=c++17"],
             libraries=["kart"],
-            # TODO: how do we move these into whatever script (cmake presumably) is invoking setup.py?
-            library_dirs=[str(LIBKART_BUILD_DIR)],
-            extra_link_args=["-rpath", str(LIBKART_BUILD_DIR)],
-            include_dirs=[
-                "include",
-                str(LIBKART_SRC_PREFIX / "include"),
-                str(LIBKART_SRC_PREFIX / "cppgit2" / "include"),
-            ],
         )
     ),
 )
