@@ -16,7 +16,6 @@ from .cli_util import (
 from .checkout import reset_wc_if_needed
 from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
 from .meta_items import META_ITEM_NAMES
-from .object_builder import ObjectBuilder
 from .output_util import (
     dump_json_output,
     format_json_for_output,
@@ -25,6 +24,8 @@ from .output_util import (
     resolve_output_path,
     wrap_text_to_terminal,
 )
+from .pack_util import packfile_object_builder
+
 
 # Changing these items would generally break the repo;
 # we disallow that.
@@ -267,13 +268,13 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
         message = parent_commit.message
 
     original_tree = parent_commit.peel(pygit2.Tree)
-    object_builder = ObjectBuilder(repo, original_tree)
-    for key, value in items:
-        value = value_optionally_from_binary_file(value, key, ctx, encoding="utf-8")
-        if remove_empty_files and not value:
-            object_builder.remove(key)
-        else:
-            object_builder.insert(key, value)
+    with packfile_object_builder(repo, original_tree) as object_builder:
+        for key, value in items:
+            value = value_optionally_from_binary_file(value, key, ctx, encoding="utf-8")
+            if remove_empty_files and not value:
+                object_builder.remove(key)
+            else:
+                object_builder.insert(key, value)
 
     new_tree = object_builder.flush()
     if new_tree == original_tree and not amend and not allow_empty:
