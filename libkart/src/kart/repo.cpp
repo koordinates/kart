@@ -30,3 +30,7 @@ unique_ptr<RepoStructure> KartRepo::Structure(string treeish)
     auto tree = object.peel_until(object::object_type::tree).as_tree();
     return make_unique<RepoStructure>(&repo, tree);
 }
+unique_ptr<TreeWalker> KartRepo::walk_tree(cppgit2::tree *root)
+{
+    return make_unique<TreeWalker>(&repo, root);
+}

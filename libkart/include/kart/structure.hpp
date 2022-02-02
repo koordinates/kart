@@ -10,8 +10,6 @@
 using namespace std;
 namespace kart
 {
-    const string DATASET_DIRNAME = ".table-dataset";
-
     class RepoStructure
     {
     public:

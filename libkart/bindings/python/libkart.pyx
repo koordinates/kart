@@ -1,11 +1,98 @@
 # cython: c_string_type=unicode, c_string_encoding=utf8
 
-from cython.operator cimport dereference as deref
+from cython.operator cimport dereference as deref, preincrement as preinc, address
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from libkart_ cimport *
+
+
+cdef class Oid:
+    cdef cppgit2_oid cpp
+
+    def __str__(self):
+        return self.cpp.to_hex_string()
+
+    def __repr__(self):
+        return f'<Oid: {self}>'
+
+    @staticmethod
+    cdef Oid _wrap(cppgit2_oid cpp):
+        cdef Oid x = Oid()
+        x.cpp = cpp
+        return x
+
+
+cdef class TreeEntry:
+    cdef cppgit2_tree_entry cpp
+    @property
+    def filename(self):
+        return self.cpp.filename()
+    @property
+    def id(self):
+        return Oid._wrap(self.cpp.id())
+
+    def __repr__(self):
+        return f"<TreeEntry: {self.filename}>"
+
+    @staticmethod
+    cdef TreeEntry _wrap(cppgit2_tree_entry cpp):
+        cdef TreeEntry x = TreeEntry()
+        x.cpp = cpp
+        return x
+
+cdef class TreeEntryWithPath:
+    cdef CppTreeEntryWithPath cpp
+    @property
+    def filename(self):
+        return self.cpp.filename()
+    @property
+    def id(self):
+        return Oid._wrap(self.cpp.id())
+    @property
+    def rel_path(self):
+        return self.cpp.rel_path
+
+    def __repr__(self):
+        return f"<TreeEntryWithPath: {self.rel_path}>"
+
+    @staticmethod
+    cdef TreeEntryWithPath _wrap(CppTreeEntryWithPath cpp):
+        cdef TreeEntryWithPath x = TreeEntryWithPath()
+        x.cpp = cpp
+        return x
+
+
+cdef class Tree:
+    cdef unique_ptr[cppgit2_tree] thisptr
+    @property
+    def id(self):
+        return Oid._wrap(deref(self.thisptr).id())
+
+    def __repr__(self):
+        return f"<Tree: {self.id}>"
+
+    @staticmethod
+    cdef Tree _wrap(unique_ptr[cppgit2_tree] cpp):
+        cdef Tree x = Tree()
+        x.thisptr = move(cpp)
+        return x
+
+
+cdef class TreeWalker:
+    cdef unique_ptr[CppTreeWalker] thisptr
+    @staticmethod
+    cdef TreeWalker _wrap(unique_ptr[CppTreeWalker] cpp):
+        cdef TreeWalker x = TreeWalker()
+        x.thisptr = move(cpp)
+        return x
+
+    def __iter__(self):
+        cdef CppTreeEntryIterator it = deref(self.thisptr).begin()
+        while it != deref(self.thisptr).end():
+            yield TreeEntryWithPath._wrap(deref(it))
+            it = preinc(it)
 
 
 cdef class Dataset3:
@@ -17,6 +104,14 @@ cdef class Dataset3:
 
     def __repr__(self):
         return f"<libkart.Dataset3: {self.path}>"
+
+    @property
+    def tree(self):
+        return Tree._wrap(deref(self.thisptr).get_tree())
+
+    @property
+    def features_tree(self):
+        return Tree._wrap(deref(self.thisptr).get_features_tree())
 
     @staticmethod
     cdef Dataset3 _wrap(CppDataset3 *cpp):
@@ -65,6 +160,11 @@ cdef class KartRepo:
     def structure(self, treeish: str = "HEAD"):
         structure = deref(self.thisptr).Structure(treeish)
         return RepoStructure._wrap(move(structure))
+
+    def walk_tree(self, root: Tree):
+        return TreeWalker._wrap(
+            deref(self.thisptr).walk_tree(address(deref(root.thisptr)))
+        )
 
     def __dealloc__(self):
         if self.thisptr:

@@ -6,7 +6,7 @@
 
 #include <cppgit2/repository.hpp>
 
-#include "kart/structure.hpp"
+#include "kart/tree_walker.hpp"
 #include "kart/structure.hpp"
 
 using namespace std;
@@ -22,6 +22,8 @@ namespace kart
 		int Version();
 		unique_ptr<RepoStructure> Structure();
 		unique_ptr<RepoStructure> Structure(string treeish);
+
+		unique_ptr<TreeWalker> walk_tree(tree *root);
 
 	private:
 		repository repo;

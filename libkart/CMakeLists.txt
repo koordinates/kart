@@ -13,6 +13,10 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_BUILD_TYPE Debug)
 
+# make it way debuggable
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set(CMAKE_C_FLAGS_DEBUG "-g -O0")
+
 include(FindPackageHandleStandardArgs)
 
 find_package(LibGit2 1.3.0 REQUIRED)
@@ -26,7 +30,8 @@ add_subdirectory(cppgit2 EXCLUDE_FROM_ALL)
 add_library(
   kart SHARED
   # need to list *ALL* cpp files here
-  src/kart.cpp src/kart/repo.cpp src/kart/structure.cpp src/kart/dataset3.cpp)
+  src/kart.cpp src/kart/repo.cpp src/kart/structure.cpp src/kart/dataset3.cpp
+  src/kart/tree_walker.cpp)
 set_target_properties(kart PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(kart PUBLIC "include")
 target_include_directories(kart PUBLIC cppgit2)
