@@ -14,8 +14,10 @@ from .merge_util import (
     MergeContext,
     ALL_MERGE_FILES,
     merge_status_to_text,
+    write_merged_index_flags,
 )
 from .output_util import dump_json_output
+from .pack_util import write_to_packfile
 from .repo import KartRepoFiles, KartRepoState
 from .structs import CommitWithReference
 
@@ -119,22 +121,23 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
         merge_jdict["commit"] = "(dryRun)"
         return merge_jdict
 
-    merge_tree_id = index.write_tree(repo)
-    L.debug(f"Merge tree: {merge_tree_id}")
+    with write_to_packfile(repo):
+        merge_tree_id = index.write_tree(repo, write_merged_index_flags(repo))
+        L.debug(f"Merge tree: {merge_tree_id}")
 
-    user = repo.default_signature
-    if not commit_message:
-        commit_message = get_commit_message(
-            merge_context, merge_tree_id, repo, quiet=quiet
+        user = repo.default_signature
+        if not commit_message:
+            commit_message = get_commit_message(
+                merge_context, merge_tree_id, repo, quiet=quiet
+            )
+        merge_commit_id = repo.create_commit(
+            repo.head.name,
+            user,
+            user,
+            commit_message,
+            merge_tree_id,
+            [ours.id, theirs.id],
         )
-    merge_commit_id = repo.create_commit(
-        repo.head.name,
-        user,
-        user,
-        commit_message,
-        merge_tree_id,
-        [ours.id, theirs.id],
-    )
 
     L.debug(f"Merge commit: {merge_commit_id}")
     merge_jdict["commit"] = merge_commit_id.hex
@@ -199,24 +202,25 @@ def complete_merging_state(ctx):
     merge_context = MergeContext.read_from_repo(repo)
     commit_ids = merge_context.versions.map(lambda v: v.commit_id)
 
-    merge_tree_id = merge_index.write_resolved_tree(repo)
-    L.debug(f"Merge tree: {merge_tree_id}")
+    with write_to_packfile(repo):
+        merge_tree_id = merge_index.write_resolved_tree(repo)
+        L.debug(f"Merge tree: {merge_tree_id}")
 
-    merge_message = ctx.params.get("message")
-    if not merge_message:
-        merge_message = get_commit_message(
-            merge_context, merge_tree_id, repo, read_msg_file=True
+        merge_message = ctx.params.get("message")
+        if not merge_message:
+            merge_message = get_commit_message(
+                merge_context, merge_tree_id, repo, read_msg_file=True
+            )
+
+        user = repo.default_signature
+        merge_commit_id = repo.create_commit(
+            repo.head.name,
+            user,
+            user,
+            merge_message,
+            merge_tree_id,
+            [commit_ids.ours, commit_ids.theirs],
         )
-
-    user = repo.default_signature
-    merge_commit_id = repo.create_commit(
-        repo.head.name,
-        user,
-        user,
-        merge_message,
-        merge_tree_id,
-        [commit_ids.ours, commit_ids.theirs],
-    )
 
     L.debug(f"Merge commit: {merge_commit_id}")
 

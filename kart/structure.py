@@ -14,7 +14,7 @@ from .exceptions import (
     PATCH_DOES_NOT_APPLY,
     SCHEMA_VIOLATION,
 )
-from .object_builder import ObjectBuilder
+from .pack_util import packfile_object_builder
 from .repo_version import extra_blobs_for_version
 from .schema import Schema
 from .structs import CommitWithReference
@@ -178,10 +178,6 @@ class RepoStructure:
         obj = self.commit or self.tree
         return obj.short_id if obj is not None else None
 
-    def object_builder(self):
-        """Returns an ObjectBuilder for creating new repository objects."""
-        return ObjectBuilder(self.repo, self.tree)
-
     def create_tree_from_diff(
         self,
         repo_diff,
@@ -205,7 +201,12 @@ class RepoStructure:
         object_builder - if supplied, this ObjectBuilder will be used instead of the default.
         """
         if object_builder is None:
-            object_builder = self.object_builder()
+            with packfile_object_builder(self.repo, self.tree) as object_builder:
+                return self.create_tree_from_diff(
+                    repo_diff,
+                    resolve_missing_values_from_rs=resolve_missing_values_from_rs,
+                    object_builder=object_builder,
+                )
 
         if not self.tree:
             # This is the first commit to this branch - we may need to add extra blobs
@@ -321,31 +322,31 @@ class RepoStructure:
 
         self.check_values_match_schema(wcdiff)
 
-        object_builder = self.object_builder()
-        new_tree = self.create_tree_from_diff(
-            wcdiff,
-            resolve_missing_values_from_rs=resolve_missing_values_from_rs,
-            object_builder=object_builder,
-        )
-        if (not allow_empty) and new_tree == self.tree:
-            raise NotFound("No changes to commit", exit_code=NO_CHANGES)
+        with packfile_object_builder(self.repo, self.tree) as object_builder:
+            new_tree = self.create_tree_from_diff(
+                wcdiff,
+                resolve_missing_values_from_rs=resolve_missing_values_from_rs,
+                object_builder=object_builder,
+            )
+            if (not allow_empty) and new_tree == self.tree:
+                raise NotFound("No changes to commit", exit_code=NO_CHANGES)
 
-        L.info("Committing...")
+            L.info("Committing...")
 
-        if self.ref == "HEAD":
-            parent_commit = self.repo.head_commit
-        else:
-            parent_commit = self.repo.references[self.ref].peel(pygit2.Commit)
-        parents = [parent_commit.oid] if parent_commit is not None else []
+            if self.ref == "HEAD":
+                parent_commit = self.repo.head_commit
+            else:
+                parent_commit = self.repo.references[self.ref].peel(pygit2.Commit)
+            parents = [parent_commit.oid] if parent_commit is not None else []
 
-        # This will also update the ref (branch) to point to the new commit
-        new_commit = object_builder.commit(
-            self.ref,
-            author or self.repo.author_signature(),
-            committer or self.repo.committer_signature(),
-            message,
-            parents,
-        )
+            # This will also update the ref (branch) to point to the new commit
+            new_commit = object_builder.commit(
+                self.ref,
+                author or self.repo.author_signature(),
+                committer or self.repo.committer_signature(),
+                message,
+                parents,
+            )
 
         L.info(f"Commit: {new_commit.id.hex}")
         return new_commit

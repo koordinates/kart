@@ -469,7 +469,6 @@ def test_spatially_filtered_fetch_promised(
             assert final_config_dict == orig_config_dict
 
 
-@pytest.mark.xfail(reason="https://github.com/koordinates/kart/issues/552")
 def test_spatially_filtered_commit(data_archive, cli_runner):
     # We use the points layer for this test since it uses consecutive integer PKs.
     # This means that promised features and locally features are likely to both be stored in the
@@ -511,20 +510,21 @@ def test_spatially_filtered_commit(data_archive, cli_runner):
             assert r.exit_code == 0, r.stderr
 
 
-@pytest.mark.xfail(reason="https://github.com/koordinates/kart/issues/550")
 def test_spatially_filtered_merge(data_archive, cli_runner):
-    with data_archive("polygons-with-feature-envelopes") as repo1_path:
+    # Make sure spatially filtered merges work (that is, make sure writing merged indexes with missing features works).
+    # See https://github.com/koordinates/kart/issues/550
+    with data_archive("points-with-feature-envelopes") as repo1_path:
         repo1_url = f"file://{repo1_path.resolve()}"
 
-        with data_archive("polygons-spatial-filtered") as repo2_path:
+        with data_archive("points-spatial-filtered") as repo2_path:
             repo2 = KartRepo(repo2_path)
             repo2.config["remote.origin.url"] = repo1_url
 
-            ds = repo2.datasets()[H.POLYGONS.LAYER]
+            ds = repo2.datasets()[H.POINTS.LAYER]
 
             local_feature_count = local_features(ds)
-            assert local_feature_count != H.POLYGONS.ROWCOUNT
-            assert local_feature_count == 52
+            assert local_feature_count != H.POINTS.ROWCOUNT
+            assert local_feature_count == 817
 
             r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
             assert r.exit_code == 0, r.stderr
@@ -533,8 +533,8 @@ def test_spatially_filtered_merge(data_archive, cli_runner):
             assert r.exit_code == 0, r.stderr
 
             with repo2.working_copy.session() as sess:
-                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
-                sess.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id % 2 == 0;")
+                assert H.row_count(sess, H.POINTS.LAYER) == 302
+                sess.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid % 3 != 0;")
 
             r = cli_runner.invoke(["-C", repo2_path, "commit", "-m", "left-commit"])
             assert r.exit_code == 0, r.stderr
@@ -545,13 +545,22 @@ def test_spatially_filtered_merge(data_archive, cli_runner):
             assert r.exit_code == 0, r.stderr
 
             with repo2.working_copy.session() as sess:
-                assert H.row_count(sess, H.POLYGONS.LAYER) == 44
-                sess.execute(f"DELETE FROM {H.POLYGONS.LAYER} WHERE id % 3 == 0;")
+                assert H.row_count(sess, H.POINTS.LAYER) == 302
+                sess.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid % 3 != 1;")
 
             r = cli_runner.invoke(["-C", repo2_path, "commit", "-m", "right-commit"])
             assert r.exit_code == 0, r.stderr
 
             r = cli_runner.invoke(["-C", repo2_path, "merge", "left", "-m", "merged"])
+            assert r.exit_code == 0, r.stderr
+
+            # Make sure we can do a full-read of the new commit without any problems -
+            # See https://github.com/koordinates/kart/issues/552 which explains why running create-workingcopy
+            # can fail after a commit in a spatial-filted repo (unless we are careful and use promisor-packfiles),
+            # whereas running diff will generally succeed regardless.
+            r = cli_runner.invoke(
+                ["-C", repo2_path, "create-workingcopy", "--delete-existing"]
+            )
             assert r.exit_code == 0, r.stderr
 
 

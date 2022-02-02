@@ -17,6 +17,17 @@ MERGE_MSG = KartRepoFiles.MERGE_MSG
 
 ALL_MERGE_FILES = (MERGE_HEAD, MERGE_INDEX, MERGE_BRANCH, MERGE_MSG)
 
+
+def write_merged_index_flags(repo):
+    flags = pygit2.GIT_INDEX_WRITE_TREE_DEFAULT
+    if repo.is_partial_clone:
+        # Don't validate the individual blob OIDS for a partial clone since - they might be "promised",
+        # which looks the same as missing once they're in the index that the merge results in.
+        flags &= ~pygit2.GIT_INDEX_WRITE_TREE_VALIDATE_OIDS
+
+    return flags
+
+
 # Utility classes relevant to merges - used by merge command, conflicts command, resolve command.
 
 
@@ -312,7 +323,7 @@ class MergeIndex:
         for e in self._resolves_entries():
             index.add(pygit2.IndexEntry(e.path, e.id, e.mode))
 
-        return index.write_tree(repo)
+        return index.write_tree(repo, write_merged_index_flags(repo))
 
     @classmethod
     def _ensure_entry(cls, entry):
