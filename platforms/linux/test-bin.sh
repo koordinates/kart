@@ -11,7 +11,6 @@ ALL=(
     debian:testing-slim
     fedora:latest
     centos:7
-#   centos:8                # red build - no mirrors found
 )
 HERE=$(dirname "$(readlink -f "$0")")
 
