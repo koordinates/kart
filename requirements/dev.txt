@@ -76,7 +76,7 @@ pyparsing==3.0.6
     # via
     #   -c requirements/test.txt
     #   packaging
-pytest==6.2.5
+pytest==7.0.0
     # via
     #   -c requirements/test.txt
     #   pytest-forked
@@ -86,9 +86,10 @@ pytest-forked==1.4.0
 pytest-xdist==2.5.0
     # via -r requirements/dev.in
 toml==0.10.2
+    # via ipdb
+tomli==2.0.0
     # via
     #   -c requirements/test.txt
-    #   ipdb
     #   pytest
 traitlets==5.1.1
     # via
