@@ -96,7 +96,8 @@ def test_e2e(
 
             r = cli_runner.invoke(["diff"])
             assert r.exit_code == 0
-            assert re.match(fr"\+\+\+ {table}:feature:\d+$", r.stdout.splitlines()[0])
+            line = r.stdout.splitlines()[0]
+            assert re.match(fr"\+\+\+ {table}:feature:\d+$", line), line
 
             # commit it
             r = cli_runner.invoke(["commit", "-m", "commit-1"])
@@ -129,10 +130,12 @@ def test_e2e(
             # push
             r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])
             assert r.exit_code == 0
-            assert re.match(
-                r"Branch '?main'? set up to track remote branch '?main'? from '?myremote'?\.$",
-                r.stdout.splitlines()[0],
-            )
+            line = r.stdout.splitlines()[0]
+            patterns = [
+                r"[Bb]ranch '?main'? set up to track '?myremote/main'?\.$",
+                r"[Bb]ranch '?main'? set up to track remote branch '?main'? from '?myremote'?\.$",
+            ]
+            assert any(re.match(p, line) for p in patterns), line
 
             # check reflog
             r = cli_runner.invoke(["reflog"])
