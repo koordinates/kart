@@ -72,10 +72,10 @@ find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL 1.1 REQUIRED)
 find_package(ODBC 2.3.9 REQUIRED)
 find_package(LibGit2 1.3.0 REQUIRED)
-if(NOT LibGit2_HAS_ERROR_SUBCODE)
+if(NOT LibGit2_IS_KOORDINATES)
   message(
     FATAL_ERROR
-      "Found LibGit2 v${LibGit2_VERSION}, but git_error_subcode isn't defined. Build & install from https://github.com/koordinates/libgit2/tree/kx-latest"
+      "Found LibGit2 v${LibGit2_VERSION}, but some required patches aren't present. Build & install from https://github.com/koordinates/libgit2/tree/kx-latest"
   )
 endif()
 

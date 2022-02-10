@@ -64,21 +64,36 @@ find_package_handle_standard_args(
   VERSION_VAR LibGit2_VERSION)
 
 if(LibGit2_FOUND)
-  # check whether it has error subcodes ie: whether it's the Koordinates fork or it's been merged
-  # into upstream
   set(CMAKE_REQUIRED_INCLUDES ${LibGit2_INCLUDE_DIR})
-  set(CMAKE_EXTRA_INCLUDE_FILES "git2/errors.h")
   set(CMAKE_REQUIRED_QUIET ON)
-  check_type_size("git_error_subcode" error_subcode)
-  unset(CMAKE_REQUIRED_INCLUDES)
-  unset(CMAKE_EXTRA_INCLUDE_FILES)
-  unset(CMAKE_REQUIRED_QUIET)
 
-  if(HAVE_error_subcode)
-    set(LibGit2_HAS_ERROR_SUBCODE ON)
+  # Check whether all needed Koordinates changes are present
+  # (Either its the Koordinates fork, or they've been merged in)
+
+  # error subcodes https://github.com/libgit2/libgit2/pull/5993
+  set(CMAKE_EXTRA_INCLUDE_FILES "git2/errors.h")
+  check_type_size("git_error_subcode" error_subcode)
+  unset(CMAKE_EXTRA_INCLUDE_FILES)
+
+  # mempack additions https://github.com/libgit2/libgit2/pull/6209
+  set(CMAKE_EXTRA_INCLUDE_FILES "git2/sys/mempack.h")
+  check_type_size("git_mempack_flag_t" mempack_flags)
+  unset(CMAKE_EXTRA_INCLUDE_FILES)
+
+  # git_index_write_tree flags
+  set(CMAKE_EXTRA_INCLUDE_FILES "git2/index.h")
+  check_type_size("git_index_write_tree_t" write_tree_flags)
+  unset(CMAKE_EXTRA_INCLUDE_FILES)
+
+
+  if(HAVE_mempack_flags AND HAVE_error_subcode AND HAVE_write_tree_flags)
+    set(LibGit2_IS_KOORDINATES ON)
   endif()
 
-  mark_as_advanced(LibGit2_LIBRARY LibGit2_INCLUDE_DIR LibGit2_HAS_ERROR_SUBCODE)
+  unset(CMAKE_REQUIRED_QUIET)
+  unset(CMAKE_REQUIRED_INCLUDES)
+
+  mark_as_advanced(LibGit2_LIBRARY LibGit2_INCLUDE_DIR LibGit2_IS_KOORDINATES)
 
   if(NOT TARGET LibGit2::LibGit2)
     add_library(LibGit2::LibGit2 UNKNOWN IMPORTED)
@@ -88,11 +103,11 @@ if(LibGit2_FOUND)
                  IMPORTED_LINK_INTERFACE_LANGUAGES "C"
                  IMPORTED_LOCATION "${LibGit2_LIBRARY}")
 
-    if(LibGit2_HAS_ERROR_SUBCODE)
+    if(LibGit2_IS_KOORDINATES)
       set_property(
         TARGET LibGit2::LibGit2
         APPEND
-        PROPERTY INTERFACE_COMPILE_DEFINITIONS "LibGit2_HAS_ERROR_SUBCODE")
+        PROPERTY INTERFACE_COMPILE_DEFINITIONS "LibGit2_IS_KOORDINATES")
     endif()
   endif()
 endif()
