@@ -58,7 +58,11 @@ def get_repo_version(repo, tree=None):
 
     for r in REPOSTRUCTURE_VERSION_BLOB_PATHS.values():
         if r in tree:
-            return json.loads((tree / r).data)
+            try:
+                return json.loads((tree / r).data)
+            except KeyError:
+                # Must be some kind of filtered clone. Try our best not to crash:
+                return _get_repo_version_from_config(repo)
 
     # Versions less than 2 don't have a REPOSTRUCTURE_VERSION_BLOB, so must be 0 or 1.
     # We don't support these versions except when performing a `kart upgrade`.

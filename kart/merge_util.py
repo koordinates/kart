@@ -3,6 +3,7 @@ import functools
 import json
 import re
 
+import click
 import pygit2
 
 from .feature_output import feature_as_text, feature_as_json, feature_as_geojson
@@ -396,8 +397,9 @@ class VersionContext:
 class MergeContext:
     """The necessary context for categorising or outputting each conflict in a merge."""
 
-    def __init__(self, versions):
+    def __init__(self, repo, versions):
         """An AncestorOursTheirs of VersionContext objects."""
+        self.repo = repo
         self.versions = versions
 
     @classmethod
@@ -409,7 +411,7 @@ class MergeContext:
                 for n, c, s, b in zip(names3, commit_ids3, short_ids3, branches3)
             )
         )
-        return MergeContext(versions)
+        return MergeContext(repo, versions)
 
     @classmethod
     def from_commit_with_refs(cls, commit_with_refs3, repo):
@@ -546,6 +548,7 @@ class RichConflictVersion:
         return self.decoded_path[2]
 
     @property
+    @functools.lru_cache(maxsize=1)
     def feature(self):
         assert self.is_feature
         feature = self.dataset.get_feature(self.pk)
@@ -680,6 +683,31 @@ class RichConflict:
 def rich_conflicts(raw_conflicts, merge_context):
     """Convert a list of AncestorOursTheirs tuples of Entrys to a list of RichConflicts."""
     return (RichConflict(c, merge_context) for c in raw_conflicts)
+
+
+def ensure_conflicts_ready(rich_conflicts, repo):
+    from .promisor_utils import object_is_promised, fetch_promised_blobs
+
+    rich_conflicts = list(rich_conflicts)
+    if not rich_conflicts:
+        return rich_conflicts
+
+    missing_ids = set()
+    for c in rich_conflicts:
+        for v in c.true_versions:
+            try:
+                repo[v.id].size
+            except KeyError:
+                # We can't test if something is promised by the time its a conflict, unfortunately.
+                missing_ids.add(v.id)
+
+    if missing_ids:
+        click.echo(
+            f"Fetching {len(missing_ids)} missing but required conflicting versions of features...",
+            err=True,
+        )
+        fetch_promised_blobs(repo, missing_ids)
+    return rich_conflicts
 
 
 def merge_context_to_text(jdict):

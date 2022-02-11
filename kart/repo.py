@@ -263,7 +263,13 @@ class KartRepo(pygit2.Repository):
             )
             kart_repo.lock_git_index()
 
-        kart_repo.write_config(wc_location, bare, spatial_filter_spec)
+        kart_repo.write_config(
+            wc_location,
+            bare,
+            spatial_filter_spec,
+            repostructure_version=DEFAULT_NEW_REPO_VERSION,
+        )
+        kart_repo.write_attributes()
         kart_repo.write_readme()
         kart_repo.activate()
         return kart_repo
@@ -404,12 +410,15 @@ class KartRepo(pygit2.Repository):
         wc_location=None,
         bare=False,
         spatial_filter_spec=None,
+        repostructure_version=None,
     ):
         # Whichever of these variable is written, controls whether this repo is kart branded or not.
         version_key = KartConfigKeys.BRANDED_REPOSTRUCTURE_VERSION_KEYS[
             self.BRANDING_FOR_NEW_REPOS
         ]
-        self.config[version_key] = str(DEFAULT_NEW_REPO_VERSION)
+        if repostructure_version is None:
+            repostructure_version = self.version
+        self.config[version_key] = str(repostructure_version)
 
         # Bare-style Kart repos are always implemented as bare git repos:
         if self.is_bare_style:
@@ -426,6 +435,11 @@ class KartRepo(pygit2.Repository):
 
     def ensure_supported_version(self):
         ensure_supported_repo_version(self.version)
+
+    def write_attributes(self):
+        (self.gitdir_path / "info").mkdir(exist_ok=True)
+        with (self.gitdir_path / "info" / "attributes").open("a+") as f:
+            f.write("**/.table-dataset/feature/** merge=binary\n")
 
     def write_readme(self):
         readme_filename = f"{self.branding.upper()}_README.txt"

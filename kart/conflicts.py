@@ -7,7 +7,7 @@ from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .key_filters import RepoKeyFilter
-from .merge_util import MergeIndex, MergeContext, rich_conflicts
+from .merge_util import MergeIndex, MergeContext, rich_conflicts, ensure_conflicts_ready
 from .output_util import dump_json_output
 from .repo import KartRepoState
 
@@ -60,9 +60,15 @@ def list_conflicts(
         flat = True  # geojson must be flat or it is not valid geojson
         summarise = 0
 
-    conflicts = rich_conflicts(merge_index.unresolved_conflicts.values(), merge_context)
+    conflicts = rich_conflicts(
+        merge_index.unresolved_conflicts.values(),
+        merge_context,
+    )
     if not conflict_filter.match_all:
         conflicts = (c for c in conflicts if c.matches_filter(conflict_filter))
+
+    if not summarise:
+        conflicts = ensure_conflicts_ready(conflicts, merge_context.repo)
 
     for conflict in conflicts:
         if not summarise:
