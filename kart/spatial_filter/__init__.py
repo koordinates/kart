@@ -225,7 +225,7 @@ class SpatialFilterSpec:
         self.REF_KEY = KartConfigKeys.KART_SPATIALFILTER_REFERENCE
         self.OID_KEY = KartConfigKeys.KART_SPATIALFILTER_OBJECTID
 
-    def write_config(self, repo):
+    def write_config(self, repo, update_remote=None):
         """Writes this user-provied spatial-filter specification to the given repository's config."""
         raise NotImplementedError()
 
@@ -241,7 +241,7 @@ class SpatialFilterSpec:
         """Returns the envelope of the spatial filter geometry as a tuple (lng_w, lat_s, lng_e, lat_n), using WGS 84."""
         raise NotImplementedError()
 
-    def partial_clone_filter_spec(self):
+    def partial_clone_filter_spec(self, specify_in_full=True):
         """Approximates this spatial-filter so it can be parsed by git's custom spatial filter extension."""
         raise NotImplementedError()
 
@@ -266,18 +266,24 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
     def resolve(self, repo):
         return self
 
-    def write_config(self, repo):
+    def write_config(self, repo, update_remote=None):
         if self.match_all:
-            self.delete_all_config(repo)
+            self.delete_all_config(repo, update_remote=update_remote)
         else:
             repo.config[self.GEOM_KEY] = self.geometry.to_wkt()
             repo.config[self.CRS_KEY] = self.crs_spec
             repo.del_config(self.REF_KEY)
             repo.del_config(self.OID_KEY)
+            if update_remote:
+                repo.config[
+                    f"remote.{update_remote}.partialclonefilter"
+                ] = self.partial_clone_filter_spec(specify_in_full=False)
 
-    def delete_all_config(self, repo):
+    def delete_all_config(self, repo, update_remote=None):
         for key in (self.GEOM_KEY, self.CRS_KEY, self.REF_KEY, self.OID_KEY):
             repo.del_config(key)
+        if update_remote:
+            repo.del_config(f"remote.{update_remote}.partialclonefilter")
 
     def matches_working_copy(self, repo):
         working_copy = repo.working_copy
@@ -305,9 +311,15 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
         except RuntimeError as e:
             raise CrsError(f"Can't reproject spatial filter into EPSG:4326:\n{e}")
 
-    def partial_clone_filter_spec(self):
-        envelope = self.envelope_wgs84()
-        return "--filter=extension:spatial={0},{1},{2},{3}".format(*envelope)
+    def partial_clone_filter_spec(self, specify_in_full=True):
+        if self.match_all:
+            result = None
+        else:
+            envelope = self.envelope_wgs84()
+            result = "extension:spatial={0},{1},{2},{3}".format(*envelope)
+        if specify_in_full:
+            result = f"--filter={result}" if result else "--no-filter"
+        return result
 
     def is_within_envelope(self, envelope_wgs84):
         assert len(envelope_wgs84) == 4
@@ -397,8 +409,11 @@ class ReferenceSpatialFilterSpec(SpatialFilterSpec):
     def matches_working_copy(self, repo):
         return self.resolve(repo).matches_working_copy(repo)
 
-    def partial_clone_filter_spec(self):
-        return f"--filter=extension:spatial={self.ref_or_oid}"
+    def partial_clone_filter_spec(self, specify_in_full=True):
+        result = f"extension:spatial={self.ref_or_oid}"
+        if specify_in_full:
+            result = f"--filter={result}" if result else "--no-filter"
+        return result
 
     @classmethod
     def split_file(cls, contents):

@@ -127,29 +127,45 @@ def checkout(
     do_switch_commit = repo.head_commit != commit
 
     do_switch_spatial_filter = False
+    do_refetch = False
+    promisor_remote = None
     if spatial_filter_spec is not None:
         resolved_spatial_filter_spec = spatial_filter_spec.resolve(repo)
         do_switch_spatial_filter = (
             not resolved_spatial_filter_spec.matches_working_copy(repo)
         )
         fetched_envelope = get_partial_clone_envelope(repo)
-        if fetched_envelope and not resolved_spatial_filter_spec.is_within_envelope(
+        do_refetch = (
             fetched_envelope
-        ):
-            raise NotYetImplemented(
-                "Sorry, enlarging the spatial filter for a spatially filtered clone is not yet supported"
-            )
+            and not resolved_spatial_filter_spec.is_within_envelope(fetched_envelope)
+        )
 
     force = force or discard_changes
     if (do_switch_commit or do_switch_spatial_filter) and not force:
         ctx.obj.check_not_dirty(help_message=_DISCARD_CHANGES_HELP_MESSAGE)
 
-    if new_branch:
-        if new_branch in repo.branches:
-            raise click.BadParameter(
-                f"A branch named '{new_branch}' already exists.", param_hint="branch"
-            )
+    if new_branch and new_branch in repo.branches:
+        raise click.BadParameter(
+            f"A branch named '{new_branch}' already exists.", param_hint="branch"
+        )
 
+    # Finished pre-flight checks - start action:
+
+    if do_refetch:
+        from .promisor_utils import get_promisor_remote
+
+        spec = resolved_spatial_filter_spec.partial_clone_filter_spec()
+        spec_desc = (
+            f"git spatial filter extension {spec}" if "spatial" in spec else spec
+        )
+
+        click.echo(
+            f"Fetching missing but required features for new spatial filter using {spec_desc}"
+        )
+        promisor_remote = get_promisor_remote(repo)
+        repo.invoke_git("fetch", promisor_remote, "--repair", spec)
+
+    if new_branch:
         if _is_in_branches(refish, repo.branches.remote):
             click.echo(f"Creating new branch '{new_branch}' to track '{refish}'...")
             new_branch = repo.create_branch(new_branch, commit, force)
@@ -166,7 +182,7 @@ def checkout(
     from kart.working_copy.base import BaseWorkingCopy
 
     if spatial_filter_spec is not None:
-        spatial_filter_spec.write_config(repo)
+        spatial_filter_spec.write_config(repo, update_remote=promisor_remote)
 
     BaseWorkingCopy.ensure_config_exists(repo)
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)

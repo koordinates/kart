@@ -27,6 +27,7 @@ static const int OBJ_TREE = 2;
 static const int OBJ_BLOB = 3;
 static const int OBJ_TAG = 4;
 
+
 class EnvelopeEncoder {
     // Encodes and decodes bounding boxes - (w, s, e, n) tuples in degrees longitude / latitude.
 
@@ -152,14 +153,16 @@ class EnvelopeEncoder {
 };
 
 enum match_result {
+    MR_FILTER_NOT_APPLICABLE,
     MR_MATCH,
     MR_NOT_MATCHED,
     MR_ERROR,
 };
 
 struct filter_context {
-    int count = 0;
-    int match_count = 0;
+    int count = 0;           // Count of how many objects we have seen.
+    int match_count = 0;     // Count of matching features.
+    int nonmatch_count = 0;  // Count of non-matching features.
     uint64_t started_at = 0;
     sqlite3 *db = nullptr;
     sqlite3_stmt *lookup_stmt = nullptr;
@@ -218,7 +221,7 @@ enum match_result sf_filter_blob(
     // We are only spatial-filtering features - all non-feature data matches automatically.
     if (path.find("/.sno-dataset/feature/") == string::npos
         && path.find("/.table-dataset/feature/") == string::npos) {
-        return MR_MATCH;
+        return MR_FILTER_NOT_APPLICABLE;
     }
 
     sqlite3 *db = ctx->db;
@@ -342,7 +345,7 @@ enum list_objects_filter_result sf_filter_object(
         ctx->started_at = getnanotime();
     }
     if (++ctx->count % 10000 == 0) {
-        std::cerr << "Enumerating objects: " << ctx->match_count << "    (Spatial-filter has tested " << ctx->count << " objects)\r";
+        std::cerr << "\t\t\t\t    (Spatial-filter has found " << ctx->match_count << " matching features and " << ctx->nonmatch_count << " non-matching)\r";
     }
 
     switch (filter_situation) {
@@ -379,8 +382,12 @@ enum list_objects_filter_result sf_filter_object(
                 case MR_ERROR:
                     abort();
 
+                case MR_FILTER_NOT_APPLICABLE:
+                    return LOFR_MARK_SEEN_AND_DO_SHOW;
+
                 case MR_NOT_MATCHED:
                     *omit = LOFO_OMIT;
+                    ++ctx->nonmatch_count;
                     return LOFR_MARK_SEEN;
 
                 case MR_MATCH:
@@ -394,7 +401,7 @@ void sf_free(const struct repository* r, void *context) {
     struct filter_context *ctx = static_cast<struct filter_context*>(context);
 
     double elapsed = (getnanotime() - ctx->started_at) / 1e9;
-    std::cerr << "Enumerating objects: " << ctx->match_count << "    (Spatial-filter has tested " << ctx->count << " objects)\n";
+    std::cerr << "\n";
     sf_trace_printf(
         "count=%d matched=%d elapsed=%fs rate=%f/s average=%fus\n",
         ctx->count, ctx->match_count, elapsed, ctx->count/elapsed, elapsed/ctx->count*1e6

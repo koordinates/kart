@@ -358,6 +358,66 @@ def test_clone_with_spatial_filter(
         # test spatially filtered cloning separately from spatially filtered clone behaviour.
 
 
+def test_reclone_with_larger_spatial_filter(
+    git_with_spatial_filter_support, data_archive, cli_runner, tmp_path
+):
+    geom = SPATIAL_FILTER_GEOMETRY["polygons"]
+    crs = SPATIAL_FILTER_CRS["polygons"]
+
+    file_path = (tmp_path / "spatialfilter.txt").resolve()
+    file_path.write_text(f"{crs}\n\n{geom}\n", encoding="utf-8")
+
+    EMPTY_SPATIAL_FILTER = "EPSG:4326;POLYGON((0 0,0 1,1 1,1 0,0 0))"
+
+    with data_archive("polygons-with-feature-envelopes") as repo1_path:
+        repo1_url = f"file://{repo1_path.resolve()}"
+        # Clone repo using spatial filter
+        repo2_path = tmp_path / "repo2"
+        # TODO: Invert some of this test when --spatial-filter-during-clone is inverted.
+        r = cli_runner.invoke(
+            [
+                "clone",
+                repo1_url,
+                repo2_path,
+                f"--spatial-filter={EMPTY_SPATIAL_FILTER}",
+                "--spatial-filter-during-clone",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        repo2 = KartRepo(repo2_path)
+        with repo2.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 0
+        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == 0
+
+        r = cli_runner.invoke(
+            ["-C", repo2_path, "checkout", f"--spatial-filter=@{file_path}"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        with repo2.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == 46
+
+        r = cli_runner.invoke(["-C", repo2_path, "checkout", "--spatial-filter=none"])
+
+        with repo2.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == H.POLYGONS.ROWCOUNT
+        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
+
+        r = cli_runner.invoke(
+            ["-C", repo2_path, "checkout", f"--spatial-filter=@{file_path}"]
+        )
+        with repo2.working_copy.session() as sess:
+            assert H.row_count(sess, H.POLYGONS.LAYER) == 44
+        assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
+
+
+# The following test delves further into testing how spatial-filtered clones behave, but
+# it loads the same spatially filtered repo from the test data folder so that we can
+# test spatially filtered cloning separately from spatially filtered clone behaviour.
+
+
 def test_spatially_filtered_partial_clone(data_archive, cli_runner):
     crs = SPATIAL_FILTER_CRS["polygons"]
 
