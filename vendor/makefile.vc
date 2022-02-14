@@ -1,18 +1,18 @@
 PATH=$(MAKEDIR)\env\Scripts;$(PATH);C:\Program Files\7-zip;
 
-# v2.34.0
-GIT_VER=2.34.0
+# v2.34.0 + koordinates changes
+GIT_VER=v2.34.0.windows.1.13
+GIT_ARCHIVE=MinGit-$(GIT_VER)-64-bit.zip
 GIT_REPO=koordinates/git
-GIT_ARCHIVE=MinGit-v2.34.0.windows.1-64-bit.zip
-GIT_RELEASE=kart-0.11.0-windows-mingit-build
+GIT_RELEASE=kart-0.11.0-windows
 
 # v1.3.0 + koordinates changes
-LIBGIT2_REF=2f56a607c37d83cd3fe14676916953ba042cddc9
+LIBGIT2_REF=kart-v0.11.0
 LIBGIT2_REPO=koordinates/libgit2
 LIBGIT2_ARCHIVE=libgit2-$(LIBGIT2_REF).zip
 
 # v1.7.0 + koordinates changes
-PYGIT2_REF=47d5ccf0ba327edea3a2d63af47c093e36403908
+PYGIT2_REF=kart-v0.11.0
 PYGIT2_REPO=koordinates/pygit2
 PYGIT2_ARCHIVE=pygit2-$(PYGIT2_REF).zip
 PYGIT2_VER=1.7.0
@@ -75,7 +75,7 @@ git=dist\git
 git\$(GIT_ARCHIVE):
 	$(_PSDL) -Uri $(GIT_URL) -OutFile $@ $(_PSDLE)
 
-$(git): git\MinGit-v$(GIT_VER).windows.1-64-bit.zip
+$(git): git\$(GIT_ARCHIVE)
 	if not exist dist mkdir dist
 	7z x %s -o$@
 

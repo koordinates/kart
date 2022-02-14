@@ -1,5 +1,5 @@
 # v1.7.0 + koordinates changes
-PYGIT2_REF ?= 47d5ccf0ba327edea3a2d63af47c093e36403908
+PYGIT2_REF ?= kart-v0.11.0
 PYGIT2_REPO ?= koordinates/pygit2
 PYGIT2_ARCHIVE := pygit2-$(PYGIT2_REF).tar.gz
 

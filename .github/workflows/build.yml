@@ -6,7 +6,7 @@ on: [push, pull_request]
 env:
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
   LIBGIT2_REPO: koordinates/libgit2
-  LIBGIT2_TAG: kx-latest
+  LIBGIT2_TAG: kart-v0.11.0
 
 jobs:
   #

@@ -202,7 +202,7 @@ set(PYGIT2_WHEEL_VER 1.7.0)
 ExternalProject_Add(
   pygit2
   GIT_REPOSITORY https://github.com/koordinates/pygit2.git
-  GIT_TAG 47d5ccf0ba327edea3a2d63af47c093e36403908
+  GIT_TAG kart-v0.11.0
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv LibGit2::LibGit2
   EXCLUDE_FROM_ALL ON
