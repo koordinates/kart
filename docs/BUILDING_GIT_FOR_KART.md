@@ -29,20 +29,22 @@ The makefile that builds vendor dependencies for Kart on Windows is `vendor/make
 
 #### Installing the build environment
 1. Download and run the [Git for Windows SDK installer](https://gitforwindows.org/#download-sdk)
+
 #### Building Git for Kart
 1. An initial git clone and make should have already occurred when running the SDK installer.
 2. Open the *Git for Windows SDK* *MinGW* shell by double clicking either the Shortcut on the desktop `Git SDK 64-bit.lnk` or by double clicking `mingw64_shell.bat` in the install folder.
 3. Change directory to the Git repository: `cd /usr/src/git`
 4. Add `koordinates/git` as a remote: `git remote add kx https://github.com/koordinates/git`
-5. Fetch the branch with the source for the custom build of Git for Kart: `git fetch kx windows-list-objects-filter-extensions`
-6. Check out the branch that was just fetched: `git checkout windows-list-objects-filter-extensions`
-6. Change directory to the build-extra repository: `cd /usr/src/build-extra`
-7. Check out the main branch: `git fetch && git checkout main`
-8. Set a version name or number for the release: `VERSION=v2.34.0.windows.1`
-9. Build a portable release of Git: `./portable/release.sh $VERSION`
-#### Packaging Git for Kart and uploading it to GitHub.
-1. Run the executable that was created to install portable Git: `~/PortableGit-$VERSION-64-bit.7z.exe`
-2. Choose a folder to install portable Git to, and navigate to that folder.
-3. Zip everything in that folder into a zip: `7zip a ../MinGit-$VERSION-64-bit.zip -r *`
-4. Create a new release in the `koordinates/git` repository and attach the new zip as an artifact.
-5. Modify `vendor/makefile.vc` to download the new zip from the new release.
+5. Fetch the branch with the source for the custom build of Git for Kart: `git fetch kx windows-kx-latest`
+6. Check out the branch that was just fetched: `git checkout windows-kx-latest`
+7. Run `make install` to build and install the latest version of git.
+   > The first line of output will contain a version-number eg `2.34.0.windows.1.13.g93318cbc8d`. Using some or all of this string as the version number generally makes sense (see step 10 below) but you can customise the version number if desired.
+8. Check that the installed git (at `/mingw64/bin/git`) is the right version by running `git --version` and make sure it has the functionality you expect.
+9. Change directory to the build-extra repository: `cd /usr/src/build-extra`
+10. Check out the main branch: `git fetch && git checkout main`
+11. Set a version name or number for the release: `VERSION=v2.34.0.windows.1.13`
+12. Build a MinGit release of Git: `./mingit/release.sh $VERSION`. The script will create a new zip file in your home directory.
+
+#### Uploading to GitHub and using in a Kart release
+1. Create a new release in the `koordinates/git` repository and attach the new zip as an artifact.
+2. Modify `vendor/makefile.vc` to download the new zip from the new release.
