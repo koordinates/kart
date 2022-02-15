@@ -351,6 +351,7 @@ class KartRepo(pygit2.Repository):
             kart_repo.lock_git_index()
 
         kart_repo.write_config(wc_location, bare, spatial_filter_spec)
+        kart_repo.write_attributes()
         kart_repo.write_readme()
         kart_repo.activate()
         return kart_repo
