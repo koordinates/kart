@@ -208,6 +208,31 @@ def test_merge_true(
             assert rowcount == num_inserts
 
 
+def test_merge_shallow_clone(data_archive, tmp_path, cli_runner):
+    with data_archive("points") as repo1_path:
+        repo1_url = f"file://{repo1_path.resolve()}"
+        repo2_path = tmp_path / "repo2"
+
+        # Clone only 1 commit from repo with more than one commit:
+        r = cli_runner.invoke(["clone", repo1_url, repo2_path, "--depth=1"])
+        assert r.exit_code == 0, r.stderr
+
+        # Make a simple commit with that one commit as a parent.
+        r = cli_runner.invoke(["-C", repo2_path, "commit-files", "-m", "A1", "a=1"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["-C", repo2_path, "checkout", "HEAD^"])
+        assert r.exit_code == 0, r.stderr
+
+        # Make another simple commit that clearly doesn't conflict, with the same parent.
+        r = cli_runner.invoke(["-C", repo2_path, "commit-files", "-m", "B2", "b=2"])
+        assert r.exit_code == 0, r.stderr
+
+        # Merge them together.
+        r = cli_runner.invoke(["-C", repo2_path, "merge", "main", "-m", "merged"])
+        assert r.exit_code == 0, r.stderr
+
+
 @pytest.mark.parametrize(
     "data",
     [

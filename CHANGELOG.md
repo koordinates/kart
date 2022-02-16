@@ -16,6 +16,7 @@ Support for spatial filters - the spatial filter can be updated during an `init`
 * Bugfix: better error message when `kart import` fails due to multiple XML metadata files for a single dataset, which Kart does not support [#547](https://github.com/koordinates/kart/issues/547)
 * When there are two pieces of XML metadata for a single dataset, but one is simply a `GDALMultiDomainMetadata` wrapping the other, the wrapped version is ignored. [#547](https://github.com/koordinates/kart/issues/547)
 * Bugfix: fixed a bug preventing `checkout -b NEW_BRANCH HEAD^` and similar commands from working
+* Bugfix: fixed a bug where `kart merge` would fail in a shallow clone, in certain circumstances. [#555](https://github.com/koordinates/kart/issues/555)
 
 ## 0.10.8
 

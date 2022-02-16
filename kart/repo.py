@@ -780,6 +780,18 @@ class KartRepo(pygit2.Repository):
             revision = "HEAD"
         return super().revparse_ext(revision)
 
+    def merge_base(self, oid1, oid2):
+        # FIXME: Overridden to work around https://github.com/koordinates/kart/issues/555
+        # Caused by https://github.com/libgit2/libgit2/issues/6123
+        try:
+            args = ["git", "-C", self.path, "merge-base", str(oid1), str(oid2)]
+            output = subprocess.check_output(
+                args, encoding="utf8", env=tool_environment()
+            )
+            return pygit2.Oid(hex=output.strip())
+        except subprocess.CalledProcessError:
+            return None
+
     KART_COMMON_README = [
         "",
         "kart status",
