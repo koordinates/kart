@@ -61,7 +61,8 @@ To reference a spatial filter file on your filesystem, use an @ symbol followed 
 
 ### Current limitations
 
-- The spatial filter can be changed at any time but it cannot be enlarged beyond the spatial filter that was originally used during `kart clone`. [#537](https://github.com/koordinates/kart/issues/537)
+- Spatial filtering may not save much bandwidth or disk space in repositories where each individual feature takes very little room on disk. [#557](https://github.com/koordinates/kart/issues/557)
+- Repeatedly changing the spatial filter is not guaranteed to be more efficient than not using spatial filters at all [#558](https://github.com/koordinates/kart/issues/558)
 - If the repository you are cloning from has not been spatially indexed, all features must be downloaded before the filter can be applied. See [Indexing](#indexing)
 - The spatial filter cannot be set to a geometry that can't be transformed into the CRS for every dataset in the repository.
 - Currently indexing isn't very clever with respect to certain CRS changes. If the CRS for a dataset has been drastically changed at some point, then the index generated for that dataset, although accurate, can be very inefficient, resulting in inefficient clones. (If the CRS is changed but the new CRS is similar to the old one in that the features are all in approximately the same place regardless of which CRS is used to interpret them, then an efficient index will still be generated). [#538](https://github.com/koordinates/kart/issues/538)
