@@ -6,7 +6,7 @@ import re
 import click
 import pygit2
 
-from .feature_output import feature_as_text, feature_as_json, feature_as_geojson
+from .tabular.feature_output import feature_as_text, feature_as_json, feature_as_geojson
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
 from .utils import ungenerator

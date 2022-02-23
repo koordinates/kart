@@ -9,7 +9,7 @@ import click
 from .base_diff_writer import BaseDiffWriter
 
 from .output_util import format_wkt_for_output, resolve_output_path
-from .feature_output import feature_as_text, feature_field_as_text
+from .tabular.feature_output import feature_as_text, feature_field_as_text
 from .tabular.schema import Schema
 
 

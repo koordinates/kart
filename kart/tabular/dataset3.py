@@ -8,7 +8,12 @@ import pygit2
 from kart import crs_util
 from .dataset3_paths import PathEncoder
 from .rich_base_dataset import RichBaseDataset
-from kart.exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
+from kart.exceptions import (
+    InvalidOperation,
+    NotYetImplemented,
+    PATCH_DOES_NOT_APPLY,
+    UNSUPPORTED_VERSION,
+)
 from .meta_items import ATTACHMENT_META_ITEMS
 from .schema import Legend, Schema
 from kart.serialise_util import (
@@ -111,7 +116,6 @@ class Dataset3(RichBaseDataset):
         if capabilities is not None:
             from .output_util import dump_json_output
             from .cli import get_version
-            from .exceptions import UNSUPPORTED_VERSION
 
             click.echo(
                 f"The dataset at {self.path} requires the following capabilities which Kart {get_version()} does not support:",

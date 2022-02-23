@@ -13,7 +13,7 @@ from .diff_estimation import (
     ThreadTerminated,
 )
 from .diff_structs import DatasetDiff
-from .feature_output import feature_as_json, feature_as_geojson
+from .tabular.feature_output import feature_as_json, feature_as_geojson
 from .log import commit_obj_to_json
 from .output_util import dump_json_output, resolve_output_path
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
