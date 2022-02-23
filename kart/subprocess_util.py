@@ -1,10 +1,10 @@
-from . import is_windows
-
 import asyncio
 import sys
 from asyncio import IncompleteReadError, LimitOverrunError
 from asyncio.subprocess import PIPE
 from functools import partial
+
+from . import is_windows
 
 
 @asyncio.coroutine
@@ -17,7 +17,7 @@ def read_stream_and_display(stream, display):
             break
         output.append(line)
         display(line)  # assume it doesn't block
-    return b''.join(output)
+    return b"".join(output)
 
 
 @asyncio.coroutine
@@ -49,7 +49,7 @@ def read_and_display(cmd, **kwargs):
 
 async def read_universal_line(stream):
     """Read chunk of data from the stream until a newline char '\r' or '\n' is found."""
-    separators = b'\r\n'
+    separators = b"\r\n"
     try:
         line = await read_until_any_of(stream, separators)
     except IncompleteReadError as e:
@@ -64,10 +64,10 @@ async def read_universal_line(stream):
     return line
 
 
-async def read_until_any_of(stream, separators=b'\n'):
+async def read_until_any_of(stream, separators=b"\n"):
     """Read data from the stream until any of the separator chars are found."""
     if len(separators) < 1:
-        raise ValueError('separators should be at least one-byte string')
+        raise ValueError("separators should be at least one-byte string")
 
     if stream._exception is not None:
         raise stream._exception
@@ -98,7 +98,7 @@ async def read_until_any_of(stream, separators=b'\n'):
             offset = buflen
             if offset > stream._limit:
                 raise LimitOverrunError(
-                    'Separator is not found, and chunk exceed the limit', offset
+                    "Separator is not found, and chunk exceed the limit", offset
                 )
 
         # Complete message (with full separator) may be present in buffer
@@ -111,11 +111,11 @@ async def read_until_any_of(stream, separators=b'\n'):
             raise IncompleteReadError(chunk, None)
 
         # _wait_for_data() will resume reading if stream was paused.
-        await stream._wait_for_data('readuntil')
+        await stream._wait_for_data("readuntil")
 
     if isep > stream._limit:
         raise LimitOverrunError(
-            'Separator is found, but chunk is longer than limit', isep
+            "Separator is found, but chunk is longer than limit", isep
         )
 
     chunk = stream._buffer[: isep + 1]

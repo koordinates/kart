@@ -1,6 +1,7 @@
-import sqlalchemy
-from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer, PGDialect
 import psycopg2
+
+import sqlalchemy
+from sqlalchemy.dialects.postgresql.base import PGDialect, PGIdentifierPreparer
 
 from .base import BaseDb
 

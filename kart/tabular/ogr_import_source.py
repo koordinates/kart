@@ -5,26 +5,24 @@ import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
-
 import click
 from osgeo import gdal, ogr
 
-
-from . import crs_util
-from .exceptions import (
+from kart import crs_util
+from kart.exceptions import (
+    NO_IMPORT_SOURCE,
+    NO_TABLE,
     InvalidOperation,
     NotFound,
     NotYetImplemented,
-    NO_IMPORT_SOURCE,
-    NO_TABLE,
 )
-from .geometry import ogr_to_gpkg_geom
-from .import_source import ImportSource
-from .ogr_util import get_type_value_adapter
-from .output_util import dump_json_output
-from .schema import Schema, ColumnSchema
-from .utils import ungenerator, chunk
+from kart.geometry import ogr_to_gpkg_geom
+from kart.ogr_util import get_type_value_adapter
+from kart.output_util import dump_json_output
+from kart.utils import chunk, ungenerator
 
+from .import_source import ImportSource
+from .schema import ColumnSchema, Schema
 
 # This defines what formats are allowed, as well as mapping
 # Kart prefixes onto an OGR format shortname.

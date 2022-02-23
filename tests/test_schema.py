@@ -5,7 +5,7 @@ import pytest
 
 from kart.geometry import Geometry
 from kart.repo import KartRepo
-from kart.schema import Schema, ColumnSchema
+from kart.tabular.schema import Schema, ColumnSchema
 from kart.text_diff_writer import TextDiffWriter
 
 

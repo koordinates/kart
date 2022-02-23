@@ -1,8 +1,8 @@
 import json
-from pathlib import Path
 import string
 import sys
 import webbrowser
+from pathlib import Path
 
 import click
 

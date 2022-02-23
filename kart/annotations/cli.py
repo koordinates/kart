@@ -3,10 +3,10 @@ import sys
 import click
 import pygit2
 
-from .db import annotations_session, is_db_writable
-
 from kart.diff_estimation import estimate_diff_feature_counts
 from kart.exceptions import InvalidOperation
+
+from .db import annotations_session, is_db_writable
 
 EMPTY_TREE_SHA = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 

@@ -7,8 +7,8 @@ __all__ = (
     "prefix",
 )
 
-import os
 import logging
+import os
 import platform
 import sys
 

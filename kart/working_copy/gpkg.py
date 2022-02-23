@@ -7,20 +7,19 @@ from pathlib import Path
 
 import click
 from osgeo import gdal
+
 import sqlalchemy as sa
+from kart import crs_util
+from kart.exceptions import InvalidOperation
+from kart.sqlalchemy import text_with_inlined_params
+from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
+from kart.tabular.schema import Schema
 from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
-
 from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
-from .table_defs import GpkgTables, GpkgKartTables
-from kart import crs_util
-from kart.exceptions import InvalidOperation
-from kart.schema import Schema
-from kart.sqlalchemy import text_with_inlined_params
-from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
-
+from .table_defs import GpkgKartTables, GpkgTables
 
 L = logging.getLogger("kart.working_copy.gpkg")
 

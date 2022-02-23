@@ -2,12 +2,11 @@ import sys
 
 import click
 
+from . import diff_estimation
 from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
-
 from .output_util import dump_json_output
 from .repo import KartRepoState
-from . import diff_estimation
 
 
 def feature_count_diff(

@@ -1,27 +1,26 @@
-from enum import Enum, auto
-import re
 import functools
 import logging
 import os
+import re
 import sys
+from enum import Enum, auto
 
 import click
 
-from kart.cli_util import add_help_subcommand, StringFromFile
+from kart.cli_util import StringFromFile, add_help_subcommand
 from kart.crs_util import make_crs
 from kart.exceptions import (
+    NO_SPATIAL_FILTER,
     CrsError,
     GeometryError,
     NotFound,
     NotYetImplemented,
-    NO_SPATIAL_FILTER,
 )
-from kart.geometry import geometry_from_string, GeometryType
+from kart.geometry import GeometryType, geometry_from_string
 from kart.output_util import dump_json_output
 from kart.promisor_utils import object_is_promised
 from kart.repo import KartRepoState
 from kart.serialise_util import hexhash
-
 
 L = logging.getLogger("kart.spatial_filter")
 

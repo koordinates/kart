@@ -1,9 +1,9 @@
 import click
 
+from . import diff_estimation
 from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
 from .repo import KartRepoState
-from . import diff_estimation
 
 
 @click.command()

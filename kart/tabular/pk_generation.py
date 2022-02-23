@@ -1,8 +1,7 @@
 import pygit2
 
+from .dataset2 import Dataset2, Dataset3
 from .import_source import ImportSource
-from .dataset2 import Dataset2
-from .dataset2 import Dataset3
 from .schema import ColumnSchema
 
 

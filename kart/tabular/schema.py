@@ -1,18 +1,18 @@
-from collections import namedtuple
 import functools
 import re
 import uuid
+from collections import namedtuple
 
 import pygit2
 
-from .geometry import Geometry
-from .serialise_util import (
-    msg_pack,
-    msg_unpack,
+from kart.geometry import Geometry
+from kart.serialise_util import (
+    hexhash,
     json_pack,
     json_unpack,
+    msg_pack,
+    msg_unpack,
     sha256,
-    hexhash,
 )
 
 

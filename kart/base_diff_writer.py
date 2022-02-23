@@ -1,23 +1,17 @@
 import itertools
 import logging
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 import click
 
 from . import diff_util
 from .diff_structs import WORKING_COPY_EDIT
-from .exceptions import (
-    CrsError,
-    InvalidOperation,
-    NotFound,
-    NO_WORKING_COPY,
-)
+from .exceptions import NO_WORKING_COPY, CrsError, InvalidOperation, NotFound
 from .key_filters import RepoKeyFilter
-from .promisor_utils import object_is_promised, FetchPromisedBlobsProcess
+from .promisor_utils import FetchPromisedBlobsProcess, object_is_promised
 from .spatial_filter import SpatialFilter
-
 
 L = logging.getLogger("kart.diff_writer")
 
@@ -342,7 +336,7 @@ class BaseDiffWriter:
                 self.spatial_filter_pk_conflicts[ds_path].append(key)
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
-        from kart.schema import Schema
+        from kart.tabular.schema import Schema
 
         old_schema = new_schema = None
         schema_delta = ds_diff.recursive_get(["meta", "schema.json"])

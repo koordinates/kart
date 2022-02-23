@@ -6,19 +6,18 @@ import click
 import pygit2
 
 from .exceptions import (
-    InvalidOperation,
-    NotFound,
-    NotYetImplemented,
     NO_CHANGES,
     NO_COMMIT,
     PATCH_DOES_NOT_APPLY,
     SCHEMA_VIOLATION,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
 )
 from .pack_util import packfile_object_builder
 from .repo_version import extra_blobs_for_version
-from .schema import Schema
 from .structs import CommitWithReference
-
+from .tabular.schema import Schema
 
 L = logging.getLogger("kart.structure")
 

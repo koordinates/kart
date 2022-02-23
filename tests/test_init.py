@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from kart.base_dataset import BaseDataset
+from kart.tabular.base_dataset import BaseDataset
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.repo import KartRepo
 from kart.exceptions import (

@@ -1,5 +1,4 @@
 import re
-
 from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 

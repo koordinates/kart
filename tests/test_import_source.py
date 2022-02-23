@@ -4,7 +4,7 @@ from osgeo import gdal
 
 import pytest
 
-from kart.ogr_import_source import postgres_url_to_ogr_conn_str
+from kart.tabular.ogr_import_source import postgres_url_to_ogr_conn_str
 from kart.repo import KartRepo
 
 

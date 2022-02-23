@@ -4,15 +4,15 @@ import sys
 import click
 
 from . import commit
-from .cli_util import call_and_exit_flag, StringFromFile
+from .cli_util import StringFromFile, call_and_exit_flag
 from .conflicts import list_conflicts
 from .diff_util import get_repo_diff
 from .exceptions import InvalidOperation
 from .merge_util import (
-    AncestorOursTheirs,
-    MergeIndex,
-    MergeContext,
     ALL_MERGE_FILES,
+    AncestorOursTheirs,
+    MergeContext,
+    MergeIndex,
     merge_status_to_text,
     write_merged_index_flags,
 )
@@ -20,7 +20,6 @@ from .output_util import dump_json_output
 from .pack_util import write_to_packfile
 from .repo import KartRepoFiles, KartRepoState
 from .structs import CommitWithReference
-
 
 L = logging.getLogger("kart.merge")
 

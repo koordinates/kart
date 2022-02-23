@@ -4,7 +4,7 @@ import subprocess
 import click
 
 from .cli_util import tool_environment
-from .exceptions import NotFound, NO_WORKING_COPY
+from .exceptions import NO_WORKING_COPY, NotFound
 from .geometry import normalise_gpkg_geom
 from .sqlalchemy.gpkg import Db_GPKG
 

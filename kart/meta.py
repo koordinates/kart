@@ -1,31 +1,30 @@
-import json
 import io
+import json
 
 import click
 import pygit2
 
 from .apply import apply_patch
+from .checkout import reset_wc_if_needed
 from .cli_util import (
+    OutputFormatType,
     StringFromFile,
     add_help_subcommand,
-    value_optionally_from_text_file,
-    value_optionally_from_binary_file,
-    OutputFormatType,
     parse_output_format,
+    value_optionally_from_binary_file,
+    value_optionally_from_text_file,
 )
-from .checkout import reset_wc_if_needed
-from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
-from .meta_items import META_ITEM_NAMES
+from .exceptions import NO_CHANGES, InvalidOperation, NotFound, NotYetImplemented
 from .output_util import (
     dump_json_output,
     format_json_for_output,
     format_wkt_for_output,
-    write_with_indent,
     resolve_output_path,
     wrap_text_to_terminal,
+    write_with_indent,
 )
 from .pack_util import packfile_object_builder
-
+from .tabular.meta_items import META_ITEM_NAMES
 
 # Changing these items would generally break the repo;
 # we disallow that.

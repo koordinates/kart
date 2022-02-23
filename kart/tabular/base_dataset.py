@@ -1,18 +1,20 @@
 from __future__ import annotations
+
 import functools
 import logging
 import time
 
-from . import crs_util
-from .import_source import ImportSource
-from . import meta_items
-from .exceptions import InvalidOperation
-from .promisor_utils import LibgitSubcode
-from .serialise_util import json_unpack, ensure_text
-from .spatial_filter import SpatialFilter
-from .utils import ungenerator
+from kart import crs_util
+from kart.exceptions import InvalidOperation
+from kart.promisor_utils import LibgitSubcode
+from kart.serialise_util import ensure_text, json_unpack
+from kart.spatial_filter import SpatialFilter
+from kart.utils import ungenerator
 
-L = logging.getLogger("kart.base_dataset")
+from . import meta_items
+from .import_source import ImportSource
+
+L = logging.getLogger("kart.tabular.base_dataset")
 
 
 class BaseDataset(ImportSource):
@@ -253,7 +255,7 @@ class BaseDataset(ImportSource):
         if missing_ok:
             return None
         else:
-            detail = f": {key_error.args[0]}" if key_error is not None else ''
+            detail = f": {key_error.args[0]}" if key_error is not None else ""
             k = KeyError(
                 f"No data found at rel-path {rel_path}, type={type(leaf)}{detail}"
             )

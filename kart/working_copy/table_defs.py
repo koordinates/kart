@@ -1,3 +1,4 @@
+from kart.sqlalchemy import TableSet
 from sqlalchemy import (
     Column,
     Float,
@@ -8,10 +9,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-
 from sqlalchemy.types import NVARCHAR, VARCHAR
-
-from kart.sqlalchemy import TableSet
 
 
 class TinyInt(Integer):

@@ -3,18 +3,14 @@ import importlib
 import logging
 import os
 import re
-import sys
 import subprocess
+import sys
 
 import click
 import pygit2
 
 from . import core  # noqa
-from .cli_util import (
-    add_help_subcommand,
-    call_and_exit_flag,
-    tool_environment,
-)
+from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment
 from .context import Context
 from .exec import execvp
 
@@ -75,8 +71,8 @@ def print_version(ctx):
     import psycopg2
     import pysqlite3
     import rtree
-    import sqlalchemy
 
+    import sqlalchemy
     from kart.sqlalchemy.gpkg import Db_GPKG
 
     click.echo(f"Kart v{get_version()}, Copyright (c) Kart Contributors")

@@ -1,7 +1,7 @@
 import html
 
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
-from kart.schema import Schema
+from kart.tabular.schema import Schema
 
 V2_SCHEMA_DATA = [
     {

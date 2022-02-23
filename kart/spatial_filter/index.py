@@ -7,24 +7,22 @@ import sys
 import time
 
 import click
-from osgeo import osr, ogr
 import pygit2
+from osgeo import ogr, osr
 from pysqlite3 import dbapi2 as sqlite
-from sqlalchemy import Column, Table
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.types import BLOB
-
 
 from kart.cli_util import tool_environment
 from kart.crs_util import make_crs, normalise_wkt
-from kart.exceptions import SubprocessError, InvalidOperation
+from kart.exceptions import InvalidOperation, SubprocessError
 from kart.geometry import Geometry
 from kart.repo import KartRepoFiles
 from kart.serialise_util import msg_unpack
-from kart.structs import CommitWithReference
 from kart.sqlalchemy import TableSet
 from kart.sqlalchemy.sqlite import sqlite_engine
-
+from kart.structs import CommitWithReference
+from sqlalchemy import Column, Table
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.types import BLOB
 
 L = logging.getLogger("kart.spatial_filter.index")
 
@@ -63,7 +61,7 @@ def _revlist_command(repo):
     ]
 
 
-DS_PATH_PATTERN = r'(.+)/\.(sno|table)-dataset/'
+DS_PATH_PATTERN = r"(.+)/\.(sno|table)-dataset/"
 
 
 def _parse_revlist_output(repo, line_iter, rel_path_pattern):

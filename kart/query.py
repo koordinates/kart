@@ -8,7 +8,6 @@ import click
 from .exceptions import NotFound
 from .output_util import dump_json_output
 
-
 L = logging.getLogger("kart.query")
 
 

@@ -1,15 +1,15 @@
 import functools
 import io
 import json
-import jsonschema
 import os
 import platform
 import warnings
 from pathlib import Path
 
 import click
-from click.core import Argument
+import jsonschema
 import pygit2
+from click.core import Argument
 
 
 def _pygit2_configs():

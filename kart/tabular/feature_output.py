@@ -1,9 +1,8 @@
 import json
 
-
-from .exceptions import InvalidOperation
-from .geometry import Geometry, GeometryType, ogr_to_hex_wkb
-from .utils import ungenerator
+from kart.exceptions import InvalidOperation
+from kart.geometry import Geometry, ogr_to_hex_wkb
+from kart.utils import ungenerator
 
 
 def feature_as_text(row, prefix=""):

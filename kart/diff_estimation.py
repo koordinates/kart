@@ -5,7 +5,6 @@ import pygit2
 
 from kart.exceptions import SubprocessError
 
-
 ACCURACY_SUBTREE_SAMPLES = {
     "veryfast": 2,
     "fast": 16,
