@@ -11,8 +11,8 @@ import pygit2
 import pytest
 
 from kart import init, fast_import
-from kart.dataset3 import Dataset3
-from kart.dataset3_paths import IntPathEncoder, MsgpackHashPathEncoder
+from kart.tabular.dataset3 import Dataset3
+from kart.tabular.dataset3_paths import IntPathEncoder, MsgpackHashPathEncoder
 from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.tabular.schema import Schema

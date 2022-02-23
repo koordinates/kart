@@ -9,7 +9,7 @@ import msgpack
 import pygit2
 
 from kart.geometry import Geometry
-from kart.base_dataset import BaseDataset
+from kart.tabular.base_dataset import BaseDataset
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.utils import ungenerator

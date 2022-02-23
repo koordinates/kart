@@ -1,4 +1,4 @@
-from kart.dataset3 import Dataset3
+from kart.tabular.dataset3 import Dataset3
 from kart.tabular.schema import Legend, ColumnSchema, Schema
 
 

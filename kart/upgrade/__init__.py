@@ -7,7 +7,7 @@ import pygit2
 
 
 from kart import checkout, context
-from kart.dataset2 import Dataset2
+from kart.tabular.dataset2 import Dataset2
 from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import fast_import_tables, ReplaceExisting
 from kart.repo import KartRepo, KartConfigKeys

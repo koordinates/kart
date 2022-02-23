@@ -8,7 +8,7 @@ from osgeo import gdal
 
 from kart import is_windows
 from . import checkout
-from .base_dataset import BaseDataset
+from .tabular.base_dataset import BaseDataset
 from .core import check_git_user
 from .cli_util import (
     call_and_exit_flag,

@@ -6,18 +6,18 @@ import time
 from osgeo import osr
 
 
-from . import crs_util
+from kart import crs_util
 from .base_dataset import BaseDataset
-from .diff_structs import DatasetDiff, DeltaDiff, Delta
-from .exceptions import (
+from kart.diff_structs import DatasetDiff, DeltaDiff, Delta
+from kart.exceptions import (
     InvalidOperation,
     NotYetImplemented,
     PATCH_DOES_NOT_APPLY,
 )
-from .key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
-from .tabular.schema import Schema
-from .spatial_filter import SpatialFilter
-from .promisor_utils import object_is_promised, fetch_promised_blobs
+from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
+from .schema import Schema
+from kart.spatial_filter import SpatialFilter
+from kart.promisor_utils import object_is_promised, fetch_promised_blobs
 
 
 class RichBaseDataset(BaseDataset):

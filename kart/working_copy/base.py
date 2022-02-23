@@ -7,7 +7,7 @@ import click
 import pygit2
 import sqlalchemy as sa
 
-from kart.base_dataset import BaseDataset
+from kart.tabular.base_dataset import BaseDataset
 from kart.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
 from kart.exceptions import (
     InvalidOperation,

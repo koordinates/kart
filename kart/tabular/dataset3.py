@@ -5,13 +5,13 @@ import sys
 import click
 import pygit2
 
-from . import crs_util
+from kart import crs_util
 from .dataset3_paths import PathEncoder
 from .rich_base_dataset import RichBaseDataset
-from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
-from .meta_items import ATTACHMENT_META_ITEMS
-from .tabular.schema import Legend, Schema
-from .serialise_util import (
+from kart.exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
+from kart.meta_items import ATTACHMENT_META_ITEMS
+from .schema import Legend, Schema
+from kart.serialise_util import (
     msg_pack,
     msg_unpack,
     json_pack,
@@ -20,7 +20,7 @@ from .serialise_util import (
     ensure_bytes,
     ensure_text,
 )
-from .utils import ungenerator
+from kart.utils import ungenerator
 
 
 def find_blobs_in_tree(tree, max_depth=4):

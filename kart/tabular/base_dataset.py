@@ -3,16 +3,16 @@ import functools
 import logging
 import time
 
-from . import crs_util
-from .import_source import ImportSource
-from . import meta_items
-from .exceptions import InvalidOperation
-from .promisor_utils import LibgitSubcode
-from .serialise_util import json_unpack, ensure_text
-from .spatial_filter import SpatialFilter
-from .utils import ungenerator
+from kart import crs_util
+from kart.import_source import ImportSource
+from kart import meta_items
+from kart.exceptions import InvalidOperation
+from kart.promisor_utils import LibgitSubcode
+from kart.serialise_util import json_unpack, ensure_text
+from kart.spatial_filter import SpatialFilter
+from kart.utils import ungenerator
 
-L = logging.getLogger("kart.base_dataset")
+L = logging.getLogger("kart.tabular.base_dataset")
 
 
 class BaseDataset(ImportSource):
