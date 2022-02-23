@@ -8,8 +8,7 @@ from osgeo import gdal
 from kart import is_windows
 
 from . import checkout
-from .cli_util import (JsonFromFile, MutexOption, StringFromFile,
-                       call_and_exit_flag)
+from .cli_util import JsonFromFile, MutexOption, StringFromFile, call_and_exit_flag
 from .core import check_git_user
 from .exceptions import InvalidOperation
 from .fast_import import ReplaceExisting, fast_import_tables

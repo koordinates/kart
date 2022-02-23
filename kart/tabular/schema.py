@@ -6,8 +6,14 @@ from collections import namedtuple
 import pygit2
 
 from kart.geometry import Geometry
-from kart.serialise_util import (hexhash, json_pack, json_unpack, msg_pack,
-                                 msg_unpack, sha256)
+from kart.serialise_util import (
+    hexhash,
+    json_pack,
+    json_unpack,
+    msg_pack,
+    msg_unpack,
+    sha256,
+)
 
 
 class Legend:

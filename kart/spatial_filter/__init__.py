@@ -9,8 +9,13 @@ import click
 
 from kart.cli_util import StringFromFile, add_help_subcommand
 from kart.crs_util import make_crs
-from kart.exceptions import (NO_SPATIAL_FILTER, CrsError, GeometryError,
-                             NotFound, NotYetImplemented)
+from kart.exceptions import (
+    NO_SPATIAL_FILTER,
+    CrsError,
+    GeometryError,
+    NotFound,
+    NotYetImplemented,
+)
 from kart.geometry import GeometryType, geometry_from_string
 from kart.output_util import dump_json_output
 from kart.promisor_utils import object_is_promised
@@ -134,8 +139,12 @@ def index(ctx, clear_existing, dry_run, debug, commits):
     Indexes all features added by the supplied commits and their ancestors.
     If no commits are supplied, indexes all features in all commits.
     """
-    from .index import (debug_index, resolve_all_commit_refs, resolve_commits,
-                        update_spatial_filter_index)
+    from .index import (
+        debug_index,
+        resolve_all_commit_refs,
+        resolve_commits,
+        update_spatial_filter_index,
+    )
 
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
 

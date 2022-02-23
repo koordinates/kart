@@ -11,8 +11,11 @@ import pygit2
 from .cli_util import tool_environment
 from .exceptions import NO_CHANGES, InvalidOperation, NotFound, SubprocessError
 from .object_builder import ObjectBuilder
-from .repo_version import (SUPPORTED_REPO_VERSIONS, dataset_class_for_version,
-                           extra_blobs_for_version)
+from .repo_version import (
+    SUPPORTED_REPO_VERSIONS,
+    dataset_class_for_version,
+    extra_blobs_for_version,
+)
 from .structure import Datasets
 from .tabular.import_source import ImportSource
 from .tabular.pk_generation import PkGeneratingImportSource

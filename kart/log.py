@@ -9,8 +9,12 @@ import click
 import pygit2
 
 from . import diff_estimation
-from .cli_util import (OutputFormatType, RemovalInKart012Warning,
-                       parse_output_format, tool_environment)
+from .cli_util import (
+    OutputFormatType,
+    RemovalInKart012Warning,
+    parse_output_format,
+    tool_environment,
+)
 from .exceptions import NotYetImplemented, SubprocessError
 from .exec import execvp
 from .key_filters import RepoKeyFilter

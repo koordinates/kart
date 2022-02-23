@@ -4,8 +4,7 @@ from pysqlite3 import dbapi2 as sqlite
 
 import sqlalchemy
 from kart import spatialite_path
-from sqlalchemy.dialects.sqlite.base import (SQLiteDialect,
-                                             SQLiteIdentifierPreparer)
+from sqlalchemy.dialects.sqlite.base import SQLiteDialect, SQLiteIdentifierPreparer
 
 from .base import BaseDb
 

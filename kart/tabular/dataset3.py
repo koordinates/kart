@@ -6,10 +6,21 @@ import click
 import pygit2
 
 from kart import crs_util
-from kart.exceptions import (PATCH_DOES_NOT_APPLY, UNSUPPORTED_VERSION,
-                             InvalidOperation, NotYetImplemented)
-from kart.serialise_util import (b64decode_str, ensure_bytes, ensure_text,
-                                 json_pack, json_unpack, msg_pack, msg_unpack)
+from kart.exceptions import (
+    PATCH_DOES_NOT_APPLY,
+    UNSUPPORTED_VERSION,
+    InvalidOperation,
+    NotYetImplemented,
+)
+from kart.serialise_util import (
+    b64decode_str,
+    ensure_bytes,
+    ensure_text,
+    json_pack,
+    json_unpack,
+    msg_pack,
+    msg_unpack,
+)
 from kart.utils import ungenerator
 
 from .dataset3_paths import PathEncoder

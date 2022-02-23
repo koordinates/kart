@@ -92,11 +92,11 @@ class WorkingCopy_MySql(DatabaseServer_WorkingCopy):
 
             if existing_crs:
                 # Don't overwrite existing CRS definitions if they are built-ins. Doing so is an error in MYSQL:
-                if existing_crs['ORGANIZATION'] == "EPSG":
+                if existing_crs["ORGANIZATION"] == "EPSG":
                     continue
                 # Don't try to replace a CRS if a matching one already exists - overwriting a CRS with an identical
                 # CRS is a no-op, but one which requires certain permissions, so we avoid it if we can.
-                if existing_crs['DEFINITION'] == crs['definition']:
+                if existing_crs["DEFINITION"] == crs["definition"]:
                     continue
                 # Don't replace a CRS definition if it is currently being referenced. Doing so is an error in MySQL.
                 if sess.scalar(

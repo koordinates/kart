@@ -1,6 +1,14 @@
 from kart.sqlalchemy import TableSet
-from sqlalchemy import (Column, Float, ForeignKey, Integer, MetaData, Table,
-                        Text, UniqueConstraint)
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    MetaData,
+    Table,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.types import NVARCHAR, VARCHAR
 
 

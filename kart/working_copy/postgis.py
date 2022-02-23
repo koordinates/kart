@@ -128,11 +128,11 @@ class WorkingCopy_Postgis(DatabaseServer_WorkingCopy):
 
             if existing_crs:
                 # Don't overwrite existing CRS definitions if they are built-ins.
-                if existing_crs['auth_name'] in ("EPSG", "ESRI"):
+                if existing_crs["auth_name"] in ("EPSG", "ESRI"):
                     continue
                 # Don't try to replace a CRS if a matching one already exists - overwriting a CRS with an identical
                 # CRS is a no-op, but one which requires certain permissions, so we avoid it if we can.
-                if existing_crs['srtext'] == crs['srtext']:
+                if existing_crs["srtext"] == crs["srtext"]:
                     continue
                 # Don't replace a CRS definition if it is currently being referenced.
                 if sess.scalar(

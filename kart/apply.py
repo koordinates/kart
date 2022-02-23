@@ -7,8 +7,14 @@ import click
 import pygit2
 
 from .diff_structs import Delta, DeltaDiff, KeyValue, RepoDiff
-from .exceptions import (NO_TABLE, NO_WORKING_COPY, PATCH_DOES_NOT_APPLY,
-                         InvalidOperation, NotFound, NotYetImplemented)
+from .exceptions import (
+    NO_TABLE,
+    NO_WORKING_COPY,
+    PATCH_DOES_NOT_APPLY,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
+)
 from .geometry import hex_wkb_to_gpkg_geom
 from .tabular.schema import Schema
 from .timestamps import iso8601_tz_to_timedelta, iso8601_utc_to_datetime

@@ -8,8 +8,7 @@ import pygit2
 
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
-from .tabular.feature_output import (feature_as_geojson, feature_as_json,
-                                     feature_as_text)
+from .tabular.feature_output import feature_as_geojson, feature_as_json, feature_as_text
 from .utils import ungenerator
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD

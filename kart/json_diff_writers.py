@@ -7,8 +7,11 @@ from pathlib import Path
 import click
 
 from .base_diff_writer import BaseDiffWriter
-from .diff_estimation import (ThreadTerminated, estimate_diff_feature_counts,
-                              terminate_estimate_thread)
+from .diff_estimation import (
+    ThreadTerminated,
+    estimate_diff_feature_counts,
+    terminate_estimate_thread,
+)
 from .diff_structs import DatasetDiff
 from .log import commit_obj_to_json
 from .output_util import dump_json_output, resolve_output_path

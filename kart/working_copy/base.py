@@ -7,10 +7,13 @@ import click
 import pygit2
 
 import sqlalchemy as sa
-from kart.diff_structs import (WORKING_COPY_EDIT, DatasetDiff, Delta,
-                               DeltaDiff, RepoDiff)
-from kart.exceptions import (NO_WORKING_COPY, InvalidOperation, NotFound,
-                             NotYetImplemented)
+from kart.diff_structs import WORKING_COPY_EDIT, DatasetDiff, Delta, DeltaDiff, RepoDiff
+from kart.exceptions import (
+    NO_WORKING_COPY,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
+)
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, RepoKeyFilter
 from kart.promisor_utils import LibgitSubcode
 from kart.sqlalchemy.upsert import Upsert as upsert
@@ -692,7 +695,7 @@ class BaseWorkingCopy:
             return dataset.get_feature(feature_pk)
         except KeyError as e:
             # Couldn't find the feature.
-            subcode = getattr(e, 'subcode', 0)
+            subcode = getattr(e, "subcode", 0)
 
             if subcode == LibgitSubcode.ENOSUCHPATH:
                 # There is no such feature. This is okay: it just means the user has inserted

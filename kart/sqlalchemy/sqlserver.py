@@ -83,7 +83,7 @@ class Db_SqlServer(BaseDb):
                 ),
                 {"db_schema": db_schema},
             )
-            return {row['table_name']: None for row in r}
+            return {row["table_name"]: None for row in r}
         else:
             r = sess.execute(
                 sqlalchemy.text(

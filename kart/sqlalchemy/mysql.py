@@ -1,8 +1,7 @@
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy
-from sqlalchemy.dialects.mysql.base import (MySQLDialect,
-                                            MySQLIdentifierPreparer)
+from sqlalchemy.dialects.mysql.base import MySQLDialect, MySQLIdentifierPreparer
 
 from .base import BaseDb
 
@@ -49,7 +48,7 @@ class Db_MySql(BaseDb):
                 ),
                 {"db_schema": db_schema},
             )
-            return {row['TABLE_NAME']: None for row in r}
+            return {row["TABLE_NAME"]: None for row in r}
         else:
             r = sess.execute(
                 sqlalchemy.text(

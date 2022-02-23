@@ -9,8 +9,13 @@ import click
 from osgeo import gdal, ogr
 
 from kart import crs_util
-from kart.exceptions import (NO_IMPORT_SOURCE, NO_TABLE, InvalidOperation,
-                             NotFound, NotYetImplemented)
+from kart.exceptions import (
+    NO_IMPORT_SOURCE,
+    NO_TABLE,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
+)
 from kart.geometry import ogr_to_gpkg_geom
 from kart.ogr_util import get_type_value_adapter
 from kart.output_util import dump_json_output

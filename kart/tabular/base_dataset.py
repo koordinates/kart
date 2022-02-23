@@ -255,7 +255,7 @@ class BaseDataset(ImportSource):
         if missing_ok:
             return None
         else:
-            detail = f": {key_error.args[0]}" if key_error is not None else ''
+            detail = f": {key_error.args[0]}" if key_error is not None else ""
             k = KeyError(
                 f"No data found at rel-path {rel_path}, type={type(leaf)}{detail}"
             )

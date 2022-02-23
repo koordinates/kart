@@ -61,7 +61,7 @@ def _revlist_command(repo):
     ]
 
 
-DS_PATH_PATTERN = r'(.+)/\.(sno|table)-dataset/'
+DS_PATH_PATTERN = r"(.+)/\.(sno|table)-dataset/"
 
 
 def _parse_revlist_output(repo, line_iter, rel_path_pattern):

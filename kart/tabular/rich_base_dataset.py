@@ -7,8 +7,7 @@ from osgeo import osr
 
 from kart import crs_util
 from kart.diff_structs import DatasetDiff, Delta, DeltaDiff
-from kart.exceptions import (PATCH_DOES_NOT_APPLY, InvalidOperation,
-                             NotYetImplemented)
+from kart.exceptions import PATCH_DOES_NOT_APPLY, InvalidOperation, NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
 from kart.promisor_utils import fetch_promised_blobs, object_is_promised
 from kart.spatial_filter import SpatialFilter

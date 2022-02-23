@@ -8,9 +8,14 @@ from .cli_util import StringFromFile, call_and_exit_flag
 from .conflicts import list_conflicts
 from .diff_util import get_repo_diff
 from .exceptions import InvalidOperation
-from .merge_util import (ALL_MERGE_FILES, AncestorOursTheirs, MergeContext,
-                         MergeIndex, merge_status_to_text,
-                         write_merged_index_flags)
+from .merge_util import (
+    ALL_MERGE_FILES,
+    AncestorOursTheirs,
+    MergeContext,
+    MergeIndex,
+    merge_status_to_text,
+    write_merged_index_flags,
+)
 from .output_util import dump_json_output
 from .pack_util import write_to_packfile
 from .repo import KartRepoFiles, KartRepoState

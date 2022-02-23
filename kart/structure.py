@@ -5,9 +5,15 @@ from typing import Optional
 import click
 import pygit2
 
-from .exceptions import (NO_CHANGES, NO_COMMIT, PATCH_DOES_NOT_APPLY,
-                         SCHEMA_VIOLATION, InvalidOperation, NotFound,
-                         NotYetImplemented)
+from .exceptions import (
+    NO_CHANGES,
+    NO_COMMIT,
+    PATCH_DOES_NOT_APPLY,
+    SCHEMA_VIOLATION,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
+)
 from .pack_util import packfile_object_builder
 from .repo_version import extra_blobs_for_version
 from .structs import CommitWithReference

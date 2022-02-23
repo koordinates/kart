@@ -284,7 +284,7 @@ class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):
             if not wc_key.startswith("crs/CUSTOM:"):
                 continue
             del wc_meta_items[wc_key]
-            suffix = wc_key[wc_key.index(':') :]
+            suffix = wc_key[wc_key.index(":") :]
             matching_ds_keys = [
                 d
                 for d in ds_meta_items.keys()

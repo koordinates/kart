@@ -1,9 +1,15 @@
 import click
 import pygit2
 
-from .exceptions import (NO_BRANCH, NO_COMMIT, NO_WORKING_COPY,
-                         DbConnectionError, InvalidOperation, NotFound,
-                         NotYetImplemented)
+from .exceptions import (
+    NO_BRANCH,
+    NO_COMMIT,
+    NO_WORKING_COPY,
+    DbConnectionError,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
+)
 from .key_filters import RepoKeyFilter
 from .output_util import InputMode, get_input_mode
 from .promisor_utils import get_partial_clone_envelope

@@ -7,8 +7,7 @@ from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
 from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
 from .key_filters import RepoKeyFilter
-from .merge_util import (MergeContext, MergeIndex, ensure_conflicts_ready,
-                         rich_conflicts)
+from .merge_util import MergeContext, MergeIndex, ensure_conflicts_ready, rich_conflicts
 from .output_util import dump_json_output
 from .repo import KartRepoState
 
