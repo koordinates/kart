@@ -1,5 +1,3 @@
-from kart.geometry import normalise_gpkg_geom
-
 import base64
 import functools
 import os
@@ -8,10 +6,10 @@ import re
 import msgpack
 import pygit2
 
-from kart.geometry import Geometry
-from kart.tabular.base_dataset import BaseDataset
+from kart.geometry import Geometry, normalise_gpkg_geom
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
+from kart.tabular.base_dataset import BaseDataset
 from kart.utils import ungenerator
 
 

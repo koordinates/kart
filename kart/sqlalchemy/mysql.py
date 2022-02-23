@@ -1,8 +1,8 @@
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy
-from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer, MySQLDialect
-
+from sqlalchemy.dialects.mysql.base import (MySQLDialect,
+                                            MySQLIdentifierPreparer)
 
 from .base import BaseDb
 

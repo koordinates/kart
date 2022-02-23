@@ -3,19 +3,16 @@ import hashlib
 import logging
 import time
 
-
+from kart import crs_util
+from kart.sqlalchemy import separate_last_path_part
+from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
+from kart.tabular.schema import Schema
 from sqlalchemy import Index
 from sqlalchemy.dialects.postgresql.base import PGIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
-
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import PostgisKartTables
-from kart import crs_util
-from kart.tabular.schema import Schema
-from kart.sqlalchemy import separate_last_path_part
-from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
-
 
 POSTGRES_MAX_IDENTIFIER_LENGTH = 63
 

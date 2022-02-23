@@ -1,6 +1,6 @@
+import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
-import subprocess
 
 from .cli_util import tool_environment
 from .exceptions import NotFound, SubprocessError

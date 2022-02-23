@@ -2,15 +2,15 @@ import contextlib
 import logging
 import time
 
+from kart import crs_util
+from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
+from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
+from kart.tabular.schema import Schema
 from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import SqlServerKartTables
-from kart import crs_util
-from kart.tabular.schema import Schema
-from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 
 
 class WorkingCopy_SqlServer(DatabaseServer_WorkingCopy):

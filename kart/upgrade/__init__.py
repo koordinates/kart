@@ -1,18 +1,17 @@
+import uuid
 from datetime import datetime
 from pathlib import Path
-import uuid
 
 import click
 import pygit2
 
-
 from kart import checkout, context
-from kart.tabular.dataset2 import Dataset2
 from kart.exceptions import InvalidOperation, NotFound
-from kart.fast_import import fast_import_tables, ReplaceExisting
-from kart.repo import KartRepo, KartConfigKeys
+from kart.fast_import import ReplaceExisting, fast_import_tables
+from kart.repo import KartConfigKeys, KartRepo
 from kart.repo_version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
+from kart.tabular.dataset2 import Dataset2
 from kart.timestamps import minutes_to_tz_offset
 
 
@@ -493,7 +492,7 @@ def upgrade_to_kart(ctx, source):
         if dot_kart_path.exists():
             raise InvalidOperation(".kart already exists")
 
-    from kart.repo import KartConfigKeys, LOCKED_GIT_INDEX_CONTENTS
+    from kart.repo import LOCKED_GIT_INDEX_CONTENTS, KartConfigKeys
 
     # Config variables:
     click.echo("Moving config variables")

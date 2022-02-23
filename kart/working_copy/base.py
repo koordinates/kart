@@ -5,23 +5,20 @@ import time
 
 import click
 import pygit2
+
 import sqlalchemy as sa
-
-from kart.tabular.base_dataset import BaseDataset
-from kart.diff_structs import RepoDiff, DatasetDiff, DeltaDiff, Delta, WORKING_COPY_EDIT
-from kart.exceptions import (
-    InvalidOperation,
-    NotYetImplemented,
-    NotFound,
-    NO_WORKING_COPY,
-)
-from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
+from kart.diff_structs import (WORKING_COPY_EDIT, DatasetDiff, Delta,
+                               DeltaDiff, RepoDiff)
+from kart.exceptions import (NO_WORKING_COPY, InvalidOperation, NotFound,
+                             NotYetImplemented)
+from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, RepoKeyFilter
 from kart.promisor_utils import LibgitSubcode
-from kart.tabular.schema import Schema, DefaultRoundtripContext
 from kart.sqlalchemy.upsert import Upsert as upsert
+from kart.tabular.base_dataset import BaseDataset
+from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
-from . import WorkingCopyStatus, WorkingCopyType
 
+from . import WorkingCopyStatus, WorkingCopyType
 
 L = logging.getLogger("kart.working_copy.base")
 

@@ -1,5 +1,6 @@
 import pygit2
-from .exceptions import NotFound, NO_USER
+
+from .exceptions import NO_USER, NotFound
 
 
 def walk_tree(top, path="", topdown=True):

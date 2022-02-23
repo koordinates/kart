@@ -1,21 +1,16 @@
 import decimal
 
 import sqlalchemy as sa
+from kart import crs_util
+from kart.geometry import Geometry
+from kart.sqlalchemy.adapter.base import (BaseKartAdapter, ConverterType,
+                                          aliased_converter_type)
+from kart.sqlalchemy.sqlserver import Db_SqlServer
+from kart.tabular.schema import ColumnSchema, Schema
+from kart.utils import ungenerator
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name
 from sqlalchemy.sql.functions import Function
-
-
-from kart import crs_util
-from kart.geometry import Geometry
-from kart.tabular.schema import Schema, ColumnSchema
-from kart.sqlalchemy.sqlserver import Db_SqlServer
-from kart.sqlalchemy.adapter.base import (
-    BaseKartAdapter,
-    ConverterType,
-    aliased_converter_type,
-)
-from kart.utils import ungenerator
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.

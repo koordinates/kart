@@ -1,6 +1,5 @@
 import json
 
-
 from kart.exceptions import InvalidOperation
 from kart.geometry import Geometry, ogr_to_hex_wkb
 from kart.utils import ungenerator

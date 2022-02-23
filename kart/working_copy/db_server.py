@@ -1,15 +1,16 @@
 import functools
 import re
-from urllib.parse import urlsplit, urlunsplit
 from pathlib import PurePosixPath
+from urllib.parse import urlsplit, urlunsplit
 
 import click
+
+from kart.exceptions import DbConnectionError, InvalidOperation
+from kart.sqlalchemy import DbType, strip_password
 from sqlalchemy.exc import DBAPIError
 
 from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
-from kart.sqlalchemy import DbType, strip_password
-from kart.exceptions import InvalidOperation, DbConnectionError
 
 
 class DatabaseServer_WorkingCopy(BaseWorkingCopy):

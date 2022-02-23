@@ -3,20 +3,18 @@ import os
 import sys
 
 import click
+
 import sqlalchemy
+from kart.exceptions import (NO_IMPORT_SOURCE, NO_TABLE, NotFound,
+                             NotYetImplemented)
+from kart.output_util import dump_json_output
+from kart.sqlalchemy import (DbType, separate_last_path_part,
+                             strip_username_and_password)
+from kart.utils import chunk, ungenerator
 from sqlalchemy.orm import sessionmaker
 
-from kart.exceptions import (
-    NotFound,
-    NotYetImplemented,
-    NO_IMPORT_SOURCE,
-    NO_TABLE,
-)
 from .import_source import ImportSource
-from kart.output_util import dump_json_output
 from .schema import Schema
-from kart.sqlalchemy import DbType, separate_last_path_part, strip_username_and_password
-from kart.utils import chunk, ungenerator
 
 
 class SqlAlchemyImportSource(ImportSource):

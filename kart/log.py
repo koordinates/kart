@@ -1,26 +1,22 @@
-from datetime import datetime, timezone, timedelta
-from enum import Enum, auto
 import re
 import subprocess
 import sys
 import warnings
+from datetime import datetime, timedelta, timezone
+from enum import Enum, auto
 
 import click
 import pygit2
 
-from .cli_util import (
-    tool_environment,
-    parse_output_format,
-    OutputFormatType,
-    RemovalInKart012Warning,
-)
-from .exec import execvp
+from . import diff_estimation
+from .cli_util import (OutputFormatType, RemovalInKart012Warning,
+                       parse_output_format, tool_environment)
 from .exceptions import NotYetImplemented, SubprocessError
+from .exec import execvp
 from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
-from . import diff_estimation
 
 
 class PreserveDoubleDash(click.Command):

@@ -1,7 +1,7 @@
 import os
 import re
 import socket
-from urllib.parse import urlsplit, urlunsplit, urlencode, parse_qs
+from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 import sqlalchemy as sa
 from sqlalchemy.engine.default import DefaultDialect

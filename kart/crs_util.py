@@ -3,15 +3,8 @@ from osgeo import osr
 from .cli_util import StringFromFile
 from .exceptions import CrsError
 from .serialise_util import uint32hash
-from .wkt_lexer import (
-    WKTLexer,
-    CloseBracket,
-    Comma,
-    Keyword,
-    OpenBracket,
-    String,
-    Whitespace,
-)
+from .wkt_lexer import (CloseBracket, Comma, Keyword, OpenBracket, String,
+                        Whitespace, WKTLexer)
 
 
 def make_crs(crs_text, context=None):

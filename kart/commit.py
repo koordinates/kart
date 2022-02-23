@@ -1,10 +1,10 @@
-from datetime import datetime, timedelta, timezone
-import re
 import os
+import re
 import shlex
 import shutil
 import subprocess
 import sys
+from datetime import datetime, timedelta, timezone
 
 import click
 import pygit2
@@ -13,28 +13,15 @@ from . import is_windows
 from .base_diff_writer import BaseDiffWriter
 from .cli_util import StringFromFile, tool_environment
 from .core import check_git_user
-from .exceptions import (
-    NotFound,
-    SubprocessError,
-    InvalidOperation,
-    NO_CHANGES,
-    NO_DATA,
-    NO_WORKING_COPY,
-    SPATIAL_FILTER_PK_CONFLICT,
-)
+from .exceptions import (NO_CHANGES, NO_DATA, NO_WORKING_COPY,
+                         SPATIAL_FILTER_PK_CONFLICT, InvalidOperation,
+                         NotFound, SubprocessError)
 from .output_util import dump_json_output
-from .status import (
-    get_branch_status_message,
-    get_diff_status_message,
-    get_diff_status_json,
-    diff_status_to_text,
-)
-from .timestamps import (
-    datetime_to_iso8601_utc,
-    timedelta_to_iso8601_tz,
-    commit_time_to_text,
-)
 from .repo import KartRepoFiles
+from .status import (diff_status_to_text, get_branch_status_message,
+                     get_diff_status_json, get_diff_status_message)
+from .timestamps import (commit_time_to_text, datetime_to_iso8601_utc,
+                         timedelta_to_iso8601_tz)
 
 
 class CommitDiffWriter(BaseDiffWriter):

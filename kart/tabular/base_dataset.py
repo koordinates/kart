@@ -1,16 +1,18 @@
 from __future__ import annotations
+
 import functools
 import logging
 import time
 
 from kart import crs_util
-from .import_source import ImportSource
-from . import meta_items
 from kart.exceptions import InvalidOperation
 from kart.promisor_utils import LibgitSubcode
-from kart.serialise_util import json_unpack, ensure_text
+from kart.serialise_util import ensure_text, json_unpack
 from kart.spatial_filter import SpatialFilter
 from kart.utils import ungenerator
+
+from . import meta_items
+from .import_source import ImportSource
 
 L = logging.getLogger("kart.tabular.base_dataset")
 

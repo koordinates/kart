@@ -3,21 +3,17 @@ import re
 
 from osgeo.osr import SpatialReference
 from psycopg2.extensions import Binary
+
 import sqlalchemy as sa
-from sqlalchemy.sql.functions import Function
-from sqlalchemy.types import TEXT
-
-
 from kart import crs_util
 from kart.geometry import Geometry
-from kart.tabular.schema import Schema, ColumnSchema
+from kart.sqlalchemy.adapter.base import (BaseKartAdapter, ConverterType,
+                                          aliased_converter_type)
 from kart.sqlalchemy.postgis import Db_Postgis
-from kart.sqlalchemy.adapter.base import (
-    BaseKartAdapter,
-    ConverterType,
-    aliased_converter_type,
-)
+from kart.tabular.schema import ColumnSchema, Schema
 from kart.utils import ungenerator
+from sqlalchemy.sql.functions import Function
+from sqlalchemy.types import TEXT
 
 
 class KartAdapter_Postgis(BaseKartAdapter, Db_Postgis):

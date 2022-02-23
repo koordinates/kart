@@ -2,9 +2,10 @@ import json
 import logging
 
 import pygit2
+
 from sqlalchemy.exc import OperationalError
 
-from .db import annotations_session, KartAnnotation
+from .db import KartAnnotation, annotations_session
 
 L = logging.getLogger(__name__)
 

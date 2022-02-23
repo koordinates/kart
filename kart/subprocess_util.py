@@ -1,10 +1,10 @@
-from . import is_windows
-
 import asyncio
 import sys
 from asyncio import IncompleteReadError, LimitOverrunError
 from asyncio.subprocess import PIPE
 from functools import partial
+
+from . import is_windows
 
 
 @asyncio.coroutine

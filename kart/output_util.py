@@ -1,18 +1,17 @@
 import datetime
 import itertools
 import json
-from pathlib import Path
 import re
 import shutil
 import sys
 import textwrap
 import types
+from pathlib import Path
 
 import pygments
 from pygments.lexers import JsonLexer
 
 from .wkt_lexer import WKTLexer
-
 
 _terminal_formatter = None
 

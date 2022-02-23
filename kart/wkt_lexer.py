@@ -1,9 +1,9 @@
-from collections import deque
 import itertools
+from collections import deque
 
 from pygments.lexer import RegexLexer, include
-from pygments.token import Keyword, Number, String, Punctuation, Token, Whitespace
-
+from pygments.token import (Keyword, Number, Punctuation, String, Token,
+                            Whitespace)
 
 Comma = Punctuation.Comma
 OpenBracket = Punctuation.OpenBracket

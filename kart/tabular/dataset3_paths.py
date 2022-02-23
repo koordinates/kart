@@ -7,12 +7,7 @@ from collections import defaultdict
 import pygit2
 
 from kart.exceptions import NotYetImplemented
-from kart.serialise_util import (
-    msg_pack,
-    b64encode_str,
-    b64hash,
-    hexhash,
-)
+from kart.serialise_util import b64encode_str, b64hash, hexhash, msg_pack
 from kart.utils import chunk
 
 L = logging.getLogger("kart.tabular.dataset3_paths")

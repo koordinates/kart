@@ -1,23 +1,20 @@
 import functools
+import time
 
 import click
 import pygit2
-import time
 from osgeo import osr
 
-
 from kart import crs_util
-from .base_dataset import BaseDataset
-from kart.diff_structs import DatasetDiff, DeltaDiff, Delta
-from kart.exceptions import (
-    InvalidOperation,
-    NotYetImplemented,
-    PATCH_DOES_NOT_APPLY,
-)
+from kart.diff_structs import DatasetDiff, Delta, DeltaDiff
+from kart.exceptions import (PATCH_DOES_NOT_APPLY, InvalidOperation,
+                             NotYetImplemented)
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
-from .schema import Schema
+from kart.promisor_utils import fetch_promised_blobs, object_is_promised
 from kart.spatial_filter import SpatialFilter
-from kart.promisor_utils import object_is_promised, fetch_promised_blobs
+
+from .base_dataset import BaseDataset
+from .schema import Schema
 
 
 class RichBaseDataset(BaseDataset):

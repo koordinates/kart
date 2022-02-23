@@ -2,15 +2,15 @@ import contextlib
 import logging
 import time
 
+from kart import crs_util
+from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
+from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
+from kart.tabular.schema import Schema
 from sqlalchemy.dialects.mysql.base import MySQLIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
 from .db_server import DatabaseServer_WorkingCopy
 from .table_defs import MySqlKartTables
-from kart import crs_util
-from kart.tabular.schema import Schema
-from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
-from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
 
 
 class WorkingCopy_MySql(DatabaseServer_WorkingCopy):

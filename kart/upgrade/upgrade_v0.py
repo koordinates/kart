@@ -2,9 +2,9 @@ import functools
 import re
 
 from kart.geometry import normalise_gpkg_geom
-from kart.tabular.base_dataset import BaseDataset
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
+from kart.tabular.base_dataset import BaseDataset
 from kart.utils import ungenerator
 
 

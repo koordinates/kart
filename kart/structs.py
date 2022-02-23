@@ -1,6 +1,6 @@
 import pygit2
 
-from .exceptions import NotFound, NO_COMMIT
+from .exceptions import NO_COMMIT, NotFound
 
 
 class CommitWithReference:

@@ -1,17 +1,15 @@
-from datetime import datetime, timezone, timedelta
 import itertools
 import json
-from pathlib import Path
 import re
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import click
 
 from .base_diff_writer import BaseDiffWriter
-
 from .output_util import format_wkt_for_output, resolve_output_path
 from .tabular.feature_output import feature_as_text, feature_field_as_text
 from .tabular.schema import Schema
-
 
 _NULL = object()
 

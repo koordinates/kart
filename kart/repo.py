@@ -13,20 +13,11 @@ import pygit2
 
 from . import is_windows
 from .cli_util import tool_environment
-from .exceptions import (
-    translate_subprocess_exit_code,
-    InvalidOperation,
-    NotFound,
-    SubprocessError,
-    NO_REPOSITORY,
-    NO_SPATIAL_FILTER_INDEX,
-)
-from .repo_version import (
-    DEFAULT_NEW_REPO_VERSION,
-    ensure_supported_repo_version,
-    get_repo_version,
-    dataset_class_for_version,
-)
+from .exceptions import (NO_REPOSITORY, NO_SPATIAL_FILTER_INDEX,
+                         InvalidOperation, NotFound, SubprocessError,
+                         translate_subprocess_exit_code)
+from .repo_version import (DEFAULT_NEW_REPO_VERSION, dataset_class_for_version,
+                           ensure_supported_repo_version, get_repo_version)
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
 

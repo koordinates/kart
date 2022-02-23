@@ -1,9 +1,9 @@
 import binascii
-from enum import IntEnum
 import json
 import math
 import re
 import struct
+from enum import IntEnum
 
 from osgeo import ogr, osr
 

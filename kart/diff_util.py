@@ -1,8 +1,7 @@
 import logging
 
-from .diff_structs import RepoDiff, DatasetDiff
-from .key_filters import RepoKeyFilter, DatasetKeyFilter
-
+from .diff_structs import DatasetDiff, RepoDiff
+from .key_filters import DatasetKeyFilter, RepoKeyFilter
 
 L = logging.getLogger("kart.diff_util")
 

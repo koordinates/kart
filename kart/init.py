@@ -2,27 +2,23 @@ import math
 import os
 from pathlib import Path
 
-
 import click
 from osgeo import gdal
 
 from kart import is_windows
+
 from . import checkout
-from .tabular.base_dataset import BaseDataset
+from .cli_util import (JsonFromFile, MutexOption, StringFromFile,
+                       call_and_exit_flag)
 from .core import check_git_user
-from .cli_util import (
-    call_and_exit_flag,
-    MutexOption,
-    StringFromFile,
-    JsonFromFile,
-)
 from .exceptions import InvalidOperation
-from .fast_import import fast_import_tables, ReplaceExisting
+from .fast_import import ReplaceExisting, fast_import_tables
+from .repo import KartRepo, PotentialRepo
+from .spatial_filter import SpatialFilterString, spatial_filter_help_text
+from .tabular.base_dataset import BaseDataset
 from .tabular.import_source import ImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingImportSource
-from .repo import KartRepo, PotentialRepo
-from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 

@@ -1,14 +1,15 @@
-from collections import namedtuple
 import functools
 import json
 import re
+from collections import namedtuple
 
 import click
 import pygit2
 
-from .tabular.feature_output import feature_as_text, feature_as_json, feature_as_geojson
 from .repo import KartRepoFiles
 from .structs import CommitWithReference
+from .tabular.feature_output import (feature_as_geojson, feature_as_json,
+                                     feature_as_text)
 from .utils import ungenerator
 
 MERGE_HEAD = KartRepoFiles.MERGE_HEAD
@@ -686,7 +687,7 @@ def rich_conflicts(raw_conflicts, merge_context):
 
 
 def ensure_conflicts_ready(rich_conflicts, repo):
-    from .promisor_utils import object_is_promised, fetch_promised_blobs
+    from .promisor_utils import fetch_promised_blobs, object_is_promised
 
     rich_conflicts = list(rich_conflicts)
     if not rich_conflicts:

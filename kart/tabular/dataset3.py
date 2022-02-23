@@ -6,26 +6,16 @@ import click
 import pygit2
 
 from kart import crs_util
-from .dataset3_paths import PathEncoder
-from .rich_base_dataset import RichBaseDataset
-from kart.exceptions import (
-    InvalidOperation,
-    NotYetImplemented,
-    PATCH_DOES_NOT_APPLY,
-    UNSUPPORTED_VERSION,
-)
-from .meta_items import ATTACHMENT_META_ITEMS
-from .schema import Legend, Schema
-from kart.serialise_util import (
-    msg_pack,
-    msg_unpack,
-    json_pack,
-    json_unpack,
-    b64decode_str,
-    ensure_bytes,
-    ensure_text,
-)
+from kart.exceptions import (PATCH_DOES_NOT_APPLY, UNSUPPORTED_VERSION,
+                             InvalidOperation, NotYetImplemented)
+from kart.serialise_util import (b64decode_str, ensure_bytes, ensure_text,
+                                 json_pack, json_unpack, msg_pack, msg_unpack)
 from kart.utils import ungenerator
+
+from .dataset3_paths import PathEncoder
+from .meta_items import ATTACHMENT_META_ITEMS
+from .rich_base_dataset import RichBaseDataset
+from .schema import Legend, Schema
 
 
 def find_blobs_in_tree(tree, max_depth=4):
@@ -114,8 +104,8 @@ class Dataset3(RichBaseDataset):
     def ensure_only_supported_capabilities(self):
         capabilities = self.get_meta_item("capabilities.json", missing_ok=True)
         if capabilities is not None:
-            from .output_util import dump_json_output
             from .cli import get_version
+            from .output_util import dump_json_output
 
             click.echo(
                 f"The dataset at {self.path} requires the following capabilities which Kart {get_version()} does not support:",

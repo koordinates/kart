@@ -1,13 +1,8 @@
 import itertools
-
 import json
 
 from .core import walk_tree
-
-from .exceptions import (
-    InvalidOperation,
-    UNSUPPORTED_VERSION,
-)
+from .exceptions import UNSUPPORTED_VERSION, InvalidOperation
 
 # We look for the repostructure version blob in either of these two places:
 REPOSTRUCTURE_VERSION_BLOB_PATHS = {

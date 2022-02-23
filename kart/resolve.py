@@ -6,9 +6,10 @@ import click
 import pygit2
 
 from .cli_util import MutexOption
-from .exceptions import InvalidOperation, NotFound, NotYetImplemented, NO_CONFLICT
+from .exceptions import (NO_CONFLICT, InvalidOperation, NotFound,
+                         NotYetImplemented)
 from .geometry import geojson_to_gpkg_geom
-from .merge_util import MergeIndex, MergeContext, RichConflict
+from .merge_util import MergeContext, MergeIndex, RichConflict
 from .repo import KartRepoState
 
 
