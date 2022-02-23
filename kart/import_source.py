@@ -2,7 +2,7 @@ import click
 
 from .exceptions import NotFound, NO_TABLE
 from .output_util import get_input_mode, InputMode
-from .schema import Schema
+from .tabular.schema import Schema
 
 
 class ImportSource:

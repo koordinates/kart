@@ -3,7 +3,7 @@ import pygit2
 from .import_source import ImportSource
 from .dataset2 import Dataset2
 from .dataset2 import Dataset3
-from .schema import ColumnSchema
+from .tabular.schema import ColumnSchema
 
 
 class PkGeneratingImportSource(ImportSource):

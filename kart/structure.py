@@ -16,7 +16,7 @@ from .exceptions import (
 )
 from .pack_util import packfile_object_builder
 from .repo_version import extra_blobs_for_version
-from .schema import Schema
+from .tabular.schema import Schema
 from .structs import CommitWithReference
 
 

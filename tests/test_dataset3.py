@@ -1,5 +1,5 @@
 from kart.dataset3 import Dataset3
-from kart.schema import Legend, ColumnSchema, Schema
+from kart.tabular.schema import Legend, ColumnSchema, Schema
 
 
 DATASET_PATH = "path/to/dataset"

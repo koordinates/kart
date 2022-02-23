@@ -10,7 +10,7 @@ from sqlalchemy.types import TEXT
 
 from kart import crs_util
 from kart.geometry import Geometry
-from kart.schema import Schema, ColumnSchema
+from kart.tabular.schema import Schema, ColumnSchema
 from kart.sqlalchemy.postgis import Db_Postgis
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,

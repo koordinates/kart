@@ -17,7 +17,7 @@ from .base import BaseWorkingCopy
 from .table_defs import GpkgTables, GpkgKartTables
 from kart import crs_util
 from kart.exceptions import InvalidOperation
-from kart.schema import Schema
+from kart.tabular.schema import Schema
 from kart.sqlalchemy import text_with_inlined_params
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 

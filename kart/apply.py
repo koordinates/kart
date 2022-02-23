@@ -16,7 +16,7 @@ from .exceptions import (
 )
 from .diff_structs import RepoDiff, DeltaDiff, Delta, KeyValue
 from .geometry import hex_wkb_to_gpkg_geom
-from .schema import Schema
+from .tabular.schema import Schema
 from .timestamps import iso8601_utc_to_datetime, iso8601_tz_to_timedelta
 
 

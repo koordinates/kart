@@ -22,7 +22,7 @@ from .geometry import ogr_to_gpkg_geom
 from .import_source import ImportSource
 from .ogr_util import get_type_value_adapter
 from .output_util import dump_json_output
-from .schema import Schema, ColumnSchema
+from .tabular.schema import Schema, ColumnSchema
 from .utils import ungenerator, chunk
 
 

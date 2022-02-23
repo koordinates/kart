@@ -10,7 +10,7 @@ from .dataset3_paths import PathEncoder
 from .rich_base_dataset import RichBaseDataset
 from .exceptions import InvalidOperation, NotYetImplemented, PATCH_DOES_NOT_APPLY
 from .meta_items import ATTACHMENT_META_ITEMS
-from .schema import Legend, Schema
+from .tabular.schema import Legend, Schema
 from .serialise_util import (
     msg_pack,
     msg_unpack,
@@ -176,7 +176,7 @@ class Dataset3(RichBaseDataset):
     def encode_schema(self, schema):
         """
         Given a schema, returns the path and the data which *should be written*
-        to write this schema. This is almost the inverse of calling .schema,
+        to write this schema. This is almost the inverse of calling .tabular.schema,
         except Dataset3 doesn't write the data. (Note that the schema's legend
         should also be stored if any features are written with this schema.)
         """

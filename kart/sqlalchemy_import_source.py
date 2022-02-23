@@ -14,7 +14,7 @@ from .exceptions import (
 )
 from .import_source import ImportSource
 from .output_util import dump_json_output
-from .schema import Schema
+from .tabular.schema import Schema
 from .sqlalchemy import DbType, separate_last_path_part, strip_username_and_password
 from .utils import chunk, ungenerator
 

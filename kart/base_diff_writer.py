@@ -342,7 +342,7 @@ class BaseDiffWriter:
                 self.spatial_filter_pk_conflicts[ds_path].append(key)
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
-        from kart.schema import Schema
+        from kart.tabular.schema import Schema
 
         old_schema = new_schema = None
         schema_delta = ds_diff.recursive_get(["meta", "schema.json"])

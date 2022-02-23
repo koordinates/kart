@@ -17,7 +17,7 @@ from kart.exceptions import (
 )
 from kart.key_filters import RepoKeyFilter, DatasetKeyFilter, FeatureKeyFilter
 from kart.promisor_utils import LibgitSubcode
-from kart.schema import Schema, DefaultRoundtripContext
+from kart.tabular.schema import Schema, DefaultRoundtripContext
 from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.utils import chunk
 from . import WorkingCopyStatus, WorkingCopyType

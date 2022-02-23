@@ -8,7 +8,7 @@ from sqlalchemy.sql.functions import Function
 
 from kart import crs_util
 from kart.geometry import Geometry
-from kart.schema import Schema, ColumnSchema
+from kart.tabular.schema import Schema, ColumnSchema
 from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,

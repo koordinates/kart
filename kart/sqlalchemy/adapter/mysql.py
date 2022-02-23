@@ -9,7 +9,7 @@ from sqlalchemy.dialects.mysql.types import DOUBLE
 from kart import crs_util
 from kart.geometry import Geometry
 from kart.exceptions import NotYetImplemented
-from kart.schema import Schema, ColumnSchema
+from kart.tabular.schema import Schema, ColumnSchema
 from kart.sqlalchemy.mysql import Db_MySql
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,

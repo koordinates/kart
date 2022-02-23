@@ -15,7 +15,7 @@ from .exceptions import (
     PATCH_DOES_NOT_APPLY,
 )
 from .key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
-from .schema import Schema
+from .tabular.schema import Schema
 from .spatial_filter import SpatialFilter
 from .promisor_utils import object_is_promised, fetch_promised_blobs
 

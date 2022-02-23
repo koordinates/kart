@@ -15,7 +15,7 @@ from kart.dataset3 import Dataset3
 from kart.dataset3_paths import IntPathEncoder, MsgpackHashPathEncoder
 from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
-from kart.schema import Schema
+from kart.tabular.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from kart.import_source import ImportSource
 from kart.ogr_import_source import postgres_url_to_ogr_conn_str

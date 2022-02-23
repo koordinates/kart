@@ -4,7 +4,7 @@ import re
 
 from kart import crs_util
 from kart.geometry import normalise_gpkg_geom
-from kart.schema import Schema, ColumnSchema
+from kart.tabular.schema import Schema, ColumnSchema
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,

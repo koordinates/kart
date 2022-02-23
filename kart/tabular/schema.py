@@ -5,8 +5,8 @@ import uuid
 
 import pygit2
 
-from .geometry import Geometry
-from .serialise_util import (
+from kart.geometry import Geometry
+from kart.serialise_util import (
     msg_pack,
     msg_unpack,
     json_pack,
