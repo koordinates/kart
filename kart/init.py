@@ -18,9 +18,9 @@ from .cli_util import (
 )
 from .exceptions import InvalidOperation
 from .fast_import import fast_import_tables, ReplaceExisting
-from .import_source import ImportSource
-from .ogr_import_source import FORMAT_TO_OGR_MAP
-from .pk_generation import PkGeneratingImportSource
+from .tabular.import_source import ImportSource
+from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
+from .tabular.pk_generation import PkGeneratingImportSource
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .utils import get_num_available_cores

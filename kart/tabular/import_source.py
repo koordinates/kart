@@ -1,8 +1,8 @@
 import click
 
-from .exceptions import NotFound, NO_TABLE
-from .output_util import get_input_mode, InputMode
-from .tabular.schema import Schema
+from kart.exceptions import NotFound, NO_TABLE
+from kart.output_util import get_input_mode, InputMode
+from .schema import Schema
 
 
 class ImportSource:

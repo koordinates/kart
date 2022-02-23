@@ -15,7 +15,7 @@ from .cli_util import (
 )
 from .checkout import reset_wc_if_needed
 from .exceptions import InvalidOperation, NotYetImplemented, NotFound, NO_CHANGES
-from .meta_items import META_ITEM_NAMES
+from .tabular.meta_items import META_ITEM_NAMES
 from .output_util import (
     dump_json_output,
     format_json_for_output,

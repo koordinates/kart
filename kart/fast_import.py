@@ -10,7 +10,7 @@ import pygit2
 
 from .cli_util import tool_environment
 from .exceptions import SubprocessError, InvalidOperation, NotFound, NO_CHANGES
-from .import_source import ImportSource
+from .tabular.import_source import ImportSource
 from .repo_version import (
     extra_blobs_for_version,
     SUPPORTED_REPO_VERSIONS,
@@ -19,7 +19,7 @@ from .repo_version import (
 from .object_builder import ObjectBuilder
 from .structure import Datasets
 from .timestamps import minutes_to_tz_offset
-from .pk_generation import PkGeneratingImportSource
+from .tabular.pk_generation import PkGeneratingImportSource
 
 
 L = logging.getLogger("kart.fast_import")

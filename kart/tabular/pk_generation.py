@@ -1,9 +1,9 @@
 import pygit2
 
 from .import_source import ImportSource
-from .tabular.dataset2 import Dataset2
-from .tabular.dataset2 import Dataset3
-from .tabular.schema import ColumnSchema
+from .dataset2 import Dataset2
+from .dataset2 import Dataset3
+from .schema import ColumnSchema
 
 
 class PkGeneratingImportSource(ImportSource):

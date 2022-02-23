@@ -17,9 +17,9 @@ from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.tabular.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
-from kart.import_source import ImportSource
-from kart.ogr_import_source import postgres_url_to_ogr_conn_str
-from kart.pk_generation import PkGeneratingImportSource
+from kart.tabular.import_source import ImportSource
+from kart.tabular.ogr_import_source import postgres_url_to_ogr_conn_str
+from kart.tabular.pk_generation import PkGeneratingImportSource
 from kart.repo import KartRepo
 
 
