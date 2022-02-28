@@ -16,12 +16,19 @@ namespace kart
         // default constructor
         TreeEntryWithPath()
             : tree::entry(),
-              rel_path(""){};
+              rel_path_(""){};
         // construct from a tree::entry
-        TreeEntryWithPath(const entry &e, string rel_path_)
+        TreeEntryWithPath(const entry &e, string rel_path__)
             : tree::entry(e),
-              rel_path(rel_path_){};
-        string rel_path;
+              rel_path_(rel_path__){};
+        // accessors
+        string rel_path() const
+        {
+            return rel_path_;
+        };
+
+    private:
+        string rel_path_;
     };
     /**
      * TreeEntryIterator: An iterator over a tree's entries
@@ -130,7 +137,7 @@ namespace kart
             string rel_path = "";
             if (entries_stack.size())
             {
-                rel_path = (**this).rel_path + "/";
+                rel_path = (**this).rel_path() + "/";
             }
             auto entries = vector<TreeEntryWithPath>();
             for (auto e : tree_.entries())

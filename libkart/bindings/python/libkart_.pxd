@@ -6,15 +6,16 @@ cdef extern from "kart.hpp" namespace "kart":
     # cppgit stuff
     cdef cppclass cppgit2_oid "cppgit2::oid":
         string to_hex_string()
-    cdef cppclass cppgit2_tree "cppgit2::tree":
-        cppgit2_oid id()
     cdef cppclass cppgit2_tree_entry "cppgit2::tree::entry":
         string filename()
         cppgit2_oid id()
+    cdef cppclass cppgit2_tree "cppgit2::tree":
+        cppgit2_oid id()
+        vector[cppgit2_tree_entry] entries()
 
     # actual libkart stuff
     cdef cppclass CppTreeEntryWithPath "kart::TreeEntryWithPath":
-        string rel_path
+        string rel_path()
         string filename()
         cppgit2_oid id()
 

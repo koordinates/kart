@@ -52,7 +52,7 @@ cdef class TreeEntryWithPath:
         return Oid._wrap(self.cpp.id())
     @property
     def rel_path(self):
-        return self.cpp.rel_path
+        return self.cpp.rel_path()
 
     def __repr__(self):
         return f"<TreeEntryWithPath: {self.rel_path}>"
@@ -72,6 +72,12 @@ cdef class Tree:
 
     def __repr__(self):
         return f"<Tree: {self.id}>"
+
+    def entries(self):
+        entries = deref(self.thisptr).entries()
+        return [
+            TreeEntry._wrap(e) for e in entries
+        ]
 
     @staticmethod
     cdef Tree _wrap(unique_ptr[cppgit2_tree] cpp):
