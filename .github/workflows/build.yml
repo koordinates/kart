@@ -844,8 +844,12 @@ jobs:
 
       - name: "dependency: libgit2"
         run: |
-          git clone -q --branch=${{ env.LIBGIT2_TAG }} --depth=1 https://github.com/${{ env.LIBGIT2_REPO }}.git ${{ runner.temp }}/libgit2
+          mkdir ${{ runner.temp }}/libgit2
           cd ${{ runner.temp }}/libgit2
+          git init
+          git remote add origin https://github.com/${{ env.LIBGIT2_REPO }}.git
+          git fetch -q --depth 1 origin ${{ env.LIBGIT2_TAG }}
+          git checkout ${{ env.LIBGIT2_TAG }}
           cmake -Wno-dev -B build -S . \
             -DBUILD_CLAR=OFF \
             -DCMAKE_C_COMPILER=/usr/lib/ccache/cc \
@@ -967,8 +971,12 @@ jobs:
 
       - name: "dependency: libgit2"
         run: |
-          git clone -q --branch=${{ env.LIBGIT2_TAG }} --depth=1 https://github.com/${{ env.LIBGIT2_REPO }}.git ${{ runner.temp }}/libgit2
+          mkdir ${{ runner.temp }}/libgit2
           cd ${{ runner.temp }}/libgit2
+          git init
+          git remote add origin https://github.com/${{ env.LIBGIT2_REPO }}.git
+          git fetch -q --depth 1 origin ${{ env.LIBGIT2_TAG }}
+          git checkout ${{ env.LIBGIT2_TAG }}
           cmake -Wno-dev -B build -S . \
             -DBUILD_CLAR=OFF \
             -DCMAKE_C_COMPILER=/usr/local/opt/ccache/libexec/cc \
