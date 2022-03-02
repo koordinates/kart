@@ -93,13 +93,11 @@ else()
   set(VENDOR_TARGET vendor)
 endif()
 
-add_subdirectory(libkart EXCLUDE_FROM_ALL)
-
 #
 # main build targets
 #
+add_subdirectory(libkart ${CMAKE_BINARY_DIR}/libkart)
 include(KartPy)
-
 # install
 
 #

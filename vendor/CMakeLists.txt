@@ -71,7 +71,7 @@ endif()
 find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL 1.1 REQUIRED)
 find_package(ODBC 2.3.9 REQUIRED)
-find_package(LibGit2 1.3.0 REQUIRED)
+find_package(LibGit2 1.4.0 REQUIRED)
 if(NOT LibGit2_IS_KOORDINATES)
   message(
     FATAL_ERROR
