@@ -17,14 +17,21 @@ set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 
-include(FindPackageHandleStandardArgs)
+# https://stackoverflow.com/a/54606606/988527
+if(APPLE)
+  set(CMAKE_THREAD_LIBS_INIT "-lpthread")
+  set(CMAKE_HAVE_THREADS_LIBRARY 1)
+  set(CMAKE_USE_WIN32_THREADS_INIT 0)
+  set(CMAKE_USE_PTHREADS_INIT 1)
+  set(THREADS_PREFER_PTHREAD_FLAG ON)
+endif()
 
-find_package(LibGit2 1.3.0 REQUIRED)
+include(FindPackageHandleStandardArgs)
 
 # libfmt, since <format> isn't widespread in compilers yet
 find_package(fmt)
 
-add_subdirectory(cppgit2 EXCLUDE_FROM_ALL)
+add_subdirectory(cppgit2 ${CMAKE_BINARY_DIR}/cppgit2)
 
 # build our own library
 add_library(
