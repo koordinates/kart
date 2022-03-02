@@ -1,5 +1,3 @@
 build/
-*.so
-libkart.cpp
-*.egg-info
+bindings/python/libkart.cpp
 bindings/python/setup.cfg
