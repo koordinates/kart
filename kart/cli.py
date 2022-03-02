@@ -36,6 +36,7 @@ MODULE_COMMANDS = {
     "status": {"status"},
     "query": {"query"},
     "upgrade": {"upgrade", "upgrade-to-tidy", "upgrade-to-kart"},
+    "point_cloud.import_": {"point-cloud-import"},
 }
 
 
@@ -301,9 +302,9 @@ def git(ctx, args):
     execvp("git", [*params, *args])
 
 
-def _hackily_parse_command(args):
-    ignore_next = False
-    for arg in args[1:]:
+def _hackily_parse_command(args, skip_first_arg=True):
+    ignore_next = skip_first_arg
+    for arg in args:
         if ignore_next:
             ignore_next = False
             continue
@@ -317,8 +318,8 @@ def _hackily_parse_command(args):
             return arg
 
 
-def load_commands_from_args(args):
-    command = _hackily_parse_command(args)
+def load_commands_from_args(args, skip_first_arg=True):
+    command = _hackily_parse_command(args, skip_first_arg=skip_first_arg)
     if command == "help":
         _load_all_commands()
     elif command not in cli.commands:
