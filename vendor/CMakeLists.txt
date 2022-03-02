@@ -198,11 +198,11 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 if(NOT LibGit2_ROOT)
   cmake_path(GET LibGit2_INCLUDE_DIR PARENT_PATH LibGit2_ROOT)
 endif()
-set(PYGIT2_WHEEL_VER 1.7.0)
+set(PYGIT2_WHEEL_VER 1.9.0)
 ExternalProject_Add(
   pygit2
   GIT_REPOSITORY https://github.com/koordinates/pygit2.git
-  GIT_TAG kart-v0.11.0
+  GIT_TAG ee304145fc588422c7d8ed930252e2e79f5bc2b2
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv LibGit2::LibGit2
   EXCLUDE_FROM_ALL ON
@@ -242,7 +242,6 @@ ExternalProject_Add(
   INSTALL_COMMAND "")
 ExternalProject_Get_Property(pyodbc INSTALL_DIR)
 list(APPEND WHEEL_LIST ${INSTALL_DIR}/pyodbc-${PYODBC_WHEEL_VER}-${Python3_WHEEL_ID}.whl)
-
 
 #
 # GDAL Python module We download the bindings associated with the version we picked up via FindGDAL
