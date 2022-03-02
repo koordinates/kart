@@ -6,16 +6,16 @@ GIT_ARCHIVE=MinGit-$(GIT_VER)-64-bit.zip
 GIT_REPO=koordinates/git
 GIT_RELEASE=kart-0.11.0-windows
 
-# v1.3.0 + koordinates changes
-LIBGIT2_REF=kart-v0.11.0
+# v1.4.2 + koordinates changes
+LIBGIT2_REF=a7e2b1332b0adf6f852aed7d70bf925f3d388079
 LIBGIT2_REPO=koordinates/libgit2
 LIBGIT2_ARCHIVE=libgit2-$(LIBGIT2_REF).zip
 
-# v1.7.0 + koordinates changes
-PYGIT2_REF=kart-v0.11.0
+# v1.9.0 + koordinates changes
+PYGIT2_REF=ee304145fc588422c7d8ed930252e2e79f5bc2b2
 PYGIT2_REPO=koordinates/pygit2
 PYGIT2_ARCHIVE=pygit2-$(PYGIT2_REF).zip
-PYGIT2_VER=1.7.0
+PYGIT2_VER=1.9.0
 
 SQLITE_VER=3.31.1
 SQLITE_URL=https://www.sqlite.org/2020/sqlite-amalgamation-3310100.zip
