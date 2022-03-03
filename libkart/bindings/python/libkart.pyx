@@ -6,7 +6,24 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from libkart_ cimport *
+from enum import Enum
 
+# FIXME: In *theory* the `cpdef enum class` in libkart_.pxd should mean we can just use `object_type`,
+# because it should be usable in a Python context.
+# However, in practice it doesn't seem to work at all.
+# I think the `cimport` above just imports the C-ish symbol and not the Python one.
+# And you can't `import` from libkart_.pxd. So I'm not sure how you're meant to use the cpdef enum.
+# So here we work around it by just defining a python-style enum and using it below.
+class ObjectType(Enum):
+    # cppgit2::object::object_type
+    any = -2
+    invalid = -1
+    commit = 1
+    tree = 2
+    blob = 3
+    tag = 4
+    ofs_delta = 6
+    ref_delta = 7
 
 cdef class Oid:
     cdef cppgit2_oid cpp
@@ -33,6 +50,10 @@ cdef class TreeEntry:
     def id(self):
         return Oid._wrap(self.cpp.id())
 
+    @property
+    def type(self):
+        return ObjectType(self.cpp.type())
+
     def __repr__(self):
         return f"<TreeEntry: {self.filename}>"
 
@@ -50,6 +71,9 @@ cdef class TreeEntryWithPath:
     @property
     def id(self):
         return Oid._wrap(self.cpp.id())
+    @property
+    def type(self):
+        return ObjectType(self.cpp.type())
     @property
     def rel_path(self):
         return self.cpp.rel_path()

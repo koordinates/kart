@@ -2,13 +2,28 @@ from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
+cdef extern from "cppgit2/object.hpp" namespace "cppgit2::object":
+    cpdef enum class object_type "cppgit2::object::object_type":
+        # cppgit2::object::object_type
+        any = -2
+        invalid = -1
+        commit = 1
+        tree = 2
+        blob = 3
+        tag = 4
+        ofs_delta = 6
+        ref_delta = 7
+
+
 cdef extern from "kart.hpp" namespace "kart":
     # cppgit stuff
+
     cdef cppclass cppgit2_oid "cppgit2::oid":
         string to_hex_string()
     cdef cppclass cppgit2_tree_entry "cppgit2::tree::entry":
         string filename()
         cppgit2_oid id()
+        object_type type()
     cdef cppclass cppgit2_tree "cppgit2::tree":
         cppgit2_oid id()
         vector[cppgit2_tree_entry] entries()
@@ -18,6 +33,7 @@ cdef extern from "kart.hpp" namespace "kart":
         string rel_path()
         string filename()
         cppgit2_oid id()
+        object_type type()
 
     cdef cppclass CppTreeEntryIterator "kart::TreeEntryIterator":
         CppTreeEntryWithPath operator*()

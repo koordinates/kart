@@ -4,7 +4,7 @@ find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake)
 include(PyCreateVirtualEnvironment)
 
-createvirtualenvironment(cythonEnv REQUIREMENTS "cython;wheel")
+createvirtualenvironment(cythonEnv REQUIREMENTS "cython==3.0.0a10;wheel")
 
 # Prepare Python's setup.cfg
 file(
