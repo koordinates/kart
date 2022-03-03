@@ -1,4 +1,3 @@
-import math
 import os
 from pathlib import Path
 
@@ -11,14 +10,13 @@ from . import checkout
 from .cli_util import JsonFromFile, MutexOption, StringFromFile, call_and_exit_flag
 from .core import check_git_user
 from .exceptions import InvalidOperation
-from .fast_import import ReplaceExisting, fast_import_tables
+from .fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .tabular.base_dataset import BaseDataset
 from .tabular.import_source import ImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingImportSource
-from .utils import get_num_available_cores
 from .working_copy import WorkingCopyStatus
 
 
@@ -74,12 +72,6 @@ class GenerateIDsFromFile(StringFromFile):
             as_file=True,
         )
         return (line.rstrip("\n") for line in fp)
-
-
-def get_default_num_processes():
-    num_processes = get_num_available_cores()
-    # that's a float, but we need an int
-    return max(1, int(math.ceil(num_processes)))
 
 
 def any_at_all(iterable):
@@ -357,14 +349,15 @@ def import_(
     fast_import_tables(
         repo,
         import_sources,
+        settings=FastImportSettings(
+            num_processes=num_processes, max_delta_depth=max_delta_depth
+        ),
         verbosity=ctx.obj.verbosity + 1,
         message=message,
-        max_delta_depth=max_delta_depth,
         replace_existing=replace_existing_enum,
         from_commit=repo.head_commit,
         replace_ids=replace_ids,
         allow_empty=allow_empty,
-        num_processes=num_processes or get_default_num_processes(),
     )
 
     if do_checkout:
@@ -427,7 +420,6 @@ def import_(
 @click.option(
     "--max-delta-depth",
     hidden=True,
-    default=0,
     type=click.INT,
     help="--depth option to git-fast-import (advanced users only)",
 )
@@ -497,10 +489,11 @@ def init(
         fast_import_tables(
             repo,
             sources,
+            settings=FastImportSettings(
+                num_processes=num_processes, max_delta_depth=max_delta_depth
+            ),
             from_commit=None,
             message=message,
-            max_delta_depth=max_delta_depth,
-            num_processes=num_processes or get_default_num_processes(),
         )
         head_commit = repo.head_commit
         if do_checkout and not bare:

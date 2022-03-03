@@ -1,4 +1,5 @@
 import logging
+import math
 import subprocess
 import time
 import uuid
@@ -20,8 +21,37 @@ from .structure import Datasets
 from .tabular.import_source import ImportSource
 from .tabular.pk_generation import PkGeneratingImportSource
 from .timestamps import minutes_to_tz_offset
+from .utils import get_num_available_cores
 
 L = logging.getLogger("kart.fast_import")
+
+
+def get_default_num_processes():
+    num_processes = get_num_available_cores()
+    # that's a float, but we need an int
+    return max(1, int(math.ceil(num_processes)))
+
+
+class FastImportSettings:
+    """
+    Tuneable settings for a fast import which affect performance.
+    If not set, reasonable defaults are used.
+    """
+
+    def __init__(self, *, num_processes=None, max_pack_size=None, max_delta_depth=None):
+        self.num_processes = num_processes or get_default_num_processes()
+        # Maximum size of pack files
+        self.max_pack_size = max_pack_size or "2G"
+        # Maximum depth of delta-compression chains
+        self.max_delta_depth = max_delta_depth or 0
+
+    def as_args(self):
+        args = []
+        if self.max_pack_size:
+            args.append(f"--max-pack-size={self.max_pack_size}")
+        if self.max_delta_depth:
+            args.append(f"--depth={self.max_delta_depth}")
+        return args
 
 
 class ReplaceExisting(Enum):
@@ -119,7 +149,7 @@ def should_compare_imported_features_against_old_features(
 
 
 @contextmanager
-def _git_fast_import(repo, *args):
+def git_fast_import(repo, *args):
     p = subprocess.Popen(
         ["git", "fast-import", "--done", *args],
         cwd=repo.path,
@@ -191,16 +221,14 @@ def fast_import_tables(
     repo,
     sources,
     *,
+    settings=None,
     verbosity=1,
-    num_processes=4,
     message=None,
     replace_existing=ReplaceExisting.DONT_REPLACE,
     from_commit=UNSPECIFIED,
     replace_ids=None,
     allow_empty=False,
     limit=None,
-    max_pack_size="2G",
-    max_delta_depth=0,
     # Advanced use - used by kart upgrade.
     header=None,
     extra_cmd_args=(),
@@ -210,18 +238,16 @@ def fast_import_tables(
 
     repo - the Kart repo to import into.
     sources - an iterable of ImportSource objects. Each source is to be imported to source.dest_path.
+    settings - optional FastImportSettings: Tuneable settings which affect performance.
     verbosity - integer:
         0: no progress information is printed to stdout.
         1: basic status information
         2: full output of `git-fast-import --stats ...`
-    num_processes: how many import processes to run in parallel
     message - the commit-message used when generating the header. Generated if not supplied - see generate_message.
     replace_existing - See ReplaceExisting enum
     from_commit - the commit to be used as a starting point before beginning the import.
     replace_ids - list of PK values to replace, or None
     limit - maximum number of features to import per source.
-    max_pack_size - maximum size of pack files. Affects performance.
-    max_delta_depth - maximum depth of delta-compression chains. Affects performance.
 
     The following extra options are used by kart upgrade.
     header - the commit-header to supply git-fast-import. Generated if not supplied - see generate_header.
@@ -230,9 +256,12 @@ def fast_import_tables(
 
     MAX_PROCESSES = 64
 
-    if num_processes < 1:
-        num_processes = 1
-    elif num_processes > MAX_PROCESSES:
+    if settings is None:
+        settings = FastImportSettings()
+
+    if settings.num_processes < 1:
+        settings.num_processes = 1
+    elif settings.num_processes > MAX_PROCESSES:
         # this is almost certainly a mistake, but also:
         # we want to split 256 trees roughly evenly, and if we're trying to split them across
         # too many processes it won't be very even.
@@ -266,15 +295,11 @@ def fast_import_tables(
     # Add primary keys if needed.
     sources = PkGeneratingImportSource.wrap_sources_if_needed(sources, repo)
 
-    cmd = [
-        "--done",
-        f"--max-pack-size={max_pack_size}",
-        f"--depth={max_delta_depth}",
-    ]
+    cmd_args = settings.as_args()
     if verbosity < 2:
-        cmd.append("--quiet")
+        cmd_args.append("--quiet")
     for arg in extra_cmd_args:
-        cmd.append(arg)
+        cmd_args.append(arg)
 
     import_refs = []
 
@@ -294,13 +319,13 @@ def fast_import_tables(
             #     (all features in tree `datasetname/feature/01` will go to process 1, etc)
             #   * after the importing is all done, we merge the trees together.
             #   * there should never be any conflicts in this merge process.
-            for i in range(num_processes):
+            for i in range(settings.num_processes):
                 if header is not None:
                     # A client-supplied header won't work if num_processes > 1 because we'll try and write to
                     # the same branch multiple times in parallel.
                     # Luckily only upgrade script passes a header in, so there we just use 1 proc.
                     proc_header = header
-                    assert num_processes == 1
+                    assert settings.num_processes == 1
                 else:
                     # import onto a temp branch. then reset the head branch afterwards.
                     import_ref = f"refs/kart-import/{uuid.uuid4()}"
@@ -314,7 +339,7 @@ def fast_import_tables(
                         repo, sources, message, import_ref, from_commit
                     )
 
-                proc = stack.enter_context(_git_fast_import(repo, *cmd))
+                proc = stack.enter_context(git_fast_import(repo, *cmd_args))
                 procs.append(proc)
                 proc.stdin.write(proc_header.encode("utf8"))
 
@@ -323,7 +348,7 @@ def fast_import_tables(
                 if replace_existing != ReplaceExisting.ALL and blob_path in from_tree:
                     raise ValueError(f"{blob_path} already exists")
 
-            if num_processes == 1:
+            if settings.num_processes == 1:
 
                 def proc_for_feature_path(path):
                     return procs[0]

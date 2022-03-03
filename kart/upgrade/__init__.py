@@ -7,7 +7,7 @@ import pygit2
 
 from kart import checkout, context
 from kart.exceptions import InvalidOperation, NotFound
-from kart.fast_import import ReplaceExisting, fast_import_tables
+from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from kart.repo import KartConfigKeys, KartRepo
 from kart.repo_version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
@@ -304,13 +304,13 @@ def _upgrade_commit(
         fast_import_tables(
             dest_repo,
             source_datasets,
+            settings=FastImportSettings(num_processes=1),
             replace_existing=replace_existing,
             from_commit=from_commit,
             replace_ids=replace_ids,
             verbosity=ctx.obj.verbosity,
             header=header,
             extra_cmd_args=["--force"],
-            num_processes=1,
         )
         dest_commit = dest_repo.references.get(upgrade_ref).target
     finally:
