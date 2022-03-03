@@ -294,7 +294,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             existing_branch = _find_remote_branch_by_name(repo, refish)
 
         if not existing_branch:
-            raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
+            raise NotFound(f"Branch '{refish}' not found.", exit_code=NO_BRANCH)
 
         commit = existing_branch.peel(pygit2.Commit)
         do_switch_commit = repo.head_commit != commit

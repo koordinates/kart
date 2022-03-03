@@ -136,4 +136,4 @@ def resolve(ctx, with_version, file_path, conflict_label):
             )
             ctx.exit(0)
 
-    raise NotFound(f"No conflict found at {conflict_label}", NO_CONFLICT)
+    raise NotFound(f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT)
