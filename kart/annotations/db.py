@@ -3,14 +3,12 @@ import json
 import logging
 import threading
 
+from kart.sqlalchemy.sqlite import sqlite_engine
 from sqlalchemy import Column, Integer, Text, UniqueConstraint
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.schema import CreateTable
-
-from kart.sqlalchemy.sqlite import sqlite_engine
-
 
 L = logging.getLogger(__name__)
 Base = declarative_base()

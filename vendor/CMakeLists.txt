@@ -195,11 +195,11 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 #
 # pygit2
 #
-set(PYGIT2_WHEEL_VER 1.7.0)
+set(PYGIT2_WHEEL_VER 1.9.0)
 ExternalProject_Add(
   pygit2
   GIT_REPOSITORY https://github.com/koordinates/pygit2.git
-  GIT_TAG kart-v0.11.0
+  GIT_TAG ee304145fc588422c7d8ed930252e2e79f5bc2b2
   BUILD_IN_SOURCE ON
   DEPENDS wheelBuildEnv LibGit2::LibGit2
   EXCLUDE_FROM_ALL ON

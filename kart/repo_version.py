@@ -1,13 +1,8 @@
 import itertools
-
 import json
 
 from .core import walk_tree
-
-from .exceptions import (
-    InvalidOperation,
-    UNSUPPORTED_VERSION,
-)
+from .exceptions import UNSUPPORTED_VERSION, InvalidOperation
 
 # We look for the repostructure version blob in either of these two places:
 REPOSTRUCTURE_VERSION_BLOB_PATHS = {
@@ -75,12 +70,12 @@ def dataset_class_for_version(version):
     """
     assert MIN_SUPPORTED_REPO_VERSION <= version <= MAX_SUPPORTED_REPO_VERSION
     if version == 2:
-        from kart.dataset2 import Dataset2
+        from kart.tabular.dataset2 import Dataset2
 
         return Dataset2
 
     if version == 3:
-        from kart.dataset3 import Dataset3
+        from kart.tabular.dataset3 import Dataset3
 
         return Dataset3
 

@@ -7,8 +7,8 @@ from .conflicts import list_conflicts
 from .crs_util import make_crs
 from .exceptions import CrsError, GeometryError
 from .geometry import geometry_from_string
-from .output_util import dump_json_output
 from .merge_util import MergeContext, MergeIndex, merge_status_to_text
+from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
 

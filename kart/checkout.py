@@ -2,22 +2,20 @@ import click
 import pygit2
 
 from .exceptions import (
-    InvalidOperation,
-    NotFound,
-    NotYetImplemented,
     NO_BRANCH,
     NO_COMMIT,
     NO_WORKING_COPY,
+    DbConnectionError,
+    InvalidOperation,
+    NotFound,
+    NotYetImplemented,
 )
-
-from .exceptions import DbConnectionError
 from .key_filters import RepoKeyFilter
 from .output_util import InputMode, get_input_mode
 from .promisor_utils import get_partial_clone_envelope
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
 from .working_copy import WorkingCopyStatus
-
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -296,7 +294,7 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
             existing_branch = _find_remote_branch_by_name(repo, refish)
 
         if not existing_branch:
-            raise NotFound(f"Branch '{refish}' not found.", NO_BRANCH)
+            raise NotFound(f"Branch '{refish}' not found.", exit_code=NO_BRANCH)
 
         commit = existing_branch.peel(pygit2.Commit)
         do_switch_commit = repo.head_commit != commit

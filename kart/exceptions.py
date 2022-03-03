@@ -19,6 +19,7 @@ UNSUPPORTED_VERSION = 24
 CRS_ERROR = 25
 GEOMETRY_ERROR = 26
 SPATIAL_FILTER_PK_CONFLICT = 27
+INVALID_FILE_FORMAT = 28
 
 NOT_YET_IMPLEMENTED = 30
 
@@ -65,7 +66,7 @@ class BaseException(click.ClickException):
 
     exit_code = UNCATEGORIZED_ERROR
 
-    def __init__(self, message, exit_code=None, param=None, param_hint=None):
+    def __init__(self, message, *, exit_code=None, param=None, param_hint=None):
         super(BaseException, self).__init__(message)
 
         if exit_code is not None:

@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from pathlib import Path
 
-from .exceptions import InvalidOperation, NotFound, NO_REPOSITORY
+from .exceptions import NO_REPOSITORY, InvalidOperation, NotFound
 
 # Don't import kart.repo here - kart.context.Context is always imported at startup,
 # whereas kart.repo.KartRepo isn't always needed, and takes a while to import.

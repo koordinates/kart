@@ -8,7 +8,6 @@ import msgpack
 
 from kart.geometry import Geometry
 
-
 L = logging.getLogger("kart.serialise_util")
 
 # Extension code for Geometry objects.

@@ -1,16 +1,15 @@
-from datetime import datetime
 import re
-
+from datetime import datetime
 
 from kart import crs_util
 from kart.geometry import normalise_gpkg_geom
-from kart.schema import Schema, ColumnSchema
-from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,
     ConverterType,
     aliased_converter_type,
 )
+from kart.sqlalchemy.gpkg import Db_GPKG
+from kart.tabular.schema import ColumnSchema, Schema
 from kart.timestamps import datetime_to_iso8601_utc
 from kart.utils import ungenerator
 

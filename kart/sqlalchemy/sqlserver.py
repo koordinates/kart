@@ -3,12 +3,10 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 import sqlalchemy
-from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer, MSDialect
+from kart.exceptions import NO_DRIVER, NotFound
+from sqlalchemy.dialects.mssql.base import MSDialect, MSIdentifierPreparer
 
-
-from kart.exceptions import NotFound, NO_DRIVER
 from .base import BaseDb
-
 
 L = logging.getLogger("kart.sqlalchemy.sqlserver")
 
@@ -85,7 +83,7 @@ class Db_SqlServer(BaseDb):
                 ),
                 {"db_schema": db_schema},
             )
-            return {row['table_name']: None for row in r}
+            return {row["table_name"]: None for row in r}
         else:
             r = sess.execute(
                 sqlalchemy.text(

@@ -6,16 +6,11 @@ from collections import defaultdict
 
 import pygit2
 
-from .exceptions import NotYetImplemented
-from .serialise_util import (
-    msg_pack,
-    b64encode_str,
-    b64hash,
-    hexhash,
-)
-from .utils import chunk
+from kart.exceptions import NotYetImplemented
+from kart.serialise_util import b64encode_str, b64hash, hexhash, msg_pack
+from kart.utils import chunk
 
-L = logging.getLogger("kart.dataset3_paths")
+L = logging.getLogger("kart.tabular.dataset3_paths")
 
 _LOWERCASE_HEX_ALPHABET = "0123456789abcdef"
 

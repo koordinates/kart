@@ -4,13 +4,13 @@ from .cli_util import StringFromFile
 from .exceptions import CrsError
 from .serialise_util import uint32hash
 from .wkt_lexer import (
-    WKTLexer,
     CloseBracket,
     Comma,
     Keyword,
     OpenBracket,
     String,
     Whitespace,
+    WKTLexer,
 )
 
 
@@ -215,7 +215,7 @@ def ensure_authority_specified(wkt, auth_name, auth_code):
     (Built-in SQL Server CRS definitions don't contain the authority).
     """
     if wkt and not WKTLexer().find_pattern(wkt, AUTHORITY_PATTERN, at_depth=1):
-        index = wkt.rindex(']')
+        index = wkt.rindex("]")
         return wkt[:index] + f', AUTHORITY["{auth_name}", "{auth_code}"]' + wkt[index:]
     return wkt
 

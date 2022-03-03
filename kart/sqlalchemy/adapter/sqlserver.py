@@ -1,21 +1,19 @@
 import decimal
 
 import sqlalchemy as sa
-from sqlalchemy.ext.compiler import compiles
-from sqlalchemy.sql import quoted_name
-from sqlalchemy.sql.functions import Function
-
-
 from kart import crs_util
 from kart.geometry import Geometry
-from kart.schema import Schema, ColumnSchema
-from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,
     ConverterType,
     aliased_converter_type,
 )
+from kart.sqlalchemy.sqlserver import Db_SqlServer
+from kart.tabular.schema import ColumnSchema, Schema
 from kart.utils import ungenerator
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql import quoted_name
+from sqlalchemy.sql.functions import Function
 
 
 # Adds all CURVE subtypes to GEOMETRY's subtypes since CURVE is a subtype of GEOMETRY, and so on.
@@ -219,9 +217,9 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
         ms_table_info = list(r)
 
         geom_cols = [
-            row['column_name']
+            row["column_name"]
             for row in ms_table_info
-            if row['data_type'] in ('geometry', 'geography')
+            if row["data_type"] in ("geometry", "geography")
         ]
 
         table_identifier = cls.quote_table(db_schema=db_schema, table_name=table_name)
@@ -332,10 +330,10 @@ class KartAdapter_SqlServer(BaseKartAdapter, Db_SqlServer):
             None,
         )
         if crs_row:
-            auth_name = crs_row['authority_name']
-            auth_code = crs_row['authorized_spatial_reference_id']
+            auth_name = crs_row["authority_name"]
+            auth_code = crs_row["authorized_spatial_reference_id"]
             if not auth_name and not auth_code:
-                auth_name, auth_code = "CUSTOM", crs_row['srid']
+                auth_name, auth_code = "CUSTOM", crs_row["srid"]
             geometry_crs = f"{auth_name}:{auth_code}"
             extra_type_info["geometryCRS"] = geometry_crs
 
@@ -402,7 +400,7 @@ class GeometryType(ConverterType):
                 bindvalue == sa.literal_column(self.EMPTY_POINT_WKB),
                 Function(
                     quoted_name("geometry::STGeomFromText", False),
-                    'POINT EMPTY',
+                    "POINT EMPTY",
                     self.crs_id,
                     type_=self,
                 ),

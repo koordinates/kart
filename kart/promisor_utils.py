@@ -1,6 +1,6 @@
+import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
-import subprocess
 
 from .cli_util import tool_environment
 from .exceptions import NotFound, SubprocessError
@@ -24,7 +24,7 @@ def object_is_promised(object_error):
     """Given an error loading an object, returns True if it signals EOBJECTPROMISED."""
     return (
         isinstance(object_error, KeyError)
-        and getattr(object_error, 'subcode', 0) == LibgitSubcode.EOBJECTPROMISED
+        and getattr(object_error, "subcode", 0) == LibgitSubcode.EOBJECTPROMISED
     )
 
 

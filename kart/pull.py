@@ -5,8 +5,7 @@ import click
 
 from . import merge
 from .cli_util import tool_environment
-from .exceptions import NotFound, NO_BRANCH
-
+from .exceptions import NO_BRANCH, NotFound
 
 L = logging.getLogger("kart.pull")
 

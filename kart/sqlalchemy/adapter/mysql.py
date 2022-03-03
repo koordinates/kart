@@ -1,22 +1,19 @@
 import decimal
 
-
 import sqlalchemy as sa
-from sqlalchemy.sql.functions import Function
-from sqlalchemy.dialects.mysql.types import DOUBLE
-
-
 from kart import crs_util
-from kart.geometry import Geometry
 from kart.exceptions import NotYetImplemented
-from kart.schema import Schema, ColumnSchema
-from kart.sqlalchemy.mysql import Db_MySql
+from kart.geometry import Geometry
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,
     ConverterType,
     aliased_converter_type,
 )
+from kart.sqlalchemy.mysql import Db_MySql
+from kart.tabular.schema import ColumnSchema, Schema
 from kart.utils import ungenerator
+from sqlalchemy.dialects.mysql.types import DOUBLE
+from sqlalchemy.sql.functions import Function
 
 
 class KartAdapter_MySql(BaseKartAdapter, Db_MySql):

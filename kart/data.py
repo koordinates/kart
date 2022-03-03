@@ -2,13 +2,12 @@ import sys
 
 import click
 
-from .cli_util import add_help_subcommand, StringFromFile
-from .commit import get_commit_message, commit_obj_to_json, commit_json_to_text
-from .diff_structs import Delta, DeltaDiff, DatasetDiff, RepoDiff
-from .exceptions import NotFound, NO_TABLE
+from .cli_util import StringFromFile, add_help_subcommand
+from .commit import commit_json_to_text, commit_obj_to_json, get_commit_message
+from .diff_structs import DatasetDiff, Delta, DeltaDiff, RepoDiff
+from .exceptions import NO_TABLE, NotFound
 from .output_util import dump_json_output
 from .repo import KartRepoState
-
 
 # Changing these items would generally break the repo;
 # we disallow that.

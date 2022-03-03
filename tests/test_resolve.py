@@ -2,7 +2,7 @@ import json
 import pytest
 
 from kart.exceptions import INVALID_OPERATION
-from kart.feature_output import feature_as_json
+from kart.tabular.feature_output import feature_as_json
 from kart.merge_util import MergeIndex
 from kart.repo import KartRepoState, KartRepo
 

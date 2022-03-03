@@ -6,9 +6,9 @@ import click
 import pygit2
 
 from .cli_util import MutexOption
-from .exceptions import InvalidOperation, NotFound, NotYetImplemented, NO_CONFLICT
+from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
 from .geometry import geojson_to_gpkg_geom
-from .merge_util import MergeIndex, MergeContext, RichConflict
+from .merge_util import MergeContext, MergeIndex, RichConflict
 from .repo import KartRepoState
 
 
@@ -136,4 +136,4 @@ def resolve(ctx, with_version, file_path, conflict_label):
             )
             ctx.exit(0)
 
-    raise NotFound(f"No conflict found at {conflict_label}", NO_CONFLICT)
+    raise NotFound(f"No conflict found at {conflict_label}", exit_code=NO_CONFLICT)

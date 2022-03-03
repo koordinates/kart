@@ -61,7 +61,8 @@ To reference a spatial filter file on your filesystem, use an @ symbol followed 
 
 ### Current limitations
 
-- The spatial filter can be changed at any time but it cannot be enlarged beyond the spatial filter that was originally used during `kart clone`. [#537](https://github.com/koordinates/kart/issues/537)
+- Spatial filtering may not save much bandwidth or disk space in repositories where each individual feature takes very little room on disk. See [Appendix](#not-much-disk-space-is-saved-when-features-are-small-on-disk)
+- Repeatedly changing the spatial filter is not guaranteed to be more efficient than not using spatial filters at all. See [Appendix](#repeatedly-changing-the-spatial-filter-is-inefficient)
 - If the repository you are cloning from has not been spatially indexed, all features must be downloaded before the filter can be applied. See [Indexing](#indexing)
 - The spatial filter cannot be set to a geometry that can't be transformed into the CRS for every dataset in the repository.
 - Currently indexing isn't very clever with respect to certain CRS changes. If the CRS for a dataset has been drastically changed at some point, then the index generated for that dataset, although accurate, can be very inefficient, resulting in inefficient clones. (If the CRS is changed but the new CRS is similar to the old one in that the features are all in approximately the same place regardless of which CRS is used to interpret them, then an efficient index will still be generated). [#538](https://github.com/koordinates/kart/issues/538)
@@ -127,9 +128,9 @@ Since a Kart repository is still basically a type of Git repository, the standar
 
 where `W`, `S`, `E` and `N` are the extent of the envelope in degrees longitude and latitude. The following constraints must hold true: `S <= N`and `W <= E` (unless the envelope crosses the antimeridian, in which case `E < W`). All longitudes must be in the range `-180 <= X <= 180` and latitudes in the range `-90 <= Y <= 90`.
 
-The custom build of git which supports filter extensions is found on GitHub at [koordinates/git](https://github.com/koordinates/git/tree/list-objects-filter-extensions), and the spatial filter extension is part of the [Kart repository](https://github.com/koordinates/kart/tree/master/vendor/spatial-filter).
+The custom build of git which supports filter extensions is found on GitHub at [koordinates/git](https://github.com/koordinates/git/tree/kx-latest), and the spatial filter extension is part of the [Kart repository](https://github.com/koordinates/kart/tree/master/vendor/spatial-filter).
 
-There is also a custom build of git for Windows [here](https://github.com/koordinates/git/tree/windows-list-objects-filter-extensions) which supports filter extensions generally but doesn't include the spatial filter extension specifically. This is sufficient so that spatial filtered clones can be made with a Windows client, but they cannot currently be made using a Windows server.
+There is also a custom build of git for Windows [here](https://github.com/koordinates/git/releases/tag/kart-0.11.0-windows) which supports filter extensions generally but doesn't include the spatial filter extension specifically. This is sufficient so that spatial filtered clones can be made with a Windows client, but they cannot currently be made using a Windows server.
 
 For more details, see [Building Git for Kart](BUILDING_GIT_FOR_KART.md)
 
@@ -142,5 +143,31 @@ way if a spatial filter was active during the clone operation, and the missing f
 
 The third party libraries that Kart uses for reading Git repositories - pygit2 and libgit2 - currently don't have full support for partial clones, so they don't have a way of separating objects that are missing-but-promised (as in promisor packfiles) and objects that are unexpectedly missing (that is, corrupt). Kart maintains a fork of each project which has this functionality added, but which has not yet been merged upstream. These are found here:
 
-- [Libgit2 fork](https://github.com/koordinates/libgit2/tree/kart-0.11.0)
-- [Pygit2 fork](https://github.com/koordinates/pygit2/tree/kart-0.11.0)
+- [Libgit2 fork](https://github.com/koordinates/libgit2/tree/kx-latest)
+- [Pygit2 fork](https://github.com/koordinates/pygit2/tree/kx-latest)
+
+---
+
+### Appendix - More on Limitations
+
+#### Not much disk space is saved when features are small on disk
+
+(Previously tracked as [#557](https://github.com/koordinates/kart/issues/557))
+
+When spatial filtering is applied during a clone, some blobs are not sent, but at this point, all tree objects are sent. (These "tree" objects group the features into a hierarchy that is not visible to the user, but which gives the repository a git-compatible structure).
+
+When features are very small in terms of bytes on disk (ie, more commonly for POINT geometries), then the feature blobs may be much smaller than the tree structure, and a spatially filtered clone may not provide much benefit at all in terms of bandwidth or disk space saved.
+
+In this case, you might opt to clone without a spatial filter at all since it is not benefitting you, or you might opt to clone with `--spatial-filter-after-clone` - this flag means that the spatial filter is only applied locally, which means you can change it at any time without having to refetch any missing features.
+
+#### Repeatedly changing the spatial filter is inefficient
+
+(Previously tracked as [#558](https://github.com/koordinates/kart/issues/558))
+
+Changing the spatial filter "locally" is relatively efficient - in this scenario you have already fetched the necessary data, and Kart is just changing your view of the data and repopulating the working copy with only the data that matches your spatial filter.
+
+These local-only changes happen if you cloned the entire repository originally - in this case you can set any spatial filter you want from that point on and it will always be a local-only change - or, if you originally cloned with a large spatial filter, and you are now changing the spatial filter to be a smaller spatial filter that is a subset of it.
+
+Changing your spatial filter to a new spatial filter that isn't a subset of what was originally fetched, causes the fetching of data to begin again from scratch - it is no more efficient in terms of bandwidth than if you had cloned a brand new repository while specifying the new spatial filter. Currently no attempt is made to skip the resending of features that the client already has (this is possible, but technically difficult and not yet implemented).
+
+For this reason, if you intend to change the spatial filter often, it is best to initially clone using a spatial filter that is a superset of the various spatial filters you intend to use (for example, if you intend to switch between using different cities in your state as spatial filters, it is probably best to clone the entire state initially). Depending on your use case, it may be simplest to clone the entire repository.

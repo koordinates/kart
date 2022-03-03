@@ -3,18 +3,14 @@ import importlib
 import logging
 import os
 import re
-import sys
 import subprocess
+import sys
 
 import click
 import pygit2
 
 from . import core  # noqa
-from .cli_util import (
-    add_help_subcommand,
-    call_and_exit_flag,
-    tool_environment,
-)
+from .cli_util import add_help_subcommand, call_and_exit_flag, tool_environment
 from .context import Context
 from .exec import execvp
 
@@ -40,6 +36,7 @@ MODULE_COMMANDS = {
     "status": {"status"},
     "query": {"query"},
     "upgrade": {"upgrade", "upgrade-to-tidy", "upgrade-to-kart"},
+    "point_cloud.import_": {"point-cloud-import"},
 }
 
 
@@ -75,8 +72,8 @@ def print_version(ctx):
     import psycopg2
     import pysqlite3
     import rtree
-    import sqlalchemy
 
+    import sqlalchemy
     from kart.sqlalchemy.gpkg import Db_GPKG
 
     click.echo(f"Kart v{get_version()}, Copyright (c) Kart Contributors")
@@ -305,9 +302,9 @@ def git(ctx, args):
     execvp("git", [*params, *args])
 
 
-def _hackily_parse_command(args):
-    ignore_next = False
-    for arg in args[1:]:
+def _hackily_parse_command(args, skip_first_arg=True):
+    ignore_next = skip_first_arg
+    for arg in args:
         if ignore_next:
             ignore_next = False
             continue
@@ -321,8 +318,8 @@ def _hackily_parse_command(args):
             return arg
 
 
-def load_commands_from_args(args):
-    command = _hackily_parse_command(args)
+def load_commands_from_args(args, skip_first_arg=True):
+    command = _hackily_parse_command(args, skip_first_arg=skip_first_arg)
     if command == "help":
         _load_all_commands()
     elif command not in cli.commands:
