@@ -30,10 +30,7 @@ add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/py-bindings.stamp
   COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/tmp
   COMMAND ${PYBUILD_ENV} ${cythonEnv_PYTHON} setup.py --no-user-cfg build_ext
-          --build-temp=${CMAKE_CURRENT_BINARY_DIR}/tmp
-  COMMAND
-    ${PYBUILD_ENV} ${cythonEnv_PYTHON} setup.py --no-user-cfg bdist_wheel --skip-build
-    --dist-dir=${CMAKE_CURRENT_BINARY_DIR} --bdist-dir=${CMAKE_CURRENT_BINARY_DIR}/tmp --keep-temp
+          --build-temp=${CMAKE_CURRENT_BINARY_DIR}/tmp --build-lib=${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/py-bindings.stamp
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   DEPENDS cythonEnv setup.py setup.cfg libkart_.pxd libkart.pyx kart
