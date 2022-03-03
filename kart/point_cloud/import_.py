@@ -1,6 +1,5 @@
-from glob import glob
 import json
-from os.path import expanduser
+from pathlib import Path
 import sys
 
 import click
@@ -26,25 +25,21 @@ def point_cloud_import(ctx, sources):
     """
     import pdal
 
-    all_source_paths = []
     for source in sources:
-        source_paths = list(glob(expanduser(source)))
-        if not source_paths:
-            raise NotFound(NO_IMPORT_SOURCE, f"No data found at {source}")
-        for source_path in source_paths:
-            all_source_paths.append(source_path)
+        if not (Path() / source).is_file():
+            raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
     version_set = ListBasedSet()
     copc_version_set = ListBasedSet()
     pdrf_set = ListBasedSet()
     crs_set = ListBasedSet()
 
-    for source_path in all_source_paths:
-        click.echo(f"Checking {source_path}...          \r", nl=False)
+    for source in sources:
+        click.echo(f"Checking {source}...          \r", nl=False)
         config = [
             {
                 "type": "readers.las",
-                "filename": source_path,
+                "filename": source,
                 "count": 0,  # Don't read any individual points.
             }
         ]
@@ -53,7 +48,7 @@ def point_cloud_import(ctx, sources):
             pipeline.execute()
         except RuntimeError:
             raise InvalidOperation(
-                f"Error reading {source_path}", exit_code=INVALID_FILE_FORMAT
+                f"Error reading {source}", exit_code=INVALID_FILE_FORMAT
             )
 
         info = json.loads(pipeline.metadata)["metadata"]["readers.las"]

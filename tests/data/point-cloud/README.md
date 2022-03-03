@@ -7,4 +7,4 @@ Data Sources
 
 #### `autzen.las`
 
-[Autzen Stadium](https://github.com/PDAL/data/tree/master/autzen); Watershed Sciences, Inc; BSD
+[Autzen Stadium](https://github.com/PDAL/data/tree/master/autzen); Watershed Sciences, Inc; CC-BY

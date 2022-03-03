@@ -1,3 +1,4 @@
+from glob import glob
 import pytest
 
 from kart.exceptions import INVALID_FILE_FORMAT
@@ -43,7 +44,9 @@ def test_import_several_las(
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
         with chdir(repo_path):
-            r = cli_runner.invoke(["point-cloud-import", f"{auckland}/auckland_*.laz"])
+            r = cli_runner.invoke(
+                ["point-cloud-import", *glob(f"{auckland}/auckland_*.laz")]
+            )
             assert r.exit_code == 0, r.stderr
 
 
@@ -60,7 +63,7 @@ def test_import_mismatched_las(
                 r = cli_runner.invoke(
                     [
                         "point-cloud-import",
-                        f"{auckland}/auckland_*.laz",
+                        *glob(f"{auckland}/auckland_*.laz"),
                         f"{autzen}/autzen.las",
                     ]
                 )
