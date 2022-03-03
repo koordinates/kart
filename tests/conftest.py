@@ -389,7 +389,7 @@ class KartCliRunner(CliRunner):
         params = {"catch_exceptions": not self._in_pdb}
         params.update(kwargs)
 
-        load_commands_from_args(args)
+        load_commands_from_args(args, skip_first_arg=False)
 
         terminate_estimate_thread.clear()
 
