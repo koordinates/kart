@@ -14,18 +14,11 @@ namespace kart
     {
     public:
         // default constructor
-        TreeEntryWithPath()
-            : tree::entry(),
-              rel_path_(""){};
+        TreeEntryWithPath();
         // construct from a tree::entry
-        TreeEntryWithPath(const entry &e, string rel_path__)
-            : tree::entry(e),
-              rel_path_(rel_path__){};
+        TreeEntryWithPath(const entry &e, string rel_path__);
         // accessors
-        string rel_path() const
-        {
-            return rel_path_;
-        };
+        string rel_path() const;
 
     private:
         string rel_path_;
@@ -43,74 +36,16 @@ namespace kart
               const TreeEntryWithPath &>
     {
     public:
-        TreeEntryIterator()
-        {
-            TreeEntryIterator(nullptr, nullptr);
-        }
-        TreeEntryIterator(repository *repo, tree *tree_)
-            : repo_(repo),
-              entries_stack(vector<vector<TreeEntryWithPath>>()),
-              heads(vector<size_t>())
-        {
-            if (tree_)
-            {
-                _enter_tree(*tree_);
-            }
-        }
-        reference operator*() const
-        {
-            return entries_stack.back()[heads.back()];
-        }
-        pointer operator->()
-        {
-            return &(entries_stack.back()[heads.back()]);
-        }
+        TreeEntryIterator();
+        TreeEntryIterator(repository *repo, tree *tree_);
+        reference operator*() const;
+        pointer operator->();
 
         // Prefix increment
-        TreeEntryIterator &operator++()
-        {
-            if (!heads.size())
-            {
-                return *this;
-            }
-            // check if the previous entry was a tree. if so, we need to push the tree's entries onto the stack
-            auto entry = **this;
-            bool new_tree = (entry.type() == object::object_type::tree);
-            if (new_tree)
-            {
-                _enter_tree(repo_->tree_entry_to_object(entry).as_tree());
-            }
-            else
-            {
-                heads.back()++;
-            }
-            // TODO: try and rearrange this so it's neater
-            while (heads.size())
-            {
-                if (heads.back() < entries_stack.back().size())
-                {
-                    return *this;
-                }
-                // the latest tree has been exhausted; pop from the stack and keep iterating
-                // over the previous tree.
-                entries_stack.pop_back();
-                heads.pop_back();
-                if (heads.size())
-                {
-                    heads.back()++;
-                }
-            }
-            // finished iteration
-            return *this;
-        }
+        TreeEntryIterator &operator++();
 
         // Postfix increment
-        TreeEntryIterator operator++(int)
-        {
-            TreeEntryIterator tmp = *this;
-            ++(*this);
-            return tmp;
-        }
+        TreeEntryIterator operator++(int);
         friend bool operator==(const TreeEntryIterator &a, const TreeEntryIterator &b)
         {
             auto a_size = a.heads.size();
@@ -124,7 +59,7 @@ namespace kart
                 return true;
             }
             return (a.heads.back() == b.heads.back());
-        }
+        };
 
         friend bool operator!=(const TreeEntryIterator &a, const TreeEntryIterator &b)
         {
@@ -132,21 +67,7 @@ namespace kart
         };
 
     private:
-        void _enter_tree(tree tree_)
-        {
-            string rel_path = "";
-            if (entries_stack.size())
-            {
-                rel_path = (**this).rel_path() + "/";
-            }
-            auto entries = vector<TreeEntryWithPath>();
-            for (auto e : tree_.entries())
-            {
-                entries.push_back(TreeEntryWithPath(e, rel_path + e.filename()));
-            }
-            entries_stack.push_back(entries);
-            heads.push_back(0);
-        };
+        void _enter_tree(tree tree_);
         repository *repo_;
         vector<vector<TreeEntryWithPath>> entries_stack;
         vector<size_t> heads;
@@ -156,14 +77,8 @@ namespace kart
     {
     public:
         TreeWalker(repository *repo_, tree *tree_);
-        TreeEntryIterator begin()
-        {
-            return TreeEntryIterator(repo_, tree_);
-        }
-        TreeEntryIterator end()
-        {
-            return TreeEntryIterator(nullptr, nullptr);
-        }
+        TreeEntryIterator begin();
+        TreeEntryIterator end();
 
     private:
         repository *repo_;
