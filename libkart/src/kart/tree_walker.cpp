@@ -40,6 +40,9 @@ TreeEntryIterator::TreeEntryIterator(repository *repo, tree *tree_)
         _enter_tree(*tree_);
     }
 };
+// static member
+const TreeEntryIterator TreeEntryIterator::END{nullptr, nullptr};
+
 TreeEntryIterator::reference TreeEntryIterator::operator*() const
 {
     return entries_stack.back()[heads.back()];
@@ -121,5 +124,5 @@ TreeEntryIterator TreeWalker::begin()
 }
 TreeEntryIterator TreeWalker::end()
 {
-    return TreeEntryIterator(nullptr, nullptr);
+    return TreeEntryIterator::END;
 }

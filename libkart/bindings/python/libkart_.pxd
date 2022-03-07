@@ -1,3 +1,4 @@
+from libc.stdint cimport int64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -27,6 +28,10 @@ cdef extern from "kart.hpp" namespace "kart":
     cdef cppclass cppgit2_tree "cppgit2::tree":
         cppgit2_oid id()
         vector[cppgit2_tree_entry] entries()
+    cdef cppclass cppgit2_blob "cppgit2::blob":
+        cppgit2_oid id()
+        void* raw_contents()
+        int64_t raw_size()
 
     # actual libkart stuff
     cdef cppclass CppTreeEntryWithPath "kart::TreeEntryWithPath":
@@ -45,10 +50,21 @@ cdef extern from "kart.hpp" namespace "kart":
         CppTreeEntryIterator begin()
         CppTreeEntryIterator end()
 
+    cdef cppclass CppBlobIterator "kart::BlobIterator":
+        cppgit2_blob operator*()
+        CppBlobIterator operator++()
+        bint operator==(CppBlobIterator)
+        bint operator!=(CppBlobIterator)
+
+    cdef cppclass CppBlobWalker "kart::BlobWalker":
+        CppBlobIterator begin()
+        CppBlobIterator end()
+
     cdef cppclass CppDataset3 "kart::Dataset3":
         const string path
-        unique_ptr[cppgit2_tree] get_tree()
-        unique_ptr[cppgit2_tree] get_features_tree()
+        unique_ptr[cppgit2_tree] get_tree() except +
+        unique_ptr[cppgit2_tree] get_features_tree() except +
+        unique_ptr[CppBlobWalker] feature_blobs() except +
 
 
     cdef cppclass CppRepoStructure "kart::RepoStructure":

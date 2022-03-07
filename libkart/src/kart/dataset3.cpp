@@ -20,7 +20,13 @@ unique_ptr<cppgit2::tree> Dataset3::get_tree()
 }
 unique_ptr<cppgit2::tree> Dataset3::get_features_tree()
 {
-    auto entry = tree_.lookup_entry_by_path(DATASET_DIRNAME + "/features");
-    auto features_tree = repo->lookup_tree(entry.id());
-    return make_unique<tree>(features_tree);
+    auto entry = tree_.lookup_entry_by_path(DATASET_DIRNAME + "/feature");
+    auto feature_tree = repo->lookup_tree(entry.id());
+    return make_unique<tree>(feature_tree);
+}
+
+unique_ptr<BlobWalker> Dataset3::feature_blobs()
+{
+    auto feature_tree = get_features_tree();
+    return make_unique<BlobWalker>(repo, move(feature_tree));
 }

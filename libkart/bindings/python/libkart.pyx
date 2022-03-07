@@ -1,7 +1,6 @@
 # cython: c_string_type=unicode, c_string_encoding=utf8
-
 from cython.operator cimport dereference as deref, preincrement as preinc, address
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 from libcpp.utility cimport move
 
@@ -110,6 +109,7 @@ cdef class Tree:
         return x
 
 
+
 cdef class TreeWalker:
     cdef unique_ptr[CppTreeWalker] thisptr
     @staticmethod
@@ -122,7 +122,73 @@ cdef class TreeWalker:
         cdef CppTreeEntryIterator it = deref(self.thisptr).begin()
         while it != deref(self.thisptr).end():
             yield TreeEntryWithPath._wrap(deref(it))
-            it = preinc(it)
+            preinc(it)
+
+
+cdef class Blob:
+    cdef unique_ptr[cppgit2_blob] thisptr
+
+    @property
+    def id(self):
+        return Oid._wrap(deref(self.thisptr).id())
+
+    def get_size(self):
+        return deref(self.thisptr).raw_size()
+
+    def get_contents(self):
+        # TODO: memoize this. how? cython seems to make this pretty damn hard
+        cdef size_t size = deref(self.thisptr).raw_size()
+        cdef const void* raw_contents = deref(self.thisptr).raw_contents()
+        # FIXME: this does a copy; see below for TODO
+        cdef string cpp_string = string(<char*>raw_contents, size)
+        return <bytes>cpp_string
+
+    # TODO: use the buffer interface to prevent copying.
+    # This doesn't quite compile because `raw_contents()` returns a `const void *`,
+    # and `buffer.buf` wants a `void *`
+    #     def __getbuffer__(self, Py_buffer *buffer, int flags):
+    #         contents = deref(self.thisptr).raw_contents()
+    #         size = deref(self.thisptr).raw_size()
+    #
+    #         buffer.buf = contents
+    #         buffer.format = 'c'
+    #         buffer.internal = NULL
+    #         buffer.itemsize = 1
+    #         buffer.len = size;
+    #         buffer.ndim = 1
+    #         buffer.obj = self
+    #         buffer.readonly = 1
+    #         buffer.shape = [size]
+    #         buffer.strides = [1]
+    #         buffer.suboffsets = NULL
+    #
+    #     def __releasebuffer__(self, Py_buffer *buffer):
+    #         pass
+
+
+    def __repr__(self):
+        return f"<Blob: {self.id}>"
+
+    @staticmethod
+    cdef Blob _wrap(unique_ptr[cppgit2_blob] cpp):
+        cdef Blob x = Blob()
+        x.thisptr = move(cpp)
+        return x
+
+
+cdef class BlobWalker:
+    cdef unique_ptr[CppBlobWalker] thisptr
+    @staticmethod
+    cdef BlobWalker _wrap(unique_ptr[CppBlobWalker] cpp):
+        cdef BlobWalker x = BlobWalker()
+        x.thisptr = move(cpp)
+        return x
+
+    def __iter__(self):
+        cdef CppBlobIterator it = deref(self.thisptr).begin()
+        while it != deref(self.thisptr).end():
+            yield Blob._wrap(make_unique[cppgit2_blob](deref(it)))
+            preinc(it)
 
 
 cdef class Dataset3:
@@ -142,6 +208,12 @@ cdef class Dataset3:
     @property
     def features_tree(self):
         return Tree._wrap(deref(self.thisptr).get_features_tree())
+
+    def feature_blobs(self):
+        return BlobWalker._wrap(
+            deref(self.thisptr).feature_blobs()
+        )
+
 
     @staticmethod
     cdef Dataset3 _wrap(CppDataset3 *cpp):

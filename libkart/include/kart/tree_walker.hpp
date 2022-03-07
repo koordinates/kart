@@ -38,6 +38,7 @@ namespace kart
     public:
         TreeEntryIterator();
         TreeEntryIterator(repository *repo, tree *tree_);
+
         reference operator*() const;
         pointer operator->();
 
@@ -65,6 +66,8 @@ namespace kart
         {
             return !(a == b);
         };
+
+        static const TreeEntryIterator END;
 
     private:
         void _enter_tree(tree tree_);

@@ -1,3 +1,4 @@
 build/
+venv/
 bindings/python/libkart.cpp
 bindings/python/setup.cfg

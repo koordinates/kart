@@ -4,6 +4,7 @@
 #include <string>
 #include <memory>
 #include <cppgit2/repository.hpp>
+#include "kart/blob_iterator.hpp"
 
 using namespace std;
 namespace kart
@@ -18,6 +19,8 @@ namespace kart
 
         unique_ptr<cppgit2::tree> get_tree();
         unique_ptr<cppgit2::tree> get_features_tree();
+
+        unique_ptr<BlobWalker> feature_blobs();
 
     private:
         cppgit2::repository *repo;
