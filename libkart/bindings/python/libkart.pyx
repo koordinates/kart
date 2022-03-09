@@ -1,4 +1,5 @@
 # cython: c_string_type=unicode, c_string_encoding=utf8
+from cpython.buffer cimport PyBUF_SIMPLE, PyBUF_F_CONTIGUOUS, PyBUF_ND, PyBUF_STRIDES, PyBUF_INDIRECT, PyBUF_FORMAT
 from cython.operator cimport dereference as deref, preincrement as preinc, address
 from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
@@ -113,35 +114,36 @@ cdef class Blob:
     def get_size(self):
         return deref(self.thisptr).raw_size()
 
-    def get_contents(self):
-        # TODO: memoize this. how? cython seems to make this pretty damn hard
-        cdef size_t size = deref(self.thisptr).raw_size()
-        cdef const void* raw_contents = deref(self.thisptr).raw_contents()
-        # FIXME: this does a copy; see below for TODO
-        cdef string cpp_string = string(<char*>raw_contents, size)
-        return <bytes>cpp_string
+    def __bytes__(self):
+        return memoryview(self).tobytes()
 
-    # TODO: use the buffer interface to prevent copying.
-    # This doesn't quite compile because `raw_contents()` returns a `const void *`,
-    # and `buffer.buf` wants a `void *`
-    #     def __getbuffer__(self, Py_buffer *buffer, int flags):
-    #         contents = deref(self.thisptr).raw_contents()
-    #         size = deref(self.thisptr).raw_size()
-    #
-    #         buffer.buf = contents
-    #         buffer.format = 'c'
-    #         buffer.internal = NULL
-    #         buffer.itemsize = 1
-    #         buffer.len = size;
-    #         buffer.ndim = 1
-    #         buffer.obj = self
-    #         buffer.readonly = 1
-    #         buffer.shape = [size]
-    #         buffer.strides = [1]
-    #         buffer.suboffsets = NULL
-    #
-    #     def __releasebuffer__(self, Py_buffer *buffer):
-    #         pass
+    cdef Py_ssize_t _size
+    cdef Py_ssize_t _shape[1]
+    cdef Py_ssize_t _strides[1]
+
+    def __getbuffer__(self, Py_buffer *buffer, int flags):
+        contents = <char*>deref(self.thisptr).raw_contents()
+
+        cdef Py_ssize_t itemsize = 1
+        cdef Py_ssize_t size = deref(self.thisptr).raw_size()
+        self._shape[0] = size
+        self._strides[0] = 1
+        cdef string cpp_string = string(contents, size)
+
+        buffer.buf = contents
+        buffer.format = 'y#'
+        buffer.internal = NULL
+        buffer.itemsize = itemsize
+        buffer.len = size;
+        buffer.ndim = 1
+        buffer.obj = self
+        buffer.readonly = 1
+        buffer.shape = self._shape
+        buffer.strides = self._strides
+        buffer.suboffsets = NULL
+
+    def __releasebuffer__(self, Py_buffer *buffer):
+        pass
 
 
     def __repr__(self):
