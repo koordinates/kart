@@ -4,8 +4,8 @@
 #include <exception>
 #include <string>
 #include <memory>
-#include <cppgit2/repository.hpp>
 
+#include "kart/object.hpp"
 #include "kart/tree_walker.hpp"
 
 using namespace std;
@@ -18,14 +18,15 @@ namespace kart
     class BlobIterator
         : public iterator<
               input_iterator_tag,
-              cppgit2::blob,
+              kart::Blob,
               long,
-              const cppgit2::blob *,
-              const cppgit2::blob &>
+              const kart::Blob *,
+              const kart::Blob &>
     {
     public:
         BlobIterator();
-        BlobIterator(repository *repo, cppgit2::tree *tree);
+        BlobIterator(const BlobIterator &other);
+        BlobIterator(KartRepo *repo, Tree *tree);
 
         reference operator*() const;
         pointer operator->();
@@ -35,27 +36,25 @@ namespace kart
 
         // Postfix increment
         BlobIterator operator++(int);
-        friend bool operator==(const BlobIterator &a, const BlobIterator &b)
-        {
-            return a.tree_entry_iterator_ == b.tree_entry_iterator_;
-        };
 
-        friend bool operator!=(const BlobIterator &a, const BlobIterator &b)
-        {
-            return a.tree_entry_iterator_ != b.tree_entry_iterator_;
-        };
+        // comparison
+        friend bool operator==(const BlobIterator &a, const BlobIterator &b);
+        friend bool operator!=(const BlobIterator &a, const BlobIterator &b);
+
+        // assignment
+        BlobIterator &operator=(const BlobIterator &other);
 
     private:
-        repository *repo_;
-        TreeEntryIterator tree_entry_iterator_;
-        cppgit2::blob current_blob;
-        inline void _next_blob();
+        KartRepo *repo_;
+        unique_ptr<TreeEntryIterator> tree_entry_iterator_;
+        Blob current_blob;
+        inline void _advance_to_blob();
     };
 
     class BlobWalker
     {
     public:
-        BlobWalker(cppgit2::repository *repo, unique_ptr<cppgit2::tree> tree)
+        BlobWalker(KartRepo *repo, unique_ptr<Tree> tree)
             : repo_(repo), tree_(move(tree))
         {
         }
@@ -69,8 +68,8 @@ namespace kart
         }
 
     private:
-        repository *repo_;
-        unique_ptr<cppgit2::tree> tree_;
+        KartRepo *repo_;
+        unique_ptr<Tree> tree_;
     };
 
 } // namespace kart

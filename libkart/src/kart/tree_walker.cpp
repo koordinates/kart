@@ -9,19 +9,6 @@ using namespace std;
 using namespace cppgit2;
 using namespace kart;
 
-TreeEntryWithPath::TreeEntryWithPath()
-    : tree::entry(),
-      rel_path_(""){};
-// construct from a tree::entry
-TreeEntryWithPath::TreeEntryWithPath(const entry &e, string rel_path__)
-    : tree::entry(e),
-      rel_path_(rel_path__){};
-// accessors
-string TreeEntryWithPath::rel_path() const
-{
-    return rel_path_;
-};
-
 /**
  * TreeEntryIterator: An iterator over a tree's entries
  * (and entries of all subtrees) in preorder.
@@ -30,9 +17,9 @@ TreeEntryIterator::TreeEntryIterator()
 {
     TreeEntryIterator(nullptr, nullptr);
 };
-TreeEntryIterator::TreeEntryIterator(repository *repo, tree *tree_)
+TreeEntryIterator::TreeEntryIterator(KartRepo *repo, Tree *tree_)
     : repo_(repo),
-      entries_stack(vector<vector<TreeEntryWithPath>>()),
+      entries_stack(vector<vector<TreeEntry>>()),
       heads(vector<size_t>())
 {
     if (tree_)
@@ -64,7 +51,7 @@ TreeEntryIterator &TreeEntryIterator::operator++()
     bool new_tree = (entry.type() == object::object_type::tree);
     if (new_tree)
     {
-        _enter_tree(repo_->tree_entry_to_object(entry).as_tree());
+        _enter_tree(entry.get_object().as_tree());
     }
     else
     {
@@ -98,24 +85,14 @@ TreeEntryIterator TreeEntryIterator::operator++(int)
     return tmp;
 }
 
-void TreeEntryIterator::_enter_tree(tree tree_)
+void TreeEntryIterator::_enter_tree(Tree tree_)
 {
-    string rel_path = "";
-    if (entries_stack.size())
-    {
-        rel_path = (**this).rel_path() + "/";
-    }
-    auto entries = vector<TreeEntryWithPath>();
-    for (auto e : tree_.entries())
-    {
-        entries.push_back(TreeEntryWithPath(e, rel_path + e.filename()));
-    }
-    entries_stack.push_back(entries);
+    entries_stack.push_back(tree_.entries());
     heads.push_back(0);
 };
 
-TreeWalker::TreeWalker(cppgit2::repository *repo_, cppgit2::tree *tree_)
-    : repo_(repo_), tree_(tree_)
+TreeWalker::TreeWalker(KartRepo *repo, Tree *tree_)
+    : repo_(repo), tree_(tree_)
 {
 }
 TreeEntryIterator TreeWalker::begin()

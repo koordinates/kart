@@ -4,6 +4,10 @@
 #include <string>
 #include <memory>
 
+namespace kart
+{
+    class RepoStructure;
+}
 #include "kart/dataset3.hpp"
 #include "kart/errors.hpp"
 
@@ -13,7 +17,7 @@ namespace kart
     class RepoStructure
     {
     public:
-        RepoStructure(cppgit2::repository *repo, cppgit2::tree root_tree);
+        RepoStructure(KartRepo *repo, Tree root_tree);
 
         int Version();
         // TODO: support other types of datasets (1/2)?
@@ -21,7 +25,7 @@ namespace kart
         vector<Dataset3 *> *GetDatasets();
 
     private:
-        const cppgit2::tree root_tree;
-        cppgit2::repository *repo;
+        const Tree root_tree;
+        KartRepo *repo;
     };
 }

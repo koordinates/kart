@@ -41,54 +41,32 @@ cdef class Oid:
 
 
 cdef class TreeEntry:
-    cdef cppgit2_tree_entry cpp
+    cdef CppTreeEntry cpp
     @property
     def filename(self):
         return self.cpp.filename()
     @property
     def id(self):
         return Oid._wrap(self.cpp.id())
-
     @property
     def type(self):
         return ObjectType(self.cpp.type())
+    @property
+    def path(self):
+        return self.cpp.path()
 
     def __repr__(self):
-        return f"<TreeEntry: {self.filename}>"
+        return f"<TreeEntry: {self.path}>"
 
     @staticmethod
-    cdef TreeEntry _wrap(cppgit2_tree_entry cpp):
+    cdef TreeEntry _wrap(CppTreeEntry cpp):
         cdef TreeEntry x = TreeEntry()
-        x.cpp = cpp
-        return x
-
-cdef class TreeEntryWithPath:
-    cdef CppTreeEntryWithPath cpp
-    @property
-    def filename(self):
-        return self.cpp.filename()
-    @property
-    def id(self):
-        return Oid._wrap(self.cpp.id())
-    @property
-    def type(self):
-        return ObjectType(self.cpp.type())
-    @property
-    def rel_path(self):
-        return self.cpp.rel_path()
-
-    def __repr__(self):
-        return f"<TreeEntryWithPath: {self.rel_path}>"
-
-    @staticmethod
-    cdef TreeEntryWithPath _wrap(CppTreeEntryWithPath cpp):
-        cdef TreeEntryWithPath x = TreeEntryWithPath()
         x.cpp = cpp
         return x
 
 
 cdef class Tree:
-    cdef unique_ptr[cppgit2_tree] thisptr
+    cdef unique_ptr[CppTree] thisptr
     @property
     def id(self):
         return Oid._wrap(deref(self.thisptr).id())
@@ -103,7 +81,7 @@ cdef class Tree:
         ]
 
     @staticmethod
-    cdef Tree _wrap(unique_ptr[cppgit2_tree] cpp):
+    cdef Tree _wrap(unique_ptr[CppTree] cpp):
         cdef Tree x = Tree()
         x.thisptr = move(cpp)
         return x
@@ -121,12 +99,12 @@ cdef class TreeWalker:
     def __iter__(self):
         cdef CppTreeEntryIterator it = deref(self.thisptr).begin()
         while it != deref(self.thisptr).end():
-            yield TreeEntryWithPath._wrap(deref(it))
+            yield TreeEntry._wrap(deref(it))
             preinc(it)
 
 
 cdef class Blob:
-    cdef unique_ptr[cppgit2_blob] thisptr
+    cdef unique_ptr[CppBlob] thisptr
 
     @property
     def id(self):
@@ -170,7 +148,7 @@ cdef class Blob:
         return f"<Blob: {self.id}>"
 
     @staticmethod
-    cdef Blob _wrap(unique_ptr[cppgit2_blob] cpp):
+    cdef Blob _wrap(unique_ptr[CppBlob] cpp):
         cdef Blob x = Blob()
         x.thisptr = move(cpp)
         return x
@@ -187,7 +165,7 @@ cdef class BlobWalker:
     def __iter__(self):
         cdef CppBlobIterator it = deref(self.thisptr).begin()
         while it != deref(self.thisptr).end():
-            yield Blob._wrap(make_unique[cppgit2_blob](deref(it)))
+            yield Blob._wrap(make_unique[CppBlob](deref(it)))
             preinc(it)
 
 

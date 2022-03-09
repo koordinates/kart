@@ -6,6 +6,11 @@
 
 #include <cppgit2/repository.hpp>
 
+// allows dataset3.hpp to reference KartRepo
+namespace kart
+{
+	class KartRepo;
+}
 #include "kart/tree_walker.hpp"
 #include "kart/structure.hpp"
 
@@ -17,16 +22,24 @@ namespace kart
 	class KartRepo
 	{
 	public:
+		// constructors
 		KartRepo(const char *path);
 		~KartRepo(){};
+
+		// git wrappers
+		Object revparse_to_object(const std::string &spec);
+		Object lookup_object(cppgit2::oid id, cppgit2::object::object_type type, TreeEntry entry);
+		Object lookup_object(cppgit2::oid id, cppgit2::object::object_type type);
+
+		// kart stuff
 		int Version();
 		unique_ptr<RepoStructure> Structure();
 		unique_ptr<RepoStructure> Structure(string treeish);
 
-		unique_ptr<TreeWalker> walk_tree(tree *root);
+		unique_ptr<TreeWalker> walk_tree(Tree *root);
 
 	private:
-		repository repo;
+		repository wrapped;
 	};
 
 }

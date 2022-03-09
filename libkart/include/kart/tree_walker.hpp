@@ -4,25 +4,19 @@
 #include <exception>
 #include <string>
 #include <memory>
-#include <cppgit2/repository.hpp>
+
+namespace kart
+{
+    class TreeEntryIterator;
+    class TreeWalker;
+}
+#include "kart/repo.hpp"
+#include "kart/object.hpp"
 
 using namespace std;
 using namespace cppgit2;
 namespace kart
 {
-    class TreeEntryWithPath : public tree::entry
-    {
-    public:
-        // default constructor
-        TreeEntryWithPath();
-        // construct from a tree::entry
-        TreeEntryWithPath(const entry &e, string rel_path__);
-        // accessors
-        string rel_path() const;
-
-    private:
-        string rel_path_;
-    };
     /**
      * TreeEntryIterator: An iterator over a tree's entries
      * (and entries of all subtrees) in preorder.
@@ -30,14 +24,14 @@ namespace kart
     class TreeEntryIterator
         : public iterator<
               input_iterator_tag,
-              TreeEntryWithPath,
+              TreeEntry,
               long,
-              const TreeEntryWithPath *,
-              const TreeEntryWithPath &>
+              const TreeEntry *,
+              const TreeEntry &>
     {
     public:
         TreeEntryIterator();
-        TreeEntryIterator(repository *repo, tree *tree_);
+        TreeEntryIterator(KartRepo *repo, Tree *tree_);
 
         reference operator*() const;
         pointer operator->();
@@ -70,21 +64,21 @@ namespace kart
         static const TreeEntryIterator END;
 
     private:
-        void _enter_tree(tree tree_);
-        repository *repo_;
-        vector<vector<TreeEntryWithPath>> entries_stack;
+        void _enter_tree(Tree tree_);
+        KartRepo *repo_;
+        vector<vector<TreeEntry>> entries_stack;
         vector<size_t> heads;
     };
 
     class TreeWalker
     {
     public:
-        TreeWalker(repository *repo_, tree *tree_);
+        TreeWalker(KartRepo *repo_, Tree *tree_);
         TreeEntryIterator begin();
         TreeEntryIterator end();
 
     private:
-        repository *repo_;
-        tree *tree_;
+        KartRepo *repo_;
+        Tree *tree_;
     };
 } // namespace kart

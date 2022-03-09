@@ -3,7 +3,13 @@
 #include <exception>
 #include <string>
 #include <memory>
-#include <cppgit2/repository.hpp>
+
+namespace kart
+{
+    class Dataset3;
+    class BlobWalker;
+}
+#include "kart/repo.hpp"
 #include "kart/blob_iterator.hpp"
 
 using namespace std;
@@ -14,16 +20,16 @@ namespace kart
     class Dataset3
     {
     public:
-        Dataset3(cppgit2::repository *repo, cppgit2::tree tree_, string path);
+        Dataset3(KartRepo *repo, Tree tree_, string path);
         string path;
 
-        unique_ptr<cppgit2::tree> get_tree();
-        unique_ptr<cppgit2::tree> get_features_tree();
+        unique_ptr<Tree> get_tree();
+        unique_ptr<Tree> get_features_tree();
 
         unique_ptr<BlobWalker> feature_blobs();
 
     private:
-        cppgit2::repository *repo;
-        cppgit2::tree tree_;
+        KartRepo *repo;
+        Tree tree_;
     };
 }

@@ -10,11 +10,30 @@
 using namespace std;
 using namespace kart;
 
+// constructors
 KartRepo::KartRepo(const char *path)
-    : repo(repository::open(path))
+    : wrapped(repository::open(path))
 {
 }
 
+// git wrappers
+
+Object KartRepo::revparse_to_object(const std::string &spec)
+{
+    auto obj = wrapped.revparse_to_object(spec);
+    return Object(TreeEntry(this), obj);
+}
+Object KartRepo::lookup_object(cppgit2::oid id, cppgit2::object::object_type type, TreeEntry entry)
+{
+    auto obj = wrapped.lookup_object(id, type);
+    return Object(entry, obj);
+}
+Object KartRepo::lookup_object(cppgit2::oid id, cppgit2::object::object_type type)
+{
+    return lookup_object(id, type, TreeEntry(this));
+}
+
+// kart stuff
 int kart::KartRepo::Version()
 {
     auto structure = Structure("HEAD");
@@ -26,11 +45,11 @@ unique_ptr<RepoStructure> KartRepo::Structure()
 }
 unique_ptr<RepoStructure> KartRepo::Structure(string treeish)
 {
-    auto object = repo.revparse_to_object(treeish);
-    auto tree = object.peel_until(object::object_type::tree).as_tree();
-    return make_unique<RepoStructure>(&repo, tree);
+    auto object = revparse_to_object(treeish);
+    auto tree = object.peel_until(cppgit2::object::object_type::tree).as_tree();
+    return make_unique<RepoStructure>(this, tree);
 }
-unique_ptr<TreeWalker> KartRepo::walk_tree(cppgit2::tree *root)
+unique_ptr<TreeWalker> KartRepo::walk_tree(Tree *root)
 {
-    return make_unique<TreeWalker>(&repo, root);
+    return make_unique<TreeWalker>(this, root);
 }

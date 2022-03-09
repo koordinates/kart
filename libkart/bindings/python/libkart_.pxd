@@ -21,27 +21,38 @@ cdef extern from "kart.hpp" namespace "kart":
 
     cdef cppclass cppgit2_oid "cppgit2::oid":
         string to_hex_string()
-    cdef cppclass cppgit2_tree_entry "cppgit2::tree::entry":
-        string filename()
-        cppgit2_oid id()
-        object_type type()
-    cdef cppclass cppgit2_tree "cppgit2::tree":
-        cppgit2_oid id()
-        vector[cppgit2_tree_entry] entries()
-    cdef cppclass cppgit2_blob "cppgit2::blob":
-        cppgit2_oid id()
-        void* raw_contents()
-        int64_t raw_size()
 
     # actual libkart stuff
-    cdef cppclass CppTreeEntryWithPath "kart::TreeEntryWithPath":
-        string rel_path()
+    cdef cppclass CppTreeEntry "kart::TreeEntry":
+        string path()
         string filename()
         cppgit2_oid id()
         object_type type()
+    cdef cppclass CppBlob "kart::Blob":
+        cppgit2_oid id()
+        string path()
+        string filename()
+        void* raw_contents()
+        int64_t raw_size()
+    cdef cppclass CppTree "kart::Tree":
+        cppgit2_oid id()
+        string path()
+        string filename()
+        vector[CppTreeEntry] entries()
+    cdef cppclass CppCommit "kart::Commit":
+        cppgit2_oid id()
+    cdef cppclass CppObject "kart::Object":
+        cppgit2_oid id()
+        object_type type()
+        string path()
+        string filename()
+
+        CppBlob as_blob()
+        CppTree as_tree()
+        CppCommit as_commit()
 
     cdef cppclass CppTreeEntryIterator "kart::TreeEntryIterator":
-        CppTreeEntryWithPath operator*()
+        CppTreeEntry operator*()
         CppTreeEntryIterator operator++()
         bint operator==(CppTreeEntryIterator)
         bint operator!=(CppTreeEntryIterator)
@@ -51,7 +62,7 @@ cdef extern from "kart.hpp" namespace "kart":
         CppTreeEntryIterator end()
 
     cdef cppclass CppBlobIterator "kart::BlobIterator":
-        cppgit2_blob operator*()
+        CppBlob operator*()
         CppBlobIterator operator++()
         bint operator==(CppBlobIterator)
         bint operator!=(CppBlobIterator)
@@ -62,8 +73,8 @@ cdef extern from "kart.hpp" namespace "kart":
 
     cdef cppclass CppDataset3 "kart::Dataset3":
         const string path
-        unique_ptr[cppgit2_tree] get_tree() except +
-        unique_ptr[cppgit2_tree] get_features_tree() except +
+        unique_ptr[CppTree] get_tree() except +
+        unique_ptr[CppTree] get_features_tree() except +
         unique_ptr[CppBlobWalker] feature_blobs() except +
 
 
@@ -74,7 +85,7 @@ cdef extern from "kart.hpp" namespace "kart":
         CppKartRepo(const char *path)
         int Version()
         unique_ptr[CppRepoStructure] Structure(string treeish)
-        unique_ptr[CppTreeWalker] walk_tree(cppgit2_tree* root)
+        unique_ptr[CppTreeWalker] walk_tree(CppTree* root)
 
 
     # KartRepo* kart_open_repository(const char *path)

@@ -13,10 +13,33 @@ namespace kart
     /**
      * BlobIterator: An iterator over all blobs in the given tree hierarchy.
      **/
-    BlobIterator::BlobIterator() : BlobIterator::BlobIterator(nullptr, nullptr){};
-    BlobIterator::BlobIterator(repository *repo, cppgit2::tree *tree) : repo_(repo), tree_entry_iterator_(TreeEntryIterator(repo, tree))
+    // default constructor
+    BlobIterator::BlobIterator() : repo_(nullptr), tree_entry_iterator_(make_unique<TreeEntryIterator>(nullptr, nullptr))
     {
-        _next_blob();
+    }
+    // copy constructor
+    BlobIterator::BlobIterator(const BlobIterator &other) : repo_(other.repo_), tree_entry_iterator_(make_unique<TreeEntryIterator>(*other.tree_entry_iterator_)), current_blob(other.current_blob)
+    {
+    }
+    // normal constructor
+    BlobIterator::BlobIterator(KartRepo *repo, Tree *tree) : repo_(repo), tree_entry_iterator_(make_unique<TreeEntryIterator>(repo, tree))
+    {
+        _advance_to_blob();
+    }
+    // copy-assignment operator
+    BlobIterator &BlobIterator::operator=(const BlobIterator &other)
+    {
+
+        // Guard self assignment
+        if (this == &other)
+            return *this;
+
+        // copy the tree entry iterator
+        tree_entry_iterator_ = make_unique<TreeEntryIterator>(*other.tree_entry_iterator_);
+        // other fields
+        repo_ = other.repo_;
+        current_blob = other.current_blob;
+        return *this;
     }
     BlobIterator::reference BlobIterator::operator*() const
     {
@@ -30,8 +53,8 @@ namespace kart
     // Prefix increment
     BlobIterator &BlobIterator::operator++()
     {
-        tree_entry_iterator_++;
-        _next_blob();
+        (*tree_entry_iterator_)++;
+        _advance_to_blob();
         return *this;
     }
 
@@ -42,20 +65,29 @@ namespace kart
         ++(*this);
         return tmp;
     }
-
-    inline void BlobIterator::_next_blob()
+    bool operator==(const BlobIterator &a, const BlobIterator &b)
     {
-        while (tree_entry_iterator_ != TreeEntryIterator::END)
+        return *(a.tree_entry_iterator_) == *(b.tree_entry_iterator_);
+    };
+
+    bool operator!=(const BlobIterator &a, const BlobIterator &b)
+    {
+        return *(a.tree_entry_iterator_) != *(b.tree_entry_iterator_);
+    };
+
+    inline void BlobIterator::_advance_to_blob()
+    {
+        while ((*tree_entry_iterator_) != TreeEntryIterator::END)
         {
-            if (tree_entry_iterator_->type() == object::object_type::blob)
+            if ((*tree_entry_iterator_)->type() == object::object_type::blob)
             {
-                cppgit2::tree::entry entry(*tree_entry_iterator_);
-                current_blob = repo_->lookup_blob(entry.id());
+                TreeEntry entry{*(*tree_entry_iterator_)};
+                current_blob = entry.get_object().as_blob();
                 break;
             }
             else
             {
-                tree_entry_iterator_++;
+                (*tree_entry_iterator_)++;
             }
         }
     }
