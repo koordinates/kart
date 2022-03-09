@@ -441,6 +441,9 @@ class KartRepo(pygit2.Repository):
         (self.gitdir_path / "info").mkdir(exist_ok=True)
         with (self.gitdir_path / "info" / "attributes").open("a+") as f:
             f.write("**/.table-dataset/feature/** merge=binary\n")
+            f.write(
+                "**/.point-cloud-dataset*/tiles/** filter=lfs diff=lfs merge=lfs -text\n"
+            )
 
     def write_readme(self):
         readme_filename = f"{self.branding.upper()}_README.txt"
