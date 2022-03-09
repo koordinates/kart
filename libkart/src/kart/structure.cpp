@@ -43,7 +43,7 @@ vector<Dataset3 *> *RepoStructure::GetDatasets()
                            auto parent_entry = root_tree.lookup_entry_by_path(parent_path);
                            auto parent_tree = parent_entry.get_object().as_tree();
 
-                           result->push_back(new Dataset3(repo, parent_tree, parent_path));
+                           result->push_back(new Dataset3(repo, parent_tree));
                            return 1;
                        }
                        return 0;

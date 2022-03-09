@@ -20,11 +20,10 @@ namespace kart
     class Dataset3
     {
     public:
-        Dataset3(KartRepo *repo, Tree tree_, string path);
-        string path;
+        Dataset3(KartRepo *repo, Tree tree_);
 
         unique_ptr<Tree> get_tree();
-        unique_ptr<Tree> get_features_tree();
+        unique_ptr<Tree> get_feature_tree();
 
         unique_ptr<BlobWalker> feature_blobs();
 

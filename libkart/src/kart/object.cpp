@@ -5,6 +5,7 @@
 
 #include "kart/object.hpp"
 #include "kart/repo.hpp"
+#include "kart/util.hpp"
 
 using namespace std;
 using namespace kart;
@@ -104,13 +105,13 @@ TreeEntry Tree::lookup_entry_by_path(const std::string &path) const
 {
     auto prefix = path_with_slash();
     auto e = wrapped.lookup_entry_by_path(path);
-    return TreeEntry{e, entry_.repo(), prefix + path};
+    return TreeEntry{e, entry_.repo(), prefix + trim_trailing_slashes(path)};
 }
 TreeEntry Tree::lookup_entry_by_name(const std::string &name) const
 {
     auto prefix = path_with_slash();
     auto e = wrapped.lookup_entry_by_name(name);
-    return TreeEntry{e, entry_.repo(), prefix + name};
+    return TreeEntry{e, entry_.repo(), prefix + trim_trailing_slashes(name)};
 }
 
 void Tree::walk(cppgit2::tree::traversal_mode mode,

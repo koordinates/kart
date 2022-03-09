@@ -72,9 +72,8 @@ cdef extern from "kart.hpp" namespace "kart":
         CppBlobIterator end()
 
     cdef cppclass CppDataset3 "kart::Dataset3":
-        const string path
         unique_ptr[CppTree] get_tree() except +
-        unique_ptr[CppTree] get_features_tree() except +
+        unique_ptr[CppTree] get_feature_tree() except +
         unique_ptr[CppBlobWalker] feature_blobs() except +
 
 

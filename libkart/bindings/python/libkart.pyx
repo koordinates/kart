@@ -71,6 +71,12 @@ cdef class Tree:
     @property
     def id(self):
         return Oid._wrap(deref(self.thisptr).id())
+    @property
+    def path(self):
+        return deref(self.thisptr).path()
+    @property
+    def filename(self):
+        return deref(self.thisptr).filename()
 
     def __repr__(self):
         return f"<Tree: {self.id}>"
@@ -110,6 +116,12 @@ cdef class Blob:
     @property
     def id(self):
         return Oid._wrap(deref(self.thisptr).id())
+    @property
+    def path(self):
+        return deref(self.thisptr).path()
+    @property
+    def filename(self):
+        return deref(self.thisptr).filename()
 
     def get_size(self):
         return deref(self.thisptr).raw_size()
@@ -176,7 +188,7 @@ cdef class Dataset3:
 
     @property
     def path(self):
-        return deref(self.thisptr).path
+        return self.tree.path
 
     def __repr__(self):
         return f"<libkart.Dataset3: {self.path}>"
@@ -186,8 +198,8 @@ cdef class Dataset3:
         return Tree._wrap(deref(self.thisptr).get_tree())
 
     @property
-    def features_tree(self):
-        return Tree._wrap(deref(self.thisptr).get_features_tree())
+    def feature_tree(self):
+        return Tree._wrap(deref(self.thisptr).get_feature_tree())
 
     def feature_blobs(self):
         return BlobWalker._wrap(

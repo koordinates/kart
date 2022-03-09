@@ -6,4 +6,5 @@ target_sources(
          kart/structure.hpp
          kart/tree_walker.hpp
          kart/blob_iterator.hpp
-         kart/object.hpp)
+         kart/object.hpp
+         kart/util.hpp)
