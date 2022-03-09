@@ -32,13 +32,14 @@ extern "C"
 {
 	KartRepo *kart::kart_open_repository(const char *path)
 	{
+		string path_s{path};
 		try
 		{
-			return new KartRepo(path);
+			return new KartRepo(path_s);
 		}
 		catch (git_exception &e)
 		{
-			clog << "error opening repository " << path << ": " << e.what() << "\n";
+			clog << "error opening repository " << path_s << ": " << e.what() << "\n";
 			return nullptr;
 		}
 	}

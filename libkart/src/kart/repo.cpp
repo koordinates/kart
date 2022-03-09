@@ -11,7 +11,7 @@ using namespace std;
 using namespace kart;
 
 // constructors
-KartRepo::KartRepo(const char *path)
+KartRepo::KartRepo(string path)
     : wrapped(repository::open(path))
 {
 }

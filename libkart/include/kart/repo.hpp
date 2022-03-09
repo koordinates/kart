@@ -23,7 +23,7 @@ namespace kart
 	{
 	public:
 		// constructors
-		KartRepo(const char *path);
+		KartRepo(string path);
 		~KartRepo(){};
 
 		// git wrappers
