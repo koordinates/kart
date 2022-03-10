@@ -25,7 +25,6 @@ namespace kart
     {
     public:
         BlobIterator();
-        BlobIterator(const BlobIterator &other);
         BlobIterator(KartRepo *repo, Tree *tree);
 
         reference operator*() const;
@@ -34,15 +33,9 @@ namespace kart
         // Prefix increment
         BlobIterator &operator++();
 
-        // Postfix increment
-        BlobIterator operator++(int);
-
         // comparison
         friend bool operator==(const BlobIterator &a, const BlobIterator &b);
         friend bool operator!=(const BlobIterator &a, const BlobIterator &b);
-
-        // assignment
-        BlobIterator &operator=(const BlobIterator &other);
 
     private:
         KartRepo *repo_;

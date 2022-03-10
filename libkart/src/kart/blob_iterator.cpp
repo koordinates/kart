@@ -17,29 +17,10 @@ namespace kart
     BlobIterator::BlobIterator() : repo_(nullptr), tree_entry_iterator_(make_unique<TreeEntryIterator>(nullptr, nullptr))
     {
     }
-    // copy constructor
-    BlobIterator::BlobIterator(const BlobIterator &other) : repo_(other.repo_), tree_entry_iterator_(make_unique<TreeEntryIterator>(*other.tree_entry_iterator_)), current_blob(other.current_blob)
-    {
-    }
     // normal constructor
     BlobIterator::BlobIterator(KartRepo *repo, Tree *tree) : repo_(repo), tree_entry_iterator_(make_unique<TreeEntryIterator>(repo, tree))
     {
         _advance_to_blob();
-    }
-    // copy-assignment operator
-    BlobIterator &BlobIterator::operator=(const BlobIterator &other)
-    {
-
-        // Guard self assignment
-        if (this == &other)
-            return *this;
-
-        // copy the tree entry iterator
-        tree_entry_iterator_ = make_unique<TreeEntryIterator>(*other.tree_entry_iterator_);
-        // other fields
-        repo_ = other.repo_;
-        current_blob = other.current_blob;
-        return *this;
     }
     BlobIterator::reference BlobIterator::operator*() const
     {
@@ -53,18 +34,11 @@ namespace kart
     // Prefix increment
     BlobIterator &BlobIterator::operator++()
     {
-        (*tree_entry_iterator_)++;
+        ++(*tree_entry_iterator_);
         _advance_to_blob();
         return *this;
     }
 
-    // Postfix increment
-    BlobIterator BlobIterator::operator++(int)
-    {
-        BlobIterator tmp = *this;
-        ++(*this);
-        return tmp;
-    }
     bool operator==(const BlobIterator &a, const BlobIterator &b)
     {
         return *(a.tree_entry_iterator_) == *(b.tree_entry_iterator_);
@@ -87,7 +61,7 @@ namespace kart
             }
             else
             {
-                (*tree_entry_iterator_)++;
+                ++(*tree_entry_iterator_);
             }
         }
     }

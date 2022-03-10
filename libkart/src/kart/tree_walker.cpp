@@ -77,14 +77,6 @@ TreeEntryIterator &TreeEntryIterator::operator++()
     return *this;
 }
 
-// Postfix increment
-TreeEntryIterator TreeEntryIterator::operator++(int)
-{
-    TreeEntryIterator tmp = *this;
-    ++(*this);
-    return tmp;
-}
-
 void TreeEntryIterator::_enter_tree(Tree tree_)
 {
     entries_stack.push_back(tree_.entries());

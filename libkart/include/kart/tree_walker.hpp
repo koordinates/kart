@@ -39,8 +39,6 @@ namespace kart
         // Prefix increment
         TreeEntryIterator &operator++();
 
-        // Postfix increment
-        TreeEntryIterator operator++(int);
         friend bool operator==(const TreeEntryIterator &a, const TreeEntryIterator &b)
         {
             auto a_size = a.heads.size();
