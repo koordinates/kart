@@ -71,6 +71,7 @@ pytest.xml
 /test-results/
 /dist
 /build
+docs/_build/
 *.code-workspace
 .vscode/
 
