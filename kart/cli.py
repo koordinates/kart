@@ -294,11 +294,26 @@ def gc(ctx, args):
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def git(ctx, args):
     """
-    Run an arbitrary git command, using kart's packaged git
+    Run an arbitrary Git command, using kart's packaged Git
     """
     params = ["git"]
     if ctx.obj.user_repo_path:
         params += ["-C", ctx.obj.user_repo_path]
+    execvp("git", [*params, *args])
+
+
+@cli.command(context_settings=dict(ignore_unknown_options=True), hidden=True)
+@click.pass_context
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def lfs(ctx, args):
+    """
+    Run an arbitrary Git LFS command, using Kart's packaged Git.
+    Git LFS is not yet packaged with Kart so this will not work unless your Kart environment has Git LFS installed.
+    """
+    params = ["git"]
+    if ctx.obj.user_repo_path:
+        params += ["-C", ctx.obj.user_repo_path]
+    params += ["lfs"]
     execvp("git", [*params, *args])
 
 
