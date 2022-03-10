@@ -95,8 +95,10 @@ std::vector<TreeEntry> Tree::entries()
 {
     auto result = std::vector<TreeEntry>();
     auto prefix = path_with_slash();
-    for (auto e : wrapped.entries())
+    auto size = wrapped.size();
+    for (size_t i = 0; i < size; i++)
     {
+        auto e{wrapped.lookup_entry_by_index(i)};
         result.push_back(TreeEntry(e, entry_.repo(), prefix + e.filename()));
     }
     return result;
