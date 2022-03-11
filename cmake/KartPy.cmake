@@ -6,7 +6,7 @@ if(WIN32)
   cmake_path(NATIVE_PATH VENV_PY VENV_PY)
 
   cmake_path(SET KART_EXE_VENV ${VENV_BIN}/kart.exe)
-  cmake_path(SET KART_EXE_BUILD kart.cmd)
+  cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart.cmd)
 else()
   set(VENV_BIN ${CMAKE_CURRENT_BINARY_DIR}/venv/bin)
   # this is needed sometimes for bad setup.py files that invoke Python again seems ok without it on
@@ -14,7 +14,7 @@ else()
   set(VENV_EXEC_ENV ${CMAKE_COMMAND} -E env "PATH=${VENV_BIN}:$ENV{PATH}")
   set(VENV_PY ${VENV_EXEC_ENV} ${VENV_BIN}/python)
   cmake_path(SET KART_EXE_VENV ${VENV_BIN}/kart)
-  cmake_path(SET KART_EXE_BUILD kart)
+  cmake_path(SET KART_EXE_BUILD ${CMAKE_CURRENT_BINARY_DIR}/kart)
 endif()
 
 set(VENV_PIP_INSTALL ${VENV_PY} -m pip install --isolated --disable-pip-version-check)

@@ -195,9 +195,6 @@ list(APPEND WHEEL_LIST ${INSTALL_DIR}/psycopg2-${PYSCOPG2_WHEEL_VER}-${Python3_W
 #
 # pygit2
 #
-if(NOT LibGit2_ROOT)
-  cmake_path(GET LibGit2_INCLUDE_DIR PARENT_PATH LibGit2_ROOT)
-endif()
 set(PYGIT2_WHEEL_VER 1.9.0)
 ExternalProject_Add(
   pygit2

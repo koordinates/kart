@@ -67,8 +67,8 @@ if(LibGit2_FOUND)
   set(CMAKE_REQUIRED_INCLUDES ${LibGit2_INCLUDE_DIR})
   set(CMAKE_REQUIRED_QUIET ON)
 
-  # Check whether all needed Koordinates changes are present
-  # (Either its the Koordinates fork, or they've been merged in)
+  # Check whether all needed Koordinates changes are present (Either its the Koordinates fork, or
+  # they've been merged in)
 
   # error subcodes https://github.com/libgit2/libgit2/pull/5993
   set(CMAKE_EXTRA_INCLUDE_FILES "git2/errors.h")
@@ -85,8 +85,9 @@ if(LibGit2_FOUND)
   check_type_size("git_index_write_tree_t" write_tree_flags)
   unset(CMAKE_EXTRA_INCLUDE_FILES)
 
-
-  if(HAVE_mempack_flags AND HAVE_error_subcode AND HAVE_write_tree_flags)
+  if(HAVE_mempack_flags
+     AND HAVE_error_subcode
+     AND HAVE_write_tree_flags)
     set(LibGit2_IS_KOORDINATES ON)
   endif()
 
@@ -97,6 +98,7 @@ if(LibGit2_FOUND)
 
   if(NOT TARGET LibGit2::LibGit2)
     add_library(LibGit2::LibGit2 UNKNOWN IMPORTED)
+    add_library(git2 ALIAS LibGit2::LibGit2)
     set_target_properties(
       LibGit2::LibGit2
       PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LibGit2_INCLUDE_DIR}"
@@ -109,5 +111,8 @@ if(LibGit2_FOUND)
         APPEND
         PROPERTY INTERFACE_COMPILE_DEFINITIONS "LibGit2_IS_KOORDINATES")
     endif()
+  endif()
+  if("${LibGit2_ROOT}" STREQUAL "")
+    cmake_path(GET LibGit2_INCLUDE_DIR PARENT_PATH LibGit2_ROOT)
   endif()
 endif()

@@ -12,6 +12,7 @@ enable_testing()
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 include(PythonGetABIInfo)
+include(CCache)
 
 # find_package(Git REQUIRED) execute_process( COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
 # RESULT_VARIABLE result OUTPUT_VARIABLE KART_GIT_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
@@ -39,16 +40,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   set(LINUX ON)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
   set(MACOS ON)
-endif()
-
-# CCache
-find_program(CCACHE_PROGRAM ccache)
-if(CCACHE_PROGRAM)
-  set(ccacheEnv CCACHE_CPP2=true CCACHE_BASEDIR=${CMAKE_BINARY_DIR}
-                CCACHE_SLOPPINESS=pch_defines,time_macros)
-  foreach(lang IN ITEMS C CXX)
-    set(CMAKE_${lang}_COMPILER_LAUNCHER ${CMAKE_COMMAND} -E env ${ccacheEnv} ${CCACHE_PROGRAM})
-  endforeach()
 endif()
 
 # OSX: prefer Homebrew over Frameworks
