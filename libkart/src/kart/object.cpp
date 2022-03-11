@@ -115,6 +115,12 @@ TreeEntry Tree::lookup_entry_by_name(const std::string &name) const
     auto e = wrapped.lookup_entry_by_name(name);
     return TreeEntry{e, entry_.repo(), prefix + trim_trailing_slashes(name)};
 }
+TreeEntry Tree::lookup_entry_by_index(size_t index) const
+{
+    auto prefix = path_with_slash();
+    auto e = wrapped.lookup_entry_by_index(index);
+    return TreeEntry{e, entry_.repo(), prefix + trim_trailing_slashes(e.filename())};
+}
 
 void Tree::walk(cppgit2::tree::traversal_mode mode,
                 std::function<int(const std::string &, const TreeEntry &)>
@@ -149,6 +155,9 @@ void Tree::walk(cppgit2::tree::traversal_mode mode,
     if (git_tree_walk(wrapped.c_ptr(), static_cast<git_treewalk_mode>(mode), callback_c,
                       (void *)(&wrapper)))
         throw git_exception();
+}
+size_t Tree::size() const {
+    return wrapped.size();
 }
 Object Object::peel_until(cppgit2::object::object_type target)
 {

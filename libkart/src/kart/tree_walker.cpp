@@ -19,10 +19,10 @@ TreeEntryIterator::TreeEntryIterator()
 };
 TreeEntryIterator::TreeEntryIterator(KartRepo *repo, Tree *tree_)
     : repo_(repo),
-      entries_stack(vector<vector<TreeEntry>>()),
+      open_trees(),
       heads(vector<size_t>())
 {
-    if (tree_)
+    if (tree_ && tree_->size())
     {
         _enter_tree(*tree_);
     }
@@ -32,11 +32,11 @@ const TreeEntryIterator TreeEntryIterator::END{nullptr, nullptr};
 
 TreeEntryIterator::reference TreeEntryIterator::operator*() const
 {
-    return entries_stack.back()[heads.back()];
+    return current_entry;
 };
 TreeEntryIterator::pointer TreeEntryIterator::operator->()
 {
-    return &(entries_stack.back()[heads.back()]);
+    return &current_entry;
 };
 
 // Prefix increment
@@ -46,41 +46,40 @@ TreeEntryIterator &TreeEntryIterator::operator++()
     {
         return *this;
     }
-    // check if the previous entry was a tree. if so, we need to push the tree's entries onto the stack
-    auto entry = **this;
-    bool new_tree = (entry.type() == object::object_type::tree);
-    if (new_tree)
+    // check if the previous entry was a tree. if so, we need to push the tree's children onto the stack
+    if (current_entry.type() == object::object_type::tree)
     {
-        _enter_tree(entry.get_object().as_tree());
+        _enter_tree(current_entry.get_object().as_tree());
     }
     else
     {
-        heads.back()++;
+        ++heads.back();
     }
     // TODO: try and rearrange this so it's neater
     while (heads.size())
     {
-        if (heads.back() < entries_stack.back().size())
+        if (heads.back() < open_trees.back().size())
         {
+            current_entry = open_trees.back().lookup_entry_by_index(heads.back());
             return *this;
         }
         // the latest tree has been exhausted; pop from the stack and keep iterating
         // over the previous tree.
-        entries_stack.pop_back();
+        open_trees.pop_back();
         heads.pop_back();
         if (heads.size())
         {
             heads.back()++;
         }
     }
-    // finished iteration
     return *this;
 }
 
-void TreeEntryIterator::_enter_tree(Tree tree_)
+void TreeEntryIterator::_enter_tree(const Tree& tree_)
 {
-    entries_stack.push_back(tree_.entries());
+    open_trees.push_back(tree_);
     heads.push_back(0);
+    current_entry = tree_.lookup_entry_by_index(0);
 };
 
 TreeWalker::TreeWalker(KartRepo *repo, Tree *tree_)

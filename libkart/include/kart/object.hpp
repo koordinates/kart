@@ -61,9 +61,11 @@ namespace kart
         std::vector<TreeEntry> entries();
         TreeEntry lookup_entry_by_path(const std::string &path) const;
         TreeEntry lookup_entry_by_name(const std::string &name) const;
+        TreeEntry lookup_entry_by_index(size_t index) const;
         void walk(cppgit2::tree::traversal_mode mode,
                   std::function<int(const std::string &, const TreeEntry &)>
                       visitor) const;
+        size_t size() const;
         inline string path_with_slash() const
         {
             auto p = path();

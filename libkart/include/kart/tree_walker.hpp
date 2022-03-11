@@ -62,9 +62,10 @@ namespace kart
         static const TreeEntryIterator END;
 
     private:
-        void _enter_tree(Tree tree_);
+        void _enter_tree(const Tree &tree_);
         KartRepo *repo_;
-        vector<vector<TreeEntry>> entries_stack;
+        TreeEntry current_entry;
+        vector<Tree> open_trees;
         vector<size_t> heads;
     };
 
