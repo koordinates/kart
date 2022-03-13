@@ -9,11 +9,11 @@ from kart import is_windows
 from . import checkout
 from .cli_util import JsonFromFile, MutexOption, StringFromFile, call_and_exit_flag
 from .core import check_git_user
+from .dataset_util import validate_dataset_paths
 from .exceptions import InvalidOperation
 from .fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
-from .tabular.base_dataset import BaseDataset
 from .tabular.import_source import ImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingImportSource
@@ -341,7 +341,7 @@ def import_(
     all_ds_paths = [s.dest_path for s in import_sources]
     if not replace_existing:
         all_ds_paths[:0] = [ds.path for ds in repo.datasets()]
-    BaseDataset.validate_dataset_paths(all_ds_paths)
+    validate_dataset_paths(all_ds_paths)
 
     replace_existing_enum = (
         ReplaceExisting.GIVEN if replace_existing else ReplaceExisting.DONT_REPLACE
@@ -485,7 +485,7 @@ def init(
     )
 
     if import_from:
-        BaseDataset.validate_dataset_paths([s.dest_path for s in sources])
+        validate_dataset_paths([s.dest_path for s in sources])
         fast_import_tables(
             repo,
             sources,
