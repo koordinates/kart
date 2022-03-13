@@ -41,7 +41,7 @@ py-cpuinfo==8.0.0
     # via pytest-benchmark
 pyparsing==3.0.6
     # via packaging
-pytest==7.0.1
+pytest==7.1.0
     # via
     #   -r requirements/test.in
     #   pytest-benchmark
