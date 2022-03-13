@@ -76,7 +76,7 @@ pyparsing==3.0.6
     # via
     #   -c requirements/test.txt
     #   packaging
-pytest==7.0.1
+pytest==7.1.0
     # via
     #   -c requirements/test.txt
     #   pytest-forked
