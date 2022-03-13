@@ -4,7 +4,7 @@ import shutil
 
 import pytest
 
-from kart.tabular.base_dataset import BaseDataset
+from kart import dataset_util
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.repo import KartRepo
 from kart.exceptions import (
@@ -1090,10 +1090,10 @@ def test_import_list_formats(data_archive_readonly, cli_runner):
 )
 def test_validate_dataset_paths(names, is_okay):
     if is_okay:
-        BaseDataset.validate_dataset_paths(names)
+        dataset_util.validate_dataset_paths(names)
     else:
         with pytest.raises(InvalidOperation):
-            BaseDataset.validate_dataset_paths(names)
+            dataset_util.validate_dataset_paths(names)
 
 
 def test_import_bad_dataset_path(data_archive, data_archive_readonly, cli_runner):

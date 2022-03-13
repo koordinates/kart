@@ -124,7 +124,7 @@ def point_cloud_import(ctx, ds_path, sources):
             "crs84_envelope": crs84_envelope,
         }
 
-    click.echo(copc_version_set[0])
+    click.echo()
 
     # Set up LFS hooks.
     # TODO: This could eventually be moved to `kart init`.
@@ -145,14 +145,15 @@ def point_cloud_import(ctx, ds_path, sources):
         repo.head_commit,
     )
 
-    is_copc = (
-        compressed_set[0] is True
-        and version_set[0] == "1.4"
-        and copc_version_set[0] == 1
-    )
-    import_func = (
-        _copy_tile_to_copc_lfs_blob if is_copc else _convert_tile_to_copc_lfs_blob
-    )
+    # TODO - revisit this if another COPC version is released.
+    if compressed_set[0] is True and copc_version_set[0] != NOT_COPC:
+        # Keep native format.
+        import_func = _copy_tile_to_copc_lfs_blob
+        copc_version = copc_version_set[0]
+    else:
+        # Convert to COPC 1.0
+        import_func = _convert_tile_to_copc_lfs_blob
+        copc_version = 1
 
     lfs_objects_path = repo.gitdir_path / "lfs" / "objects"
     lfs_tmp_import_path = lfs_objects_path / "import"
@@ -185,7 +186,7 @@ def point_cloud_import(ctx, ds_path, sources):
                 # TODO - available.<URL-IDX> <URL>
                 "kart.extent.crs84": _format_array(info["crs84_envelope"]),
                 "kart.extent.native": _format_array(info["native_envelope"]),
-                "kart.format": "pc:v1/copc-1.0",
+                "kart.format": f"pc:v1/copc-{copc_version}.0",
                 "kart.pc.count": info["count"],
                 "oid": f"sha256:{oid}",
                 "size": size,
