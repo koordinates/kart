@@ -10,6 +10,7 @@ import click
 from osgeo import osr
 
 from kart.crs_util import make_crs
+from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
     NotFound,
@@ -33,8 +34,11 @@ from kart.repo_version import (
 
 @click.command("point-cloud-import", hidden=True)
 @click.pass_context
+@click.option(
+    "--dataset-path", "ds_path", help="The dataset's path once imported", required=True
+)
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=True)
-def point_cloud_import(ctx, sources):
+def point_cloud_import(ctx, ds_path, sources):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
     Will eventually be merged with the main `import` command.
@@ -44,6 +48,10 @@ def point_cloud_import(ctx, sources):
     import pdal
 
     repo = ctx.obj.repo
+
+    # TODO - improve path validation to make sure datasets of any type don't collide with each other
+    # or with attachments.
+    validate_dataset_paths([ds_path])
 
     for source in sources:
         if not (Path() / source).is_file():
@@ -120,15 +128,10 @@ def point_cloud_import(ctx, sources):
 
     # Set up LFS hooks.
     # TODO: This could eventually be moved to `kart init`.
-    r = subprocess.check_call(
-        ["git", "-C", str(repo.gitdir_path), "lfs", "install", "hooks"]
-    )
-
-    # TODO: Find a proper dataset name or let the user supply it:
-    if len(sources) == 1:
-        ds_path = os.path.basename(os.path.splitext(sources[0])[0])
-    else:
-        ds_path = os.path.basename(os.path.commonprefix(sources)).rstrip("-_.")
+    if not (repo.gitdir_path / "hooks" / "pre-push").is_file():
+        subprocess.check_call(
+            ["git", "-C", str(repo.gitdir_path), "lfs", "install", "hooks"]
+        )
 
     # We still need to write .kart.repostructure.version unfortunately, even though it's only relevant to tabular datasets.
     assert repo.version in SUPPORTED_REPO_VERSIONS
@@ -142,15 +145,15 @@ def point_cloud_import(ctx, sources):
         repo.head_commit,
     )
 
-    # TODO: Don't accept all possible versions of everything / maybe convert everything to COPC-1.0
-    copc_version = copc_version_set[0]
-    if copc_version == 1:
-        kart_format = "pc:v1/copc-1.0"
-    elif copc_version != NOT_COPC:
-        kart_format = f"pc:DEV/copc-{copc_version}"
+    # TODO - revisit this if another COPC version is released.
+    if compressed_set[0] is True and copc_version_set[0] != NOT_COPC:
+        # Keep native format.
+        import_func = _copy_tile_to_copc_lfs_blob
+        copc_version = copc_version_set[0]
     else:
-        filetype = "laz" if compressed_set[0] is True else "las"
-        kart_format = f"pc:DEV/{filetype}-{version_set[0]}"
+        # Convert to COPC 1.0
+        import_func = _convert_tile_to_copc_lfs_blob
+        copc_version = 1
 
     lfs_objects_path = repo.gitdir_path / "lfs" / "objects"
     lfs_tmp_import_path = lfs_objects_path / "import"
@@ -163,16 +166,16 @@ def point_cloud_import(ctx, sources):
             pass
 
         for source in sources:
-            click.echo(f"Writing {source}...          \r", nl=False)
+            click.echo(f"Writing {source}...")
 
             tmp_object_path = lfs_tmp_import_path / str(uuid.uuid4())
-            oid, size = _copy_and_get_sha256_and_size(source, tmp_object_path)
+            oid, size = import_func(source, tmp_object_path)
             actual_object_path = lfs_objects_path / oid[0:2] / oid[2:4] / oid
             actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
             tmp_object_path.rename(actual_object_path)
 
             # TODO - is this the right prefix and name?
-            tilename = os.path.basename(source)
+            tilename = os.path.splitext(os.path.basename(source))[0] + ".copc.laz"
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = (
                 f"{ds_path}/.point-cloud-dataset.v1/tiles/{tile_prefix}/{tilename}"
@@ -183,7 +186,7 @@ def point_cloud_import(ctx, sources):
                 # TODO - available.<URL-IDX> <URL>
                 "kart.extent.crs84": _format_array(info["crs84_envelope"]),
                 "kart.extent.native": _format_array(info["native_envelope"]),
-                "kart.format": kart_format,
+                "kart.format": f"pc:v1/copc-{copc_version}.0",
                 "kart.pc.count": info["count"],
                 "oid": f"sha256:{oid}",
                 "size": size,
@@ -265,14 +268,56 @@ def _transform_3d_envelope(transform, envelope):
     return min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1), min(z0, z1), max(z0, z1)
 
 
-def _copy_and_get_sha256_and_size(src, dest):
-    BUF_SIZE = 65536
+_BUF_SIZE = 65536
+
+
+def _convert_tile_to_copc_lfs_blob(source, dest):
+    """
+    Converts a LAS/LAZ file of some sort as source to a COPC.LAZ file at dest.
+    Returns the SHA256 and length of the COPC.LAZ file.
+    """
+    # Note that this requires a cutting edge PDAL - e.g. 63eb89ab3f504e8af7259bf60c8158363c99b6e3.
+    import pdal
+
+    config = [
+        {
+            "type": "readers.las",
+            "filename": str(source),
+        },
+        {
+            "type": "writers.copc",
+            "filename": str(dest),
+            "forward": "all",
+        },
+    ]
+    pipeline = pdal.Pipeline(json.dumps(config))
+    try:
+        pipeline.execute()
+    except RuntimeError as e:
+        raise InvalidOperation(
+            f"Error converting {source}\n{e}", exit_code=INVALID_FILE_FORMAT
+        )
+    assert dest.is_file()
+
+    size = dest.stat().st_size
     sha256 = hashlib.sha256()
-    size = Path(src).stat().st_size
-    with open(str(src), "rb") as input:
+    with open(str(dest), "rb") as input:
+        while True:
+            data = input.read(_BUF_SIZE)
+            if not data:
+                break
+            sha256.update(data)
+    return sha256.hexdigest(), size
+
+
+def _copy_tile_to_copc_lfs_blob(source, dest):
+    """Copies a file from source to dest and returns the SHA256 and length of the file."""
+    sha256 = hashlib.sha256()
+    size = Path(source).stat().st_size
+    with open(str(source), "rb") as input:
         with open(str(dest), "wb") as output:
             while True:
-                data = input.read(BUF_SIZE)
+                data = input.read(_BUF_SIZE)
                 if not data:
                     break
                 sha256.update(data)
