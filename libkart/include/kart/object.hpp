@@ -4,7 +4,10 @@
 #include <exception>
 #include <string>
 #include <memory>
-#include <cppgit2/repository.hpp>
+
+#include <git2.h>
+
+#include "kart/object_type.hpp"
 
 using namespace std;
 namespace kart
@@ -12,6 +15,7 @@ namespace kart
     class KartRepo;
     class Object;
     class Tree;
+    class Oid;
     class TreeEntry
     {
     public:
@@ -19,19 +23,27 @@ namespace kart
         TreeEntry();
         // construct with no actual tree entry available (for object lookup by OID, and commit/tag objects)
         TreeEntry(KartRepo *repo);
-        // construct from a tree::entry
-        TreeEntry(const cppgit2::tree::entry &e, KartRepo *repo, string path__);
+        // construct from a git_tree_entry
+        TreeEntry(git_tree_entry *e, KartRepo *repo, string path__);
+        ~TreeEntry();
+        // copy constructor/assignment
+        TreeEntry(const TreeEntry &other);
+        TreeEntry &operator=(const TreeEntry &other);
+        // move constructor/assignment
+        TreeEntry(TreeEntry &&other);
+        TreeEntry &operator=(TreeEntry &&other);
+
         Object get_object();
         // accessors
-        cppgit2::oid id() const;
+        Oid id() const;
         string filename() const;
-        cppgit2::object::object_type type() const;
+        ObjectType type() const;
         string path() const;
         KartRepo *repo() const;
 
     private:
         friend class Tree;
-        cppgit2::tree::entry wrapped;
+        git_tree_entry *wrapped;
         KartRepo *repo_;
         string path_;
     };
@@ -56,14 +68,16 @@ namespace kart
     class Tree : public BaseObject
     {
     public:
-        Tree(const TreeEntry &e, const cppgit2::tree &x);
-        cppgit2::oid id() const;
-        std::vector<TreeEntry> entries();
-        TreeEntry lookup_entry_by_path(const std::string &path) const;
-        TreeEntry lookup_entry_by_name(const std::string &name) const;
-        TreeEntry lookup_entry_by_index(size_t index) const;
-        void walk(cppgit2::tree::traversal_mode mode,
-                  std::function<int(const std::string &, const TreeEntry &)>
+        Tree(const TreeEntry &e, git_tree *x);
+        ~Tree();
+        Tree(const Tree &other);
+        Tree &operator=(const Tree &other);
+        Tree(Tree &&other);
+        Tree &operator=(Tree &&other);
+        Oid id() const;
+        TreeEntry get_entry_by_path(const std::string &path) const;
+        TreeEntry get_entry_by_index(size_t index) const;
+        void walk(std::function<int(const std::string &, const TreeEntry &)>
                       visitor) const;
         size_t size() const;
         inline string path_with_slash() const
@@ -71,69 +85,82 @@ namespace kart
             auto p = path();
             return p.empty() ? p : p + "/";
         }
-
-    private:
-        cppgit2::tree wrapped;
+        git_tree *wrapped;
     };
     class Blob : public BaseObject
     {
     public:
         Blob();
-        Blob(const TreeEntry &e, const cppgit2::blob &x);
-        cppgit2::oid id() const;
+        Blob(const TreeEntry &e, git_blob *x);
+        ~Blob();
+        Blob(const Blob &other);
+        Blob &operator=(const Blob &other);
+        Blob(Blob &&other);
+        Blob &operator=(Blob &&other);
+        Oid id() const;
         // Get read-only buffer with raw contents of this blob
         const void *raw_contents() const;
 
         // Get size in bytes of the contents of this blob
-        cppgit2::blob_size raw_size() const;
+        uint64_t raw_size() const;
 
-    private:
-        cppgit2::blob wrapped;
+        git_blob *wrapped;
     };
     class Commit
     {
     public:
-        Commit(const cppgit2::commit &x);
-        cppgit2::oid id() const;
+        Commit(git_commit *x);
+        ~Commit();
+        Commit(const Commit &other);
+        Commit &operator=(const Commit &other);
+        Commit(Commit &&other);
+        Commit &operator=(Commit &&other);
+        Oid id() const;
 
-    private:
-        cppgit2::commit wrapped;
+        git_commit *wrapped;
     };
     class Tag
     {
     public:
-        Tag(const cppgit2::tag &x);
-        cppgit2::oid id() const;
+        Tag(git_tag *x);
+        ~Tag();
+        Tag(const Tag &other);
+        Tag &operator=(const Tag &other);
+        Tag(Tag &&other);
+        Tag &operator=(Tag &&other);
+        Oid id() const;
 
-    private:
-        cppgit2::tag wrapped;
+        git_tag *wrapped;
     };
 
     class Object : public BaseObject
     {
     public:
-        Object(const TreeEntry &e, const cppgit2::object &x);
-        Object(const cppgit2::object &x);
-        cppgit2::oid id() const;
+        Object(const TreeEntry &e, git_object *x);
+        Object(git_object *x);
+        ~Object();
+        Object(const Object &other);
+        Object &operator=(const Object &other);
+        Object(Object &&other);
+        Object &operator=(Object &&other);
+        Oid id() const;
 
-        Object peel_until(cppgit2::object::object_type target);
+        Object peel_until(ObjectType target);
 
-        // Throws git_exception if object is not a blob
+        // Throws LibGitError if object is not a blob
         Blob as_blob();
 
         // Cast to commit
-        // Throws git_exception if object is not a commit
+        // Throws LibGitError if object is not a commit
         Commit as_commit();
 
         // Cast to tree
-        // Throws git_exception if object is not a tree
+        // Throws LibGitError if object is not a tree
         Tree as_tree();
 
         // Cast to tag
-        // Throws git_exception if object is not a tag
+        // Throws LibGitError if object is not a tag
         Tag as_tag();
-
-    private:
-        cppgit2::object wrapped;
+        git_object *wrapped;
     };
 };

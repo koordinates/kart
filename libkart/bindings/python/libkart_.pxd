@@ -1,11 +1,12 @@
+from cython cimport size_t
 from libc.stdint cimport int64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cdef extern from "cppgit2/object.hpp" namespace "cppgit2::object":
-    cpdef enum class object_type "cppgit2::object::object_type":
-        # cppgit2::object::object_type
+
+cdef extern from "kart.hpp" namespace "kart":
+    cpdef enum class ObjectType "kart::ObjectType":
         any = -2
         invalid = -1
         commit = 1
@@ -15,35 +16,32 @@ cdef extern from "cppgit2/object.hpp" namespace "cppgit2::object":
         ofs_delta = 6
         ref_delta = 7
 
-
-cdef extern from "kart.hpp" namespace "kart":
-    # cppgit stuff
-
-    cdef cppclass cppgit2_oid "cppgit2::oid":
+    cdef cppclass CppOid "kart::Oid":
         string to_hex_string()
 
-    # actual libkart stuff
     cdef cppclass CppTreeEntry "kart::TreeEntry":
         string path()
         string filename()
-        cppgit2_oid id()
-        object_type type()
+        CppOid id()
+        ObjectType type()
     cdef cppclass CppBlob "kart::Blob":
-        cppgit2_oid id()
+        CppOid id()
         string path()
         string filename()
         void* raw_contents()
         int64_t raw_size()
     cdef cppclass CppTree "kart::Tree":
-        cppgit2_oid id()
+        CppOid id()
         string path()
         string filename()
-        vector[CppTreeEntry] entries()
+        CppTreeEntry get_entry_by_path(const string)
+        CppTreeEntry get_entry_by_index(size_t index)
+        size_t size()
     cdef cppclass CppCommit "kart::Commit":
-        cppgit2_oid id()
+        CppOid id()
     cdef cppclass CppObject "kart::Object":
-        cppgit2_oid id()
-        object_type type()
+        CppOid id()
+        ObjectType type()
         string path()
         string filename()
 

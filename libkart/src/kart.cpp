@@ -3,27 +3,10 @@
 #include <string>
 #include <memory>
 
-#include <cppgit2/repository.hpp>
-
 #include "kart.hpp"
 
 using namespace std;
 using namespace kart;
-
-/*
- * cppgit2 extensions:
- * TODO: move this into our cppgit2 fork, once things have stabilised.
- *
- * Make it easier to debug cppgit2 OID objects.
-*/
-std::ostream &operator<<(std::ostream &strm, const cppgit2::oid &id)
-{
-	return strm << id.to_hex_string();
-}
-std::ostream &operator<<(std::ostream &strm, const cppgit2::object::object_type &otyp)
-{
-	return strm << cppgit2::object::object_type_to_string(otyp);
-}
 
 /*
  * libkart C API
@@ -37,7 +20,7 @@ extern "C"
 		{
 			return new KartRepo(path_s);
 		}
-		catch (git_exception &e)
+		catch (LibGitError &e)
 		{
 			clog << "error opening repository " << path_s << ": " << e.what() << "\n";
 			return nullptr;

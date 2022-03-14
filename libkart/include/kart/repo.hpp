@@ -4,18 +4,21 @@
 #include <string>
 #include <memory>
 
-#include <cppgit2/repository.hpp>
+#include <git2.h>
 
 // allows dataset3.hpp to reference KartRepo
 namespace kart
 {
 	class KartRepo;
 }
+#include "kart/ownership.hpp"
+#include "kart/errors.hpp"
+#include "kart/oid.hpp"
+#include "kart/object_type.hpp"
 #include "kart/tree_walker.hpp"
 #include "kart/structure.hpp"
 
 using namespace std;
-using namespace cppgit2;
 
 namespace kart
 {
@@ -24,12 +27,12 @@ namespace kart
 	public:
 		// constructors
 		KartRepo(string path);
-		~KartRepo(){};
+		~KartRepo();
 
 		// git wrappers
 		Object revparse_to_object(const std::string &spec);
-		Object lookup_object(cppgit2::oid id, cppgit2::object::object_type type, TreeEntry entry);
-		Object lookup_object(cppgit2::oid id, cppgit2::object::object_type type);
+		Object lookup_object(Oid id, ObjectType type, TreeEntry entry);
+		Object lookup_object(Oid id, ObjectType type);
 
 		// kart stuff
 		int Version();
@@ -38,8 +41,10 @@ namespace kart
 
 		unique_ptr<TreeWalker> walk_tree(Tree *root);
 
+		git_repository *c_ptr();
+
 	private:
-		repository wrapped;
+		git_repository *wrapped;
 	};
 
 }

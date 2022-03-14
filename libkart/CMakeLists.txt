@@ -19,20 +19,8 @@ set(CMAKE_BUILD_TYPE Debug)
 # libfmt, since <format> isn't widespread in compilers yet
 find_package(fmt)
 
-if(DEFINED LibGit2_ROOT)
-  find_package(LibGit2 1.3.0 REQUIRED)
-endif()
+find_package(LibGit2 1.4.0 REQUIRED)
 
-# configure the cppgit2 module with the right libgit2
-function(add_cppgit)
-  if(LibGit2_FOUND)
-    # if we have libgit2, get cppgit2 to use it instead of building it's own.
-    set(CMAKE_PREFIX_PATH ${LibGit2_ROOT})
-  endif()
-  add_subdirectory(cppgit2 EXCLUDE_FROM_ALL)
-endfunction()
-
-add_cppgit()
 # build libkart
 add_library(kart SHARED "")
 add_subdirectory(src)
@@ -40,8 +28,7 @@ add_subdirectory(include)
 
 set_target_properties(kart PROPERTIES LINKER_LANGUAGE CXX)
 target_include_directories(kart PUBLIC "include")
-target_include_directories(kart PUBLIC cppgit2)
-target_link_libraries(kart PRIVATE fmt::fmt cppgit2)
+target_link_libraries(kart PRIVATE fmt::fmt git2)
 
 option(WITH_LIBKART_PYTHON "Build Python bindings for Libkart" ON)
 if(WITH_LIBKART_PYTHON)

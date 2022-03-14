@@ -2,12 +2,10 @@
 #include <exception>
 #include <string>
 #include <memory>
-#include <cppgit2/repository.hpp>
 
 #include "kart/blob_iterator.hpp"
 
 using namespace std;
-using namespace cppgit2;
 namespace kart
 {
     /**
@@ -53,7 +51,7 @@ namespace kart
     {
         while ((*tree_entry_iterator_) != TreeEntryIterator::END)
         {
-            if ((*tree_entry_iterator_)->type() == object::object_type::blob)
+            if ((*tree_entry_iterator_)->type() == ObjectType::blob)
             {
                 TreeEntry entry{*(*tree_entry_iterator_)};
                 current_blob = entry.get_object().as_blob();

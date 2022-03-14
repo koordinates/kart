@@ -6,7 +6,6 @@
 #include "kart/tree_walker.hpp"
 
 using namespace std;
-using namespace cppgit2;
 using namespace kart;
 
 /**
@@ -47,7 +46,7 @@ TreeEntryIterator &TreeEntryIterator::operator++()
         return *this;
     }
     // check if the previous entry was a tree. if so, we need to push the tree's children onto the stack
-    if (current_entry.type() == object::object_type::tree)
+    if (current_entry.type() == ObjectType::tree)
     {
         _enter_tree(current_entry.get_object().as_tree());
     }
@@ -60,7 +59,7 @@ TreeEntryIterator &TreeEntryIterator::operator++()
     {
         if (heads.back() < open_trees.back().size())
         {
-            current_entry = open_trees.back().lookup_entry_by_index(heads.back());
+            current_entry = open_trees.back().get_entry_by_index(heads.back());
             return *this;
         }
         // the latest tree has been exhausted; pop from the stack and keep iterating
@@ -75,11 +74,11 @@ TreeEntryIterator &TreeEntryIterator::operator++()
     return *this;
 }
 
-void TreeEntryIterator::_enter_tree(const Tree& tree_)
+void TreeEntryIterator::_enter_tree(const Tree &tree_)
 {
     open_trees.push_back(tree_);
     heads.push_back(0);
-    current_entry = tree_.lookup_entry_by_index(0);
+    current_entry = tree_.get_entry_by_index(0);
 };
 
 TreeWalker::TreeWalker(KartRepo *repo, Tree *tree_)

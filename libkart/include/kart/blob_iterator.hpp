@@ -9,7 +9,6 @@
 #include "kart/tree_walker.hpp"
 
 using namespace std;
-using namespace cppgit2;
 namespace kart
 {
     /**

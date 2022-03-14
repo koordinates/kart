@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <exception>
 #include <string>
+#include <vector>
 #include <memory>
 
 namespace kart
@@ -14,7 +15,6 @@ namespace kart
 #include "kart/object.hpp"
 
 using namespace std;
-using namespace cppgit2;
 namespace kart
 {
     /**

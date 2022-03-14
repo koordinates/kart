@@ -8,25 +8,8 @@ from libcpp.utility cimport move
 from libkart_ cimport *
 from enum import Enum
 
-# FIXME: In *theory* the `cpdef enum class` in libkart_.pxd should mean we can just use `object_type`,
-# because it should be usable in a Python context.
-# However, in practice it doesn't seem to work at all.
-# I think the `cimport` above just imports the C-ish symbol and not the Python one.
-# And you can't `import` from libkart_.pxd. So I'm not sure how you're meant to use the cpdef enum.
-# So here we work around it by just defining a python-style enum and using it below.
-class ObjectType(Enum):
-    # cppgit2::object::object_type
-    any = -2
-    invalid = -1
-    commit = 1
-    tree = 2
-    blob = 3
-    tag = 4
-    ofs_delta = 6
-    ref_delta = 7
-
 cdef class Oid:
-    cdef cppgit2_oid cpp
+    cdef CppOid cpp
 
     def __str__(self):
         return self.cpp.to_hex_string()
@@ -35,7 +18,7 @@ cdef class Oid:
         return f'<Oid: {self}>'
 
     @staticmethod
-    cdef Oid _wrap(cppgit2_oid cpp):
+    cdef Oid _wrap(CppOid cpp):
         cdef Oid x = Oid()
         x.cpp = cpp
         return x
@@ -51,7 +34,7 @@ cdef class TreeEntry:
         return Oid._wrap(self.cpp.id())
     @property
     def type(self):
-        return ObjectType(self.cpp.type())
+        return self.cpp.type()
     @property
     def path(self):
         return self.cpp.path()
@@ -78,14 +61,12 @@ cdef class Tree:
     def filename(self):
         return deref(self.thisptr).filename()
 
+    def __iter__(self):
+        for i in range(deref(self.thisptr).size()):
+            yield TreeEntry._wrap(deref(self.thisptr).get_entry_by_index(i))
+
     def __repr__(self):
         return f"<Tree: {self.id}>"
-
-    def entries(self):
-        entries = deref(self.thisptr).entries()
-        return [
-            TreeEntry._wrap(e) for e in entries
-        ]
 
     @staticmethod
     cdef Tree _wrap(unique_ptr[CppTree] cpp):

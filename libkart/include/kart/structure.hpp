@@ -25,7 +25,7 @@ namespace kart
         vector<Dataset3 *> *GetDatasets();
 
     private:
-        const Tree root_tree;
+        Tree root_tree;
         KartRepo *repo;
     };
 }

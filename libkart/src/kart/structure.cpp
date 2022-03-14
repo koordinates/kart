@@ -3,23 +3,20 @@
 #include <string>
 #include <memory>
 
-#include <cppgit2/repository.hpp>
-
 #include "kart/structure.hpp"
 
 using namespace std;
-using namespace cppgit2;
 using namespace kart;
 
-RepoStructure::RepoStructure(KartRepo *repo, Tree root_tree)
-    : repo(repo), root_tree(root_tree)
+RepoStructure::RepoStructure(KartRepo *repo, Tree root_tree_)
+    : repo(repo), root_tree(root_tree_)
 {
 }
 
 int kart::RepoStructure::Version()
 {
-    auto entry = root_tree.lookup_entry_by_path(".kart.repostructure.version");
-    if (entry.type() != object::object_type::blob)
+    auto entry = root_tree.get_entry_by_path(".kart.repostructure.version");
+    if (entry.type() != ObjectType::blob)
     {
         throw LibKartError("kart repo version didn't resolve to a blob");
     }
@@ -32,21 +29,21 @@ int kart::RepoStructure::Version()
 vector<Dataset3 *> *RepoStructure::GetDatasets()
 {
     auto result = new vector<Dataset3 *>();
-    root_tree.walk(tree::traversal_mode::preorder,
-                   [&](const string &parent_path, const TreeEntry &entry)
-                   {
-                       auto type = entry.type();
-                       if (type == object::object_type::tree && entry.filename() == DATASET_DIRNAME)
-                       {
-                           auto oid = entry.id();
-                           // get parent tree; that's what the dataset uses as its root tree.
-                           auto parent_entry = root_tree.lookup_entry_by_path(parent_path);
-                           auto parent_tree = parent_entry.get_object().as_tree();
+    root_tree.walk(
+        [&](const string &parent_path, const TreeEntry &entry)
+        {
+            auto type = entry.type();
+            if (type == ObjectType::tree && entry.filename() == DATASET_DIRNAME)
+            {
+                auto oid = entry.id();
+                // get parent tree; that's what the dataset uses as its root tree.
+                auto parent_entry = root_tree.get_entry_by_path(parent_path);
+                auto parent_tree = parent_entry.get_object().as_tree();
 
-                           result->push_back(new Dataset3(repo, parent_tree));
-                           return 1;
-                       }
-                       return 0;
-                   });
+                result->push_back(new Dataset3(repo, parent_tree));
+                return 1;
+            }
+            return 0;
+        });
     return result;
 }
