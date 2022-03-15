@@ -1,11 +1,9 @@
 <img title="Kart logo" width="50%" src="https://kartproject.org/images/kart-github.png">
 
-
-
-Kart: Distributed version-control for datasets
----------------------------------------------
+## Kart: Distributed version-control for datasets
 
 ![Build](https://github.com/koordinates/kart/workflows/Build/badge.svg?event=push)
+![Docs](https://readthedocs.org/projects/kart/badge/?version=latest&style=flat)
 
 ## Installing
 
@@ -40,7 +38,9 @@ For Kart development see the [Contributing Notes](CONTRIBUTING.md).
 See the [documentation](https://github.com/koordinates/kart/wiki) for tutorials and reference.
 
 > ##### 💡 If you're new to git
+>
 > Configure the identity you will use for Kart commits with:
+>
 > ```console
 > $ kart config --global user.email "you@example.com"
 > $ kart config --global user.name "Your Name"
@@ -56,26 +56,26 @@ See the [documentation](https://github.com/koordinates/kart/wiki) for tutorials 
    ```
    Use this repository as the directory to run all the other commands in.
    This will also create a working copy as `myproject/myproject.gpkg` to edit.
-4. Editing the working copy in QGIS/etc:
-   * will track changes in the internal `kart` tables
-   * additions/edits/deletes of features are supported
-   * changing feature PKs is supported
-   * schema changes should be detected, but aren't supported yet (will error).
-   * Use F5 to refresh your QGIS map after changing the underlying working-copy data using `kart`.
-5. With your working copy, `kart` commands should work if run from the `myproject/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
-    * `kart diff` diff the working copy against the repository (no index!)
-    * `kart commit -m {message}` commit outstanding changes from the working copy
-    * `kart log` review commit history
-    * `kart branch` & `kart checkout -b` branch management
-    * `kart fetch` fetch upstream changes.
-    * `kart status` show working copy state.
-    * `kart merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
-    * `kart switch` switch to existing or new branches.
-    * `kart reset` & `kart restore` discard changes in the working copy.
-    * `kart tag ...`
-    * `kart remote ...`. Remember simple remotes can just be another local directory.
-    * `kart push` / `kart pull`
-    * `kart clone` initialise a new repository from a remote URL,
+3. Editing the working copy in QGIS/etc:
+   - will track changes in the internal `kart` tables
+   - additions/edits/deletes of features are supported
+   - changing feature PKs is supported
+   - schema changes should be detected, but aren't supported yet (will error).
+   - Use F5 to refresh your QGIS map after changing the underlying working-copy data using `kart`.
+4. With your working copy, `kart` commands should work if run from the `myproject/` folder. Check `--help` for options, the most important ones are supported. In some cases options are passed straight through to an underlying git command:
+   - `kart diff` diff the working copy against the repository (no index!)
+   - `kart commit -m {message}` commit outstanding changes from the working copy
+   - `kart log` review commit history
+   - `kart branch` & `kart checkout -b` branch management
+   - `kart fetch` fetch upstream changes.
+   - `kart status` show working copy state.
+   - `kart merge` merge. Supports `--ff`/`--no-ff`/`--ff-only` from one merge source.
+   - `kart switch` switch to existing or new branches.
+   - `kart reset` & `kart restore` discard changes in the working copy.
+   - `kart tag ...`
+   - `kart remote ...`. Remember simple remotes can just be another local directory.
+   - `kart push` / `kart pull`
+   - `kart clone` initialise a new repository from a remote URL,
 
 ## License
 
@@ -89,17 +89,17 @@ In addition to the permissions in the GNU General Public License,
 the authors give you unlimited permission to link the compiled
 version of this file into combinations with other programs,
 and to distribute those combinations without any restriction
-coming from the use of this file.  (The General Public License
+coming from the use of this file. (The General Public License
 restrictions do apply in other respects; for example, they cover
 modification of the file, and distribution when not linked into
 a combined executable.)
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program; see the file [`COPYING`](COPYING).  If not, write to
+along with this program; see the file [`COPYING`](COPYING). If not, write to
 the Free Software Foundation, 51 Franklin Street, Fifth Floor,
 Boston, MA 02110-1301, USA.

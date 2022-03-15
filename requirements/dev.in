@@ -1,5 +1,6 @@
 -c ../requirements.txt
 -c test.txt
+-c docs.txt
 
 ipdb
 ipython
