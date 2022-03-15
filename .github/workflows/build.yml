@@ -6,7 +6,7 @@ on: [push, pull_request]
 env:
   PIP_CACHE_DIR: ${{ github.workspace }}/.cache/pip
   LIBGIT2_REPO: koordinates/libgit2
-  LIBGIT2_TAG: a7e2b1332b0adf6f852aed7d70bf925f3d388079
+  LIBGIT2_TAG: kart-v0.11.1
 
 jobs:
   #
@@ -849,7 +849,7 @@ jobs:
           git init
           git remote add origin https://github.com/${{ env.LIBGIT2_REPO }}.git
           git fetch -q --depth 1 origin ${{ env.LIBGIT2_TAG }}
-          git checkout ${{ env.LIBGIT2_TAG }}
+          git checkout FETCH_HEAD
           cmake -Wno-dev -B build -S . \
             -DBUILD_CLAR=OFF \
             -DCMAKE_C_COMPILER=/usr/lib/ccache/cc \
@@ -976,7 +976,7 @@ jobs:
           git init
           git remote add origin https://github.com/${{ env.LIBGIT2_REPO }}.git
           git fetch -q --depth 1 origin ${{ env.LIBGIT2_TAG }}
-          git checkout ${{ env.LIBGIT2_TAG }}
+          git checkout FETCH_HEAD
           cmake -Wno-dev -B build -S . \
             -DBUILD_CLAR=OFF \
             -DCMAKE_C_COMPILER=/usr/local/opt/ccache/libexec/cc \
