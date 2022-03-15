@@ -6,7 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.11.1
 
-* Fix for the slowness when creating the working copy in a spatially filtered repository (this was previously slower than usual in a spatially filtered repository, now it is faster) [#561](https://github.com/koordinates/kart/issues/561)
+* Improve performance when creating a working copy in a spatially filtered repository (this was previously slower than in a non-filtered repository; now it is much faster) [#561](https://github.com/koordinates/kart/issues/561)
 
 ## 0.11.0
 

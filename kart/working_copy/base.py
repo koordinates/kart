@@ -1449,6 +1449,9 @@ class BaseWorkingCopy:
 
 @contextlib.contextmanager
 def pause_refreshing(odb):
+    old_flags = odb.lookup_flags()
     odb.set_lookup_flags(pygit2.GIT_ODB_LOOKUP_NO_REFRESH)
-    yield
-    odb.set_lookup_flags(0)
+    try:
+        yield
+    finally:
+        odb.set_lookup_flags(old_flags)
