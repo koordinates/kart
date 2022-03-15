@@ -905,7 +905,8 @@ class BaseWorkingCopy:
         """
         L = logging.getLogger(f"{self.__class__.__qualname__}.write_full")
 
-        with self.session() as sess:
+        self.repo.odb.refresh()
+        with pause_refreshing(self.repo.odb), self.session() as sess:
             dataset_count = len(datasets)
             for i, dataset in enumerate(datasets):
                 L.info(
@@ -1444,3 +1445,10 @@ class BaseWorkingCopy:
             self._reset_tracking_table_for_table(
                 sess, base_ds.table_name, feature_filter
             )
+
+
+@contextlib.contextmanager
+def pause_refreshing(odb):
+    odb.set_lookup_flags(pygit2.GIT_ODB_LOOKUP_NO_REFRESH)
+    yield
+    odb.set_lookup_flags(0)

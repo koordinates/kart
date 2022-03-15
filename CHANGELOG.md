@@ -4,6 +4,10 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
+## 0.11.1
+
+* Fix for the slowness when creating the working copy in a spatially filtered repository (this was previously slower than usual in a spatially filtered repository, now it is faster) [#561](https://github.com/koordinates/kart/issues/561)
+
 ## 0.11.0
 
 ### Major changes
