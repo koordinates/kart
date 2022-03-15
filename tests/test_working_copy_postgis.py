@@ -274,7 +274,10 @@ def test_postgis_wc_with_long_index_name(
                 "unique": False,
                 "column_names": ["geom"],
                 "include_columns": [],
-                "dialect_options": {"postgresql_using": "gist"},
+                "dialect_options": {
+                    "postgresql_include": [],
+                    "postgresql_using": "gist",
+                },
             }
 
 
