@@ -336,3 +336,25 @@ def test_find_renames(data_working_copy, cli_runner):
         )
 
         assert not index.conflicts
+
+
+def test_json_conflicts_as_geojson(data_working_copy, cli_runner):
+    with data_working_copy("points") as (repo_path, wc):
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["checkout", "-b", "theirs_branch"])
+        r = cli_runner.invoke(["branch", "ours_branch"])
+        with repo.working_copy.session() as sess:
+            r = sess.execute(f"""ALTER TABLE {H.POINTS.LAYER} ADD COLUMN new_col1""")
+            assert r.rowcount == -1
+        r = cli_runner.invoke(["commit", "-m", "theirs_commit"])
+
+        r = cli_runner.invoke(["checkout", "ours_branch"])
+        with repo.working_copy.session() as sess:
+            r = sess.execute(f"""ALTER TABLE {H.POINTS.LAYER} ADD COLUMN new_col2""")
+            assert r.rowcount == -1
+        r = cli_runner.invoke(["commit", "-m", "ours_commit"])
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        r = cli_runner.invoke(["conflicts", "-o", "geojson"])
+        assert r.exit_code == 0, r

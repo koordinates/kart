@@ -1,6 +1,5 @@
 import logging
 import sys
-
 import click
 
 from .cli_util import OutputFormatType, parse_output_format
@@ -216,9 +215,19 @@ def conflicts_json_as_text(json_obj):
 def conflicts_json_as_geojson(json_obj):
     """Converts the JSON output of list_conflicts to geojson."""
     features = []
+    meta_item_keys = set()
     for key, feature in json_obj.items():
+        if type(feature) != dict or feature.get("type") != "Feature":
+            meta_item_keys.add(":".join(key.split(":")[:-1]))
+            continue
         feature["id"] = key
         features.append(feature)
+
+    if meta_item_keys:
+        L.warning(
+            f"There are meta-item conflicts that cannot be output as geojson: \n{meta_item_keys}"
+        )
+
     return {"type": "FeatureCollection", "features": features}
 
 
