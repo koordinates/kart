@@ -34,7 +34,12 @@ from kart.repo_version import (
 
 @click.command("point-cloud-import", hidden=True)
 @click.pass_context
-@click.option("--convert-to-copc/--no-convert-to-copc", is_flag=True, default=True)
+@click.option(
+    "--convert-to-copc/--no-convert-to-copc",
+    is_flag=True,
+    default=True,
+    help="Convert non-COPC LAS or LAZ files to COPC LAZ files",
+)
 @click.option(
     "--dataset-path", "ds_path", help="The dataset's path once imported", required=True
 )
@@ -125,7 +130,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             )
 
         if transform is None:
-            src_crs = make_crs(crs_set[0])
+            src_crs = make_crs(crs_set.only())
             target_crs = make_crs("EPSG:4326")
             transform = osr.CoordinateTransformation(src_crs, target_crs)
 
@@ -138,15 +143,15 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         }
 
         if schema is None:
-            crs_name = get_identifier_str(crs_set[0])
+            crs_name = get_identifier_str(crs_set.only())
             schema = metadata["filters.info"]["schema"]
             schema["CRS"] = crs_name
 
     click.echo()
 
-    version = version_set[0]
-    copc_version = copc_version_set[0]
-    is_laz = compressed_set[0] is True
+    version = version_set.only()
+    copc_version = copc_version_set.only()
+    is_laz = compressed_set.only() is True
     is_copc = is_laz and copc_version != NOT_COPC
 
     if is_copc:
@@ -233,7 +238,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         write_blob_to_stream(
             proc.stdin,
             f"{ds_inner_path}/meta/crs/{crs_name}.wkt",
-            ensure_bytes(normalise_wkt(crs_set[0])),
+            ensure_bytes(normalise_wkt(crs_set.only())),
         )
 
     click.echo()
@@ -381,6 +386,14 @@ class ListBasedSet:
         if element not in self.list:
             self.list.append(element)
 
+    def only(self):
+        """Return the only element in this collection, or raise a LookupError."""
+        if len(self.list) != 1:
+            raise LookupError(
+                f"Can't return only element: set contains {len(self.list)} elements"
+            )
+        return self.list[0]
+
     def __contains__(self, element):
         return element in self.list
 
@@ -389,6 +402,3 @@ class ListBasedSet:
 
     def __iter__(self):
         return iter(self.list)
-
-    def __getitem__(self, key):
-        return self.list[key]
