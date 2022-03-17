@@ -91,6 +91,8 @@ def test_import_single_las(
                 stdout.splitlines()[0],
             )
 
+            assert (repo_path / "autzen" / "tiles" / "autzen.copc.laz").is_file()
+
 
 def test_import_several_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
@@ -154,6 +156,12 @@ def test_import_several_las(
                     r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tiles/[0-9a-f]{2}/auckland_\d_\d.copc.laz",
                     lines[i],
                 )
+
+            for x in range(4):
+                for y in range(4):
+                    assert (
+                        repo_path / "auckland" / "tiles" / f"auckland_{x}_{y}.copc.laz"
+                    ).is_file()
 
 
 def test_import_mismatched_las(

@@ -427,7 +427,6 @@ class KartRepo(pygit2.Repository):
             self.config["core.bare"] = True
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
-
         # Write working copy config:
         from kart.working_copy.base import BaseWorkingCopy
 
@@ -439,12 +438,24 @@ class KartRepo(pygit2.Repository):
         ensure_supported_repo_wide_version(self.table_dataset_version)
 
     def write_attributes(self):
-        (self.gitdir_path / "info").mkdir(exist_ok=True)
-        with (self.gitdir_path / "info" / "attributes").open("a+") as f:
-            f.write("**/.table-dataset/feature/** merge=binary\n")
-            f.write(
-                "**/.point-cloud-dataset*/tiles/** filter=lfs diff=lfs merge=lfs -text\n"
-            )
+        info_path = self.gitdir_path / "info"
+        info_path.mkdir(exist_ok=True)
+        # File attributes
+        with (info_path / "attributes").open("a+") as f:
+            f.write("**/.*-dataset*/feature/** diff=binary merge=binary -text\n")
+            f.write("**/.*-dataset*/tiles/** filter=lfs diff=lfs merge=lfs -text\n")
+
+        # Files potentially in workdir that should not be checked in:
+        with (info_path / "exclude").open("a+") as f:
+            f.write(".git\n")
+            f.write(".kart\n")
+            f.write("KART_README.*\n")
+
+        # TODO - configure sparse checkout and use it to check out attachments (possibly).
+        # The files in the ODB that should be checked out are:
+        # /*                     Checkout every file
+        # !.kart                 But not .kart.repostructure.version or similar
+        # !**/.*-dataset*/**     And not anything in a dataset folder
 
     def write_readme(self):
         readme_filename = f"{self.branding.upper()}_README.txt"
@@ -657,8 +668,8 @@ class KartRepo(pygit2.Repository):
 
     def invoke_git(self, *args):
         try:
-            args = ["git", "-C", self.path, *args]
-            subprocess.check_call(args, env=tool_environment())
+            args = ["git", *args]
+            subprocess.check_call(args, env=tool_environment(), cwd=self.workdir_path)
         except subprocess.CalledProcessError as e:
             sys.exit(translate_subprocess_exit_code(e.returncode))
 
