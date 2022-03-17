@@ -1,4 +1,5 @@
 from glob import glob
+import json
 import re
 import subprocess
 import pytest
@@ -52,6 +53,28 @@ def test_import_single_las(
             )
             assert r.exit_code == 0, r.stderr
 
+            schema_json = (
+                repo.head_tree / "autzen/.point-cloud-dataset.v1/meta/schema.json"
+            )
+            assert json.loads(schema_json.data) == {
+                "dimensions": [
+                    {"name": "X", "size": 8, "type": "floating"},
+                    {"name": "Y", "size": 8, "type": "floating"},
+                    {"name": "Z", "size": 8, "type": "floating"},
+                    {"name": "Intensity", "size": 2, "type": "unsigned"},
+                    {"name": "ReturnNumber", "size": 1, "type": "unsigned"},
+                    {"name": "NumberOfReturns", "size": 1, "type": "unsigned"},
+                    {"name": "ScanDirectionFlag", "size": 1, "type": "unsigned"},
+                    {"name": "EdgeOfFlightLine", "size": 1, "type": "unsigned"},
+                    {"name": "Classification", "size": 1, "type": "unsigned"},
+                    {"name": "ScanAngleRank", "size": 4, "type": "floating"},
+                    {"name": "UserData", "size": 1, "type": "unsigned"},
+                    {"name": "PointSourceId", "size": 2, "type": "unsigned"},
+                    {"name": "GpsTime", "size": 8, "type": "floating"},
+                ],
+                "CRS": "EPSG:2994",
+            }
+
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
             assert r.exit_code == 0, r.stderr
             repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
@@ -84,6 +107,31 @@ def test_import_several_las(
                 ]
             )
             assert r.exit_code == 0, r.stderr
+
+            schema_json = (
+                repo.head_tree / "auckland/.point-cloud-dataset.v1/meta/schema.json"
+            )
+            assert json.loads(schema_json.data) == {
+                "dimensions": [
+                    {"name": "X", "size": 8, "type": "floating"},
+                    {"name": "Y", "size": 8, "type": "floating"},
+                    {"name": "Z", "size": 8, "type": "floating"},
+                    {"name": "Intensity", "size": 2, "type": "unsigned"},
+                    {"name": "ReturnNumber", "size": 1, "type": "unsigned"},
+                    {"name": "NumberOfReturns", "size": 1, "type": "unsigned"},
+                    {"name": "ScanDirectionFlag", "size": 1, "type": "unsigned"},
+                    {"name": "EdgeOfFlightLine", "size": 1, "type": "unsigned"},
+                    {"name": "Classification", "size": 1, "type": "unsigned"},
+                    {"name": "ScanAngleRank", "size": 4, "type": "floating"},
+                    {"name": "UserData", "size": 1, "type": "unsigned"},
+                    {"name": "PointSourceId", "size": 2, "type": "unsigned"},
+                    {"name": "GpsTime", "size": 8, "type": "floating"},
+                    {"name": "Red", "size": 2, "type": "unsigned"},
+                    {"name": "Green", "size": 2, "type": "unsigned"},
+                    {"name": "Blue", "size": 2, "type": "unsigned"},
+                ],
+                "CRS": "EPSG:2193",
+            }
 
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
             assert r.exit_code == 0, r.stderr

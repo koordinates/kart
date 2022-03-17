@@ -9,7 +9,7 @@ import sys
 import click
 from osgeo import osr
 
-from kart.crs_util import make_crs
+from kart.crs_util import make_crs, get_identifier_str, normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
@@ -24,7 +24,7 @@ from kart.fast_import import (
     write_blob_to_stream,
     write_blobs_to_stream,
 )
-from kart.serialise_util import hexhash
+from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.output_util import format_wkt_for_output
 from kart.repo_version import (
     SUPPORTED_REPO_VERSIONS,
@@ -34,11 +34,12 @@ from kart.repo_version import (
 
 @click.command("point-cloud-import", hidden=True)
 @click.pass_context
+@click.option("--convert-to-copc/--no-convert-to-copc", is_flag=True, default=True)
 @click.option(
     "--dataset-path", "ds_path", help="The dataset's path once imported", required=True
 )
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=True)
-def point_cloud_import(ctx, ds_path, sources):
+def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
     Will eventually be merged with the main `import` command.
@@ -61,8 +62,12 @@ def point_cloud_import(ctx, ds_path, sources):
     version_set = ListBasedSet()
     copc_version_set = ListBasedSet()
     pdrf_set = ListBasedSet()
+    pdr_length_set = ListBasedSet()
+    schema_set = ListBasedSet()
     crs_set = ListBasedSet()
     transform = None
+    schema = None
+    crs_name = None
 
     per_source_info = {}
 
@@ -75,6 +80,9 @@ def point_cloud_import(ctx, ds_path, sources):
                 "count": 0,  # Don't read any individual points.
             }
         ]
+        if schema is None:
+            config.append({"type": "filters.info"})
+
         pipeline = pdal.Pipeline(json.dumps(config))
         try:
             pipeline.execute()
@@ -83,7 +91,8 @@ def point_cloud_import(ctx, ds_path, sources):
                 f"Error reading {source}", exit_code=INVALID_FILE_FORMAT
             )
 
-        info = json.loads(pipeline.metadata)["metadata"]["readers.las"]
+        metadata = json.loads(pipeline.metadata)["metadata"]
+        info = metadata["readers.las"]
 
         compressed_set.add(info["compressed"])
         if len(compressed_set) > 1:
@@ -101,6 +110,10 @@ def point_cloud_import(ctx, ds_path, sources):
         pdrf_set.add(info["dataformat_id"])
         if len(pdrf_set) > 1:
             raise _non_homogenous_error("Point Data Record Format", pdrf_set)
+
+        pdr_length_set.add(info["point_length"])
+        if len(pdr_length_set) > 1:
+            raise _non_homogenous_error("Point Data Record Length", pdr_length_set)
 
         crs_set.add(info["srs"]["wkt"])
         if len(crs_set) > 1:
@@ -124,7 +137,38 @@ def point_cloud_import(ctx, ds_path, sources):
             "crs84_envelope": crs84_envelope,
         }
 
+        if schema is None:
+            crs_name = get_identifier_str(crs_set[0])
+            schema = metadata["filters.info"]["schema"]
+            schema["CRS"] = crs_name
+
     click.echo()
+
+    version = version_set[0]
+    copc_version = copc_version_set[0]
+    is_laz = compressed_set[0] is True
+    is_copc = is_laz and copc_version != NOT_COPC
+
+    if is_copc:
+        # Keep native format.
+        import_func = _copy_tile_to_lfs_blob
+        kart_format = f"pc:v1/copc-{copc_version}.0"
+    elif is_laz:
+        # Optionally Convert to COPC 1.0 if requested
+        import_func = (
+            _convert_tile_to_copc_lfs_blob
+            if convert_to_copc
+            else _copy_tile_to_lfs_blob
+        )
+        kart_format = "pc:v1/copc-1.0" if convert_to_copc else f"pc:v1/laz-{version}"
+    else:  # LAS
+        if not convert_to_copc:
+            raise InvalidOperation(
+                "LAS datasets are not supported - dataset must be converted to LAZ / COPC",
+                exit_code=INVALID_FILE_FORMAT,
+            )
+        import_func = _convert_tile_to_copc_lfs_blob
+        kart_format = "pc:v1/copc-1.0"
 
     # Set up LFS hooks.
     # TODO: This could eventually be moved to `kart init`.
@@ -140,20 +184,12 @@ def point_cloud_import(ctx, ds_path, sources):
     header = generate_header(
         repo,
         None,
-        f"Importing {len(sources)} point-cloud tiles as {ds_path}",
+        f"Importing {len(sources)} LAZ tiles as {ds_path}",
         repo.head_branch,
         repo.head_commit,
     )
 
-    # TODO - revisit this if another COPC version is released.
-    if compressed_set[0] is True and copc_version_set[0] != NOT_COPC:
-        # Keep native format.
-        import_func = _copy_tile_to_copc_lfs_blob
-        copc_version = copc_version_set[0]
-    else:
-        # Convert to COPC 1.0
-        import_func = _convert_tile_to_copc_lfs_blob
-        copc_version = 1
+    ds_inner_path = f"{ds_path}/.point-cloud-dataset.v1"
 
     lfs_objects_path = repo.gitdir_path / "lfs" / "objects"
     lfs_tmp_import_path = lfs_objects_path / "import"
@@ -177,21 +213,28 @@ def point_cloud_import(ctx, ds_path, sources):
             # TODO - is this the right prefix and name?
             tilename = os.path.splitext(os.path.basename(source))[0] + ".copc.laz"
             tile_prefix = hexhash(tilename)[0:2]
-            blob_path = (
-                f"{ds_path}/.point-cloud-dataset.v1/tiles/{tile_prefix}/{tilename}"
-            )
+            blob_path = f"{ds_inner_path}/tiles/{tile_prefix}/{tilename}"
             info = per_source_info[source]
             pointer_dict = {
                 "version": "https://git-lfs.github.com/spec/v1",
                 # TODO - available.<URL-IDX> <URL>
                 "kart.extent.crs84": _format_array(info["crs84_envelope"]),
                 "kart.extent.native": _format_array(info["native_envelope"]),
-                "kart.format": f"pc:v1/copc-{copc_version}.0",
+                "kart.format": kart_format,
                 "kart.pc.count": info["count"],
                 "oid": f"sha256:{oid}",
                 "size": size,
             }
             write_pointer_file_to_stream(proc.stdin, blob_path, pointer_dict)
+
+        write_blob_to_stream(
+            proc.stdin, f"{ds_inner_path}/meta/schema.json", json_pack(schema)
+        )
+        write_blob_to_stream(
+            proc.stdin,
+            f"{ds_inner_path}/meta/crs/{crs_name}.wkt",
+            ensure_bytes(normalise_wkt(crs_set[0])),
+        )
 
     click.echo()
 
@@ -310,7 +353,7 @@ def _convert_tile_to_copc_lfs_blob(source, dest):
     return sha256.hexdigest(), size
 
 
-def _copy_tile_to_copc_lfs_blob(source, dest):
+def _copy_tile_to_lfs_blob(source, dest):
     """Copies a file from source to dest and returns the SHA256 and length of the file."""
     sha256 = hashlib.sha256()
     size = Path(source).stat().st_size

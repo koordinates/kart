@@ -166,7 +166,7 @@ def _generate_identifier_int(crs):
         # it will get a new auto-generated ID - but the user can name it to avoid this behaviour.
         if isinstance(crs, str):
             normalised_wkt = normalise_wkt(crs)
-        elif isinstance(crs, SpatialReference):
+        elif isinstance(crs, osr.SpatialReference):
             normalised_wkt = normalise_wkt(crs.ExportToWkt())
         else:
             raise RuntimeError(f"Unrecognised CRS: {crs}")
