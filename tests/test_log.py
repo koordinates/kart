@@ -8,7 +8,7 @@ H = pytest.helpers.helpers()
 
 @pytest.mark.parametrize("output_format", ["text", "json", "json-lines"])
 def test_log(output_format, data_archive_readonly, cli_runner):
-    """ review commit history """
+    """review commit history"""
     with data_archive_readonly("points"):
         extra_args = ["--dataset-changes"] if output_format.startswith("json") else []
         r = cli_runner.invoke(["log", f"--output-format={output_format}"] + extra_args)
@@ -104,7 +104,7 @@ def test_log_arg_parsing_with_range(data_archive_readonly, cli_runner):
 def test_log_shallow_clone(
     output_format, data_archive_readonly, cli_runner, tmp_path, chdir
 ):
-    """ review commit history """
+    """review commit history"""
     with data_archive_readonly("points") as path:
 
         clone_path = tmp_path / "shallow.clone"
@@ -147,7 +147,7 @@ def test_log_shallow_clone(
 
 
 def test_log_with_feature_count(data_archive, cli_runner):
-    """ review commit history """
+    """review commit history"""
     with data_archive("points"):
         r = cli_runner.invoke(
             ["log", "--output-format=json", "--with-feature-count=exact"]
@@ -185,7 +185,7 @@ def test_log_with_feature_count(data_archive, cli_runner):
 
 @pytest.mark.parametrize("output_format", ["text", "json"])
 def test_log_arg_handling(data_archive, cli_runner, output_format):
-    """ review commit history """
+    """review commit history"""
 
     def num_commits(r):
         if output_format == "text":
@@ -450,3 +450,26 @@ def test_extra_git_log_options(data_archive, cli_runner, args, expected_commits)
         r = cli_runner.invoke(["log", *args])
         assert r.exit_code == 0, r.stderr
         assert get_log_hashes(r) == expected_commits
+
+
+@pytest.mark.parametrize(
+    "args, expected_ref",
+    [
+        pytest.param(["--decorate=short"], "main", id="decorate_short"),
+        pytest.param(["--decorate=full"], "refs/heads/main", id="decorate_full"),
+        pytest.param(["--decorate=auto"], "", id="decorate_auto"),
+        pytest.param(["--decorate=no"], "", id="decorate_no"),
+        pytest.param(["--no-decorate"], "", id="no_decorate"),
+    ],
+)
+def test_log_decorate(data_archive, args, expected_ref, cli_runner):
+    def get_log_refs(r):
+        ref_group = r.stdout.splitlines()[0].split(" ", 4)
+        if len(ref_group) <= 2:
+            return ""
+        return ref_group[-1][:-1]
+
+    with data_archive("points"):
+        r = cli_runner.invoke(["log", *args])
+        assert r.exit_code == 0, r
+        assert get_log_refs(r) == expected_ref

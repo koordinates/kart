@@ -109,6 +109,8 @@ def parse_extra_args(
     author,
     committer,
     grep,
+    decorate,
+    no_decorate,
 ):
     """
     Interprets positional `kart log` args, including "--", commits/refs, and paths.
@@ -147,6 +149,10 @@ def parse_extra_args(
         options.append(f"--since={since}")
     if until is not None:
         options.append(f"--until={until}")
+    if decorate is not None:
+        options.append(f"--decorate={decorate}")
+    if no_decorate:
+        options.append(f"--no-decorate")
     # These ones can be specified more than once
     if author:
         options.extend(f"--author={a}" for a in author)
@@ -341,6 +347,22 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     metavar="PATTERN",
     multiple=True,
     help="Limit the commits output to ones with log message matching the specified pattern (regular expression)",
+)
+@click.option(
+    "--decorate",
+    nargs=1,
+    metavar="[=short|full|auto|no]",
+    type=click.Choice(["short", "full", "auto", "no"]),
+    help="""
+    Print out the ref names of any commits that are shown. If short is specified, the ref name prefixes refs/heads/, refs/tags/ and refs/remotes/ will not be printed. If full is specified, the full ref name (including prefix) will be printed. If auto is specified, then if the output is going to a terminal, the ref names are shown as if short were given, otherwise no ref names are shown. The option --decorate is short-hand for --decorate=short. Default to configuration value of log.decorate if configured, otherwise, auto.
+    """,
+)
+@click.option(
+    "--no-decorate",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Doesn't print out the ref names of any commits that are shown. The option --no-decorate is short-hand for --decorate=no.",
 )
 @click.argument(
     "args", metavar="[REVISION RANGE] [--] [FEATURES]", nargs=-1, type=click.UNPROCESSED
