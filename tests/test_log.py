@@ -242,19 +242,10 @@ def test_log_arg_handling(data_archive, cli_runner, output_format):
         assert num_commits(r) == 2
 
         if output_format == "text":
-            # check that we support passing unknown options (e.g. `-p`) on to git log
-            r = cli_runner.invoke(
-                [
-                    "log",
-                    "-o",
-                    output_format,
-                    "1582725544d9122251acd4b3fc75b5c88ac3fd17",
-                    "-p",
-                    "nz_pa_points_topo_150k/.table-dataset/feature/A/A/A/R/kc0EQA==",
-                ]
-            )
+            # check that we support passing unknown options (e.g. `-g`) on to git log
+            r = cli_runner.invoke(["log", "-g"])
             assert r.exit_code == 0, r.stderr
-            assert "diff --git" in r.stdout
+            assert "Reflog" in r.stdout
 
         # NOTE: this will fail the 0.12 release ; at that point we need to remove the code that
         # generates the warning.

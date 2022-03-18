@@ -78,7 +78,7 @@ def test_init_import_custom_message(data_archive_readonly, tmp_path, cli_runner,
         )
         assert r.exit_code == 0, r
         with chdir(tmp_path / "emptydir"):
-            r = cli_runner.invoke(["log", "-1"])
+            r = cli_runner.invoke(["log", "-n 1"])
         assert r.exit_code == 0, r
         assert "Custom message" in r.stdout
 
