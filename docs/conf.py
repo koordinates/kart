@@ -31,7 +31,6 @@ exclude_patterns = [
     "Thumbs.db",
     ".DS_Store",
     "include/links.rst",
-    "pages/google-summer-of-code*",
 ]
 
 
