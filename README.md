@@ -3,7 +3,7 @@
 ## Kart: Distributed version-control for datasets
 
 ![Build](https://github.com/koordinates/kart/workflows/Build/badge.svg?event=push)
-![Docs](https://readthedocs.org/projects/kart/badge/?version=latest&style=flat)
+![Docs](https://readthedocs.org/projects/kart-project/badge/?version=latest&style=flat)
 
 ## Installing
 
