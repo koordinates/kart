@@ -8,7 +8,7 @@ Kart
 
 .. image:: https://github.com/koordinates/kart/workflows/Build/badge.svg?event=push
     :alt: build status
-.. image:: https://readthedocs.org/projects/kart/badge/?version=latest&style=flat
+.. image:: https://readthedocs.org/projects/kart-project/badge/?version=latest&style=flat
     :alt: docs status
 
 Welcome to the `Kart <kart_website_>`_ documentation. Kart
