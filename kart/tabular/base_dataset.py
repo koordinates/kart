@@ -46,7 +46,7 @@ class BaseDataset(ImportSource):
 
     NUM_FEATURES_PER_PROGRESS_LOG = 10_000
 
-    def __init__(self, tree, path, repo=None):
+    def __init__(self, tree, path, dirname=None, repo=None):
         """
         Create a dataset at the given tree, which has the given path.
         The tree should contain a child tree with the name DATASET_DIRNAME.
@@ -55,18 +55,17 @@ class BaseDataset(ImportSource):
         if self.__class__ is BaseDataset:
             raise TypeError("Cannot construct a BaseDataset - you may want Dataset3")
 
+        if dirname is None:
+            dirname = self.DATASET_DIRNAME
+
         if tree is not None:
             self.tree = tree
-            self.inner_tree = (
-                tree / self.DATASET_DIRNAME if self.DATASET_DIRNAME else self.tree
-            )
+            self.inner_tree = tree / dirname if dirname else self.tree
         else:
             self.inner_tree = self.tree = None
 
         self.path = path.strip("/")
-        self.inner_path = (
-            f"{path}/{self.DATASET_DIRNAME}" if self.DATASET_DIRNAME else self.path
-        )
+        self.inner_path = f"{path}/{dirname}" if dirname else self.path
 
         self.table_name = self.dataset_path_to_table_name(self.path)
         self.L = logging.getLogger(self.__class__.__qualname__)
@@ -75,7 +74,7 @@ class BaseDataset(ImportSource):
 
     @classmethod
     def new_dataset_for_writing(cls, path, schema, repo=None):
-        result = cls(None, path, repo=repo)
+        result = cls(None, path, cls.DATASET_DIRNAME, repo=repo)
         result._schema = schema
         return result
 

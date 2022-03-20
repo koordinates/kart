@@ -53,6 +53,10 @@ def test_import_single_las(
             )
             assert r.exit_code == 0, r.stderr
 
+            r = cli_runner.invoke(["data", "ls"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == ["autzen"]
+
             schema_json = (
                 repo.head_tree / "autzen/.point-cloud-dataset.v1/meta/schema.json"
             )
@@ -107,6 +111,10 @@ def test_import_several_las(
                 ]
             )
             assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["data", "ls"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines() == ["auckland"]
 
             schema_json = (
                 repo.head_tree / "auckland/.point-cloud-dataset.v1/meta/schema.json"

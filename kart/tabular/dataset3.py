@@ -107,8 +107,8 @@ class Dataset3(RichBaseDataset):
             and (tree / cls.DATASET_DIRNAME).type_str == "tree"
         )
 
-    def __init__(self, tree, path, repo=None):
-        super().__init__(tree, path, repo)
+    def __init__(self, tree, path, dirname=None, repo=None):
+        super().__init__(tree, path, dirname=dirname, repo=repo)
         if self.inner_tree is not None:
             self.ensure_only_supported_capabilities()
 

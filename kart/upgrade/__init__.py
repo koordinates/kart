@@ -255,7 +255,7 @@ def _upgrade_commit(
     source_rs = RepoStructure(
         source_repo,
         source_commit,
-        dataset_class=source_dataset_class,
+        force_dataset_class=source_dataset_class,
     )
     source_datasets = list(source_rs.datasets)
     dataset_count = len(source_datasets)
@@ -348,7 +348,7 @@ def _find_sole_dataset_diff(
     parent_rs = RepoStructure(
         source_repo,
         parent_commit,
-        dataset_class=source_dataset_class,
+        force_dataset_class=source_dataset_class,
     )
     source_ds_paths = {ds.path for ds in source_rs.datasets}
     parent_ds_paths = {ds.path for ds in parent_rs.datasets}

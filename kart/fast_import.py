@@ -387,9 +387,7 @@ def fast_import_tables(
                 t1 = time.monotonic()
                 builder = ObjectBuilder(repo, trees[0])
                 for t in trees[1:]:
-                    datasets = Datasets(
-                        repo, t, dataset_class_for_version(repo.table_dataset_version)
-                    )
+                    datasets = Datasets(repo, t)
                     for ds in datasets:
                         try:
                             feature_tree = ds.feature_tree
