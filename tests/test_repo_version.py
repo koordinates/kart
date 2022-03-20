@@ -18,4 +18,4 @@ def test_get_repo_version(
         3: Path(f"{archive}.tgz"),
     }
     with data_archive_readonly(archive_paths[repo_version]):
-        assert KartRepo(".").version == repo_version
+        assert KartRepo(".").table_dataset_version == repo_version

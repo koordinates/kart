@@ -9,7 +9,7 @@ from kart import checkout, context
 from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from kart.repo import KartConfigKeys, KartRepo
-from kart.repo_version import DEFAULT_NEW_REPO_VERSION
+from kart.tabular.version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
 from kart.tabular.dataset2 import Dataset2
 from kart.timestamps import minutes_to_tz_offset
@@ -96,7 +96,7 @@ class ForceLatestVersionRepo(KartRepo):
     """
 
     @property
-    def version(self):
+    def table_dataset_version(self):
         return DEFAULT_NEW_REPO_VERSION
 
 
@@ -135,7 +135,7 @@ def upgrade(ctx, source, dest, in_place):
             f"'{source}': not an existing Kart repository", param_hint="SOURCE"
         )
 
-    source_version = source_repo.version
+    source_version = source_repo.table_dataset_version
     if source_version == DEFAULT_NEW_REPO_VERSION:
         raise InvalidOperation(
             f"Cannot upgrade: source repository is already at latest known version (Datasets V{source_version})"

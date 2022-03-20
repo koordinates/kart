@@ -21,11 +21,11 @@ from .exceptions import (
     SubprocessError,
     translate_subprocess_exit_code,
 )
-from .repo_version import (
+from kart.tabular.version import (
     DEFAULT_NEW_REPO_VERSION,
     dataset_class_for_version,
-    ensure_supported_repo_version,
-    get_repo_version,
+    ensure_supported_repo_wide_version,
+    get_repo_wide_version,
 )
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
@@ -267,7 +267,7 @@ class KartRepo(pygit2.Repository):
             wc_location,
             bare,
             spatial_filter_spec,
-            repostructure_version=DEFAULT_NEW_REPO_VERSION,
+            table_dataset_version=DEFAULT_NEW_REPO_VERSION,
         )
         kart_repo.write_attributes()
         kart_repo.write_readme()
@@ -411,15 +411,16 @@ class KartRepo(pygit2.Repository):
         wc_location=None,
         bare=False,
         spatial_filter_spec=None,
-        repostructure_version=None,
+        table_dataset_version=None,
     ):
         # Whichever of these variable is written, controls whether this repo is kart branded or not.
         version_key = KartConfigKeys.BRANDED_REPOSTRUCTURE_VERSION_KEYS[
             self.BRANDING_FOR_NEW_REPOS
         ]
-        if repostructure_version is None:
-            repostructure_version = self.version
-        self.config[version_key] = str(repostructure_version)
+
+        if table_dataset_version is None:
+            table_dataset_version = self.table_dataset_version
+        self.config[version_key] = str(table_dataset_version)
 
         # Bare-style Kart repos are always implemented as bare git repos:
         if self.is_bare_style:
@@ -435,7 +436,7 @@ class KartRepo(pygit2.Repository):
             spatial_filter_spec.write_config(self)
 
     def ensure_supported_version(self):
-        ensure_supported_repo_version(self.version)
+        ensure_supported_repo_wide_version(self.table_dataset_version)
 
     def write_attributes(self):
         (self.gitdir_path / "info").mkdir(exist_ok=True)
@@ -505,7 +506,7 @@ class KartRepo(pygit2.Repository):
         elif KartConfigKeys.SNO_REPOSITORY_VERSION in self.config:
             return "sno"
         # Pre V2 repos (no longer fully supported - need to be upgraded) are always Sno branded.
-        if self.BRANDING_FOR_NEW_REPOS != "sno" and self.version < 2:
+        if self.BRANDING_FOR_NEW_REPOS != "sno" and self.table_dataset_version < 2:
             return "sno"
         # New repo, config is not yet written. Refer to BRANDING_FOR_NEW_REPOS
         return self.BRANDING_FOR_NEW_REPOS
@@ -552,9 +553,10 @@ class KartRepo(pygit2.Repository):
         )
 
     @property
-    def version(self):
+    @lru_cache(maxsize=1)
+    def table_dataset_version(self):
         """Returns the Kart repository version - eg 2 for 'Datasets V2' See DATASETS_v2.md"""
-        return get_repo_version(self)
+        return get_repo_wide_version(self)
 
     @property
     def workingcopy_location(self):
@@ -617,7 +619,7 @@ class KartRepo(pygit2.Repository):
     @property
     def dataset_class(self):
         self.ensure_supported_version()
-        return dataset_class_for_version(self.version)
+        return dataset_class_for_version(self.table_dataset_version)
 
     @property
     def working_copy(self):

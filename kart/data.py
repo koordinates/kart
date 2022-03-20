@@ -141,7 +141,7 @@ def data_version(ctx, output_format):
     repo = ctx.obj.get_repo(
         allowed_states=KartRepoState.ALL_STATES, allow_unsupported_versions=True
     )
-    version = repo.version
+    version = repo.table_dataset_version
     if output_format == "text":
         click.echo(f"This Kart repo uses Datasets v{version}")
         if version >= 1:

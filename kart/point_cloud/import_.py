@@ -26,8 +26,8 @@ from kart.fast_import import (
 )
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.output_util import format_wkt_for_output
-from kart.repo_version import (
-    SUPPORTED_REPO_VERSIONS,
+from kart.tabular.version import (
+    SUPPORTED_VERSIONS,
     extra_blobs_for_version,
 )
 
@@ -183,8 +183,12 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         )
 
     # We still need to write .kart.repostructure.version unfortunately, even though it's only relevant to tabular datasets.
-    assert repo.version in SUPPORTED_REPO_VERSIONS
-    extra_blobs = extra_blobs_for_version(repo.version) if not repo.head_commit else []
+    assert repo.table_dataset_version in SUPPORTED_VERSIONS
+    extra_blobs = (
+        extra_blobs_for_version(repo.table_dataset_version)
+        if not repo.head_commit
+        else []
+    )
 
     header = generate_header(
         repo,

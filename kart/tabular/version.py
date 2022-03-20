@@ -1,33 +1,47 @@
 import itertools
 import json
 
-from .core import walk_tree
-from .exceptions import UNSUPPORTED_VERSION, InvalidOperation
+from kart.core import walk_tree
+from kart.exceptions import UNSUPPORTED_VERSION, InvalidOperation
+
+# Kart repos have a repo-wide marker - either in the .kart/config file or in a blob in the ODB -
+# that stores which version all of the table-datasets are, if they are V2 or V3.
+# This type of repo-wide marker wasn't present for V0 or V1 table-datasets, and it won't be extended to work for
+# other dataset types going forward.
+
+# It has the following advantage:
+# - it marks an entire repo as being compatible or incompatible with a particular Kart version, so that Kart can simply
+#   announce "you need to download newer Kart" or "you need to upgrade this repo to a supported version".
+
+# But, it has the following disadvantage:
+# - slightly ugly: extra blobs unrelated to the commit content is added to the first commit
+# - wasn't designed to store versions for multiple different dataset types eg table-dataset.v3, point-cloud-dataset.v1.
+# - was specifically designed to prevent a mixture of dataset versions in one repo eg table-dataset.v1 and .v2
+#   Going forward, it probably makes more sense to allow this, rather than always requiring the user to upgrade old
+#   datasets (which breaks synchronisation with remotes).
 
 # We look for the repostructure version blob in either of these two places:
-REPOSTRUCTURE_VERSION_BLOB_PATHS = {
+TABLE_DATASET_VERSION_BLOB_PATHS = {
     2: ".sno.repository.version",  # Default path for V2
     3: ".kart.repostructure.version",  # Default path for V3
 }
 
-# Currently Datasets v2 and v3 are supported by all commands.
-MIN_SUPPORTED_REPO_VERSION = 2
-MAX_SUPPORTED_REPO_VERSION = 3
-SUPPORTED_REPO_VERSIONS = range(
-    MIN_SUPPORTED_REPO_VERSION, MAX_SUPPORTED_REPO_VERSION + 1
-)
-SUPPORTED_REPO_VERSION_DESC = "v2 or v3"
+# Currently table-Datasets v2 and v3 are supported by all commands.
+MIN_SUPPORTED_VERSION = 2
+MAX_SUPPORTED_VERSION = 3
+SUPPORTED_VERSIONS = range(MIN_SUPPORTED_VERSION, MAX_SUPPORTED_VERSION + 1)
+SUPPORTED_VERSION_DESC = "v2 or v3"
 
 DEFAULT_NEW_REPO_VERSION = 3
 
 
-# Datasets v0 and v1 are also recognized. Datasets v0, v1 and v2 and can be upgradeed to v3.
-MIN_RECOGNIZED_REPO_VERSION = 0
-MAX_RECOGNIZED_REPO_VERSION = 3
+# Table-datasets v0 and v1 are also recognized. Table-datasets v0, v1 and v2 and can be upgradeed to v3.
+MIN_RECOGNIZED_VERSION = 0
+MAX_RECOGNIZED_VERSION = 3
 
 
 def encode_repo_version(version):
-    return REPOSTRUCTURE_VERSION_BLOB_PATHS[version], f"{version}\n".encode("utf8")
+    return TABLE_DATASET_VERSION_BLOB_PATHS[version], f"{version}\n".encode("utf8")
 
 
 def extra_blobs_for_version(version):
@@ -41,7 +55,7 @@ def extra_blobs_for_version(version):
     return [encode_repo_version(version)]
 
 
-def get_repo_version(repo, tree=None):
+def get_repo_wide_version(repo, tree=None):
     """
     Returns the repo version from the blob at <repo-root>/REPOSTRUCTURE_VERSION_BLOB_PATH -
     (note that this is not user-visible in the file-system since we keep it hidden via sparse / bare checkouts).
@@ -49,15 +63,15 @@ def get_repo_version(repo, tree=None):
     if tree is None:
         tree = repo.head_tree
         if tree is None:  # Empty repo / empty branch.
-            return _get_repo_version_from_config(repo)
+            return _get_repo_wide_version_from_config(repo)
 
-    for r in REPOSTRUCTURE_VERSION_BLOB_PATHS.values():
+    for r in TABLE_DATASET_VERSION_BLOB_PATHS.values():
         if r in tree:
             try:
                 return json.loads((tree / r).data)
             except KeyError:
                 # Must be some kind of filtered clone. Try our best not to crash:
-                return _get_repo_version_from_config(repo)
+                return _get_repo_wide_version_from_config(repo)
 
     # Versions less than 2 don't have a REPOSTRUCTURE_VERSION_BLOB, so must be 0 or 1.
     # We don't support these versions except when performing a `kart upgrade`.
@@ -68,7 +82,7 @@ def dataset_class_for_version(version):
     """
     Returns the Dataset class that implements a particular repository version.
     """
-    assert MIN_SUPPORTED_REPO_VERSION <= version <= MAX_SUPPORTED_REPO_VERSION
+    assert MIN_SUPPORTED_VERSION <= version <= MAX_SUPPORTED_VERSION
     if version == 2:
         from kart.tabular.dataset2 import Dataset2
 
@@ -80,25 +94,22 @@ def dataset_class_for_version(version):
         return Dataset3
 
 
-def ensure_supported_repo_version(version):
-    from .cli import get_version
+def ensure_supported_repo_wide_version(version):
+    from kart.cli import get_version
 
-    if not MIN_SUPPORTED_REPO_VERSION <= version <= MAX_SUPPORTED_REPO_VERSION:
+    if not MIN_SUPPORTED_VERSION <= version <= MAX_SUPPORTED_VERSION:
         message = (
             f"This Kart repo uses Datasets v{version}, "
-            f"but Kart {get_version()} only supports Datasets {SUPPORTED_REPO_VERSION_DESC}.\n"
+            f"but Kart {get_version()} only supports Datasets {SUPPORTED_VERSION_DESC}.\n"
         )
-        if (
-            version < MIN_SUPPORTED_REPO_VERSION
-            and version >= MIN_RECOGNIZED_REPO_VERSION
-        ):
+        if version < MIN_SUPPORTED_VERSION and version >= MIN_RECOGNIZED_VERSION:
             message += "Use `kart upgrade SOURCE DEST` to upgrade this repo to the supported version."
         else:
             message += "Get the latest version of Kart to work with this repo."
         raise InvalidOperation(message, exit_code=UNSUPPORTED_VERSION)
 
 
-def _get_repo_version_from_config(repo):
+def _get_repo_wide_version_from_config(repo):
     from kart.repo import KartConfigKeys
 
     repo_cfg = repo.config
