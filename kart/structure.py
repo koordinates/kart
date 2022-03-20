@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+import re
 from typing import Optional
 
 import click
@@ -15,11 +16,18 @@ from .exceptions import (
     NotYetImplemented,
 )
 from .pack_util import packfile_object_builder
-from .structs import CommitWithReference
 from .tabular.schema import Schema
-from .tabular.version import extra_blobs_for_version
+from .tabular.version import extra_blobs_for_version, dataset_class_for_version
+from .structs import CommitWithReference
+from .unsupported_dataset import UnsupportedDataset
 
 L = logging.getLogger("kart.structure")
+
+
+_DOT = r"\."
+_NON_SLASHES = "[^/]*"
+DATASET_DIRNAME_PATTERN = re.compile(rf"{_DOT}{_NON_SLASHES}-dataset{_NON_SLASHES}")
+DATASET_PATH_PATTERN = re.compile(f"/{DATASET_DIRNAME_PATTERN.pattern}/")
 
 
 class RepoStructure:
@@ -123,16 +131,15 @@ class RepoStructure:
         self,
         repo,
         refish,
-        dataset_class,
+        force_dataset_class=None,
     ):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
         self.ref, self.commit, self.tree = RepoStructure.resolve_refish(repo, refish)
-
-        self.dataset_class = dataset_class
-        self.version = dataset_class.VERSION
-        self.datasets = Datasets(repo, self.tree, self.dataset_class)
+        self.datasets = Datasets(
+            repo, self.tree, force_dataset_class=force_dataset_class
+        )
 
     def __eq__(self, other):
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
@@ -153,14 +160,15 @@ class RepoStructure:
 
     def decode_path(self, full_path):
         """
-        Given a path in the Kart repository - eg "path/to/dataset/.sno-dataset/feature/49/3e/Bg==" -
-        returns a tuple in either of the following forms:
-        1. (dataset_path, "feature", primary_key)
-        2. (dataset_path, "meta", meta_item_path)
+        Given a path in the Kart repository - eg "path/to/dataset/.table-dataset/feature/49/3e/Bg==" -
+        returns a tuple in one of the following forms (depending on the dataset type):
+        1. (dataset_path, "meta", meta_item_path)
+        2. (dataset_path, "feature", primary_key)
+        3. (dataset_path, "tile", tile_name)
         """
-        dataset_dirname = self.dataset_class.DATASET_DIRNAME
-        dataset_path, rel_path = full_path.split(f"/{dataset_dirname}/", 1)
-        rel_path = f"{dataset_dirname}/{rel_path}"
+        match = DATASET_PATH_PATTERN.search(full_path)
+        dataset_path = full_path[: match.start()]
+        rel_path = full_path[match.start() + 1 :]
         return (dataset_path, *self.datasets[dataset_path].decode_path(rel_path))
 
     @property
@@ -228,7 +236,9 @@ class RepoStructure:
 
             if schema_delta and schema_delta.type == "insert":
                 schema = Schema.from_column_dicts(schema_delta.new_value)
-                dataset = self.dataset_class.new_dataset_for_writing(ds_path, schema)
+                dataset = dataset_class_for_version(
+                    self.repo.table_dataset_version
+                ).new_dataset_for_writing(ds_path, schema)
             else:
                 dataset = self.datasets[ds_path]
 
@@ -362,28 +372,66 @@ class Datasets:
     >>> structure.datasets.get(path_to_dataset)
     """
 
-    def __init__(self, repo, tree, dataset_class):
+    def __init__(self, repo, tree, force_dataset_class=None):
         self.repo = repo
         self.tree = tree
-        self.dataset_class = dataset_class
+        self.force_dataset_class = force_dataset_class
 
     def __getitem__(self, ds_path):
         """Get a specific dataset by path."""
-        try:
-            ds_tree = self.tree / ds_path if self.tree is not None else None
-        except KeyError:
-            ds_tree = None
+        result = self.get(ds_path)
+        if not result:
+            raise KeyError(f"No dataset found at '{ds_path}'")
+        return result
 
-        if self.dataset_class.is_dataset_tree(ds_tree):
-            return self.dataset_class(ds_tree, ds_path, repo=self.repo)
+    def is_dataset_dirname(self, dirname):
+        return DATASET_DIRNAME_PATTERN.fullmatch(dirname)
 
-        raise KeyError(f"No valid dataset found at '{ds_path}'")
+    def get_dataset_class_for_dirname(self, dirname):
+
+        if dirname in (".table-dataset", ".sno-dataset"):
+            return dataset_class_for_version(self.repo.table_dataset_version)
+        if dirname == ".point-cloud-dataset.v1":
+            from kart.point_cloud.dataset1 import PointCloudV1
+
+            return PointCloudV1
+
+        return UnsupportedDataset
 
     def get(self, ds_path):
+        """Get a specific dataset by path, or return None."""
+        if not self.tree:
+            return None
         try:
-            return self.__getitem__(ds_path)
+            ds_tree = self.tree / ds_path
         except KeyError:
             return None
+        if ds_tree.type_str != "tree":
+            return None
+
+        return self._get_for_tree(ds_tree, ds_path)
+
+    def _get_for_tree(self, ds_tree, ds_path):
+        """
+        Try to load a dataset that has the given outer_tree and outer_path.
+        For instance, this succeeds when given the tree at a/b/c, if there is a child tree a/b/c/.table-dataset/ -
+        It will return a dataset with path "a/b/c".
+        """
+        if self.force_dataset_class is not None:
+            if self.force_dataset_class.is_dataset_tree(ds_tree):
+                return self.force_dataset_class(
+                    ds_tree,
+                    ds_path,
+                    self.force_dataset_class.DATASET_DIRNAME,
+                    repo=self.repo,
+                )
+        else:
+            for child_tree in ds_tree:
+                dirname = child_tree.name
+                if self.is_dataset_dirname(dirname):
+                    dataset_class = self.get_dataset_class_for_dirname(dirname)
+                    return dataset_class(ds_tree, ds_path, dirname, repo=self.repo)
+        return None
 
     def __len__(self):
         return sum(1 for _ in self)
@@ -402,15 +450,18 @@ class Datasets:
                 # Ignore everything other than directories
                 if child.type_str != "tree":
                     continue
+                # Ignore "hidden" directories.
+                if child.name.startswith("."):
+                    continue
 
                 if path:
                     child_path = "/".join([path, child.name])
                 else:
                     child_path = child.name
 
-                if self.dataset_class.is_dataset_tree(child):
-                    ds = self.dataset_class(child, child_path, repo=self.repo)
+                # Examine inside this directory
+                to_examine.append((child, child_path))
+
+                ds = self._get_for_tree(child, child_path)
+                if ds is not None:
                     yield ds
-                else:
-                    # Examine inside this directory
-                    to_examine.append((child, child_path))

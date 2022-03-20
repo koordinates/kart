@@ -70,7 +70,7 @@ def test_legend_roundtrip():
     path, data = empty_dataset.encode_legend(orig)
     tree = MemoryTree({path: data})
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH)
+    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH, Dataset3.DATASET_DIRNAME)
     roundtripped = dataset3.get_legend(orig.hexhash())
 
     assert roundtripped is not orig

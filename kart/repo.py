@@ -607,7 +607,7 @@ class KartRepo(pygit2.Repository):
     def structure(self, refish="HEAD"):
         """Get the structure of this Kart repository at a particular revision."""
         self.ensure_supported_version()
-        return RepoStructure(self, refish, dataset_class=self.dataset_class)
+        return RepoStructure(self, refish)
 
     def datasets(self, refish="HEAD"):
         """
