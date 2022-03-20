@@ -263,7 +263,7 @@ jobs:
   #
   windows:
     name: Windows
-    runs-on: windows-2016
+    runs-on: windows-2019
     env:
       PY_VER: "3.7"
 
@@ -1075,7 +1075,7 @@ jobs:
           # Python3.exe gets found by FindPython3, but it's a symlink
           # and this breaks virtualenv creation
           # https://github.com/actions/virtual-environments/issues/2690
-          & cmake --log-level=VERBOSE -B build -S . -G "Visual Studio 15 2017" -A x64 -DVENDOR_ARCHIVE=${{ github.workspace }}\vendor\dist\vendor-Windows.zip -DPython3_ROOT=${{ env.pythonLocation }} -DPython3_EXECUTABLE=${{ env.pythonLocation }}\Python.exe
+          & cmake --log-level=VERBOSE -B build -S . -G "Visual Studio 16 2019" -A x64 -DVENDOR_ARCHIVE=${{ github.workspace }}\vendor\dist\vendor-Windows.zip -DPython3_ROOT=${{ env.pythonLocation }} -DPython3_EXECUTABLE=${{ env.pythonLocation }}\Python.exe
 
       - name: "build"
         run: |
