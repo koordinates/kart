@@ -290,9 +290,9 @@ def import_(
         )
 
         if replace_ids is not None:
-            if repo.version < 2:
+            if repo.table_dataset_version < 2:
                 raise InvalidOperation(
-                    f"--replace-ids is not supported for V{repo.version} datasets"
+                    f"--replace-ids is not supported for V{repo.table_dataset_version} datasets"
                 )
             if not import_source.schema.pk_columns:
                 # non-PK datasets can use this if it's only ever an empty list.
@@ -304,9 +304,9 @@ def import_(
             replace_existing = True
 
         if replace_existing:
-            if repo.version < 2:
+            if repo.table_dataset_version < 2:
                 raise InvalidOperation(
-                    f"--replace-existing is not supported for V{repo.version} datasets"
+                    f"--replace-existing is not supported for V{repo.table_dataset_version} datasets"
                 )
             try:
                 existing_ds = repo.datasets()[dest_path]

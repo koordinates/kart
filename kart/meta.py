@@ -169,7 +169,7 @@ def meta_set(ctx, message, dataset, items):
     """
     repo = ctx.obj.repo
 
-    if repo.version < 2:
+    if repo.table_dataset_version < 2:
         raise InvalidOperation(
             "This repo doesn't support meta changes, use `kart upgrade`"
         )

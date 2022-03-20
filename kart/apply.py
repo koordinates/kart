@@ -50,7 +50,9 @@ def _meta_change_type(ds_diff_dict):
     return MetaChangeType.META_UPDATE
 
 
-def check_change_supported(repo_version, dataset, ds_path, meta_change_type, commit):
+def check_change_supported(
+    table_dataset_version, dataset, ds_path, meta_change_type, commit
+):
     desc = None
     if meta_change_type == MetaChangeType.CREATE_DATASET:
         desc = f"Patch creates dataset '{ds_path}'"
@@ -59,7 +61,7 @@ def check_change_supported(repo_version, dataset, ds_path, meta_change_type, com
     else:
         desc = f"Patch contains meta changes for dataset '{ds_path}'"
 
-    if repo_version < 2 and meta_change_type is not None:
+    if table_dataset_version < 2 and meta_change_type is not None:
         message = (
             V1_NO_META_UPDATE
             if meta_change_type == MetaChangeType.META_UPDATE
@@ -239,7 +241,7 @@ def apply_patch(
         dataset = rs.datasets.get(ds_path)
         meta_change_type = _meta_change_type(ds_diff_dict)
         check_change_supported(
-            repo.version, dataset, ds_path, meta_change_type, do_commit
+            repo.table_dataset_version, dataset, ds_path, meta_change_type, do_commit
         )
 
         meta_changes = ds_diff_dict.get("meta", {})

@@ -12,8 +12,8 @@ import pygit2
 from .cli_util import tool_environment
 from .exceptions import NO_CHANGES, InvalidOperation, NotFound, SubprocessError
 from .object_builder import ObjectBuilder
-from .repo_version import (
-    SUPPORTED_REPO_VERSIONS,
+from kart.tabular.version import (
+    SUPPORTED_VERSIONS,
     dataset_class_for_version,
     extra_blobs_for_version,
 )
@@ -279,10 +279,14 @@ def fast_import_tables(
 
     from_tree = from_commit.peel(pygit2.Tree) if from_commit else repo.empty_tree
 
-    assert repo.version in SUPPORTED_REPO_VERSIONS
-    extra_blobs = extra_blobs_for_version(repo.version) if not from_commit else []
+    assert repo.table_dataset_version in SUPPORTED_VERSIONS
+    extra_blobs = (
+        extra_blobs_for_version(repo.table_dataset_version) if not from_commit else []
+    )
 
-    ImportSource.check_valid(sources, dataset_class_for_version(repo.version))
+    ImportSource.check_valid(
+        sources, dataset_class_for_version(repo.table_dataset_version)
+    )
 
     if replace_existing == ReplaceExisting.DONT_REPLACE:
         for source in sources:
@@ -384,7 +388,7 @@ def fast_import_tables(
                 builder = ObjectBuilder(repo, trees[0])
                 for t in trees[1:]:
                     datasets = Datasets(
-                        repo, t, dataset_class_for_version(repo.version)
+                        repo, t, dataset_class_for_version(repo.table_dataset_version)
                     )
                     for ds in datasets:
                         try:
@@ -463,7 +467,7 @@ def _import_single_source(
             source=source,
         )
 
-    dataset_class = dataset_class_for_version(repo.version)
+    dataset_class = dataset_class_for_version(repo.table_dataset_version)
     dataset = dataset_class.new_dataset_for_writing(
         source.dest_path, source.schema, repo=repo
     )

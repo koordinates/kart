@@ -15,9 +15,9 @@ from .exceptions import (
     NotYetImplemented,
 )
 from .pack_util import packfile_object_builder
-from .repo_version import extra_blobs_for_version
 from .structs import CommitWithReference
 from .tabular.schema import Schema
+from .tabular.version import extra_blobs_for_version
 
 L = logging.getLogger("kart.structure")
 
@@ -216,10 +216,10 @@ class RepoStructure:
 
         for ds_path, ds_diff in repo_diff.items():
             schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
-            if schema_delta and self.version < 2:
+            if schema_delta and self.repo.table_dataset_version < 2:
                 # This should have been handled already, but just to be safe.
                 raise NotYetImplemented(
-                    "Meta changes are not supported until datasets V2"
+                    "Meta changes are not supported until table datasets V2"
                 )
 
             if schema_delta and schema_delta.type == "delete":
@@ -262,7 +262,7 @@ class RepoStructure:
 
             schema_delta = ds_diff.recursive_get(["meta", "schema.json"])
             if schema_delta:
-                if self.version < 2:
+                if self.repo.table_dataset_version < 2:
                     # This should have been handled already, but just to be safe.
                     raise NotYetImplemented(
                         "Meta changes are not supported until datasets V2"

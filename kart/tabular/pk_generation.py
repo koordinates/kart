@@ -383,7 +383,7 @@ class PkGeneratingImportSource(ImportSource):
             unassigned_pks.update(pks)
 
         filtered_dataset_class = {2: FilteredDataset2, 3: FilteredDataset3}[
-            self.repo.version
+            self.repo.table_dataset_version
         ]
 
         def pk_filter(pk):
