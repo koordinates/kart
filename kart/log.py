@@ -101,14 +101,7 @@ def get_arg_type(repo, arg, allow_paths=True):
 def parse_extra_args(
     repo,
     args,
-    *,
-    max_count,
-    skip,
-    since,
-    until,
-    author,
-    committer,
-    grep,
+    **kwargs,
 ):
     """
     Interprets positional `kart log` args, including "--", commits/refs, and paths.
@@ -139,21 +132,17 @@ def parse_extra_args(
             LogArgType.PATH: paths,
         }[arg_type].append(arg)
 
-    if max_count is not None:
-        options.append(f"--max-count={max_count}")
-    if skip is not None:
-        options.append(f"--skip={skip}")
-    if since is not None:
-        options.append(f"--since={since}")
-    if until is not None:
-        options.append(f"--until={until}")
-    # These ones can be specified more than once
-    if author:
-        options.extend(f"--author={a}" for a in author)
-    if committer:
-        options.extend(f"--committer={c}" for c in committer)
-    if grep:
-        options.extend(f"--grep={g}" for g in grep)
+    for option_name, option_val in kwargs.items():
+        option_name = option_name.replace("_", "-", 1)
+        mapping = {
+            "int": lambda: options.append(f"--{option_name}={option_val}"),
+            "str": lambda: options.append(f"--{option_name}={option_val}"),
+            "tuple": lambda: options.extend(
+                [f"--{option_name}={o}" for o in option_val]
+            ),
+            "bool": lambda: options.append(f"--{option_name}") if option_val else None,
+        }
+        mapping.get(type(option_val).__name__, lambda: "None")()
     return options, commits, paths
 
 
@@ -277,7 +266,6 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
 )
 @click.option(
     "--dataset-changes",
-    "do_dataset_changes",
     is_flag=True,
     help="Shows which datasets were changed at each commit. Only works with --output-format-json",
     hidden=True,
@@ -342,6 +330,22 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     multiple=True,
     help="Limit the commits output to ones with log message matching the specified pattern (regular expression)",
 )
+@click.option(
+    "--decorate",
+    nargs=1,
+    metavar="[=short|full|auto|no]",
+    type=click.Choice(["short", "full", "auto", "no"]),
+    help="""
+    Print out the ref names of any commits that are shown. If short is specified, the ref name prefixes refs/heads/, refs/tags/ and refs/remotes/ will not be printed. If full is specified, the full ref name (including prefix) will be printed. If auto is specified, then if the output is going to a terminal, the ref names are shown as if short were given, otherwise no ref names are shown. The option --decorate is short-hand for --decorate=short. Default to configuration value of log.decorate if configured, otherwise, auto.
+    """,
+)
+@click.option(
+    "--no-decorate",
+    is_flag=True,
+    show_default=True,
+    default=False,
+    help="Doesn't print out the ref names of any commits that are shown. The option --no-decorate is short-hand for --decorate=no.",
+)
 @click.argument(
     "args", metavar="[REVISION RANGE] [--] [FEATURES]", nargs=-1, type=click.UNPROCESSED
 )
@@ -349,7 +353,7 @@ def log(
     ctx,
     output_format,
     json_style,
-    do_dataset_changes,
+    dataset_changes,
     with_feature_count,
     args,
     **kwargs,
@@ -409,7 +413,7 @@ def log(
                 repo[commit_id],
                 repo,
                 refs,
-                do_dataset_changes,
+                dataset_changes,
                 dataset_change_cache,
                 with_feature_count,
             )
@@ -436,7 +440,7 @@ def commit_obj_to_json(
     commit,
     repo=None,
     refs=None,
-    do_dataset_changes=False,
+    dataset_changes=False,
     dataset_change_cache={},
     with_feature_count=None,
 ):
@@ -472,12 +476,12 @@ def commit_obj_to_json(
     }
     if refs is not None:
         result["refs"] = refs
-    if do_dataset_changes:
+    if dataset_changes:
         result["datasetChanges"] = get_dataset_changes(
             repo, commit, dataset_change_cache
         )
     if with_feature_count:
-        if (not do_dataset_changes) or result["datasetChanges"]:
+        if (not dataset_changes) or result["datasetChanges"]:
             try:
                 parent_commit = commit.parents[0]
             except (KeyError, IndexError):

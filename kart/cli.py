@@ -35,7 +35,7 @@ MODULE_COMMANDS = {
     "spatial_filter": {"spatial-filter"},
     "status": {"status"},
     "query": {"query"},
-    "upgrade": {"upgrade", "upgrade-to-tidy", "upgrade-to-kart"},
+    "upgrade": {"upgrade"},
     "point_cloud.import_": {"point-cloud-import"},
 }
 

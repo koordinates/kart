@@ -101,11 +101,13 @@ def test_reset(data_working_copy, cli_runner, edit_points):
 
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 1
-        r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
+        r = cli_runner.invoke(
+            ["log", "--output-format=text:oneline", "--decorate=short"]
+        )
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            f"{H.POINTS.HEAD_SHA[:7]} (HEAD -> main) Improve naming on Coromandel East coast",
-            f"{H.POINTS.HEAD1_SHA[:7]} Import from nz-pa-points-topo-150k.gpkg",
+            f"{H.POINTS.HEAD_SHA} (HEAD -> main) Improve naming on Coromandel East coast",
+            f"{H.POINTS.HEAD1_SHA} Import from nz-pa-points-topo-150k.gpkg",
         ]
 
         r = cli_runner.invoke(["reset", "HEAD^"])
@@ -117,8 +119,10 @@ def test_reset(data_working_copy, cli_runner, edit_points):
 
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0
-        r = cli_runner.invoke(["log", "--oneline", "--decorate=short"])
+        r = cli_runner.invoke(
+            ["log", "--output-format=text:oneline", "--decorate=short"]
+        )
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            f"{H.POINTS.HEAD1_SHA[:7]} (HEAD -> main) Import from nz-pa-points-topo-150k.gpkg",
+            f"{H.POINTS.HEAD1_SHA} (HEAD -> main) Import from nz-pa-points-topo-150k.gpkg",
         ]
