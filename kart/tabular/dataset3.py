@@ -144,7 +144,7 @@ class Dataset3(RichBaseDataset):
         """Returns {identifier: definition} dict for all CRS definitions in this dataset."""
         if not self.inner_tree or self.CRS_PATH not in self.inner_tree:
             return
-        for blob in find_blobs_in_tree(self.inner_tree / self.CRS_PATH, max_depth=4):
+        for blob in find_blobs_in_tree(self.inner_tree / self.CRS_PATH):
             # -4 -> Remove ".wkt"
             yield blob.name[:-4], crs_util.normalise_wkt(ensure_text(blob.data))
 
@@ -217,7 +217,7 @@ class Dataset3(RichBaseDataset):
         """
         if self.FEATURE_PATH not in self.inner_tree:
             return
-        yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH, max_depth=4)
+        yield from find_blobs_in_tree(self.inner_tree / self.FEATURE_PATH)
 
     @property
     @functools.lru_cache(maxsize=1)

@@ -19,15 +19,18 @@ class PointCloudV1:
         if dirname is None:
             dirname = self.DATASET_DIRNAME
 
+        assert path is not None
+        assert dirname is not None
+        assert repo is not None
+
         if tree is not None:
             self.tree = tree
-            self.inner_tree = tree / dirname if dirname else self.tree
+            self.inner_tree = tree / dirname
         else:
             self.inner_tree = self.tree = None
 
         self.path = path.strip("/")
-        self.inner_path = f"{path}/{dirname}" if dirname else self.path
-
+        self.inner_path = f"{path}/{dirname}"
         self.repo = repo
 
         self.L = logging.getLogger(self.__class__.__qualname__)
@@ -47,7 +50,7 @@ class PointCloudV1:
         """Returns a generator that yields every tile pointer blob in turn."""
         tiles_tree = self.tiles_tree
         if tiles_tree:
-            yield from find_blobs_in_tree(tiles_tree, max_depth=4)
+            yield from find_blobs_in_tree(tiles_tree)
 
     def tilenames_with_lfs_hashes(self):
         """Returns a generator that yields every tilename along with its LFS hash."""

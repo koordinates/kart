@@ -3,16 +3,13 @@ import pygit2
 from .exceptions import NO_USER, NotFound
 
 
-def find_blobs_in_tree(tree, max_depth=20):
-    """
-    Recursively yields possible blobs in the given directory tree,
-    up to a given max_depth.
-    """
+def find_blobs_in_tree(tree):
+    """Recursively yields all possible blobs in the given directory tree."""
     for entry in tree:
         if isinstance(entry, pygit2.Blob):
             yield entry
-        elif max_depth > 0:
-            yield from find_blobs_in_tree(entry, max_depth - 1)
+        elif isinstance(entry, pygit2.Tree):
+            yield from find_blobs_in_tree(entry)
 
 
 def walk_tree(top, path="", topdown=True):
