@@ -9,6 +9,7 @@ import sys
 import click
 from osgeo import osr
 
+from .checkout import reset_wc_if_needed
 from kart.crs_util import make_crs, get_identifier_str, normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
@@ -68,7 +69,6 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
     copc_version_set = ListBasedSet()
     pdrf_set = ListBasedSet()
     pdr_length_set = ListBasedSet()
-    schema_set = ListBasedSet()
     crs_set = ListBasedSet()
     transform = None
     schema = None
@@ -211,7 +211,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             pass
 
         for source in sources:
-            click.echo(f"Writing {source}...")
+            click.echo(f"Importing {source}...")
 
             tmp_object_path = lfs_tmp_import_path / str(uuid.uuid4())
             oid, size = import_func(source, tmp_object_path)
@@ -245,7 +245,8 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             ensure_bytes(normalise_wkt(crs_set.only())),
         )
 
-    click.echo()
+    click.echo("Updating working copy...")
+    reset_wc_if_needed(repo)
 
 
 def _format_array(array):

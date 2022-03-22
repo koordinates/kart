@@ -3,9 +3,9 @@ import os
 import sys
 
 import click
-import pygit2
 
 from kart import crs_util
+from kart.core import find_blobs_in_tree
 from kart.exceptions import (
     PATCH_DOES_NOT_APPLY,
     UNSUPPORTED_VERSION,
@@ -27,22 +27,6 @@ from .dataset3_paths import PathEncoder
 from .meta_items import ATTACHMENT_META_ITEMS
 from .rich_base_dataset import RichBaseDataset
 from .schema import Legend, Schema
-
-
-def find_blobs_in_tree(tree, max_depth=4):
-    """
-    Recursively yields possible blobs in the given directory tree,
-    up to a given max_depth.
-    """
-    for entry in tree:
-        if isinstance(entry, pygit2.Blob):
-            yield entry
-        elif max_depth > 0:
-            yield from find_blobs_in_tree(entry, max_depth - 1)
-
-
-# So tests can patch this out. it's hard to mock memoryviews...
-_blob_to_memoryview = memoryview
 
 
 class Dataset3(RichBaseDataset):

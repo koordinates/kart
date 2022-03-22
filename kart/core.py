@@ -3,6 +3,15 @@ import pygit2
 from .exceptions import NO_USER, NotFound
 
 
+def find_blobs_in_tree(tree):
+    """Recursively yields all possible blobs in the given directory tree."""
+    for entry in tree:
+        if isinstance(entry, pygit2.Blob):
+            yield entry
+        elif isinstance(entry, pygit2.Tree):
+            yield from find_blobs_in_tree(entry)
+
+
 def walk_tree(top, path="", topdown=True):
     """
     Corollary of os.walk() for git Tree objects:

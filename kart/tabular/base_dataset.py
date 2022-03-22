@@ -117,7 +117,7 @@ class BaseDataset(ImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def feature_tree(self):
-        """Returns the root of the feature tree, or the empty tree if no meta tree exists."""
+        """Returns the root of the feature tree, or the empty tree if no feature tree exists."""
         try:
             return (
                 self.inner_tree / self.FEATURE_PATH
