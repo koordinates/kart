@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.11.2 (UNRELEASED)
 
+- Bugfix: Better error message on using `kart conflicts -ogeojson` for `meta-item` conflicts. [#515](https://github.com/koordinates/kart/issues/515)
 - Removed the older `upgrade-to-tidy` and `upgrade-to-kart` features which were only relevant to Sno (predecessor of Kart). [[#585](https://github.com/koordinates/kart/issues/585]]
 - Added support for `--decorate` and `--no-decorate` in `kart log`. [[#586](https://github.com/koordinates/kart/issues/586]]
 
