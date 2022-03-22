@@ -28,3 +28,17 @@ def reset_wc_if_needed(repo):
                 )
                 continue
             shutil.copy(lfs_path, wc_tiles_dir / tilename)
+
+
+@click.command("point-cloud-checkout", hidden=True)
+@click.pass_context
+def point_cloud_checkout(ctx):
+    """
+    Basic checkout operation for point-clouds - can only checkout any-and-all point-cloud datasets at HEAD,
+    as folders full of tiles.
+
+    Not made for switching branch, and doesn't do any tidying up - automatically removing these tiles
+    during a checkout, reset, or restore operation is not yet supported.
+    """
+    repo = ctx.obj.repo
+    reset_wc_if_needed(repo)

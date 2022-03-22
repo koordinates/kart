@@ -1,4 +1,5 @@
 import re
+import os
 from pathlib import Path, PurePath
 from urllib.parse import urlsplit
 
@@ -174,3 +175,10 @@ def clone(
     head_commit = repo.head_commit
     if head_commit is not None and do_checkout and not bare:
         checkout.reset_wc_if_needed(repo, head_commit)
+
+    # Experimental point-cloud datasets:
+    if os.environ.get("X_KART_POINT_CLOUDS"):
+        repo.invoke_git("lfs", "fetch")
+        from kart.point_cloud.checkout import reset_wc_if_needed
+
+        reset_wc_if_needed(repo)

@@ -8,7 +8,6 @@ from .exceptions import (
     DbConnectionError,
     InvalidOperation,
     NotFound,
-    NotYetImplemented,
 )
 from .key_filters import RepoKeyFilter
 from .output_util import InputMode, get_input_mode
@@ -38,7 +37,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if not (working_copy.status() & WorkingCopyStatus.INITIALISED):
         click.echo(f"Creating working copy at {working_copy} ...")
         working_copy.create_and_initialise()
-        datasets = list(repo.datasets(target_tree_or_commit))
+        datasets = list(repo.datasets(target_tree_or_commit, "table"))
         working_copy.write_full(target_tree_or_commit, *datasets)
         return
 
@@ -46,7 +45,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if not spatial_filter_matches:
         # TODO - support spatial filter changes without doing full rewrites.
         click.echo(f"Updating {working_copy} with new spatial filter...")
-        datasets = list(repo.datasets(target_tree_or_commit))
+        datasets = list(repo.datasets(target_tree_or_commit, "table"))
         working_copy.rewrite_full(
             target_tree_or_commit, *datasets, force=discard_changes
         )
