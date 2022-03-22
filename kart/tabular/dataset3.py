@@ -25,11 +25,11 @@ from kart.utils import ungenerator
 
 from .dataset3_paths import PathEncoder
 from .meta_items import ATTACHMENT_META_ITEMS
-from .rich_base_dataset import RichBaseDataset
+from .rich_table_dataset import RichTableDataset
 from .schema import Legend, Schema
 
 
-class Dataset3(RichBaseDataset):
+class Dataset3(RichTableDataset):
     """
     - Uses messagePack to serialise features.
     - Stores each feature in a blob with path dependent on primary key values.

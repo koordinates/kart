@@ -16,7 +16,7 @@ from .table_dataset import TableDataset
 from .schema import Schema
 
 
-class RichBaseDataset(TableDataset):
+class RichTableDataset(TableDataset):
     """
     Adds extra functionality to the TableDataset.
     This is in a separate class to TableDataset so that the core functionality -
