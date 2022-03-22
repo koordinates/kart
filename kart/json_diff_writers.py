@@ -269,9 +269,9 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
     def write_ds_diff(self, ds_path, ds_diff):
         if "schema.json" not in ds_diff.get("meta", {}):
-            dataset = self.base_rs.datasets.get(ds_path) or self.target_rs.datasets.get(
+            dataset = self.base_rs.datasets().get(
                 ds_path
-            )
+            ) or self.target_rs.datasets().get(ds_path)
             self.dump(
                 {
                     "type": "metaInfo",

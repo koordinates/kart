@@ -13,8 +13,8 @@ def get_all_ds_paths(base_rs, target_rs, repo_key_filter=RepoKeyFilter.MATCH_ALL
     base_rs, target_rs - kart.structure.RepoStructure objects
     repo_key_filter - controls which datasets match and are included in the result.
     """
-    base_ds_paths = {ds.path for ds in base_rs.datasets}
-    target_ds_paths = {ds.path for ds in target_rs.datasets}
+    base_ds_paths = {ds.path for ds in base_rs.datasets()}
+    target_ds_paths = {ds.path for ds in target_rs.datasets()}
     all_ds_paths = base_ds_paths | target_ds_paths
 
     if not repo_key_filter.match_all:
@@ -40,7 +40,11 @@ def get_repo_diff(
     repo_diff = RepoDiff()
     for ds_path in all_ds_paths:
         repo_diff[ds_path] = get_dataset_diff(
-            ds_path, base_rs, target_rs, working_copy, repo_key_filter[ds_path]
+            ds_path,
+            base_rs.datasets(),
+            target_rs.datasets(),
+            working_copy,
+            repo_key_filter[ds_path],
         )
     # No need to recurse since self.get_dataset_diff already prunes the dataset diffs.
     repo_diff.prune(recurse=False)
@@ -48,7 +52,11 @@ def get_repo_diff(
 
 
 def get_dataset_diff(
-    ds_path, base_rs, target_rs, working_copy=None, ds_filter=DatasetKeyFilter.MATCH_ALL
+    ds_path,
+    base_datasets,
+    target_datasets,
+    working_copy=None,
+    ds_filter=DatasetKeyFilter.MATCH_ALL,
 ):
     """
     Generates the DatasetDiff for the dataset at path dataset_path.
@@ -61,10 +69,10 @@ def get_dataset_diff(
     base_target_diff = None
     target_wc_diff = None
 
-    if base_rs != target_rs:
+    if base_datasets != target_datasets:
         # diff += base_rs<>target_rs
-        base_ds = base_rs.datasets.get(ds_path)
-        target_ds = target_rs.datasets.get(ds_path)
+        base_ds = base_datasets.get(ds_path)
+        target_ds = target_datasets.get(ds_path)
 
         params = {}
         if not base_ds:
@@ -76,7 +84,7 @@ def get_dataset_diff(
 
     if working_copy:
         # diff += target_rs<>working_copy
-        target_ds = target_rs.datasets.get(ds_path)
+        target_ds = target_datasets.get(ds_path)
         if target_ds:
             target_wc_diff = working_copy.diff_db_to_tree(
                 target_ds, ds_filter=ds_filter

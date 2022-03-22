@@ -252,12 +252,8 @@ def _upgrade_commit(
     dest_repo,
     commit_map,
 ):
-    source_rs = RepoStructure(
-        source_repo,
-        source_commit,
-        force_dataset_class=source_dataset_class,
-    )
-    source_datasets = list(source_rs.datasets)
+    source_rs = RepoStructure(source_repo, source_commit)
+    source_datasets = source_rs.datasets(force_dataset_class=source_dataset_class)
     dataset_count = len(source_datasets)
 
     s = source_commit
@@ -275,14 +271,14 @@ def _upgrade_commit(
     )
 
     sole_dataset_diff = _find_sole_dataset_diff(
-        source_repo, source_commit, source_rs, source_dataset_class
+        source_repo, source_commit, source_datasets, source_dataset_class
     )
 
     if sole_dataset_diff:
         # Optimisation - we can use feature_ids if we are only importing one dataset at a time, and,
         # we have access to the parent commit.
         ds_path, ds_diff = sole_dataset_diff
-        source_datasets = [source_rs.datasets[ds_path]]
+        source_datasets = [source_datasets[ds_path]]
         replace_existing = ReplaceExisting.GIVEN
         from_id = commit_map[source_commit.parents[0].hex]
         from_commit = dest_repo[from_id]
@@ -330,7 +326,7 @@ def _upgrade_commit(
 
 
 def _find_sole_dataset_diff(
-    source_repo, source_commit, source_rs, source_dataset_class
+    source_repo, source_commit, source_datasets, source_dataset_class
 ):
     """
     Returns a tuple (dataset_path, dataset_diff) if there is only one dataset which is changed
@@ -345,13 +341,12 @@ def _find_sole_dataset_diff(
     if not parent_commit:
         # Initial commit - this optimisation won't help here anyway.
         return None
-    parent_rs = RepoStructure(
-        source_repo,
-        parent_commit,
-        force_dataset_class=source_dataset_class,
-    )
-    source_ds_paths = {ds.path for ds in source_rs.datasets}
-    parent_ds_paths = {ds.path for ds in parent_rs.datasets}
+
+    parent_rs = RepoStructure(source_repo, parent_commit)
+    parent_datasets = parent_rs.datasets(force_dataset_class=source_dataset_class)
+    source_ds_paths = {ds.path for ds in source_datasets}
+    parent_ds_paths = {ds.path for ds in parent_datasets}
+
     all_ds_paths = source_ds_paths | parent_ds_paths
     all_changed_ds_paths = [
         path
@@ -364,7 +359,7 @@ def _find_sole_dataset_diff(
     from kart.diff_util import get_dataset_diff
 
     ds_path = all_changed_ds_paths[0]
-    ds_diff = get_dataset_diff(ds_path, parent_rs, source_rs, None)
+    ds_diff = get_dataset_diff(ds_path, parent_datasets, source_datasets, None)
     return ds_path, ds_diff
 
 

@@ -620,12 +620,12 @@ class KartRepo(pygit2.Repository):
         self.ensure_supported_version()
         return RepoStructure(self, refish)
 
-    def datasets(self, refish="HEAD"):
+    def datasets(self, refish="HEAD", filter_dataset_type=None):
         """
         Get the datasets of this Kart repository at a particular revision.
         Equivalent to: self.structure(refish).datasets
         """
-        return self.structure(refish).datasets
+        return self.structure(refish).datasets(filter_dataset_type=filter_dataset_type)
 
     @property
     def dataset_class(self):

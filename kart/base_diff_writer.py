@@ -260,8 +260,8 @@ class BaseDiffWriter:
 
         return diff_util.get_dataset_diff(
             ds_path,
-            self.base_rs,
-            self.target_rs,
+            self.base_rs.datasets(),
+            self.target_rs.datasets(),
             self.working_copy,
             self.repo_key_filter[ds_path],
         )
@@ -348,7 +348,9 @@ class BaseDiffWriter:
             return old_schema, new_schema
 
         # No diff - old and new schemas are the same.
-        ds = self.base_rs.datasets.get(ds_path) or self.target_rs.datasets.get(ds_path)
+        ds = self.base_rs.datasets().get(ds_path) or self.target_rs.datasets().get(
+            ds_path
+        )
         schema = ds.schema
         return schema, schema
 
@@ -379,7 +381,9 @@ class BaseDiffWriter:
                 return old_crs, new_crs
 
         # No diff - old and new CRS are the same.
-        ds = self.base_rs.datasets.get(ds_path) or self.target_rs.datasets.get(ds_path)
+        ds = self.base_rs.datasets().get(ds_path) or self.target_rs.datasets().get(
+            ds_path
+        )
         crs_defs = list(ds.crs_definitions().values())
         if not crs_defs:
             return None, None

@@ -102,8 +102,8 @@ def estimate_diff_feature_counts(
     base_rs = repo.structure(base)
     target_rs = repo.structure(target)
 
-    base_ds_paths = {ds.path for ds in base_rs.datasets}
-    target_ds_paths = {ds.path for ds in target_rs.datasets}
+    base_ds_paths = {ds.path for ds in base_rs.datasets()}
+    target_ds_paths = {ds.path for ds in target_rs.datasets()}
     all_ds_paths = base_ds_paths | target_ds_paths
 
     dataset_change_counts = {}
@@ -111,8 +111,8 @@ def estimate_diff_feature_counts(
         if terminate_estimate_thread.is_set():
             raise ThreadTerminated()
 
-        base_ds = base_rs.datasets.get(dataset_path)
-        target_ds = target_rs.datasets.get(dataset_path)
+        base_ds = base_rs.datasets().get(dataset_path)
+        target_ds = target_rs.datasets().get(dataset_path)
         if not base_ds and not target_ds:
             continue
 
@@ -123,7 +123,9 @@ def estimate_diff_feature_counts(
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
             from kart.diff_util import get_dataset_diff
 
-            ds_diff = get_dataset_diff(dataset_path, base_rs, target_rs, working_copy)
+            ds_diff = get_dataset_diff(
+                dataset_path, base_rs.datasets(), target_rs.datasets(), working_copy
+            )
             ds_total = len(ds_diff.get("feature", []))
 
         elif accuracy == "exact":

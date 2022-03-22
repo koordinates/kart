@@ -8,6 +8,8 @@ from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_ha
 class PointCloudV1:
     """A V1 point-cloud (LIDAR) dataset."""
 
+    VERSION = 1
+    DATASET_TYPE = "point-cloud"
     DATASET_DIRNAME = ".point-cloud-dataset.v1"
 
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.

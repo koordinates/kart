@@ -1,5 +1,6 @@
 import logging
 from collections import deque
+import functools
 import re
 from typing import Optional
 
@@ -34,9 +35,9 @@ class RepoStructure:
     """
     The internal structure of a Kart repository, at a particular revision.
     The Kart revision's structure is almost entirely comprised of its datasets, but this may change.
-    The datasets can be accessed at self.datasets, but there is also a shortcut that skips this class - instead of:
+    The datasets can be accessed at self.datasets(), but there is also a shortcut that skips this class - instead of:
 
-    >>> kart_repo.structure(commit_hash).datasets
+    >>> kart_repo.structure(commit_hash).datasets()
 
     You can use:
 
@@ -127,22 +128,17 @@ class RepoStructure:
             pass
         return commit, tree
 
-    def __init__(
-        self,
-        repo,
-        refish,
-        force_dataset_class=None,
-    ):
+    def __init__(self, repo, refish):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
         self.ref, self.commit, self.tree = RepoStructure.resolve_refish(repo, refish)
-        self.datasets = Datasets(
-            repo, self.tree, force_dataset_class=force_dataset_class
-        )
 
     def __eq__(self, other):
         return other and (self.repo.path == other.repo.path) and (self.id == other.id)
+
+    def __hash__(self):
+        return hash((self.repo.path, self.id))
 
     def __repr__(self):
         if self.ref == "[EMPTY]":
@@ -158,6 +154,15 @@ class RepoStructure:
 
         return f"RepoStructure<{self.repo.path}{at_desc}>"
 
+    @functools.lru_cache()
+    def datasets(self, filter_dataset_type=None, force_dataset_class=None):
+        return Datasets(
+            self.repo,
+            self.tree,
+            filter_dataset_type=filter_dataset_type,
+            force_dataset_class=force_dataset_class,
+        )
+
     def decode_path(self, full_path):
         """
         Given a path in the Kart repository - eg "path/to/dataset/.table-dataset/feature/49/3e/Bg==" -
@@ -169,7 +174,7 @@ class RepoStructure:
         match = DATASET_PATH_PATTERN.search(full_path)
         dataset_path = full_path[: match.start()]
         rel_path = full_path[match.start() + 1 :]
-        return (dataset_path, *self.datasets[dataset_path].decode_path(rel_path))
+        return (dataset_path, *self.datasets()[dataset_path].decode_path(rel_path))
 
     @property
     def ref_or_id(self):
@@ -240,13 +245,13 @@ class RepoStructure:
                     self.repo.table_dataset_version
                 ).new_dataset_for_writing(ds_path, schema)
             else:
-                dataset = self.datasets[ds_path]
+                dataset = self.datasets()[ds_path]
 
             resolve_missing_values_from_ds = None
             if resolve_missing_values_from_rs is not None:
                 try:
                     resolve_missing_values_from_ds = (
-                        resolve_missing_values_from_rs.datasets[ds_path]
+                        resolve_missing_values_from_rs.datasets()[ds_path]
                     )
                 except KeyError:
                     pass
@@ -282,7 +287,7 @@ class RepoStructure:
                 else:
                     new_schema = Schema.from_column_dicts(schema_delta.new_value)
             else:
-                new_schema = self.datasets[ds_path].schema
+                new_schema = self.datasets()[ds_path].schema
 
             feature_diff = ds_diff.get("feature") or {}
             for feature_delta in feature_diff.values():
@@ -365,16 +370,19 @@ class Datasets:
     """
     The collection of datasets found in a particular tree. Can be used as an iterator, or by subscripting:
 
-    >>> [ds.path for ds in structure.datasets]
+    >>> [ds.path for ds in structure.datasets()]
     or
-    >>> structure.datasets[path_to_dataset]
+    >>> structure.datasets()[path_to_dataset]
     or
-    >>> structure.datasets.get(path_to_dataset)
+    >>> structure.datasets().get(path_to_dataset)
     """
 
-    def __init__(self, repo, tree, force_dataset_class=None):
+    def __init__(self, repo, tree, filter_dataset_type=None, force_dataset_class=None):
+        assert filter_dataset_type is None or force_dataset_class is None
+
         self.repo = repo
         self.tree = tree
+        self.filter_dataset_type = filter_dataset_type
         self.force_dataset_class = force_dataset_class
 
     def __getitem__(self, ds_path):
@@ -428,9 +436,16 @@ class Datasets:
         else:
             for child_tree in ds_tree:
                 dirname = child_tree.name
-                if self.is_dataset_dirname(dirname):
-                    dataset_class = self.get_dataset_class_for_dirname(dirname)
-                    return dataset_class(ds_tree, ds_path, dirname, repo=self.repo)
+                if not self.is_dataset_dirname(dirname):
+                    continue
+                dataset_class = self.get_dataset_class_for_dirname(dirname)
+                if (
+                    self.filter_dataset_type
+                    and dataset_class.DATASET_TYPE != self.filter_dataset_type
+                ):
+                    continue
+                return dataset_class(ds_tree, ds_path, dirname, repo=self.repo)
+
         return None
 
     def __len__(self):

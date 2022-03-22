@@ -238,7 +238,7 @@ def apply_patch(
 
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():
-        dataset = rs.datasets.get(ds_path)
+        dataset = rs.datasets().get(ds_path)
         meta_change_type = _meta_change_type(ds_diff_dict)
         check_change_supported(
             repo.table_dataset_version, dataset, ds_path, meta_change_type, do_commit

@@ -474,7 +474,7 @@ class BaseWorkingCopy:
         """
         with self.session():
             repo_diff = RepoDiff()
-            for dataset in self.repo.datasets(self.get_db_tree()):
+            for dataset in self.repo.datasets(self.get_db_tree(), "table"):
                 if dataset.path not in repo_filter:
                     continue
                 if not self._is_dataset_supported(dataset):
@@ -1081,7 +1081,7 @@ class BaseWorkingCopy:
         Doesn't do any further work like modifying the kart_track table in any way.
         """
         base_tree_id = self.get_db_tree()
-        base_datasets = self.repo.datasets(base_tree_id)
+        base_datasets = self.repo.datasets(base_tree_id, "table")
         with self.session() as sess:
             for ds_path, pk_list in pk_lists.items():
                 self._delete_features(sess, base_datasets[ds_path], pk_list)
@@ -1159,7 +1159,7 @@ class BaseWorkingCopy:
 
         base_datasets = {
             ds.path: ds
-            for ds in self.repo.datasets(base_tree)
+            for ds in self.repo.datasets(base_tree, "table")
             if ds.path in repo_key_filter
         }
         if base_tree == target_tree:
@@ -1167,7 +1167,7 @@ class BaseWorkingCopy:
         else:
             target_datasets = {
                 ds.path: ds
-                for ds in self.repo.datasets(target_tree)
+                for ds in self.repo.datasets(target_tree, "table")
                 if ds.path in repo_key_filter
             }
 

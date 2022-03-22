@@ -518,7 +518,7 @@ class RichConflictVersion:
 
     @property
     def dataset(self):
-        return self.repo_structure.datasets[self.dataset_path]
+        return self.repo_structure.datasets()[self.dataset_path]
 
     @property
     def dataset_part(self):

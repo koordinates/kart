@@ -36,6 +36,7 @@ class BaseDataset(ImportSource):
 
     VERSION = None  # Version eg 1
     DATASET_DIRNAME = None  # Eg ".table-dataset" or ".sno-dataset"
+    DATASET_TYPE = "table"
 
     # Paths are all defined relative to the inner path -
 
