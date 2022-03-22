@@ -4,11 +4,11 @@ import re
 from kart.geometry import normalise_gpkg_geom
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
-from kart.tabular.base_dataset import BaseDataset
+from kart.tabular.table_dataset import TableDataset
 from kart.utils import ungenerator
 
 
-class Dataset0(BaseDataset):
+class Dataset0(TableDataset):
     """A V0 dataset / import source, only used for upgrading to V2 and beyond."""
 
     VERSION = 0

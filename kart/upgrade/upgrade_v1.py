@@ -9,11 +9,11 @@ import pygit2
 from kart.geometry import Geometry, normalise_gpkg_geom
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
-from kart.tabular.base_dataset import BaseDataset
+from kart.tabular.table_dataset import TableDataset
 from kart.utils import ungenerator
 
 
-class Dataset1(BaseDataset):
+class Dataset1(TableDataset):
     """
     - messagePack
     - primary key values

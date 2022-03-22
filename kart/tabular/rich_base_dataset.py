@@ -12,18 +12,18 @@ from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
 from kart.promisor_utils import fetch_promised_blobs, object_is_promised
 from kart.spatial_filter import SpatialFilter
 
-from .base_dataset import BaseDataset
+from .table_dataset import TableDataset
 from .schema import Schema
 
 
-class RichBaseDataset(BaseDataset):
+class RichBaseDataset(TableDataset):
     """
-    Adds extra functionality to the BaseDataset.
-    This is in a separate class to BaseDataset so that the core functionality -
+    Adds extra functionality to the TableDataset.
+    This is in a separate class to TableDataset so that the core functionality -
     and the missing abstract functionality that needs to be implemented - isn't lost amongst
     this more advanced functionality (which is built on top of the core functionality).
 
-    If you are only using a Dataset as an ImportSource, just extend BaseDataset - this functionality isn't needed.
+    If you are only using a TableDataset as an ImportSource, just extend TableDataset - this functionality isn't needed.
     For example, see Dataset0.
     """
 
@@ -37,8 +37,8 @@ class RichBaseDataset(BaseDataset):
         self, spatial_filter=SpatialFilter.MATCH_ALL, log_progress=False
     ):
         """
-        Same as base_dataset.features(), but includes the CRS ID from the schema in every Geometry object.
-        By contrast, the returned Geometries from base_dataset.features() all contain a CRS ID of zero,
+        Same as table_dataset.features(), but includes the CRS ID from the schema in every Geometry object.
+        By contrast, the returned Geometries from table_dataset.features() all contain a CRS ID of zero,
         so the schema must be consulted separately to learn about CRS IDs.
         """
         yield from self._add_crs_ids_to_features(
@@ -49,8 +49,8 @@ class RichBaseDataset(BaseDataset):
         self, row_pks, *, ignore_missing=False, spatial_filter=SpatialFilter.MATCH_ALL
     ):
         """
-        Same as base_dataset.get_features(...), but includes the CRS ID from the schema in every Geometry object.
-        By contrast, the returned Geometries from base_dataset.get_features(...) all contain a CRS ID of zero,
+        Same as table_dataset.get_features(...), but includes the CRS ID from the schema in every Geometry object.
+        By contrast, the returned Geometries from table_dataset.get_features(...) all contain a CRS ID of zero,
         so the schema must be consulted separately to learn about CRS IDs.
         """
         yield from self._add_crs_ids_to_features(

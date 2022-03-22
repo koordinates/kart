@@ -17,7 +17,7 @@ from kart.exceptions import (
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, RepoKeyFilter
 from kart.promisor_utils import LibgitSubcode
 from kart.sqlalchemy.upsert import Upsert as upsert
-from kart.tabular.base_dataset import BaseDataset
+from kart.tabular.table_dataset import TableDataset
 from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
 
@@ -107,7 +107,7 @@ class BaseWorkingCopy:
         """Given a dataset, tablename, or sqlalchemy table, escapes its fullname for use in a SQL statement."""
         table = (
             dataset_or_table.table_name
-            if isinstance(dataset_or_table, BaseDataset)
+            if isinstance(dataset_or_table, TableDataset)
             else dataset_or_table
         )
         sqlalchemy_table = (
@@ -786,7 +786,7 @@ class BaseWorkingCopy:
                 return
 
             for dataset_path, dataset_filter in repo_key_filter.items():
-                table_name = BaseDataset.dataset_path_to_table_name(dataset_path)
+                table_name = TableDataset.dataset_path_to_table_name(dataset_path)
                 feature_filter = dataset_filter.get(
                     "feature", dataset_filter.child_type()
                 )

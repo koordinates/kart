@@ -11,10 +11,10 @@ from kart.utils import ungenerator
 from . import meta_items
 from .import_source import ImportSource
 
-L = logging.getLogger("kart.tabular.base_dataset")
+L = logging.getLogger("kart.tabular.table_dataset")
 
 
-class BaseDataset(ImportSource):
+class TableDataset(ImportSource):
     """
     Common interface for all datasets - mostly used by Dataset3,
     but also implemented by legacy datasets ie during `kart upgrade`.
@@ -53,8 +53,8 @@ class BaseDataset(ImportSource):
         The tree should contain a child tree with the name DATASET_DIRNAME.
         The tree can be None if this dataset hasn't yet been written to the repo.
         """
-        if self.__class__ is BaseDataset:
-            raise TypeError("Cannot construct a BaseDataset - you may want Dataset3")
+        if self.__class__ is TableDataset:
+            raise TypeError("Cannot construct a TableDataset - you may want Dataset3")
 
         if dirname is None:
             dirname = self.DATASET_DIRNAME
