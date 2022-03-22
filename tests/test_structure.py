@@ -11,8 +11,8 @@ import pygit2
 import pytest
 
 from kart import init, fast_import
-from kart.tabular.dataset3 import Dataset3
-from kart.tabular.dataset3_paths import IntPathEncoder, MsgpackHashPathEncoder
+from kart.tabular.v3 import TableV3
+from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
 from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.tabular.schema import Schema
@@ -872,7 +872,7 @@ def test_pk_encoder_string_pk():
     schema = Schema.from_column_dicts(
         [{"name": "mypk", "dataType": "text", "id": "abc123"}]
     )
-    ds = Dataset3.new_dataset_for_writing("mytable", schema)
+    ds = TableV3.new_dataset_for_writing("mytable", schema)
     e = ds.feature_path_encoder
     assert isinstance(e, MsgpackHashPathEncoder)
     assert e.encoding == "base64"
@@ -897,7 +897,7 @@ def test_pk_encoder_int_pk():
             }
         ]
     )
-    ds = Dataset3.new_dataset_for_writing("mytable", schema)
+    ds = TableV3.new_dataset_for_writing("mytable", schema)
     e = ds.feature_path_encoder
     assert isinstance(e, IntPathEncoder)
     assert e.encoding == "base64"
@@ -1081,7 +1081,7 @@ def test_write_feature_performance(
 
             source = ImportSource.open(data / source_gpkg, table=table)
             with source:
-                dataset = Dataset3.new_dataset_for_writing(table, source.schema)
+                dataset = TableV3.new_dataset_for_writing(table, source.schema)
                 feature_iter = itertools.cycle(list(source.features()))
 
                 index = pygit2.Index()

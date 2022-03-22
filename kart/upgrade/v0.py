@@ -8,8 +8,8 @@ from kart.tabular.table_dataset import TableDataset
 from kart.utils import ungenerator
 
 
-class Dataset0(TableDataset):
-    """A V0 dataset / import source, only used for upgrading to V2 and beyond."""
+class TableV0(TableDataset):
+    """A V0 table-dataset / import source, only used for upgrading to V2 and beyond."""
 
     VERSION = 0
 

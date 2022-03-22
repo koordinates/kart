@@ -1,7 +1,7 @@
 import click
 import shutil
 
-from .dataset1 import PointCloudV1
+from .v1 import PointCloudV1
 
 # Handles point-cloud side of checkout.
 # Some of this may move at some point to be part of "filesystem" checkout which will also handle attachments.

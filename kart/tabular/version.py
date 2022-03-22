@@ -84,14 +84,14 @@ def dataset_class_for_version(version):
     """
     assert MIN_SUPPORTED_VERSION <= version <= MAX_SUPPORTED_VERSION
     if version == 2:
-        from kart.tabular.dataset2 import Dataset2
+        from kart.tabular.v2 import TableV2
 
-        return Dataset2
+        return TableV2
 
     if version == 3:
-        from kart.tabular.dataset3 import Dataset3
+        from kart.tabular.v3 import TableV3
 
-        return Dataset3
+        return TableV3
 
 
 def ensure_supported_repo_wide_version(version):

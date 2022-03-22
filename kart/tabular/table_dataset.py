@@ -16,7 +16,7 @@ L = logging.getLogger("kart.tabular.table_dataset")
 
 class TableDataset(ImportSource):
     """
-    Common interface for all datasets - mostly used by Dataset3,
+    Common interface for all datasets - mostly used by TableV3,
     but also implemented by legacy datasets ie during `kart upgrade`.
 
     A Dataset instance is immutable since it is a view of a particular git tree.
@@ -54,7 +54,7 @@ class TableDataset(ImportSource):
         The tree can be None if this dataset hasn't yet been written to the repo.
         """
         if self.__class__ is TableDataset:
-            raise TypeError("Cannot construct a TableDataset - you may want Dataset3")
+            raise TypeError("Cannot construct a TableDataset - you may want TableV3")
 
         if dirname is None:
             dirname = self.DATASET_DIRNAME

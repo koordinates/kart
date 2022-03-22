@@ -1,4 +1,4 @@
-from kart.tabular.dataset3 import Dataset3
+from kart.tabular.v3 import TableV3
 from kart.tabular.schema import Legend, ColumnSchema, Schema
 
 
@@ -66,12 +66,12 @@ def test_legend_roundtrip():
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, None)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, None)
     path, data = empty_dataset.encode_legend(orig)
     tree = MemoryTree({path: data})
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH, Dataset3.DATASET_DIRNAME)
-    roundtripped = dataset3.get_legend(orig.hexhash())
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, TableV3.DATASET_DIRNAME)
+    roundtripped = tableV3.get_legend(orig.hexhash())
 
     assert roundtripped is not orig
     assert roundtripped == orig
@@ -137,7 +137,7 @@ def abcdef_schema():
 def test_raw_feature_roundtrip():
     legend = Legend(["a"], ["b", "c", "d", "e", "f"])
     schema = abcdef_schema()
-    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, schema)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema)
     legend_path, legend_data = empty_dataset.encode_legend(legend)
 
     raw_feature_dict = {
@@ -153,8 +153,8 @@ def test_raw_feature_roundtrip():
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: feature_data})
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped = dataset3.get_raw_feature_dict(path=feature_path)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped = tableV3.get_raw_feature_dict(path=feature_path)
     assert roundtripped is not raw_feature_dict
     assert roundtripped == raw_feature_dict
 
@@ -173,8 +173,8 @@ def test_raw_feature_roundtrip():
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: empty_feature_data})
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped = dataset3.get_raw_feature_dict(path=feature_path)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped = tableV3.get_raw_feature_dict(path=feature_path)
     # Overwriting the old feature with an empty feature at the same path only
     # clears the non-pk values, since the pk values are part of the path.
     assert roundtripped == {
@@ -205,12 +205,12 @@ def test_schema_roundtrip(gen_uuid):
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, None)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, None)
     path, data = empty_dataset.encode_schema(orig)
     tree = MemoryTree({path: data})
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped = dataset3.schema
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped = tableV3.schema
 
     assert roundtripped is not orig
     assert roundtripped == orig
@@ -225,7 +225,7 @@ def test_feature_roundtrip(gen_uuid):
             ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
-    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, schema)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema)
     schema_path, schema_data = empty_dataset.encode_schema(schema)
     legend_path, legend_data = empty_dataset.encode_legend(schema.legend)
 
@@ -248,8 +248,8 @@ def test_feature_roundtrip(gen_uuid):
         {schema_path: schema_data, legend_path: legend_data, feature_path: feature_data}
     )
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH)
-    roundtripped_feature = dataset3.get_feature(path=feature_path)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    roundtripped_feature = tableV3.get_feature(path=feature_path)
     assert roundtripped_feature is not feature_dict
     assert roundtripped_feature == feature_dict
     # We guarantee that the dict iterates in row-order.
@@ -286,7 +286,7 @@ def test_schema_change_roundtrip(gen_uuid):
         "ID": 7,
     }
 
-    empty_dataset = Dataset3.new_dataset_for_writing(DATASET_PATH, old_schema)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, old_schema)
     feature_path, feature_data = empty_dataset.encode_feature(feature_tuple, old_schema)
     feature_path2, feature_data2 = empty_dataset.encode_feature(
         feature_dict, old_schema
@@ -307,10 +307,10 @@ def test_schema_change_roundtrip(gen_uuid):
         }
     )
 
-    dataset3 = Dataset3(tree / DATASET_PATH, DATASET_PATH)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
     # Old columns that are not present in the new schema are gone.
     # New columns that are not present in the old schema have 'None's.
-    roundtripped = dataset3.get_feature(path=feature_path)
+    roundtripped = tableV3.get_feature(path=feature_path)
     assert roundtripped == {
         "personnel_id": 7,
         "tax_file_number": None,

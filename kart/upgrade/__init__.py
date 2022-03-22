@@ -11,31 +11,31 @@ from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_ta
 from kart.repo import KartConfigKeys, KartRepo
 from kart.tabular.version import DEFAULT_NEW_REPO_VERSION
 from kart.structure import RepoStructure
-from kart.tabular.dataset2 import Dataset2
+from kart.tabular.v2 import TableV2
 from kart.timestamps import minutes_to_tz_offset
 
 
 def dataset_class_for_legacy_version(version, in_place=False):
-    from .upgrade_v0 import Dataset0
-    from .upgrade_v1 import Dataset1
+    from .v0 import TableV0
+    from .v1 import TableV1
 
     version = int(version)
     if version == 0:
-        return Dataset0
+        return TableV0
     elif version == 1:
-        return Dataset1
+        return TableV1
     elif version == 2:
         if in_place:
-            return InPlaceUpgradeSourceDataset2
+            return InPlaceUpgradeSourceTableV2
         else:
-            return UpgradeSourceDataset2
+            return UpgradeSourceTableV2
 
     return None
 
 
-class UpgradeSourceDataset2(Dataset2):
+class UpgradeSourceTableV2(TableV2):
     """
-    Variant of Dataset2 that:
+    Variant of TableV2 that:
     - preserves all meta_items, even non-standard ones.
     - preserves attachments
     - upgrades dataset/metadata.json to metadata.xml
@@ -65,7 +65,7 @@ class UpgradeSourceDataset2(Dataset2):
             yield attachment.name, attachment.data
 
 
-class InPlaceUpgradeSourceDataset2(UpgradeSourceDataset2):
+class InPlaceUpgradeSourceTableV2(UpgradeSourceTableV2):
     @property
     def feature_blobs_already_written(self):
         return True

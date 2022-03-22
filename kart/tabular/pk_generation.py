@@ -1,6 +1,7 @@
 import pygit2
 
-from .dataset2 import Dataset2, Dataset3
+from .v2 import TableV2
+from .v3 import TableV3
 from .import_source import ImportSource
 from .schema import ColumnSchema
 
@@ -382,7 +383,7 @@ class PkGeneratingImportSource(ImportSource):
         for pks in hash_to_unassigned_pks.values():
             unassigned_pks.update(pks)
 
-        filtered_dataset_class = {2: FilteredDataset2, 3: FilteredDataset3}[
+        filtered_dataset_class = {2: FilteredTableV2, 3: FilteredTableV3}[
             self.repo.table_dataset_version
         ]
 
@@ -448,7 +449,7 @@ class PkGeneratingImportSource(ImportSource):
         return self.delegate.aggregate_import_source_desc(import_sources)
 
 
-class AbstractFilteredDataset:
+class FilteredTableDataset:
     """A dataset that only yields features with pk where `pk_filter(pk)` returns True."""
 
     def __init__(self, tree, path, pk_filter):
@@ -462,11 +463,11 @@ class AbstractFilteredDataset:
                 yield blob
 
 
-class FilteredDataset3(AbstractFilteredDataset, Dataset3):
+class FilteredTableV3(FilteredTableDataset, TableV3):
     pass
 
 
-class FilteredDataset2(AbstractFilteredDataset, Dataset2):
+class FilteredTableV2(FilteredTableDataset, TableV2):
     pass
 
 

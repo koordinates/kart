@@ -23,13 +23,13 @@ from kart.serialise_util import (
 )
 from kart.utils import ungenerator
 
-from .dataset3_paths import PathEncoder
+from .v3_paths import PathEncoder
 from .meta_items import ATTACHMENT_META_ITEMS
 from .rich_table_dataset import RichTableDataset
 from .schema import Legend, Schema
 
 
-class Dataset3(RichTableDataset):
+class TableV3(RichTableDataset):
     """
     - Uses messagePack to serialise features.
     - Stores each feature in a blob with path dependent on primary key values.
@@ -47,16 +47,16 @@ class Dataset3(RichTableDataset):
         feature/
           encoded_path(pk_value) = [msgpack([legend-x-hash, value0, value1, ...])]
 
-    Dataset3 is initialised pointing at a particular directory tree, and uses that
+    TableV3 is initialised pointing at a particular directory tree, and uses that
     to read features and schemas. However, it never writes to the tree, since this
     is not straight-forward in git/kart and involves batching writes into a commit.
     Therefore, there are no methods which write, only methods which return things
     which *should be written*. The caller must write these to a commit.
 
-    Path encoding is handled by PathEncoder in dataset3_paths.py - the exact system
+    Path encoding is handled by PathEncoder in v3_paths.py - the exact system
     for choosing a path based on a PK can differ, but typically they look something
     like: A/B/C/D/E/base64(msgpack(pk_value)), where A-E are characters from the
-    Base64 alphabet. See dataset3_paths.py for details.
+    Base64 alphabet. See v3_paths.py for details.
     """
 
     VERSION = 3
@@ -158,7 +158,7 @@ class Dataset3(RichTableDataset):
         """
         Given a legend, returns the path and the data which *should be written*
         to write this legend. This is almost the inverse of get_legend, except
-        Dataset3 doesn't write the data.
+        TableV3 doesn't write the data.
         """
         return self.full_path(self.LEGEND_PATH + legend.hexhash()), legend.dumps()
 
@@ -166,7 +166,7 @@ class Dataset3(RichTableDataset):
         """
         Given a schema, returns the path and the data which *should be written*
         to write this schema. This is almost the inverse of calling .schema,
-        except Dataset3 doesn't write the data. (Note that the schema's legend
+        except TableV3 doesn't write the data. (Note that the schema's legend
         should also be stored if any features are written with this schema.)
         """
         return self.full_path(self.SCHEMA_PATH), schema.dumps()
@@ -253,7 +253,7 @@ class Dataset3(RichTableDataset):
         """
         Given a "raw" feature dict (keyed by column IDs) and a legend, returns the path
         and the data which *should be written* to write this feature. This is almost the
-        inverse of get_raw_feature_dict, except Dataset3 doesn't write the data.
+        inverse of get_raw_feature_dict, except TableV3 doesn't write the data.
         """
         pk_values, non_pk_values = legend.raw_dict_to_value_tuples(raw_feature_dict)
         path = self.encode_pks_to_path(pk_values, relative=relative, schema=schema)
@@ -264,7 +264,7 @@ class Dataset3(RichTableDataset):
         """
         Given a feature (either a dict keyed by column name, or a list / tuple in schema order),
         returns the path and the data which *should be written* to write this feature. This is
-        almost the inverse of get_feature, except Dataset3 doesn't write the data.
+        almost the inverse of get_feature, except TableV3 doesn't write the data.
         """
         if schema is None:
             schema = self.schema

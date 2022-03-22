@@ -1,13 +1,13 @@
-from .dataset3 import Dataset3
-from .dataset3_paths import PathEncoder
+from .v3 import TableV3
+from .v3_paths import PathEncoder
 
 
-class Dataset2(Dataset3):
+class TableV2(TableV3):
     VERSION = 2
 
     DATASET_DIRNAME = ".sno-dataset"  # Old name for V2 datasets.
 
-    META_ITEM_NAMES = Dataset3.META_ITEM_NAMES + ("metadata/dataset.json",)
+    META_ITEM_NAMES = TableV3.META_ITEM_NAMES + ("metadata/dataset.json",)
 
     @property
     def feature_path_encoder(self):

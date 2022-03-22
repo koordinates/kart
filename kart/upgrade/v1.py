@@ -13,7 +13,7 @@ from kart.tabular.table_dataset import TableDataset
 from kart.utils import ungenerator
 
 
-class Dataset1(TableDataset):
+class TableV1(TableDataset):
     """
     - messagePack
     - primary key values

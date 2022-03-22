@@ -400,7 +400,7 @@ class Datasets:
         if dirname in (".table-dataset", ".sno-dataset"):
             return dataset_class_for_version(self.repo.table_dataset_version)
         if dirname == ".point-cloud-dataset.v1":
-            from kart.point_cloud.dataset1 import PointCloudV1
+            from kart.point_cloud.v1 import PointCloudV1
 
             return PointCloudV1
 
