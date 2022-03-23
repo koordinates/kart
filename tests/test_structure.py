@@ -10,6 +10,8 @@ from osgeo import gdal, ogr
 import pygit2
 import pytest
 
+from memory_repo import MemoryRepo
+
 from kart import init, fast_import
 from kart.tabular.v3 import TableV3
 from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
@@ -872,7 +874,7 @@ def test_pk_encoder_string_pk():
     schema = Schema.from_column_dicts(
         [{"name": "mypk", "dataType": "text", "id": "abc123"}]
     )
-    ds = TableV3.new_dataset_for_writing("mytable", schema)
+    ds = TableV3.new_dataset_for_writing("mytable", schema, MemoryRepo())
     e = ds.feature_path_encoder
     assert isinstance(e, MsgpackHashPathEncoder)
     assert e.encoding == "base64"
@@ -897,7 +899,7 @@ def test_pk_encoder_int_pk():
             }
         ]
     )
-    ds = TableV3.new_dataset_for_writing("mytable", schema)
+    ds = TableV3.new_dataset_for_writing("mytable", schema, MemoryRepo())
     e = ds.feature_path_encoder
     assert isinstance(e, IntPathEncoder)
     assert e.encoding == "base64"
@@ -1081,7 +1083,9 @@ def test_write_feature_performance(
 
             source = TableImportSource.open(data / source_gpkg, table=table)
             with source:
-                dataset = TableV3.new_dataset_for_writing(table, source.schema)
+                dataset = TableV3.new_dataset_for_writing(
+                    table, source.schema, MemoryRepo()
+                )
                 feature_iter = itertools.cycle(list(source.features()))
 
                 index = pygit2.Index()

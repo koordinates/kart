@@ -243,7 +243,7 @@ class RepoStructure:
                 schema = Schema.from_column_dicts(schema_delta.new_value)
                 dataset = dataset_class_for_version(
                     self.repo.table_dataset_version
-                ).new_dataset_for_writing(ds_path, schema)
+                ).new_dataset_for_writing(ds_path, schema, self.repo)
             else:
                 dataset = self.datasets()[ds_path]
 
@@ -427,12 +427,7 @@ class Datasets:
         """
         if self.force_dataset_class is not None:
             if self.force_dataset_class.is_dataset_tree(ds_tree):
-                return self.force_dataset_class(
-                    ds_tree,
-                    ds_path,
-                    self.force_dataset_class.DATASET_DIRNAME,
-                    repo=self.repo,
-                )
+                return self.force_dataset_class(ds_tree, ds_path, self.repo)
         else:
             for child_tree in ds_tree:
                 dirname = child_tree.name
@@ -444,7 +439,7 @@ class Datasets:
                     and dataset_class.DATASET_TYPE != self.filter_dataset_type
                 ):
                     continue
-                return dataset_class(ds_tree, ds_path, dirname, repo=self.repo)
+                return dataset_class(ds_tree, ds_path, self.repo, dirname=dirname)
 
         return None
 

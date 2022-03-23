@@ -3,6 +3,7 @@ import logging
 import time
 
 from kart import crs_util
+from kart.base_dataset import BaseDataset
 from kart.promisor_utils import LibgitSubcode
 from kart.serialise_util import ensure_text, json_unpack
 from kart.spatial_filter import SpatialFilter
@@ -14,7 +15,7 @@ from .import_source import TableImportSource
 L = logging.getLogger("kart.tabular.table_dataset")
 
 
-class TableDataset(TableImportSource):
+class TableDataset(BaseDataset, TableImportSource):
     """
     Common interface for all datasets - mostly used by TableV3,
     but also implemented by legacy datasets ie during `kart upgrade`.
@@ -32,50 +33,30 @@ class TableDataset(TableImportSource):
     All relative paths are defined as being relative to the inner_path / inner_tree.
     """
 
-    # Constants that subclasses should generally define.
+    # TableDataset is abstract - more dataset interface fields are defined by the concrete subclasses.
 
-    VERSION = None  # Version eg 1
-    DATASET_DIRNAME = None  # Eg ".table-dataset" or ".sno-dataset"
     DATASET_TYPE = "table"
 
-    # Paths are all defined relative to the inner path -
-
-    META_PATH = None  # Eg "meta/"
-    FEATURE_PATH = None  # Eg "feature/"
+    # Paths are all defined relative to the inner path:
+    FEATURE_PATH = "feature/"
 
     META_ITEM_NAMES = meta_items.META_ITEM_NAMES
 
     NUM_FEATURES_PER_PROGRESS_LOG = 10_000
 
-    def __init__(self, tree, path, dirname=None, repo=None):
-        """
-        Create a dataset at the given tree, which has the given path.
-        The tree should contain a child tree with the name DATASET_DIRNAME.
-        The tree can be None if this dataset hasn't yet been written to the repo.
-        """
+    def __init__(self, tree, path, repo, dirname=None):
+        super().__init__(tree, path, repo, dirname=dirname)
+
         if self.__class__ is TableDataset:
             raise TypeError("Cannot construct a TableDataset - you may want TableV3")
 
-        if dirname is None:
-            dirname = self.DATASET_DIRNAME
-
-        if tree is not None:
-            self.tree = tree
-            self.inner_tree = tree / dirname if dirname else self.tree
-        else:
-            self.inner_tree = self.tree = None
-
-        self.path = path.strip("/")
-        self.inner_path = f"{path}/{dirname}" if dirname else self.path
-
         self.table_name = self.dataset_path_to_table_name(self.path)
-        self.L = logging.getLogger(self.__class__.__qualname__)
 
         self.repo = repo
 
     @classmethod
-    def new_dataset_for_writing(cls, path, schema, repo=None):
-        result = cls(None, path, cls.DATASET_DIRNAME, repo=repo)
+    def new_dataset_for_writing(cls, path, schema, repo):
+        result = cls(None, path, repo)
         result._schema = schema
         return result
 
@@ -90,18 +71,6 @@ class TableDataset(TableImportSource):
         # TableImportSource method - by default, a dataset should import with the same path it already has.
         return self.path
 
-    @classmethod
-    def is_dataset_tree(cls, tree):
-        """
-        Returns True if the given tree seems to contain a dataset of this type.
-        Used for finding all the datasets in a given repo, etc.
-        """
-        return (
-            tree is not None
-            and cls.DATASET_DIRNAME in tree
-            and (tree / cls.DATASET_DIRNAME).type_str == "tree"
-        )
-
     @property
     @functools.lru_cache(maxsize=1)
     def meta_tree(self):
@@ -109,7 +78,7 @@ class TableDataset(TableImportSource):
         try:
             return self.inner_tree / self.META_PATH
         except KeyError:
-            return self.repo.empty_tree if self.repo else None
+            return self.repo.empty_tree
 
     @property
     def attachment_tree(self):
@@ -126,7 +95,7 @@ class TableDataset(TableImportSource):
                 else self.inner_tree
             )
         except KeyError:
-            return self.repo.empty_tree if self.repo else None
+            return self.repo.empty_tree
 
     @property
     def schema(self):

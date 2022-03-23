@@ -51,8 +51,9 @@ class TableV1(TableDataset):
             return msgpack.ExtType(code, data)
 
     @functools.lru_cache()
-    def get_meta_item(self, name):
-        return self.meta_items().get(name)
+    def get_meta_item(self, name, missing_ok=True):
+        meta_items = self.meta_items()
+        return meta_items.get(name) if missing_ok else meta_items[name]
 
     @functools.lru_cache()
     @ungenerator(dict)
