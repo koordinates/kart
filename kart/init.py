@@ -14,9 +14,9 @@ from .exceptions import InvalidOperation
 from .fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
-from .tabular.import_source import ImportSource
+from .tabular.import_source import TableImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
-from .tabular.pk_generation import PkGeneratingImportSource
+from .tabular.pk_generation import PkGeneratingTableImportSource
 from .working_copy import WorkingCopyStatus
 
 
@@ -248,7 +248,7 @@ def import_(
             "Illegal usage: '--output-format=json' only supports --list"
         )
     if do_list:
-        ImportSource.open(source).print_table_list(do_json=output_format == "json")
+        TableImportSource.open(source).print_table_list(do_json=output_format == "json")
         return
 
     repo = ctx.obj.repo
@@ -261,7 +261,7 @@ def import_(
         )
         do_checkout = True
 
-    base_import_source = ImportSource.open(source)
+    base_import_source = TableImportSource.open(source)
     if all_tables:
         tables = base_import_source.get_tables().keys()
     elif not tables:
@@ -319,7 +319,7 @@ def import_(
                 # will result in a new schema object, and thus a new blob for every feature.
                 # Note that alignment works better if we add the generated-pk-column first (when needed),
                 # if one schema has this and the other lacks it they will be harder to align.
-                import_source = PkGeneratingImportSource.wrap_source_if_needed(
+                import_source = PkGeneratingTableImportSource.wrap_source_if_needed(
                     import_source,
                     repo,
                     dest_path=dest_path,
@@ -336,7 +336,7 @@ def import_(
                     )
         import_sources.append(import_source)
 
-    ImportSource.check_valid(import_sources, param_hint="tables")
+    TableImportSource.check_valid(import_sources, param_hint="tables")
 
     all_ds_paths = [s.dest_path for s in import_sources]
     if not replace_existing:
@@ -467,7 +467,7 @@ def init(
 
     if import_from:
         check_git_user(repo=None)
-        base_source = ImportSource.open(import_from)
+        base_source = TableImportSource.open(import_from)
 
         # Import all tables.
         # If you need finer grained control than this,

@@ -2,13 +2,13 @@ import pygit2
 
 from .v2 import TableV2
 from .v3 import TableV3
-from .import_source import ImportSource
+from .import_source import TableImportSource
 from .schema import ColumnSchema
 
 
-class PkGeneratingImportSource(ImportSource):
+class PkGeneratingTableImportSource(TableImportSource):
     """
-    Wrapper of ImportSource that makes it appear to have a primary key, even though the delegate ImportSource does not.
+    Wrapper of TableImportSource that makes it appear to have a primary key, even though the delegate TableImportSource does not.
     In the simplest case, every feature encountered is just assigned a primary key from the sequence 1, 2, 3...
     However, this mapping from each feature to its primary key is stored as metadata the imported dataset, so that if
     the same (or similar) data is reimported, then the same primary keys can be assigned to each feature. The
@@ -72,16 +72,16 @@ class PkGeneratingImportSource(ImportSource):
 
     @classmethod
     def wrap_source_if_needed(cls, source, repo, **kwargs):
-        """Wraps an ImportSource in a PkGeneratingImportSource if the original data lacks a primary key."""
+        """Wraps an TableImportSource in a PkGeneratingTableImportSource if the original data lacks a primary key."""
         return (
             source
             if source.schema.pk_columns
-            else PkGeneratingImportSource(source, repo, **kwargs)
+            else PkGeneratingTableImportSource(source, repo, **kwargs)
         )
 
     @classmethod
     def wrap_sources_if_needed(cls, sources, repo, **kwargs):
-        """Wraps any of the given ImportSources that lack a primary key, returns the result as a new list."""
+        """Wraps any of the given TableImportSources that lack a primary key, returns the result as a new list."""
         return [cls.wrap_source_if_needed(source, repo, **kwargs) for source in sources]
 
     def __init__(self, delegate, repo, *, dest_path=None, similarity_detection_limit=0):
@@ -440,7 +440,7 @@ class PkGeneratingImportSource(ImportSource):
         return self.delegate.__exit__(*args)
 
     def __str__(self):
-        return f"PkGeneratingImportSource({self.delegate})"
+        return f"PkGeneratingTableImportSource({self.delegate})"
 
     def import_source_desc(self):
         return self.delegate.import_source_desc()

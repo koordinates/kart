@@ -6,7 +6,7 @@ from kart.output_util import InputMode, get_input_mode
 from .schema import Schema
 
 
-class ImportSource:
+class TableImportSource:
     """
     A dataset-like interface that can be imported as a dataset.
     A read-only interface.
@@ -31,17 +31,17 @@ class ImportSource:
 
         db_type = DbType.from_spec(spec)
         if db_type is not None:
-            from .sqlalchemy_import_source import SqlAlchemyImportSource
+            from .sqlalchemy_import_source import SqlAlchemyTableImportSource
 
-            return SqlAlchemyImportSource.open(spec, table=table)
+            return SqlAlchemyTableImportSource.open(spec, table=table)
         else:
-            from .ogr_import_source import OgrImportSource
+            from .ogr_import_source import OgrTableImportSource
 
-            return OgrImportSource.open(full_spec, table=table)
+            return OgrTableImportSource.open(full_spec, table=table)
 
     @classmethod
     def check_valid(cls, import_sources, dataset_class=None, param_hint=None):
-        """Given an iterable of ImportSources, checks that all are fully specified and none of their dest_paths collide."""
+        """Given an iterable of TableImportSources, checks that all are fully specified and none of their dest_paths collide."""
         dest_paths = {}
         for s1 in import_sources:
             s1.check_fully_specified()
@@ -59,7 +59,7 @@ class ImportSource:
 
     def check_fully_specified(self):
         """
-        Some ImportSources can be constructed only partially specified, but they will not work as an import source
+        Some TableImportSources can be constructed only partially specified, but they will not work as an import source
         until they are fully specified. This checks that self is fully specified and raises an error if it is not.
         """
         pass
@@ -68,7 +68,7 @@ class ImportSource:
     def dest_path(self):
         """
         The destination path where this dataset should be imported.
-        ImportSource.dest_path can be set, otherwise defaults to ImportSource.default_dest_path()
+        TableImportSource.dest_path can be set, otherwise defaults to TableImportSource.default_dest_path()
         """
         if hasattr(self, "_dest_path"):
             return self._dest_path
@@ -87,7 +87,7 @@ class ImportSource:
     def default_dest_path(self):
         """
         The default destination path where this dataset should be imported.
-        This should be generated based on the source path / source table name of the ImportSource.
+        This should be generated based on the source path / source table name of the TableImportSource.
         """
         raise NotImplementedError()
 
@@ -150,7 +150,7 @@ class ImportSource:
     @property
     def schema(self):
         """
-        The ImportSource implemenation must return the schema as a meta-item called "schema.json", so this accessor
+        The TableImportSource implemenation must return the schema as a meta-item called "schema.json", so this accessor
         simply delegates to that. Calling self.align_schema_to_existing_schema(...) should modify the schema returned by
         self.meta_items()
         """
@@ -206,7 +206,7 @@ class ImportSource:
         return f"{self.__class__.__name__}"
 
     def import_source_desc(self):
-        """Return a description of this ImportSource."""
+        """Return a description of this TableImportSource."""
         # Subclasses should override if str() does not return the right information.
         return (
             f"Importing {self.feature_count} features from {self} to {self.dest_path}/"

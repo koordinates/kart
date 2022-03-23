@@ -17,9 +17,9 @@ from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
 from kart.tabular.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
-from kart.tabular.import_source import ImportSource
+from kart.tabular.import_source import TableImportSource
 from kart.tabular.ogr_import_source import postgres_url_to_ogr_conn_str
-from kart.tabular.pk_generation import PkGeneratingImportSource
+from kart.tabular.pk_generation import PkGeneratingTableImportSource
 from kart.repo import KartRepo
 
 
@@ -770,7 +770,7 @@ def test_import_no_pk_performance(data_archive_readonly, benchmark):
         old_features = features[0:1000]
         new_features = features[1000:2143]
 
-        pkis = PkGeneratingImportSource(dataset, repo)
+        pkis = PkGeneratingTableImportSource(dataset, repo)
         pkis.prev_dest_schema = dataset.schema
         pkis.primary_key = dataset.primary_key
 
@@ -1079,7 +1079,7 @@ def test_write_feature_performance(
 
             repo = KartRepo(repo_path)
 
-            source = ImportSource.open(data / source_gpkg, table=table)
+            source = TableImportSource.open(data / source_gpkg, table=table)
             with source:
                 dataset = TableV3.new_dataset_for_writing(table, source.schema)
                 feature_iter = itertools.cycle(list(source.features()))
@@ -1116,7 +1116,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
 
             repo = KartRepo(repo_path)
 
-            source = ImportSource.open(
+            source = TableImportSource.open(
                 data / "nz-pa-points-topo-150k.gpkg", table=table
             )
 

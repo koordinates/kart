@@ -21,7 +21,7 @@ from kart.ogr_util import get_type_value_adapter
 from kart.output_util import dump_json_output
 from kart.utils import chunk, ungenerator
 
-from .import_source import ImportSource
+from .import_source import TableImportSource
 from .schema import ColumnSchema, Schema
 
 # This defines what formats are allowed, as well as mapping
@@ -38,7 +38,7 @@ FORMAT_TO_OGR_MAP = {
 LOCAL_PATH_FORMATS = set(FORMAT_TO_OGR_MAP.keys()) - {"PG"}
 
 
-class OgrImportSource(ImportSource):
+class OgrTableImportSource(TableImportSource):
     """
     Imports from an OGR source, currently from a whitelist of formats.
     """
@@ -492,7 +492,7 @@ class OgrImportSource(ImportSource):
         # Fixing this collision might be a good reason to move away from OGR
         # for import processing in the near future.
         #
-        # Note that the shapefile importsource overrides this since OGR *always* reports
+        # Note that ESRIShapefileImportSource overrides this since OGR *always* reports
         # a nonzero width for floats/ints in shapefiles.
         return ogr_width != 0
 
@@ -592,7 +592,7 @@ class OgrImportSource(ImportSource):
     }
 
 
-class ESRIShapefileImportSource(OgrImportSource):
+class ESRIShapefileImportSource(OgrTableImportSource):
     def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
         if not super()._should_import_as_numeric(ogr_type, ogr_width, ogr_precision):
             return False

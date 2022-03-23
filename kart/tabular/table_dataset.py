@@ -9,12 +9,12 @@ from kart.spatial_filter import SpatialFilter
 from kart.utils import ungenerator
 
 from . import meta_items
-from .import_source import ImportSource
+from .import_source import TableImportSource
 
 L = logging.getLogger("kart.tabular.table_dataset")
 
 
-class TableDataset(ImportSource):
+class TableDataset(TableImportSource):
     """
     Common interface for all datasets - mostly used by TableV3,
     but also implemented by legacy datasets ie during `kart upgrade`.
@@ -87,7 +87,7 @@ class TableDataset(ImportSource):
         return f"<{self.__class__.__name__}: {self.path}>"
 
     def default_dest_path(self):
-        # ImportSource method - by default, a dataset should import with the same path it already has.
+        # TableImportSource method - by default, a dataset should import with the same path it already has.
         return self.path
 
     @classmethod

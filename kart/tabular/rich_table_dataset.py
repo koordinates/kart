@@ -23,8 +23,8 @@ class RichTableDataset(TableDataset):
     and the missing abstract functionality that needs to be implemented - isn't lost amongst
     this more advanced functionality (which is built on top of the core functionality).
 
-    If you are only using a TableDataset as an ImportSource, just extend TableDataset - this functionality isn't needed.
-    For example, see Dataset0.
+    If you are only using a TableDataset as an TableImportSource, just extend TableDataset -
+    this functionality isn't needed. For example, see Dataset0.
     """
 
     RTREE_INDEX_EXTENSIONS = ("kart-idxd", "kart-idxi")

@@ -18,8 +18,8 @@ from kart.tabular.version import (
     extra_blobs_for_version,
 )
 from .structure import Datasets
-from .tabular.import_source import ImportSource
-from .tabular.pk_generation import PkGeneratingImportSource
+from .tabular.import_source import TableImportSource
+from .tabular.pk_generation import PkGeneratingTableImportSource
 from .timestamps import minutes_to_tz_offset
 from .utils import get_num_available_cores
 
@@ -237,7 +237,7 @@ def fast_import_tables(
     Imports all of the given sources as new datasets, and commit the result.
 
     repo - the Kart repo to import into.
-    sources - an iterable of ImportSource objects. Each source is to be imported to source.dest_path.
+    sources - an iterable of TableImportSource objects. Each source is to be imported to source.dest_path.
     settings - optional FastImportSettings: Tuneable settings which affect performance.
     verbosity - integer:
         0: no progress information is printed to stdout.
@@ -284,7 +284,7 @@ def fast_import_tables(
         extra_blobs_for_version(repo.table_dataset_version) if not from_commit else []
     )
 
-    ImportSource.check_valid(
+    TableImportSource.check_valid(
         sources, dataset_class_for_version(repo.table_dataset_version)
     )
 
@@ -297,7 +297,7 @@ def fast_import_tables(
         assert replace_ids is None
 
     # Add primary keys if needed.
-    sources = PkGeneratingImportSource.wrap_sources_if_needed(sources, repo)
+    sources = PkGeneratingTableImportSource.wrap_sources_if_needed(sources, repo)
 
     cmd_args = settings.as_args()
     if verbosity < 2:
@@ -438,7 +438,7 @@ def _import_single_source(
 ):
     """
     repo - the Kart repo to import into.
-    source - an individual ImportSource
+    source - an individual TableImportSource
     replace_existing - See ReplaceExisting enum
     from_commit - the commit to be used as a starting point before beginning the import.
     procs - all the processes to be used (for parallel imports)

@@ -11,13 +11,13 @@ from kart.sqlalchemy import DbType, separate_last_path_part, strip_username_and_
 from kart.utils import chunk, ungenerator
 from sqlalchemy.orm import sessionmaker
 
-from .import_source import ImportSource
+from .import_source import TableImportSource
 from .schema import Schema
 
 
-class SqlAlchemyImportSource(ImportSource):
+class SqlAlchemyTableImportSource(TableImportSource):
     """
-    ImportSource that uses SqlAlchemy directly to import into Kart.
+    TableImportSource that uses SqlAlchemy directly to import into Kart.
     Supports GPKG, Postgres (+ PostGIS), SQL Server, MySQL.
     """
 
@@ -60,7 +60,7 @@ class SqlAlchemyImportSource(ImportSource):
             connect_url, db_schema = separate_last_path_part(connect_url)
 
         engine = db_type.class_.create_engine(connect_url)
-        return SqlAlchemyImportSource(
+        return SqlAlchemyTableImportSource(
             spec, db_type=db_type, engine=engine, db_schema=db_schema, table=table
         )
 
@@ -212,7 +212,7 @@ class SqlAlchemyImportSource(ImportSource):
         meta_overrides = {**self.meta_overrides, **meta_overrides}
         db_schema, table = self.validate_table(table)
 
-        result = SqlAlchemyImportSource(
+        result = SqlAlchemyTableImportSource(
             self.original_spec,
             db_type=self.db_type,
             engine=self.engine,
