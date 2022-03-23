@@ -467,7 +467,7 @@ def _import_single_source(
 
     dataset_class = dataset_class_for_version(repo.table_dataset_version)
     dataset = dataset_class.new_dataset_for_writing(
-        source.dest_path, source.schema, repo=repo
+        source.dest_path, source.schema, repo
     )
 
     with source:

@@ -116,7 +116,7 @@ class PkGeneratingTableImportSource(TableImportSource):
             return
 
         self.prev_dest_dataset = self.repo.dataset_class(
-            self.prev_dest_tree, self.dest_path
+            self.prev_dest_tree, self.dest_path, self.repo
         )
         self.prev_dest_schema = self.prev_dest_dataset.schema
 
@@ -177,7 +177,7 @@ class PkGeneratingTableImportSource(TableImportSource):
         root_tree = commit_or_tree.peel(pygit2.Tree)
         try:
             dataset = self.repo.dataset_class(
-                root_tree / self.dest_path, self.dest_path
+                root_tree / self.dest_path, self.dest_path, self.repo
             )
             return dataset.inner_tree / self.GENERATED_PKS_PATH
         except KeyError:
@@ -391,7 +391,7 @@ class PkGeneratingTableImportSource(TableImportSource):
             return pk in unassigned_pks
 
         filtered_ds = filtered_dataset_class(
-            self.prev_dest_tree, self.dest_path, pk_filter
+            self.prev_dest_tree, self.dest_path, self.repo, pk_filter
         )
         return list(filtered_ds.features())
 
@@ -452,8 +452,8 @@ class PkGeneratingTableImportSource(TableImportSource):
 class FilteredTableDataset:
     """A dataset that only yields features with pk where `pk_filter(pk)` returns True."""
 
-    def __init__(self, tree, path, pk_filter):
-        super().__init__(tree, path)
+    def __init__(self, tree, path, repo, pk_filter):
+        super().__init__(tree, path, repo)
         self.pk_filter = pk_filter
 
     def feature_blobs(self):

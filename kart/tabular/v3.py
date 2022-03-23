@@ -1,6 +1,5 @@
 import functools
 import os
-import sys
 
 import click
 
@@ -8,7 +7,6 @@ from kart import crs_util
 from kart.core import find_blobs_in_tree
 from kart.exceptions import (
     PATCH_DOES_NOT_APPLY,
-    UNSUPPORTED_VERSION,
     InvalidOperation,
     NotYetImplemented,
 )
@@ -81,36 +79,6 @@ class TableV3(RichTableDataset):
 
     # Attachments
     METADATA_XML = "metadata.xml"
-
-    @classmethod
-    def is_dataset_tree(cls, tree):
-        if tree is None:
-            return False
-        return (
-            cls.DATASET_DIRNAME in tree
-            and (tree / cls.DATASET_DIRNAME).type_str == "tree"
-        )
-
-    def __init__(self, tree, path, dirname=None, repo=None):
-        super().__init__(tree, path, dirname=dirname, repo=repo)
-        if self.inner_tree is not None:
-            self.ensure_only_supported_capabilities()
-
-    def ensure_only_supported_capabilities(self):
-        capabilities = self.get_meta_item("capabilities.json", missing_ok=True)
-        if capabilities is not None:
-            from .cli import get_version
-            from .output_util import dump_json_output
-
-            click.echo(
-                f"The dataset at {self.path} requires the following capabilities which Kart {get_version()} does not support:",
-                err=True,
-            )
-            dump_json_output(capabilities, sys.stderr)
-            raise InvalidOperation(
-                "Download the latest Kart to work with this dataset",
-                exit_code=UNSUPPORTED_VERSION,
-            )
 
     @functools.lru_cache()
     def get_meta_item(self, name, missing_ok=True):

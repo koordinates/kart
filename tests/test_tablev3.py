@@ -1,61 +1,10 @@
+from memory_repo import MemoryTree, MemoryRepo
+
 from kart.tabular.v3 import TableV3
 from kart.tabular.schema import Legend, ColumnSchema, Schema
 
 
 DATASET_PATH = "path/to/dataset"
-
-
-class MemoryTree:
-    """
-    A fake directory tree structure.
-    Contains a dict - all_blobs - of all file data contained anywhere in this tree and its descendants.
-    Supports only two operators:
-    ("some/path" in self) return True if a descendant tree or blob exists at the given path.
-    self / "some/path" returns either a descendant MemoryTree, or a descendant MemoryBlob.
-    More complex directory navigation is not supported.
-    """
-
-    def __init__(self, all_blobs):
-        self.all_blobs = all_blobs
-
-    @property
-    def type_str(self):
-        return "tree"
-
-    def __contains__(self, path):
-        path = path.strip("/")
-        if path in self.all_blobs:
-            return True
-        dir_path = path + "/"
-        return any((p.startswith(dir_path) for p in self.all_blobs))
-
-    def __truediv__(self, path):
-        path = path.strip("/")
-        if path in self.all_blobs:
-            return MemoryBlob(self.all_blobs[path])
-
-        dir_path = path + "/"
-        dir_path_len = len(dir_path)
-        subtree = {
-            p[dir_path_len:]: data
-            for p, data in self.all_blobs.items()
-            if p.startswith(dir_path)
-        }
-        if not subtree:
-            raise KeyError(f"Path not found: {path}")
-        return MemoryTree(subtree)
-
-
-class MemoryBlob(bytes):
-    """Test-only implementation of pygit2.Blob. Supports self.data and memoryview(self)."""
-
-    @property
-    def data(self):
-        return self
-
-    @property
-    def type_str(self):
-        return "blob"
 
 
 def test_legend_roundtrip():
@@ -66,11 +15,11 @@ def test_legend_roundtrip():
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, None)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, None, MemoryRepo())
     path, data = empty_dataset.encode_legend(orig)
     tree = MemoryTree({path: data})
 
-    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, TableV3.DATASET_DIRNAME)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, MemoryRepo())
     roundtripped = tableV3.get_legend(orig.hexhash())
 
     assert roundtripped is not orig
@@ -137,7 +86,7 @@ def abcdef_schema():
 def test_raw_feature_roundtrip():
     legend = Legend(["a"], ["b", "c", "d", "e", "f"])
     schema = abcdef_schema()
-    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema, MemoryRepo())
     legend_path, legend_data = empty_dataset.encode_legend(legend)
 
     raw_feature_dict = {
@@ -153,7 +102,7 @@ def test_raw_feature_roundtrip():
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: feature_data})
 
-    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, MemoryRepo())
     roundtripped = tableV3.get_raw_feature_dict(path=feature_path)
     assert roundtripped is not raw_feature_dict
     assert roundtripped == raw_feature_dict
@@ -173,7 +122,7 @@ def test_raw_feature_roundtrip():
     )
     tree = MemoryTree({legend_path: legend_data, feature_path: empty_feature_data})
 
-    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, MemoryRepo())
     roundtripped = tableV3.get_raw_feature_dict(path=feature_path)
     # Overwriting the old feature with an empty feature at the same path only
     # clears the non-pk values, since the pk values are part of the path.
@@ -205,11 +154,11 @@ def test_schema_roundtrip(gen_uuid):
     assert roundtripped is not orig
     assert roundtripped == orig
 
-    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, None)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, None, MemoryRepo())
     path, data = empty_dataset.encode_schema(orig)
     tree = MemoryTree({path: data})
 
-    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, MemoryRepo())
     roundtripped = tableV3.schema
 
     assert roundtripped is not orig
@@ -225,7 +174,7 @@ def test_feature_roundtrip(gen_uuid):
             ColumnSchema(gen_uuid(), "recording", "blob", None),
         ]
     )
-    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema)
+    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, schema, MemoryRepo())
     schema_path, schema_data = empty_dataset.encode_schema(schema)
     legend_path, legend_data = empty_dataset.encode_legend(schema.legend)
 
@@ -248,7 +197,7 @@ def test_feature_roundtrip(gen_uuid):
         {schema_path: schema_data, legend_path: legend_data, feature_path: feature_data}
     )
 
-    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, MemoryRepo())
     roundtripped_feature = tableV3.get_feature(path=feature_path)
     assert roundtripped_feature is not feature_dict
     assert roundtripped_feature == feature_dict
@@ -286,7 +235,9 @@ def test_schema_change_roundtrip(gen_uuid):
         "ID": 7,
     }
 
-    empty_dataset = TableV3.new_dataset_for_writing(DATASET_PATH, old_schema)
+    empty_dataset = TableV3.new_dataset_for_writing(
+        DATASET_PATH, old_schema, MemoryRepo()
+    )
     feature_path, feature_data = empty_dataset.encode_feature(feature_tuple, old_schema)
     feature_path2, feature_data2 = empty_dataset.encode_feature(
         feature_dict, old_schema
@@ -307,7 +258,7 @@ def test_schema_change_roundtrip(gen_uuid):
         }
     )
 
-    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH)
+    tableV3 = TableV3(tree / DATASET_PATH, DATASET_PATH, MemoryRepo())
     # Old columns that are not present in the new schema are gone.
     # New columns that are not present in the old schema have 'None's.
     roundtripped = tableV3.get_feature(path=feature_path)
