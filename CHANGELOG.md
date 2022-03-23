@@ -13,8 +13,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.11.1
 
 - Improve performance when creating a working copy in a spatially filtered repository (this was previously slower than in a non-filtered repository; now it is much faster) [#561](https://github.com/koordinates/kart/issues/561)
-- Added support for Sphinx Documentation with Read the Docs for the existing markdown files from the [Github Wiki](https://github.com/koordinates/kart/wiki) and from the `docs` directory. [[#220](https://github.com/koordinates/kart/issues/220)]
-
+- Added Sphinx [documentation](https://docs.kartproject.org/en/latest/), built from the `docs` directory. [#220](https://github.com/koordinates/kart/issues/220)
 ## 0.11.0
 
 ### Major changes
@@ -385,7 +384,7 @@ We have an initial preview available of our Sno repository hosting. This allows 
 
 ### Compatibility
 
-Repositories created with Sno v0.2 are compatible with v0.3. For assistance upgrading any v0.1 repositories, please read our [upgrade guide](https://github.com/koordinates/kart/wiki/Upgrading).
+Repositories created with Sno v0.2 are compatible with v0.3. For assistance upgrading any v0.1 repositories, please read our [upgrade guide](https://docs.kartproject.org/en/latest/pages/upgrading.html).
 
 ## 0.2.0
 

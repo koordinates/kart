@@ -35,7 +35,7 @@ For Kart development see the [Contributing Notes](CONTRIBUTING.md).
 
 ## Usage
 
-See the [documentation](https://github.com/koordinates/kart/wiki) for tutorials and reference.
+See the [documentation](https://docs.kartproject.org/en/latest/) for tutorials and reference.
 
 > ##### 💡 If you're new to git
 >
