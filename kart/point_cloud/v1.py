@@ -13,6 +13,14 @@ class PointCloudV1(BaseDataset):
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
     TILES_PATH = "tiles/"
 
+    META_ITEMS = (
+        BaseDataset.TITLE,
+        BaseDataset.DESCRIPTION,
+        BaseDataset.METADATA_XML,
+        BaseDataset.SCHEMA_JSON,
+        BaseDataset.CRS_DEFINITIONS,
+    )
+
     @property
     def tiles_tree(self):
         return self.get_subtree(self.TILES_PATH)

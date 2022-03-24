@@ -103,7 +103,7 @@ class TableImportSource:
 
     def meta_items(self):
         """
-        Returns a dict of all the meta items that need to be imported. See META_ITEM_NAMES.
+        Returns a dict of all the meta items that need to be imported. See TableV3.META_ITEMS.
         Meta items from this list can be ommitted if there is no data (eg, no title or description exists).
         Meta items not on this list can also be included, they will be stored verbatim in the resulting dataset.
         All CRS definitions from self.crs_definitions() should also be included with keys crs/{identifier}.wkt

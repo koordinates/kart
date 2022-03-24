@@ -1,9 +1,15 @@
 import functools
 import os
+import re
 
 import click
 
-from kart import crs_util
+from kart.base_dataset import (
+    BaseDataset,
+    MetaItemDefinition,
+    MetaItemFileType,
+    MetaItemPermission,
+)
 from kart.core import find_blobs_in_tree
 from kart.exceptions import (
     PATCH_DOES_NOT_APPLY,
@@ -15,15 +21,31 @@ from kart.serialise_util import (
     ensure_bytes,
     ensure_text,
     json_pack,
+    json_unpack,
     msg_pack,
     msg_unpack,
 )
-from kart.utils import ungenerator
-
 from .v3_paths import PathEncoder
-from .meta_items import ATTACHMENT_META_ITEMS
 from .rich_table_dataset import RichTableDataset
 from .schema import Legend, Schema
+
+
+class SchemaJsonFileType:
+    # schema.json should be normalised on read and write, by dropping any optional fields that are None.
+    def decode_from_bytes(self, data):
+        if data is None:
+            return None
+        return Schema.normalise_column_dicts(json_unpack(data))
+
+    def encode_to_bytes(self, meta_item):
+        if meta_item is None:
+            return None
+        if not isinstance(meta_item, Schema):
+            meta_item = Schema.from_column_dicts(meta_item)
+        return meta_item.dumps()
+
+
+SchemaJsonFileType.INSTANCE = SchemaJsonFileType()
 
 
 class TableV3(RichTableDataset):
@@ -33,9 +55,9 @@ class TableV3(RichTableDataset):
     - Stored at a particular path eg "path/to/my/layer".
 
     any/structure/mylayer/
-      .sno-dataset/
+      .table-dataset/
         meta/
-          schema              = [current schema JSON]
+          schema.json         = [current schema JSON]
           legend/
             [legend-a-hash]   = [column-id0, column-id1, ...]
             [legend-b-hash]   = [column-id0, column-id1, ...]
@@ -60,43 +82,68 @@ class TableV3(RichTableDataset):
 
     DATASET_DIRNAME = ".table-dataset"  # New name for V3 datasets.
 
-    # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
-    FEATURE_PATH = "feature/"
     META_PATH = "meta/"
-
     LEGEND_DIRNAME = "legend"
     LEGEND_PATH = META_PATH + "legend/"
     SCHEMA_PATH = META_PATH + "schema.json"
 
-    TITLE_PATH = META_PATH + "title"
-    DESCRIPTION_PATH = META_PATH + "description"
+    # === Visible meta-items ===
+    # Override schema.json to normalise schemas during serialisation.
+    SCHEMA_JSON = MetaItemDefinition("schema.json", SchemaJsonFileType.INSTANCE)
 
-    CRS_PATH = META_PATH + "crs/"
+    # == Hidden meta-items (which don't show in diffs) ==
+    # How automatically generated PKs have been assigned so far:
+    GENERATED_PKS = MetaItemDefinition(
+        "generated-pks.json", MetaItemFileType.JSON, MetaItemPermission.HIDDEN
+    )
+    # How primary keys are converted to feature paths:
+    PATH_STRUCTURE = MetaItemDefinition(
+        "path-structure.json", MetaItemFileType.JSON, MetaItemPermission.INTERNAL_ONLY
+    )
+    # Legends are used to help decode each feature:
+    LEGEND = MetaItemDefinition(
+        re.compile(r"legend/(.*)"),
+        MetaItemFileType.BYTES,
+        MetaItemPermission.INTERNAL_ONLY,
+    )
 
-    PATH_STRUCTURE_PATH = META_PATH + "path-structure.json"
-    CAPABILITIES_PATH = META_PATH + "capabilities.json"
+    META_ITEMS = (
+        BaseDataset.TITLE,
+        BaseDataset.DESCRIPTION,
+        BaseDataset.METADATA_XML,
+        SCHEMA_JSON,
+        BaseDataset.CRS_DEFINITIONS,
+        GENERATED_PKS,
+        PATH_STRUCTURE,
+        LEGEND,
+    )
 
-    # Attachments
-    METADATA_XML = "metadata.xml"
+    # This meta-item is generally stored in the "attachment" area, alongside the dataset, rather than inside it.
+    # Storing it in this unusual location adds complexity without actually solving any problems, so newer datasets
+    # don't do this.
+    ATTACHMENT_META_ITEMS = ("metadata.xml",)
 
     @functools.lru_cache()
     def get_meta_item(self, meta_item_path, missing_ok=True):
-        if meta_item_path in ATTACHMENT_META_ITEMS and self.tree is not None:
-            return ensure_text(
-                self.get_data_at(
-                    meta_item_path, missing_ok=missing_ok, from_tree=self.tree
-                )
-            )
+        # Handle meta-items stored in the attachment area:
+        if (
+            meta_item_path in self.ATTACHMENT_META_ITEMS
+            and meta_item_path not in self.meta_tree
+            and self.tree is not None
+            and meta_item_path in self.tree
+        ):
+            return ensure_text(self.get_data_at(meta_item_path, from_tree=self.tree))
+
         return super().get_meta_item(meta_item_path, missing_ok=missing_ok)
 
-    @ungenerator(dict)
+    @functools.lru_cache(maxsize=1)
     def crs_definitions(self):
         """Returns {identifier: definition} dict for all CRS definitions in this dataset."""
-        if not self.inner_tree or self.CRS_PATH not in self.inner_tree:
-            return
-        for blob in find_blobs_in_tree(self.inner_tree / self.CRS_PATH):
-            # -4 -> Remove ".wkt"
-            yield blob.name[:-4], crs_util.normalise_wkt(ensure_text(blob.data))
+        result = self.get_meta_items_matching(self.CRS_DEFINITIONS)
+        return {
+            self.CRS_DEFINITIONS.match_group(path, 1): value
+            for path, value in result.items()
+        }
 
     @functools.lru_cache()
     def get_legend(self, legend_hash):
@@ -261,7 +308,7 @@ class TableV3(RichTableDataset):
                 else:
                     content = ensure_bytes(content)
 
-            if rel_path in ATTACHMENT_META_ITEMS:
+            if rel_path in self.ATTACHMENT_META_ITEMS:
                 full_path = self.full_attachment_path(rel_path)
             else:
                 if not rel_path.startswith(self.META_PATH):
@@ -347,7 +394,11 @@ class TableV3(RichTableDataset):
         # Apply diff to hidden meta items folder: <dataset>/.table-dataset/meta/<item-name>
         with object_builder.chdir(f"{self.inner_path}/{self.META_PATH}"):
             has_conflicts |= self._apply_meta_deltas_to_tree(
-                (d for d in meta_diff.values() if d.key not in ATTACHMENT_META_ITEMS),
+                (
+                    d
+                    for d in meta_diff.values()
+                    if d.key not in self.ATTACHMENT_META_ITEMS
+                ),
                 object_builder,
                 self.meta_tree if self.inner_tree is not None else None,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,
@@ -356,7 +407,7 @@ class TableV3(RichTableDataset):
         # Apply diff to visible attachment meta items: <dataset>/<item-name>
         with object_builder.chdir(self.path):
             has_conflicts |= self._apply_meta_deltas_to_tree(
-                (d for d in meta_diff.values() if d.key in ATTACHMENT_META_ITEMS),
+                (d for d in meta_diff.values() if d.key in self.ATTACHMENT_META_ITEMS),
                 object_builder,
                 self.attachment_tree,
                 resolve_missing_values_from_ds=resolve_missing_values_from_ds,

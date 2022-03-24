@@ -7,7 +7,6 @@ from kart.tabular.schema import Schema
 from kart.spatial_filter import SpatialFilter
 from kart.utils import ungenerator
 
-from . import meta_items
 from .import_source import TableImportSource
 
 L = logging.getLogger("kart.tabular.table_dataset")
@@ -37,8 +36,6 @@ class TableDataset(BaseDataset, TableImportSource):
 
     # Paths are all defined relative to the inner path:
     FEATURE_PATH = "feature/"
-
-    META_ITEM_NAMES = meta_items.META_ITEM_NAMES
 
     NUM_FEATURES_PER_PROGRESS_LOG = 10_000
 
@@ -117,48 +114,6 @@ class TableDataset(BaseDataset, TableImportSource):
             return ("meta", rel_path[len("meta/") :])
         pk = self.decode_path_to_1pk(rel_path)
         return ("feature", pk)
-
-    @functools.lru_cache()
-    @ungenerator(dict)
-    def meta_items(self, only_standard_items=True):
-        if not self.meta_tree:
-            return
-
-        for name in self.META_ITEM_NAMES:
-            value = self.get_meta_item(name)
-            if value:
-                yield name, value
-
-        for identifier, definition in self.crs_definitions().items():
-            yield f"crs/{identifier}.wkt", definition
-
-        if not only_standard_items:
-            yield from self.extra_meta_items().items()
-
-    @functools.lru_cache()
-    @ungenerator(dict)
-    def extra_meta_items(self):
-        if not self.meta_tree:
-            return
-
-        extra_names = [obj.name for obj in self.meta_tree if obj.type_str == "blob"]
-        for name in sorted(extra_names):
-            yield name, self.get_meta_item(name)
-
-    def decode_meta_item(self, data, meta_item_path):
-        result = super().decode_meta_item(data, meta_item_path)
-        if meta_item_path == "schema.json":
-            # This normalises the schema by dropping optional fields that are unset.
-            result = Schema.normalise_column_dicts(result)
-        return result
-
-    def encode_meta_item(self, meta_item, meta_item_path):
-        if meta_item_path == "schema.json":
-            # Normalise and serialise schema:
-            if not isinstance(meta_item, Schema):
-                meta_item = Schema.from_column_dicts(meta_item)
-            return meta_item.dumps()
-        return super().encode_meta_item(meta_item, meta_item_path)
 
     @property
     @functools.lru_cache(maxsize=1)

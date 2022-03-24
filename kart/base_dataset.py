@@ -1,16 +1,20 @@
 from enum import Enum, auto
 import functools
 import logging
+import re
 import sys
 
 import click
 
 from kart import crs_util
+from kart.core import find_blobs_with_paths_in_tree
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION
 from kart.serialise_util import ensure_text, ensure_bytes, json_pack, json_unpack
 
 
-class MetaItemType(Enum):
+class MetaItemFileType(Enum):
+    """Different types of meta-item a dataset may contain."""
+
     BYTES = auto()
     JSON = auto()
     TEXT = auto()
@@ -18,11 +22,111 @@ class MetaItemType(Enum):
     XML = auto()
 
     @classmethod
-    def get(cls, name):
-        try:
-            return cls[name]
-        except KeyError:
+    def get_from_suffix(cls, meta_item_path):
+        parts = meta_item_path.rsplit(".", maxsplit=1)
+        if len(parts) == 2:
+            try:
+                return cls[parts[1].upper()]
+            except KeyError:
+                pass
+        return None
+
+    def decode_from_bytes(self, data):
+        if data is None:
             return None
+        if self is self.BYTES:
+            return data
+        elif self in (self.TEXT, self.XML):
+            return ensure_text(data)
+        elif self is self.JSON:
+            return json_unpack(data)
+        elif self is self.WKT:
+            return crs_util.normalise_wkt(ensure_text(data))
+
+    def encode_to_bytes(self, meta_item):
+        if meta_item is None:
+            return meta_item
+        if self is self.JSON:
+            return json_pack(meta_item)
+        elif self is self.WKT:
+            return ensure_bytes(crs_util.normalise_wkt(meta_item))
+        return ensure_bytes(meta_item)
+
+    @classmethod
+    def get_from_definition_or_suffix(cls, definition, meta_item_path):
+        if definition is not None:
+            return definition.file_type
+        else:
+            return (
+                MetaItemFileType.get_from_suffix(meta_item_path)
+                or MetaItemFileType.TEXT
+            )
+
+
+@functools.total_ordering
+class MetaItemPermission(Enum):
+    """
+    Different permission-like properties a meta-item within a dataset may have.
+    This is not a security model, as the user can edit any meta-item they want if they try hard enough.
+    """
+
+    # Some extra data we don't recognise is in the meta-item area. User is shown it and can edit it:
+    EXTRA = 5
+    # User is shown this meta-item (eg in `kart diff`) and can edit this meta-item:
+    EDITABLE = 4
+    # User is shown but cannot (easily) edit this meta-item
+    VISIBLE = 3
+    # User is not "shown" this meta-item (but may be able to see it if they request it).
+    # This data belongs with the dataset and should be preserved if the dataset is rewritten somewhere new:
+    HIDDEN = 2
+    # User is not "shown" this meta-item and this data need not be preserved if the dataset is rewritten somewhere new
+    # (ie, it is specific to how the dataset is encoded in this instance, it is not part of the data of the dataset.)
+    INTERNAL_ONLY = 1
+
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
+
+
+class MetaItemDefinition:
+    """Used for storing meta-information about meta-items."""
+
+    def __init__(
+        self, path_or_pattern, file_type=None, perm=MetaItemPermission.EDITABLE
+    ):
+        assert path_or_pattern is not None
+        assert perm is not None
+
+        if isinstance(path_or_pattern, str):
+            self.path = path_or_pattern
+            self.pattern = None
+            if file_type is None:
+                file_type = MetaItemFileType.get_from_suffix(file_type)
+        else:
+            self.path = None
+            self.pattern = path_or_pattern
+            if file_type is None:
+                file_type = MetaItemFileType.get_from_suffix(path_or_pattern.pattern)
+
+        if file_type is None:
+            raise ValueError(f"Unknown file_type for meta-item: {path_or_pattern}")
+        self.file_type = file_type
+        self.perm = perm
+
+    def __repr__(self):
+        return f"MetaItemDefinition({self.path or self.pattern.pattern})"
+
+    def matches(self, meta_item_path):
+        if self.path:
+            return self.path == meta_item_path
+        elif self.pattern:
+            return bool(self.pattern.fullmatch(meta_item_path))
+
+    def match_group(self, meta_item_path, match_group):
+        assert self.pattern
+        match = self.pattern.fullmatch(meta_item_path)
+        return match.group(match_group) if match else None
 
 
 class BaseDataset:
@@ -49,13 +153,29 @@ class BaseDataset:
     DATASET_DIRNAME = None  # Example: ".hologram-dataset.v1".
     # (This should match the pattern DATASET_DIRNAME_PATTERN in kart.structure.)
 
-    # Paths - these are generally relative to self.inner_tree, but datasets may choose to put extra data in the outer
+    # Paths are generally relative to self.inner_tree, but datasets may choose to put extra data in the outer
     # tree also where it will eventually be user-visible (once attachments are fully supported).
 
     # Where meta-items are stored - blobs containing metadata about the structure or schema of the dataset.
     META_PATH = "meta/"
 
-    # There are no other paths that are common to all types of dataset.
+    # Some common meta-items, used by many types of dataset (but not necessarily every dataset):
+
+    # The dataset's name / title:
+    TITLE = MetaItemDefinition("title", MetaItemFileType.TEXT)
+    # A longer description about the dataset's contents:
+    DESCRIPTION = MetaItemDefinition("description", MetaItemFileType.TEXT)
+    # JSON representation of the dataset's schema. See kart/tabular/schema.py, datasets_v3.rst
+    SCHEMA_JSON = MetaItemDefinition("schema.json", MetaItemFileType.JSON)
+    # Any XML metadata about the dataset.
+    METADATA_XML = MetaItemDefinition("metadata.xml", MetaItemFileType.XML)
+    # CRS definitions in well-known-text:
+    CRS_DEFINITIONS = MetaItemDefinition(
+        re.compile(r"crs/(.*)\.wkt"), MetaItemFileType.WKT
+    )
+
+    # No meta-items are defined by default - subclasses have to define these themselves.
+    META_ITEMS = ()
 
     @classmethod
     def is_dataset_tree(cls, tree):
@@ -82,6 +202,8 @@ class BaseDataset:
                   If this is also None, then inner_tree is set to the same as tree - this is not the normal structure of
                   a dataset, but is supported for legacy reasons.
         """
+        self.__class__._init_meta_item_definitions()
+
         assert path is not None
         assert repo is not None
         if dirname is None:
@@ -104,6 +226,18 @@ class BaseDataset:
         self._empty_tree = repo.empty_tree
 
         self.ensure_only_supported_capabilities()
+
+    @classmethod
+    def _init_meta_item_definitions(cls):
+        if hasattr(cls, "PATH_META_ITEMS"):
+            return
+        cls.PATH_META_ITEMS = {}
+        cls.PATTERN_META_ITEMS = []
+        for definition in cls.META_ITEMS:
+            if definition.path:
+                cls.PATH_META_ITEMS[definition.path] = definition
+            else:
+                cls.PATTERN_META_ITEMS.append(definition)
 
     def ensure_only_supported_capabilities(self):
         # TODO - loosen this restriction. A dataset with capabilities that we don't support should (at worst) be treated
@@ -191,20 +325,16 @@ class BaseDataset:
     def meta_tree(self):
         return self.get_subtree(self.META_PATH)
 
-    def get_meta_item_type(self, meta_item_path):
-        result = self.get_meta_item_type_from_suffix(meta_item_path)
-        if result is None:
-            result = self.get_meta_item_type_without_suffix(meta_item_path)
-        return result
-
-    def get_meta_item_type_from_suffix(self, meta_item_path):
-        parts = meta_item_path.rsplit(".", maxsplit=1)
-        if len(parts) == 2:
-            return MetaItemType.get(parts[1].upper())
+    def get_meta_item_definition(self, meta_item_path):
+        # Quicker dict lookup:
+        definition = self.PATH_META_ITEMS.get(meta_item_path)
+        if definition is not None:
+            return definition
+        # Slower pattern search:
+        for definition in self.PATTERN_META_ITEMS:
+            if definition.matches(meta_item_path):
+                return definition
         return None
-
-    def get_meta_item_type_without_suffix(self, meta_item_path):
-        return MetaItemType.TEXT
 
     @functools.lru_cache()
     def get_meta_item(self, meta_item_path, missing_ok=True):
@@ -219,28 +349,49 @@ class BaseDataset:
         )
         if data is None:
             return data
-        return self.decode_meta_item(data, meta_item_path)
+        definition = self.get_meta_item_definition(meta_item_path)
+        file_type = MetaItemFileType.get_from_definition_or_suffix(
+            definition, meta_item_path
+        )
+        return file_type.decode_from_bytes(data)
 
-    def decode_meta_item(self, data, meta_item_path):
-        meta_item_type = self.get_meta_item_type(meta_item_path)
-        if meta_item_type is MetaItemType.BYTES:
-            return data
-        elif meta_item_type in (MetaItemType.TEXT, MetaItemType.XML):
-            return ensure_text(data)
-        elif meta_item_type is MetaItemType.JSON:
-            return json_unpack(data)
-        elif meta_item_type is MetaItemType.WKT:
-            return crs_util.normalise_wkt(ensure_text(data))
-        else:
-            raise RuntimeError(f"Unexpected meta_item_type: {meta_item_type}")
+    @functools.lru_cache()
+    def meta_items(self, min_perm=MetaItemPermission.VISIBLE):
+        """
+        Returns a dict of all the meta-items, keyed by meta-item-path.
+        Meta-items returned are sorted by the order in which they appear in self.META_ITEMS,
+        and extra (unexpected) meta-items are returned last of all.
+        """
 
-    def encode_meta_item(self, meta_item, meta_item_path):
-        if meta_item is None:
-            return None
-        meta_item_type = self.get_meta_item_type(meta_item_path)
-        if meta_item_type is MetaItemType.JSON:
-            return json_pack(meta_item)
-        elif meta_item_type == MetaItemType.WKT:
-            return ensure_bytes(crs_util.normalise_wkt(meta_item))
-        else:
-            return ensure_bytes(meta_item)
+        # meta_items() is written in such a way that you shouldn't need to override it.
+        # It always delegates to get_meta_item, so overriding that should be enough.
+
+        result = {}
+        for definition in self.META_ITEMS:
+            if definition.perm < min_perm:
+                continue
+            result.update(self.get_meta_items_matching(definition))
+
+        result.update(self.get_meta_items_matching(None))
+        return result
+
+    def get_meta_items_matching(self, definition):
+        result = {
+            path: self.get_meta_item(path)
+            for path in self.get_meta_item_paths_matching(definition)
+        }
+        # Filter out any None values.
+        return {k: v for k, v in result.items() if v is not None}
+
+    def get_meta_item_paths_matching(self, definition):
+        if definition and definition.path:
+            return [definition.path]
+        return self._meta_item_paths_grouped_by_definition().get(definition, [])
+
+    @functools.lru_cache(maxsize=1)
+    def _meta_item_paths_grouped_by_definition(self):
+        result = {}
+        for meta_item_path, blob in find_blobs_with_paths_in_tree(self.meta_tree):
+            definition = self.get_meta_item_definition(meta_item_path)
+            result.setdefault(definition, []).append(meta_item_path)
+        return result
