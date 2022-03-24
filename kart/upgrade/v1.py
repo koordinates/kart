@@ -6,6 +6,7 @@ import re
 import msgpack
 import pygit2
 
+from kart.base_dataset import MetaItemType
 from kart.geometry import Geometry, normalise_gpkg_geom
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
@@ -68,11 +69,17 @@ class TableV1(TableDataset):
             self.gpkg_meta_items()
         )
 
+    def get_meta_item_type(self, meta_item_path):
+        # For V0 / V1, all data is serialised using json.dumps
+        if meta_item_path in KartAdapter_GPKG.GPKG_META_ITEM_NAMES:
+            return MetaItemType.JSON
+        return super().get_meta_item_type(meta_item_path)
+
     @functools.lru_cache(maxsize=1)
     def gpkg_meta_items(self):
-        # For V0 / V1, all data is serialised using json.dumps
+        super_ = super()
         return {
-            name: self.get_json_data_at(self.META_PATH + name, missing_ok=True)
+            name: super_.get_meta_item(name, missing_ok=True)
             for name in KartAdapter_GPKG.GPKG_META_ITEM_NAMES
         }
 

@@ -2,10 +2,8 @@ import functools
 import logging
 import time
 
-from kart import crs_util
 from kart.base_dataset import BaseDataset
-from kart.promisor_utils import LibgitSubcode
-from kart.serialise_util import ensure_text, json_unpack
+from kart.tabular.schema import Schema
 from kart.spatial_filter import SpatialFilter
 from kart.utils import ungenerator
 
@@ -72,95 +70,18 @@ class TableDataset(BaseDataset, TableImportSource):
         return self.path
 
     @property
-    @functools.lru_cache(maxsize=1)
-    def meta_tree(self):
-        """Returns the root of the meta tree, or the empty tree if no meta tree exists."""
-        try:
-            return self.inner_tree / self.META_PATH
-        except KeyError:
-            return self.repo.empty_tree
-
-    @property
     def attachment_tree(self):
         return self.tree
 
     @property
-    @functools.lru_cache(maxsize=1)
     def feature_tree(self):
-        """Returns the root of the feature tree, or the empty tree if no feature tree exists."""
-        try:
-            return (
-                self.inner_tree / self.FEATURE_PATH
-                if self.FEATURE_PATH
-                else self.inner_tree
-            )
-        except KeyError:
-            return self.repo.empty_tree
+        return self.get_subtree(self.FEATURE_PATH)
 
     @property
     def schema(self):
         if not hasattr(self, "_schema"):
             self._schema = super().schema
         return self._schema
-
-    def get_blob_at(self, rel_path, missing_ok=False, tree=None):
-        """
-        Return the blob at the given relative path from within this dataset.
-
-        If missing_ok is true, we return None instead of raising a KeyError for
-        missing data.
-
-        If tree is set, the caller can override the tree in which to look for the data.
-        """
-        leaf = None
-        key_error = None
-        tree = tree or self.inner_tree
-        try:
-            leaf = tree / str(rel_path)
-            if leaf is not None and leaf.type_str == "blob":
-                return leaf
-        except KeyError as e:
-            key_error = e
-        except (AttributeError, TypeError):
-            pass
-
-        # If we got here, that means leaf wasn't a blob, or one of the above
-        # exceptions happened...
-        if missing_ok:
-            return None
-        else:
-            detail = f": {key_error.args[0]}" if key_error is not None else ""
-            k = KeyError(
-                f"No data found at rel-path {rel_path}, type={type(leaf)}{detail}"
-            )
-            if hasattr(key_error, "subcode"):
-                k.subcode = key_error.subcode
-            elif key_error is not None and leaf is None:
-                # TODO - remove this clause once windows also has libgit subcodes.
-                k.subcode = LibgitSubcode.ENOSUCHPATH
-            raise k
-
-    def get_data_at(self, rel_path, as_memoryview=False, missing_ok=False, tree=None):
-        """
-        Return the data at the given relative path from within this dataset.
-
-        Data is usually returned as a bytestring.
-        If as_memoryview=True is given, data is returned as a memoryview instead
-        (this avoids a copy, so can make loops more efficient for many rows)
-
-        If missing_ok is true, we return None instead of raising a KeyError for
-        missing data.
-
-        If tree is set, the caller can override the tree in which to look for the data.
-        """
-        blob = self.get_blob_at(rel_path, missing_ok=missing_ok, tree=tree)
-        if blob is not None:
-            return memoryview(blob) if as_memoryview else blob.data
-        return None
-
-    def get_json_data_at(self, rel_path, missing_ok=False):
-        data = self.get_data_at(rel_path, missing_ok=missing_ok)
-        return json_unpack(data) if data is not None else None
 
     def full_path(self, rel_path):
         """Given a path relative to this dataset, returns its full path from the repo root."""
@@ -198,21 +119,6 @@ class TableDataset(BaseDataset, TableImportSource):
         return ("feature", pk)
 
     @functools.lru_cache()
-    def get_meta_item(self, name, missing_ok=True):
-        """Loads a meta item stored in the meta tree."""
-        rel_path = self.META_PATH + name
-        data = self.get_data_at(rel_path, missing_ok=missing_ok)
-        if data is None:
-            return data
-
-        if rel_path.endswith(".json"):
-            return json_unpack(data)
-        elif rel_path.endswith(".wkt"):
-            return crs_util.normalise_wkt(ensure_text(data))
-        else:
-            return ensure_text(data)
-
-    @functools.lru_cache()
     @ungenerator(dict)
     def meta_items(self, only_standard_items=True):
         if not self.meta_tree:
@@ -238,6 +144,21 @@ class TableDataset(BaseDataset, TableImportSource):
         extra_names = [obj.name for obj in self.meta_tree if obj.type_str == "blob"]
         for name in sorted(extra_names):
             yield name, self.get_meta_item(name)
+
+    def decode_meta_item(self, data, meta_item_path):
+        result = super().decode_meta_item(data, meta_item_path)
+        if meta_item_path == "schema.json":
+            # This normalises the schema by dropping optional fields that are unset.
+            result = Schema.normalise_column_dicts(result)
+        return result
+
+    def encode_meta_item(self, meta_item, meta_item_path):
+        if meta_item_path == "schema.json":
+            # Normalise and serialise schema:
+            if not isinstance(meta_item, Schema):
+                meta_item = Schema.from_column_dicts(meta_item)
+            return meta_item.dumps()
+        return super().encode_meta_item(meta_item, meta_item_path)
 
     @property
     @functools.lru_cache(maxsize=1)
