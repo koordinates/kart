@@ -1,9 +1,28 @@
+from enum import Enum, auto
+import functools
 import logging
 import sys
 
 import click
 
+from kart import crs_util
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION
+from kart.serialise_util import ensure_text, ensure_bytes, json_pack, json_unpack
+
+
+class MetaItemType(Enum):
+    BYTES = auto()
+    JSON = auto()
+    TEXT = auto()
+    WKT = auto()
+    XML = auto()
+
+    @classmethod
+    def get(cls, name):
+        try:
+            return cls[name]
+        except KeyError:
+            return None
 
 
 class BaseDataset:
@@ -103,3 +122,125 @@ class BaseDataset:
                 "Download the latest Kart to work with this dataset",
                 exit_code=UNSUPPORTED_VERSION,
             )
+
+    @functools.lru_cache()
+    def get_subtree(self, subtree_path):
+        if self.inner_tree is not None:
+            try:
+                return self.inner_tree / subtree_path
+            except KeyError:
+                pass
+        # Returning an empty tree makes it easier for callers to not have to handle None as a special case.
+        return self._empty_tree
+
+    def get_blob_at(self, rel_path, missing_ok=False, from_tree=None):
+        """
+        Return the blob at the given relative path from within this dataset.
+        If missing_ok is true, we return None instead of raising a KeyError for missing data.
+        The caller can choose a subtree to look for the data inside, the default is to look in self.inner_tree
+        """
+        leaf = None
+        caught_error = None
+        from_tree = from_tree or self.inner_tree
+        try:
+            leaf = from_tree / str(rel_path)
+            if leaf is not None and leaf.type_str == "blob":
+                return leaf
+        except (AttributeError, TypeError, KeyError) as e:
+            caught_error = e
+
+        # If we got here, that means leaf wasn't a blob, or one of the above
+        # exceptions happened...
+        if missing_ok:
+            return None
+        else:
+            raise self._new_key_error_from_caught_error(rel_path, leaf, caught_error)
+
+    def _new_key_error_from_caught_error(self, rel_path, leaf, caught_error):
+        if caught_error and caught_error.args:
+            detail = f": {caught_error.args[0]}"
+        result = KeyError(
+            f"No data found at rel-path {rel_path}, type={type(leaf)}{detail}"
+        )
+        if hasattr(caught_error, "code"):
+            result.code = caught_error.code
+        if hasattr(caught_error, "subcode"):
+            result.subcode = caught_error.subcode
+        return result
+
+    def get_data_at(
+        self, rel_path, as_memoryview=False, missing_ok=False, from_tree=None
+    ):
+        """
+        Return the data at the given relative path from within this dataset.
+
+        Data is usually returned as a bytestring.
+        If as_memoryview=True is given, data is returned as a memoryview instead -
+        (this avoids a copy, so can make loops more efficient for many rows)
+
+        If missing_ok is true, we return None instead of raising a KeyError for missing data.
+
+        The caller can choose a subtree to look for the data inside, the default is to look in self.inner_tree
+        """
+        blob = self.get_blob_at(rel_path, missing_ok=missing_ok, from_tree=from_tree)
+        if blob is not None:
+            return memoryview(blob) if as_memoryview else blob.data
+        return None
+
+    @property
+    def meta_tree(self):
+        return self.get_subtree(self.META_PATH)
+
+    def get_meta_item_type(self, meta_item_path):
+        result = self.get_meta_item_type_from_suffix(meta_item_path)
+        if result is None:
+            result = self.get_meta_item_type_without_suffix(meta_item_path)
+        return result
+
+    def get_meta_item_type_from_suffix(self, meta_item_path):
+        parts = meta_item_path.rsplit(".", maxsplit=1)
+        if len(parts) == 2:
+            return MetaItemType.get(parts[1].upper())
+        return None
+
+    def get_meta_item_type_without_suffix(self, meta_item_path):
+        return MetaItemType.TEXT
+
+    @functools.lru_cache()
+    def get_meta_item(self, meta_item_path, missing_ok=True):
+        """
+        Returns the meta-item at the given path (relative to self.meta_tree).
+        Meta-items are "decoded" by decode_meta_item before being returned - for instance, this deserialises
+        JSON objects using json.loads(). All user-visible meta-items should be JSON dumpable once deserialised, whether
+        or not they are stored as JSON. Meta-items that are for internal use only can use binary fornats.
+        """
+        data = self.get_data_at(
+            meta_item_path, missing_ok=missing_ok, from_tree=self.meta_tree
+        )
+        if data is None:
+            return data
+        return self.decode_meta_item(data, meta_item_path)
+
+    def decode_meta_item(self, data, meta_item_path):
+        meta_item_type = self.get_meta_item_type(meta_item_path)
+        if meta_item_type is MetaItemType.BYTES:
+            return data
+        elif meta_item_type in (MetaItemType.TEXT, MetaItemType.XML):
+            return ensure_text(data)
+        elif meta_item_type is MetaItemType.JSON:
+            return json_unpack(data)
+        elif meta_item_type is MetaItemType.WKT:
+            return crs_util.normalise_wkt(ensure_text(data))
+        else:
+            raise RuntimeError(f"Unexpected meta_item_type: {meta_item_type}")
+
+    def encode_meta_item(self, meta_item, meta_item_path):
+        if meta_item is None:
+            return None
+        meta_item_type = self.get_meta_item_type(meta_item_path)
+        if meta_item_type is MetaItemType.JSON:
+            return json_pack(meta_item)
+        elif meta_item_type == MetaItemType.WKT:
+            return ensure_bytes(crs_util.normalise_wkt(meta_item))
+        else:
+            return ensure_bytes(meta_item)

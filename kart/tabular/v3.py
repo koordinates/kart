@@ -15,7 +15,6 @@ from kart.serialise_util import (
     ensure_bytes,
     ensure_text,
     json_pack,
-    json_unpack,
     msg_pack,
     msg_unpack,
 )
@@ -81,31 +80,14 @@ class TableV3(RichTableDataset):
     METADATA_XML = "metadata.xml"
 
     @functools.lru_cache()
-    def get_meta_item(self, name, missing_ok=True):
-        if name in ATTACHMENT_META_ITEMS:
-            rel_path = name
-            meta_item_tree = self.attachment_tree
-        else:
-            rel_path = self.META_PATH + name
-            meta_item_tree = self.inner_tree
-
-        data = self.get_data_at(rel_path, missing_ok=missing_ok, tree=meta_item_tree)
-        if data is None:
-            return data
-
-        if rel_path.startswith(self.LEGEND_PATH):
-            return data
-
-        if rel_path.endswith("schema.json"):
-            # Unfortunately, some schemas might be stored slightly differently to others -
-            # - eg with or without null attributes. This normalises them.
-            return Schema.normalise_column_dicts(json_unpack(data))
-        if rel_path.endswith(".json"):
-            return json_unpack(data)
-        elif rel_path.endswith(".wkt"):
-            return crs_util.normalise_wkt(ensure_text(data))
-        else:
-            return ensure_text(data)
+    def get_meta_item(self, meta_item_path, missing_ok=True):
+        if meta_item_path in ATTACHMENT_META_ITEMS and self.tree is not None:
+            return ensure_text(
+                self.get_data_at(
+                    meta_item_path, missing_ok=missing_ok, from_tree=self.tree
+                )
+            )
+        return super().get_meta_item(meta_item_path, missing_ok=missing_ok)
 
     @ungenerator(dict)
     def crs_definitions(self):

@@ -1,5 +1,3 @@
-import functools
-
 from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset
 from kart.lfs_util import get_hash_from_pointer_file, get_local_path_from_lfs_hash
@@ -15,20 +13,9 @@ class PointCloudV1(BaseDataset):
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
     TILES_PATH = "tiles/"
 
-    def get_meta_item(self, name, missing_ok=True):
-        # TODO - move a common implementation of get_meta_item into BaseDataset
-        return None
-
     @property
-    @functools.lru_cache(maxsize=1)
     def tiles_tree(self):
-        """Returns the root of the tiles tree, or the empty tree if no tiles tree exists."""
-        if self.inner_tree:
-            try:
-                return self.inner_tree / self.TILES_PATH
-            except KeyError:
-                pass
-        return self.repo.empty_tree
+        return self.get_subtree(self.TILES_PATH)
 
     def tile_pointer_blobs(self):
         """Returns a generator that yields every tile pointer blob in turn."""
