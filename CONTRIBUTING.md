@@ -31,7 +31,7 @@ $ git clone https://github.com/koordinates/kart.git
 $ cd kart
 ```
 
-[Build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.3
+[Build and install libgit2](https://libgit2.org/docs/guides/build-and-link/#basic-build) v1.4.2
 from the [Koordinates `kx-latest` branch](https://github.com/koordinates/libgit2/tree/kx-latest):
 
 ```console
