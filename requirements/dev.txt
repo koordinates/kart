@@ -81,15 +81,15 @@ pyparsing==3.0.7
     #   -c requirements/docs.txt
     #   -c requirements/test.txt
     #   packaging
-pytest-forked==1.4.0
-    # via pytest-xdist
-pytest-xdist==2.5.0
-    # via -r requirements/dev.in
-pytest==7.1.0
+pytest==7.1.1
     # via
     #   -c requirements/test.txt
     #   pytest-forked
     #   pytest-xdist
+pytest-forked==1.4.0
+    # via pytest-xdist
+pytest-xdist==2.5.0
+    # via -r requirements/dev.in
 toml==0.10.2
     # via ipdb
 tomli==2.0.1
