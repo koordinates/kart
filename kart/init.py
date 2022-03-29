@@ -503,3 +503,9 @@ def init(
         click.echo(
             f"Created an empty repository at {repo_path} — import some data with `kart import`"
         )
+
+    # Experimental point-cloud datasets:
+    if os.environ.get("X_KART_POINT_CLOUDS"):
+        lfs_override = os.environ.get("X_KART_SET_LFS_FOR_NEW_REPOS")
+        if lfs_override:
+            repo.config["lfs.url"] = lfs_override

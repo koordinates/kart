@@ -178,6 +178,10 @@ def clone(
 
     # Experimental point-cloud datasets:
     if os.environ.get("X_KART_POINT_CLOUDS"):
+        lfs_override = os.environ.get("X_KART_SET_LFS_FOR_NEW_REPOS")
+        if lfs_override:
+            repo.config["lfs.url"] = lfs_override
+
         repo.invoke_git("lfs", "fetch")
         from kart.point_cloud.checkout import reset_wc_if_needed
 
