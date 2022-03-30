@@ -396,15 +396,14 @@ class Datasets:
         return DATASET_DIRNAME_PATTERN.fullmatch(dirname)
 
     def get_dataset_class_for_dirname(self, dirname):
-
         if dirname in (".table-dataset", ".sno-dataset"):
             return dataset_class_for_version(self.repo.table_dataset_version)
-        if dirname == ".point-cloud-dataset.v1":
+        elif dirname == ".point-cloud-dataset.v1":
             from kart.point_cloud.v1 import PointCloudV1
 
             return PointCloudV1
-
-        return UnsupportedDataset
+        else:
+            return UnsupportedDataset
 
     def get(self, ds_path):
         """Get a specific dataset by path, or return None."""

@@ -1,4 +1,5 @@
 from enum import Enum, auto
+import binascii
 import functools
 import logging
 import re
@@ -20,6 +21,7 @@ class MetaItemFileType(Enum):
     TEXT = auto()
     WKT = auto()
     XML = auto()
+    UNKNOWN = auto()
 
     @classmethod
     def get_from_suffix(cls, meta_item_path):
@@ -34,21 +36,26 @@ class MetaItemFileType(Enum):
     def decode_from_bytes(self, data):
         if data is None:
             return None
-        if self is self.BYTES:
+        if self == self.BYTES:
             return data
         elif self in (self.TEXT, self.XML):
             return ensure_text(data)
-        elif self is self.JSON:
+        elif self == self.JSON:
             return json_unpack(data)
-        elif self is self.WKT:
+        elif self == self.WKT:
             return crs_util.normalise_wkt(ensure_text(data))
+        else:
+            try:
+                return ensure_text(data)
+            except UnicodeDecodeError:
+                return binascii.hexlify(data).decode()
 
     def encode_to_bytes(self, meta_item):
         if meta_item is None:
             return meta_item
-        if self is self.JSON:
+        if self == self.JSON:
             return json_pack(meta_item)
-        elif self is self.WKT:
+        elif self == self.WKT:
             return ensure_bytes(crs_util.normalise_wkt(meta_item))
         return ensure_bytes(meta_item)
 
@@ -59,15 +66,15 @@ class MetaItemFileType(Enum):
         else:
             return (
                 MetaItemFileType.get_from_suffix(meta_item_path)
-                or MetaItemFileType.TEXT
+                or MetaItemFileType.UNKNOWN
             )
 
 
 @functools.total_ordering
-class MetaItemPermission(Enum):
+class MetaItemVisibility(Enum):
     """
-    Different permission-like properties a meta-item within a dataset may have.
-    This is not a security model, as the user can edit any meta-item they want if they try hard enough.
+    Different meta-items have different levels of user-visibility.
+    This is not a security model, as the user can view or edit any meta-item they want if they try hard enough.
     """
 
     # Some extra data we don't recognise is in the meta-item area. User is shown it and can edit it:
@@ -93,10 +100,10 @@ class MetaItemDefinition:
     """Used for storing meta-information about meta-items."""
 
     def __init__(
-        self, path_or_pattern, file_type=None, perm=MetaItemPermission.EDITABLE
+        self, path_or_pattern, file_type=None, visibility=MetaItemVisibility.EDITABLE
     ):
         assert path_or_pattern is not None
-        assert perm is not None
+        assert visibility is not None
 
         if isinstance(path_or_pattern, str):
             self.path = path_or_pattern
@@ -112,7 +119,7 @@ class MetaItemDefinition:
         if file_type is None:
             raise ValueError(f"Unknown file_type for meta-item: {path_or_pattern}")
         self.file_type = file_type
-        self.perm = perm
+        self.visibility = visibility
 
     def __repr__(self):
         return f"MetaItemDefinition({self.path or self.pattern.pattern})"
@@ -129,7 +136,26 @@ class MetaItemDefinition:
         return match.group(match_group) if match else None
 
 
-class BaseDataset:
+class BaseDatasetMetaClass(type):
+    """Metaclass that automatically splits a dataset class's META_ITEMS into PATH_META_ITEMS and PATTERN_META_ITEMS."""
+
+    def __new__(*args):
+        dataset_cls = type.__new__(*args)
+
+        path_meta_items = {}
+        pattern_meta_items = []
+        for definition in dataset_cls.META_ITEMS:
+            if definition.path:
+                path_meta_items[definition.path] = definition
+            else:
+                pattern_meta_items.append(definition)
+
+        dataset_cls.PATH_META_ITEMS = path_meta_items
+        dataset_cls.PATTERN_META_ITEMS = pattern_meta_items
+        return dataset_cls
+
+
+class BaseDataset(metaclass=BaseDatasetMetaClass):
     """
     Common interface for all datasets.
 
@@ -202,8 +228,6 @@ class BaseDataset:
                   If this is also None, then inner_tree is set to the same as tree - this is not the normal structure of
                   a dataset, but is supported for legacy reasons.
         """
-        self.__class__._init_meta_item_definitions()
-
         assert path is not None
         assert repo is not None
         if dirname is None:
@@ -226,18 +250,6 @@ class BaseDataset:
         self._empty_tree = repo.empty_tree
 
         self.ensure_only_supported_capabilities()
-
-    @classmethod
-    def _init_meta_item_definitions(cls):
-        if hasattr(cls, "PATH_META_ITEMS"):
-            return
-        cls.PATH_META_ITEMS = {}
-        cls.PATTERN_META_ITEMS = []
-        for definition in cls.META_ITEMS:
-            if definition.path:
-                cls.PATH_META_ITEMS[definition.path] = definition
-            else:
-                cls.PATTERN_META_ITEMS.append(definition)
 
     def ensure_only_supported_capabilities(self):
         # TODO - loosen this restriction. A dataset with capabilities that we don't support should (at worst) be treated
@@ -356,7 +368,7 @@ class BaseDataset:
         return file_type.decode_from_bytes(data)
 
     @functools.lru_cache()
-    def meta_items(self, min_perm=MetaItemPermission.VISIBLE):
+    def meta_items(self, min_visibility=MetaItemVisibility.VISIBLE):
         """
         Returns a dict of all the meta-items, keyed by meta-item-path.
         Meta-items returned are sorted by the order in which they appear in self.META_ITEMS,
@@ -368,7 +380,7 @@ class BaseDataset:
 
         result = {}
         for definition in self.META_ITEMS:
-            if definition.perm < min_perm:
+            if definition.visibility < min_visibility:
                 continue
             result.update(self.get_meta_items_matching(definition))
 

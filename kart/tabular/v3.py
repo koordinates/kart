@@ -8,7 +8,7 @@ from kart.base_dataset import (
     BaseDataset,
     MetaItemDefinition,
     MetaItemFileType,
-    MetaItemPermission,
+    MetaItemVisibility,
 )
 from kart.core import find_blobs_in_tree
 from kart.exceptions import (
@@ -94,17 +94,17 @@ class TableV3(RichTableDataset):
     # == Hidden meta-items (which don't show in diffs) ==
     # How automatically generated PKs have been assigned so far:
     GENERATED_PKS = MetaItemDefinition(
-        "generated-pks.json", MetaItemFileType.JSON, MetaItemPermission.HIDDEN
+        "generated-pks.json", MetaItemFileType.JSON, MetaItemVisibility.HIDDEN
     )
     # How primary keys are converted to feature paths:
     PATH_STRUCTURE = MetaItemDefinition(
-        "path-structure.json", MetaItemFileType.JSON, MetaItemPermission.INTERNAL_ONLY
+        "path-structure.json", MetaItemFileType.JSON, MetaItemVisibility.INTERNAL_ONLY
     )
     # Legends are used to help decode each feature:
     LEGEND = MetaItemDefinition(
         re.compile(r"legend/(.*)"),
         MetaItemFileType.BYTES,
-        MetaItemPermission.INTERNAL_ONLY,
+        MetaItemVisibility.INTERNAL_ONLY,
     )
 
     META_ITEMS = (
@@ -119,8 +119,8 @@ class TableV3(RichTableDataset):
     )
 
     # This meta-item is generally stored in the "attachment" area, alongside the dataset, rather than inside it.
-    # Storing it in this unusual location adds complexity without actually solving any problems, so newer datasets
-    # don't do this.
+    # Storing it in this unusual location adds complexity without actually solving any problems, so any datasets
+    # designed after table.v3 don't do this.
     ATTACHMENT_META_ITEMS = ("metadata.xml",)
 
     @functools.lru_cache()

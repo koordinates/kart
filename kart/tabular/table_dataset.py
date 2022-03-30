@@ -3,9 +3,7 @@ import logging
 import time
 
 from kart.base_dataset import BaseDataset
-from kart.tabular.schema import Schema
 from kart.spatial_filter import SpatialFilter
-from kart.utils import ungenerator
 
 from .import_source import TableImportSource
 

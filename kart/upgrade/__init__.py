@@ -6,7 +6,6 @@ import click
 import pygit2
 
 from kart import checkout, context
-from kart.base_dataset import MetaItemPermission
 from kart.exceptions import InvalidOperation, NotFound
 from kart.fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
 from kart.repo import KartConfigKeys, KartRepo
