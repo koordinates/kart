@@ -24,15 +24,6 @@ from .output_util import (
     write_with_indent,
 )
 from .pack_util import packfile_object_builder
-from .tabular.meta_items import META_ITEM_NAMES
-
-# Changing these items would generally break the repo;
-# we disallow that.
-READONLY_ITEMS = {
-    "primary_key",
-    "sqlite_table_info",
-    "fields",
-}
 
 
 @add_help_subcommand
@@ -117,9 +108,9 @@ def get_meta_items(ds, keys):
     items = {}
     for key in keys:
         try:
-            # Standard meta items are allowed to be missing - it means they are effectively None.
-            # If the user requests something else, and it doesn't exist, we error.
-            missing_ok = key in META_ITEM_NAMES
+            # If the user requests something we've heard of, but it's not there, we return None.
+            # If the user requests something we've never heard of and it's not there, we raise an error.
+            missing_ok = bool(ds.get_meta_item_definition(key))
             items[key] = ds.get_meta_item(key, missing_ok=missing_ok)
         except KeyError:
             pass

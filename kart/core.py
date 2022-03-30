@@ -12,6 +12,16 @@ def find_blobs_in_tree(tree):
             yield from find_blobs_in_tree(entry)
 
 
+def find_blobs_with_paths_in_tree(tree, path=""):
+    """Recursively yields all possible (path, blob) tuples in the given directory tree."""
+    for entry in tree:
+        entry_path = f"{path}/{entry.name}" if path else entry.name
+        if isinstance(entry, pygit2.Blob):
+            yield entry_path, entry
+        elif isinstance(entry, pygit2.Tree):
+            yield from find_blobs_with_paths_in_tree(entry, path=entry_path)
+
+
 def walk_tree(top, path="", topdown=True):
     """
     Corollary of os.walk() for git Tree objects:

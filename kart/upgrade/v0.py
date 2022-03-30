@@ -1,7 +1,7 @@
 import functools
 import re
 
-from kart.base_dataset import MetaItemType
+from kart.base_dataset import MetaItemDefinition, MetaItemFileType
 from kart.geometry import normalise_gpkg_geom
 from kart.serialise_util import json_unpack
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
@@ -15,6 +15,11 @@ class TableV0(TableDataset):
     VERSION = 0
 
     FEATURE_PATH = "features/"
+
+    META_ITEMS = tuple(
+        MetaItemDefinition(meta_item_path, MetaItemFileType.JSON)
+        for meta_item_path in KartAdapter_GPKG.GPKG_META_ITEM_NAMES
+    )
 
     @classmethod
     def is_dataset_tree(cls, tree):
@@ -61,12 +66,6 @@ class TableV0(TableDataset):
         return KartAdapter_GPKG.all_v2_meta_items_from_gpkg_meta_items(
             self.gpkg_meta_items()
         )
-
-    def get_meta_item_type(self, meta_item_path):
-        # For V0 / V1, all data is serialised using json.dumps
-        if meta_item_path in KartAdapter_GPKG.GPKG_META_ITEM_NAMES:
-            return MetaItemType.JSON
-        return super().get_meta_item_type(meta_item_path)
 
     @functools.lru_cache(maxsize=1)
     def gpkg_meta_items(self):

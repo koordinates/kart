@@ -41,14 +41,14 @@ class UpgradeSourceTableV2(TableV2):
     - upgrades dataset/metadata.json to metadata.xml
     """
 
-    def meta_items(self):
-        # We also want to include hidden items like generated-pks.json, in the odd case where we have it.
-        return super().meta_items(only_standard_items=False)
-
     def get_meta_item(self, name, missing_ok=True):
+        # Remove metadata/dataset.json
         if name == "metadata/dataset.json":
             return None
+
         result = super().get_meta_item(name, missing_ok=missing_ok)
+
+        # Add metadata.xml:
         if result is None and name == "metadata.xml":
             metadata_json = super().get_meta_item("metadata/dataset.json")
             if metadata_json:
