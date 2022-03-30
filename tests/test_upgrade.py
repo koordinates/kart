@@ -26,55 +26,6 @@ POINTS_UPGRADE_RESULT = [
 ]
 
 
-def check_points(cli_runner):
-    r = cli_runner.invoke(["meta", "get", "nz_pa_points_topo_150k", "schema.json"])
-    assert r.exit_code == 0, r.stderr
-    assert r.stdout.splitlines() == [
-        "nz_pa_points_topo_150k",
-        "    schema.json",
-        "        [",
-        "          {",
-        '            "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
-        '            "name": "fid",',
-        '            "dataType": "integer",',
-        '            "primaryKeyIndex": 0,',
-        '            "size": 64',
-        "          },",
-        "          {",
-        '            "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
-        '            "name": "geom",',
-        '            "dataType": "geometry",',
-        '            "geometryType": "POINT",',
-        '            "geometryCRS": "EPSG:4326"',
-        "          },",
-        "          {",
-        '            "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
-        '            "name": "t50_fid",',
-        '            "dataType": "integer",',
-        '            "size": 32',
-        "          },",
-        "          {",
-        '            "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
-        '            "name": "name_ascii",',
-        '            "dataType": "text",',
-        '            "length": 75',
-        "          },",
-        "          {",
-        '            "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
-        '            "name": "macronated",',
-        '            "dataType": "text",',
-        '            "length": 1',
-        "          },",
-        "          {",
-        '            "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
-        '            "name": "name",',
-        '            "dataType": "text",',
-        '            "length": 75',
-        "          }",
-        "        ]",
-    ]
-
-
 @pytest.mark.slow
 @pytest.mark.parametrize(
     "archive,layer",
@@ -144,7 +95,6 @@ def test_upgrade_v1(archive, layer, data_archive_readonly, cli_runner, tmp_path,
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
-            check_points(cli_runner)
             assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
         r = cli_runner.invoke(["status", "--output-format=json"])
@@ -191,7 +141,6 @@ def test_upgrade_v2(
         assert r.exit_code == 0, r.stderr
 
         if layer == H.POINTS.LAYER:
-            check_points(cli_runner)
             assert r.stdout.splitlines() == POINTS_UPGRADE_RESULT
 
         r = cli_runner.invoke(["status", "--output-format=json"])

@@ -9,6 +9,7 @@ import click
 
 from kart import crs_util
 from kart.core import find_blobs_with_paths_in_tree
+from kart.dataset_mixins import DatasetDiffMixin
 from kart.exceptions import InvalidOperation, UNSUPPORTED_VERSION
 from kart.serialise_util import ensure_text, ensure_bytes, json_pack, json_unpack
 
@@ -155,7 +156,7 @@ class BaseDatasetMetaClass(type):
         return dataset_cls
 
 
-class BaseDataset(metaclass=BaseDatasetMetaClass):
+class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
     """
     Common interface for all datasets.
 

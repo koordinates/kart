@@ -332,7 +332,7 @@ def _find_sole_dataset_diff(
     Returns a tuple (dataset_path, dataset_diff) if there is only one dataset which is changed
     in source_commit (when comparing source_commit to its first parent). Otherwise returns None.
     """
-    if not hasattr(source_dataset_class, "diff"):
+    if not hasattr(source_dataset_class, "diff_feature"):
         # Earlier dataset versions are no longer full-featured so we can't diff them anymore,
         # so, we don't do this optimisation.
         return None

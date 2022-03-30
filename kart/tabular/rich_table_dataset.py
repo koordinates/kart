@@ -6,9 +6,9 @@ import pygit2
 from osgeo import osr
 
 from kart import crs_util
-from kart.diff_structs import DatasetDiff, Delta, DeltaDiff
+from kart.diff_structs import Delta, DeltaDiff
 from kart.exceptions import PATCH_DOES_NOT_APPLY, InvalidOperation, NotYetImplemented
-from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter, MetaKeyFilter
+from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.promisor_utils import fetch_promised_blobs, object_is_promised
 from kart.spatial_filter import SpatialFilter
 
@@ -168,36 +168,12 @@ class RichTableDataset(TableDataset):
         Generates a Diff from self -> other.
         If reverse is true, generates a diff from other -> self.
         """
-        ds_diff = DatasetDiff()
-        meta_filter = ds_filter.get("meta", ds_filter.child_type())
-        ds_diff["meta"] = self.diff_meta(other, meta_filter, reverse=reverse)
+        ds_diff = super().diff(other, ds_filter=ds_filter, reverse=reverse)
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
         ds_diff["feature"] = DeltaDiff(
             self.diff_feature(other, feature_filter, reverse=reverse)
         )
         return ds_diff
-
-    def diff_meta(self, other, meta_filter=MetaKeyFilter.MATCH_ALL, reverse=False):
-        """
-        Returns a diff from self -> other, but only for meta items.
-        If reverse is true, generates a diff from other -> self.
-        """
-        if reverse:
-            old, new = other, self
-        else:
-            old, new = self, other
-
-        meta_old = (
-            {k: v for k, v in old.meta_items().items() if k in meta_filter}
-            if old
-            else {}
-        )
-        meta_new = (
-            {k: v for k, v in new.meta_items().items() if k in meta_filter}
-            if new
-            else {}
-        )
-        return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     _INSERT_UPDATE_DELETE = (
         pygit2.GIT_DELTA_ADDED,
