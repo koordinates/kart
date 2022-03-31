@@ -1,9 +1,28 @@
+import logging
 import re
 
 import pygit2
 
+L = logging.getLogger(__name__)
 
 POINTER_PATTERN = re.compile(rb"^oid sha256:([0-9a-fA-F]{64})$", re.MULTILINE)
+
+
+def pointer_file_to_json(pointer_file_bytes):
+    if isinstance(pointer_file_bytes, pygit2.Blob):
+        pointer_file_bytes = pointer_file_bytes.data
+    pointer_file_str = pointer_file_bytes.decode("utf8")
+    result = {}
+    for line in pointer_file_str.splitlines():
+        if not line:
+            continue
+        parts = line.split(" ", maxsplit=1)
+        if len(parts) < 2:
+            L.warn(f"Error parsing pointer file:\n{line}")
+            continue
+        key, value = parts
+        result[key] = value
+    return result
 
 
 def get_hash_from_pointer_file(pointer_file_bytes):

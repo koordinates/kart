@@ -86,6 +86,18 @@ def test_import_single_las(
                 }
             }
 
+            r = cli_runner.invoke(["show", "HEAD", "autzen:tiles:autzen.copc.laz"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[4:] == [
+                "    Importing 1 LAZ tiles as autzen",
+                "",
+                "+++ autzen:tiles:autzen.copc.laz",
+                "+ {",
+                '+   "oid": "sha256:ce1b2d1757b8139b5ce6b60cc8a82cb5ea02333be29a1e152af858c4bdc27d20",',
+                '+   "size": "3585"',
+                "+ }",
+            ]
+
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
             assert r.exit_code == 0, r.stderr
             repo.config[f"lfs.{DUMMY_REPO}/info/lfs.locksverify"] = False
@@ -101,6 +113,7 @@ def test_import_single_las(
             assert (repo_path / "autzen" / "tiles" / "autzen.copc.laz").is_file()
 
 
+@pytest.mark.slow
 def test_import_several_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):

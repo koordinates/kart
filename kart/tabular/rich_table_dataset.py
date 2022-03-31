@@ -178,14 +178,6 @@ class RichTableDataset(TableDataset):
     def diff_to_wc(self, repo, ds_filter=DatasetKeyFilter.MATCH_ALL):
         return repo.working_copy.diff_db_to_tree(self, ds_filter)
 
-    _INSERT_UPDATE_DELETE = (
-        pygit2.GIT_DELTA_ADDED,
-        pygit2.GIT_DELTA_MODIFIED,
-        pygit2.GIT_DELTA_DELETED,
-    )
-    _INSERT_UPDATE = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED)
-    _UPDATE_DELETE = (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_DELETED)
-
     def diff_feature(
         self, other, feature_filter=FeatureKeyFilter.MATCH_ALL, reverse=False
     ):
@@ -193,95 +185,14 @@ class RichTableDataset(TableDataset):
         Yields feature deltas from self -> other, but only for features that match the feature_filter.
         If reverse is true, yields feature deltas from other -> self.
         """
-        params = {"flags": pygit2.GIT_DIFF_SKIP_BINARY_CHECK}
-        if reverse:
-            params["swap"] = True
-
-        if other is None:
-            diff_index = self.inner_tree.diff_to_tree(**params)
-            self.L.debug(
-                "diff (%s -> None / %s): %s changes",
-                self.inner_tree.id,
-                "R" if reverse else "F",
-                len(diff_index),
-            )
-        else:
-            diff_index = self.inner_tree.diff_to_tree(other.inner_tree, **params)
-            self.L.debug(
-                "diff (%s -> %s / %s): %s changes",
-                self.inner_tree.id,
-                other.inner_tree.id,
-                "R" if reverse else "F",
-                len(diff_index),
-            )
-        # TODO - call diff_index.find_similar() to detect renames.
-
-        if reverse:
-            old, new = other, self
-        else:
-            old, new = self, other
-
-        for d in diff_index.deltas:
-            if d.old_file and not d.old_file.path.startswith(self.FEATURE_PATH):
-                continue
-            elif d.new_file and not d.new_file.path.startswith(self.FEATURE_PATH):
-                continue
-
-            self.L.debug(
-                "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
-            )
-
-            if d.status not in self._INSERT_UPDATE_DELETE:
-                # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE, UNTRACKED
-                raise NotImplementedError(f"Delta status: {d.status_char()}")
-
-            if d.status in self._UPDATE_DELETE:
-                old_path = d.old_file.path
-                old_pk = old.decode_path_to_1pk(old_path)
-            else:
-                old_pk = None
-
-            if d.status in self._INSERT_UPDATE:
-                new_path = d.new_file.path
-                new_pk = new.decode_path_to_1pk(d.new_file.path)
-            else:
-                new_pk = None
-
-            if str(old_pk) not in feature_filter and str(new_pk) not in feature_filter:
-                continue
-
-            if d.status == pygit2.GIT_DELTA_ADDED:
-                self.L.debug("diff(): insert %s (%s)", new_path, new_pk)
-            elif d.status == pygit2.GIT_DELTA_MODIFIED:
-                self.L.debug(
-                    "diff(): update %s %s -> %s %s",
-                    old_path,
-                    old_pk,
-                    new_path,
-                    new_pk,
-                )
-            elif d.status == pygit2.GIT_DELTA_DELETED:
-                self.L.debug("diff(): delete %s %s", old_path, old_pk)
-
-            if d.status in self._UPDATE_DELETE:
-                old_feature_blob = old.get_blob_at(old_path)
-                old_feature_promise = functools.partial(
-                    old.get_feature_from_blob, old_feature_blob
-                )
-                old_half_delta = old_pk, old_feature_promise
-            else:
-                old_half_delta = None
-
-            if d.status in self._INSERT_UPDATE:
-                new_feature_blob = new.get_blob_at(new_path)
-                new_feature_promise = functools.partial(
-                    new.get_feature_from_blob, new_feature_blob
-                )
-                new_half_delta = new_pk, new_feature_promise
-            else:
-                new_half_delta = None
-
-            yield Delta(old_half_delta, new_half_delta)
+        yield from self.diff_subtree(
+            other,
+            "feature",
+            key_filter=feature_filter,
+            key_decoder_method="decode_path_to_1pk",
+            value_decoder_method="get_feature_from_blob",
+            reverse=reverse,
+        )
 
     def apply_diff(
         self, dataset_diff, object_builder, *, resolve_missing_values_from_ds=None
