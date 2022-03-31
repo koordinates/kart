@@ -77,9 +77,11 @@ class BaseDiffWriter:
     ):
         self.repo = repo
         self.commit_spec = commit_spec
-        self.base_rs, self.target_rs, self.working_copy = self.parse_diff_commit_spec(
-            repo, commit_spec
-        )
+        (
+            self.base_rs,
+            self.target_rs,
+            self.include_wc_diff,
+        ) = self.parse_diff_commit_spec(repo, commit_spec)
 
         self.user_key_filters = user_key_filters
         self.repo_key_filter = RepoKeyFilter.build_from_user_patterns(user_key_filters)
@@ -94,7 +96,7 @@ class BaseDiffWriter:
         if (
             not self.spatial_filter.match_all
             and self.base_rs == self.target_rs
-            and self.working_copy is not None
+            and self.include_wc_diff
         ):
             # When generating a WC diff with a spatial filter active, we need to keep track of PK conflicts:
             self.record_spatial_filter_stats = True
@@ -146,7 +148,7 @@ class BaseDiffWriter:
                 #  \ /     A..C  is B<>C
                 #   B      (git log semantics)
                 base_rs = cls._get_common_ancestor(repo, base_rs, target_rs)
-            working_copy = None
+            include_wc_diff = False
         else:
             # When one commit is specified, it is base, and we diff base<>working_copy.
             # When no commits are specified, base is HEAD, and we do the same.
@@ -158,7 +160,8 @@ class BaseDiffWriter:
             if not working_copy:
                 raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
             working_copy.assert_db_tree_match(target_rs.tree)
-        return base_rs, target_rs, working_copy
+            include_wc_diff = True
+        return base_rs, target_rs, include_wc_diff
 
     @classmethod
     def _get_common_ancestor(cls, repo, rs1, rs2):
@@ -242,7 +245,10 @@ class BaseDiffWriter:
         Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
         """
         return diff_util.get_repo_diff(
-            self.base_rs, self.target_rs, self.working_copy, self.repo_key_filter
+            self.base_rs,
+            self.target_rs,
+            self.include_wc_diff,
+            self.repo_key_filter,
         )
 
     def get_dataset_diff(self, ds_path):
@@ -262,7 +268,7 @@ class BaseDiffWriter:
             ds_path,
             self.base_rs.datasets(),
             self.target_rs.datasets(),
-            self.working_copy,
+            self.include_wc_diff,
             self.repo_key_filter[ds_path],
         )
 

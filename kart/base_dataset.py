@@ -153,6 +153,9 @@ class BaseDatasetMetaClass(type):
 
         dataset_cls.PATH_META_ITEMS = path_meta_items
         dataset_cls.PATTERN_META_ITEMS = pattern_meta_items
+
+        if dataset_cls.DATASET_DIRNAME:
+            dataset_cls.DATASET_DIRNAME_PATH = dataset_cls.DATASET_DIRNAME + "/"
         return dataset_cls
 
 
@@ -408,3 +411,42 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
             definition = self.get_meta_item_definition(meta_item_path)
             result.setdefault(definition, []).append(meta_item_path)
         return result
+
+    def ensure_full_path(self, path):
+        """Given a path relative to this dataset, returns its full path from the repo root."""
+        if path.startswith(self.inner_path):
+            # Already a full-path. Return as-is.
+            return path
+        elif self.DATASET_DIRNAME and path.startswith(self.DATASET_DIRNAME_PATH):
+            # A path relative to the outer tree (prefer to use paths relative to the inner tree).
+            return f"{self.path}/{path}"
+        else:
+            # A path relative to the inner tree.
+            return f"{self.inner_path}/{path}"
+
+    def ensure_rel_path(self, path):
+        """Given a full path to something in this dataset, returns its path relative to the dataset inner-path."""
+        if path.startswith(self.inner_path):
+            # A full-path. Strip off the inner-path prefix.
+            return path[len(self.inner_path) + 1 :]
+        elif self.DATASET_DIRNAME and path.startswith(self.DATASET_DIRNAME_PATH):
+            # A path relative to the outer tree. Strip off the dataset-dirname prefix.
+            return path[len(self.DATASET_DIRNAME_PATH) :]
+        else:
+            # Already a rel-path. Return as is.
+            return path
+
+    def decode_path(self, path):
+        """
+        Given a path to something inside this dataset eg "meta/title" or "meta/crs/EPSG:4326.wkt"
+        Returns a 2-tuple eg ("meta", "title"), or ("meta", "crs/EPSG:4326.wkt")
+        Subclasses can override to do more complex decoding when the name of an item
+        is not the same as the path to it.
+        """
+        rel_path = self.ensure_rel_path(path)
+        parts = rel_path.split("/", maxsplit=1)
+        if len(parts) == 2:
+            return tuple(parts)
+        else:
+            # It generally shouldn't happen that we have files in the top-level.
+            return ("", rel_path)

@@ -175,6 +175,9 @@ class RichTableDataset(TableDataset):
         )
         return ds_diff
 
+    def diff_to_wc(self, repo, ds_filter=DatasetKeyFilter.MATCH_ALL):
+        return repo.working_copy.diff_db_to_tree(self, ds_filter)
+
     _INSERT_UPDATE_DELETE = (
         pygit2.GIT_DELTA_ADDED,
         pygit2.GIT_DELTA_MODIFIED,
