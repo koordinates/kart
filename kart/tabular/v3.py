@@ -157,7 +157,10 @@ class TableV3(RichTableDataset):
         to write this legend. This is almost the inverse of get_legend, except
         TableV3 doesn't write the data.
         """
-        return self.full_path(self.LEGEND_PATH + legend.hexhash()), legend.dumps()
+        return (
+            self.ensure_full_path(self.LEGEND_PATH + legend.hexhash()),
+            legend.dumps(),
+        )
 
     def encode_schema(self, schema):
         """
@@ -166,7 +169,7 @@ class TableV3(RichTableDataset):
         except TableV3 doesn't write the data. (Note that the schema's legend
         should also be stored if any features are written with this schema.)
         """
-        return self.full_path(self.SCHEMA_PATH), schema.dumps()
+        return self.ensure_full_path(self.SCHEMA_PATH), schema.dumps()
 
     def get_raw_feature_dict(self, pk_values=None, *, path=None, data=None):
         """
@@ -277,7 +280,7 @@ class TableV3(RichTableDataset):
         """
         encoder = self.feature_path_encoder
         rel_path = f"{self.FEATURE_PATH}{encoder.encode_pks_to_path(pk_values)}"
-        return rel_path if relative else self.full_path(rel_path)
+        return rel_path if relative else self.ensure_full_path(rel_path)
 
     def encode_1pk_to_path(self, pk_value, relative=False, *, schema=None):
         """Given a feature's only pk value, returns the path the feature should be written to."""
@@ -313,7 +316,7 @@ class TableV3(RichTableDataset):
             else:
                 if not rel_path.startswith(self.META_PATH):
                     rel_path = self.META_PATH + rel_path
-                full_path = self.full_path(rel_path)
+                full_path = self.ensure_full_path(rel_path)
 
             yield full_path, content
 
@@ -327,7 +330,7 @@ class TableV3(RichTableDataset):
         legend_tree = self.meta_tree / "legend"
         for blob in legend_tree:
             yield (
-                self.full_path(self.LEGEND_PATH + blob.name),
+                self.ensure_full_path(self.LEGEND_PATH + blob.name),
                 blob.data,
             )
 
