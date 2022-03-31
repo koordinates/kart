@@ -24,17 +24,15 @@ def feature_count_diff(
     repo = ctx.obj.repo
     from .base_diff_writer import BaseDiffWriter
 
-    (
-        base_rs,
-        target_rs,
-        include_wc_diff,
-    ) = BaseDiffWriter.parse_diff_commit_spec(repo, commit_spec)
+    base_rs, target_rs, working_copy = BaseDiffWriter.parse_diff_commit_spec(
+        repo, commit_spec
+    )
 
     dataset_change_counts = diff_estimation.estimate_diff_feature_counts(
         repo,
         base_rs.tree,
         target_rs.tree,
-        include_wc_diff=include_wc_diff,
+        working_copy=working_copy,
         accuracy=accuracy,
     )
 

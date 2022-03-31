@@ -78,22 +78,40 @@ class TableDataset(BaseDataset, TableImportSource):
             self._schema = super().schema
         return self._schema
 
+    def full_path(self, rel_path):
+        """Given a path relative to this dataset, returns its full path from the repo root."""
+        return f"{self.inner_path}/{rel_path}"
+
     def full_attachment_path(self, rel_path):
         """Given the path of an attachment relative to this dataset's attachment path, returns its full path from the repo root."""
         return f"{self.path}/{rel_path}"
 
-    def decode_path(self, path):
+    def rel_path(self, full_path):
+        """Given a full path to something in this dataset, returns its path relative to the dataset."""
+        if not full_path.startswith(f"{self.inner_path}/"):
+            raise ValueError(f"{full_path} is not a descendant of {self.inner_path}")
+        return full_path[len(self.inner_path) + 1 :]
+
+    def ensure_rel_path(self, path):
+        """Given either a relative path or a full path, return the equivalent relative path."""
+        if path.startswith(self.inner_path):
+            return self.rel_path(path)
+        return path
+
+    def decode_path(self, rel_path):
         """
-        Given a relative path to something inside this dataset eg "feature/49/3e/Bg==""
+        Given a relative path to something inside this dataset
+        eg "[DATASET_DIRNAME]/feature/49/3e/Bg==", or simply "feature/49/3e/Bg==""
         returns a tuple in either of the following forms:
         1. ("feature", primary_key)
-        2. ("meta", meta_item_path)
+        2. ("meta", metadata_file_path)
         """
-        rel_path = self.ensure_rel_path(path)
-        if rel_path.startswith("feature/"):
-            pk = self.decode_path_to_1pk(rel_path)
-            return ("feature", pk)
-        return super().decode_path(rel_path)
+        if self.DATASET_DIRNAME and rel_path.startswith(f"{self.DATASET_DIRNAME}/"):
+            rel_path = rel_path[len(self.DATASET_DIRNAME) + 1 :]
+        if rel_path.startswith("meta/"):
+            return ("meta", rel_path[len("meta/") :])
+        pk = self.decode_path_to_1pk(rel_path)
+        return ("feature", pk)
 
     @property
     @functools.lru_cache(maxsize=1)

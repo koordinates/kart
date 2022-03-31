@@ -490,7 +490,7 @@ class BaseWorkingCopy:
 
     def _is_dataset_supported(self, dataset):
         """
-        Returns False if the given table-dataset cannot be created in this working copy.
+        Returns False if the given dataset cannot be created in this working copy.
         Generally returns True since we do our best to create all datasets, even if not 100% accurately.
         """
         return True
@@ -502,7 +502,6 @@ class BaseWorkingCopy:
         Generates a diff between a working copy DB and the underlying repository tree,
         for a single dataset only.
         """
-        assert isinstance(dataset, TableDataset)
         if not self._is_dataset_supported(dataset):
             return DatasetDiff()
 

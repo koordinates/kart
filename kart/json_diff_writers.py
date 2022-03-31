@@ -253,7 +253,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                 self.repo,
                 self.base_rs.tree,
                 self.target_rs.tree,
-                include_wc_diff=self.include_wc_diff,
+                working_copy=self.working_copy,
                 accuracy=self._diff_estimate_accuracy,
             )
         except ThreadTerminated:
