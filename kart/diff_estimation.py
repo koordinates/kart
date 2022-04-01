@@ -73,7 +73,7 @@ def estimate_diff_feature_counts(
     base,
     target,
     *,
-    working_copy=None,
+    include_wc_diff=False,
     accuracy,
 ):
     """
@@ -84,11 +84,12 @@ def estimate_diff_feature_counts(
     """
     base = base.peel(pygit2.Tree)
     target = target.peel(pygit2.Tree)
-    if base == target and not working_copy:
+    if base == target and not include_wc_diff:
         return {}
 
     assert accuracy in ACCURACY_CHOICES
 
+    working_copy = repo.working_copy if include_wc_diff else None
     if not working_copy:
         annotation_type = f"feature-change-counts-{accuracy}"
         annotation = repo.diff_annotations.get(
