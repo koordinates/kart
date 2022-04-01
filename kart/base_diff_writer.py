@@ -244,11 +244,10 @@ class BaseDiffWriter:
         """
         Generates a RepoDiff containing an entry for every dataset in the repo (that matches self.repo_key_filter).
         """
-        working_copy = self.repo.working_copy if self.include_wc_diff else None
         return diff_util.get_repo_diff(
             self.base_rs,
             self.target_rs,
-            working_copy,
+            self.include_wc_diff,
             self.repo_key_filter,
         )
 
@@ -264,12 +263,11 @@ class BaseDiffWriter:
         which will return a generator that filters features as it loads and outputs them,
         which can be used to output streaming diffs.
         """
-        working_copy = self.repo.working_copy if self.include_wc_diff else None
         return diff_util.get_dataset_diff(
             ds_path,
             self.base_rs.datasets(),
             self.target_rs.datasets(),
-            working_copy,
+            self.include_wc_diff,
             self.repo_key_filter[ds_path],
         )
 

@@ -36,3 +36,13 @@ class DatasetDiffMixin:
             else {}
         )
         return DeltaDiff.diff_dicts(meta_old, meta_new)
+
+    def diff_to_wc(self, repo, ds_filter=DatasetKeyFilter.MATCH_ALL):
+        """
+        Generates a diff from self to the working-copy.
+        It may be the case that only the dataset-revision used to write the working
+        copy can be used to do this (if we are tracking changes from that revision).
+        See diff_util.get_dataset_diff() to generate diffs more generally.
+        """
+        # Subclasses to override.
+        pass

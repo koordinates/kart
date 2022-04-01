@@ -89,8 +89,9 @@ def estimate_diff_feature_counts(
 
     assert accuracy in ACCURACY_CHOICES
 
-    working_copy = repo.working_copy if include_wc_diff else None
-    if not working_copy:
+    if include_wc_diff:
+        working_copy = repo.working_copy
+    else:
         annotation_type = f"feature-change-counts-{accuracy}"
         annotation = repo.diff_annotations.get(
             base=base,
@@ -120,12 +121,12 @@ def estimate_diff_feature_counts(
         base_feature_tree = base_ds.feature_tree if base_ds else repo.empty_tree
         target_feature_tree = target_ds.feature_tree if target_ds else repo.empty_tree
 
-        if accuracy == "exact" and working_copy:
+        if accuracy == "exact" and include_wc_diff:
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
             from kart.diff_util import get_dataset_diff
 
             ds_diff = get_dataset_diff(
-                dataset_path, base_rs.datasets(), target_rs.datasets(), working_copy
+                dataset_path, base_rs.datasets(), target_rs.datasets(), include_wc_diff
             )
             ds_total = len(ds_diff.get("feature", []))
 
@@ -148,13 +149,13 @@ def estimate_diff_feature_counts(
                 dataset_path,
                 path_encoder,
             )
-            if working_copy and target_ds:
+            if include_wc_diff and target_ds:
                 ds_total += working_copy.tracking_changes_count(target_ds)
 
         if ds_total:
             dataset_change_counts[dataset_path] = ds_total
 
-    if not working_copy:
+    if not include_wc_diff:
         repo.diff_annotations.store(
             base=base,
             target=target,

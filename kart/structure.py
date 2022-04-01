@@ -135,10 +135,10 @@ class RepoStructure:
         self.ref, self.commit, self.tree = RepoStructure.resolve_refish(repo, refish)
 
     def __eq__(self, other):
-        return other and (self.repo.path == other.repo.path) and (self.id == other.id)
+        return other and (self.repo is other.repo) and (self.id == other.id)
 
     def __hash__(self):
-        return hash((self.repo.path, self.id))
+        return hash((id(self.repo), self.id))
 
     def __repr__(self):
         if self.ref == "[EMPTY]":
