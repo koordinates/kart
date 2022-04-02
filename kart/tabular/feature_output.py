@@ -55,11 +55,19 @@ def feature_as_json(row, pk_value, geometry_transform=None):
         yield k, v
 
 
-def feature_as_geojson(row, pk_value, change=None, geometry_transform=None):
+def feature_as_geojson(
+    row,
+    pk_value,
+    ds_path=None,
+    change_type=None,
+    geometry_transform=None,
+):
     """
     Turns a row into a dict representing a GeoJSON feature.
     """
-    change_id = f"{change}::{pk_value}" if change else str(pk_value)
+    change_id = str(pk_value)
+    if ds_path:
+        change_id = f"{ds_path}:feature:{pk_value}:{change_type}"
     f = {
         "type": "Feature",
         "geometry": None,

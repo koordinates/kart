@@ -33,7 +33,7 @@ def _check_html_output(s):
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_points(output_format, data_working_copy, cli_runner):
-    """ diff the working copy against HEAD """
+    """diff the working copy against HEAD"""
     with data_working_copy("points") as (repo_path, wc):
         # empty
         r = cli_runner.invoke(
@@ -94,96 +94,96 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
+                "type": "FeatureCollection",
                 "features": [
                     {
+                        "type": "Feature",
                         "geometry": {
-                            "coordinates": [177.0959629713586, -38.00433803621768],
                             "type": "Point",
+                            "coordinates": [177.0959629713586, -38.00433803621768],
                         },
-                        "id": "U-::1",
                         "properties": {
                             "fid": 1,
+                            "t50_fid": 2426271,
+                            "name_ascii": None,
                             "macronated": "N",
                             "name": None,
-                            "name_ascii": None,
-                            "t50_fid": 2426271,
                         },
-                        "type": "Feature",
+                        "id": "nz_pa_points_topo_150k:feature:1:U-",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
-                            "coordinates": [177.0959629713586, -38.00433803621768],
                             "type": "Point",
+                            "coordinates": [177.0959629713586, -38.00433803621768],
                         },
-                        "id": "U+::9998",
                         "properties": {
                             "fid": 9998,
-                            "macronated": "N",
-                            "name": None,
-                            "name_ascii": None,
                             "t50_fid": 2426271,
-                        },
-                        "type": "Feature",
-                    },
-                    {
-                        "geometry": {
-                            "coordinates": [177.0786628443959, -37.9881848576018],
-                            "type": "Point",
-                        },
-                        "id": "U-::2",
-                        "properties": {
-                            "fid": 2,
+                            "name_ascii": None,
                             "macronated": "N",
                             "name": None,
-                            "name_ascii": None,
-                            "t50_fid": 2426272,
                         },
-                        "type": "Feature",
+                        "id": "nz_pa_points_topo_150k:feature:9998:U+",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
-                            "coordinates": [177.0786628443959, -37.9881848576018],
                             "type": "Point",
+                            "coordinates": [177.0786628443959, -37.9881848576018],
                         },
-                        "id": "U+::2",
                         "properties": {
                             "fid": 2,
+                            "t50_fid": 2426272,
+                            "name_ascii": None,
+                            "macronated": "N",
+                            "name": None,
+                        },
+                        "id": "nz_pa_points_topo_150k:feature:2:U-",
+                    },
+                    {
+                        "type": "Feature",
+                        "geometry": {
+                            "type": "Point",
+                            "coordinates": [177.0786628443959, -37.9881848576018],
+                        },
+                        "properties": {
+                            "fid": 2,
+                            "t50_fid": None,
+                            "name_ascii": None,
                             "macronated": "N",
                             "name": "test",
-                            "name_ascii": None,
-                            "t50_fid": None,
                         },
-                        "type": "Feature",
+                        "id": "nz_pa_points_topo_150k:feature:2:U+",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
-                            "coordinates": [177.07125219628702, -37.97947548462757],
                             "type": "Point",
+                            "coordinates": [177.07125219628702, -37.97947548462757],
                         },
-                        "id": "D::3",
                         "properties": {
                             "fid": 3,
+                            "t50_fid": 2426273,
+                            "name_ascii": "Tauwhare Pa",
                             "macronated": "N",
                             "name": "Tauwhare Pa",
-                            "name_ascii": "Tauwhare Pa",
-                            "t50_fid": 2426273,
                         },
-                        "type": "Feature",
+                        "id": "nz_pa_points_topo_150k:feature:3:D",
                     },
                     {
-                        "geometry": {"coordinates": [0.0, 0.0], "type": "Point"},
-                        "id": "I::9999",
+                        "type": "Feature",
+                        "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
                         "properties": {
                             "fid": 9999,
+                            "t50_fid": 9999999,
+                            "name_ascii": "Te Motu-a-kore",
                             "macronated": "N",
                             "name": "Te Motu-a-kore",
-                            "name_ascii": "Te Motu-a-kore",
-                            "t50_fid": 9999999,
                         },
-                        "type": "Feature",
+                        "id": "nz_pa_points_topo_150k:feature:9999:I",
                     },
                 ],
-                "type": "FeatureCollection",
             }
 
         elif output_format == "json":
@@ -312,7 +312,7 @@ def test_diff_json_lines_with_feature_count_estimate(
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_reprojection(output_format, data_working_copy, cli_runner):
-    """ diff the working copy against HEAD """
+    """diff the working copy against HEAD"""
     with data_working_copy("points") as (repo_path, wc):
         # make some changes
         repo = KartRepo(repo_path)
@@ -387,7 +387,7 @@ def test_show_crs_with_aspatial_dataset(data_archive, cli_runner):
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_polygons(output_format, data_working_copy, cli_runner):
-    """ diff the working copy against HEAD """
+    """diff the working copy against HEAD"""
     with data_working_copy("polygons") as (repo, wc):
         # empty
         r = cli_runner.invoke(
@@ -447,9 +447,12 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
+                "type": "FeatureCollection",
                 "features": [
                     {
+                        "type": "Feature",
                         "geometry": {
+                            "type": "MultiPolygon",
                             "coordinates": [
                                 [
                                     [
@@ -474,19 +477,19 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                                     ]
                                 ]
                             ],
-                            "type": "MultiPolygon",
                         },
-                        "id": "U-::1424927",
                         "properties": {
-                            "adjusted_nodes": 1122,
-                            "date_adjusted": "2011-03-25T07:30:45",
                             "id": 1424927,
+                            "date_adjusted": "2011-03-25T07:30:45",
                             "survey_reference": None,
+                            "adjusted_nodes": 1122,
                         },
-                        "type": "Feature",
+                        "id": "nz_waca_adjustments:feature:1424927:U-",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
+                            "type": "MultiPolygon",
                             "coordinates": [
                                 [
                                     [
@@ -511,19 +514,19 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                                     ]
                                 ]
                             ],
-                            "type": "MultiPolygon",
                         },
-                        "id": "U+::9998",
                         "properties": {
-                            "adjusted_nodes": 1122,
-                            "date_adjusted": "2011-03-25T07:30:45",
                             "id": 9998,
+                            "date_adjusted": "2011-03-25T07:30:45",
                             "survey_reference": None,
+                            "adjusted_nodes": 1122,
                         },
-                        "type": "Feature",
+                        "id": "nz_waca_adjustments:feature:9998:U+",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
+                            "type": "MultiPolygon",
                             "coordinates": [
                                 [
                                     [
@@ -541,19 +544,19 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                                     ]
                                 ]
                             ],
-                            "type": "MultiPolygon",
                         },
-                        "id": "U-::1443053",
                         "properties": {
-                            "adjusted_nodes": 1238,
+                            "id": 1443053,
                             "date_adjusted": "2011-05-10T12:09:10",
-                            "id": 1443053,
                             "survey_reference": None,
+                            "adjusted_nodes": 1238,
                         },
-                        "type": "Feature",
+                        "id": "nz_waca_adjustments:feature:1443053:U-",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
+                            "type": "MultiPolygon",
                             "coordinates": [
                                 [
                                     [
@@ -571,19 +574,19 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                                     ]
                                 ]
                             ],
-                            "type": "MultiPolygon",
                         },
-                        "id": "U+::1443053",
                         "properties": {
-                            "adjusted_nodes": 1238,
-                            "date_adjusted": "2019-01-01T00:00:00",
                             "id": 1443053,
+                            "date_adjusted": "2019-01-01T00:00:00",
                             "survey_reference": "test",
+                            "adjusted_nodes": 1238,
                         },
-                        "type": "Feature",
+                        "id": "nz_waca_adjustments:feature:1443053:U+",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
+                            "type": "MultiPolygon",
                             "coordinates": [
                                 [
                                     [
@@ -614,19 +617,19 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                                     ]
                                 ]
                             ],
-                            "type": "MultiPolygon",
                         },
-                        "id": "D::1452332",
                         "properties": {
-                            "adjusted_nodes": 558,
-                            "date_adjusted": "2011-06-07T15:22:58",
                             "id": 1452332,
+                            "date_adjusted": "2011-06-07T15:22:58",
                             "survey_reference": None,
+                            "adjusted_nodes": 558,
                         },
-                        "type": "Feature",
+                        "id": "nz_waca_adjustments:feature:1452332:D",
                     },
                     {
+                        "type": "Feature",
                         "geometry": {
+                            "type": "MultiPolygon",
                             "coordinates": [
                                 [
                                     [
@@ -638,19 +641,16 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
                                     ]
                                 ]
                             ],
-                            "type": "MultiPolygon",
                         },
-                        "id": "I::9999999",
                         "properties": {
-                            "adjusted_nodes": 123,
-                            "date_adjusted": "2019-07-05T13:04:00",
                             "id": 9999999,
+                            "date_adjusted": "2019-07-05T13:04:00",
                             "survey_reference": "Null Island™ 🗺",
+                            "adjusted_nodes": 123,
                         },
-                        "type": "Feature",
+                        "id": "nz_waca_adjustments:feature:9999999:I",
                     },
                 ],
-                "type": "FeatureCollection",
             }
 
         elif output_format == "json":
@@ -735,7 +735,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
 
 @pytest.mark.parametrize("output_format", DIFF_OUTPUT_FORMATS)
 def test_diff_table(output_format, data_working_copy, cli_runner):
-    """ diff the working copy against HEAD """
+    """diff the working copy against HEAD"""
     with data_working_copy("table") as (repo_path, wc):
         # empty
         r = cli_runner.invoke(
@@ -811,123 +811,123 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
             odata = json.loads(r.stdout)
             assert len(odata["features"]) == 6
             assert odata == {
+                "type": "FeatureCollection",
                 "features": [
                     {
+                        "type": "Feature",
                         "geometry": None,
-                        "id": "U-::1",
                         "properties": {
-                            "AREA": 1784.0634,
-                            "CNTY_FIPS": "077",
-                            "FIPS": "27077",
-                            "NAME": "Lake of the Woods",
                             "OBJECTID": 1,
-                            "POP1990": 4076.0,
-                            "POP2000": 4651.0,
-                            "POP90_SQMI": 2,
-                            "STATE_FIPS": "27",
+                            "NAME": "Lake of the Woods",
                             "STATE_NAME": "Minnesota",
-                            "Shape_Area": 0.5654499337414509,
-                            "Shape_Leng": 4.055459982439919,
-                        },
-                        "type": "Feature",
-                    },
-                    {
-                        "geometry": None,
-                        "id": "U+::9998",
-                        "properties": {
-                            "AREA": 1784.0634,
+                            "STATE_FIPS": "27",
                             "CNTY_FIPS": "077",
                             "FIPS": "27077",
-                            "NAME": "Lake of the Woods",
-                            "OBJECTID": 9998,
+                            "AREA": 1784.0634,
                             "POP1990": 4076.0,
                             "POP2000": 4651.0,
                             "POP90_SQMI": 2,
-                            "STATE_FIPS": "27",
-                            "STATE_NAME": "Minnesota",
-                            "Shape_Area": 0.5654499337414509,
                             "Shape_Leng": 4.055459982439919,
+                            "Shape_Area": 0.5654499337414509,
                         },
-                        "type": "Feature",
+                        "id": "countiestbl:feature:1:U-",
                     },
                     {
+                        "type": "Feature",
                         "geometry": None,
-                        "id": "U-::2",
                         "properties": {
-                            "AREA": 2280.2319,
+                            "OBJECTID": 9998,
+                            "NAME": "Lake of the Woods",
+                            "STATE_NAME": "Minnesota",
+                            "STATE_FIPS": "27",
+                            "CNTY_FIPS": "077",
+                            "FIPS": "27077",
+                            "AREA": 1784.0634,
+                            "POP1990": 4076.0,
+                            "POP2000": 4651.0,
+                            "POP90_SQMI": 2,
+                            "Shape_Leng": 4.055459982439919,
+                            "Shape_Area": 0.5654499337414509,
+                        },
+                        "id": "countiestbl:feature:9998:U+",
+                    },
+                    {
+                        "type": "Feature",
+                        "geometry": None,
+                        "properties": {
+                            "OBJECTID": 2,
+                            "NAME": "Ferry",
+                            "STATE_NAME": "Washington",
+                            "STATE_FIPS": "53",
                             "CNTY_FIPS": "019",
                             "FIPS": "53019",
-                            "NAME": "Ferry",
-                            "OBJECTID": 2,
+                            "AREA": 2280.2319,
                             "POP1990": 6295.0,
                             "POP2000": 7199.0,
                             "POP90_SQMI": 3,
-                            "STATE_FIPS": "53",
-                            "STATE_NAME": "Washington",
-                            "Shape_Area": 0.7180593026451161,
                             "Shape_Leng": 3.786160993863997,
+                            "Shape_Area": 0.7180593026451161,
                         },
-                        "type": "Feature",
+                        "id": "countiestbl:feature:2:U-",
                     },
                     {
+                        "type": "Feature",
                         "geometry": None,
-                        "id": "U+::2",
                         "properties": {
-                            "AREA": 2280.2319,
+                            "OBJECTID": 2,
+                            "NAME": "test",
+                            "STATE_NAME": "Washington",
+                            "STATE_FIPS": "53",
                             "CNTY_FIPS": "019",
                             "FIPS": "53019",
-                            "NAME": "test",
-                            "OBJECTID": 2,
+                            "AREA": 2280.2319,
                             "POP1990": 6295.0,
                             "POP2000": 9867.0,
                             "POP90_SQMI": 3,
-                            "STATE_FIPS": "53",
-                            "STATE_NAME": "Washington",
-                            "Shape_Area": 0.7180593026451161,
                             "Shape_Leng": 3.786160993863997,
+                            "Shape_Area": 0.7180593026451161,
                         },
-                        "type": "Feature",
+                        "id": "countiestbl:feature:2:U+",
                     },
                     {
+                        "type": "Feature",
                         "geometry": None,
-                        "id": "D::3",
                         "properties": {
-                            "AREA": 2529.9794,
+                            "OBJECTID": 3,
+                            "NAME": "Stevens",
+                            "STATE_NAME": "Washington",
+                            "STATE_FIPS": "53",
                             "CNTY_FIPS": "065",
                             "FIPS": "53065",
-                            "NAME": "Stevens",
-                            "OBJECTID": 3,
+                            "AREA": 2529.9794,
                             "POP1990": 30948.0,
                             "POP2000": 40652.0,
                             "POP90_SQMI": 12,
-                            "STATE_FIPS": "53",
-                            "STATE_NAME": "Washington",
-                            "Shape_Area": 0.7954858988987561,
                             "Shape_Leng": 4.876296245235406,
+                            "Shape_Area": 0.7954858988987561,
                         },
-                        "type": "Feature",
+                        "id": "countiestbl:feature:3:D",
                     },
                     {
+                        "type": "Feature",
                         "geometry": None,
-                        "id": "I::9999",
                         "properties": {
-                            "AREA": 1784.0634,
+                            "OBJECTID": 9999,
+                            "NAME": "Lake of the Gruffalo",
+                            "STATE_NAME": "Minnesota",
+                            "STATE_FIPS": "27",
                             "CNTY_FIPS": "077",
                             "FIPS": "27077",
-                            "NAME": "Lake of the Gruffalo",
-                            "OBJECTID": 9999,
+                            "AREA": 1784.0634,
                             "POP1990": 4076.0,
                             "POP2000": 4651.0,
                             "POP90_SQMI": 2,
-                            "STATE_FIPS": "27",
-                            "STATE_NAME": "Minnesota",
-                            "Shape_Area": 0.565449933741451,
                             "Shape_Leng": 4.05545998243992,
+                            "Shape_Area": 0.565449933741451,
                         },
-                        "type": "Feature",
+                        "id": "countiestbl:feature:9999:I",
                     },
                 ],
-                "type": "FeatureCollection",
             }
 
         elif output_format == "json":
@@ -1153,7 +1153,7 @@ def test_diff_rev_rev(head_sha, head1_sha, data_archive_readonly, cli_runner):
 
 
 def test_diff_rev_wc(data_working_copy, cli_runner):
-    """ diff the working copy against commits """
+    """diff the working copy against commits"""
     # ID  R0  ->  R1  ->  WC
     # 1   a       a1      a
     # 2   b       b1      b1
