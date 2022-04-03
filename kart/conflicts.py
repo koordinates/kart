@@ -1,234 +1,8 @@
-import logging
-import sys
 import click
-
+from .conflicts_writer import BaseConflictsWriter
 from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
-from .exceptions import SUCCESS, SUCCESS_WITH_FLAG
-from .key_filters import RepoKeyFilter
-from .merge_util import MergeContext, MergeIndex, ensure_conflicts_ready, rich_conflicts
-from .output_util import dump_json_output
 from .repo import KartRepoState
-
-L = logging.getLogger("kart.conflicts")
-
-
-# Stand in for a conflict if the conflict is going to be summarised anyway -
-# this helps code re-use between summary and full-diff output modes.
-_CONFLICT_PLACEHOLDER = object()
-
-
-def list_conflicts(
-    merge_index,
-    merge_context,
-    output_type="text",
-    conflict_filter=RepoKeyFilter.MATCH_ALL,
-    summarise=0,
-    flat=False,
-    target_crs=None,
-):
-    """
-    Lists all the conflicts in merge_index, categorised into nested dicts.
-    Example:
-    {
-        "dataset_A": {
-            "feature":
-                "5": {"ancestor": "...", "ours": ..., "theirs": ...},
-                "11": {"ancestor": "...", "ours": ..., "theirs": ...},
-            },
-            "meta": {
-                "gpkg_spatial_ref_sys": {"ancestor": ..., "ours": ..., "theirs": ...}}
-            }
-        },
-        "dataset_B": {...}
-    }
-
-    merge_index - MergeIndex object containing the conflicts found.
-    merge_context - MergeContext object containing RepoStructures.
-    output_type - one of 'text', 'json', 'geojson'
-    summarise - 1 means summarise (names only), 2 means *really* summarise (counts only).
-    categorise - if True, adds another layer between feature and ID which is the type of conflict, eg "edit/edit"
-    flat - if True, put all features at the top level, with the entire path as the key eg:
-        {"dataset_A:feature:5:ancestor": ..., "dataset_A:feature:5:ours": ...}
-    """
-    output_dict = {}
-    conflict_output = _CONFLICT_PLACEHOLDER
-
-    if output_type == "geojson":
-        flat = True  # geojson must be flat or it is not valid geojson
-        summarise = 0
-
-    conflicts = rich_conflicts(
-        merge_index.unresolved_conflicts.values(),
-        merge_context,
-    )
-    if not conflict_filter.match_all:
-        conflicts = (c for c in conflicts if c.matches_filter(conflict_filter))
-
-    if not summarise:
-        conflicts = ensure_conflicts_ready(conflicts, merge_context.repo)
-
-    for conflict in conflicts:
-        if not summarise:
-            conflict_output = conflict.output(
-                output_type, include_label=flat, target_crs=target_crs
-            )
-
-        if flat:
-            if isinstance(conflict_output, dict):
-                output_dict.update(conflict_output)
-            else:
-                output_dict[conflict.label] = conflict_output
-        else:
-            set_value_at_dict_path(output_dict, conflict.decoded_path, conflict_output)
-
-    if summarise:
-        output_dict = summarise_conflicts(output_dict, summarise)
-
-    if output_type == "text":
-        return conflicts_json_as_text(output_dict)
-    elif output_type == "geojson":
-        return conflicts_json_as_geojson(output_dict)
-    else:
-        return output_dict
-
-
-def set_value_at_dict_path(root_dict, path, value):
-    """
-    Ensures the given path exists as a nested dict structure in root dict,
-    and then places the given value there. For example:
-    >>> d = {"x": 1}
-    >>> add_value_at_dict_path(d, ("a", "b", "c"), 100)
-    >>> d
-    {"a": {"b": {"c": 100}}, "x": 1}
-    """
-    cur_dict = root_dict
-    for c in path[:-1]:
-        cur_dict.setdefault(c, {})
-        cur_dict = cur_dict[c]
-
-    leaf = path[-1]
-    cur_dict[leaf] = value
-
-
-def summarise_conflicts(cur_dict, summarise):
-    """
-    Recursively traverses the tree of categorised conflicts,
-    looking for a dict where the values are placeholders.
-    For example:
-    {
-        K1: _CONFLICT_PLACEHOLDER,
-        K2: _CONFLICT_PLACEHOLDER,
-    }
-    When found, it will be replaced with one of the following,
-    depending on the summarise-level specified:
-    summarise=1: [K1, K2]
-    summarise=2: 2 (the size of the dict)
-    """
-    first_value = next(iter(cur_dict.values())) if cur_dict else None
-    if first_value == _CONFLICT_PLACEHOLDER:
-        if summarise == 1:
-            return sorted(cur_dict.keys(), key=_path_sort_key)
-        elif summarise >= 2:
-            return len(cur_dict)
-
-    for k, v in cur_dict.items():
-        cur_dict[k] = summarise_conflicts(v, summarise)
-    return cur_dict
-
-
-def _path_sort_key(path):
-    """Sort conflicts in a sensible way."""
-    if isinstance(path, str) and ":" in path:
-        return tuple(_path_part_sort_key(p) for p in path.split(":"))
-    else:
-        return _path_part_sort_key(path)
-
-
-def _path_part_sort_key(path_part):
-    # Treat stringified numbers as numbers
-    if isinstance(path_part, str) and path_part.isdigit():
-        path_part = int(path_part)
-
-    # Put meta before features:
-    if path_part == "meta":
-        return "A", path_part
-    elif path_part == "feature":
-        return "B", path_part
-
-    # Put complicated conflicts last:
-    if isinstance(path_part, str) and "," in path_part:
-        return "Z", path_part
-
-    if isinstance(path_part, int):
-        return "N", "", path_part
-    else:
-        return "N", path_part
-
-
-def conflicts_json_as_text(json_obj):
-    """
-    Converts the JSON output of list_conflicts to a string.
-    The conflicts themselves should already be in the appropriate format -
-    this function deals with the hierarchy that contains them.
-    """
-
-    def style_key_text(key_text, level):
-        indent = "    " * level
-        style = {}
-        if key_text.endswith(":ancestor:"):
-            style["fg"] = "red"
-        elif key_text.endswith(":ours:"):
-            style["fg"] = "green"
-        elif key_text.endswith(":theirs:"):
-            style["fg"] = "cyan"
-        return click.style(indent + key_text, **style)
-
-    def value_to_text(value, path, level):
-        if isinstance(value, str):
-            return f"{value}\n"
-        elif isinstance(value, int):
-            return f"{value} conflicts\n"
-        elif isinstance(value, dict):
-            separator = "\n" if level == 0 else ""
-            return separator.join(
-                item_to_text(k, v, path, level) for k, v in sorted(value.items())
-            )
-        elif isinstance(value, list):
-            indent = "    " * level
-            return "".join(f"{indent}{path}{item}\n" for item in value)
-
-    def item_to_text(key, value, path, level):
-        key_text = f"{path}{key}:"
-
-        styled_key_text = style_key_text(key_text, level)
-        value_text = value_to_text(value, key_text, level + 1)
-
-        if isinstance(value, int):
-            return f"{styled_key_text} {value_text}"
-        else:
-            return f"{styled_key_text}\n{value_text}"
-
-    return value_to_text(json_obj, "", 0)
-
-
-def conflicts_json_as_geojson(json_obj):
-    """Converts the JSON output of list_conflicts to geojson."""
-    features = []
-    meta_item_keys = set()
-    for key, feature in json_obj.items():
-        if type(feature) != dict or feature.get("type") != "Feature":
-            meta_item_keys.add(":".join(key.split(":")[:-1]))
-            continue
-        feature["id"] = key
-        features.append(feature)
-
-    if meta_item_keys:
-        L.warning(
-            f"There are meta-item conflicts that cannot be output as geojson: \n{meta_item_keys}"
-        )
-
-    return {"type": "FeatureCollection", "features": features}
 
 
 @click.command()
@@ -242,6 +16,12 @@ def conflicts_json_as_geojson(json_obj):
     ),
     default="text",
     help="Output format. 'quiet' disables all output and implies --exit-code.",
+)
+@click.option(
+    "--output",
+    "output_path",
+    help="Output to a specific file/directory instead of stdout.",
+    type=click.Path(writable=True, allow_dash=True),
 )
 @click.option(
     "--exit-code",
@@ -280,6 +60,7 @@ def conflicts_json_as_geojson(json_obj):
 def conflicts(
     ctx,
     output_format,
+    output_path,
     exit_code,
     json_style,
     summarise,
@@ -292,33 +73,20 @@ def conflicts(
 
     To list only particular conflicts, supply one or more FILTERS of the form [DATASET[:PRIMARY_KEY]]
     """
-
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.MERGING)
-    merge_index = MergeIndex.read_from_repo(repo)
-
     output_type, fmt = parse_output_format(output_format, json_style)
 
-    if output_type == "quiet":
-        ctx.exit(SUCCESS_WITH_FLAG if merge_index.conflicts else SUCCESS)
-
-    merge_context = MergeContext.read_from_repo(repo)
-    conflict_filter = RepoKeyFilter.build_from_user_patterns(filters)
-    result = list_conflicts(
-        merge_index,
-        merge_context,
-        output_type,
-        conflict_filter,
+    conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class(output_type)
+    conflicts_writer = conflicts_writer_class(
+        repo,
+        filters,
+        output_path,
         summarise,
         flat,
-        crs,
+        json_style=fmt,
+        target_crs=crs,
     )
+    conflicts_writer.write_conflicts()
 
-    if output_type == "text":
-        click.echo(result)
-    elif output_type == "json":
-        dump_json_output({"kart.conflicts/v1": result}, sys.stdout, fmt)
-    elif output_type == "geojson":
-        dump_json_output(result, sys.stdout, fmt)
-
-    if exit_code:
-        ctx.exit(SUCCESS_WITH_FLAG if merge_context.conflicts else SUCCESS)
+    if exit_code or output_type == "quiet":
+        conflicts_writer.exit_with_code()

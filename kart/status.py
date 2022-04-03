@@ -3,11 +3,11 @@ import sys
 import click
 import pygit2
 
-from .conflicts import list_conflicts
+from .conflicts_writer import BaseConflictsWriter
 from .crs_util import make_crs
 from .exceptions import CrsError, GeometryError
 from .geometry import geometry_from_string
-from .merge_util import MergeContext, MergeIndex, merge_status_to_text
+from .merge_util import MergeContext, merge_status_to_text
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
@@ -22,7 +22,7 @@ from .spatial_filter import SpatialFilter
     default="text",
 )
 def status(ctx, output_format):
-    """ Show the working copy status """
+    """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
     jdict["spatialFilter"] = SpatialFilter.load_repo_config(repo)
@@ -30,12 +30,13 @@ def status(ctx, output_format):
         jdict["spatialFilter"] = spatial_filter_status_to_json(jdict["spatialFilter"])
 
     if repo.state == KartRepoState.MERGING:
-        merge_index = MergeIndex.read_from_repo(repo)
         merge_context = MergeContext.read_from_repo(repo)
         jdict["merging"] = merge_context.as_json()
-        jdict["conflicts"] = list_conflicts(
-            merge_index, merge_context, output_format, summarise=2
+        conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class(
+            output_format
         )
+        conflicts_writer = conflicts_writer_class(repo, summarise=2)
+        jdict["conflicts"] = conflicts_writer.list_conflicts()
         jdict["state"] = "merging"
     else:
         jdict["workingCopy"] = get_working_copy_status_json(repo)
@@ -291,7 +292,7 @@ def get_diff_status_message(diff):
 
 
 def _pf(count):
-    """ Simple pluraliser for feature/features """
+    """Simple pluraliser for feature/features"""
     if count == 1:
         return "feature"
     else:
@@ -299,7 +300,7 @@ def _pf(count):
 
 
 def _pc(count):
-    """ Simple pluraliser for commit/commits """
+    """Simple pluraliser for commit/commits"""
     if count == 1:
         return "commit"
     else:

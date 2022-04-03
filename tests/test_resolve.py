@@ -114,7 +114,6 @@ def test_resolve_with_file(data_archive, cli_runner):
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r.stderr
         ours_geojson = json.loads(r.stdout)["features"][0]
-        print(ours_geojson["id"])
         assert ours_geojson["id"] == "nz_waca_adjustments:feature:98001:I"
 
         r = cli_runner.invoke(
