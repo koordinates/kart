@@ -130,9 +130,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             )
 
         if transform is None:
-            src_crs = make_crs(crs_set.only())
-            target_crs = make_crs("EPSG:4326")
-            transform = osr.CoordinateTransformation(src_crs, target_crs)
+            transform = _make_transform_to_crs84(crs_set.only())
 
         native_envelope = get_native_envelope(info)
         crs84_envelope = _transform_3d_envelope(transform, native_envelope)
@@ -315,10 +313,14 @@ def _non_homogenous_error(attribute_name, detail):
     )
 
 
+def _make_transform_to_crs84(src_wkt):
+    # TODO - use pdal to transform from src_wkt to EPSG:4326
+    return None
+
+
 def _transform_3d_envelope(transform, envelope):
-    x0, y0, z0 = transform.TransformPoint(*envelope[0::2])
-    x1, y1, z1 = transform.TransformPoint(*envelope[1::2])
-    return min(x0, x1), max(x0, x1), min(y0, y1), max(y0, y1), min(z0, z1), max(z0, z1)
+    # TODO - actually transform this envelope
+    return envelope
 
 
 _BUF_SIZE = 65536

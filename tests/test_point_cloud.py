@@ -93,8 +93,8 @@ def test_import_single_las(
                 "",
                 "+++ autzen:tile:autzen.copc.laz",
                 "+ {",
-                '+   "oid": "sha256:ce1b2d1757b8139b5ce6b60cc8a82cb5ea02333be29a1e152af858c4bdc27d20",',
-                '+   "size": "3585"',
+                '+   "oid": "sha256:4fc66b29491b8b22fc5deb69da86e588e93e276aa0511460fba6521048081701",',
+                '+   "size": "2839"',
                 "+ }",
             ]
 
