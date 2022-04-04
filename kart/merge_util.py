@@ -731,7 +731,7 @@ def merge_status_to_text(jdict, fresh):
             False if the user is just checking the current state.
     """
     # this is here to avoid an import loop
-    from kart.conflicts import conflicts_json_as_text
+    from .conflicts_util import conflicts_json_as_text
 
     merging_text = merge_context_to_text(jdict["merging"])
 

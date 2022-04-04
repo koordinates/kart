@@ -2,16 +2,25 @@ import logging
 
 from .diff_structs import DatasetDiff, RepoDiff
 from .key_filters import DatasetKeyFilter, RepoKeyFilter
+from .structure import RepoStructure
 
 L = logging.getLogger("kart.diff_util")
 
 
-def get_all_ds_paths(base_rs, target_rs, repo_key_filter=RepoKeyFilter.MATCH_ALL):
-    """
-    Returns a list of all dataset paths in either RepoStructure (that match repo_key_filter).
+def get_all_ds_paths(
+    base_rs: RepoStructure,
+    target_rs: RepoStructure,
+    repo_key_filter=RepoKeyFilter.MATCH_ALL,
+):
+    """Returns a list of all dataset paths in either RepoStructure (that match repo_key_filter).
 
-    base_rs, target_rs - kart.structure.RepoStructure objects
-    repo_key_filter - controls which datasets match and are included in the result.
+    Args:
+        base_rs (kart.structure.RepoStructure)
+        target_rs (kart.structure.RepoStructure)
+        repo_key_filter (kart.key_filters.RepoKeyFilter): Controls which datasets match and are included in the result.
+
+    Returns:
+        Sorted list of all dataset paths in either RepoStructure (that match repo_key_filter).
     """
     base_ds_paths = {ds.path for ds in base_rs.datasets()}
     target_ds_paths = {ds.path for ds in target_rs.datasets()}

@@ -5,7 +5,7 @@ import click
 
 from . import commit
 from .cli_util import StringFromFile, call_and_exit_flag
-from .conflicts import list_conflicts
+from .conflicts_writer import BaseConflictsWriter
 from .diff_util import get_repo_diff
 from .exceptions import InvalidOperation
 from .merge_util import (
@@ -102,10 +102,11 @@ def do_merge(repo, ff, ff_only, dry_run, commit, commit_message, quiet=False):
 
     if index.conflicts:
         merge_index = MergeIndex.from_pygit2_index(index)
-
-        merge_jdict["conflicts"] = list_conflicts(
-            merge_index, merge_context, "json", summarise=2
+        conflicts_writer_class = BaseConflictsWriter.get_conflicts_writer_class("json")
+        conflicts_writer = conflicts_writer_class(
+            repo, summarise=2, merge_index=merge_index, merge_context=merge_context
         )
+        merge_jdict["conflicts"] = conflicts_writer.list_conflicts()
         merge_jdict["state"] = "merging"
         if not dry_run:
             move_repo_to_merging_state(
@@ -299,7 +300,7 @@ def complete_merging_state(ctx):
 @click.argument("commit", required=True, metavar="COMMIT")
 @click.pass_context
 def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
-    """ Incorporates changes from the named commits (usually other branch heads) into the current branch. """
+    """Incorporates changes from the named commits (usually other branch heads) into the current branch."""
 
     repo = ctx.obj.get_repo(
         allowed_states=KartRepoState.NORMAL,

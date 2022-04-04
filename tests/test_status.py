@@ -317,7 +317,6 @@ def test_status_merging(data_archive, cli_runner):
             "nz_pa_points_topo_150k:",
             "    nz_pa_points_topo_150k:feature: 4 conflicts",
             "",
-            "",
             "View conflicts with `kart conflicts` and resolve them with `kart resolve`.",
             "Once no conflicts remain, complete this merge with `kart merge --continue`.",
             "Or use `kart merge --abort` to return to the previous state.",

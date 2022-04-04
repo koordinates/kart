@@ -6,6 +6,7 @@ from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
 H = pytest.helpers.helpers()
+CONFLICTS_OUTPUT_FORMATS = ["text", "geojson", "json", "quiet"]
 
 
 def test_merge_index_roundtrip(data_archive, cli_runner):
@@ -71,7 +72,14 @@ def test_summarise_conflicts(data_archive, cli_runner):
             "",
         ]
 
-        r = cli_runner.invoke(["conflicts", "-s", "-o", "json"])
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "-s",
+                "-o",
+                "json",
+            ]
+        )
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "kart.conflicts/v1": {
@@ -79,7 +87,12 @@ def test_summarise_conflicts(data_archive, cli_runner):
             }
         }
 
-        r = cli_runner.invoke(["conflicts", "-ss"])
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "-ss",
+            ]
+        )
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
             "nz_waca_adjustments:",
@@ -87,7 +100,14 @@ def test_summarise_conflicts(data_archive, cli_runner):
             "",
         ]
 
-        r = cli_runner.invoke(["conflicts", "-ss", "-o", "json"])
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "-ss",
+                "-o",
+                "json",
+            ]
+        )
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == {
             "kart.conflicts/v1": {"nz_waca_adjustments": {"feature": 4}},
@@ -97,7 +117,6 @@ def test_summarise_conflicts(data_archive, cli_runner):
 def test_list_conflicts(data_archive, cli_runner):
     with data_archive("conflicts/points.tgz") as _:
         r = cli_runner.invoke(["merge", "theirs_branch"])
-
         expected_text = [
             "nz_pa_points_topo_150k:",
             "    nz_pa_points_topo_150k:feature:",
@@ -167,7 +186,12 @@ def test_list_conflicts(data_archive, cli_runner):
             }
         }
         r = cli_runner.invoke(
-            ["conflicts", "-o", "json", "nz_pa_points_topo_150k:feature:4"]
+            [
+                "conflicts",
+                "-o",
+                "json",
+                "nz_pa_points_topo_150k:feature:4",
+            ]
         )
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == expected_json
@@ -182,57 +206,62 @@ def test_list_conflicts(data_archive, cli_runner):
         )
 
         expected_geojson = {
+            "type": "FeatureCollection",
             "features": [
                 {
+                    "type": "Feature",
                     "geometry": {
-                        "coordinates": [177.2757807736718, -38.08491506728025],
                         "type": "Point",
+                        "coordinates": [177.2757807736718, -38.08491506728025],
                     },
-                    "id": "nz_pa_points_topo_150k:feature:5:ancestor",
                     "properties": {
                         "fid": 5,
+                        "t50_fid": 2426275,
+                        "name_ascii": None,
                         "macronated": "N",
                         "name": None,
-                        "name_ascii": None,
-                        "t50_fid": 2426275,
                     },
-                    "type": "Feature",
+                    "id": "nz_pa_points_topo_150k:feature:5:ancestor",
                 },
                 {
+                    "type": "Feature",
                     "geometry": {
-                        "coordinates": [177.2757807736718, -38.08491506728025],
                         "type": "Point",
+                        "coordinates": [177.2757807736718, -38.08491506728025],
                     },
-                    "id": "nz_pa_points_topo_150k:feature:5:ours",
                     "properties": {
                         "fid": 5,
+                        "t50_fid": 2426275,
+                        "name_ascii": None,
                         "macronated": "N",
                         "name": "ours_version",
-                        "name_ascii": None,
-                        "t50_fid": 2426275,
                     },
-                    "type": "Feature",
+                    "id": "nz_pa_points_topo_150k:feature:5:ours",
                 },
                 {
+                    "type": "Feature",
                     "geometry": {
-                        "coordinates": [177.2757807736718, -38.08491506728025],
                         "type": "Point",
+                        "coordinates": [177.2757807736718, -38.08491506728025],
                     },
-                    "id": "nz_pa_points_topo_150k:feature:5:theirs",
                     "properties": {
                         "fid": 5,
+                        "t50_fid": 2426275,
+                        "name_ascii": None,
                         "macronated": "N",
                         "name": "theirs_version",
-                        "name_ascii": None,
-                        "t50_fid": 2426275,
                     },
-                    "type": "Feature",
+                    "id": "nz_pa_points_topo_150k:feature:5:theirs",
                 },
             ],
-            "type": "FeatureCollection",
         }
         r = cli_runner.invoke(
-            ["conflicts", "-o", "geojson", "nz_pa_points_topo_150k:feature:5"]
+            [
+                "conflicts",
+                "-o",
+                "geojson",
+                "nz_pa_points_topo_150k:feature:5",
+            ]
         )
         assert r.exit_code == 0, r
         assert json.loads(r.stdout) == expected_geojson
@@ -250,7 +279,12 @@ def test_list_conflicts_transform_crs(data_archive, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch"])
 
         r = cli_runner.invoke(
-            ["conflicts", "-o", "json", "nz_pa_points_topo_150k:feature:4"]
+            [
+                "conflicts",
+                "-o",
+                "json",
+                "nz_pa_points_topo_150k:feature:4",
+            ]
         )
         assert r.exit_code == 0, r
         json_layer = json.loads(r.stdout)["kart.conflicts/v1"][H.POINTS.LAYER]
@@ -338,7 +372,7 @@ def test_find_renames(data_working_copy, cli_runner):
         assert not index.conflicts
 
 
-def test_json_conflicts_as_geojson(data_working_copy, cli_runner):
+def test_meta_item_conflicts_as_geojson(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
         repo = KartRepo(repo_path)
 
@@ -358,3 +392,122 @@ def test_json_conflicts_as_geojson(data_working_copy, cli_runner):
         r = cli_runner.invoke(["merge", "theirs_branch"])
         r = cli_runner.invoke(["conflicts", "-o", "geojson"])
         assert r.exit_code == 0, r
+
+
+@pytest.mark.parametrize(
+    "output_format", [o for o in CONFLICTS_OUTPUT_FORMATS if o not in {"quiet"}]
+)
+def test_conflicts_output_to_file(output_format, data_archive, cli_runner):
+    with data_archive("conflicts/polygons.tgz") as repo_path:
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(
+            ["conflicts", f"--output-format={output_format}", "--output=out"]
+        )
+        assert r.exit_code == 0, r
+        assert (repo_path / "out").exists()
+
+
+def test_conflicts_geojson_usage(data_archive, cli_runner, tmp_path):
+    with data_archive("conflicts/polygons.tgz") as repo_path:
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r
+
+        # output to stdout
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "--output-format=geojson",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        # output to stdout (by default)
+        r = cli_runner.invoke(["conflicts", "--output-format=geojson"])
+        assert r.exit_code == 0, r.stderr
+
+        # output to a directory that doesn't yet exist
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "--output-format=geojson",
+                f"--output={tmp_path / 'abc'}",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert {p.name for p in (tmp_path / "abc").iterdir()} == {
+            "nz_waca_adjustments.geojson"
+        }
+
+        # output to a directory that does exist
+        d = tmp_path / "def"
+        d.mkdir()
+        # this gets left alone
+        (d / "empty.file").write_bytes(b"")
+        # this gets deleted.
+        (d / "some.geojson").write_bytes(b"{}")
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "--output-format=geojson",
+                f"--output={d}",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+        assert {p.name for p in d.iterdir()} == {
+            "nz_waca_adjustments.geojson",
+            "empty.file",
+        }
+
+        # can't import in merge state, so abort
+        r = cli_runner.invoke(["merge", "--abort"])
+        assert r.exit_code == 0, r.stdout
+
+        # adding datasets
+        with data_archive("gpkg-3d-points") as src:
+            src_gpkg_path = src / "points-3d.gpkg"
+            r = cli_runner.invoke(["-C", repo_path, "import", src_gpkg_path])
+            assert r.exit_code == 0, r.stderr
+
+        with data_archive("gpkg-points") as data:
+            with data_archive("polygons"):
+                src_gpkg_path = data / "nz-pa-points-topo-150k.gpkg"
+                r = cli_runner.invoke(["-C", repo_path, "import", src_gpkg_path])
+                assert r.exit_code == 0, r.stderr
+
+        # commit changes and merge again
+        r = cli_runner.invoke(["commit", "-m", "test-commit"])
+        assert r.exit_code == 0, r
+
+        r = cli_runner.invoke(["merge", "theirs_branch"])
+        assert r.exit_code == 0, r
+
+        # file/stdout output isn't allowed when there are multiple datasets
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "--output-format=geojson",
+            ]
+        )
+        assert r.exit_code == 2, r.stderr
+        assert (
+            r.stderr.splitlines()[-1]
+            == "Error: Invalid value for --output: Need to specify a directory via --output for GeoJSON with more than one dataset"
+        )
+
+        # Can't specify an (existing) regular file either
+        myfile = tmp_path / "ghi"
+        myfile.write_bytes(b"")
+        assert myfile.exists()
+        r = cli_runner.invoke(
+            [
+                "conflicts",
+                "--output-format=geojson",
+                f"--output={myfile}",
+            ]
+        )
+        assert r.exit_code == 2, r.stderr
+        assert (
+            r.stderr.splitlines()[-1]
+            == "Error: Invalid value for --output: Output path should be a directory for GeoJSON format."
+        )
