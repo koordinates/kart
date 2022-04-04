@@ -141,13 +141,13 @@
 
                 for (let change of diff.features) {
                     const id = change['id']
-                    if (id.startsWith('U+::')) {
+                    if (id.endsWith(':U+')) {
                         fc['updateNew'].push(change)
-                    } else if (id.startsWith('U-::')) {
+                    } else if (id.endsWith(':U-')) {
                         fc['updateOld'].push(change)
-                    } else if (id.startsWith('D::')) {
+                    } else if (id.endsWith(':D')) {
                         fc['delete'].push(change)
-                    } else if (id.startsWith('I::')) {
+                    } else if (id.endsWith(':I')) {
                         fc['insert'].push(change)
                     } else {
                         console.log('unknown ID format: ' + id)
@@ -230,21 +230,21 @@
             let featuresByRealId = {}
             for (let fc of diff.features) {
                 const id = fc['id']
-                const realId = id.split('::')[1]
-                if (id.startsWith('U')) {
+                const realId = id.split(':')[2]
+                if (id.endsWith(':U+') || id.endsWith(":U-")) {
                     if (!featuresByRealId[realId]) {
                         featuresByRealId[realId] = [null, null]
                     }
-                    if (id.startsWith('U+::')) {
+                    if (id.endsWith(':U+')) {
                         // 'new'
                         featuresByRealId[realId][1] = fc
                     } else {
                         // 'old'
                         featuresByRealId[realId][0] = fc
                     }
-                } else if (id.startsWith('D::')) {
+                } else if (id.endsWith(':D')) {
                     featuresByRealId[realId] = [fc, null]
-                } else if (id.startsWith('I::')) {
+                } else if (id.endsWith(':I')) {
                     featuresByRealId[realId] = [null, fc]
                 } else {
                     console.log('unknown ID format: ' + id)
