@@ -85,8 +85,9 @@ class DatasetDiffMixin:
         other,
         subtree_name,
         key_filter=UserStringKeyFilter.MATCH_ALL,
-        key_decoder_method=None,
-        value_decoder_method=None,
+        *,
+        key_decoder_method,
+        value_decoder_method,
         reverse=False,
     ):
         """
@@ -107,11 +108,12 @@ class DatasetDiffMixin:
         else:
             old, new = self, other
 
+        def _null_decoder(key):
+            raise RuntimeError("Can't decode key when dataset is None")
+
         def get_decoder(dataset, method_name):
             return (
-                getattr(dataset, method_name)
-                if dataset is not None
-                else lambda key: key
+                getattr(dataset, method_name) if dataset is not None else _null_decoder
             )
 
         old_key_decoder = get_decoder(old, key_decoder_method)
@@ -119,7 +121,7 @@ class DatasetDiffMixin:
         old_value_decoder = get_decoder(old, value_decoder_method)
         new_value_decoder = get_decoder(new, value_decoder_method)
 
-        subtree_path = subtree_name + "/"
+        subtree_path = subtree_name.rstrip("/") + "/"
 
         for d in raw_diff.deltas:
             self.L.debug(
@@ -128,6 +130,8 @@ class DatasetDiffMixin:
 
             if d.status not in self._INSERT_UPDATE_DELETE:
                 # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE, UNTRACKED
+                # We don't enounter these status codes in the diffs we generate since we
+                # only generate commit<>commit diffs without rename detection.
                 raise NotImplementedError(f"Delta status: {d.status_char()}")
 
             if d.status in self._UPDATE_DELETE:
