@@ -63,33 +63,45 @@ class TextDiffWriter(BaseDiffWriter):
         for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
             self.write_feature_delta(ds_path, key, delta)
 
-    def write_meta_delta(self, ds_path, key, delta):
-        if delta.old:
-            click.secho(f"--- {ds_path}:meta:{delta.old_key}", bold=True, **self.pecho)
-        if delta.new:
-            click.secho(f"+++ {ds_path}:meta:{delta.new_key}", bold=True, **self.pecho)
+        if "tiles" in ds_diff:
+            for key, delta in ds_diff["tiles"].sorted_items():
+                self.write_simple_delta(ds_path, "tiles", key, delta)
 
+    def write_simple_delta(self, ds_path, item_type, key, delta):
+        if delta.old:
+            click.secho(
+                f"--- {ds_path}:{item_type}:{delta.old_key}", bold=True, **self.pecho
+            )
+        if delta.new:
+            click.secho(
+                f"+++ {ds_path}:{item_type}:{delta.new_key}", bold=True, **self.pecho
+            )
+
+        if delta.old:
+            output = self._prefix_simple_item(delta.old_value, delta.old_key, "- ")
+            click.secho(output, fg="red", **self.pecho)
+        if delta.new:
+            output = self._prefix_simple_item(delta.new_value, delta.new_key, "+ ")
+            click.secho(output, fg="green", **self.pecho)
+
+    def write_meta_delta(self, ds_path, key, delta):
         if key == "schema.json" and delta.old and delta.new:
             # Make a more readable schema diff.
+            click.secho(f"--- {ds_path}:meta:schema.json", bold=True, **self.pecho)
+            click.secho(f"+++ {ds_path}:meta:schema.json", bold=True, **self.pecho)
             output = self._schema_diff_as_text(
                 Schema.from_column_dicts(delta.old_value),
                 Schema.from_column_dicts(delta.new_value),
             )
             click.echo(output, **self.pecho)
-            return
-
-        if delta.old:
-            output = self._prefix_meta_item(delta.old_value, delta.old_key, "- ")
-            click.secho(output, fg="red", **self.pecho)
-        if delta.new:
-            output = self._prefix_meta_item(delta.new_value, delta.new_key, "+ ")
-            click.secho(output, fg="green", **self.pecho)
+        else:
+            self.write_simple_delta(ds_path, "meta", key, delta)
 
     @classmethod
-    def _prefix_meta_item(cls, meta_item, meta_item_name, prefix):
+    def _prefix_simple_item(cls, meta_item, meta_item_name, prefix):
         if meta_item_name.endswith(".wkt"):
             return cls._prefix_wkt(meta_item, prefix)
-        elif meta_item_name.endswith(".json"):
+        elif isinstance(meta_item, dict) or meta_item_name.endswith(".json"):
             return cls._prefix_json(meta_item, prefix)
         else:
             return re.sub("^", prefix, str(meta_item), flags=re.MULTILINE)

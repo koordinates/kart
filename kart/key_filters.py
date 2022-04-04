@@ -45,6 +45,7 @@ UserStringKeyFilter.MATCH_ALL = UserStringKeyFilter(match_all=True)
 # Aliases so that FeatureKeyFilter.MATCH_ALL works, which is a bit easier to remember.
 MetaKeyFilter = UserStringKeyFilter
 FeatureKeyFilter = UserStringKeyFilter
+TilesKeyFilter = UserStringKeyFilter
 
 
 class KeyFilterDict(RichDict):
@@ -80,11 +81,11 @@ class KeyFilterDict(RichDict):
 
 class DatasetKeyFilter(KeyFilterDict):
     """
-    A dict with the structure:
+    A dict with the structure something like the following:
     {
         "meta": UserStringKeyFilter, "feature": UserStringKeyFilter}
     }
-    for filtering meta items and features (although meta item filtering is not yet implemented).
+    for filtering meta items, features, tiles etc.
     """
 
     child_type = UserStringKeyFilter
@@ -114,8 +115,8 @@ class RepoKeyFilter(KeyFilterDict):
         r'^(?P<dataset_glob>[^:<>"|?\x00-\x1f]+)'
         # optional sub-dataset part. This is optional; if a PK is given and ':feature' isn't, we assume feature anyway.
         # (i.e. 'datasetname:123' is equivalent to 'datasetname:feature:123'
-        r"(?::(?P<subdataset>feature|meta))?"
-        # The rest of the pattern is  either a meta key or a PK
+        r"(?::(?P<subdataset>feature|meta|tiles))?"
+        # The rest of the pattern is either a meta key, a PK or a tilename
         r"(?::(?P<rest>.*))?"
     )
 
@@ -145,6 +146,7 @@ class RepoKeyFilter(KeyFilterDict):
         subdataset = groups["subdataset"]
         if not subdataset:
             if groups["rest"]:
+                # TODO - make this a bit smarter - this should default to "tiles" for a tile-dataset.
                 subdataset = "feature"
 
         return groups["dataset_glob"], subdataset, groups["rest"] or None
@@ -173,7 +175,7 @@ class RepoKeyFilter(KeyFilterDict):
         if not ds_filter:
             ds_filter = DatasetKeyFilter()
             if rest:
-                # Specific feature or meta item
+                # Specific feature, tile or meta item
                 ds_filter[subdataset] = UserStringKeyFilter()
             else:
                 # All features, or all meta items

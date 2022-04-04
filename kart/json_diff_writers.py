@@ -84,6 +84,15 @@ class JsonDiffWriter(BaseDiffWriter):
             r["*"] = r.pop("+")
         return r
 
+    def _postprocess_tiles_delta(self, tilename, delta):
+        r = delta.to_plus_minus_dict()
+        if self.patch_type == "minimal" and "+" in r and "-" in r:
+            r.pop("-")
+            r["*"] = r.pop("+")
+        for char in r:
+            r[char] = {"name": tilename, **r[char]}
+        return r
+
     def default(self, obj):
         # Part of JsonEncoder interface - adapt objects that couldn't otherwise be encoded.
         if isinstance(obj, DatasetDiff):
@@ -98,6 +107,11 @@ class JsonDiffWriter(BaseDiffWriter):
                 result["feature"] = self.filtered_ds_feature_deltas_as_json(
                     ds_path, ds_diff
                 )
+            if "tiles" in ds_diff:
+                result["tiles"] = [
+                    self._postprocess_tiles_delta(key, value)
+                    for key, value in ds_diff["tiles"].items()
+                ]
             return result
 
         return None
@@ -283,6 +297,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
         self.write_meta_deltas(ds_path, ds_diff)
         self.write_feature_deltas(ds_path, ds_diff)
+        self.write_tiles_deltas(ds_path, ds_diff)
 
     def write_meta_deltas(self, ds_path, ds_diff):
         if "meta" not in ds_diff:
@@ -310,6 +325,18 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                 change["+"] = feature_as_json(
                     delta.new_value, delta.new_key, new_transform
                 )
+            obj["change"] = change
+            self.dump(obj)
+
+    def write_tiles_deltas(self, ds_path, ds_diff):
+        if "tiles" not in ds_diff:
+            return
+
+        obj = {"type": "tiles", "dataset": ds_path, "change": None}
+        for key, delta in ds_diff["tiles"].sorted_items():
+            change = delta.to_plus_minus_dict()
+            for char in change:
+                change[char] = {"name": key, **change[char]}
             obj["change"] = change
             self.dump(obj)
 
