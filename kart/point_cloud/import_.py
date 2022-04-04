@@ -222,7 +222,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             # TODO - is this the right prefix and name?
             tilename = os.path.splitext(os.path.basename(source))[0] + ".copc.laz"
             tile_prefix = hexhash(tilename)[0:2]
-            blob_path = f"{ds_inner_path}/tiles/{tile_prefix}/{tilename}"
+            blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
             info = per_source_info[source]
             pointer_dict = {
                 "version": "https://git-lfs.github.com/spec/v1",

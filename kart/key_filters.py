@@ -45,7 +45,7 @@ UserStringKeyFilter.MATCH_ALL = UserStringKeyFilter(match_all=True)
 # Aliases so that FeatureKeyFilter.MATCH_ALL works, which is a bit easier to remember.
 MetaKeyFilter = UserStringKeyFilter
 FeatureKeyFilter = UserStringKeyFilter
-TilesKeyFilter = UserStringKeyFilter
+TileKeyFilter = UserStringKeyFilter
 
 
 class KeyFilterDict(RichDict):
@@ -115,7 +115,7 @@ class RepoKeyFilter(KeyFilterDict):
         r'^(?P<dataset_glob>[^:<>"|?\x00-\x1f]+)'
         # optional sub-dataset part. This is optional; if a PK is given and ':feature' isn't, we assume feature anyway.
         # (i.e. 'datasetname:123' is equivalent to 'datasetname:feature:123'
-        r"(?::(?P<subdataset>feature|meta|tiles))?"
+        r"(?::(?P<subdataset>feature|meta|tile))?"
         # The rest of the pattern is either a meta key, a PK or a tilename
         r"(?::(?P<rest>.*))?"
     )
@@ -146,7 +146,7 @@ class RepoKeyFilter(KeyFilterDict):
         subdataset = groups["subdataset"]
         if not subdataset:
             if groups["rest"]:
-                # TODO - make this a bit smarter - this should default to "tiles" for a tile-dataset.
+                # TODO - make this a bit smarter - this should default to "tile" for a tile-dataset.
                 subdataset = "feature"
 
         return groups["dataset_glob"], subdataset, groups["rest"] or None

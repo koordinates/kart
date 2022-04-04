@@ -18,7 +18,7 @@ class PointCloudV1(BaseDataset):
     DATASET_DIRNAME = ".point-cloud-dataset.v1"
 
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
-    TILES_PATH = "tiles/"
+    TILE_PATH = "tile/"
 
     META_ITEMS = (
         BaseDataset.TITLE,
@@ -29,14 +29,14 @@ class PointCloudV1(BaseDataset):
     )
 
     @property
-    def tiles_tree(self):
-        return self.get_subtree(self.TILES_PATH)
+    def tile_tree(self):
+        return self.get_subtree(self.TILE_PATH)
 
     def tile_pointer_blobs(self):
         """Returns a generator that yields every tile pointer blob in turn."""
-        tiles_tree = self.tiles_tree
-        if tiles_tree:
-            yield from find_blobs_in_tree(tiles_tree)
+        tile_tree = self.tile_tree
+        if tile_tree:
+            yield from find_blobs_in_tree(tile_tree)
 
     def tilenames_with_lfs_hashes(self):
         """Returns a generator that yields every tilename along with its LFS hash."""
@@ -50,14 +50,14 @@ class PointCloudV1(BaseDataset):
 
     def decode_path(self, path):
         rel_path = self.ensure_rel_path(path)
-        if rel_path.startswith("tiles/"):
-            return ("tiles", self.decode_tile_path(rel_path))
+        if rel_path.startswith("tile/"):
+            return ("tile", self.decode_tile_path(rel_path))
         return super().decode_path(rel_path)
 
     def encode_tile_path(self, tilename, relative=False, *, schema=None):
         """Given a tile's name, returns the path the tile's pointer should be written to."""
         tile_prefix = hexhash(tilename)[0:2]
-        rel_path = f"tiles/{tile_prefix}/{tilename}"
+        rel_path = f"tile/{tile_prefix}/{tilename}"
         return rel_path if relative else self.ensure_full_path(rel_path)
 
     @classmethod
@@ -70,21 +70,19 @@ class PointCloudV1(BaseDataset):
         If reverse is true, generates a diff from other -> self.
         """
         ds_diff = super().diff(other, ds_filter=ds_filter, reverse=reverse)
-        tiles_filter = ds_filter.get("tiles", ds_filter.child_type())
-        ds_diff["tiles"] = DeltaDiff(
-            self.diff_tiles(other, tiles_filter, reverse=reverse)
-        )
+        tile_filter = ds_filter.get("tile", ds_filter.child_type())
+        ds_diff["tile"] = DeltaDiff(self.diff_tile(other, tile_filter, reverse=reverse))
         return ds_diff
 
-    def diff_tiles(self, other, tiles_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
+    def diff_tile(self, other, tile_filter=FeatureKeyFilter.MATCH_ALL, reverse=False):
         """
-        Yields tiles deltas from self -> other, but only for tiles that match the tiles_filter.
-        If reverse is true, yields tiles deltas from other -> self.
+        Yields tile deltas from self -> other, but only for tile that match the tile_filter.
+        If reverse is true, yields tile deltas from other -> self.
         """
         yield from self.diff_subtree(
             other,
-            "tiles",
-            key_filter=tiles_filter,
+            "tile",
+            key_filter=tile_filter,
             key_decoder_method="decode_tile_path",
             value_decoder_method="get_tile_summary_from_pointer_blob",
             reverse=reverse,

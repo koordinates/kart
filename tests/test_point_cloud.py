@@ -86,12 +86,12 @@ def test_import_single_las(
                 }
             }
 
-            r = cli_runner.invoke(["show", "HEAD", "autzen:tiles:autzen.copc.laz"])
+            r = cli_runner.invoke(["show", "HEAD", "autzen:tile:autzen.copc.laz"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines()[4:] == [
                 "    Importing 1 LAZ tiles as autzen",
                 "",
-                "+++ autzen:tiles:autzen.copc.laz",
+                "+++ autzen:tile:autzen.copc.laz",
                 "+ {",
                 '+   "oid": "sha256:ce1b2d1757b8139b5ce6b60cc8a82cb5ea02333be29a1e152af858c4bdc27d20",',
                 '+   "size": "3585"',
@@ -106,7 +106,7 @@ def test_import_single_las(
                 ["kart", "lfs", "push", "origin", "--all", "--dry-run"], encoding="utf8"
             )
             assert re.match(
-                r"push [0-9a-f]{64} => autzen/.point-cloud-dataset.v1/tiles/e8/autzen.copc.laz",
+                r"push [0-9a-f]{64} => autzen/.point-cloud-dataset.v1/tile/e8/autzen.copc.laz",
                 stdout.splitlines()[0],
             )
 
@@ -180,7 +180,7 @@ def test_import_several_las(
             lines = stdout.splitlines()
             for i in range(16):
                 assert re.match(
-                    r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tiles/[0-9a-f]{2}/auckland_\d_\d.copc.laz",
+                    r"push [0-9a-f]{64} => auckland/.point-cloud-dataset.v1/tile/[0-9a-f]{2}/auckland_\d_\d.copc.laz",
                     lines[i],
                 )
 

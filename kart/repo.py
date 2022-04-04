@@ -443,7 +443,7 @@ class KartRepo(pygit2.Repository):
         # File attributes
         with (info_path / "attributes").open("a+") as f:
             f.write("**/.*-dataset*/feature/** diff=binary merge=binary -text\n")
-            f.write("**/.*-dataset*/tiles/** filter=lfs diff=lfs merge=lfs -text\n")
+            f.write("**/.*-dataset*/tile/** filter=lfs diff=lfs merge=lfs -text\n")
 
         # Files potentially in workdir that should not be checked in:
         with (info_path / "exclude").open("a+") as f:

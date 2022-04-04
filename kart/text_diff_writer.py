@@ -63,9 +63,9 @@ class TextDiffWriter(BaseDiffWriter):
         for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
             self.write_feature_delta(ds_path, key, delta)
 
-        if "tiles" in ds_diff:
-            for key, delta in ds_diff["tiles"].sorted_items():
-                self.write_simple_delta(ds_path, "tiles", key, delta)
+        if "tile" in ds_diff:
+            for key, delta in ds_diff["tile"].sorted_items():
+                self.write_simple_delta(ds_path, "tile", key, delta)
 
     def write_simple_delta(self, ds_path, item_type, key, delta):
         if delta.old:
