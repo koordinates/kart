@@ -101,7 +101,9 @@ class ObjectBuilder:
         return self.repo[commit_oid]
 
     def _ensure_writeable(self, writeable):
-        if not isinstance(writeable, (pygit2.Tree, pygit2.Blob, bytes, type(None))):
+        if not isinstance(
+            writeable, (pygit2.Tree, pygit2.Blob, bytes, bytearray, type(None))
+        ):
             raise ValueError(f"Expected a writeable type but found {type(writeable)}")
 
 
@@ -132,6 +134,9 @@ def copy_and_modify_tree(repo, tree, changes):
             tree_builder.insert(name, new_value.oid, pygit2.GIT_FILEMODE_BLOB)
         elif isinstance(new_value, bytes):
             blob_oid = repo.create_blob(new_value)
+            tree_builder.insert(name, blob_oid, pygit2.GIT_FILEMODE_BLOB)
+        elif isinstance(new_value, bytearray):
+            blob_oid = repo.create_blob(bytes(new_value))
             tree_builder.insert(name, blob_oid, pygit2.GIT_FILEMODE_BLOB)
         elif new_value is None:
             try:

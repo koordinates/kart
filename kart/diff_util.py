@@ -50,7 +50,10 @@ class WCDiffContext:
         index = pygit2.Index(str(self.workdir_index_path))
         index._repo = self.repo
         return index.diff_to_workdir(
-            pygit2.GIT_DIFF_INCLUDE_UNTRACKED | pygit2.GIT_DIFF_UPDATE_INDEX
+            pygit2.GIT_DIFF_INCLUDE_UNTRACKED
+            | pygit2.GIT_DIFF_UPDATE_INDEX
+            # GIT_DIFF_UPDATE_INDEX just updates timestamps in the index to make the diff quicker next time
+            # none of the paths or hashes change, and the end result stays the same.
         )
 
     @functools.lru_cache(maxsize=1)

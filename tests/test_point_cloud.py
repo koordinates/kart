@@ -213,7 +213,9 @@ def test_import_mismatched_las(
                 assert "Non-homogenous" in r.stderr
 
 
-def test_working_copy_edit(cli_runner, data_working_copy):
+def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+
     # TODO - remove Kart's requirement for a GPKG working copy
     with data_working_copy("point-cloud/auckland.tgz") as (repo_path, wc_path):
         r = cli_runner.invoke(["diff"])
@@ -249,3 +251,31 @@ def test_working_copy_edit(cli_runner, data_working_copy):
             "+                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
             "+                                     size = 1334",
         ]
+
+        r = cli_runner.invoke(["commit", "-m", "Edit point cloud tiles"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[4:] == [
+            "    Edit point cloud tiles",
+            "",
+            "--- auckland:tile:auckland_1_1.copc.laz",
+            "+++ auckland:tile:auckland_1_1.copc.laz",
+            "-                                      oid = sha256:1d9934b50ebd057d893281813fda8deffb0ad03b3c354ec1c5d7557134c40be1",
+            "+                                      oid = sha256:dafd2ed5671190433ca1e7cea364a94d9e00c11f0a7b3927ce93554df5b1cd5c",
+            "-                                     size = 23570",
+            "+                                     size = 68665",
+            "--- auckland:tile:auckland_3_3.copc.laz",
+            "-                                     name = auckland_3_3.copc.laz",
+            "-                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
+            "-                                     size = 1334",
+            "+++ auckland:tile:auckland_4_4.copc.laz",
+            "+                                     name = auckland_4_4.copc.laz",
+            "+                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
+            "+                                     size = 1334",
+        ]
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == []
