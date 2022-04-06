@@ -1,6 +1,11 @@
-import click
 import shutil
+import subprocess
+import sys
 
+import click
+
+from kart.cli_util import tool_environment
+from kart.exceptions import translate_subprocess_exit_code
 from .v1 import PointCloudV1
 
 # Handles point-cloud side of checkout.
@@ -12,6 +17,19 @@ def reset_wc_if_needed(repo):
     if repo.is_bare:
         return
     assert repo.workdir_path.is_dir()
+
+    worktree_index_file = repo.gitdir_file("worktree-index")
+    # TODO - checkout should check the existing index to do the following:
+    # - see what the <commit>...<commit> diffs are of the checkout operation we are doing
+    # - make sure they don't conflict with uncommitted WC diffs / make sure there are no WC diffs
+    # - apply the <commit>...<commit> diffs to the WC (instead of checking out from scratch)
+    # Right now we don't do any of this - we just write a new index over the top of the old one.
+    if worktree_index_file.exists():
+        worktree_index_file.unlink()
+
+    # NOTE - we could also use pygit2.Index to do this, but this has been easier to get working so far.
+    env = tool_environment()
+    env["GIT_INDEX_FILE"] = str(worktree_index_file)
 
     for dataset in repo.datasets():
         if not isinstance(dataset, PointCloudV1):
@@ -28,6 +46,12 @@ def reset_wc_if_needed(repo):
                 )
                 continue
             shutil.copy(lfs_path, wc_tiles_dir / tilename)
+
+            try:
+                args = ["git", "add", dataset.path]
+                subprocess.check_call(args, env=env, cwd=repo.workdir_path)
+            except subprocess.CalledProcessError as e:
+                sys.exit(translate_subprocess_exit_code(e.returncode))
 
 
 @click.command("point-cloud-checkout", hidden=True)

@@ -1,4 +1,7 @@
+import hashlib
 import logging
+from pathlib import Path
+
 import re
 
 import pygit2
@@ -8,11 +11,32 @@ L = logging.getLogger(__name__)
 POINTER_PATTERN = re.compile(rb"^oid sha256:([0-9a-fA-F]{64})$", re.MULTILINE)
 
 
-def pointer_file_to_json(pointer_file_bytes):
+_BUF_SIZE = 65536
+
+
+def get_hash_and_size_of_file(path):
+    """Given a path to a file, calculates and returns its SHA256 hash and length in bytes."""
+    if not isinstance(path, Path):
+        path = Path(path)
+    assert path.is_file()
+
+    size = path.stat().st_size
+    sha256 = hashlib.sha256()
+    with open(str(path), "rb") as input:
+        while True:
+            data = input.read(_BUF_SIZE)
+            if not data:
+                break
+            sha256.update(data)
+    return sha256.hexdigest(), size
+
+
+def pointer_file_to_json(pointer_file_bytes, result=None):
     if isinstance(pointer_file_bytes, pygit2.Blob):
         pointer_file_bytes = pointer_file_bytes.data
     pointer_file_str = pointer_file_bytes.decode("utf8")
-    result = {}
+    if result is None:
+        result = {}
     for line in pointer_file_str.splitlines():
         if not line:
             continue

@@ -1,6 +1,7 @@
 from glob import glob
 import json
 import re
+import shutil
 import subprocess
 import pytest
 
@@ -41,7 +42,7 @@ def test_import_single_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
     # Using postgres here because it has the best type preservation
-    with data_archive_readonly("point-cloud/autzen.tgz") as autzen:
+    with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
         repo_path = tmp_path / "point-cloud-repo"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0, r.stderr
@@ -92,10 +93,9 @@ def test_import_single_las(
                 "    Importing 1 LAZ tiles as autzen",
                 "",
                 "+++ autzen:tile:autzen.copc.laz",
-                "+ {",
-                '+   "oid": "sha256:4fc66b29491b8b22fc5deb69da86e588e93e276aa0511460fba6521048081701",',
-                '+   "size": "2839"',
-                "+ }",
+                "+                                     name = autzen.copc.laz",
+                "+                                      oid = sha256:4fc66b29491b8b22fc5deb69da86e588e93e276aa0511460fba6521048081701",
+                "+                                     size = 2839",
             ]
 
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
@@ -118,7 +118,7 @@ def test_import_several_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
     # Using postgres here because it has the best type preservation
-    with data_archive_readonly("point-cloud/auckland.tgz") as auckland:
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
         repo_path = tmp_path / "point-cloud-repo"
         r = cli_runner.invoke(["init", repo_path])
         assert r.exit_code == 0
@@ -195,11 +195,11 @@ def test_import_mismatched_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
     # Using postgres here because it has the best type preservation
-    with data_archive_readonly("point-cloud/auckland.tgz") as auckland:
-        with data_archive_readonly("point-cloud/autzen.tgz") as autzen:
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
+        with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
             repo_path = tmp_path / "point-cloud-repo"
             r = cli_runner.invoke(["init", repo_path])
-            assert r.exit_code == 0
+            assert r.exit_code == 0, r.stderr
             with chdir(repo_path):
                 r = cli_runner.invoke(
                     [
@@ -211,3 +211,41 @@ def test_import_mismatched_las(
                 )
                 assert r.exit_code == INVALID_FILE_FORMAT
                 assert "Non-homogenous" in r.stderr
+
+
+def test_working_copy_edit(cli_runner, data_working_copy):
+    # TODO - remove Kart's requirement for a GPKG working copy
+    with data_working_copy("point-cloud/auckland.tgz") as (repo_path, wc_path):
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == []
+
+        tiles_path = repo_path / "auckland" / "tiles"
+        assert tiles_path.is_dir()
+
+        shutil.copy(
+            tiles_path / "auckland_0_0.copc.laz", tiles_path / "auckland_1_1.copc.laz"
+        )
+        # TODO - add rename detection.
+        (tiles_path / "auckland_3_3.copc.laz").rename(
+            tiles_path / "auckland_4_4.copc.laz"
+        )
+
+        r = cli_runner.invoke(["diff"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "--- auckland:tile:auckland_1_1.copc.laz",
+            "+++ auckland:tile:auckland_1_1.copc.laz",
+            "-                                      oid = sha256:1d9934b50ebd057d893281813fda8deffb0ad03b3c354ec1c5d7557134c40be1",
+            "+                                      oid = sha256:dafd2ed5671190433ca1e7cea364a94d9e00c11f0a7b3927ce93554df5b1cd5c",
+            "-                                     size = 23570",
+            "+                                     size = 68665",
+            "--- auckland:tile:auckland_3_3.copc.laz",
+            "-                                     name = auckland_3_3.copc.laz",
+            "-                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
+            "-                                     size = 1334",
+            "+++ auckland:tile:auckland_4_4.copc.laz",
+            "+                                     name = auckland_4_4.copc.laz",
+            "+                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
+            "+                                     size = 1334",
+        ]

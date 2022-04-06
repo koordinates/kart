@@ -41,7 +41,7 @@ class DatasetDiffMixin:
         )
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
-    def diff_to_wc(self, repo, ds_filter=DatasetKeyFilter.MATCH_ALL):
+    def diff_to_wc(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
         """
         Generates a diff from self to the working-copy.
         It may be the case that only the dataset-revision used to write the working
@@ -72,13 +72,16 @@ class DatasetDiffMixin:
         )
         return diff
 
-    _INSERT_UPDATE_DELETE = (
-        pygit2.GIT_DELTA_ADDED,
-        pygit2.GIT_DELTA_MODIFIED,
-        pygit2.GIT_DELTA_DELETED,
-    )
-    _INSERT_UPDATE = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_MODIFIED)
-    _UPDATE_DELETE = (pygit2.GIT_DELTA_MODIFIED, pygit2.GIT_DELTA_DELETED)
+    # We treat UNTRACKED like an ADD since we don't have a staging area -
+    # if the user has untracked files, we have to assume they want to add them.
+    # So far this is only relevant to point cloud datasets.
+    _INSERT_TYPES = (pygit2.GIT_DELTA_ADDED, pygit2.GIT_DELTA_UNTRACKED)
+    _UPDATE_TYPES = (pygit2.GIT_DELTA_MODIFIED,)
+    _DELETE_TYPES = (pygit2.GIT_DELTA_DELETED,)
+
+    _INSERT_UPDATE_DELETE = _INSERT_TYPES + _UPDATE_TYPES + _DELETE_TYPES
+    _INSERT_UPDATE = _INSERT_TYPES + _UPDATE_TYPES
+    _UPDATE_DELETE = _UPDATE_TYPES + _DELETE_TYPES
 
     def diff_subtree(
         self,
@@ -99,49 +102,83 @@ class DatasetDiffMixin:
         # TODO - if the key-filter is very restrictive (ie it has only a few items in) then
         # it would be more efficient if we first search for those items and diff only those.
 
+        subtree_name = subtree_name.rstrip("/")
         raw_diff = self.get_raw_diff_for_subtree(other, subtree_name, reverse=reverse)
         # NOTE - we could potentially call diff.find_similar() to detect renames here,
-        #
 
         if reverse:
             old, new = other, self
         else:
             old, new = self, other
 
-        def _null_decoder(key):
-            raise RuntimeError("Can't decode key when dataset is None")
-
-        def get_decoder(dataset, method_name):
-            return (
-                getattr(dataset, method_name) if dataset is not None else _null_decoder
+        def _no_dataset_error(method_name):
+            raise RuntimeError(
+                f"Can't call {method_name} to decode diff deltas: dataset is None"
             )
 
-        old_key_decoder = get_decoder(old, key_decoder_method)
-        new_key_decoder = get_decoder(new, key_decoder_method)
-        old_value_decoder = get_decoder(old, value_decoder_method)
-        new_value_decoder = get_decoder(new, value_decoder_method)
+        def get_decoder(dataset, method_name):
+            if dataset is not None:
+                return getattr(dataset, method_name)
+            # This shouldn't happen:
+            return lambda x: _no_dataset_error(method_name)
 
-        subtree_path = subtree_name.rstrip("/") + "/"
+        path_decoder = lambda path: f"{subtree_name}/{path}"
 
-        for d in raw_diff.deltas:
+        yield from self.decode_raw_deltas(
+            raw_diff.deltas,
+            key_filter,
+            old_path_decoder=path_decoder,
+            old_key_decoder=get_decoder(old, key_decoder_method),
+            old_value_decoder=get_decoder(old, value_decoder_method),
+            new_path_decoder=path_decoder,
+            new_key_decoder=get_decoder(new, key_decoder_method),
+            new_value_decoder=get_decoder(new, value_decoder_method),
+        )
+
+    def decode_raw_deltas(
+        self,
+        deltas,
+        key_filter=UserStringKeyFilter.MATCH_ALL,
+        *,
+        old_path_decoder=lambda x: x,
+        old_key_decoder=lambda x: x,
+        old_value_decoder=lambda x: x,
+        new_path_decoder=lambda x: x,
+        new_key_decoder=lambda x: x,
+        new_value_decoder=lambda x: x,
+    ):
+        """
+        Given a list of deltas - inserts, updates, and deletes -
+        yields a list of Kart deltas, which look something like ((old_key, old_value), (new_key, new_value)).
+        A key could be a path, a meta-item name, or a primary key value.
+
+        key-filter - deltas are discarded if they don't involve any keys that matches the key filter.
+        old/new_path_decoder - converts the raw-path into a canonical path.
+            Useful if the raw-path is not relative to the preferred folder, you can tidy it up first.
+        old/new_key_decoder - converts the canonical-path into a key.
+        old/new_value_decoder - converts the canonical-path into a value, presumably by loading the file contents at
+            that path.
+
+        If any decoder is not set, the decode operation simply returns the original object.
+        """
+        for d in deltas:
             self.L.debug(
                 "diff(): %s %s %s", d.status_char(), d.old_file.path, d.new_file.path
             )
 
             if d.status not in self._INSERT_UPDATE_DELETE:
-                # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE, UNTRACKED
-                # We don't enounter these status codes in the diffs we generate since we
-                # only generate commit<>commit diffs without rename detection.
+                # RENAMED, COPIED, IGNORED, TYPECHANGE, UNMODIFIED, UNREADABLE
+                # We don't enounter these status codes in the diffs we generate.
                 raise NotImplementedError(f"Delta status: {d.status_char()}")
 
             if d.status in self._UPDATE_DELETE:
-                old_path = subtree_path + d.old_file.path
+                old_path = old_path_decoder(d.old_file.path)
                 old_key = old_key_decoder(old_path)
             else:
                 old_key = None
 
             if d.status in self._INSERT_UPDATE:
-                new_path = subtree_path + d.new_file.path
+                new_path = new_path_decoder(d.new_file.path)
                 new_key = new_key_decoder(d.new_file.path)
             else:
                 new_key = None
@@ -149,9 +186,9 @@ class DatasetDiffMixin:
             if old_key not in key_filter and new_key not in key_filter:
                 continue
 
-            if d.status == pygit2.GIT_DELTA_ADDED:
+            if d.status in self._INSERT_TYPES:
                 self.L.debug("diff(): insert %s (%s)", new_path, new_key)
-            elif d.status == pygit2.GIT_DELTA_MODIFIED:
+            elif d.status in self._UPDATE_TYPES:
                 self.L.debug(
                     "diff(): update %s %s -> %s %s",
                     old_path,
@@ -159,24 +196,16 @@ class DatasetDiffMixin:
                     new_path,
                     new_key,
                 )
-            elif d.status == pygit2.GIT_DELTA_DELETED:
+            elif d.status in self._DELETE_TYPES:
                 self.L.debug("diff(): delete %s %s", old_path, old_key)
 
             if d.status in self._UPDATE_DELETE:
-                old_feature_blob = old.get_blob_at(old_path)
-                old_value_promise = functools.partial(
-                    old_value_decoder, old_feature_blob
-                )
-                old_half_delta = old_key, old_value_promise
+                old_half_delta = old_key, old_value_decoder(old_path)
             else:
                 old_half_delta = None
 
             if d.status in self._INSERT_UPDATE:
-                new_feature_blob = new.get_blob_at(new_path)
-                new_value_promise = functools.partial(
-                    new_value_decoder, new_feature_blob
-                )
-                new_half_delta = new_key, new_value_promise
+                new_half_delta = new_key, new_value_decoder(new_path)
             else:
                 new_half_delta = None
 

@@ -7,10 +7,9 @@ import subprocess
 import sys
 
 import click
-from osgeo import osr
 
 from .checkout import reset_wc_if_needed
-from kart.crs_util import make_crs, get_identifier_str, normalise_wkt
+from kart.crs_util import get_identifier_str, normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
@@ -25,6 +24,7 @@ from kart.fast_import import (
     write_blob_to_stream,
     write_blobs_to_stream,
 )
+from kart.lfs_util import get_hash_and_size_of_file
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.output_util import format_wkt_for_output
 from kart.tabular.version import (
@@ -323,9 +323,6 @@ def _transform_3d_envelope(transform, envelope):
     return envelope
 
 
-_BUF_SIZE = 65536
-
-
 def _convert_tile_to_copc_lfs_blob(source, dest):
     """
     Converts a LAS/LAZ file of some sort as source to a COPC.LAZ file at dest.
@@ -354,15 +351,10 @@ def _convert_tile_to_copc_lfs_blob(source, dest):
         )
     assert dest.is_file()
 
-    size = dest.stat().st_size
-    sha256 = hashlib.sha256()
-    with open(str(dest), "rb") as input:
-        while True:
-            data = input.read(_BUF_SIZE)
-            if not data:
-                break
-            sha256.update(data)
-    return sha256.hexdigest(), size
+    return get_hash_and_size_of_file(dest)
+
+
+_BUF_SIZE = 65536
 
 
 def _copy_tile_to_lfs_blob(source, dest):

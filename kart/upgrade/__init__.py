@@ -359,7 +359,7 @@ def _find_sole_dataset_diff(
     from kart.diff_util import get_dataset_diff
 
     ds_path = all_changed_ds_paths[0]
-    ds_diff = get_dataset_diff(ds_path, parent_datasets, source_datasets, None)
+    ds_diff = get_dataset_diff(ds_path, parent_datasets, source_datasets)
     return ds_path, ds_diff
 
 
