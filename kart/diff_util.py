@@ -49,7 +49,9 @@ class WCDiffContext:
         # we can reuse this result for more than one dataset.
         index = pygit2.Index(str(self.workdir_index_path))
         index._repo = self.repo
-        return index.diff_to_workdir(pygit2.GIT_DIFF_INCLUDE_UNTRACKED)
+        return index.diff_to_workdir(
+            pygit2.GIT_DIFF_INCLUDE_UNTRACKED | pygit2.GIT_DIFF_UPDATE_INDEX
+        )
 
     @functools.lru_cache(maxsize=1)
     def workdir_deltas_by_ds_path(self):

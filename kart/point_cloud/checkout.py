@@ -47,11 +47,13 @@ def reset_wc_if_needed(repo):
                 continue
             shutil.copy(lfs_path, wc_tiles_dir / tilename)
 
-            try:
-                args = ["git", "add", dataset.path]
-                subprocess.check_call(args, env=env, cwd=repo.workdir_path)
-            except subprocess.CalledProcessError as e:
-                sys.exit(translate_subprocess_exit_code(e.returncode))
+        try:
+            args = ["git", "add", dataset.path]
+            subprocess.check_call(
+                args, env=env, cwd=repo.workdir_path, stdout=subprocess.DEVNULL
+            )
+        except subprocess.CalledProcessError as e:
+            sys.exit(translate_subprocess_exit_code(e.returncode))
 
 
 @click.command("point-cloud-checkout", hidden=True)

@@ -54,18 +54,26 @@ class PointCloudV1(BaseDataset):
     def decode_path(self, path):
         rel_path = self.ensure_rel_path(path)
         if rel_path.startswith("tile/"):
-            return ("tile", self.decode_tile_path(rel_path))
+            return ("tile", self.tilename_from_path(rel_path))
         return super().decode_path(rel_path)
 
-    def encode_tile_path(self, tilename, relative=False):
+    def tilename_to_blob_path(self, tilename, relative=False):
         """Given a tile's name, returns the path the tile's pointer should be written to."""
-        tilename = tilename.rsplit("/")[-1]
+        tilename = self.tilename_from_path(
+            tilename
+        )  # Just in case it's a whole path, not just a name.
         tile_prefix = hexhash(tilename)[0:2]
         rel_path = f"tile/{tile_prefix}/{tilename}"
         return rel_path if relative else self.ensure_full_path(rel_path)
 
+    def tilename_to_wc_path(self, tilename):
+        tilename = self.tilename_from_path(
+            tilename
+        )  # Just in case it's a whole path, not just a name.
+        return f"{self.path}/tiles/{tilename}"
+
     @classmethod
-    def decode_tile_path(cls, tile_path):
+    def tilename_from_path(cls, tile_path):
         return tile_path.rsplit("/", maxsplit=1)[-1]
 
     def get_tile_summary_from_pointer_blob(self, tile_pointer_blob):
@@ -101,7 +109,7 @@ class PointCloudV1(BaseDataset):
             other,
             "tile",
             key_filter=tile_filter,
-            key_decoder_method="decode_tile_path",
+            key_decoder_method="tilename_from_path",
             value_decoder_method="get_tile_summary_promise_from_path",
             reverse=reverse,
         )
@@ -113,28 +121,29 @@ class PointCloudV1(BaseDataset):
         )
 
     def diff_to_wc(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
+        """Returns a diff of all changes made to this dataset in the working copy."""
         ds_diff = DatasetDiff()
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
         ds_diff["tile"] = DeltaDiff(self.diff_tile_to_wc(wc_diff_context, tile_filter))
         return ds_diff
 
     def diff_tile_to_wc(self, wc_diff_context, tile_filter):
-        deltas = wc_diff_context.workdir_deltas_by_ds_path().get(self.path)
-        if not deltas:
-            return
+        """Yields deltas of all the changes the user has made to tiles in the working copy."""
 
-        def encode_tile_path_relative(tilename):
-            return self.encode_tile_path(tilename, relative=True)
+        # Dataset-paths have a different structure to worktree paths - the worktree index will have only worktree paths,
+        # and we need to find the related dataset paths.
+        def wc_to_ds_path_transform(wc_path):
+            return self.tilename_to_blob_path(wc_path, relative=True)
 
-        yield from self.decode_raw_deltas(
-            deltas,
-            tile_filter,
-            old_path_decoder=encode_tile_path_relative,
-            old_key_decoder=self.decode_tile_path,
-            old_value_decoder=self.get_tile_summary_promise_from_path,
-            # We don't need new_path_decoder - leave wc paths as-is
-            new_key_decoder=self.decode_tile_path,
-            new_value_decoder=self.get_tile_summary_promise_from_wc_path,
+        yield from self.generate_wc_diff_from_worktree_index(
+            wc_diff_context,
+            only_in_subfolder="tiles",
+            key_filter=tile_filter,
+            wc_to_ds_path_transform=wc_to_ds_path_transform,
+            ds_key_decoder=self.tilename_from_path,
+            wc_key_decoder=self.tilename_from_path,
+            ds_value_decoder=self.get_tile_summary_promise_from_path,
+            wc_value_decoder=self.get_tile_summary_promise_from_wc_path,
         )
 
     def get_tile_summary_promise_from_wc_path(self, wc_path):
