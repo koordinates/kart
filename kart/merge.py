@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 import click
@@ -322,6 +323,13 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
             L.debug(f"Updating {wc} ...")
             merge_commit = repo[jdict["commit"]]
             wc.reset(merge_commit)
+
+            if os.environ.get("X_KART_POINT_CLOUDS"):
+                from kart.point_cloud.checkout import (
+                    reset_wc_if_needed as reset_for_point_clouds,
+                )
+
+                reset_for_point_clouds(repo)
 
     if do_json:
         dump_json_output({"kart.merge/v1": jdict}, sys.stdout)
