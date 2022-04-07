@@ -78,20 +78,11 @@ class JsonDiffWriter(BaseDiffWriter):
         )
         self.write_warnings_footer()
 
-    def _postprocess_meta_delta(self, delta):
+    def _postprocess_simple_delta(self, delta):
         r = delta.to_plus_minus_dict()
         if self.patch_type == "minimal" and "+" in r and "-" in r:
             r.pop("-")
             r["*"] = r.pop("+")
-        return r
-
-    def _postprocess_tile_delta(self, tilename, delta):
-        r = delta.to_plus_minus_dict()
-        if self.patch_type == "minimal" and "+" in r and "-" in r:
-            r.pop("-")
-            r["*"] = r.pop("+")
-        for char in r:
-            r[char] = {"name": tilename, **r[char]}
         return r
 
     def default(self, obj):
@@ -101,7 +92,7 @@ class JsonDiffWriter(BaseDiffWriter):
             result = {}
             if "meta" in ds_diff:
                 result["meta"] = {
-                    key: self._postprocess_meta_delta(value)
+                    key: self._postprocess_simple_delta(value)
                     for key, value in ds_diff["meta"].items()
                 }
             if "feature" in ds_diff:
@@ -110,7 +101,7 @@ class JsonDiffWriter(BaseDiffWriter):
                 )
             if "tile" in ds_diff:
                 result["tile"] = [
-                    self._postprocess_tile_delta(key, value)
+                    self._postprocess_simple_delta(value)
                     for key, value in ds_diff["tile"].items()
                 ]
             return result

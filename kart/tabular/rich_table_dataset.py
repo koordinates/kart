@@ -175,8 +175,8 @@ class RichTableDataset(TableDataset):
         )
         return ds_diff
 
-    def diff_to_wc(self, repo, ds_filter=DatasetKeyFilter.MATCH_ALL):
-        return repo.working_copy.diff_db_to_tree(self, ds_filter)
+    def diff_to_wc(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
+        return wc_diff_context.table_working_copy.diff_db_to_tree(self, ds_filter)
 
     def diff_feature(
         self, other, feature_filter=FeatureKeyFilter.MATCH_ALL, reverse=False
@@ -190,9 +190,13 @@ class RichTableDataset(TableDataset):
             "feature",
             key_filter=feature_filter,
             key_decoder_method="decode_path_to_1pk",
-            value_decoder_method="get_feature_from_blob",
+            value_decoder_method="get_feature_promise_from_path",
             reverse=reverse,
         )
+
+    def get_feature_promise_from_path(self, feature_path):
+        feature_blob = self.get_blob_at(feature_path)
+        return functools.partial(self.get_feature_from_blob, feature_blob)
 
     def apply_diff(
         self, dataset_diff, object_builder, *, resolve_missing_values_from_ds=None

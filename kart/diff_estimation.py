@@ -3,6 +3,7 @@ import threading
 
 import pygit2
 
+from kart.diff_util import get_dataset_diff, WCDiffContext
 from kart.exceptions import SubprocessError
 
 ACCURACY_SUBTREE_SAMPLES = {
@@ -91,6 +92,7 @@ def estimate_diff_feature_counts(
 
     if include_wc_diff:
         working_copy = repo.working_copy
+        wc_diff_context = WCDiffContext(repo)
     else:
         annotation_type = f"feature-change-counts-{accuracy}"
         annotation = repo.diff_annotations.get(
@@ -123,10 +125,13 @@ def estimate_diff_feature_counts(
 
         if accuracy == "exact" and include_wc_diff:
             # can't really avoid this - to generate an exact count for this diff we have to generate the diff
-            from kart.diff_util import get_dataset_diff
 
             ds_diff = get_dataset_diff(
-                dataset_path, base_rs.datasets(), target_rs.datasets(), include_wc_diff
+                dataset_path,
+                base_rs.datasets(),
+                target_rs.datasets(),
+                include_wc_diff=include_wc_diff,
+                wc_diff_context=wc_diff_context,
             )
             ds_total = len(ds_diff.get("feature", []))
 

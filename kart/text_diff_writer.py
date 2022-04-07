@@ -61,11 +61,11 @@ class TextDiffWriter(BaseDiffWriter):
                 self.write_meta_delta(ds_path, key, delta)
 
         for key, delta in self.filtered_ds_feature_deltas(ds_path, ds_diff):
-            self.write_feature_delta(ds_path, key, delta)
+            self.write_dict_delta_only_show_diffs(ds_path, "feature", key, delta)
 
         if "tile" in ds_diff:
             for key, delta in ds_diff["tile"].sorted_items():
-                self.write_simple_delta(ds_path, "tile", key, delta)
+                self.write_dict_delta_only_show_diffs(ds_path, "tile", key, delta)
 
     def write_simple_delta(self, ds_path, item_type, key, delta):
         if delta.old:
@@ -116,42 +116,42 @@ class TextDiffWriter(BaseDiffWriter):
         json_str = json.dumps(jdict, indent=2)
         return re.sub("^", prefix, json_str, flags=re.MULTILINE)
 
-    def write_feature_delta(self, ds_path, key, delta):
-        old_pk = delta.old_key
-        new_pk = delta.new_key
-        old_feature = delta.old_value
-        new_feature = delta.new_value
+    def write_dict_delta_only_show_diffs(self, ds_path, item_type, key, delta):
+        old_key = delta.old_key
+        new_key = delta.new_key
+        old_value = delta.old_value
+        new_value = delta.new_value
 
         if delta.type == "insert":
-            click.secho(f"+++ {ds_path}:feature:{new_pk}", bold=True, **self.pecho)
-            output = feature_as_text(new_feature, prefix="+ ")
+            click.secho(f"+++ {ds_path}:{item_type}:{new_key}", bold=True, **self.pecho)
+            output = feature_as_text(new_value, prefix="+ ")
 
             click.secho(output, fg="green", **self.pecho)
             return
 
         if delta.type == "delete":
-            click.secho(f"--- {ds_path}:feature:{old_pk}", bold=True, **self.pecho)
-            output = feature_as_text(old_feature, prefix="- ")
+            click.secho(f"--- {ds_path}:{item_type}:{old_key}", bold=True, **self.pecho)
+            output = feature_as_text(old_value, prefix="- ")
             click.secho(output, fg="red", **self.pecho)
             return
 
         # More work to do when delta.type == "update"
         click.secho(
-            f"--- {ds_path}:feature:{old_pk}\n+++ {ds_path}:feature:{new_pk}",
+            f"--- {ds_path}:{item_type}:{old_key}\n+++ {ds_path}:{item_type}:{new_key}",
             bold=True,
             **self.pecho,
         )
 
-        for k in self._all_feature_keys(old_feature, new_feature):
+        for k in self._all_dict_keys(old_value, new_value):
             if k.startswith("__"):
                 continue
-            if old_feature.get(k, _NULL) == new_feature.get(k, _NULL):
+            if old_value.get(k, _NULL) == new_value.get(k, _NULL):
                 continue
-            if k in old_feature:
-                output = feature_field_as_text(old_feature, k, prefix="- ")
+            if k in old_value:
+                output = feature_field_as_text(old_value, k, prefix="- ")
                 click.secho(output, fg="red", **self.pecho)
-            if k in new_feature:
-                output = feature_field_as_text(new_feature, k, prefix="+ ")
+            if k in new_value:
+                output = feature_field_as_text(new_value, k, prefix="+ ")
                 click.secho(output, fg="green", **self.pecho)
 
     # The rest of the class is all just so we can get nice schema diffs. Still, that's important.

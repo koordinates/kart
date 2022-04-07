@@ -91,6 +91,7 @@ class BaseDiffWriter:
         self.all_ds_paths = diff_util.get_all_ds_paths(
             self.base_rs, self.target_rs, self.repo_key_filter
         )
+        self.wc_diff_context = diff_util.WCDiffContext(repo, self.all_ds_paths)
 
         self.spatial_filter_pk_conflicts = None
         if (
@@ -178,11 +179,11 @@ class BaseDiffWriter:
         return repo.structure(ancestor_id)
 
     @classmethod
-    def _all_feature_keys(cls, old_feature, new_feature):
+    def _all_dict_keys(cls, old_dict, new_dict):
         # Returns a sensible order for outputting all fields from two features which may have different fields.
         return itertools.chain(
-            old_feature.keys(),
-            (k for k in new_feature.keys() if k not in old_feature),
+            old_dict.keys(),
+            (k for k in new_dict.keys() if k not in old_dict),
         )
 
     def write_header(self):
@@ -247,8 +248,9 @@ class BaseDiffWriter:
         return diff_util.get_repo_diff(
             self.base_rs,
             self.target_rs,
-            self.include_wc_diff,
-            self.repo_key_filter,
+            include_wc_diff=self.include_wc_diff,
+            wc_diff_context=self.wc_diff_context,
+            repo_key_filter=self.repo_key_filter,
         )
 
     def get_dataset_diff(self, ds_path):
@@ -267,8 +269,9 @@ class BaseDiffWriter:
             ds_path,
             self.base_rs.datasets(),
             self.target_rs.datasets(),
-            self.include_wc_diff,
-            self.repo_key_filter[ds_path],
+            include_wc_diff=self.include_wc_diff,
+            wc_diff_context=self.wc_diff_context,
+            ds_filter=self.repo_key_filter[ds_path],
         )
 
     def _unfiltered_ds_feature_deltas(self, ds_path, ds_diff):
