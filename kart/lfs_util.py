@@ -11,7 +11,7 @@ L = logging.getLogger(__name__)
 POINTER_PATTERN = re.compile(rb"^oid sha256:([0-9a-fA-F]{64})$", re.MULTILINE)
 
 
-_BUF_SIZE = 65536
+_BUF_SIZE = 1 * 1024 * 1024  # 1MB
 
 
 def get_hash_and_size_of_file(path):
@@ -79,22 +79,14 @@ def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
 
 
 def dict_to_pointer_file_bytes(pointer_dict):
-    def sort_key(key_value):
-        key, value = key_value
-        if key == "version":
-            return ""
-        return key
-
     blob = bytearray()
-    for key, value in sorted(pointer_dict.items(), key=sort_key):
+    for key, value in sorted(
+        pointer_dict.items(), key=lambda kv: (kv[0] != "version", kv)
+    ):
         # TODO - LFS doesn't support our fancy pointer files yet. Hopefully fix this in LFS.
         if key not in ("version", "oid", "size"):
             continue
-        blob += key.encode("utf8")
-        blob += b" "
-        blob += str(value).encode("utf8")
-        blob += b"\n"
-
+        blob += f"{key} {value}\n".encode("utf8")
     return blob
 
 
@@ -111,7 +103,7 @@ def get_hash_from_pointer_file(pointer_file_bytes):
 def get_local_path_from_lfs_hash(repo, lfs_hash):
     """Given a sha256 LFS hash, finds where the object would be stored in the local LFS cache."""
     if lfs_hash.startswith("sha256:"):
-        lfs_hash = lfs_hash[len("sha256:") :]
+        lfs_hash = lfs_hash[7:]  # len("sha256:")
     return (
         repo.gitdir_path / "lfs" / "objects" / lfs_hash[0:2] / lfs_hash[2:4] / lfs_hash
     )
