@@ -18,25 +18,21 @@ def reset_wc_if_needed(repo):
         return
     assert repo.workdir_path.is_dir()
 
-    worktree_index_file = repo.gitdir_file("worktree-index")
-    # TODO - checkout should check the existing index to do the following:
+    # TODO - checkout should check the existing worktree-index to do the following:
     # - see what the <commit>...<commit> diffs are of the checkout operation we are doing
     # - make sure they don't conflict with uncommitted WC diffs / make sure there are no WC diffs
     # - apply the <commit>...<commit> diffs to the WC (instead of checking out from scratch)
-    # Right now we don't do any of this - we just write a new index over the top of the old one.
-    if worktree_index_file.exists():
-        worktree_index_file.unlink()
+    # Right now we don't do any of this - we just write a new worktree and a new index over the top of the old one.
+    # Nothing is properly tidied up - files from the previous commit that was checked out will stay there unless
+    # they are replaced by the version of that file from the latest commit.
 
-    # NOTE - we could also use pygit2.Index to do this, but this has been easier to get working so far.
-    env = tool_environment()
-    env["GIT_INDEX_FILE"] = str(worktree_index_file)
-
+    reset_index_paths = []
     for dataset in repo.datasets():
         if not isinstance(dataset, PointCloudV1):
             continue
 
+        reset_index_paths.append(dataset.path)
         wc_tiles_dir = repo.workdir_path / dataset.path / "tiles"
-
         (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
         for tilename, lfs_path in dataset.tilenames_with_lfs_paths():
@@ -47,8 +43,31 @@ def reset_wc_if_needed(repo):
                 continue
             shutil.copy(lfs_path, wc_tiles_dir / tilename)
 
+    # TODO - this marks everything inside these dataset folders as "clean" until the user makes an edit, which is then
+    # "dirty". Since we aren't tidying up the folders properly, there could actually be untracked files in them still.
+    # But it works well enough to show how diffing and committing works in principle - it just needs more work.
+    reset_worktree_index(repo, reset_index_paths)
+
+
+def reset_worktree_index(repo, reset_index_paths):
+    """
+    Creates a file <GIT-DIR>/worktree-index that is an index of that part of the contents of the workdir
+    that is contained within the given update_index_paths (which can be files or folders).
+    """
+    worktree_index_file = repo.gitdir_file("worktree-index")
+
+    # NOTE - we could also use pygit2.Index to do this, but this has been easier to get working so far.
+    env = tool_environment()
+    env["GIT_INDEX_FILE"] = str(worktree_index_file)
+
+    # TODO - this may be inefficient - it might be possible to reuse some or all of the existing index,
+    # rather than regenerating it from scratch.
+    if worktree_index_file.exists():
+        worktree_index_file.unlink()
+
+    for path in reset_index_paths:
         try:
-            args = ["git", "add", dataset.path]
+            args = ["git", "add", path]
             subprocess.check_call(
                 args, env=env, cwd=repo.workdir_path, stdout=subprocess.DEVNULL
             )

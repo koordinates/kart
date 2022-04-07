@@ -140,7 +140,7 @@ class DatasetDiffMixin:
         wc_diff_context,
         key_filter=UserStringKeyFilter.MATCH_ALL,
         *,
-        only_in_subfolder=None,
+        wc_path_filter_pattern=None,
         wc_to_ds_path_transform=lambda x: x,
         ds_key_decoder=lambda x: x,
         wc_key_decoder=lambda x: x,
@@ -161,8 +161,8 @@ class DatasetDiffMixin:
         Args:
         wc_diff_context - a WCDiffContext object, from which the raw diff is generated.
         key_filter - deltas are only yielded if they involve at least one key that matches the key filter.
-        only_in_subfolder - if unset, then all deltas that involve the dataset's path will be considered. If set, then
-            only those deltas in a specific subfolder from the dataset's path will be considered.
+        wc_path_filter_pattern - if unset, then all deltas that involve the dataset's path will be considered. If set, then
+            only those deltas involving paths that match the given pattern will be considered.
         wc_to_ds_path_transform - a function for taking a working-copy path, and returning the path to the equivalent item
             in the dataset. (The result should generally be a relative path, since that is easier for the dataset to use).
         ds_key_decoder, wc_key_decoder - functions which take a path and return the name of the item.
@@ -178,14 +178,13 @@ class DatasetDiffMixin:
         if not deltas:
             return
 
-        if only_in_subfolder:
-            only_in_subfolder = only_in_subfolder.rstrip("/")
-            required_prefix = f"{self.path}/{only_in_subfolder}/"
+        if wc_path_filter_pattern:
+            p = wc_path_filter_pattern
             deltas = (
                 d
                 for d in deltas
-                if (d.old_file and d.old_file.path.startswith(required_prefix))
-                or (d.new_file and d.new_file.path.startswith(required_prefix))
+                if (d.old_file and p.search(d.old_file.path))
+                or (d.new_file and p.search(d.new_file.path))
             )
 
         yield from self.transform_raw_deltas(

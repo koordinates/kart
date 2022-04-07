@@ -2,6 +2,7 @@ import logging
 from collections import deque
 import functools
 import re
+import os
 from typing import Optional
 
 import click
@@ -287,6 +288,10 @@ class RepoStructure:
                 else:
                     new_schema = Schema.from_column_dicts(schema_delta.new_value)
             else:
+                ds = self.datasets()[ds_path]
+                # TODO - check schema for point-clouds as well as table datasets.
+                if ds.DATASET_TYPE != "table":
+                    continue
                 new_schema = self.datasets()[ds_path].schema
 
             feature_diff = ds_diff.get("feature") or {}
@@ -361,6 +366,18 @@ class RepoStructure:
                 message,
                 parents,
             )
+
+        if os.environ.get("X_KART_POINT_CLOUDS"):
+            from kart.point_cloud.v1 import PointCloudV1
+            from kart.point_cloud.checkout import reset_worktree_index
+
+            # Update the worktree-index to match the actual current worktree.
+            # TODO - update that part of the index that was actually changed - don't just assume
+            # we committed all outstanding changes in all point-cloud datasets.
+            reset_index_paths = [
+                ds.path for ds in self.datasets() if isinstance(ds, PointCloudV1)
+            ]
+            reset_worktree_index(self.repo, reset_index_paths)
 
         L.info(f"Commit: {new_commit.id.hex}")
         return new_commit

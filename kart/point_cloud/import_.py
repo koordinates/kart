@@ -1,5 +1,4 @@
 import json
-import hashlib
 import os
 from pathlib import Path
 import uuid
@@ -24,7 +23,12 @@ from kart.fast_import import (
     write_blob_to_stream,
     write_blobs_to_stream,
 )
-from kart.lfs_util import get_hash_and_size_of_file
+from kart.lfs_util import (
+    dict_to_pointer_file_bytes,
+    get_hash_and_size_of_file,
+    get_hash_and_size_of_file_while_copying,
+    get_local_path_from_lfs_hash,
+)
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.output_util import format_wkt_for_output
 from kart.tabular.version import (
@@ -154,14 +158,14 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
     if is_copc:
         # Keep native format.
-        import_func = _copy_tile_to_lfs_blob
+        import_func = get_hash_and_size_of_file_while_copying
         kart_format = f"pc:v1/copc-{copc_version}.0"
     elif is_laz:
         # Optionally Convert to COPC 1.0 if requested
         import_func = (
             _convert_tile_to_copc_lfs_blob
             if convert_to_copc
-            else _copy_tile_to_lfs_blob
+            else get_hash_and_size_of_file_while_copying
         )
         kart_format = "pc:v1/copc-1.0" if convert_to_copc else f"pc:v1/laz-{version}"
     else:  # LAS
@@ -198,9 +202,8 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
     ds_inner_path = f"{ds_path}/.point-cloud-dataset.v1"
 
-    lfs_objects_path = repo.gitdir_path / "lfs" / "objects"
-    lfs_tmp_import_path = lfs_objects_path / "import"
-    lfs_tmp_import_path.mkdir(parents=True, exist_ok=True)
+    lfs_tmp_path = repo.gitdir_path / "lfs" / "objects" / "tmp"
+    lfs_tmp_path.mkdir(parents=True, exist_ok=True)
 
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))
@@ -211,9 +214,9 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         for source in sources:
             click.echo(f"Importing {source}...")
 
-            tmp_object_path = lfs_tmp_import_path / str(uuid.uuid4())
+            tmp_object_path = lfs_tmp_path / str(uuid.uuid4())
             oid, size = import_func(source, tmp_object_path)
-            actual_object_path = lfs_objects_path / oid[0:2] / oid[2:4] / oid
+            actual_object_path = get_local_path_from_lfs_hash(repo, oid)
             actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
             tmp_object_path.rename(actual_object_path)
 
@@ -232,7 +235,9 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
                 "oid": f"sha256:{oid}",
                 "size": size,
             }
-            write_pointer_file_to_stream(proc.stdin, blob_path, pointer_dict)
+            write_blob_to_stream(
+                proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
+            )
 
         write_blob_to_stream(
             proc.stdin, f"{ds_inner_path}/meta/schema.json", json_pack(schema)
@@ -249,26 +254,6 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
 def _format_array(array):
     return json.dumps(array, separators=(",", ":"))[1:-1]
-
-
-def write_pointer_file_to_stream(stream, blob_path, pointer_dict):
-    def sort_key(key_value):
-        key, value = key_value
-        if key == "version":
-            return ""
-        return key
-
-    blob = bytearray()
-    for key, value in sorted(pointer_dict.items(), key=sort_key):
-        # TODO - LFS doesn't support our fancy pointer files yet. Hopefully fix this in LFS.
-        if key not in ("version", "oid", "size"):
-            continue
-        blob += key.encode("utf8")
-        blob += b" "
-        blob += str(value).encode("utf8")
-        blob += b"\n"
-
-    write_blob_to_stream(stream, blob_path, blob)
 
 
 # The COPC version number we use for any LAZ / LAS file that is not actually COPC.
@@ -352,24 +337,6 @@ def _convert_tile_to_copc_lfs_blob(source, dest):
     assert dest.is_file()
 
     return get_hash_and_size_of_file(dest)
-
-
-_BUF_SIZE = 65536
-
-
-def _copy_tile_to_lfs_blob(source, dest):
-    """Copies a file from source to dest and returns the SHA256 and length of the file."""
-    sha256 = hashlib.sha256()
-    size = Path(source).stat().st_size
-    with open(str(source), "rb") as input:
-        with open(str(dest), "wb") as output:
-            while True:
-                data = input.read(_BUF_SIZE)
-                if not data:
-                    break
-                sha256.update(data)
-                output.write(data)
-    return sha256.hexdigest(), size
 
 
 class ListBasedSet:
