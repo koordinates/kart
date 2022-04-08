@@ -177,6 +177,8 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         import_func = _convert_tile_to_copc_lfs_blob
         kart_format = "pc:v1/copc-1.0"
 
+    import_ext = ".copc.laz" if "copc" in kart_format else ".laz"
+
     # Set up LFS hooks.
     # TODO: This could eventually be moved to `kart init`.
     if not (repo.gitdir_path / "hooks" / "pre-push").is_file():
@@ -221,7 +223,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             tmp_object_path.rename(actual_object_path)
 
             # TODO - is this the right prefix and name?
-            tilename = os.path.splitext(os.path.basename(source))[0] + ".copc.laz"
+            tilename = os.path.splitext(os.path.basename(source))[0] + import_ext
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
             info = per_source_info[source]

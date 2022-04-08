@@ -191,6 +191,37 @@ def test_import_several_las(
                     ).is_file()
 
 
+def test_import_no_convert(
+    tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
+):
+    with data_archive_readonly("point-cloud/laz-auckland.tgz") as auckland:
+        repo_path = tmp_path / "point-cloud-repo"
+        r = cli_runner.invoke(["init", repo_path])
+        assert r.exit_code == 0
+
+        with chdir(repo_path):
+            r = cli_runner.invoke(
+                [
+                    "point-cloud-import",
+                    *glob(f"{auckland}/auckland_0_0.laz"),
+                    "--dataset-path=auckland",
+                    "--no-convert-to-copc",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0.laz"])
+            assert r.exit_code == 0, r.stderr
+            assert r.stdout.splitlines()[4:] == [
+                "    Importing 1 LAZ tiles as auckland",
+                "",
+                "+++ auckland:tile:auckland_0_0.laz",
+                "+                                     name = auckland_0_0.laz",
+                "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
+                "+                                     size = 51489",
+            ]
+
+
 def test_import_mismatched_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):

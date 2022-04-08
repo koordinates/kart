@@ -50,9 +50,9 @@ def get_hash_and_size_of_file_while_copying(src_path, dest_path, allow_overwrite
 
     size = src_path.stat().st_size
     sha256 = hashlib.sha256()
-    with open(str(src_path), "rb"), open(str(dest_path)) as (src, dest):
+    with open(str(src_path), "rb") as src, open(str(dest_path), "wb") as dest:
         while True:
-            data = input.read(_BUF_SIZE)
+            data = src.read(_BUF_SIZE)
             if not data:
                 break
             sha256.update(data)
