@@ -1,3 +1,4 @@
+import os
 import sys
 
 import click
@@ -81,7 +82,13 @@ def get_working_copy_status_json(repo):
 
     output = {"path": working_copy.clean_location, "changes": None}
 
-    wc_diff = working_copy.diff_to_tree()
+    if os.environ.get("X_KART_POINT_CLOUDS"):
+        from kart import diff_util
+
+        rs = repo.structure()
+        wc_diff = diff_util.get_repo_diff(rs, rs, include_wc_diff=True)
+    else:
+        wc_diff = working_copy.diff_to_tree()
     if wc_diff:
         output["changes"] = get_diff_status_including_pk_conflicts_json(wc_diff, repo)
 
@@ -260,7 +267,7 @@ def diff_status_to_text(jdict):
     message = []
     for dataset_path, dataset_changes in jdict.items():
         message.append(f"  {dataset_path}:")
-        for dataset_part in ("meta", "feature"):
+        for dataset_part in ("meta", "feature", "tile"):
             if dataset_part not in dataset_changes:
                 continue
             message.append(f"    {dataset_part}:")

@@ -41,7 +41,6 @@ def requires_git_lfs():
 def test_import_single_las(
     tmp_path, chdir, cli_runner, data_archive_readonly, requires_pdal, requires_git_lfs
 ):
-    # Using postgres here because it has the best type preservation
     with data_archive_readonly("point-cloud/las-autzen.tgz") as autzen:
         repo_path = tmp_path / "point-cloud-repo"
         r = cli_runner.invoke(["init", repo_path])
@@ -263,6 +262,22 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch):
         (tiles_path / "auckland_3_3.copc.laz").rename(
             tiles_path / "auckland_4_4.copc.laz"
         )
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines() == [
+            "On branch main",
+            "",
+            "Changes in working copy:",
+            '  (use "kart commit" to commit)',
+            '  (use "kart restore" to discard changes)',
+            "",
+            "  auckland:",
+            "    tile:",
+            "      1 inserts",
+            "      1 updates",
+            "      1 deletes",
+        ]
 
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
