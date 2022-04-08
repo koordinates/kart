@@ -100,7 +100,8 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
                 f"Error reading {source}", exit_code=INVALID_FILE_FORMAT
             )
 
-        metadata = json.loads(pipeline.metadata)["metadata"]
+        metadata = _unwrap_metadata(pipeline.metadata)
+
         info = metadata["readers.las"]
 
         compressed_set.add(info["compressed"])
@@ -252,6 +253,14 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
     click.echo("Updating working copy...")
     reset_wc_if_needed(repo)
+
+
+def _unwrap_metadata(metadata):
+    if isinstance(metadata, str):
+        metadata = json.loads(metadata)
+    if "metadata" in metadata:
+        metadata = metadata["metadata"]
+    return metadata
 
 
 def _format_array(array):
