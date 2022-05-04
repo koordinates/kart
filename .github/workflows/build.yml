@@ -1016,7 +1016,7 @@ jobs:
   #
   Windows-cmake:
     needs: Windows
-    runs-on: windows-2016
+    runs-on: windows-2019
     continue-on-error: true
     env:
       PY_VER: "3.7"  # needs to match the Windows job since we use its vendor archive.
