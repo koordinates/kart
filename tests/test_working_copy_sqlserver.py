@@ -655,3 +655,25 @@ def test_checkout_and_status_with_no_crs(
                 ]
             )
             assert r.exit_code == 0, r.stderr
+
+
+def test_checkout_large_geometry(
+    new_sqlserver_db_schema,
+    data_archive,
+    tmp_path,
+    cli_runner,
+):
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    with data_archive("large-geometry") as repo_path:
+        with new_sqlserver_db_schema() as (sqlserver_url, sqlserver_schema):
+            r = cli_runner.invoke(["create-workingcopy", sqlserver_url])
+            r = cli_runner.invoke(
+                [
+                    "-C",
+                    str(repo_path),
+                    "status",
+                ]
+            )
+            assert r.exit_code == 0, r.stderr
