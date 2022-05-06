@@ -397,7 +397,8 @@ class GeometryType(ConverterType):
         # POINT EMPTY is handled specially since it doesn't have a WKB value the SQL Server accepts.
         return sa.case(
             (
-                bindvalue == sa.literal_column(self.EMPTY_POINT_WKB),
+                sa.cast(bindvalue, sa.VARBINARY)
+                == sa.literal_column(self.EMPTY_POINT_WKB),
                 Function(
                     quoted_name("geometry::STGeomFromText", False),
                     "POINT EMPTY",
