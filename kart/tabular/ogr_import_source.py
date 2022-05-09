@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 import click
 from osgeo import gdal, ogr
 
-from kart import crs_util
+from kart import crs_util, ogr_util
 from kart.exceptions import (
     NO_IMPORT_SOURCE,
     NO_TABLE,
@@ -17,7 +17,6 @@ from kart.exceptions import (
     NotYetImplemented,
 )
 from kart.geometry import ogr_to_gpkg_geom
-from kart.ogr_util import get_type_value_adapter
 from kart.output_util import dump_json_output
 from kart.utils import chunk, ungenerator
 
@@ -342,7 +341,13 @@ class OgrTableImportSource(TableImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def field_adapter_map(self):
-        return {col.name: get_type_value_adapter(col.data_type) for col in self.schema}
+        return {
+            col.name: self._get_type_value_adapter(col.name, col.data_type)
+            for col in self.schema
+        }
+
+    def _get_type_value_adapter(self, name, v2_type):
+        return ogr_util.get_type_value_adapter(v2_type)
 
     @ungenerator(dict)
     def _ogr_feature_to_kart_feature(self, ogr_feature):
@@ -579,7 +584,13 @@ class OgrTableImportSource(TableImportSource):
             # 'Line String' --> 'LineString' --> 'LINESTRING'
             v2_type = ogr.GeometryTypeToName(ogr_geom_type).replace(" ", "").upper()
 
+        if self._should_promote_to_multi(name, v2_type):
+            v2_type = f"MULTI{v2_type}"
+
         return f"{v2_type} {z}{m}".strip()
+
+    def _should_promote_to_multi(self, name, v2_geom_type):
+        return False
 
     def _schema_from_db(self):
         pk_col = self.pk_column_schema
@@ -593,6 +604,10 @@ class OgrTableImportSource(TableImportSource):
 
 
 class ESRIShapefileImportSource(OgrTableImportSource):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.force_promote_geom_columns = {}
+
     def _should_import_as_numeric(self, ogr_type, ogr_width, ogr_precision):
         if not super()._should_import_as_numeric(ogr_type, ogr_width, ogr_precision):
             return False
@@ -613,6 +628,36 @@ class ESRIShapefileImportSource(OgrTableImportSource):
         ):
             return False
         return True
+
+    def _should_promote_to_multi(self, name, v2_geom_type):
+        # Shapefiles don't distinguish between single- and multi- versions of these geometry types -
+        # so we promote the column to the multi-type on import in case there are any multi- instances in that column.
+        if v2_geom_type in ("LINESTRING", "POLYGON"):
+            forced_type = f"MULTI{v2_geom_type}"
+            self.force_promote_geom_columns[name] = forced_type
+            return True
+        return False
+
+    def _get_type_value_adapter(self, name, v2_type):
+        if name in self.force_promote_geom_columns:
+            forced_type = self.force_promote_geom_columns[name]
+            if forced_type == "MULTILINESTRING":
+                return adapt_ogr_force_multilinestring
+            elif forced_type == "MULTIPOLYGON":
+                return adapt_ogr_force_multipolygon
+        return super()._get_type_value_adapter(name, v2_type)
+
+
+def adapt_ogr_force_multilinestring(value):
+    if value is None:
+        return value
+    return ogr_util.adapt_ogr_geometry(ogr.ForceToMultiLineString(value))
+
+
+def adapt_ogr_force_multipolygon(value):
+    if value is None:
+        return value
+    return ogr_util.adapt_ogr_geometry(ogr.ForceToMultiPolygon(value))
 
 
 def postgres_url_to_ogr_conn_str(url):
