@@ -12,7 +12,8 @@ from .merge_util import MergeContext, merge_status_to_text
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
-
+from .tabular.import_source import TableImportSource
+from kart.working_copy import WorkingCopyType
 
 @click.command()
 @click.pass_context
@@ -22,7 +23,13 @@ from .spatial_filter import SpatialFilter
     type=click.Choice(["text", "json"]),
     default="text",
 )
-def status(ctx, output_format):
+
+@click.option(
+    "--list-untracked-tables",
+    is_flag=True,
+    help="Make the program exit with codes similar to diff(1). That is, it exits with 1 if there were differences and 0 means no differences.",
+)
+def status(ctx, output_format, list_untracked_tables):
     """Show the working copy status"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
     jdict = get_branch_status_json(repo)
@@ -45,7 +52,23 @@ def status(ctx, output_format):
     if output_format == "json":
         dump_json_output({"kart.status/v1": jdict}, sys.stdout)
     else:
-        click.echo(status_to_text(jdict))
+        if list_untracked_tables:
+            working_copy = repo.working_copy
+            location = repo.workingcopy_location
+            wc_type = str(WorkingCopyType.from_location(location)).lstrip("WorkingCopyType.")
+            source = wc_type + ":" + str(working_copy)
+
+            ret_val = TableImportSource.open(source).get_tables()
+            all_tables = [table_name for table_name, title in ret_val.items()]
+            # Get tables shown in kart data ls
+            ds_paths = [ds.path for ds in repo.datasets()] 
+
+            untracked_tables = list(set(all_tables) - set(ds_paths))
+            if untracked_tables:
+                for untracked_table in untracked_tables:
+                    click.echo(untracked_table)
+        else:        
+            click.echo(status_to_text(jdict))
 
 
 def get_branch_status_json(repo):
