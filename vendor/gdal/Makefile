@@ -162,7 +162,9 @@ $(configure-gdal): | src $(libs) $(ccache-deps)
 		--without-jasper \
 		--without-jpeg \
 		--without-jpeg12 \
+		--without-jxl \
 		--without-lerc \
+		--without-lz4 \
 		--without-netcdf \
 		--without-odbc \
 		--without-openjpeg \
