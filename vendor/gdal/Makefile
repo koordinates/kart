@@ -1,5 +1,5 @@
-GDAL_VERSION ?= 3.3.2
-GDAL_SO = libgdal.29
+GDAL_VERSION ?= 3.4.0
+GDAL_SO = libgdal.30
 SHELL = /bin/bash
 
 export PREFIX ?= $(abspath env)
