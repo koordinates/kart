@@ -14,7 +14,6 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Bugfix: Fixed a bug where creating a MSSQL working copy fails when there are large (~10KB) geometries. [#617](https://github.com/koordinates/kart/issues/617)
 - Added support for `--list-untracked-tables` option under `kart status` command to list the tables/datasets that are added to the repository but are not tracked by Kart.
 
-
 ## 0.11.1
 
 - Improve performance when creating a working copy in a spatially filtered repository (this was previously slower than in a non-filtered repository; now it is much faster) [#561](https://github.com/koordinates/kart/issues/561)
