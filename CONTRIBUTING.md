@@ -17,7 +17,7 @@ Requirements for macOS & Linux:
 * Git >= v2.31
 * OpenSSL >= v1.1
 * PostgreSQL client library (libpq)
-* Python >= 3.7
+* Python == 3.7
 * Spatialindex >= v1.9.3
 * SpatiaLite >= v5.0.1
 * SQLite3 >= v3.31.1
