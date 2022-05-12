@@ -30,8 +30,8 @@
        </Directory>
 
         <DirectoryRef Id="APPDIR">
-            <!-- C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Redist\MSVC\14.16.27012\MergeModules -->
-            <Merge Id="VCRedist" SourceFile="..\..\vendor\dist\Microsoft_VC141_CRT_x64.msm" DiskId="1" Language="0" />
+            <!-- C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\VC\Redist\MSVC\14.29.30133\MergeModules -->
+            <Merge Id="VCRedist" SourceFile="..\..\vendor\dist\Microsoft_VC142_CRT_x64.msm" DiskId="1" Language="0" />
         </DirectoryRef>
 
         <!--Start Menu Shortcuts-->

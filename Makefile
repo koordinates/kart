@@ -18,7 +18,7 @@ export PREFIX ?= /usr/local
 # Python dependencies via pip-compile
 BASE_PIP_COMPILE_CMD = CUSTOM_COMPILE_COMMAND="make py-requirements" pip-compile -v --annotate --no-index --no-emit-trusted-host --upgrade --allow-unsafe
 PIP_COMPILE_CMD ?= $(BASE_PIP_COMPILE_CMD)
-PY_REQS = requirements.txt requirements/test.txt requirements/dev.txt
+PY_REQS = requirements.txt requirements/test.txt requirements/dev.txt requirements/docs.txt
 
 # Native library dependencies
 ifeq ($(PLATFORM),Darwin)
@@ -55,7 +55,9 @@ py-requirements-upgrade: py-requirements
 
 requirements.txt: requirements/requirements.in requirements/licenses.ini
 requirements/test.txt: requirements/test.in requirements.txt
-requirements/dev.txt: requirements/dev.in requirements.txt requirements/test.txt
+requirements/docs.txt: requirements/docs.in requirements.txt requirements/test.txt
+requirements/dev.txt: requirements/dev.in requirements.txt requirements/test.txt requirements/docs.txt
+
 
 requirement%.txt requirements/%.txt:
 	$(MAKE) $(py-install-tools) $(vendor-install)

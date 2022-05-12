@@ -402,6 +402,8 @@ def test_import_from_non_gpkg(
                     g = f.GetGeometryRef()
                     if g:
                         g.AssignSpatialReference(src_layer.GetSpatialRef())
+                        if table == H.POLYGONS.LAYER:
+                            g = ogr.ForceToMultiPolygon(g)
                     expected_feature["geom"] = ogr_to_gpkg_geom(g)
 
                 assert normalise_feature(got_feature) == expected_feature
@@ -444,7 +446,7 @@ def test_shp_import_meta(
             {
                 "name": "geom",
                 "dataType": "geometry",
-                "geometryType": "POLYGON",
+                "geometryType": "MULTIPOLYGON",
                 "geometryCRS": "EPSG:4167",
             },
             {"name": "date_adjus", "dataType": "date"},

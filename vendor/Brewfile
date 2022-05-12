@@ -4,10 +4,6 @@ brew "libpq"
     brew "openssl@1.1"
     brew "krb5"
 
-brew "git"
-    brew "pcre2"
-    brew "gettext"
-
 brew "geos"
 
 brew "json-c"
