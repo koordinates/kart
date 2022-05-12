@@ -185,12 +185,13 @@ def get_dataset_diff(
         if wc_diff_context is None:
             wc_diff_context = WCDiffContext(target_ds.repo)
 
-        target_wc_diff = target_ds.diff_to_wc(wc_diff_context, ds_filter=ds_filter)
-        L.debug(
-            "target<>working_copy diff (%s): %s",
-            ds_path,
-            repr(target_wc_diff),
-        )
+        if target_ds is not None:
+            target_wc_diff = target_ds.diff_to_wc(wc_diff_context, ds_filter=ds_filter)
+            L.debug(
+                "target<>working_copy diff (%s): %s",
+                ds_path,
+                repr(target_wc_diff),
+            )
 
     ds_diff = DatasetDiff.concatenated(
         base_target_diff, target_wc_diff, overwrite_original=True
