@@ -17,7 +17,7 @@ Requirements for macOS & Linux:
 * Git >= v2.31
 * OpenSSL >= v1.1
 * PostgreSQL client library (libpq)
-* Python == 3.7
+* Python >= 3.7
 * Spatialindex >= v1.9.3
 * SpatiaLite >= v5.0.1
 * SQLite3 >= v3.31.1
@@ -101,7 +101,7 @@ $ ./kart --version
 ```
 
 Note you'll need to have the same version of Python that Kart CI currently uses
-(Python 3.7). Get CMake to pick up the right Python using `-DPython3_ROOT=...`.
+(Python 3.7). Get CMake to pick up the right Python using `-DPython3_ROOT=...` - for example, `-DPython3_ROOT=$(which python3.7 | sed 's@/bin/.*@/@')`
 
 ### Running the tests
 
