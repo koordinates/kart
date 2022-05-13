@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 import importlib
+import importlib.util
+import inspect
 import logging
 import os
+import pathlib
 import re
 import subprocess
 import sys
+import traceback
 
 import click
 import pygit2
@@ -217,7 +221,7 @@ def cli(ctx, repo_dir, verbose, post_mortem):
 )
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def push(ctx, do_progress, args):
-    """ Update remote refs along with associated objects """
+    """Update remote refs along with associated objects"""
     ctx.invoke(
         git,
         args=[
@@ -239,7 +243,7 @@ def push(ctx, do_progress, args):
 )
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def fetch(ctx, do_progress, args):
-    """ Download objects and refs from another repository """
+    """Download objects and refs from another repository"""
     ctx.invoke(
         git,
         args=[
@@ -254,7 +258,7 @@ def fetch(ctx, do_progress, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def remote(ctx, args):
-    """ Manage set of tracked repositories """
+    """Manage set of tracked repositories"""
     ctx.invoke(git, args=["remote", *args])
 
 
@@ -262,7 +266,7 @@ def remote(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def tag(ctx, args):
-    """ Create, list, delete or verify a tag object signed with GPG """
+    """Create, list, delete or verify a tag object signed with GPG"""
     ctx.invoke(git, args=["tag", *args])
 
 
@@ -270,7 +274,7 @@ def tag(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def reflog(ctx, args):
-    """ Manage reflog information """
+    """Manage reflog information"""
     ctx.invoke(git, args=["reflog", *args])
 
 
@@ -278,7 +282,7 @@ def reflog(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def config(ctx, args):
-    """ Get and set repository or global options """
+    """Get and set repository or global options"""
     ctx.invoke(git, args=["config", *args])
 
 
@@ -286,7 +290,7 @@ def config(ctx, args):
 @click.pass_context
 @click.argument("args", nargs=-1, type=click.UNPROCESSED)
 def gc(ctx, args):
-    """ Cleanup unnecessary files and optimize the local repository """
+    """Cleanup unnecessary files and optimize the local repository"""
     ctx.invoke(git, args=["gc", *args])
 
 
@@ -316,6 +320,57 @@ def lfs(ctx, args):
         params += ["-C", ctx.obj.user_repo_path]
     params += ["lfs"]
     execvp("git", [*params, *args])
+
+
+@cli.command(
+    name="ext-run", context_settings=dict(ignore_unknown_options=True), hidden=True
+)
+@click.pass_context
+@click.argument("script", type=click.Path(exists=True, dir_okay=False), required=True)
+@click.argument("args", nargs=-1, type=click.UNPROCESSED)
+def ext_run(ctx, script, args):
+    """
+    Invoke a main(ctx, args) function from an arbitrary Python script inside the
+    Kart execution environment. There is no public API for Kart.
+    """
+    script = pathlib.Path(script)
+    # strip all the suffixes
+    module_name = "kart.ext_run." + script.name.split(".", 1)[0]
+
+    def _format_exc_tb():
+        # print a traceback from the ext module down
+        extracts = traceback.extract_tb(sys.exc_info()[2])
+        count = len(extracts)
+        # find the first occurrence of the module file name
+        for i, extract in enumerate(extracts):
+            if extract[0] == script.name:
+                break
+            count -= 1
+        # keep only the count of last lines
+        return traceback.format_exc(limit=-count)
+
+    spec = importlib.util.spec_from_file_location(module_name, script)
+    module = importlib.util.module_from_spec(spec)
+
+    # add script directory to sys.path so the extension can do imports
+    script_dir = script.resolve().parent
+    sys.path.append(str(script_dir))
+
+    try:
+        spec.loader.exec_module(module)
+    except Exception:
+        raise click.ClickException(f"loading {script}\n\n{_format_exc_tb()}")
+
+    if not hasattr(module, "main") or not callable(module.main):
+        raise click.ClickException(f"{script} does not have a main(ctx, args) function")
+
+    try:
+        f_sig = inspect.signature(module.main)
+        f_sig.bind(ctx=ctx, args=args)
+    except TypeError:
+        raise click.ClickException(f"{script} requires a main(ctx, args) function")
+
+    return module.main(ctx=ctx, args=args)
 
 
 def _hackily_parse_command(args, skip_first_arg=True):
