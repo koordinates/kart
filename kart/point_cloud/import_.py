@@ -254,6 +254,11 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
     click.echo("Updating working copy...")
     reset_wc_if_needed(repo)
 
+    # TODO - fix up reset code - there should be a single function you can call that updates all working copies.
+    tabular_wc = repo.get_working_copy(allow_uncreated=True)
+    if tabular_wc is not None:
+        tabular_wc.reset(repo.head_commit)
+
 
 def _unwrap_metadata(metadata):
     if isinstance(metadata, str):
