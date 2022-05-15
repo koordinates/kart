@@ -144,8 +144,8 @@ $(configure-gdal): | src $(libs) $(ccache-deps)
 	@test "`command -v geos-config`" && echo ">> geos-config: `command -v geos-config`" || ( echo ">> geos-config not found"; exit 1 )
 	cd src && ./configure \
 		--prefix=$(PREFIX) \
-		--with-geotiff=internal --with-rename-internal-libgeotiff-symbols \
-		--with-libtiff=internal --with-rename-internal-libtiff-symbols \
+		--with-geotiff=internal --without-rename-internal-libgeotiff-symbols \
+		--with-libtiff=internal --without-rename-internal-libtiff-symbols \
 		--with-proj=$(PROJ_PREFIX) \
 		--without-python \
 		--disable-all-optional-drivers \
