@@ -81,7 +81,6 @@ class PointCloudV1(BaseDataset):
         return tile_path.rsplit("/", maxsplit=1)[-1]
 
     def get_tile_summary_from_pointer_blob(self, tile_pointer_blob):
-        # For now just return the blob contents as a string - it's a reasonable summary.
         result = pointer_file_bytes_to_dict(
             tile_pointer_blob, {"name": tile_pointer_blob.name}
         )
@@ -90,9 +89,17 @@ class PointCloudV1(BaseDataset):
         return result
 
     def get_tile_summary_from_wc_path(self, wc_path):
-        # For now just return the blob contents as a string - it's a reasonable summary.
+        from kart.point_cloud.import_ import (
+            extract_pc_tile_metadata,
+            pc_tile_metadata_to_pointer_metadata,
+        )
+
+        metadata = pc_tile_metadata_to_pointer_metadata(
+            extract_pc_tile_metadata(wc_path)
+        )
+
         oid, size = get_hash_and_size_of_file(wc_path)
-        return {"name": wc_path.name, "oid": f"sha256:{oid}", "size": size}
+        return {"name": wc_path.name, **metadata, "oid": f"sha256:{oid}", "size": size}
 
     def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
         """
@@ -197,20 +204,13 @@ class PointCloudV1(BaseDataset):
                     assert path_in_wc.is_file()
 
                     oid = delta.new_value["oid"]
-                    assert oid.startswith("sha256:")
-                    size = delta.new_value["size"]
                     actual_object_path = get_local_path_from_lfs_hash(self.repo, oid)
                     actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
                     shutil.copy(path_in_wc, actual_object_path)
 
-                    pointer_dict = {
-                        "version": "https://git-lfs.github.com/spec/v1",
-                        "oid": oid,
-                        "size": size,
-                    }
                     object_builder.insert(
                         self.tilename_to_blob_path(tilename, relative=True),
-                        dict_to_pointer_file_bytes(pointer_dict),
+                        dict_to_pointer_file_bytes(delta.new_value),
                     )
 
                 else:  # delete:

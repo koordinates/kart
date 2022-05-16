@@ -81,7 +81,6 @@ def test_import_single_las(
                             {"name": "PointSourceId", "size": 2, "type": "unsigned"},
                             {"name": "GpsTime", "size": 8, "type": "floating"},
                         ],
-                        "CRS": "EPSG:2994",
                     }
                 }
             }
@@ -89,12 +88,16 @@ def test_import_single_las(
             r = cli_runner.invoke(["show", "HEAD", "autzen:tile:autzen.copc.laz"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines()[4:] == [
-                "    Importing 1 LAZ tiles as autzen",
-                "",
-                "+++ autzen:tile:autzen.copc.laz",
-                "+                                     name = autzen.copc.laz",
-                "+                                      oid = sha256:213ef4211ba375e2eec60aa61b6c230d1a3d1498b8fcc39150fd3040ee8f0512",
-                "+                                     size = 3607",
+                '    Importing 1 LAZ tiles as autzen',
+                '',
+                '+++ autzen:tile:autzen.copc.laz',
+                '+                                     name = autzen.copc.laz',
+                '+                             extent.crs84 = 6356.163100000001,6388.646,8489.777900000001,8533.6237,4.0735,5.3684',
+                '+                            extent.native = 6356.163100000001,6388.646,8489.777900000001,8533.6237,4.0735,5.3684',
+                '+                                   format = pc:v1/copc-1.0',
+                '+                             points.count = 106',
+                '+                                      oid = sha256:213ef4211ba375e2eec60aa61b6c230d1a3d1498b8fcc39150fd3040ee8f0512',
+                '+                                     size = 3607',
             ]
 
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
@@ -164,7 +167,6 @@ def test_import_several_las(
                             {"name": "Green", "size": 2, "type": "unsigned"},
                             {"name": "Blue", "size": 2, "type": "unsigned"},
                         ],
-                        "CRS": "EPSG:2193",
                     }
                 }
             }
@@ -212,12 +214,16 @@ def test_import_no_convert(
             r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0.laz"])
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines()[4:] == [
-                "    Importing 1 LAZ tiles as auckland",
-                "",
-                "+++ auckland:tile:auckland_0_0.laz",
-                "+                                     name = auckland_0_0.laz",
-                "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
-                "+                                     size = 51489",
+                '    Importing 1 LAZ tiles as auckland',
+                '',
+                '+++ auckland:tile:auckland_0_0.laz',
+                '+                                     name = auckland_0_0.laz',
+                '+                             extent.crs84 = 17549.878500000003,17559.8777,59202.1976,59212.1964,-0.0166,0.9983',
+                '+                            extent.native = 17549.878500000003,17559.8777,59202.1976,59212.1964,-0.0166,0.9983',
+                '+                                   format = pc:v1/laz-1.2',
+                '+                             points.count = 4231',
+                '+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c',
+                '+                                     size = 51489',
             ]
 
 
@@ -243,7 +249,7 @@ def test_import_mismatched_las(
                 assert "Non-homogenous" in r.stderr
 
 
-def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch):
+def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_pdal):
     monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
 
     # TODO - remove Kart's requirement for a GPKG working copy
@@ -282,20 +288,34 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch):
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "--- auckland:tile:auckland_1_1.copc.laz",
-            "+++ auckland:tile:auckland_1_1.copc.laz",
-            "-                                      oid = sha256:1d9934b50ebd057d893281813fda8deffb0ad03b3c354ec1c5d7557134c40be1",
-            "+                                      oid = sha256:dafd2ed5671190433ca1e7cea364a94d9e00c11f0a7b3927ce93554df5b1cd5c",
-            "-                                     size = 23570",
-            "+                                     size = 68665",
-            "--- auckland:tile:auckland_3_3.copc.laz",
-            "-                                     name = auckland_3_3.copc.laz",
-            "-                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
-            "-                                     size = 1334",
-            "+++ auckland:tile:auckland_4_4.copc.laz",
-            "+                                     name = auckland_4_4.copc.laz",
-            "+                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
-            "+                                     size = 1334",
+            '--- auckland:tile:auckland_1_1.copc.laz',
+            '+++ auckland:tile:auckland_1_1.copc.laz',
+            '-                             extent.crs84 = 17559.8903,17569.8713,59212.2062,59222.1949,-0.0148,0.3515',
+            '+                             extent.crs84 = 17549.878500000003,17559.8777,59202.1976,59212.1964,-0.0166,0.9983',
+            '-                            extent.native = 17559.8903,17569.8713,59212.2062,59222.1949,-0.0148,0.3515',
+            '+                            extent.native = 17549.878500000003,17559.8777,59202.1976,59212.1964,-0.0166,0.9983',
+            '-                             points.count = 1558',
+            '+                             points.count = 4231',
+            '-                                      oid = sha256:c00ad390503389ceebef26ff0a29f98842c82773f998b3b2efde2369584c1f9d',
+            '+                                      oid = sha256:c667eeb6603f22fd36c7be97f672c9c940eb23b2c924701d898501cf8db8abf4',
+            '-                                     size = 24505',
+            '+                                     size = 69559',
+            '--- auckland:tile:auckland_3_3.copc.laz',
+            '-                                     name = auckland_3_3.copc.laz',
+            '-                             extent.crs84 = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '-                            extent.native = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '-                                   format = pc:v1/copc-1.0',
+            '-                             points.count = 29',
+            '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '-                                     size = 2319',
+            '+++ auckland:tile:auckland_4_4.copc.laz',
+            '+                                     name = auckland_4_4.copc.laz',
+            '+                             extent.crs84 = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '+                            extent.native = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '+                                   format = pc:v1/copc-1.0',
+            '+                             points.count = 29',
+            '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '+                                     size = 2319',
         ]
 
         r = cli_runner.invoke(["commit", "-m", "Edit point cloud tiles"])
@@ -304,22 +324,36 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch):
         r = cli_runner.invoke(["show"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines()[4:] == [
-            "    Edit point cloud tiles",
-            "",
-            "--- auckland:tile:auckland_1_1.copc.laz",
-            "+++ auckland:tile:auckland_1_1.copc.laz",
-            "-                                      oid = sha256:1d9934b50ebd057d893281813fda8deffb0ad03b3c354ec1c5d7557134c40be1",
-            "+                                      oid = sha256:dafd2ed5671190433ca1e7cea364a94d9e00c11f0a7b3927ce93554df5b1cd5c",
-            "-                                     size = 23570",
-            "+                                     size = 68665",
-            "--- auckland:tile:auckland_3_3.copc.laz",
-            "-                                     name = auckland_3_3.copc.laz",
-            "-                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
-            "-                                     size = 1334",
-            "+++ auckland:tile:auckland_4_4.copc.laz",
-            "+                                     name = auckland_4_4.copc.laz",
-            "+                                      oid = sha256:522ef2ff7f66b51516021cde1fa7b9f301acde6713772958d6f1303fdac40c25",
-            "+                                     size = 1334",
+            '    Edit point cloud tiles',
+            '',
+            '--- auckland:tile:auckland_1_1.copc.laz',
+            '+++ auckland:tile:auckland_1_1.copc.laz',
+            '-                             extent.crs84 = 17559.8903,17569.8713,59212.2062,59222.1949,-0.0148,0.3515',
+            '+                             extent.crs84 = 17549.878500000003,17559.8777,59202.1976,59212.1964,-0.0166,0.9983',
+            '-                            extent.native = 17559.8903,17569.8713,59212.2062,59222.1949,-0.0148,0.3515',
+            '+                            extent.native = 17549.878500000003,17559.8777,59202.1976,59212.1964,-0.0166,0.9983',
+            '-                             points.count = 1558',
+            '+                             points.count = 4231',
+            '-                                      oid = sha256:c00ad390503389ceebef26ff0a29f98842c82773f998b3b2efde2369584c1f9d',
+            '+                                      oid = sha256:c667eeb6603f22fd36c7be97f672c9c940eb23b2c924701d898501cf8db8abf4',
+            '-                                     size = 24505',
+            '+                                     size = 69559',
+            '--- auckland:tile:auckland_3_3.copc.laz',
+            '-                                     name = auckland_3_3.copc.laz',
+            '-                             extent.crs84 = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '-                            extent.native = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '-                                   format = pc:v1/copc-1.0',
+            '-                             points.count = 29',
+            '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '-                                     size = 2319',
+            '+++ auckland:tile:auckland_4_4.copc.laz',
+            '+                                     name = auckland_4_4.copc.laz',
+            '+                             extent.crs84 = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '+                            extent.native = 17580.9346,17589.2534,59232.198,59232.2938,-0.0128,0.098',
+            '+                                   format = pc:v1/copc-1.0',
+            '+                             points.count = 29',
+            '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '+                                     size = 2319',
         ]
 
         r = cli_runner.invoke(["diff"])
