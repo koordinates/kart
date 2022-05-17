@@ -14,6 +14,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Bugfix: Fixed a bug where creating a MSSQL working copy fails when there are large (~10KB) geometries. [#617](https://github.com/koordinates/kart/issues/617)
 - Bugfix: Fixed `kart diff <commit-id>` for a commit containing a dataset that has since been deleted using `kart data rm`. [#611](https://github.com/koordinates/kart/issues/611)
 - Add `ext-run` to provide an execution environment for prototyping ideas/extensions.
+- Added more context about datasets to JSONL diffs. [#624](https://github.com/koordinates/kart/pull/624)
 
 ## 0.11.1
 
