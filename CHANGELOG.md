@@ -13,6 +13,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 - Added support for `--decorate` and `--no-decorate` in `kart log`. [#586](https://github.com/koordinates/kart/issues/586)
 - Bugfix: Fixed a bug where creating a MSSQL working copy fails when there are large (~10KB) geometries. [#617](https://github.com/koordinates/kart/issues/617)
 - Bugfix: Fixed `kart diff <commit-id>` for a commit containing a dataset that has since been deleted using `kart data rm`. [#611](https://github.com/koordinates/kart/issues/611)
+- Add `ext-run` to provide an execution environment for prototyping ideas/extensions.
 
 ## 0.11.1
 
