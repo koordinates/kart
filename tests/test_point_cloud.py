@@ -93,8 +93,8 @@ def test_import_single_las(
                 "",
                 "+++ autzen:tile:autzen.copc.laz",
                 "+                                     name = autzen.copc.laz",
-                "+                                      oid = sha256:4fc66b29491b8b22fc5deb69da86e588e93e276aa0511460fba6521048081701",
-                "+                                     size = 2839",
+                "+                                      oid = sha256:213ef4211ba375e2eec60aa61b6c230d1a3d1498b8fcc39150fd3040ee8f0512",
+                "+                                     size = 3607",
             ]
 
             r = cli_runner.invoke(["remote", "add", "origin", DUMMY_REPO])
