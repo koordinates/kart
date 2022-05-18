@@ -199,6 +199,9 @@ class KartRepo(pygit2.Repository):
         if validate:
             self.validate_bare_or_tidy_style()
 
+    def __repr__(self):
+        return f"KartRepo({self.path!r})"
+
     @classmethod
     def init_repository(
         cls,
