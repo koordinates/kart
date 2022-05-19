@@ -1,4 +1,5 @@
 import logging
+import os
 import subprocess
 
 import click
@@ -89,3 +90,9 @@ def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
     # now merge with FETCH_HEAD
     L.debug("Running merge:", {"ff": ff, "ff_only": ff_only, "commit": "FETCH_HEAD"})
     ctx.invoke(merge.merge, ff=ff, ff_only=ff_only, commit="FETCH_HEAD")
+
+    if os.environ.get("X_KART_POINT_CLOUDS"):
+        from kart.point_cloud.checkout import reset_wc_if_needed
+
+        repo.invoke_git("lfs", "fetch")
+        reset_wc_if_needed(repo)

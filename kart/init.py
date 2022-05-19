@@ -506,6 +506,10 @@ def init(
 
     # Experimental point-cloud datasets:
     if os.environ.get("X_KART_POINT_CLOUDS"):
+        from kart.lfs_util import install_lfs_hooks
+
         lfs_override = os.environ.get("X_KART_SET_LFS_FOR_NEW_REPOS")
         if lfs_override:
             repo.config["lfs.url"] = lfs_override
+
+        install_lfs_hooks(repo)

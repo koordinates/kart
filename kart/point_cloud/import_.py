@@ -1,8 +1,6 @@
 import json
 import os
 from pathlib import Path
-import uuid
-import subprocess
 import sys
 
 import click
@@ -24,10 +22,9 @@ from kart.fast_import import (
     write_blobs_to_stream,
 )
 from kart.lfs_util import (
+    install_lfs_hooks,
     dict_to_pointer_file_bytes,
-    get_hash_and_size_of_file,
-    get_hash_and_size_of_file_while_copying,
-    get_local_path_from_lfs_hash,
+    copy_file_to_local_lfs_cache,
 )
 from kart.serialise_util import hexhash, json_pack, ensure_bytes
 from kart.output_util import format_wkt_for_output
@@ -159,15 +156,11 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
     if is_copc:
         # Keep native format.
-        import_func = get_hash_and_size_of_file_while_copying
+        conversion_func = None
         kart_format = f"pc:v1/copc-{copc_version}.0"
     elif is_laz:
         # Optionally Convert to COPC 1.0 if requested
-        import_func = (
-            _convert_tile_to_copc_lfs_blob
-            if convert_to_copc
-            else get_hash_and_size_of_file_while_copying
-        )
+        conversion_func = _convert_tile_to_copc if convert_to_copc else None
         kart_format = "pc:v1/copc-1.0" if convert_to_copc else f"pc:v1/laz-{version}"
     else:  # LAS
         if not convert_to_copc:
@@ -175,17 +168,13 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
                 "LAS datasets are not supported - dataset must be converted to LAZ / COPC",
                 exit_code=INVALID_FILE_FORMAT,
             )
-        import_func = _convert_tile_to_copc_lfs_blob
+        conversion_func = _convert_tile_to_copc
         kart_format = "pc:v1/copc-1.0"
 
     import_ext = ".copc.laz" if "copc" in kart_format else ".laz"
 
-    # Set up LFS hooks.
-    # TODO: This could eventually be moved to `kart init`.
-    if not (repo.gitdir_path / "hooks" / "pre-push").is_file():
-        subprocess.check_call(
-            ["git", "-C", str(repo.gitdir_path), "lfs", "install", "hooks"]
-        )
+    # Set up LFS hooks. This is also in `kart init`, but not every existing Kart repo will have these hooks.
+    install_lfs_hooks(repo)
 
     # We still need to write .kart.repostructure.version unfortunately, even though it's only relevant to tabular datasets.
     assert repo.table_dataset_version in SUPPORTED_VERSIONS
@@ -205,9 +194,6 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
     ds_inner_path = f"{ds_path}/.point-cloud-dataset.v1"
 
-    lfs_tmp_path = repo.gitdir_path / "lfs" / "objects" / "tmp"
-    lfs_tmp_path.mkdir(parents=True, exist_ok=True)
-
     with git_fast_import(repo, *FastImportSettings().as_args(), "--quiet") as proc:
         proc.stdin.write(header.encode("utf8"))
 
@@ -217,27 +203,22 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         for source in sources:
             click.echo(f"Importing {source}...")
 
-            tmp_object_path = lfs_tmp_path / str(uuid.uuid4())
-            oid, size = import_func(source, tmp_object_path)
-            actual_object_path = get_local_path_from_lfs_hash(repo, oid)
-            actual_object_path.parents[0].mkdir(parents=True, exist_ok=True)
-            tmp_object_path.rename(actual_object_path)
+            pointer_dict = copy_file_to_local_lfs_cache(repo, source, conversion_func)
 
             # TODO - is this the right prefix and name?
             tilename = os.path.splitext(os.path.basename(source))[0] + import_ext
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
             info = per_source_info[source]
-            pointer_dict = {
-                "version": "https://git-lfs.github.com/spec/v1",
-                # TODO - available.<URL-IDX> <URL>
-                "kart.extent.crs84": _format_array(info["crs84_envelope"]),
-                "kart.extent.native": _format_array(info["native_envelope"]),
-                "kart.format": kart_format,
-                "kart.pc.count": info["count"],
-                "oid": f"sha256:{oid}",
-                "size": size,
-            }
+            pointer_dict.update(
+                {
+                    # TODO - available.<URL-IDX> <URL>
+                    "kart.extent.crs84": _format_array(info["crs84_envelope"]),
+                    "kart.extent.native": _format_array(info["native_envelope"]),
+                    "kart.format": kart_format,
+                    "kart.pc.count": info["count"],
+                }
+            )
             write_blob_to_stream(
                 proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
             )
@@ -324,12 +305,10 @@ def _transform_3d_envelope(transform, envelope):
     return envelope
 
 
-def _convert_tile_to_copc_lfs_blob(source, dest):
+def _convert_tile_to_copc(source, dest):
     """
     Converts a LAS/LAZ file of some sort as source to a COPC.LAZ file at dest.
-    Returns the SHA256 and length of the COPC.LAZ file.
     """
-    # Note that this requires a cutting edge PDAL - e.g. 63eb89ab3f504e8af7259bf60c8158363c99b6e3.
     import pdal
 
     config = [
@@ -351,8 +330,6 @@ def _convert_tile_to_copc_lfs_blob(source, dest):
             f"Error converting {source}\n{e}", exit_code=INVALID_FILE_FORMAT
         )
     assert dest.is_file()
-
-    return get_hash_and_size_of_file(dest)
 
 
 class ListBasedSet:
