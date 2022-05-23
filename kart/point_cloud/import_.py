@@ -176,9 +176,10 @@ NOT_COPC = "NOT COPC"
 
 
 def get_copc_version(info):
-    # TODO - find out how to extract the COPC version number using the current PDAL.
     if info.get("copc"):
-        return 1
+        # PDAL now hides the COPC VLR from us so we can't do better than this without peeking at the file directly.
+        # See https://github.com/PDAL/PDAL/blob/3e33800d85d48f726dcd0931cefe062c4af2b573/io/private/las/Vlr.cpp#L53
+        return "1.0"
     else:
         return NOT_COPC
 
@@ -241,16 +242,6 @@ def _error_for_non_homogenous_field(v1, v2, name, disparity):
     raise InvalidOperation(
         "Non-homogenous dataset supplied", exit_code=INVALID_FILE_FORMAT
     )
-
-
-def _make_transform_to_crs84(src_wkt):
-    # TODO - use pdal to transform from src_wkt to EPSG:4326
-    return None
-
-
-def _transform_3d_envelope(transform, envelope):
-    # TODO - actually transform this envelope
-    return envelope
 
 
 def _convert_tile_to_copc(source, dest):
@@ -349,4 +340,4 @@ def _pc_tile_metadata_to_kart_format(metadata):
     if metadata["copc-version"] == NOT_COPC:
         return f"pc:v1/laz-{metadata['version']}"
     else:
-        return f"pc:v1/copc-{metadata['copc-version']}.0"
+        return f"pc:v1/copc-{metadata['copc-version']}"
