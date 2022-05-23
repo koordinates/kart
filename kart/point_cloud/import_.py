@@ -338,9 +338,7 @@ def pc_tile_metadata_to_pointer_metadata(metadata):
     in the appropriate format.
     """
     return {
-        # TODO - available.<URL-IDX> <URL>
-        # TODO - find the real extent.crs84
-        "extent.crs84": _format_array(metadata["native-extent"]),
+        # TODO - find and include the extent in CRS84
         "extent.native": _format_array(metadata["native-extent"]),
         "format": _pc_tile_metadata_to_kart_format(metadata),
         "points.count": metadata["count"],

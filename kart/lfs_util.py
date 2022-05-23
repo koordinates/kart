@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 from pathlib import Path
@@ -7,7 +8,7 @@ import uuid
 
 import pygit2
 
-from kart.serialise_util import b64encode_str, b64decode_str, msg_pack, msg_unpack
+from kart.serialise_util import msg_pack, msg_unpack
 
 L = logging.getLogger(__name__)
 
@@ -86,9 +87,10 @@ def dict_to_pointer_file_bytes(pointer_dict, only_standard_keys=True):
     )
     encoded_extra_values = _encode_extra_values(extra_values)
 
+    # The lfs spec requires keys after `version` to be sorted alphabetically.
     result = (
         f"version {pointer_dict['version']}\n"
-        f"ext-0-kart-encoded={encoded_extra_values} {_EMPTY_SHA256}\n"
+        f"ext-0-kart-encoded.{encoded_extra_values} {_EMPTY_SHA256}\n"
         f"oid {pointer_dict['oid']}\n"
         f"size {pointer_dict['size']}\n"
     )
@@ -96,11 +98,16 @@ def dict_to_pointer_file_bytes(pointer_dict, only_standard_keys=True):
 
 
 def _encode_extra_values(extra_values):
-    return b64encode_str(msg_pack(extra_values))
+    packed = msg_pack(extra_values)
+    # Using only the chars: [A-Z][a-z][0-9] . -
+    return base64.b64encode(packed, altchars=b'.-').rstrip(b'=').decode('ascii')
 
 
 def _decode_extra_values(encoded_extra_values):
-    return msg_unpack(b64decode_str(encoded_extra_values))
+    packed = base64.b64decode(
+        (encoded_extra_values + '==').encode('ascii'), altchars=b'.-'
+    )
+    return msg_unpack(packed)
 
 
 def _dict_to_pointer_file_bytes_simple(pointer_dict):
@@ -127,8 +134,8 @@ def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
         if len(parts) < 2:
             L.warn(f"Error parsing pointer file:\n{line}")
         key, value = parts
-        if key.startswith("ext-0-kart-encoded="):
-            result.update(_decode_extra_values(key[len("ext-0-kart-encoded=") :]))
+        if key.startswith("ext-0-kart-encoded."):
+            result.update(_decode_extra_values(key[len("ext-0-kart-encoded.") :]))
         else:
             result[key] = value
     return result
