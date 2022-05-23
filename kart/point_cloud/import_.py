@@ -6,7 +6,7 @@ import sys
 import click
 
 from .checkout import reset_wc_if_needed
-from kart.crs_util import get_identifier_str, normalise_wkt
+from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
     InvalidOperation,
@@ -53,8 +53,6 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
 
     SOURCES should be one or more LAZ or LAS files (or wildcards that match multiple LAZ or LAS files).
     """
-    import pdal
-
     repo = ctx.obj.repo
 
     # TODO - improve path validation to make sure datasets of any type don't collide with each other
@@ -65,103 +63,36 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         if not (Path() / source).is_file():
             raise NotFound(f"No data found at {source}", exit_code=NO_IMPORT_SOURCE)
 
-    compressed_set = ListBasedSet()
-    version_set = ListBasedSet()
-    copc_version_set = ListBasedSet()
-    pdrf_set = ListBasedSet()
-    pdr_length_set = ListBasedSet()
-    crs_set = ListBasedSet()
-    transform = None
-    schema = None
-    crs_name = None
-
-    per_source_info = {}
+    first_tile_metadata = None
+    source_to_metadata = {}
 
     for source in sources:
         click.echo(f"Checking {source}...          \r", nl=False)
-        config = [
-            {
-                "type": "readers.las",
-                "filename": source,
-                "count": 0,  # Don't read any individual points.
-            }
-        ]
-        if schema is None:
-            config.append({"type": "filters.info"})
 
-        pipeline = pdal.Pipeline(json.dumps(config))
-        try:
-            pipeline.execute()
-        except RuntimeError:
-            raise InvalidOperation(
-                f"Error reading {source}", exit_code=INVALID_FILE_FORMAT
-            )
+        extract_schema = first_tile_metadata is None
+        metadata = extract_pc_tile_metadata(source, extract_schema=extract_schema)
+        source_to_metadata[source] = metadata
 
-        metadata = _unwrap_metadata(pipeline.metadata)
-
-        info = metadata["readers.las"]
-
-        compressed_set.add(info["compressed"])
-        if len(compressed_set) > 1:
-            raise _non_homogenous_error("filetype", "LAS vs LAZ")
-
-        version = f"{info['major_version']}.{info['minor_version']}"
-        version_set.add(version)
-        if len(version_set) > 1:
-            raise _non_homogenous_error("version", version_set)
-
-        copc_version_set.add(get_copc_version(info))
-        if len(copc_version_set) > 1:
-            raise _non_homogenous_error("COPC version", copc_version_set)
-
-        pdrf_set.add(info["dataformat_id"])
-        if len(pdrf_set) > 1:
-            raise _non_homogenous_error("Point Data Record Format", pdrf_set)
-
-        pdr_length_set.add(info["point_length"])
-        if len(pdr_length_set) > 1:
-            raise _non_homogenous_error("Point Data Record Length", pdr_length_set)
-
-        crs_set.add(info["srs"]["wkt"])
-        if len(crs_set) > 1:
-            raise _non_homogenous_error(
-                "CRS",
-                "\n vs \n".join(
-                    (format_wkt_for_output(wkt, sys.stderr) for wkt in crs_set)
-                ),
-            )
-
-        if transform is None:
-            transform = _make_transform_to_crs84(crs_set.only())
-
-        native_envelope = get_native_envelope(info)
-        crs84_envelope = _transform_3d_envelope(transform, native_envelope)
-        per_source_info[source] = {
-            "count": info["count"],
-            "native_envelope": native_envelope,
-            "crs84_envelope": crs84_envelope,
-        }
-
-        if schema is None:
-            crs_name = get_identifier_str(crs_set.only())
-            schema = metadata["filters.info"]["schema"]
-            schema["CRS"] = crs_name
+        if first_tile_metadata is None:
+            first_tile_metadata = metadata
+        else:
+            check_for_non_homogenous_metadata(first_tile_metadata, metadata)
 
     click.echo()
 
-    version = version_set.only()
-    copc_version = copc_version_set.only()
-    is_laz = compressed_set.only() is True
+    version = first_tile_metadata["version"]
+    copc_version = first_tile_metadata["copc-version"]
+    is_laz = first_tile_metadata["compressed"] is True
     is_copc = is_laz and copc_version != NOT_COPC
 
     if is_copc:
         # Keep native format.
         conversion_func = None
-        kart_format = f"pc:v1/copc-{copc_version}.0"
+        import_format = f"pc:v1/copc-{copc_version}.0"
     elif is_laz:
         # Optionally Convert to COPC 1.0 if requested
         conversion_func = _convert_tile_to_copc if convert_to_copc else None
-        kart_format = "pc:v1/copc-1.0" if convert_to_copc else f"pc:v1/laz-{version}"
+        import_format = "pc:v1/copc-1.0" if convert_to_copc else f"pc:v1/laz-{version}"
     else:  # LAS
         if not convert_to_copc:
             raise InvalidOperation(
@@ -169,9 +100,9 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
                 exit_code=INVALID_FILE_FORMAT,
             )
         conversion_func = _convert_tile_to_copc
-        kart_format = "pc:v1/copc-1.0"
+        import_format = "pc:v1/copc-1.0"
 
-    import_ext = ".copc.laz" if "copc" in kart_format else ".laz"
+    import_ext = ".copc.laz" if "copc" in import_format else ".laz"
 
     # Set up LFS hooks. This is also in `kart init`, but not every existing Kart repo will have these hooks.
     install_lfs_hooks(repo)
@@ -204,32 +135,27 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             click.echo(f"Importing {source}...")
 
             pointer_dict = copy_file_to_local_lfs_cache(repo, source, conversion_func)
-
+            pointer_dict.update(
+                pc_tile_metadata_to_pointer_metadata(source_to_metadata[source])
+            )
+            pointer_dict["format"] = import_format
             # TODO - is this the right prefix and name?
             tilename = os.path.splitext(os.path.basename(source))[0] + import_ext
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
-            info = per_source_info[source]
-            pointer_dict.update(
-                {
-                    # TODO - available.<URL-IDX> <URL>
-                    "kart.extent.crs84": _format_array(info["crs84_envelope"]),
-                    "kart.extent.native": _format_array(info["native_envelope"]),
-                    "kart.format": kart_format,
-                    "kart.pc.count": info["count"],
-                }
-            )
             write_blob_to_stream(
                 proc.stdin, blob_path, dict_to_pointer_file_bytes(pointer_dict)
             )
 
         write_blob_to_stream(
-            proc.stdin, f"{ds_inner_path}/meta/schema.json", json_pack(schema)
+            proc.stdin,
+            f"{ds_inner_path}/meta/schema.json",
+            json_pack(first_tile_metadata["schema"]),
         )
         write_blob_to_stream(
             proc.stdin,
-            f"{ds_inner_path}/meta/crs/{crs_name}.wkt",
-            ensure_bytes(normalise_wkt(crs_set.only())),
+            f"{ds_inner_path}/meta/crs.wkt",
+            ensure_bytes(normalise_wkt(first_tile_metadata["crs"])),
         )
 
     click.echo("Updating working copy...")
@@ -241,14 +167,6 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
         tabular_wc.reset(repo.head_commit)
 
 
-def _unwrap_metadata(metadata):
-    if isinstance(metadata, str):
-        metadata = json.loads(metadata)
-    if "metadata" in metadata:
-        metadata = metadata["metadata"]
-    return metadata
-
-
 def _format_array(array):
     return json.dumps(array, separators=(",", ":"))[1:-1]
 
@@ -258,16 +176,15 @@ NOT_COPC = "NOT COPC"
 
 
 def get_copc_version(info):
-    vlr_0 = info.get("vlr_0")
-    if vlr_0:
-        user_id = vlr_0.get("user_id")
-        if user_id == "copc":
-            return vlr_0.get("record_id")
-    return NOT_COPC
+    # TODO - find out how to extract the COPC version number using the current PDAL.
+    if info.get("copc"):
+        return 1
+    else:
+        return NOT_COPC
 
 
-def get_native_envelope(info):
-    def _get_native_envelope_for_coord(coord):
+def get_native_extent(info):
+    def _get_native_extent_for_coord(coord):
         min_coord = (
             info[f"min{coord}"] * info[f"scale_{coord}"] + info[f"offset_{coord}"]
         )
@@ -276,20 +193,51 @@ def get_native_envelope(info):
         )
         return min_coord, max_coord
 
-    min_x, max_x = _get_native_envelope_for_coord("x")
-    min_y, max_y = _get_native_envelope_for_coord("y")
-    min_z, max_z = _get_native_envelope_for_coord("z")
+    min_x, max_x = _get_native_extent_for_coord("x")
+    min_y, max_y = _get_native_extent_for_coord("y")
+    min_z, max_z = _get_native_extent_for_coord("z")
     return min_x, max_x, min_y, max_y, min_z, max_z
 
 
-def _non_homogenous_error(attribute_name, detail):
-    if not isinstance(detail, str):
-        detail = " vs ".join(str(d) for d in detail)
+def check_for_non_homogenous_metadata(m1, m2):
+    """
+    Given two sets of point-cloud metadata - as extracted by extract_pc_tile_metadata - raises an error
+    if there is any metadata which is non-homogenous (eg "version" - other fields like "extent" are allowed to vary).
+    """
 
+    _check_for_non_homogenous_field(m1, m2, "version")
+    _check_for_non_homogenous_field(
+        m1, m2, "compressed", "compression", disparity="LAS vz LAZ"
+    )
+    _check_for_non_homogenous_field(m1, m2, "copc-version", "COPC version")
+    _check_for_non_homogenous_field(
+        m1, m2, "point-data-record-format", "Point Data Record Format (PDRF)"
+    )
+    _check_for_non_homogenous_field(
+        m1, m2, "point-data-record-length", "Point Data Record Format (PDRF)"
+    )
+    # Do CRS a bit differently so we can format the output.
+    if m1["crs"] != m2["crs"]:
+        disparity = "\n vs \n".join(
+            (format_wkt_for_output(wkt, sys.stderr) for wkt in [m1["crs"], m2["crs"]])
+        )
+        _error_for_non_homogenous_field(m1, m2, "crs", "CRS", disparity)
+
+
+def _check_for_non_homogenous_field(m1, m2, key, name=None, disparity=None):
+    v1 = m1.get(key)
+    v2 = m2.get(key)
+    if v1 != v2:
+        _error_for_non_homogenous_field(v1, v2, name or key, disparity)
+
+
+def _error_for_non_homogenous_field(v1, v2, name, disparity):
+    if disparity is None:
+        disparity = f"{v1} vs {v2}"
     click.echo()  # Go to next line to get past the progress output.
     click.echo("Only the import of homogenous datasets is supported.", err=True)
-    click.echo(f"The input files have more than one {attribute_name}:", err=True)
-    click.echo(detail, err=True)
+    click.echo(f"The input files have more than one {name}:", err=True)
+    click.echo(disparity, err=True)
     raise InvalidOperation(
         "Non-homogenous dataset supplied", exit_code=INVALID_FILE_FORMAT
     )
@@ -332,32 +280,73 @@ def _convert_tile_to_copc(source, dest):
     assert dest.is_file()
 
 
-class ListBasedSet:
+def _unwrap_metadata(metadata):
+    if isinstance(metadata, str):
+        metadata = json.loads(metadata)
+    if "metadata" in metadata:
+        metadata = metadata["metadata"]
+    return metadata
+
+
+def extract_pc_tile_metadata(pc_tile_path, extract_schema=False):
     """
-    A basic set that doesn't use hashing, so it can contain dicts.
-    Very inefficient for lots of elements, perfect for one or two elements.
+    Use pdal to get any and all point-cloud metadata we can make use of in Kart.
+    This can include metadata must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
+    along with other metadata that is tile-specific and would be stored in the tile's pointer file.
     """
+    import pdal
 
-    def __init__(self):
-        self.list = []
+    config = [
+        {
+            "type": "readers.las",
+            "filename": str(pc_tile_path),
+            "count": 0,  # Don't read any individual points.
+        }
+    ]
+    if extract_schema:
+        config.append({"type": "filters.info"})
 
-    def add(self, element):
-        if element not in self.list:
-            self.list.append(element)
+    pipeline = pdal.Pipeline(json.dumps(config))
+    try:
+        pipeline.execute()
+    except RuntimeError:
+        raise InvalidOperation(
+            f"Error reading {pc_tile_path}", exit_code=INVALID_FILE_FORMAT
+        )
 
-    def only(self):
-        """Return the only element in this collection, or raise a LookupError."""
-        if len(self.list) != 1:
-            raise LookupError(
-                f"Can't return only element: set contains {len(self.list)} elements"
-            )
-        return self.list[0]
+    metadata = _unwrap_metadata(pipeline.metadata)
+    info = metadata["readers.las"]
 
-    def __contains__(self, element):
-        return element in self.list
+    result = {
+        "compressed": info["compressed"],
+        "version": f"{info['major_version']}.{info['minor_version']}",
+        "copc-version": get_copc_version(info),
+        "point-data-record-format": info["dataformat_id"],
+        "point-data-record-length": info["point_length"],
+        "crs": info["srs"]["wkt"],
+        "native-extent": get_native_extent(info),
+        "count": info["count"],
+    }
+    if extract_schema:
+        result["schema"] = metadata["filters.info"]["schema"]
+    return result
 
-    def __len__(self):
-        return len(self.list)
 
-    def __iter__(self):
-        return iter(self.list)
+def pc_tile_metadata_to_pointer_metadata(metadata):
+    """
+    Given all the tile-metadata, returns thats which should be written to an LFS pointer file,
+    in the appropriate format.
+    """
+    return {
+        # TODO - find and include the extent in CRS84
+        "extent.native": _format_array(metadata["native-extent"]),
+        "format": _pc_tile_metadata_to_kart_format(metadata),
+        "points.count": metadata["count"],
+    }
+
+
+def _pc_tile_metadata_to_kart_format(metadata):
+    if metadata["copc-version"] == NOT_COPC:
+        return f"pc:v1/laz-{metadata['version']}"
+    else:
+        return f"pc:v1/copc-{metadata['copc-version']}.0"

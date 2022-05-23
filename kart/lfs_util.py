@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import logging
 from pathlib import Path
@@ -7,12 +8,16 @@ import uuid
 
 import pygit2
 
+from kart.serialise_util import msg_pack, msg_unpack
+
 L = logging.getLogger(__name__)
 
 POINTER_PATTERN = re.compile(rb"^oid sha256:([0-9a-fA-F]{64})$", re.MULTILINE)
 
-
 _BUF_SIZE = 1 * 1024 * 1024  # 1MB
+
+_STANDARD_LFS_KEYS = set(("version", "oid", "size"))
+_EMPTY_SHA256 = "sha256:" + ("0" * 64)
 
 
 def install_lfs_hooks(repo):
@@ -68,34 +73,72 @@ def get_hash_and_size_of_file_while_copying(src_path, dest_path, allow_overwrite
     return sha256.hexdigest(), size
 
 
+def dict_to_pointer_file_bytes(pointer_dict, only_standard_keys=True):
+    if "version" not in pointer_dict:
+        pointer_dict["version"] = "https://git-lfs.github.com/spec/v1"
+    if not pointer_dict["oid"].startswith("sha256:"):
+        pointer_dict["oid"] = f"sha256:{pointer_dict['oid']}"
+
+    if not only_standard_keys or not (pointer_dict.keys() - _STANDARD_LFS_KEYS):
+        return _dict_to_pointer_file_bytes_simple(pointer_dict)
+
+    extra_values = dict(
+        (k, v) for k, v in sorted(pointer_dict.items()) if k not in _STANDARD_LFS_KEYS
+    )
+    encoded_extra_values = _encode_extra_values(extra_values)
+
+    # The lfs spec requires keys after `version` to be sorted alphabetically.
+    result = (
+        f"version {pointer_dict['version']}\n"
+        f"ext-0-kart-encoded.{encoded_extra_values} {_EMPTY_SHA256}\n"
+        f"oid {pointer_dict['oid']}\n"
+        f"size {pointer_dict['size']}\n"
+    )
+    return result.encode("utf8")
+
+
+def _encode_extra_values(extra_values):
+    packed = msg_pack(extra_values)
+    # Using only the chars: [A-Z][a-z][0-9] . -
+    return base64.b64encode(packed, altchars=b'.-').rstrip(b'=').decode('ascii')
+
+
+def _decode_extra_values(encoded_extra_values):
+    packed = base64.b64decode(
+        (encoded_extra_values + '==').encode('ascii'), altchars=b'.-'
+    )
+    return msg_unpack(packed)
+
+
+def _dict_to_pointer_file_bytes_simple(pointer_dict):
+    blob = bytearray()
+    for key, value in sorted(
+        pointer_dict.items(), key=lambda kv: (kv[0] != "version", kv)
+    ):
+        blob += f"{key} {value}\n".encode("utf8")
+    return blob
+
+
 def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
     if isinstance(pointer_file_bytes, pygit2.Blob):
         pointer_file_bytes = pointer_file_bytes.data
     pointer_file_str = pointer_file_bytes.decode("utf8")
+
     if result is None:
         result = {}
+
     for line in pointer_file_str.splitlines():
         if not line:
             continue
         parts = line.split(" ", maxsplit=1)
         if len(parts) < 2:
             L.warn(f"Error parsing pointer file:\n{line}")
-            continue
         key, value = parts
-        result[key] = value
+        if key.startswith("ext-0-kart-encoded."):
+            result.update(_decode_extra_values(key[len("ext-0-kart-encoded.") :]))
+        else:
+            result[key] = value
     return result
-
-
-def dict_to_pointer_file_bytes(pointer_dict):
-    blob = bytearray()
-    for key, value in sorted(
-        pointer_dict.items(), key=lambda kv: (kv[0] != "version", kv)
-    ):
-        # TODO - LFS doesn't support our fancy pointer files yet. Hopefully fix this in LFS.
-        if key not in ("version", "oid", "size"):
-            continue
-        blob += f"{key} {value}\n".encode("utf8")
-    return blob
 
 
 def get_hash_from_pointer_file(pointer_file_bytes):
