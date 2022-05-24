@@ -142,7 +142,7 @@ def clone(
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
-    from kart.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import BaseWorkingCopy
 
     BaseWorkingCopy.check_valid_creation_location(wc_location, PotentialRepo(repo_path))
 

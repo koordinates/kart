@@ -17,7 +17,7 @@ from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .tabular.import_source import TableImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingTableImportSource
-from .working_copy import WorkingCopyStatus
+from kart.tabular.working_copy import WorkingCopyStatus
 
 
 def list_import_formats(ctx):
@@ -458,7 +458,7 @@ def init(
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
-    from kart.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import BaseWorkingCopy
 
     BaseWorkingCopy.check_valid_creation_location(wc_location, PotentialRepo(repo_path))
 

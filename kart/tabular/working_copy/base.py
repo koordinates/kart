@@ -23,7 +23,7 @@ from kart.utils import chunk
 
 from . import WorkingCopyStatus, WorkingCopyType
 
-L = logging.getLogger("kart.working_copy.base")
+L = logging.getLogger("kart.tabular.working_copy.base")
 
 
 class WorkingCopyDirty(Exception):

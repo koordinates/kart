@@ -6,7 +6,7 @@ from kart.repo import KartRepo
 
 from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.adapter.mysql import KartAdapter_MySql
-from kart.working_copy.base import WorkingCopyStatus
+from kart.tabular.working_copy.base import WorkingCopyStatus
 from test_working_copy import compute_approximated_types
 
 

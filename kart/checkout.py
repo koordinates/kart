@@ -14,7 +14,7 @@ from .output_util import InputMode, get_input_mode
 from .promisor_utils import get_partial_clone_envelope
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
-from .working_copy import WorkingCopyStatus
+from kart.tabular.working_copy import WorkingCopyStatus
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -176,7 +176,7 @@ def checkout(
 
         head_ref = new_branch.name
 
-    from kart.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import BaseWorkingCopy
 
     if spatial_filter_spec is not None:
         spatial_filter_spec.write_config(repo, update_remote=promisor_remote)
@@ -449,7 +449,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     If no location is supplied, the location from the repo config at "kart.workingcopy.location" will be used.
     If no location is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
-    from kart.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import BaseWorkingCopy
 
     repo = ctx.obj.repo
     if repo.head_is_unborn:

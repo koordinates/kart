@@ -1,5 +1,3 @@
-import os
-
 import pytest
 import pygit2
 from sqlalchemy.exc import IntegrityError
@@ -10,7 +8,7 @@ from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.sqlserver import Db_SqlServer
 from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
 
-from kart.working_copy.base import WorkingCopyStatus
+from kart.tabular.working_copy.base import WorkingCopyStatus
 from test_working_copy import compute_approximated_types
 
 

@@ -8,7 +8,7 @@ import sqlalchemy
 from kart.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
 from kart.repo import KartRepo
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
-from kart.working_copy.base import BaseWorkingCopy
+from kart.tabular.working_copy.base import BaseWorkingCopy
 from test_working_copy import compute_approximated_types
 
 

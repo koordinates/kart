@@ -21,7 +21,7 @@ from . import WorkingCopyStatus
 from .base import BaseWorkingCopy
 from .table_defs import GpkgKartTables, GpkgTables
 
-L = logging.getLogger("kart.working_copy.gpkg")
+L = logging.getLogger("kart.tabular.working_copy.gpkg")
 
 
 class WorkingCopy_GPKG(BaseWorkingCopy):

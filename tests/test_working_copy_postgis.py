@@ -6,7 +6,7 @@ from sqlalchemy import inspect
 
 from kart.repo import KartRepo
 
-from kart.working_copy.base import WorkingCopyStatus
+from kart.tabular.working_copy.base import WorkingCopyStatus
 from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 from test_working_copy import compute_approximated_types
