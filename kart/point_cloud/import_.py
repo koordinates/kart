@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from pathlib import Path
 import sys
@@ -32,6 +33,8 @@ from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
 )
+
+L = logging.getLogger(__name__)
 
 
 @click.command("point-cloud-import", hidden=True)
@@ -185,19 +188,14 @@ def get_copc_version(info):
 
 
 def get_native_extent(info):
-    def _get_native_extent_for_coord(coord):
-        min_coord = (
-            info[f"min{coord}"] * info[f"scale_{coord}"] + info[f"offset_{coord}"]
-        )
-        max_coord = (
-            info[f"max{coord}"] * info[f"scale_{coord}"] + info[f"offset_{coord}"]
-        )
-        return min_coord, max_coord
-
-    min_x, max_x = _get_native_extent_for_coord("x")
-    min_y, max_y = _get_native_extent_for_coord("y")
-    min_z, max_z = _get_native_extent_for_coord("z")
-    return min_x, max_x, min_y, max_y, min_z, max_z
+    return (
+        info["minx"],
+        info["maxx"],
+        info["miny"],
+        info["maxy"],
+        info["minz"],
+        info["maxz"],
+    )
 
 
 def check_for_non_homogenous_metadata(m1, m2):
@@ -279,7 +277,12 @@ def _unwrap_metadata(metadata):
     return metadata
 
 
-def extract_pc_tile_metadata(pc_tile_path, extract_schema=False):
+def extract_pc_tile_metadata(
+    pc_tile_path,
+    *,
+    calc_crs84_extent=True,
+    extract_schema=False,
+):
     """
     Use pdal to get any and all point-cloud metadata we can make use of in Kart.
     This can include metadata must be dataset-homogenous and would be stored in the dataset's /meta/ folder,
@@ -291,7 +294,7 @@ def extract_pc_tile_metadata(pc_tile_path, extract_schema=False):
         {
             "type": "readers.las",
             "filename": str(pc_tile_path),
-            "count": 0,  # Don't read any individual points.
+            "count": 10,  # Don't read any individual points.
         }
     ]
     if extract_schema:
@@ -308,19 +311,65 @@ def extract_pc_tile_metadata(pc_tile_path, extract_schema=False):
     metadata = _unwrap_metadata(pipeline.metadata)
     info = metadata["readers.las"]
 
+    native_extent = get_native_extent(info)
+    native_crs = info["srs"]["wkt"]
     result = {
         "compressed": info["compressed"],
         "version": f"{info['major_version']}.{info['minor_version']}",
         "copc-version": get_copc_version(info),
         "point-data-record-format": info["dataformat_id"],
         "point-data-record-length": info["point_length"],
-        "crs": info["srs"]["wkt"],
-        "native-extent": get_native_extent(info),
+        "crs": native_crs,
+        "native-extent": native_extent,
         "count": info["count"],
     }
     if extract_schema:
         result["schema"] = metadata["filters.info"]["schema"]
+    if calc_crs84_extent:
+        crs84_extent = _calc_crs84_extent(native_extent, native_crs)
+        if crs84_extent is not None:
+            result["crs84-extent"] = crs84_extent
     return result
+
+
+def _calc_crs84_extent(src_extent, src_crs):
+    """
+    Given a 3D extent with a particular CRS, return a CRS84 extent that surrounds that extent.
+    """
+
+    import pdal
+    import numpy as np
+
+    # Treat the src_extent as if it is a point cloud with only two points:
+    # (minx, miny, minz) and (maxx, maxy, maxz).
+    # This "point cloud" has the same extent as the source extent, but is otherwise not descriptive
+    # of the point cloud that src_extent was extracted from (whatever that might be).
+    src_points = np.array(
+        [src_extent[0::2], src_extent[1::2]],
+        dtype=[
+            ('X', np.dtype(float)),
+            ('Y', np.dtype(float)),
+            ('Z', np.dtype(float)),
+        ],
+    )
+
+    pipeline = (
+        # This reprojection just associates src_crs with src_points - doesn't do any reprojection.
+        pdal.Filter.reprojection(in_srs=src_crs, out_srs=src_crs).pipeline(src_points)
+        # PDAL filter.stats calculates the native bbox of the input points, and also converts the native bbox into a
+        # CRS84 bbox that surrounds the native bbox. The CRS84 bbox only depends on the native bbox, not the input
+        # points directly, which is good since our input points define a useful native bbox but are otherwise not
+        # descriptive of the actual point cloud that the native bbox was extracted from.
+        | pdal.Filter.stats()
+    )
+    try:
+        pipeline.execute()
+    except RuntimeError:
+        L.warning("Couldn't convert tile CRS to EPGS:4326")
+        return None
+    metadata = _unwrap_metadata(pipeline.metadata)
+    b = metadata['filters.stats']['bbox']['EPSG:4326']['bbox']
+    return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
 
 
 def pc_tile_metadata_to_pointer_metadata(metadata):
@@ -328,12 +377,18 @@ def pc_tile_metadata_to_pointer_metadata(metadata):
     Given all the tile-metadata, returns thats which should be written to an LFS pointer file,
     in the appropriate format.
     """
-    return {
-        # TODO - find and include the extent in CRS84
+    # Keep these keys in alphabetical order.
+    result = {
+        "extent.crs84": _format_array(metadata["crs84-extent"])
+        if "crs84-extent" in metadata
+        else None,
         "extent.native": _format_array(metadata["native-extent"]),
         "format": _pc_tile_metadata_to_kart_format(metadata),
         "points.count": metadata["count"],
     }
+    if result["extent.crs84"] is None:
+        del result["extent.crs84"]
+    return result
 
 
 def _pc_tile_metadata_to_kart_format(metadata):
