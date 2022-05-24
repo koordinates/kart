@@ -294,7 +294,7 @@ def extract_pc_tile_metadata(
         {
             "type": "readers.las",
             "filename": str(pc_tile_path),
-            "count": 10,  # Don't read any individual points.
+            "count": 0,  # Don't read any individual points.
         }
     ]
     if extract_schema:
