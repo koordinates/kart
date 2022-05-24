@@ -10,10 +10,10 @@ from kart.sqlalchemy import DbType, strip_password
 from sqlalchemy.exc import DBAPIError
 
 from . import WorkingCopyStatus
-from .base import BaseWorkingCopy
+from .base import TableWorkingCopy
 
 
-class DatabaseServer_WorkingCopy(BaseWorkingCopy):
+class DatabaseServer_WorkingCopy(TableWorkingCopy):
     """Functionality common to working copies that connect to a database server."""
 
     @property

@@ -227,9 +227,9 @@ class KartRepo(pygit2.Repository):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
         if not bare:
-            from kart.tabular.working_copy.base import BaseWorkingCopy
+            from kart.tabular.working_copy.base import TableWorkingCopy
 
-            BaseWorkingCopy.check_valid_creation_location(
+            TableWorkingCopy.check_valid_creation_location(
                 wc_location, PotentialRepo(repo_root_path)
             )
 
@@ -291,9 +291,9 @@ class KartRepo(pygit2.Repository):
         repo_root_path = repo_root_path.resolve()
         cls._ensure_exists_and_empty(repo_root_path)
         if not bare:
-            from kart.tabular.working_copy.base import BaseWorkingCopy
+            from kart.tabular.working_copy.base import TableWorkingCopy
 
-            BaseWorkingCopy.check_valid_creation_location(
+            TableWorkingCopy.check_valid_creation_location(
                 wc_location, PotentialRepo(repo_root_path)
             )
 
@@ -431,9 +431,9 @@ class KartRepo(pygit2.Repository):
         # Force writing to reflogs:
         self.config["core.logAllRefUpdates"] = "always"
         # Write working copy config:
-        from kart.tabular.working_copy.base import BaseWorkingCopy
+        from kart.tabular.working_copy.base import TableWorkingCopy
 
-        BaseWorkingCopy.write_config(self, wc_location, bare)
+        TableWorkingCopy.write_config(self, wc_location, bare)
         if spatial_filter_spec:
             spatial_filter_spec.write_config(self)
 
@@ -655,9 +655,9 @@ class KartRepo(pygit2.Repository):
         allow_invalid_state=False,
         allow_unconnectable=False,
     ):
-        from kart.tabular.working_copy.base import BaseWorkingCopy
+        from kart.tabular.working_copy.base import TableWorkingCopy
 
-        return BaseWorkingCopy.get(
+        return TableWorkingCopy.get(
             self,
             allow_uncreated=allow_uncreated,
             allow_invalid_state=allow_invalid_state,

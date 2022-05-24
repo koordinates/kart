@@ -176,12 +176,12 @@ def checkout(
 
         head_ref = new_branch.name
 
-    from kart.tabular.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import TableWorkingCopy
 
     if spatial_filter_spec is not None:
         spatial_filter_spec.write_config(repo, update_remote=promisor_remote)
 
-    BaseWorkingCopy.ensure_config_exists(repo)
+    TableWorkingCopy.ensure_config_exists(repo)
     reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
 
     repo.set_head(head_ref)
@@ -449,7 +449,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     If no location is supplied, the location from the repo config at "kart.workingcopy.location" will be used.
     If no location is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
-    from kart.tabular.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import TableWorkingCopy
 
     repo = ctx.obj.repo
     if repo.head_is_unborn:
@@ -461,16 +461,16 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     if not new_wc_loc and old_wc_loc is not None:
         new_wc_loc = old_wc_loc
     elif not new_wc_loc:
-        new_wc_loc = BaseWorkingCopy.default_location(repo)
+        new_wc_loc = TableWorkingCopy.default_location(repo)
 
     if new_wc_loc != old_wc_loc:
-        BaseWorkingCopy.check_valid_creation_location(new_wc_loc, repo)
+        TableWorkingCopy.check_valid_creation_location(new_wc_loc, repo)
 
-    if BaseWorkingCopy.clearly_doesnt_exist(old_wc_loc, repo):
+    if TableWorkingCopy.clearly_doesnt_exist(old_wc_loc, repo):
         old_wc_loc = None
 
     if old_wc_loc:
-        old_wc = BaseWorkingCopy.get_at_location(
+        old_wc = TableWorkingCopy.get_at_location(
             repo,
             old_wc_loc,
             allow_uncreated=True,
@@ -537,7 +537,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
                 keep_db_schema_if_possible = old_wc_loc == new_wc_loc
                 old_wc.delete(keep_db_schema_if_possible=keep_db_schema_if_possible)
 
-    BaseWorkingCopy.write_config(repo, new_wc_loc)
+    TableWorkingCopy.write_config(repo, new_wc_loc)
     reset_wc_if_needed(repo, repo.head_commit)
 
     # This command is used in tests and by other commands, so we have to be extra careful to

@@ -458,9 +458,11 @@ def init(
     if repo_path.exists() and any(repo_path.iterdir()):
         raise InvalidOperation(f'"{repo_path}" isn\'t empty', param_hint="directory")
 
-    from kart.tabular.working_copy.base import BaseWorkingCopy
+    from kart.tabular.working_copy.base import TableWorkingCopy
 
-    BaseWorkingCopy.check_valid_creation_location(wc_location, PotentialRepo(repo_path))
+    TableWorkingCopy.check_valid_creation_location(
+        wc_location, PotentialRepo(repo_path)
+    )
 
     if not repo_path.exists():
         repo_path.mkdir(parents=True)

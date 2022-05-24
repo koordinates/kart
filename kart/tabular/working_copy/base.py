@@ -43,9 +43,9 @@ class Mismatch(ValueError):
         return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.expected_tree_id}"
 
 
-class BaseWorkingCopy:
+class TableWorkingCopy:
     """
-    Abstract working copy implementation.
+    Abstract tabular working copy implementation.
     Subclasses to override any unimplemented methods below, and also to set the following fields:
 
     self.repo - KartRepo containing this WorkingCopy

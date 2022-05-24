@@ -18,13 +18,13 @@ from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
 from . import WorkingCopyStatus
-from .base import BaseWorkingCopy
+from .base import TableWorkingCopy
 from .table_defs import GpkgKartTables, GpkgTables
 
 L = logging.getLogger("kart.tabular.working_copy.gpkg")
 
 
-class WorkingCopy_GPKG(BaseWorkingCopy):
+class WorkingCopy_GPKG(TableWorkingCopy):
     """
     GPKG working copy implementation.
 
