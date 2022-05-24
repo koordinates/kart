@@ -17,7 +17,7 @@ from kart.tabular.schema import Schema
 from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
-from . import WorkingCopyStatus
+from . import TableWorkingCopyStatus
 from .base import TableWorkingCopy
 from .table_defs import GpkgKartTables, GpkgTables
 
@@ -149,7 +149,7 @@ class WorkingCopy_GPKG(TableWorkingCopy):
         if not self.full_path.is_file():
             return result
 
-        result |= WorkingCopyStatus.FILE_EXISTS
+        result |= TableWorkingCopyStatus.FILE_EXISTS
         with self.session() as sess:
             kart_table_count = sess.scalar(
                 """
@@ -165,18 +165,18 @@ class WorkingCopy_GPKG(TableWorkingCopy):
                 """SELECT count(*) FROM sqlite_master WHERE type='table' AND NAME NOT LIKE 'gpkg%';"""
             )
             if kart_table_count or user_table_count:
-                result |= WorkingCopyStatus.NON_EMPTY
+                result |= TableWorkingCopyStatus.NON_EMPTY
             if kart_table_count == 2:
-                result |= WorkingCopyStatus.INITIALISED
+                result |= TableWorkingCopyStatus.INITIALISED
             if user_table_count:
-                result |= WorkingCopyStatus.HAS_DATA
+                result |= TableWorkingCopyStatus.HAS_DATA
 
         if (
-            (WorkingCopyStatus.INITIALISED & result)
+            (TableWorkingCopyStatus.INITIALISED & result)
             and check_if_dirty
             and self.is_dirty()
         ):
-            result |= WorkingCopyStatus.DIRTY
+            result |= TableWorkingCopyStatus.DIRTY
 
         return result
 

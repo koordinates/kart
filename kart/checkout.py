@@ -14,7 +14,7 @@ from .output_util import InputMode, get_input_mode
 from .promisor_utils import get_partial_clone_envelope
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
-from kart.tabular.working_copy import WorkingCopyStatus
+from kart.tabular.working_copy import TableWorkingCopyStatus
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -34,7 +34,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
         )
         return
 
-    if not (working_copy.status() & WorkingCopyStatus.INITIALISED):
+    if not (working_copy.status() & TableWorkingCopyStatus.INITIALISED):
         click.echo(f"Creating working copy at {working_copy} ...")
         working_copy.create_and_initialise()
         datasets = list(repo.datasets(target_tree_or_commit, "table"))
@@ -503,12 +503,12 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
             status = old_wc.status(
                 allow_unconnectable=allow_unconnectable, check_if_dirty=check_if_dirty
             )
-            if old_wc_loc == new_wc_loc and status & WorkingCopyStatus.WC_EXISTS:
+            if old_wc_loc == new_wc_loc and status & TableWorkingCopyStatus.WC_EXISTS:
                 raise InvalidOperation(
                     f"Cannot recreate working copy at same location {old_wc} if --no-delete-existing is set."
                 )
 
-            if not discard_changes and (status & WorkingCopyStatus.DIRTY):
+            if not discard_changes and (status & TableWorkingCopyStatus.DIRTY):
                 raise InvalidOperation(
                     f"You have uncommitted changes at {old_wc}.\n"
                     + _DISCARD_CHANGES_HELP_MESSAGE
@@ -526,13 +526,13 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
                 )
                 raise e
 
-            if not discard_changes and (status & WorkingCopyStatus.DIRTY):
+            if not discard_changes and (status & TableWorkingCopyStatus.DIRTY):
                 raise InvalidOperation(
                     f"You have uncommitted changes at {old_wc}.\n"
                     + _DISCARD_CHANGES_HELP_MESSAGE
                 )
 
-            if status & WorkingCopyStatus.WC_EXISTS:
+            if status & TableWorkingCopyStatus.WC_EXISTS:
                 click.echo(f"Deleting existing working copy at {old_wc}")
                 keep_db_schema_if_possible = old_wc_loc == new_wc_loc
                 old_wc.delete(keep_db_schema_if_possible=keep_db_schema_if_possible)

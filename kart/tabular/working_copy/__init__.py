@@ -3,7 +3,7 @@ from enum import Enum, IntEnum, auto
 import click
 
 
-class WorkingCopyType(Enum):
+class TableWorkingCopyType(Enum):
     """Different types of working copy currently supported by Kart."""
 
     GPKG = auto()
@@ -18,7 +18,7 @@ class WorkingCopyType(Enum):
         location = str(location)
         db_type = DbType.from_spec(location)
         if db_type is not None:
-            return WorkingCopyType[db_type.name]
+            return TableWorkingCopyType[db_type.name]
 
         if allow_invalid:
             return None
@@ -34,27 +34,27 @@ class WorkingCopyType(Enum):
 
     @property
     def class_(self):
-        if self is WorkingCopyType.GPKG:
+        if self is TableWorkingCopyType.GPKG:
             from .gpkg import WorkingCopy_GPKG
 
             return WorkingCopy_GPKG
-        elif self is WorkingCopyType.POSTGIS:
+        elif self is TableWorkingCopyType.POSTGIS:
             from .postgis import WorkingCopy_Postgis
 
             return WorkingCopy_Postgis
-        elif self is WorkingCopyType.SQL_SERVER:
+        elif self is TableWorkingCopyType.SQL_SERVER:
             from .sqlserver import WorkingCopy_SqlServer
 
             return WorkingCopy_SqlServer
-        elif self is WorkingCopyType.MYSQL:
+        elif self is TableWorkingCopyType.MYSQL:
             from .mysql import WorkingCopy_MySql
 
             return WorkingCopy_MySql
 
-        raise RuntimeError("Invalid WorkingCopyType")
+        raise RuntimeError("Invalid TableWorkingCopyType")
 
 
-class WorkingCopyStatus(IntEnum):
+class TableWorkingCopyStatus(IntEnum):
     """
     Different status that a working copy can have.
     A working copy can have more than one status at a time, eg:

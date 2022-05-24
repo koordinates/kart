@@ -21,7 +21,7 @@ from kart.tabular.table_dataset import TableDataset
 from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
 
-from . import WorkingCopyStatus, WorkingCopyType
+from . import TableWorkingCopyStatus, TableWorkingCopyType
 
 L = logging.getLogger("kart.tabular.working_copy.base")
 
@@ -231,7 +231,7 @@ class TableWorkingCopy:
         if not location:
             return None
 
-        wc_type = WorkingCopyType.from_location(
+        wc_type = TableWorkingCopyType.from_location(
             location, allow_invalid=allow_invalid_state
         )
         if not wc_type:
@@ -245,7 +245,7 @@ class TableWorkingCopy:
         if not allow_invalid_state:
             wc.check_valid_state(status)
 
-        if not allow_uncreated and not (status & WorkingCopyStatus.WC_EXISTS):
+        if not allow_uncreated and not (status & TableWorkingCopyStatus.WC_EXISTS):
             wc = None
 
         return wc
@@ -275,7 +275,7 @@ class TableWorkingCopy:
 
     @classmethod
     def subclass_from_location(cls, wc_location):
-        wct = WorkingCopyType.from_location(wc_location)
+        wct = TableWorkingCopyType.from_location(wc_location)
         if wct.class_ is cls:
             raise RuntimeError(
                 f"No subclass found - don't call subclass_from_location on concrete implementation {cls}."
@@ -323,13 +323,13 @@ class TableWorkingCopy:
         if status is None:
             status = self.status()
 
-        wc_exists = status & WorkingCopyStatus.WC_EXISTS
-        if wc_exists and not (status & WorkingCopyStatus.INITIALISED):
+        wc_exists = status & TableWorkingCopyStatus.WC_EXISTS
+        if wc_exists and not (status & TableWorkingCopyStatus.INITIALISED):
             message = [
                 f"Working copy at {self} is not yet fully initialised",
                 "Try `kart create-workingcopy --delete-existing` to delete and recreate working copy if problem persists",
             ]
-            if status & WorkingCopyStatus.HAS_DATA:
+            if status & TableWorkingCopyStatus.HAS_DATA:
                 message.append(
                     f"But beware: {self} already seems to contain data, make sure it is backed up"
                 )
@@ -380,7 +380,7 @@ class TableWorkingCopy:
 
     def status(self, check_if_dirty=False, allow_unconnectable=False):
         """
-        Returns a union of WorkingCopyStatus values.
+        Returns a union of TableWorkingCopyStatus values.
         """
         raise NotImplementedError()
 

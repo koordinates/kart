@@ -6,7 +6,7 @@ from sqlalchemy import inspect
 
 from kart.repo import KartRepo
 
-from kart.tabular.working_copy.base import WorkingCopyStatus
+from kart.tabular.working_copy.base import TableWorkingCopyStatus
 from kart.sqlalchemy import strip_password
 from kart.sqlalchemy.adapter.postgis import KartAdapter_Postgis
 from test_working_copy import compute_approximated_types
@@ -64,8 +64,8 @@ def test_checkout_workingcopy(
             ]
 
             wc = repo.working_copy
-            assert wc.status() & WorkingCopyStatus.INITIALISED
-            assert wc.status() & WorkingCopyStatus.HAS_DATA
+            assert wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             head_tree_id = repo.head_tree.hex
             assert wc.assert_db_tree_match(head_tree_id)
@@ -112,8 +112,8 @@ def test_init_import(
 
             repo = KartRepo(repo_path)
             wc = repo.working_copy
-            assert wc.status() & WorkingCopyStatus.INITIALISED
-            assert wc.status() & WorkingCopyStatus.HAS_DATA
+            assert wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             assert wc.location == postgres_url
 
@@ -177,8 +177,8 @@ def test_commit_edits(
             ]
 
             wc = repo.working_copy
-            assert wc.status() & WorkingCopyStatus.INITIALISED
-            assert wc.status() & WorkingCopyStatus.HAS_DATA
+            assert wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             with wc.session() as sess:
                 if archive == "points":
@@ -291,8 +291,8 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             assert r.exit_code == 0, r.stderr
 
             wc = repo.working_copy
-            assert wc.status() & WorkingCopyStatus.INITIALISED
-            assert wc.status() & WorkingCopyStatus.HAS_DATA
+            assert wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
             assert r.exit_code == 0, r.stderr
@@ -418,8 +418,8 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
             assert r.exit_code == 0, r.stderr
 
             wc = repo.working_copy
-            assert wc.status() & WorkingCopyStatus.INITIALISED
-            assert wc.status() & WorkingCopyStatus.HAS_DATA
+            assert wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
             assert not wc.is_dirty()
 
             # The test is run inside a single transaction which we always roll back -

@@ -17,7 +17,7 @@ from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .tabular.import_source import TableImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingTableImportSource
-from kart.tabular.working_copy import WorkingCopyStatus
+from kart.tabular.working_copy import TableWorkingCopyStatus
 
 
 def list_import_formats(ctx):
@@ -48,7 +48,7 @@ def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
         return
 
     commit = repo.head_commit
-    if not (wc.status() & WorkingCopyStatus.INITIALISED):
+    if not (wc.status() & TableWorkingCopyStatus.INITIALISED):
         click.echo(f"Creating working copy at {wc} ...")
         wc.create_and_initialise()
     else:
