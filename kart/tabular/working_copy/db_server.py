@@ -9,11 +9,11 @@ from kart.exceptions import DbConnectionError, InvalidOperation
 from kart.sqlalchemy import DbType, strip_password
 from sqlalchemy.exc import DBAPIError
 
-from . import WorkingCopyStatus
-from .base import BaseWorkingCopy
+from . import TableWorkingCopyStatus
+from .base import TableWorkingCopy
 
 
-class DatabaseServer_WorkingCopy(BaseWorkingCopy):
+class DatabaseServer_WorkingCopy(TableWorkingCopy):
     """Functionality common to working copies that connect to a database server."""
 
     @property
@@ -35,7 +35,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
 
         working_copy = cls(repo, wc_location)
         status = working_copy.status()
-        if status & WorkingCopyStatus.NON_EMPTY:
+        if status & TableWorkingCopyStatus.NON_EMPTY:
             db_schema = working_copy.db_schema
             container_text = f"schema '{db_schema}'" if db_schema else "working copy"
             raise InvalidOperation(
@@ -120,7 +120,7 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
                 ):
                     return result
 
-                result |= WorkingCopyStatus.DB_SCHEMA_EXISTS
+                result |= TableWorkingCopyStatus.DB_SCHEMA_EXISTS
 
                 kart_table_count = sess.scalar(
                     """
@@ -141,22 +141,22 @@ class DatabaseServer_WorkingCopy(BaseWorkingCopy):
                     {"table_schema": self.db_schema},
                 )
                 if schema_table_count:
-                    result |= WorkingCopyStatus.NON_EMPTY
+                    result |= TableWorkingCopyStatus.NON_EMPTY
                 if kart_table_count == 2:
-                    result |= WorkingCopyStatus.INITIALISED
+                    result |= TableWorkingCopyStatus.INITIALISED
                 if schema_table_count > kart_table_count:
-                    result |= WorkingCopyStatus.HAS_DATA
+                    result |= TableWorkingCopyStatus.HAS_DATA
 
             if (
-                (result & WorkingCopyStatus.INITIALISED)
+                (result & TableWorkingCopyStatus.INITIALISED)
                 and check_if_dirty
                 and self.is_dirty()
             ):
-                result |= WorkingCopyStatus.DIRTY
+                result |= TableWorkingCopyStatus.DIRTY
 
         except DBAPIError as e:
             if allow_unconnectable:
-                result |= WorkingCopyStatus.UNCONNECTABLE
+                result |= TableWorkingCopyStatus.UNCONNECTABLE
             else:
                 raise self._db_connection_error(e)
 

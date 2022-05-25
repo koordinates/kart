@@ -7,6 +7,7 @@ from .cli_util import tool_environment
 from .exceptions import NO_WORKING_COPY, NotFound
 from .geometry import normalise_gpkg_geom
 from .sqlalchemy.gpkg import Db_GPKG
+from kart.working_copy import WorkingCopyTreeMismatch
 
 
 def _fsck_reset(repo, working_copy, dataset_paths):
@@ -67,7 +68,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             click.secho(
                 f"✔︎ Working Copy tree id matches repository: {oid}", fg="green"
             )
-        except working_copy.Mismatch as e:
+        except WorkingCopyTreeMismatch as e:
             # try and find the tree we _do_ have
             click.secho(f"✘ Repository tree is: {tree.id}", fg="red")
             click.secho(f"✘ Working Copy tree is: {e.working_copy_tree_id}", fg="red")

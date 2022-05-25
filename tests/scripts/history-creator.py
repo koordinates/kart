@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from kart.repo import KartRepo
-from kart.working_copy.base import WorkingCopy
+from kart.tabular.working_copy.base import WorkingCopy
 
 
 QMARK = "?"

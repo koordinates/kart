@@ -20,32 +20,16 @@ from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tabular.table_dataset import TableDataset
 from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
+from kart.working_copy import WorkingCopyDirty, WorkingCopyTreeMismatch
 
-from . import WorkingCopyStatus, WorkingCopyType
+from . import TableWorkingCopyStatus, TableWorkingCopyType
 
-L = logging.getLogger("kart.working_copy.base")
-
-
-class WorkingCopyDirty(Exception):
-    """Exception to abort immediately if working copy is dirty."""
-
-    pass
+L = logging.getLogger("kart.tabular.working_copy.base")
 
 
-class Mismatch(ValueError):
-    """Error for if the tree id stored in state table doesn't match the one at HEAD."""
-
-    def __init__(self, working_copy_tree_id, expected_tree_id):
-        self.working_copy_tree_id = working_copy_tree_id
-        self.expected_tree_id = expected_tree_id
-
-    def __str__(self):
-        return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.expected_tree_id}"
-
-
-class BaseWorkingCopy:
+class TableWorkingCopy:
     """
-    Abstract working copy implementation.
+    Abstract tabular working copy implementation.
     Subclasses to override any unimplemented methods below, and also to set the following fields:
 
     self.repo - KartRepo containing this WorkingCopy
@@ -231,7 +215,7 @@ class BaseWorkingCopy:
         if not location:
             return None
 
-        wc_type = WorkingCopyType.from_location(
+        wc_type = TableWorkingCopyType.from_location(
             location, allow_invalid=allow_invalid_state
         )
         if not wc_type:
@@ -245,7 +229,7 @@ class BaseWorkingCopy:
         if not allow_invalid_state:
             wc.check_valid_state(status)
 
-        if not allow_uncreated and not (status & WorkingCopyStatus.WC_EXISTS):
+        if not allow_uncreated and not (status & TableWorkingCopyStatus.WC_EXISTS):
             wc = None
 
         return wc
@@ -275,7 +259,7 @@ class BaseWorkingCopy:
 
     @classmethod
     def subclass_from_location(cls, wc_location):
-        wct = WorkingCopyType.from_location(wc_location)
+        wct = TableWorkingCopyType.from_location(wc_location)
         if wct.class_ is cls:
             raise RuntimeError(
                 f"No subclass found - don't call subclass_from_location on concrete implementation {cls}."
@@ -323,13 +307,13 @@ class BaseWorkingCopy:
         if status is None:
             status = self.status()
 
-        wc_exists = status & WorkingCopyStatus.WC_EXISTS
-        if wc_exists and not (status & WorkingCopyStatus.INITIALISED):
+        wc_exists = status & TableWorkingCopyStatus.WC_EXISTS
+        if wc_exists and not (status & TableWorkingCopyStatus.INITIALISED):
             message = [
                 f"Working copy at {self} is not yet fully initialised",
                 "Try `kart create-workingcopy --delete-existing` to delete and recreate working copy if problem persists",
             ]
-            if status & WorkingCopyStatus.HAS_DATA:
+            if status & TableWorkingCopyStatus.HAS_DATA:
                 message.append(
                     f"But beware: {self} already seems to contain data, make sure it is backed up"
                 )
@@ -380,7 +364,7 @@ class BaseWorkingCopy:
 
     def status(self, check_if_dirty=False, allow_unconnectable=False):
         """
-        Returns a union of WorkingCopyStatus values.
+        Returns a union of TableWorkingCopyStatus values.
         """
         raise NotImplementedError()
 
@@ -421,12 +405,12 @@ class BaseWorkingCopy:
             )
 
     def assert_db_tree_match(self, tree):
-        """Raises a Mismatch if kart_state refers to a different tree and not the given tree."""
+        """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the given tree."""
         wc_tree_id = self.get_db_tree()
         expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
 
         if wc_tree_id != expected_tree_id:
-            raise Mismatch(wc_tree_id, expected_tree_id)
+            raise WorkingCopyTreeMismatch(wc_tree_id, expected_tree_id)
         return wc_tree_id
 
     def tracking_changes_count(self, dataset=None):
