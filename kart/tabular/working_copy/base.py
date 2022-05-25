@@ -20,27 +20,11 @@ from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tabular.table_dataset import TableDataset
 from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
+from kart.working_copy import WorkingCopyDirty, WorkingCopyTreeMismatch
 
 from . import TableWorkingCopyStatus, TableWorkingCopyType
 
 L = logging.getLogger("kart.tabular.working_copy.base")
-
-
-class WorkingCopyDirty(Exception):
-    """Exception to abort immediately if working copy is dirty."""
-
-    pass
-
-
-class Mismatch(ValueError):
-    """Error for if the tree id stored in state table doesn't match the one at HEAD."""
-
-    def __init__(self, working_copy_tree_id, expected_tree_id):
-        self.working_copy_tree_id = working_copy_tree_id
-        self.expected_tree_id = expected_tree_id
-
-    def __str__(self):
-        return f"Working Copy is tree {self.working_copy_tree_id}; expecting {self.expected_tree_id}"
 
 
 class TableWorkingCopy:
@@ -421,12 +405,12 @@ class TableWorkingCopy:
             )
 
     def assert_db_tree_match(self, tree):
-        """Raises a Mismatch if kart_state refers to a different tree and not the given tree."""
+        """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the given tree."""
         wc_tree_id = self.get_db_tree()
         expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
 
         if wc_tree_id != expected_tree_id:
-            raise Mismatch(wc_tree_id, expected_tree_id)
+            raise WorkingCopyTreeMismatch(wc_tree_id, expected_tree_id)
         return wc_tree_id
 
     def tracking_changes_count(self, dataset=None):
