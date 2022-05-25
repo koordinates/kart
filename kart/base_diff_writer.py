@@ -157,10 +157,11 @@ class BaseDiffWriter:
             # and target is set to HEAD.
             base_rs = repo.structure(commit_parts[0])
             target_rs = repo.structure("HEAD")
-            working_copy = repo.working_copy
-            if not working_copy:
+            # TODO: this code shouldn't special-case tabular working copies
+            table_wc = repo.wc.tabular
+            if not table_wc:
                 raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
-            working_copy.assert_db_tree_match(target_rs.tree)
+            repo.working_copy.assert_tree_match(target_rs.tree)
             include_wc_diff = True
         return base_rs, target_rs, include_wc_diff
 

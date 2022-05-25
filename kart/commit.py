@@ -134,11 +134,12 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
     commit = repo.head_commit
     tree = commit.tree
 
-    working_copy = repo.working_copy
-    if not working_copy:
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if not table_wc:
         raise NotFound("No working copy, use 'checkout'", exit_code=NO_WORKING_COPY)
 
-    working_copy.assert_db_tree_match(tree)
+    repo.working_copy.assert_tree_match(tree)
 
     commit_diff_writer = CommitDiffWriter(repo, "HEAD", filters)
     wc_diff = commit_diff_writer.get_repo_diff()
@@ -168,8 +169,8 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
         wc_diff, commit_msg, allow_empty=allow_empty
     )
 
-    working_copy.reset_tracking_table(commit_diff_writer.repo_key_filter)
-    working_copy.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
+    table_wc.reset_tracking_table(commit_diff_writer.repo_key_filter)
+    table_wc.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
 
     remove_from_wc = commit_diff_writer.remove_from_wc_post_commit
     if remove_from_wc and any(remove_from_wc.values()):
@@ -178,7 +179,7 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
             click.echo(
                 f"Removing {total_count} features from the working copy that no longer match the spatial filter..."
             )
-        working_copy.drop_features(remove_from_wc)
+        table_wc.drop_features(remove_from_wc)
 
     jdict = commit_obj_to_json(new_commit, repo, wc_diff)
     if do_json:

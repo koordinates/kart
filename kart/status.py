@@ -76,11 +76,13 @@ def get_working_copy_status_json(repo):
     if repo.is_empty:
         return None
 
-    working_copy = repo.working_copy
-    if not working_copy:
+    # TODO: this code shouldn't special-case tabular working copies.
+    # Also, the JSON output should be clear when it is talking about the tabular working copy vs other parts.
+    table_wc = repo.wc.tabular
+    if not table_wc:
         return None
 
-    output = {"path": working_copy.clean_location, "changes": None}
+    output = {"path": table_wc.clean_location, "changes": None}
 
     if os.environ.get("X_KART_POINT_CLOUDS"):
         from kart import diff_util
@@ -88,7 +90,7 @@ def get_working_copy_status_json(repo):
         rs = repo.structure()
         wc_diff = diff_util.get_repo_diff(rs, rs, include_wc_diff=True)
     else:
-        wc_diff = working_copy.diff_to_tree()
+        wc_diff = table_wc.diff_to_tree()
     if wc_diff:
         output["changes"] = get_diff_status_including_pk_conflicts_json(wc_diff, repo)
 

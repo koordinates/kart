@@ -164,10 +164,10 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
     click.echo("Updating working copy...")
     reset_wc_if_needed(repo)
 
-    # TODO - fix up reset code - there should be a single function you can call that updates all working copies.
-    tabular_wc = repo.working_copy
-    if tabular_wc is not None:
-        tabular_wc.reset(repo.head_commit)
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if table_wc is not None:
+        table_wc.reset(repo.head_commit)
 
 
 def _format_array(array):

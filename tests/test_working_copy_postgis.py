@@ -63,12 +63,12 @@ def test_checkout_workingcopy(
                 "Nothing to commit, working copy clean",
             ]
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             head_tree_id = repo.head_tree.hex
-            assert wc.assert_db_tree_match(head_tree_id)
+            table_wc.assert_tree_match(head_tree_id)
 
             # Also test the importer by making sure we can import this from the WC:
             r = cli_runner.invoke(["import", postgres_url, f"{table}:{table}_2"])
@@ -111,11 +111,11 @@ def test_init_import(
             assert (repo_path / ".kart" / "HEAD").exists()
 
             repo = KartRepo(repo_path)
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
-            assert wc.location == postgres_url
+            assert table_wc.location == postgres_url
 
 
 def test_checkout_and_status_with_no_crs(
@@ -176,17 +176,17 @@ def test_commit_edits(
                 "Nothing to commit, working copy clean",
             ]
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 if archive == "points":
-                    edit_points(sess, repo.datasets()[H.POINTS.LAYER], wc)
+                    edit_points(sess, repo.datasets()[H.POINTS.LAYER], table_wc)
                 elif archive == "polygons":
-                    edit_polygons(sess, repo.datasets()[H.POLYGONS.LAYER], wc)
+                    edit_polygons(sess, repo.datasets()[H.POLYGONS.LAYER], table_wc)
                 elif archive == "table":
-                    edit_table(sess, repo.datasets()[H.TABLE.LAYER], wc)
+                    edit_table(sess, repo.datasets()[H.TABLE.LAYER], table_wc)
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
@@ -262,8 +262,8 @@ def test_postgis_wc_with_long_index_name(
             assert not repo.is_bare
             assert not repo.is_empty
 
-            wc = repo.working_copy
-            insp = inspect(wc.engine)
+            table_wc = repo.wc.tabular
+            insp = inspect(table_wc.engine)
             indexes = insp.get_indexes(
                 "a_really_long_table_name_that_is_really_actually_quite_long_dont_you_think",
                 schema=postgres_schema,
@@ -290,14 +290,14 @@ def test_edit_schema(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["create-workingcopy", postgres_url])
             assert r.exit_code == 0, r.stderr
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 sess.execute(
                     f"""COMMENT ON TABLE "{postgres_schema}"."{H.POLYGONS.LAYER}" IS 'New title';"""
                 )
@@ -417,17 +417,17 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
             r = cli_runner.invoke(["create-workingcopy", postgres_url])
             assert r.exit_code == 0, r.stderr
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
-            assert not wc.is_dirty()
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
+            assert not table_wc.is_dirty()
 
             # The test is run inside a single transaction which we always roll back -
             # this is because we are editing the public.spatial_ref_sys table, which is shared by
             # everything in the postgis DB - we don't want these temporary changes to make other
             # tests fail, and we want to roll them immediately whether the test passes or fails.
             with pytest.raises(SucceedAndRollback):
-                with wc.session() as sess:
+                with table_wc.session() as sess:
 
                     crs = sess.scalar(
                         "SELECT srtext FROM public.spatial_ref_sys WHERE srid=4326"
@@ -444,7 +444,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
 
                     # kart diff hides differences between dataset CRS and WC CRS if they are both supposed to be EPSG:4326
                     # (or any other standard CRS). See POSTGIS_WC.md
-                    assert not wc.is_dirty()
+                    assert not table_wc.is_dirty()
 
                     # Change the CRS authority to CUSTOM
                     crs = crs.replace(
@@ -457,14 +457,14 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                     )
 
                     # Now kart diff should show the change, and it is possible to commit the change.
-                    assert wc.is_dirty()
+                    assert table_wc.is_dirty()
 
                     commit_id = repo.structure().commit_diff(
-                        wc.diff_to_tree(), "Modify CRS"
+                        table_wc.diff_to_tree(), "Modify CRS"
                     )
-                    wc.update_state_table_tree(commit_id.hex)
+                    table_wc.update_state_table_tree(commit_id.hex)
 
-                    assert not wc.is_dirty()
+                    assert not table_wc.is_dirty()
 
                     r = cli_runner.invoke(["show"])
                     lines = r.stdout.splitlines()
@@ -484,7 +484,7 @@ def test_auto_increment_pk(data_archive, cli_runner, new_postgis_db_schema):
             assert r.exit_code == 0, r.stderr
 
             repo = KartRepo(repo_path)
-            with repo.working_copy.session() as sess:
+            with repo.wc.tabular.session() as sess:
                 t = f"{postgres_schema}.{H.POLYGONS.LAYER}"
                 count = sess.scalar(
                     f"SELECT COUNT(*) FROM {t} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
@@ -527,7 +527,7 @@ def test_values_roundtrip(data_archive, cli_runner, new_postgis_db_schema):
             repo.config["kart.workingcopy.location"] = postgres_url
             r = cli_runner.invoke(["checkout"])
 
-            with repo.working_copy.session() as sess:
+            with repo.wc.tabular.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
                 sess.execute(
                     f'UPDATE {postgres_schema}.manytypes SET "PK"="PK" + 1000;'
@@ -551,7 +551,7 @@ def test_empty_geometry_roundtrip(data_archive, cli_runner, new_postgis_db_schem
             repo.config["kart.workingcopy.location"] = postgres_url
             r = cli_runner.invoke(["checkout"])
 
-            with repo.working_copy.session() as sess:
+            with repo.wc.tabular.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
                 sess.execute(
                     f'UPDATE {postgres_schema}.point_test SET "PK"="PK" + 1000;'
@@ -610,8 +610,8 @@ def test_checkout_custom_crs(
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stderr
 
-            wc = repo.working_copy
-            with wc.session() as sess:
+            table_wc = repo.wc.tabular
+            with table_wc.session() as sess:
                 srid = sess.scalar(
                     """
                     SELECT srid FROM geometry_columns WHERE f_table_schema=:table_schema AND f_table_name=:table_name;
@@ -624,7 +624,7 @@ def test_checkout_custom_crs(
             r = cli_runner.invoke(["checkout", "epsg-4326"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 srid = sess.scalar(
                     """
                     SELECT srid FROM geometry_columns WHERE f_table_schema=:table_schema AND f_table_name=:table_name;

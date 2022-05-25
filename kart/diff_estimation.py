@@ -91,7 +91,8 @@ def estimate_diff_feature_counts(
     assert accuracy in ACCURACY_CHOICES
 
     if include_wc_diff:
-        working_copy = repo.working_copy
+        # TODO: this code shouldn't special-case tabular working copies
+        table_wc = repo.working_copy.tabular
         wc_diff_context = WCDiffContext(repo)
     else:
         annotation_type = f"feature-change-counts-{accuracy}"
@@ -155,7 +156,7 @@ def estimate_diff_feature_counts(
                 path_encoder,
             )
             if include_wc_diff and target_ds:
-                ds_total += working_copy.tracking_changes_count(target_ds)
+                ds_total += table_wc.tracking_changes_count(target_ds)
 
         if ds_total:
             dataset_change_counts[dataset_path] = ds_total

@@ -32,7 +32,7 @@ class WCDiffContext:
     @property
     def table_working_copy(self):
         assert not self.is_bare
-        return self.repo.working_copy
+        return self.repo.working_copy.tabular
 
     @property
     def workdir_path(self):

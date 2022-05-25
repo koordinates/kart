@@ -57,7 +57,7 @@ def test_commit(
 
         # make some changes
         repo = KartRepo(repo_dir)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             try:
                 edit_func = locals()[f"edit_{archive}"]
                 pk_del = edit_func(sess)
@@ -69,8 +69,8 @@ def test_commit(
         repo = KartRepo(repo_dir)
         dataset = repo.datasets()[layer]
 
-        wc = repo.working_copy
-        original_change_count = wc.tracking_changes_count(dataset)
+        table_wc = repo.wc.tabular
+        original_change_count = table_wc.tracking_changes_count(dataset)
 
         if partial:
             r = cli_runner.invoke(
@@ -91,8 +91,8 @@ def test_commit(
         tree = repo.head_tree
         assert dataset.encode_1pk_to_path(pk_del) not in tree
 
-        wc.assert_db_tree_match(tree)
-        change_count = wc.tracking_changes_count(dataset)
+        table_wc.assert_tree_match(tree)
+        change_count = table_wc.tracking_changes_count(dataset)
 
         if partial:
             # All but one change should still be in the tracking table
@@ -106,7 +106,7 @@ def test_commit(
         else:
             assert (
                 change_count == 0
-            ), f"Changes still listed in {wc.TRACKING_TABLE} after full commit"
+            ), f"Changes still listed in {table_wc.TRACKING_TABLE} after full commit"
 
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r
@@ -210,7 +210,7 @@ def test_commit_message(
 
         # make some changes
         repo = KartRepo(repo_dir)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             edit_points(sess)
 
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
@@ -309,7 +309,7 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
 def test_commit_schema_violation(cli_runner, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
         repo = KartRepo(repo_dir)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             sess.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
             sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET t50_fid=123456789012 WHERE fid=2;"

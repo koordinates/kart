@@ -233,13 +233,14 @@ def complete_merging_state(ctx):
         "message": merge_message,
     }
 
-    wc = repo.working_copy
-    if wc:
-        L.debug(f"Updating {wc} ...")
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if table_wc:
+        L.debug(f"Updating {table_wc} ...")
         merge_commit = repo[merge_commit_id]
         # FIXME - this blows away any WC changes the user has, but unfortunately,
         # we don't have any way of preserving them right now.
-        wc.reset(merge_commit, force=True)
+        table_wc.reset(merge_commit, force=True)
 
     for filename in ALL_MERGE_FILES:
         repo.remove_gitdir_file(filename)
@@ -318,11 +319,12 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     if not no_op and not conflicts:
         # Update working copy.
         # TODO - maybe lock the working copy during a merge?
-        wc = repo.working_copy
-        if wc:
-            L.debug(f"Updating {wc} ...")
+        # TODO: this code shouldn't special-case tabular working copies.
+        table_wc = repo.wc.tabular
+        if table_wc:
+            L.debug(f"Updating {table_wc} ...")
             merge_commit = repo[jdict["commit"]]
-            wc.reset(merge_commit)
+            table_wc.reset(merge_commit)
 
             if os.environ.get("X_KART_POINT_CLOUDS"):
                 from kart.point_cloud.checkout import (

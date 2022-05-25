@@ -41,7 +41,7 @@ def test_merge_fastforward(data, data_working_copy, cli_runner, insert, request)
         h = repo.head.target.hex
 
         # make some changes
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             insert(sess)
             insert(sess)
             commit_id = insert(sess)
@@ -97,7 +97,7 @@ def test_merge_fastforward_noff(
         h = repo.head.target.hex
 
         # make some changes
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             insert(sess)
             insert(sess)
             commit_id = insert(sess)
@@ -150,7 +150,7 @@ def test_merge_true(
 ):
     with data_working_copy(data.ARCHIVE) as (repo_path, wc_path):
         repo = KartRepo(repo_path)
-        wc = repo.working_copy
+        table_wc = repo.wc.tabular
         # new branch
         r = cli_runner.invoke(["checkout", "-b", "changes"])
         assert r.exit_code == 0, r
@@ -159,7 +159,7 @@ def test_merge_true(
         h = repo.head.target.hex
 
         # make some changes
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             insert(sess)
             insert(sess)
             b_commit_id = insert(sess)
@@ -169,7 +169,7 @@ def test_merge_true(
         assert r.exit_code == 0, r
         assert repo.head.target.hex != b_commit_id
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             m_commit_id = insert(sess)
         H.git_graph(request, "pre-merge-main")
 
@@ -198,7 +198,7 @@ def test_merge_true(
         # check the database state
         num_inserts = len(insert.inserted_fids)
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             rowcount = 0
             for pk in insert.inserted_fids:
                 rowcount += sess.execute(

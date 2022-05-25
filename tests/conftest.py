@@ -287,15 +287,15 @@ def data_working_copy(request, data_archive, tmp_path_factory, cli_runner):
         archive_path = get_archive_path(archive_path)
         with data_archive(archive_path) as repo_dir:
             repo = KartRepo(repo_dir)
-            if repo.working_copy:
-                wc_path = repo.working_copy.full_path
+            if repo.wc.tabular:
+                table_wc_path = repo.wc.tabular.full_path
                 if force_new:
-                    L.info("force_new is set, deleting existing WC: %s", wc_path)
-                    del repo.working_copy
-                    assert not hasattr(repo, "_working_copy")
-                    del wc_path
+                    L.info("force_new is set, deleting existing WC: %s", table_wc_path)
+                    repo.working_copy.delete_tabular()
+                    assert not hasattr(repo.working_copy, "_tabular")
+                    del table_wc_path
 
-            if not repo.working_copy:
+            if not repo.wc.tabular:
                 wc_path = (
                     tmp_path_factory.mktemp(request.node.name, str(incr))
                     / archive_path.with_suffix(".gpkg").name
@@ -655,10 +655,12 @@ class TestHelpers:
     def clear_working_copy(cls, repo_path="."):
         """ Delete any existing working copy & associated config """
         repo = KartRepo(repo_path)
-        wc = repo.get_working_copy(allow_invalid_state=True)
-        if wc:
-            print(f"Deleting existing working copy: {repo.workingcopy_location}")
-            wc.delete()
+        table_wc = repo.working_copy.get_tabular(allow_invalid_state=True)
+        if table_wc:
+            print(
+                f"Deleting existing tabular working copy: {repo.workingcopy_location}"
+            )
+            table_wc.delete()
 
         if repo.WORKINGCOPY_LOCATION_KEY in repo.config:
             del repo.config[repo.WORKINGCOPY_LOCATION_KEY]
@@ -1081,6 +1083,6 @@ def dodgy_restore(cli_runner):
         r = cli_runner.invoke(["checkout", restore_commit])
         assert r.exit_code == 0, r.stderr
         repo.write_gitdir_file("HEAD", head_commit)
-        repo.working_copy.update_state_table_tree(head_tree)
+        repo.wc.tabular.update_state_table_tree(head_tree)
 
     return _dodgy_restore

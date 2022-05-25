@@ -138,7 +138,7 @@ def test_import_table_meta_overrides(
             cli_runner.invoke(["checkout"])
 
             repo = KartRepo(repo_path)
-            with repo.working_copy.session() as sess:
+            with repo.wc.tabular.session() as sess:
                 title, description = sess.execute(
                     """
                     SELECT c.identifier, c.description
@@ -516,8 +516,7 @@ def test_init_import_table_gpkg_types(data_archive_readonly, tmp_path, cli_runne
 
         # There's a bunch of wacky types in here, let's check them
         repo = KartRepo(repo_path)
-        wc = repo.working_copy
-        with wc.session() as sess:
+        with repo.wc.tabular.session() as sess:
             table_info = [
                 dict(row) for row in sess.execute("PRAGMA table_info('types');")
             ]
@@ -667,7 +666,7 @@ def test_init_import(
         assert repo.config["kart.repostructure.version"] == "3"
         assert repo.config["kart.workingcopy.location"] == f"{wc.name}"
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, table) > 0
 
             wc_tree_id = sess.scalar(
@@ -982,16 +981,16 @@ def test_import_existing_wc(
             assert r.exit_code == 0, r
 
         repo = KartRepo(repo_path)
-        wc = repo.working_copy
-        with wc.session() as sess:
+        table_wc = repo.wc.tabular
+        with table_wc.session() as sess:
             assert H.row_count(sess, "nz_waca_adjustments") > 0
-        assert wc.get_db_tree() == repo.head_tree.id.hex
+        assert table_wc.get_tree_id() == repo.head_tree.id.hex
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r
         assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(
                 "DELETE FROM nz_waca_adjustments WHERE rowid IN (SELECT rowid FROM nz_waca_adjustments ORDER BY id LIMIT 10);"
             )
@@ -1007,9 +1006,9 @@ def test_import_existing_wc(
             )
             assert r.exit_code == 0, r
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.row_count(sess, "waca2") > 0
-        assert wc.get_db_tree() == repo.head_tree.id.hex
+        assert table_wc.get_tree_id() == repo.head_tree.id.hex
 
         r = cli_runner.invoke(["status"])
         assert r.exit_code == 0, r

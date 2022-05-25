@@ -228,13 +228,13 @@ def apply_patch(
             raise NotFound(f"No such ref {ref}")
 
     rs = repo.structure(ref)
-    wc = repo.working_copy
-    if not do_commit and not wc:
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if not do_commit and not table_wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
         raise NotFound("--no-commit requires a working copy", exit_code=NO_WORKING_COPY)
 
-    if wc:
-        wc.check_not_dirty()
+    repo.wc.check_not_dirty()
 
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():
@@ -301,10 +301,10 @@ def apply_patch(
             resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
 
-    if wc and new_wc_target:
+    if table_wc and new_wc_target:
         # oid refers to either a commit or tree
-        click.echo(f"Updating {wc} ...")
-        wc.reset(new_wc_target, track_changes_as_dirty=not do_commit)
+        click.echo(f"Updating {table_wc} ...")
+        table_wc.reset(new_wc_target, track_changes_as_dirty=not do_commit)
 
 
 @click.command()

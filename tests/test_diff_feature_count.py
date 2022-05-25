@@ -118,7 +118,7 @@ def test_feature_count_with_working_copy(data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             # this actually undoes a change from the HEAD commit
             r = sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name_ascii=NULL, name=NULL WHERE fid = 1166;"

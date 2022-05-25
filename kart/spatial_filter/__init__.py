@@ -285,11 +285,9 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
             repo.del_config(f"remote.{update_remote}.partialclonefilter")
 
     def matches_working_copy(self, repo):
-        working_copy = repo.working_copy
-        return (
-            working_copy is None
-            or working_copy.get_spatial_filter_hash() == self.hexhash
-        )
+        # TODO: this code shouldn't special-case tabular working copies
+        table_wc = repo.wc.tabular
+        return table_wc is None or table_wc.get_spatial_filter_hash() == self.hexhash
 
     @property
     def hexhash(self):
@@ -701,11 +699,9 @@ class OriginalSpatialFilter(SpatialFilter):
             raise CrsError(f"Can't reproject spatial filter into {crs_desc}:\n{e}")
 
     def matches_working_copy(self, repo):
-        working_copy = repo.working_copy
-        return (
-            working_copy is None
-            or working_copy.get_spatial_filter_hash() == self.hexhash
-        )
+        # TODO: this code shouldn't special-case tabular working copies
+        table_wc = repo.wc.tabular
+        return table_wc is None or table_wc.get_spatial_filter_hash() == self.hexhash
 
 
 # A SpatialFilter object that matches everything.

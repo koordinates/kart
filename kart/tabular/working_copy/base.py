@@ -10,7 +10,6 @@ import sqlalchemy as sa
 from kart.diff_structs import WORKING_COPY_EDIT, DatasetDiff, Delta, DeltaDiff, RepoDiff
 from kart.exceptions import (
     NO_WORKING_COPY,
-    InvalidOperation,
     NotFound,
     NotYetImplemented,
 )
@@ -20,14 +19,14 @@ from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tabular.table_dataset import TableDataset
 from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
-from kart.working_copy import WorkingCopyDirty, WorkingCopyTreeMismatch
+from kart.working_copy import WorkingCopyDirty, WorkingCopyTreeMismatch, WorkingCopyPart
 
 from . import TableWorkingCopyStatus, TableWorkingCopyType
 
 L = logging.getLogger("kart.tabular.working_copy.base")
 
 
-class TableWorkingCopy:
+class TableWorkingCopy(WorkingCopyPart):
     """
     Abstract tabular working copy implementation.
     Subclasses to override any unimplemented methods below, and also to set the following fields:
@@ -382,36 +381,17 @@ class TableWorkingCopy:
         """
         raise NotImplementedError()
 
-    def get_db_tree(self):
+    def get_kart_state_value(self, table_name, key):
         """Returns the hex tree ID from the state table."""
         kart_state = self.kart_tables.kart_state
         with self.session() as sess:
             return sess.scalar(
                 sa.select([kart_state.c.value]).where(
-                    sa.and_(kart_state.c.table_name == "*", kart_state.c.key == "tree")
-                )
-            )
-
-    def get_spatial_filter_hash(self):
-        kart_state = self.kart_tables.kart_state
-        with self.session() as sess:
-            return sess.scalar(
-                sa.select([kart_state.c.value]).where(
                     sa.and_(
-                        kart_state.c.table_name == "*",
-                        kart_state.c.key == "spatial-filter-hash",
+                        kart_state.c.table_name == table_name, kart_state.c.key == key
                     )
                 )
             )
-
-    def assert_db_tree_match(self, tree):
-        """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the given tree."""
-        wc_tree_id = self.get_db_tree()
-        expected_tree_id = tree.id.hex if isinstance(tree, pygit2.Tree) else tree
-
-        if wc_tree_id != expected_tree_id:
-            raise WorkingCopyTreeMismatch(wc_tree_id, expected_tree_id)
-        return wc_tree_id
 
     def tracking_changes_count(self, dataset=None):
         """
@@ -429,21 +409,12 @@ class TableWorkingCopy:
             else:
                 return sess.scalar(sa.select([sa.func.count()]).select_from(kart_track))
 
-    def check_not_dirty(self, help_message=None):
-        """Checks the working copy has no changes in it. Otherwise, raises InvalidOperation"""
-        if not help_message:
-            help_message = "Commit these changes (`kart commit`) or discard these changes (`kart restore`) first."
-        if self.is_dirty():
-            raise InvalidOperation(
-                f"You have uncommitted changes in your working copy.\n{help_message}"
-            )
-
     def is_dirty(self):
         """
         Returns True if there are uncommitted changes in the working copy,
         or False otherwise.
         """
-        if self.get_db_tree() is None:
+        if self.get_tree_id() is None:
             return False
         try:
             self.diff_to_tree(raise_if_dirty=True)
@@ -458,7 +429,7 @@ class TableWorkingCopy:
         """
         with self.session():
             repo_diff = RepoDiff()
-            for dataset in self.repo.datasets(self.get_db_tree(), "table"):
+            for dataset in self.repo.datasets(self.get_tree_id(), "table"):
                 if dataset.path not in repo_filter:
                     continue
                 if not self._is_dataset_supported(dataset):
@@ -604,7 +575,7 @@ class TableWorkingCopy:
         # That way, they don't vary at random if the same command is run twice in a row, but
         # they will vary as the repo state changes so that we don't accidentally generate the same ID twice
         # for two unrelated columns.
-        id_salt = f"{self.engine.url} {self.db_schema} {dataset.table_name} {self.get_db_tree()}"
+        id_salt = f"{self.engine.url} {self.db_schema} {dataset.table_name} {self.get_tree_id()}"
 
         with self.session() as sess:
             return self.adapter.all_v2_meta_items(
@@ -1064,7 +1035,7 @@ class TableWorkingCopy:
         Drop the given features from the given datasets.
         Doesn't do any further work like modifying the kart_track table in any way.
         """
-        base_tree_id = self.get_db_tree()
+        base_tree_id = self.get_tree_id()
         base_datasets = self.repo.datasets(base_tree_id, "table")
         with self.session() as sess:
             for ds_path, pk_list in pk_lists.items():
@@ -1127,7 +1098,7 @@ class TableWorkingCopy:
 
         # base_tree is the tree the working copy is based on.
         # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.
-        base_tree_id = self.get_db_tree()
+        base_tree_id = self.get_tree_id()
         base_tree = self.repo[base_tree_id]
         repo_tree_id = self.repo.head_tree.hex
 

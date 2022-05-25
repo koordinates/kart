@@ -94,9 +94,8 @@ class Context(object):
         return self._repo
 
     def check_not_dirty(self, help_message=None):
+        """Checks if the working copy is dirty."""
         from .repo import KartRepoState
 
         repo = self.get_repo(allowed_states=KartRepoState.ALL_STATES)
-        working_copy = repo.working_copy
-        if working_copy:
-            working_copy.check_not_dirty(help_message)
+        repo.working_copy.check_not_dirty(help_message)

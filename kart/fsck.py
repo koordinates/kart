@@ -44,27 +44,28 @@ def fsck(ctx, reset_datasets, fsck_args):
         click.echo("No working copy configured")
         return
 
-    working_copy = repo.working_copy
-    if not working_copy:
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if not table_wc:
         raise NotFound(
-            click.style(f"Working copy missing: {working_copy}", fg="red"),
+            click.style(f"Working copy missing: {table_wc}", fg="red"),
             exit_code=NO_WORKING_COPY,
         )
 
-    click.secho(f"✔︎ Working copy: {working_copy}", fg="green")
+    click.secho(f"✔︎ Working copy: {table_wc}", fg="green")
 
     if reset_datasets:
         click.secho(
             f"Resetting working copy for {', '.join(reset_datasets)} ...", bold=True
         )
-        return _fsck_reset(repo, working_copy, reset_datasets)
+        return _fsck_reset(repo, table_wc, reset_datasets)
 
-    with working_copy.session() as sess:
+    with table_wc.session() as sess:
         tree = repo.head_tree
 
         # compare repo tree id to what's in the DB
         try:
-            oid = working_copy.assert_db_tree_match(repo.head_tree)
+            oid = table_wc.assert_tree_match(repo.head_tree)
             click.secho(
                 f"✔︎ Working Copy tree id matches repository: {oid}", fg="green"
             )
@@ -93,7 +94,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                 )
 
             wc_count = sess.scalar(
-                f"SELECT COUNT(*) FROM {working_copy.table_identifier(dataset)};"
+                f"SELECT COUNT(*) FROM {table_wc.table_identifier(dataset)};"
             )
             click.echo(f"{wc_count} features in {table}")
             ds_count = dataset.feature_count
@@ -105,12 +106,12 @@ def fsck(ctx, reset_datasets, fsck_args):
                 )
 
             track_count = sess.scalar(
-                f"SELECT COUNT(*) FROM {working_copy.KART_TRACK} WHERE table_name=:table_name;",
+                f"SELECT COUNT(*) FROM {table_wc.KART_TRACK} WHERE table_name=:table_name;",
                 {"table_name": table},
             )
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
-            wc_diff = working_copy.diff_db_to_tree(dataset)
+            wc_diff = table_wc.diff_db_to_tree(dataset)
             wc_diff.prune()
 
             if wc_diff:
@@ -171,7 +172,7 @@ def fsck(ctx, reset_datasets, fsck_args):
                         )
 
                     f = sess.execute(
-                        f"SELECT * FROM {working_copy.table_identifier(dataset)} WHERE {working_copy.quote(pk)}=:pk;",
+                        f"SELECT * FROM {table_wc.table_identifier(dataset)} WHERE {table_wc.quote(pk)}=:pk;",
                         {"pk": feature[pk]},
                     )
                     db_obj = dict(f.fetchone())
