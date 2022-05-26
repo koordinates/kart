@@ -91,9 +91,7 @@ def data_rm(ctx, message, output_format, datasets):
                 exit_code=NO_TABLE,
             )
 
-    wc = repo.working_copy
-    if wc:
-        wc.check_not_dirty()
+    repo.working_copy.check_not_dirty()
 
     repo_diff = RepoDiff()
     for ds_path in datasets:
@@ -114,10 +112,12 @@ def data_rm(ctx, message, output_format, datasets):
 
     new_commit = repo.structure().commit_diff(repo_diff, commit_msg)
 
-    if wc:
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if table_wc:
         if not do_json:
-            click.echo(f"Updating {wc} ...")
-        wc.reset(new_commit)
+            click.echo(f"Updating {table_wc} ...")
+        table_wc.reset(new_commit)
 
     jdict = commit_obj_to_json(new_commit, repo, repo_diff)
     if do_json:

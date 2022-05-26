@@ -1,7 +1,7 @@
 import pytest
 
 
-from kart.exceptions import INVALID_OPERATION, NO_BRANCH, NO_COMMIT
+from kart.exceptions import UNCOMMITTED_CHANGES, NO_BRANCH, NO_COMMIT
 from kart.repo import KartRepo
 from kart.structs import CommitWithReference
 
@@ -96,7 +96,7 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 def test_reset(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc):
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             edit_points(sess)
 
         r = cli_runner.invoke(["diff", "--exit-code"])
@@ -111,7 +111,7 @@ def test_reset(data_working_copy, cli_runner, edit_points):
         ]
 
         r = cli_runner.invoke(["reset", "HEAD^"])
-        assert r.exit_code == INVALID_OPERATION
+        assert r.exit_code == UNCOMMITTED_CHANGES
         assert "You have uncommitted changes in your working copy." in r.stderr
 
         r = cli_runner.invoke(["reset", "HEAD^", "--discard-changes"])

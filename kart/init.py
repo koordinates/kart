@@ -43,7 +43,7 @@ def list_import_formats(ctx):
 
 
 def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
-    wc = repo.get_working_copy(allow_uncreated=True)
+    wc = repo.wc.get_tabular(allow_uncreated=True)
     if not wc:
         return
 

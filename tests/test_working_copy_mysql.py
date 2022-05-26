@@ -61,12 +61,12 @@ def test_checkout_workingcopy(
                 "Nothing to commit, working copy clean",
             ]
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             head_tree_id = repo.head_tree.hex
-            assert wc.assert_db_tree_match(head_tree_id)
+            table_wc.assert_tree_match(head_tree_id)
 
             # Also test the importer by making sure we can import this from the WC:
             r = cli_runner.invoke(["import", mysql_url, f"{table}:{table}_2"])
@@ -109,11 +109,11 @@ def test_init_import(
             assert (repo_path / ".kart" / "HEAD").exists()
 
             repo = KartRepo(repo_path)
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
-            assert wc.location == mysql_url
+            assert table_wc.location == mysql_url
 
 
 @pytest.mark.parametrize(
@@ -152,17 +152,17 @@ def test_commit_edits(
                 "Nothing to commit, working copy clean",
             ]
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 if archive == "points":
-                    edit_points(sess, repo.datasets()[H.POINTS.LAYER], wc)
+                    edit_points(sess, repo.datasets()[H.POINTS.LAYER], table_wc)
                 elif archive == "polygons":
-                    edit_polygons(sess, repo.datasets()[H.POLYGONS.LAYER], wc)
+                    edit_polygons(sess, repo.datasets()[H.POLYGONS.LAYER], table_wc)
                 elif archive == "table":
-                    edit_table(sess, repo.datasets()[H.TABLE.LAYER], wc)
+                    edit_table(sess, repo.datasets()[H.TABLE.LAYER], table_wc)
 
             r = cli_runner.invoke(["status"])
             assert r.exit_code == 0, r.stderr
@@ -209,14 +209,14 @@ def test_edit_schema(data_archive, cli_runner, new_mysql_db_schema):
             r = cli_runner.invoke(["create-workingcopy", mysql_url])
             assert r.exit_code == 0, r.stderr
 
-            wc = repo.working_copy
-            assert wc.status() & TableWorkingCopyStatus.INITIALISED
-            assert wc.status() & TableWorkingCopyStatus.HAS_DATA
+            table_wc = repo.wc.tabular
+            assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
+            assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
             r = cli_runner.invoke(["diff", "--output-format=quiet"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 sess.execute(
                     f"""ALTER TABLE "{mysql_schema}"."{H.POLYGONS.LAYER}" ADD colour NVARCHAR(32);"""
                 )
@@ -309,7 +309,7 @@ def test_auto_increment_pk(data_archive, cli_runner, new_mysql_db_schema):
             assert r.exit_code == 0, r.stderr
 
             repo = KartRepo(repo_path)
-            with repo.working_copy.session() as sess:
+            with repo.wc.tabular.session() as sess:
                 t = f"{mysql_schema}.{H.POLYGONS.LAYER}"
                 count = sess.scalar(
                     f"SELECT COUNT(*) FROM {t} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
@@ -352,7 +352,7 @@ def test_values_roundtrip(data_archive, cli_runner, new_mysql_db_schema):
             repo.config["kart.workingcopy.location"] = mysql_url
             r = cli_runner.invoke(["checkout", "2d-geometry-only"])
 
-            with repo.working_copy.session() as sess:
+            with repo.wc.tabular.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
                 sess.execute(f'UPDATE {mysql_schema}.manytypes SET "PK"="PK" + 1000;')
                 sess.execute(f'UPDATE {mysql_schema}.manytypes SET "PK"="PK" - 1000;')
@@ -401,8 +401,8 @@ def test_checkout_custom_crs(
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stdout
 
-            wc = repo.working_copy
-            with wc.session() as sess:
+            table_wc = repo.wc.tabular
+            with table_wc.session() as sess:
                 srs_id = sess.scalar(
                     """
                     SELECT srs_id FROM information_schema.st_geometry_columns
@@ -425,7 +425,7 @@ def test_checkout_custom_crs(
             r = cli_runner.invoke(["checkout", "epsg-4326"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 srs_id = sess.scalar(
                     """
                     SELECT srs_id FROM information_schema.st_geometry_columns

@@ -27,37 +27,36 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
     if repo.is_bare:
         return
 
-    working_copy = repo.get_working_copy(allow_uncreated=True, allow_invalid_state=True)
-    if working_copy is None:
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.get_tabular(allow_uncreated=True, allow_invalid_state=True)
+    if table_wc is None:
         click.echo(
             "(Working copy isn't created yet. To create a working copy, use `kart create-workingcopy`)"
         )
         return
 
-    if not (working_copy.status() & TableWorkingCopyStatus.INITIALISED):
-        click.echo(f"Creating working copy at {working_copy} ...")
-        working_copy.create_and_initialise()
+    if not (table_wc.status() & TableWorkingCopyStatus.INITIALISED):
+        click.echo(f"Creating working copy at {table_wc} ...")
+        table_wc.create_and_initialise()
         datasets = list(repo.datasets(target_tree_or_commit, "table"))
-        working_copy.write_full(target_tree_or_commit, *datasets)
+        table_wc.write_full(target_tree_or_commit, *datasets)
         return
 
     spatial_filter_matches = repo.spatial_filter.matches_working_copy(repo)
     if not spatial_filter_matches:
         # TODO - support spatial filter changes without doing full rewrites.
-        click.echo(f"Updating {working_copy} with new spatial filter...")
+        click.echo(f"Updating {table_wc} with new spatial filter...")
         datasets = list(repo.datasets(target_tree_or_commit, "table"))
-        working_copy.rewrite_full(
-            target_tree_or_commit, *datasets, force=discard_changes
-        )
+        table_wc.rewrite_full(target_tree_or_commit, *datasets, force=discard_changes)
         return
 
     db_tree_matches = (
-        working_copy.get_db_tree() == target_tree_or_commit.peel(pygit2.Tree).hex
+        table_wc.get_tree_id() == target_tree_or_commit.peel(pygit2.Tree).hex
     )
 
     if discard_changes or not db_tree_matches:
-        click.echo(f"Updating {working_copy} ...")
-        working_copy.reset(target_tree_or_commit, force=discard_changes)
+        click.echo(f"Updating {table_wc} ...")
+        table_wc.reset(target_tree_or_commit, force=discard_changes)
 
 
 @click.command()
@@ -360,8 +359,9 @@ def restore(ctx, source, filters):
     """
     repo = ctx.obj.repo
 
-    working_copy = repo.working_copy
-    if not working_copy:
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
+    if not table_wc:
         raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 
     try:
@@ -372,7 +372,7 @@ def restore(ctx, source, filters):
 
     repo_key_filter = RepoKeyFilter.build_from_user_patterns(filters)
 
-    working_copy.reset(
+    table_wc.reset(
         commit_or_tree,
         force=True,
         track_changes_as_dirty=True,

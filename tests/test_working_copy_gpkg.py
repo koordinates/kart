@@ -5,7 +5,7 @@ import pytest
 
 import sqlalchemy
 
-from kart.exceptions import INVALID_ARGUMENT, INVALID_OPERATION
+from kart.exceptions import INVALID_ARGUMENT, INVALID_OPERATION, UNCOMMITTED_CHANGES
 from kart.repo import KartRepo
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
 from kart.tabular.working_copy.base import TableWorkingCopy
@@ -39,14 +39,14 @@ def test_checkout_workingcopy(
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [f"Creating working copy at {wc_path} ..."]
         assert wc_path.exists()
-        wc = repo.working_copy
+        table_wc = repo.working_copy.tabular
 
         assert repo.head.name == "refs/heads/main"
         assert repo.head.shorthand == "main"
-        assert wc.get_db_tree() == repo.head_tree.hex
+        assert table_wc.get_tree_id() == repo.head_tree.hex
 
         if geom_cols:
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 spatial_index_count = sess.execute(
                     f"""SELECT COUNT(*) FROM "rtree_{table}_{geom_cols[0].name}";"""
                 ).scalar()
@@ -61,14 +61,14 @@ def test_checkout_detached(data_working_copy, cli_runner):
     """ Checkout a working copy to edit """
     with data_working_copy("points") as (repo_dir, wc):
         repo = KartRepo(repo_dir)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the previous commit
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA[:8]])
         assert r.exit_code == 0, r
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
         assert repo.head.target.hex == H.POINTS.HEAD1_SHA
@@ -79,7 +79,7 @@ def test_checkout_detached(data_working_copy, cli_runner):
 def test_checkout_references(data_working_copy, cli_runner, tmp_path):
     with data_working_copy("points") as (repo_dir, wc_path):
         repo = KartRepo(repo_dir)
-        wc = repo.working_copy
+        table_wc = repo.wc.tabular
 
         # create a tag
         repo.create_reference("refs/tags/version1", repo.head.target)
@@ -100,7 +100,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the HEAD-but-1 commit
@@ -108,7 +108,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD1_SHA)
         assert repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the main HEAD via branch-name
@@ -116,7 +116,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout a short-sha commit
@@ -124,7 +124,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD1_SHA)
         assert repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
         # checkout the main HEAD via refspec
@@ -132,7 +132,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("refs/heads/main", H.POINTS.HEAD_SHA)
         assert not repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the tag
@@ -140,7 +140,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
         # checkout the remote branch
@@ -148,7 +148,7 @@ def test_checkout_references(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r
         assert r_head() == ("HEAD", H.POINTS.HEAD_SHA)
         assert repo.head_is_detached
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-20T14:28:33.000000Z"
 
 
@@ -178,7 +178,7 @@ def test_checkout_branch(data_working_copy, cli_runner, tmp_path):
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
@@ -224,13 +224,13 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         assert r.exit_code == 0, r.stderr
 
         repo = KartRepo(repo_path)
-        wc = repo.working_copy
+        table_wc = repo.wc.tabular
         assert repo.head.name == "refs/heads/foo"
         assert "foo" in repo.branches
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
@@ -246,14 +246,14 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         r = cli_runner.invoke(["switch", "main"])
         assert r.exit_code == 0, r
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
         assert repo.head.name == "refs/heads/main"
         assert repo.head_commit.hex == H.POINTS.HEAD_SHA
 
         # make some changes
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
 
@@ -261,13 +261,13 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
             assert r.rowcount == 1
 
         r = cli_runner.invoke(["switch", "foo"])
-        assert r.exit_code == INVALID_OPERATION
+        assert r.exit_code == UNCOMMITTED_CHANGES
         assert "Error: You have uncommitted changes in your working copy." in r.stderr
 
         r = cli_runner.invoke(["switch", "foo", "--discard-changes"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT + 1
 
         assert repo.head.name == "refs/heads/foo"
@@ -282,7 +282,7 @@ def test_switch_branch(data_working_copy, cli_runner, tmp_path):
         branch = repo.branches["test99"]
         assert branch.upstream_name == "refs/remotes/myremote/main"
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
 
@@ -342,9 +342,9 @@ def test_working_copy_discard_changes(
 
     with data_working_copy(archive, force_new=True) as (repo_path, wc_path):
         repo = KartRepo(repo_path)
-        wc = repo.working_copy
+        table_wc = repo.wc.tabular
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             h_before = H.db_table_hash(sess, layer, pk_field)
             r = sess.execute(sql, rec)
             assert r.rowcount == 1
@@ -385,7 +385,7 @@ def test_working_copy_discard_changes(
             # kart checkout HEAD does nothing if you don't --discard-changes:
             r = cli_runner.invoke(["checkout", "HEAD"])
             assert r.exit_code == 0, r.stderr
-            assert wc.tracking_changes_count() == (1 + 4 + 5 + 2)
+            assert table_wc.tracking_changes_count() == (1 + 4 + 5 + 2)
 
             # do again with --discard-changes
             r = cli_runner.invoke(["checkout", "--discard-changes", "HEAD"])
@@ -393,9 +393,9 @@ def test_working_copy_discard_changes(
         else:
             raise NotImplementedError(f"via={via}")
 
-        assert wc.tracking_changes_count() == 0
+        assert table_wc.tracking_changes_count() == 0
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             h_after = H.db_table_hash(sess, layer, pk_field)
             if h_before != h_after:
                 r = sess.execute(
@@ -437,8 +437,8 @@ def test_working_copy_discard_changes(
 
 def test_switch_with_meta_items(data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = KartRepo(repo_path).working_copy
-        with wc.session() as sess:
+        table_wc = KartRepo(repo_path).wc.tabular
+        with table_wc.session() as sess:
             sess.execute(
                 """UPDATE gpkg_contents SET identifier = 'new identifier', description='new description'"""
             )
@@ -448,7 +448,7 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute("""SELECT identifier, description FROM gpkg_contents""")
             identifier, description = r.fetchone()
             assert identifier == "NZ Pa Points (Topo, 1:50k)"
@@ -457,7 +457,7 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute("""SELECT identifier, description FROM gpkg_contents""")
             identifier, description = r.fetchone()
             assert identifier == "new identifier"
@@ -467,8 +467,8 @@ def test_switch_with_meta_items(data_working_copy, cli_runner):
 def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
     # Column renames are one of the only schema changes we can do without having to recreate the whole table.
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = KartRepo(repo_path).working_copy
-        with wc.session() as sess:
+        table_wc = KartRepo(repo_path).wc.tabular
+        with table_wc.session() as sess:
             sess.execute(
                 f"""ALTER TABLE "{H.POINTS.LAYER}" RENAME "name_ascii" TO "name_latin1";"""
             )
@@ -477,7 +477,7 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             name = sess.scalar(
                 f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
             )
@@ -485,7 +485,7 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             name = sess.scalar(
                 f"""SELECT name FROM pragma_table_info('{H.POINTS.LAYER}') WHERE cid = 3;"""
             )
@@ -494,8 +494,8 @@ def test_switch_with_trivial_schema_change(data_working_copy, cli_runner):
 
 def test_switch_with_schema_change(data_working_copy, cli_runner):
     with data_working_copy("polygons") as (repo_path, wc_path):
-        wc = KartRepo(repo_path).working_copy
-        with wc.session() as sess:
+        table_wc = KartRepo(repo_path).wc.tabular
+        with table_wc.session() as sess:
             sess.execute(
                 f"""ALTER TABLE "{H.POLYGONS.LAYER}" ADD COLUMN "colour" TEXT;"""
             )
@@ -503,7 +503,7 @@ def test_switch_with_schema_change(data_working_copy, cli_runner):
         assert r.exit_code == 0, r.stderr
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(
                 f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
             )
@@ -518,7 +518,7 @@ def test_switch_with_schema_change(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(
                 f"""SELECT name, type FROM pragma_table_info('{H.POLYGONS.LAYER}');"""
             )
@@ -538,7 +538,7 @@ def test_switch_pre_import_post_import(
 ):
     with data_archive_readonly("gpkg-au-census") as data:
         with data_working_copy("polygons") as (repo_path, wc_path):
-            wc = KartRepo(repo_path).working_copy
+            table_wc = KartRepo(repo_path).wc.tabular
 
             r = cli_runner.invoke(
                 [
@@ -551,7 +551,7 @@ def test_switch_pre_import_post_import(
             r = cli_runner.invoke(["checkout", "HEAD^"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 count = sess.scalar(
                     f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
                 )
@@ -560,7 +560,7 @@ def test_switch_pre_import_post_import(
             r = cli_runner.invoke(["checkout", "main"])
             assert r.exit_code == 0, r.stderr
 
-            with wc.session() as sess:
+            with table_wc.session() as sess:
                 count = sess.scalar(
                     f"""SELECT COUNT(name) FROM sqlite_master where type='table' AND name='census2016_sdhca_ot_ced_short';"""
                 )
@@ -569,8 +569,8 @@ def test_switch_pre_import_post_import(
 
 def test_switch_xml_metadata_added(data_working_copy, cli_runner):
     with data_working_copy("table") as (repo_path, wc_path):
-        wc = KartRepo(repo_path).working_copy
-        with wc.session() as sess:
+        table_wc = KartRepo(repo_path).wc.tabular
+        with table_wc.session() as sess:
             sess.execute(
                 """
                 INSERT INTO gpkg_metadata (id, md_scope, md_standard_uri, mime_type, metadata)
@@ -589,7 +589,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "HEAD^"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             xml_metadata = sess.execute(
                 """
                 SELECT m.metadata
@@ -603,7 +603,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             xml_metadata = sess.execute(
                 """
                 SELECT m.metadata
@@ -617,7 +617,7 @@ def test_switch_xml_metadata_added(data_working_copy, cli_runner):
 
 def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = KartRepo(repo_path).working_copy
+        table_wc = KartRepo(repo_path).wc.tabular
 
         is_checked = False
         orig_func = TableWorkingCopy._write_features
@@ -628,7 +628,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
                 with pytest.raises(
                     sqlalchemy.exc.OperationalError, match=r"database is locked"
                 ):
-                    with wc.session() as sess:
+                    with table_wc.session() as sess:
                         sess.execute("UPDATE gpkg_contents SET table_name=table_name;")
                 is_checked = True
 
@@ -640,7 +640,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
         assert r.exit_code == 0, r
         assert is_checked
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             assert H.last_change_time(sess) == "2019-06-11T11:03:58.000000Z"
 
 
@@ -717,9 +717,9 @@ def test_restore(source, filters, data_working_copy, cli_runner):
         id_chg_pk = 20
 
         repo = KartRepo(repo_path)
-        wc = repo.working_copy
+        table_wc = repo.wc.tabular
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(f"UPDATE {H.POINTS.LAYER} SET fid=30000 WHERE fid=300;")
             assert r.rowcount == 1
 
@@ -730,7 +730,7 @@ def test_restore(source, filters, data_working_copy, cli_runner):
         assert new_commit != H.POINTS.HEAD_SHA
         print(f"Original commit={H.POINTS.HEAD_SHA} New commit={new_commit}")
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             r = sess.execute(sql, rec)
             assert r.rowcount == 1
 
@@ -777,14 +777,14 @@ def test_restore(source, filters, data_working_copy, cli_runner):
         r = cli_runner.invoke(["restore"] + source + filters)
         assert r.exit_code == 0, r
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             changes_post = [
                 r[0]
                 for r in sess.execute(
                     'SELECT pk FROM "gpkg_kart_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
-            head_sha = wc.get_db_tree()
+            head_sha = table_wc.get_tree_id()
 
             if filters:
                 # we restore'd paths other than our test dataset, so all the changes should still be there
@@ -878,7 +878,7 @@ def test_delete_branch(data_working_copy, cli_runner):
 def test_auto_increment_pk(data_working_copy):
     with data_working_copy("polygons") as (repo_path, wc):
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             count = sess.scalar(
                 f"SELECT COUNT(*) FROM {H.POLYGONS.LAYER} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
             )
@@ -909,7 +909,7 @@ def test_values_roundtrip(data_working_copy, cli_runner):
     # we could get spurious diffs on those values.
     with data_working_copy("types") as (repo_path, wc_path):
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
             sess.execute('UPDATE manytypes SET "PK"="PK" + 1000;')
             sess.execute('UPDATE manytypes SET "PK"="PK" - 1000;')
@@ -920,7 +920,7 @@ def test_values_roundtrip(data_working_copy, cli_runner):
 def test_empty_geometry_roundtrip(data_working_copy, cli_runner):
     with data_working_copy("empty-geometry") as (repo_path, wc_path):
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
             sess.execute('UPDATE point_test SET "PK"="PK" + 1000;')
             sess.execute('UPDATE point_test SET "PK"="PK" - 1000;')
@@ -934,7 +934,7 @@ def test_pk_second_roundtrip(data_working_copy, cli_runner):
     # Make sure we can handle the PK being second without creating an auto_int_pk column or showing spurious diffs.
     with data_working_copy("pk-second") as (repo_path, wc_path):
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(
                 "SELECT name FROM pragma_table_info('nz_waca_adjustments');"
             )
@@ -975,7 +975,7 @@ def _edit_string_pk_polygons(conn):
 def test_edit_string_pks(data_working_copy, cli_runner):
     with data_working_copy("string-pks") as (repo_path, wc):
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             _edit_string_pk_polygons(sess)
 
         r = cli_runner.invoke(["status", "--output-format=json"])
@@ -1007,8 +1007,8 @@ def test_edit_string_pks(data_working_copy, cli_runner):
 
 def test_reset_transaction(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc_path):
-        wc = KartRepo(repo_path).working_copy
-        with wc.session() as sess:
+        table_wc = KartRepo(repo_path).wc.tabular
+        with table_wc.session() as sess:
             edit_points(sess)
 
         r = cli_runner.invoke(["status", "--output-format=json"])
@@ -1018,7 +1018,7 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
             H.POINTS.LAYER: {"feature": {"inserts": 1, "updates": 2, "deletes": 5}}
         }
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             # This modification makes the gpkg_kart_state table work like normal for reading,
             # but writing to it will fail due to the CHECK.
             sess.execute(
@@ -1043,7 +1043,7 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
         with pytest.raises(sqlalchemy.exc.IntegrityError):
             r = cli_runner.invoke(["checkout", "HEAD^", "--discard-changes"])
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             sess.execute("DROP TABLE IF EXISTS gpkg_kart_state;")
             sess.execute(
                 """ALTER TABLE "gpkg_kart_state_backup" RENAME TO "gpkg_kart_state";"""
@@ -1084,8 +1084,8 @@ def test_checkout_custom_crs(data_working_copy, cli_runner, dodgy_restore):
         r = cli_runner.invoke(["diff", "--exit-code"])
         assert r.exit_code == 0, r.stderr
 
-        wc = repo.working_copy
-        with wc.session() as sess:
+        table_wc = repo.wc.tabular
+        with table_wc.session() as sess:
             srs_id = sess.scalar(
                 "SELECT srs_id FROM gpkg_contents WHERE table_name = :table_name",
                 {"table_name": H.POINTS.LAYER},
@@ -1096,7 +1096,7 @@ def test_checkout_custom_crs(data_working_copy, cli_runner, dodgy_restore):
         r = cli_runner.invoke(["checkout", "epsg-4326"])
         assert r.exit_code == 0, r.stderr
 
-        with wc.session() as sess:
+        with table_wc.session() as sess:
             srs_id = sess.scalar(
                 "SELECT srs_id FROM gpkg_contents WHERE table_name = :table_name",
                 {"table_name": H.POINTS.LAYER},

@@ -29,6 +29,7 @@ from kart.tabular.version import (
 )
 from .structure import RepoStructure
 from .timestamps import tz_offset_to_minutes
+from .working_copy import WorkingCopy
 
 L = logging.getLogger("kart.repo")
 
@@ -198,6 +199,8 @@ class KartRepo(pygit2.Repository):
 
         if validate:
             self.validate_bare_or_tidy_style()
+
+        self.working_copy = WorkingCopy(self)
 
     def __repr__(self):
         return f"KartRepo({self.path!r})"
@@ -408,6 +411,11 @@ class KartRepo(pygit2.Repository):
         from .annotations import DiffAnnotations
 
         return DiffAnnotations(self)
+
+    @property
+    def wc(self):
+        # Alias for working_copy.
+        return self.working_copy
 
     def write_config(
         self,
@@ -634,35 +642,6 @@ class KartRepo(pygit2.Repository):
     def dataset_class(self):
         self.ensure_supported_version()
         return dataset_class_for_version(self.table_dataset_version)
-
-    @property
-    def working_copy(self):
-        """Return the working copy of this Kart repository, or None if it it does not exist."""
-        if not hasattr(self, "_working_copy"):
-            self._working_copy = self.get_working_copy()
-        return self._working_copy
-
-    @working_copy.deleter
-    def working_copy(self):
-        wc = self.get_working_copy(allow_invalid_state=True)
-        if wc:
-            wc.delete()
-        del self._working_copy
-
-    def get_working_copy(
-        self,
-        allow_uncreated=False,
-        allow_invalid_state=False,
-        allow_unconnectable=False,
-    ):
-        from kart.tabular.working_copy.base import TableWorkingCopy
-
-        return TableWorkingCopy.get(
-            self,
-            allow_uncreated=allow_uncreated,
-            allow_invalid_state=allow_invalid_state,
-            allow_unconnectable=allow_unconnectable,
-        )
 
     def del_config(self, key):
         config = self.config

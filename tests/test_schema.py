@@ -236,7 +236,7 @@ def test_edit_schema_points(output_format, data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             edit_points_schema(sess)
 
         r = cli_runner.invoke(
@@ -266,7 +266,7 @@ def test_edit_schema_polygons(output_format, data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             edit_polygons_schema(sess)
 
         r = cli_runner.invoke(
@@ -296,7 +296,7 @@ def test_edit_schema_table(output_format, data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             edit_table_schema(sess)
 
         r = cli_runner.invoke(

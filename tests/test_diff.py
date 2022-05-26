@@ -43,7 +43,7 @@ def test_diff_points(output_format, data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(H.POINTS.INSERT, H.POINTS.RECORD)
             assert r.rowcount == 1
             r = sess.execute(f"UPDATE {H.POINTS.LAYER} SET fid=9998 WHERE fid=1;")
@@ -317,7 +317,7 @@ def test_diff_reprojection(output_format, data_working_copy, cli_runner):
     with data_working_copy("points") as (repo_path, wc):
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET name='test', t50_fid=NULL WHERE fid=2;"
             )
@@ -398,7 +398,7 @@ def test_diff_polygons(output_format, data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(H.POLYGONS.INSERT, H.POLYGONS.RECORD)
             assert r.rowcount == 1
             r = sess.execute(f"UPDATE {H.POLYGONS.LAYER} SET id=9998 WHERE id=1424927;")
@@ -747,7 +747,7 @@ def test_diff_table(output_format, data_working_copy, cli_runner):
 
         # make some changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(H.TABLE.INSERT, H.TABLE.RECORD)
             assert r.rowcount == 1
             r = sess.execute(
@@ -1190,7 +1190,7 @@ def test_diff_rev_wc(data_working_copy, cli_runner):
 
         # make the R1 -> WC changes
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
 
             EDITS = ((1, "a"), (3, "c1"), (4, "d2"), (8, "h1"))
             for pk, value in EDITS:
@@ -1262,7 +1262,7 @@ def test_3d_diff_wc(data_archive, cli_runner, tmp_path, output_format):
         r = cli_runner.invoke(["init", "--import", src_gpkg_path, repo_path])
         assert r.exit_code == 0, r.stderr
         repo = KartRepo(repo_path)
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             r = sess.execute(
                 """UPDATE "points-3d" SET geometry = ST_GeomFromText('POINT Z(1 2 3)', 4326) WHERE id = 1"""
             )
@@ -1425,7 +1425,7 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
         assert repo.head.name == "refs/heads/changes"
 
         # make some changes
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             insert(sess)
             insert(sess)
             b_commit_id = insert(sess)
@@ -1435,7 +1435,7 @@ def test_diff_3way(data_working_copy, cli_runner, insert, request):
         assert r.exit_code == 0, r.stderr
         assert repo.head.target.hex != b_commit_id
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             m_commit_id = insert(sess)
 
         H.git_graph(request, "pre-merge-main")

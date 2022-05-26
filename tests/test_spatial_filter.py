@@ -9,7 +9,7 @@ from kart.cli_util import tool_environment
 from kart.exceptions import (
     INVALID_ARGUMENT,
     NO_SPATIAL_FILTER,
-    INVALID_OPERATION,
+    UNCOMMITTED_CHANGES,
     SPATIAL_FILTER_PK_CONFLICT,
 )
 from kart.promisor_utils import FetchPromisedBlobsProcess, LibgitSubcode
@@ -323,7 +323,7 @@ def test_clone_with_spatial_filter(
         )
         assert repo2.config["kart.spatialfilter.crs"] == crs
 
-        with repo2.working_copy.session() as sess:
+        with repo2.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
         # However, the entire polygons layer was cloned due to --spatial-filter-after-clone.
@@ -348,7 +348,7 @@ def test_clone_with_spatial_filter(
         assert local_feature_count != H.POLYGONS.ROWCOUNT
         assert local_feature_count == 46
 
-        with repo3.working_copy.session() as sess:
+        with repo3.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
         # The next test delves further into testing how spatial-filtered clones behave, but
@@ -384,7 +384,7 @@ def test_reclone_with_larger_spatial_filter(
         assert r.exit_code == 0, r.stderr
 
         repo2 = KartRepo(repo2_path)
-        with repo2.working_copy.session() as sess:
+        with repo2.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 0
         assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == 0
 
@@ -393,20 +393,20 @@ def test_reclone_with_larger_spatial_filter(
         )
         assert r.exit_code == 0, r.stderr
 
-        with repo2.working_copy.session() as sess:
+        with repo2.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 44
         assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == 46
 
         r = cli_runner.invoke(["-C", repo2_path, "checkout", "--spatial-filter=none"])
 
-        with repo2.working_copy.session() as sess:
+        with repo2.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == H.POLYGONS.ROWCOUNT
         assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
 
         r = cli_runner.invoke(
             ["-C", repo2_path, "checkout", f"--spatial-filter=@{file_path}"]
         )
-        with repo2.working_copy.session() as sess:
+        with repo2.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 44
         assert local_features(repo2.datasets()[H.POLYGONS.LAYER]) == H.POLYGONS.ROWCOUNT
 
@@ -439,7 +439,7 @@ def test_spatially_filtered_partial_clone(data_archive, cli_runner):
             r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
             assert r.exit_code == 0, r.stderr
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
             def _get_key_error(ds, pk):
@@ -493,7 +493,7 @@ def test_spatially_filtered_fetch_promised(
             r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
             assert r.exit_code == 0, r.stderr
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POLYGONS.LAYER) == 44
                 # Inserting features that are in the dataset, but don't match the spatial filter,
                 # so they are not loaded locally nor written to the working copy.
@@ -508,7 +508,7 @@ def test_spatially_filtered_fetch_promised(
             assert fetch_count == 6
             assert local_features(ds) == 58
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 sess.execute(f"DROP TABLE {H.POLYGONS.LAYER};")
 
             r = cli_runner.invoke(["-C", repo2_path, "status"])
@@ -547,7 +547,7 @@ def test_spatially_filtered_commit(data_archive, cli_runner):
             r = cli_runner.invoke(["-C", repo2_path, "create-workingcopy"])
             assert r.exit_code == 0, r.stderr
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POINTS.LAYER) == 302
                 sess.execute(f"DELETE FROM {H.POINTS.LAYER}")
 
@@ -590,7 +590,7 @@ def test_spatially_filtered_merge(data_archive, cli_runner):
             r = cli_runner.invoke(["-C", repo2_path, "checkout", "-b", "left"])
             assert r.exit_code == 0, r.stderr
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POINTS.LAYER) == 302
                 sess.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid % 3 != 0;")
 
@@ -602,7 +602,7 @@ def test_spatially_filtered_merge(data_archive, cli_runner):
             )
             assert r.exit_code == 0, r.stderr
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POINTS.LAYER) == 302
                 sess.execute(f"DELETE FROM {H.POINTS.LAYER} WHERE fid % 3 != 1;")
 
@@ -706,7 +706,7 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
                 == H.POLYGONS.ROWCOUNT
             )
 
-            with repo2.working_copy.session() as sess:
+            with repo2.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
             # Clone repo using spatial filter object ID
@@ -727,7 +727,7 @@ def test_clone_with_reference_spatial_filter(data_archive, cli_runner, tmp_path)
             )
             assert repo3.config["kart.spatialfilter.crs"] == crs
 
-            with repo3.working_copy.session() as sess:
+            with repo3.wc.tabular.session() as sess:
                 assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
             # Missing spatial filter:
@@ -782,7 +782,7 @@ def test_spatial_filtered_workingcopy(
         r = cli_runner.invoke(["checkout"])
         assert r.exit_code == 0, r
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, table) == matching_features[archive]
 
 
@@ -808,7 +808,7 @@ def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
             status["workingCopy"]["changes"][H.POINTS.LAYER]["feature"]["updates"] == 5
         )
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
 
         # With the spatial filter - checking out main^ then restoring main results in 2 uncommitted changes,
@@ -832,7 +832,7 @@ def test_reset_wc_with_spatial_filter(data_archive, cli_runner):
             status["workingCopy"]["changes"][H.POINTS.LAYER]["feature"]["updates"] == 2
         )
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 13
 
 
@@ -860,7 +860,7 @@ def test_diff_commits_with_spatial_filter(data_archive, cli_runner, insert):
         diff = json.loads(r.stdout)["kart.diff/v1+hexwkb"]
         assert len(diff[H.POINTS.LAYER]["feature"]) == 2
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             for i in range(5):
                 insert(sess, commit=False)
 
@@ -885,7 +885,7 @@ def test_change_spatial_filter(data_archive, cli_runner, insert):
         r = cli_runner.invoke(["checkout", "main"])
         assert r.exit_code == 0, r.stderr
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == H.POLYGONS.ROWCOUNT
 
         geom = SPATIAL_FILTER_GEOMETRY["polygons"]
@@ -893,7 +893,7 @@ def test_change_spatial_filter(data_archive, cli_runner, insert):
         r = cli_runner.invoke(["checkout", "main", f"--spatial-filter={crs};{geom}"])
         assert r.exit_code == 0, r.stderr
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == 44
 
         geom = SPATIAL_FILTER_GEOMETRY["polygons"]
@@ -901,12 +901,12 @@ def test_change_spatial_filter(data_archive, cli_runner, insert):
         r = cli_runner.invoke(["checkout", "main", "--spatial-filter="])
         assert r.exit_code == 0, r.stderr
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POLYGONS.LAYER) == H.POLYGONS.ROWCOUNT
             insert(sess, commit=False)
 
         r = cli_runner.invoke(["checkout", "main", f"--spatial-filter={crs};{geom}"])
-        assert r.exit_code == INVALID_OPERATION
+        assert r.exit_code == UNCOMMITTED_CHANGES
         assert "You have uncommitted changes in your working copy" in r.stderr
 
 
@@ -923,7 +923,7 @@ def test_pk_conflict_due_to_spatial_filter(
         assert r.exit_code == 0, r.stderr
         head_tree_id = repo.head_tree.id
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 302
             # Both of these new features are outside the spatial filter.
             # One of them - PK=1 - is a conflict with an existing feature (that is outside the spatial filter).
@@ -968,5 +968,5 @@ def test_pk_conflict_due_to_spatial_filter(
             in r.stdout
         )
 
-        with repo.working_copy.session() as sess:
+        with repo.wc.tabular.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == 302
