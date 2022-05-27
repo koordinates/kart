@@ -324,12 +324,42 @@ def extract_pc_tile_metadata(
         "count": info["count"],
     }
     if extract_schema:
-        result["schema"] = metadata["filters.info"]["schema"]
+        result["schema"] = _pdal_schema_to_kart_schema(
+            metadata["filters.info"]["schema"]
+        )
     if calc_crs84_extent:
         crs84_extent = _calc_crs84_extent(native_extent, native_crs)
         if crs84_extent is not None:
             result["crs84-extent"] = crs84_extent
     return result
+
+
+def _pdal_schema_to_kart_schema(pdal_schema):
+    return [
+        _pdal_col_schema_to_kart_col_schema(col) for col in pdal_schema["dimensions"]
+    ]
+
+
+def _pdal_col_schema_to_kart_col_schema(pdal_col_schema):
+    return {
+        "name": pdal_col_schema["name"],
+        "dataType": _pdal_type_to_kart_type(pdal_col_schema["type"]),
+        # Kart measures data-sizes in bits, PDAL in bytes.
+        "size": pdal_col_schema["size"] * 8,
+    }
+
+
+# TODO - investigate what types PDAL can actually return - it's not the same as the LAZ spec.
+# TODO - our dataset types don't have any notion of signed vs unsigned.
+_PDAL_TYPE_TO_KART_TYPE = {
+    "floating": "float",
+    "unsigned": "integer",
+    "string": "text",
+}
+
+
+def _pdal_type_to_kart_type(pdal_type):
+    return _PDAL_TYPE_TO_KART_TYPE.get(pdal_type) or pdal_type
 
 
 def _calc_crs84_extent(src_extent, src_crs):
