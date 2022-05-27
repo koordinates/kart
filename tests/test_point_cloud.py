@@ -60,28 +60,22 @@ def test_import_single_las(
             r = cli_runner.invoke(["meta", "get", "autzen", "schema.json", "-ojson"])
             assert r.exit_code == 0, r.stderr
             assert json.loads(r.stdout) == {
-                "autzen": {
-                    "schema.json": {
-                        "dimensions": [
-                            {"name": "X", "size": 8, "type": "floating"},
-                            {"name": "Y", "size": 8, "type": "floating"},
-                            {"name": "Z", "size": 8, "type": "floating"},
-                            {"name": "Intensity", "size": 2, "type": "unsigned"},
-                            {"name": "ReturnNumber", "size": 1, "type": "unsigned"},
-                            {"name": "NumberOfReturns", "size": 1, "type": "unsigned"},
-                            {
-                                "name": "ScanDirectionFlag",
-                                "size": 1,
-                                "type": "unsigned",
-                            },
-                            {"name": "EdgeOfFlightLine", "size": 1, "type": "unsigned"},
-                            {"name": "Classification", "size": 1, "type": "unsigned"},
-                            {"name": "ScanAngleRank", "size": 4, "type": "floating"},
-                            {"name": "UserData", "size": 1, "type": "unsigned"},
-                            {"name": "PointSourceId", "size": 2, "type": "unsigned"},
-                            {"name": "GpsTime", "size": 8, "type": "floating"},
-                        ],
-                    }
+                'autzen': {
+                    'schema.json': [
+                        {'name': 'X', 'dataType': 'float', 'size': 64},
+                        {'name': 'Y', 'dataType': 'float', 'size': 64},
+                        {'name': 'Z', 'dataType': 'float', 'size': 64},
+                        {'name': 'Intensity', 'dataType': 'integer', 'size': 16},
+                        {'name': 'ReturnNumber', 'dataType': 'integer', 'size': 8},
+                        {'name': 'NumberOfReturns', 'dataType': 'integer', 'size': 8},
+                        {'name': 'ScanDirectionFlag', 'dataType': 'integer', 'size': 8},
+                        {'name': 'EdgeOfFlightLine', 'dataType': 'integer', 'size': 8},
+                        {'name': 'Classification', 'dataType': 'integer', 'size': 8},
+                        {'name': 'ScanAngleRank', 'dataType': 'float', 'size': 32},
+                        {'name': 'UserData', 'dataType': 'integer', 'size': 8},
+                        {'name': 'PointSourceId', 'dataType': 'integer', 'size': 16},
+                        {'name': 'GpsTime', 'dataType': 'float', 'size': 64},
+                    ]
                 }
             }
 
@@ -143,31 +137,25 @@ def test_import_several_las(
             r = cli_runner.invoke(["meta", "get", "auckland", "schema.json", "-ojson"])
             assert r.exit_code == 0, r.stderr
             assert json.loads(r.stdout) == {
-                "auckland": {
-                    "schema.json": {
-                        "dimensions": [
-                            {"name": "X", "size": 8, "type": "floating"},
-                            {"name": "Y", "size": 8, "type": "floating"},
-                            {"name": "Z", "size": 8, "type": "floating"},
-                            {"name": "Intensity", "size": 2, "type": "unsigned"},
-                            {"name": "ReturnNumber", "size": 1, "type": "unsigned"},
-                            {"name": "NumberOfReturns", "size": 1, "type": "unsigned"},
-                            {
-                                "name": "ScanDirectionFlag",
-                                "size": 1,
-                                "type": "unsigned",
-                            },
-                            {"name": "EdgeOfFlightLine", "size": 1, "type": "unsigned"},
-                            {"name": "Classification", "size": 1, "type": "unsigned"},
-                            {"name": "ScanAngleRank", "size": 4, "type": "floating"},
-                            {"name": "UserData", "size": 1, "type": "unsigned"},
-                            {"name": "PointSourceId", "size": 2, "type": "unsigned"},
-                            {"name": "GpsTime", "size": 8, "type": "floating"},
-                            {"name": "Red", "size": 2, "type": "unsigned"},
-                            {"name": "Green", "size": 2, "type": "unsigned"},
-                            {"name": "Blue", "size": 2, "type": "unsigned"},
-                        ],
-                    }
+                'auckland': {
+                    'schema.json': [
+                        {'name': 'X', 'dataType': 'float', 'size': 64},
+                        {'name': 'Y', 'dataType': 'float', 'size': 64},
+                        {'name': 'Z', 'dataType': 'float', 'size': 64},
+                        {'name': 'Intensity', 'dataType': 'integer', 'size': 16},
+                        {'name': 'ReturnNumber', 'dataType': 'integer', 'size': 8},
+                        {'name': 'NumberOfReturns', 'dataType': 'integer', 'size': 8},
+                        {'name': 'ScanDirectionFlag', 'dataType': 'integer', 'size': 8},
+                        {'name': 'EdgeOfFlightLine', 'dataType': 'integer', 'size': 8},
+                        {'name': 'Classification', 'dataType': 'integer', 'size': 8},
+                        {'name': 'ScanAngleRank', 'dataType': 'float', 'size': 32},
+                        {'name': 'UserData', 'dataType': 'integer', 'size': 8},
+                        {'name': 'PointSourceId', 'dataType': 'integer', 'size': 16},
+                        {'name': 'GpsTime', 'dataType': 'float', 'size': 64},
+                        {'name': 'Red', 'dataType': 'integer', 'size': 16},
+                        {'name': 'Green', 'dataType': 'integer', 'size': 16},
+                        {'name': 'Blue', 'dataType': 'integer', 'size': 16},
+                    ]
                 }
             }
 
@@ -296,10 +284,10 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_
             '+                            extent.native = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
             '-                             points.count = 1558',
             '+                             points.count = 4231',
-            '-                                      oid = sha256:ca99a9670adf54aae4d0f380da21880f265fcbc659cf0d804d1f7bec4004bc38',
-            '+                                      oid = sha256:188afd71a6b1cb5309c3192a285e9f3167aa8b43e80c96b6ca917b0397376a67',
-            '-                                     size = 24527',
-            '+                                     size = 69593',
+            '-                                      oid = sha256:78d4867cb7256e188fadcff6e2338489fc6e6787a74cc0f7eb9420fa028e190c',
+            '+                                      oid = sha256:e3003c43cd3ab4151da80b12878e179b6f31ebe14db3a8989ba86fc3adf937c7',
+            '-                                     size = 24537',
+            '+                                     size = 69609',
             '--- auckland:tile:auckland_3_3.copc.laz',
             '-                                     name = auckland_3_3.copc.laz',
             '-                             extent.crs84 = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
@@ -334,10 +322,10 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_
             '+                            extent.native = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
             '-                             points.count = 1558',
             '+                             points.count = 4231',
-            '-                                      oid = sha256:ca99a9670adf54aae4d0f380da21880f265fcbc659cf0d804d1f7bec4004bc38',
-            '+                                      oid = sha256:188afd71a6b1cb5309c3192a285e9f3167aa8b43e80c96b6ca917b0397376a67',
-            '-                                     size = 24527',
-            '+                                     size = 69593',
+            '-                                      oid = sha256:78d4867cb7256e188fadcff6e2338489fc6e6787a74cc0f7eb9420fa028e190c',
+            '+                                      oid = sha256:e3003c43cd3ab4151da80b12878e179b6f31ebe14db3a8989ba86fc3adf937c7',
+            '-                                     size = 24537',
+            '+                                     size = 69609',
             '--- auckland:tile:auckland_3_3.copc.laz',
             '-                                     name = auckland_3_3.copc.laz',
             '-                             extent.crs84 = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
