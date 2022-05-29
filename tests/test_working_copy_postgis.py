@@ -66,9 +66,7 @@ def test_checkout_workingcopy(
             table_wc = repo.wc.tabular
             assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
             assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
-
-            head_tree_id = repo.head_tree.hex
-            table_wc.assert_tree_match(head_tree_id)
+            table_wc.assert_matches_head_tree()
 
             # Also test the importer by making sure we can import this from the WC:
             r = cli_runner.invoke(["import", postgres_url, f"{table}:{table}_2"])
@@ -460,7 +458,7 @@ def test_edit_crs(data_archive, cli_runner, new_postgis_db_schema):
                     assert table_wc.is_dirty()
 
                     commit_id = repo.structure().commit_diff(
-                        table_wc.diff_to_tree(), "Modify CRS"
+                        table_wc.diff_repo_to_wc(), "Modify CRS"
                     )
                     table_wc.update_state_table_tree(commit_id.hex)
 

@@ -2,11 +2,10 @@ import functools
 import time
 
 import click
-import pygit2
 from osgeo import osr
 
 from kart import crs_util
-from kart.diff_structs import Delta, DeltaDiff
+from kart.diff_structs import Delta, DeltaDiff, DatasetDiff
 from kart.exceptions import PATCH_DOES_NOT_APPLY, InvalidOperation, NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.promisor_utils import fetch_promised_blobs, object_is_promised
@@ -176,7 +175,10 @@ class RichTableDataset(TableDataset):
         return ds_diff
 
     def diff_to_wc(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
-        return wc_diff_context.table_working_copy.diff_db_to_tree(self, ds_filter)
+        table_wc = wc_diff_context.wc.tabular
+        if table_wc is None:
+            return DatasetDiff()
+        return table_wc.diff_ds_to_wc(self, ds_filter)
 
     def diff_feature(
         self, other, feature_filter=FeatureKeyFilter.MATCH_ALL, reverse=False

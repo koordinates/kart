@@ -1,6 +1,12 @@
 import pygit2
 
-from kart.exceptions import InvalidOperation, UNCOMMITTED_CHANGES
+from kart.exceptions import (
+    InvalidOperation,
+    NotFound,
+    UNCOMMITTED_CHANGES,
+    NO_DATA,
+    NO_WORKING_COPY,
+)
 
 # General code for working copies.
 # Nothing specific to tabular working copies, nor file-based working copies.
@@ -32,18 +38,54 @@ class WorkingCopy:
     def __init__(self, repo):
         self.repo = repo
 
+    def assert_exists(self, error_message=None):
+        """
+        Make sure that the working copy exists, print the provided error message if it does not, plus some extra context.
+        Now that the working copy can potentially have more than one part, its not simple to say if it exists or not.
+        If a particular part doesn't exist, we would generally treat that the same as if that part existed but had no diffs.
+        However, if the user has spefically asked for a WC operation, and no WC parts at all exist, we want to warn the user.
+        That is what this function is for.
+        """
+
+        if any(self.parts()):
+            return
+
+        error_message = f"{error_message}:\n" if error_message else ""
+
+        if self.repo.head_is_unborn:
+            raise NotFound(
+                f'{error_message}Empty repository.\n  (use "kart import" to add some data)',
+                exit_code=NO_DATA,
+            )
+        if self.repo.is_bare:
+            raise NotFound(
+                f'{error_message}Repository is "bare": it has no working copy.',
+                exit_code=NO_WORKING_COPY,
+            )
+        raise NotFound(
+            f'{error_message}Repository has no working copy.\n  (use "kart create-workingcopy")',
+            exit_code=NO_WORKING_COPY,
+        )
+
     def check_not_dirty(self, help_message=None):
         """Checks that all parts of the working copy have no changes. Otherwise, raises InvalidOperation"""
         for p in self.parts():
             p.check_not_dirty(help_message=help_message)
 
-    def assert_tree_match(self, tree):
+    def assert_matches_head_tree(self):
+        """
+        Checks that all parts of the working copy are based on the HEAD tree, according to their kart-state tables.
+        Otherwise, raises WorkingCopyTreeMismatch.
+        """
+        self.assert_matches_tree(self.repo.head_tree)
+
+    def assert_matches_tree(self, tree):
         """
         Checks that all parts of the working copy are based on the given tree, according to their kart-state tables.
         Otherwise, raises WorkingCopyTreeMismatch.
         """
         for p in self.parts():
-            p.assert_tree_match(tree)
+            p.assert_matches_tree(tree)
 
     def parts(self):
         """Yields extant working-copy parts. Raises an error if a corrupt or uncontactable part is encountered."""
@@ -112,7 +154,11 @@ class WorkingCopyPart:
         """Returns True if this part has uncommitted changes, False if it does not."""
         raise NotImplementedError()
 
-    def assert_tree_match(self, expected_tree):
+    def assert_matches_head_tree(self):
+        """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the HEAD tree."""
+        self.assert_matches_tree(self.repo.head_tree)
+
+    def assert_matches_tree(self, expected_tree):
         """Raises a WorkingCopyTreeMismatch if kart_state refers to a different tree and not the given tree."""
         if expected_tree is None or isinstance(expected_tree, str):
             expected_tree_id = expected_tree
