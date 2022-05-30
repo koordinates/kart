@@ -118,9 +118,7 @@ def test_checkout_workingcopy(
             table_wc = repo.wc.tabular
             assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
             assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
-
-            head_tree_id = repo.head_tree.hex
-            table_wc.assert_tree_match(head_tree_id)
+            table_wc.assert_matches_head_tree()
 
             # Also test the importer by making sure we can import this from the WC:
             r = cli_runner.invoke(["import", sqlserver_url, f"{table}:{table}_2"])

@@ -123,23 +123,10 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
     """
     repo = ctx.obj.repo
 
-    if repo.is_empty:
-        raise NotFound(
-            'Empty repository.\n  (use "kart import" to add some data)',
-            exit_code=NO_DATA,
-        )
+    repo.working_copy.assert_exists()
+    repo.working_copy.assert_matches_head_tree()
 
     check_git_user(repo)
-
-    commit = repo.head_commit
-    tree = commit.tree
-
-    # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
-    if not table_wc:
-        raise NotFound("No working copy, use 'checkout'", exit_code=NO_WORKING_COPY)
-
-    repo.working_copy.assert_tree_match(tree)
 
     commit_diff_writer = CommitDiffWriter(repo, "HEAD", filters)
     wc_diff = commit_diff_writer.get_repo_diff()
@@ -169,6 +156,8 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
         wc_diff, commit_msg, allow_empty=allow_empty
     )
 
+    # TODO: this code shouldn't special-case tabular working copies
+    table_wc = repo.wc.tabular
     table_wc.reset_tracking_table(commit_diff_writer.repo_key_filter)
     table_wc.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
 

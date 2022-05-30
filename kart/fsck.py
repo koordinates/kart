@@ -65,9 +65,10 @@ def fsck(ctx, reset_datasets, fsck_args):
 
         # compare repo tree id to what's in the DB
         try:
-            oid = table_wc.assert_tree_match(repo.head_tree)
+            table_wc.assert_matches_tree(repo.head_tree)
             click.secho(
-                f"✔︎ Working Copy tree id matches repository: {oid}", fg="green"
+                f"✔︎ Working Copy tree id matches repository: {repo.head_tree}",
+                fg="green",
             )
         except WorkingCopyTreeMismatch as e:
             # try and find the tree we _do_ have
@@ -111,7 +112,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             )
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
-            wc_diff = table_wc.diff_db_to_tree(dataset)
+            wc_diff = table_wc.diff_ds_to_wc(dataset)
             wc_diff.prune()
 
             if wc_diff:

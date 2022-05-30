@@ -90,7 +90,7 @@ def get_working_copy_status_json(repo):
         rs = repo.structure()
         wc_diff = diff_util.get_repo_diff(rs, rs, include_wc_diff=True)
     else:
-        wc_diff = table_wc.diff_to_tree()
+        wc_diff = table_wc.diff_repo_to_wc()
     if wc_diff:
         output["changes"] = get_diff_status_including_pk_conflicts_json(wc_diff, repo)
 

@@ -19,7 +19,7 @@ from kart.sqlalchemy.upsert import Upsert as upsert
 from kart.tabular.table_dataset import TableDataset
 from kart.tabular.schema import DefaultRoundtripContext, Schema
 from kart.utils import chunk
-from kart.working_copy import WorkingCopyDirty, WorkingCopyTreeMismatch, WorkingCopyPart
+from kart.working_copy import WorkingCopyDirty, WorkingCopyPart
 
 from . import TableWorkingCopyStatus, TableWorkingCopyType
 
@@ -417,12 +417,14 @@ class TableWorkingCopy(WorkingCopyPart):
         if self.get_tree_id() is None:
             return False
         try:
-            self.diff_to_tree(raise_if_dirty=True)
+            self.diff_repo_to_wc(raise_if_dirty=True)
             return False
         except WorkingCopyDirty:
             return True
 
-    def diff_to_tree(self, repo_filter=RepoKeyFilter.MATCH_ALL, raise_if_dirty=False):
+    def diff_repo_to_wc(
+        self, repo_filter=RepoKeyFilter.MATCH_ALL, raise_if_dirty=False
+    ):
         """
         Generates a diff between a working copy DB and the underlying repository tree,
         for every dataset in the given repository structure.
@@ -434,7 +436,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     continue
                 if not self._is_dataset_supported(dataset):
                     continue
-                ds_diff = self.diff_db_to_tree(
+                ds_diff = self.diff_ds_to_wc(
                     dataset,
                     ds_filter=repo_filter[dataset.path],
                     raise_if_dirty=raise_if_dirty,
@@ -450,7 +452,7 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         return True
 
-    def diff_db_to_tree(
+    def diff_ds_to_wc(
         self, dataset, ds_filter=DatasetKeyFilter.MATCH_ALL, raise_if_dirty=False
     ):
         """
@@ -462,8 +464,8 @@ class TableWorkingCopy(WorkingCopyPart):
 
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
         with self.session():
-            meta_diff = self.diff_db_to_tree_meta(dataset, raise_if_dirty)
-            feature_diff = self.diff_db_to_tree_feature(
+            meta_diff = self.diff_ds_to_wc_meta(dataset, raise_if_dirty)
+            feature_diff = self.diff_ds_to_wc_feature(
                 dataset, feature_filter, meta_diff, raise_if_dirty
             )
 
@@ -472,7 +474,7 @@ class TableWorkingCopy(WorkingCopyPart):
         ds_diff["feature"] = feature_diff
         return ds_diff
 
-    def diff_db_to_tree_meta(self, dataset, raise_if_dirty=False):
+    def diff_ds_to_wc_meta(self, dataset, raise_if_dirty=False):
         """
         Returns a DeltaDiff showing all the changes of metadata between the dataset and this working copy.
         """
@@ -586,7 +588,7 @@ class TableWorkingCopy(WorkingCopyPart):
                 include_legacy_items=True,
             )
 
-    def diff_db_to_tree_feature(
+    def diff_ds_to_wc_feature(
         self, dataset, feature_filter, meta_diff, raise_if_dirty=False
     ):
         pk_field = dataset.schema.pk_columns[0].name
@@ -1135,7 +1137,7 @@ class TableWorkingCopy(WorkingCopyPart):
             base_ds = base_datasets[ds_path]
 
             # Do we support changing the WC metadata to back to base_ds metadata?
-            rev_wc_meta_diff = self.diff_db_to_tree_meta(base_ds)
+            rev_wc_meta_diff = self.diff_ds_to_wc_meta(base_ds)
             update_supported = self._is_meta_update_supported(rev_wc_meta_diff)
 
             # And, do we support then changing it from base_ds metadata to target_ds metadata?
@@ -1236,7 +1238,7 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         feature_filter = ds_filter.get("feature", ds_filter.child_type())
 
-        self._apply_meta_diff(sess, base_ds, ~self.diff_db_to_tree_meta(base_ds))
+        self._apply_meta_diff(sess, base_ds, ~self.diff_ds_to_wc_meta(base_ds))
         # WC now has base_ds structure and so we can write base_ds features to WC.
         self._reset_dirty_rows(sess, base_ds, feature_filter)
 

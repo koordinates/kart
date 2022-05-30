@@ -8,7 +8,7 @@ import click
 
 from . import diff_util
 from .diff_structs import WORKING_COPY_EDIT
-from .exceptions import NO_WORKING_COPY, CrsError, InvalidOperation, NotFound
+from .exceptions import CrsError, InvalidOperation
 from .key_filters import RepoKeyFilter
 from .promisor_utils import FetchPromisedBlobsProcess, object_is_promised
 from .spatial_filter import SpatialFilter
@@ -157,11 +157,8 @@ class BaseDiffWriter:
             # and target is set to HEAD.
             base_rs = repo.structure(commit_parts[0])
             target_rs = repo.structure("HEAD")
-            # TODO: this code shouldn't special-case tabular working copies
-            table_wc = repo.wc.tabular
-            if not table_wc:
-                raise NotFound("No working copy", exit_code=NO_WORKING_COPY)
-            repo.working_copy.assert_tree_match(target_rs.tree)
+            repo.working_copy.assert_exists("Cannot generate working copy diff")
+            repo.working_copy.assert_matches_tree(target_rs.tree)
             include_wc_diff = True
         return base_rs, target_rs, include_wc_diff
 

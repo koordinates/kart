@@ -91,7 +91,7 @@ def test_commit(
         tree = repo.head_tree
         assert dataset.encode_1pk_to_path(pk_del) not in tree
 
-        table_wc.assert_tree_match(tree)
+        table_wc.assert_matches_tree(tree)
         change_count = table_wc.tracking_changes_count(dataset)
 
         if partial:
