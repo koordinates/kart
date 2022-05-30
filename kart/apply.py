@@ -229,12 +229,12 @@ def apply_patch(
 
     rs = repo.structure(ref)
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if not do_commit and not table_wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
         raise NotFound("--no-commit requires a working copy", exit_code=NO_WORKING_COPY)
 
-    repo.wc.check_not_dirty()
+    repo.working_copy.check_not_dirty()
 
     repo_diff = RepoDiff()
     for ds_path, ds_diff_dict in json_diff.items():

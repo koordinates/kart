@@ -1,7 +1,6 @@
 import functools
 import logging
 
-import click
 import pygit2
 
 from .diff_structs import DatasetDiff, RepoDiff
@@ -34,10 +33,6 @@ class WCDiffContext:
     def working_copy(self):
         assert not self.is_bare
         return self.repo.working_copy
-
-    @property
-    def wc(self):
-        return self.working_copy
 
     @property
     def workdir_path(self):
@@ -194,7 +189,9 @@ def get_dataset_diff(
             wc_diff_context = WCDiffContext(target_ds.repo)
 
         if target_ds is not None:
-            target_wc_diff = target_ds.diff_to_wc(wc_diff_context, ds_filter=ds_filter)
+            target_wc_diff = target_ds.diff_to_working_copy(
+                wc_diff_context, ds_filter=ds_filter
+            )
             L.debug(
                 "target<>working_copy diff (%s): %s",
                 ds_path,

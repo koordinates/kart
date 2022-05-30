@@ -157,7 +157,7 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
     )
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     table_wc.reset_tracking_table(commit_diff_writer.repo_key_filter)
     table_wc.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
 

@@ -234,7 +234,7 @@ def complete_merging_state(ctx):
     }
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if table_wc:
         L.debug(f"Updating {table_wc} ...")
         merge_commit = repo[merge_commit_id]
@@ -320,7 +320,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
         # Update working copy.
         # TODO - maybe lock the working copy during a merge?
         # TODO: this code shouldn't special-case tabular working copies.
-        table_wc = repo.wc.tabular
+        table_wc = repo.working_copy.tabular
         if table_wc:
             L.debug(f"Updating {table_wc} ...")
             merge_commit = repo[jdict["commit"]]

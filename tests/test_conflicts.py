@@ -338,7 +338,7 @@ def test_find_renames(data_working_copy, cli_runner):
 
         cli_runner.invoke(["checkout", "-b", "ancestor_branch"])
         cli_runner.invoke(["checkout", "-b", "theirs_branch"])
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             r = sess.execute(
                 f"""UPDATE {H.POINTS.LAYER} SET fid = 9998 where fid = 1"""
             )
@@ -349,7 +349,7 @@ def test_find_renames(data_working_copy, cli_runner):
         cli_runner.invoke(["checkout", "ancestor_branch"])
         cli_runner.invoke(["checkout", "-b", "ours_branch"])
 
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             r = sess.execute(
                 f"""UPDATE {H.POINTS.LAYER} SET fid = 9999 where fid = 1"""
             )
@@ -378,13 +378,13 @@ def test_meta_item_conflicts_as_geojson(data_working_copy, cli_runner):
 
         r = cli_runner.invoke(["checkout", "-b", "theirs_branch"])
         r = cli_runner.invoke(["branch", "ours_branch"])
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             r = sess.execute(f"""ALTER TABLE {H.POINTS.LAYER} ADD COLUMN new_col1""")
             assert r.rowcount == -1
         r = cli_runner.invoke(["commit", "-m", "theirs_commit"])
 
         r = cli_runner.invoke(["checkout", "ours_branch"])
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             r = sess.execute(f"""ALTER TABLE {H.POINTS.LAYER} ADD COLUMN new_col2""")
             assert r.rowcount == -1
         r = cli_runner.invoke(["commit", "-m", "ours_commit"])

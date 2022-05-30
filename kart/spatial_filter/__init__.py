@@ -286,7 +286,7 @@ class ResolvedSpatialFilterSpec(SpatialFilterSpec):
 
     def matches_working_copy(self, repo):
         # TODO: this code shouldn't special-case tabular working copies
-        table_wc = repo.wc.tabular
+        table_wc = repo.working_copy.tabular
         return table_wc is None or table_wc.get_spatial_filter_hash() == self.hexhash
 
     @property
@@ -700,7 +700,7 @@ class OriginalSpatialFilter(SpatialFilter):
 
     def matches_working_copy(self, repo):
         # TODO: this code shouldn't special-case tabular working copies
-        table_wc = repo.wc.tabular
+        table_wc = repo.working_copy.tabular
         return table_wc is None or table_wc.get_spatial_filter_hash() == self.hexhash
 
 

@@ -615,7 +615,7 @@ def test_apply_with_working_copy(
         assert bits[0] == "Commit"
         assert bits[2] == "Updating"
 
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             name = sess.scalar(
                 f"""SELECT name FROM {H.POINTS.LAYER} WHERE {H.POINTS.LAYER_PK} = 1095;"""
             )
@@ -700,7 +700,7 @@ def test_apply_benchmark(data_working_copy, benchmark, cli_runner, monkeypatch):
 
         # Generate a large change and commit it
         repo = KartRepo(repo_dir)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             sess.execute(
                 "UPDATE nz_pa_points_topo_150k SET name = 'bulk_' || Coalesce(name, 'null')"
             )

@@ -96,7 +96,7 @@ def test_checkout_branches(data_archive, cli_runner, chdir, tmp_path, working_co
 def test_reset(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc):
         repo = KartRepo(repo_path)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             edit_points(sess)
 
         r = cli_runner.invoke(["diff", "--exit-code"])

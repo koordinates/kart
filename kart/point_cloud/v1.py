@@ -70,7 +70,7 @@ class PointCloudV1(BaseDataset):
         rel_path = f"tile/{tile_prefix}/{tilename}"
         return rel_path if relative else self.ensure_full_path(rel_path)
 
-    def tilename_to_wc_path(self, tilename):
+    def tilename_to_working_copy_path(self, tilename):
         tilename = self.tilename_from_path(
             tilename
         )  # Just in case it's a whole path, not just a name.
@@ -131,14 +131,14 @@ class PointCloudV1(BaseDataset):
             self.get_tile_summary_from_pointer_blob, tile_pointer_blob
         )
 
-    def diff_to_wc(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
+    def diff_to_working_copy(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
         """Returns a diff of all changes made to this dataset in the working copy."""
         ds_diff = DatasetDiff()
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
-        ds_diff["tile"] = DeltaDiff(self.diff_tile_to_wc(wc_diff_context, tile_filter))
+        ds_diff["tile"] = DeltaDiff(self.diff_tile_to_working_copy(wc_diff_context, tile_filter))
         return ds_diff
 
-    def diff_tile_to_wc(self, wc_diff_context, tile_filter):
+    def diff_tile_to_working_copy(self, wc_diff_context, tile_filter):
         """Yields deltas of all the changes the user has made to tiles in the working copy."""
 
         # Dataset-paths have a different structure to worktree paths - the worktree index will have only worktree paths,

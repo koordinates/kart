@@ -412,11 +412,6 @@ class KartRepo(pygit2.Repository):
 
         return DiffAnnotations(self)
 
-    @property
-    def wc(self):
-        # Alias for working_copy.
-        return self.working_copy
-
     def write_config(
         self,
         wc_location=None,

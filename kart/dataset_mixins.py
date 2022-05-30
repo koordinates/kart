@@ -39,7 +39,7 @@ class DatasetDiffMixin:
         )
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
-    def diff_to_wc(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
+    def diff_to_working_copy(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
         """
         Generates a diff from self to the working-copy.
         It may be the case that only the dataset-revision used to write the working

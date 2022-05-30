@@ -57,7 +57,7 @@ def test_commit(
 
         # make some changes
         repo = KartRepo(repo_dir)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             try:
                 edit_func = locals()[f"edit_{archive}"]
                 pk_del = edit_func(sess)
@@ -69,7 +69,7 @@ def test_commit(
         repo = KartRepo(repo_dir)
         dataset = repo.datasets()[layer]
 
-        table_wc = repo.wc.tabular
+        table_wc = repo.working_copy.tabular
         original_change_count = table_wc.tracking_changes_count(dataset)
 
         if partial:
@@ -210,7 +210,7 @@ def test_commit_message(
 
         # make some changes
         repo = KartRepo(repo_dir)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             edit_points(sess)
 
         editor_out = "I am a message\n#of hope, and\nof warning\n\t\n"
@@ -309,7 +309,7 @@ def test_commit_user_info(tmp_path, cli_runner, chdir, data_working_copy):
 def test_commit_schema_violation(cli_runner, data_working_copy):
     with data_working_copy("points") as (repo_dir, wc_path):
         repo = KartRepo(repo_dir)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             sess.execute(f"""UPDATE {H.POINTS.LAYER} SET geom="text" WHERE fid=1;""")
             sess.execute(
                 f"UPDATE {H.POINTS.LAYER} SET t50_fid=123456789012 WHERE fid=2;"

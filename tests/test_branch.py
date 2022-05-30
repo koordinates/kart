@@ -79,7 +79,7 @@ def test_branches(
         assert r.exit_code == 0, r
 
         repo = KartRepo(path1)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             insert(sess)
 
         r = cli_runner.invoke(["push", "--set-upstream", "myremote", "main"])

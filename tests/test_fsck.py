@@ -12,7 +12,7 @@ def test_fsck(data_working_copy, cli_runner):
         r = cli_runner.invoke(["fsck"])
         assert r.exit_code == 0, r.stdout
 
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
             assert H.row_count(sess, "gpkg_kart_track") == 0
 
@@ -26,7 +26,7 @@ def test_fsck(data_working_copy, cli_runner):
         r = cli_runner.invoke(["fsck", "--reset-dataset=nz_pa_points_topo_150k"])
         assert r.exit_code == 0, r
 
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             assert H.row_count(sess, H.POINTS.LAYER) == H.POINTS.ROWCOUNT
             assert H.row_count(sess, "gpkg_kart_track") == 0
 

@@ -165,7 +165,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
     reset_wc_if_needed(repo)
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if table_wc is not None:
         table_wc.reset(repo.head_commit)
 

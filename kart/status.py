@@ -78,7 +78,7 @@ def get_working_copy_status_json(repo):
 
     # TODO: this code shouldn't special-case tabular working copies.
     # Also, the JSON output should be clear when it is talking about the tabular working copy vs other parts.
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if not table_wc:
         return None
 
@@ -90,7 +90,7 @@ def get_working_copy_status_json(repo):
         rs = repo.structure()
         wc_diff = diff_util.get_repo_diff(rs, rs, include_wc_diff=True)
     else:
-        wc_diff = table_wc.diff_repo_to_wc()
+        wc_diff = table_wc.diff_repo_to_working_copy()
     if wc_diff:
         output["changes"] = get_diff_status_including_pk_conflicts_json(wc_diff, repo)
 

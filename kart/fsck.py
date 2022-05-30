@@ -45,7 +45,7 @@ def fsck(ctx, reset_datasets, fsck_args):
         return
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if not table_wc:
         raise NotFound(
             click.style(f"Working copy missing: {table_wc}", fg="red"),
@@ -112,7 +112,7 @@ def fsck(ctx, reset_datasets, fsck_args):
             )
             click.echo(f"{track_count} rows marked as changed in working-copy")
 
-            wc_diff = table_wc.diff_ds_to_wc(dataset)
+            wc_diff = table_wc.diff_dataset_to_working_copy(dataset)
             wc_diff.prune()
 
             if wc_diff:

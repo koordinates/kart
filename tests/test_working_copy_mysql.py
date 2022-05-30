@@ -61,7 +61,7 @@ def test_checkout_workingcopy(
                 "Nothing to commit, working copy clean",
             ]
 
-            table_wc = repo.wc.tabular
+            table_wc = repo.working_copy.tabular
             assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
             assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
             table_wc.assert_matches_head_tree()
@@ -107,7 +107,7 @@ def test_init_import(
             assert (repo_path / ".kart" / "HEAD").exists()
 
             repo = KartRepo(repo_path)
-            table_wc = repo.wc.tabular
+            table_wc = repo.working_copy.tabular
             assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
             assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
@@ -150,7 +150,7 @@ def test_commit_edits(
                 "Nothing to commit, working copy clean",
             ]
 
-            table_wc = repo.wc.tabular
+            table_wc = repo.working_copy.tabular
             assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
             assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
@@ -207,7 +207,7 @@ def test_edit_schema(data_archive, cli_runner, new_mysql_db_schema):
             r = cli_runner.invoke(["create-workingcopy", mysql_url])
             assert r.exit_code == 0, r.stderr
 
-            table_wc = repo.wc.tabular
+            table_wc = repo.working_copy.tabular
             assert table_wc.status() & TableWorkingCopyStatus.INITIALISED
             assert table_wc.status() & TableWorkingCopyStatus.HAS_DATA
 
@@ -307,7 +307,7 @@ def test_auto_increment_pk(data_archive, cli_runner, new_mysql_db_schema):
             assert r.exit_code == 0, r.stderr
 
             repo = KartRepo(repo_path)
-            with repo.wc.tabular.session() as sess:
+            with repo.working_copy.tabular.session() as sess:
                 t = f"{mysql_schema}.{H.POLYGONS.LAYER}"
                 count = sess.scalar(
                     f"SELECT COUNT(*) FROM {t} WHERE id = {H.POLYGONS.NEXT_UNASSIGNED_PK};"
@@ -350,7 +350,7 @@ def test_values_roundtrip(data_archive, cli_runner, new_mysql_db_schema):
             repo.config["kart.workingcopy.location"] = mysql_url
             r = cli_runner.invoke(["checkout", "2d-geometry-only"])
 
-            with repo.wc.tabular.session() as sess:
+            with repo.working_copy.tabular.session() as sess:
                 # We don't diff values unless they're marked as dirty in the WC - move the row to make it dirty.
                 sess.execute(f'UPDATE {mysql_schema}.manytypes SET "PK"="PK" + 1000;')
                 sess.execute(f'UPDATE {mysql_schema}.manytypes SET "PK"="PK" - 1000;')
@@ -399,7 +399,7 @@ def test_checkout_custom_crs(
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r.stdout
 
-            table_wc = repo.wc.tabular
+            table_wc = repo.working_copy.tabular
             with table_wc.session() as sess:
                 srs_id = sess.scalar(
                     """

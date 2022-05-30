@@ -28,7 +28,7 @@ def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
         return
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.get_tabular(allow_uncreated=True, allow_invalid_state=True)
+    table_wc = repo.working_copy.get_tabular(allow_uncreated=True, allow_invalid_state=True)
     if table_wc is None:
         click.echo(
             "(Working copy isn't created yet. To create a working copy, use `kart create-workingcopy`)"
@@ -360,7 +360,7 @@ def restore(ctx, source, filters):
     repo = ctx.obj.repo
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if not table_wc:
         raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
 

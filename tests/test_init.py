@@ -138,7 +138,7 @@ def test_import_table_meta_overrides(
             cli_runner.invoke(["checkout"])
 
             repo = KartRepo(repo_path)
-            with repo.wc.tabular.session() as sess:
+            with repo.working_copy.tabular.session() as sess:
                 title, description = sess.execute(
                     """
                     SELECT c.identifier, c.description
@@ -516,7 +516,7 @@ def test_init_import_table_gpkg_types(data_archive_readonly, tmp_path, cli_runne
 
         # There's a bunch of wacky types in here, let's check them
         repo = KartRepo(repo_path)
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             table_info = [
                 dict(row) for row in sess.execute("PRAGMA table_info('types');")
             ]
@@ -666,7 +666,7 @@ def test_init_import(
         assert repo.config["kart.repostructure.version"] == "3"
         assert repo.config["kart.workingcopy.location"] == f"{wc.name}"
 
-        with repo.wc.tabular.session() as sess:
+        with repo.working_copy.tabular.session() as sess:
             assert H.row_count(sess, table) > 0
 
             wc_tree_id = sess.scalar(
@@ -981,7 +981,7 @@ def test_import_existing_wc(
             assert r.exit_code == 0, r
 
         repo = KartRepo(repo_path)
-        table_wc = repo.wc.tabular
+        table_wc = repo.working_copy.tabular
         with table_wc.session() as sess:
             assert H.row_count(sess, "nz_waca_adjustments") > 0
         assert table_wc.get_tree_id() == repo.head_tree.id.hex

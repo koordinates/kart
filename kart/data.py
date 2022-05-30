@@ -113,7 +113,7 @@ def data_rm(ctx, message, output_format, datasets):
     new_commit = repo.structure().commit_diff(repo_diff, commit_msg)
 
     # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.wc.tabular
+    table_wc = repo.working_copy.tabular
     if table_wc:
         if not do_json:
             click.echo(f"Updating {table_wc} ...")
