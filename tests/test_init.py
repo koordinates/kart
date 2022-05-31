@@ -60,7 +60,7 @@ def test_init_import_single_table_source(data_archive_readonly, tmp_path, cli_ru
         lines = r.stdout.splitlines()
         assert len(lines) >= 2
         assert "to nz_pa_points_topo_150k/ ..." in lines[2]
-        assert lines[-1] == "Creating working copy at emptydir.gpkg ..."
+        assert lines[-1] == "Creating GPKG working copy at emptydir.gpkg ..."
 
 
 @pytest.mark.slow

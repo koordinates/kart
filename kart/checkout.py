@@ -4,7 +4,6 @@ import pygit2
 from .exceptions import (
     NO_BRANCH,
     NO_COMMIT,
-    NO_WORKING_COPY,
     DbConnectionError,
     InvalidOperation,
     NotFound,
@@ -20,43 +19,6 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
     " just discard them by adding the option `--discard-changes`."
 )
-
-
-def reset_wc_if_needed(repo, target_tree_or_commit, *, discard_changes=False):
-    """Resets the working copy to the target if it does not already match, or if discard_changes is True."""
-    if repo.is_bare:
-        return
-
-    # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.working_copy.get_tabular(allow_uncreated=True, allow_invalid_state=True)
-    if table_wc is None:
-        click.echo(
-            "(Working copy isn't created yet. To create a working copy, use `kart create-workingcopy`)"
-        )
-        return
-
-    if not (table_wc.status() & TableWorkingCopyStatus.INITIALISED):
-        click.echo(f"Creating working copy at {table_wc} ...")
-        table_wc.create_and_initialise()
-        datasets = list(repo.datasets(target_tree_or_commit, "table"))
-        table_wc.write_full(target_tree_or_commit, *datasets)
-        return
-
-    spatial_filter_matches = repo.spatial_filter.matches_working_copy(repo)
-    if not spatial_filter_matches:
-        # TODO - support spatial filter changes without doing full rewrites.
-        click.echo(f"Updating {table_wc} with new spatial filter...")
-        datasets = list(repo.datasets(target_tree_or_commit, "table"))
-        table_wc.rewrite_full(target_tree_or_commit, *datasets, force=discard_changes)
-        return
-
-    db_tree_matches = (
-        table_wc.get_tree_id() == target_tree_or_commit.peel(pygit2.Tree).hex
-    )
-
-    if discard_changes or not db_tree_matches:
-        click.echo(f"Updating {table_wc} ...")
-        table_wc.reset(target_tree_or_commit, force=discard_changes)
 
 
 @click.command()
@@ -135,9 +97,13 @@ def checkout(
             fetched_envelope
             and not resolved_spatial_filter_spec.is_within_envelope(fetched_envelope)
         )
+    else:
+        # We also allow switching of spatial filter by just writing it to the config and then running
+        # `kart checkout`. TODO this may not be a good idea.
+        do_switch_spatial_filter = not repo.spatial_filter.matches_working_copy(repo)
 
-    force = force or discard_changes
-    if (do_switch_commit or do_switch_spatial_filter) and not force:
+    discard_changes = discard_changes or force
+    if (do_switch_commit or do_switch_spatial_filter) and not discard_changes:
         ctx.obj.check_not_dirty(help_message=_DISCARD_CHANGES_HELP_MESSAGE)
 
     if new_branch and new_branch in repo.branches:
@@ -181,9 +147,21 @@ def checkout(
         spatial_filter_spec.write_config(repo, update_remote=promisor_remote)
 
     TableWorkingCopy.ensure_config_exists(repo)
-    reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
-
     repo.set_head(head_ref)
+
+    # TODO - this shouldn't special-case the tabular part of the working copy.
+    parts_to_create = ["tabular"]
+
+    if do_switch_commit or do_switch_spatial_filter or discard_changes:
+        repo.working_copy.reset_to_head(
+            rewrite_full=do_switch_spatial_filter,
+            create_parts_if_missing=parts_to_create,
+        )
+    else:
+        # Possibly we needn't auto-create any working copy here at all, but lots of tests currently depend on it.
+        repo.working_copy.create_parts_if_missing(
+            parts_to_create, reset_to=repo.head_commit
+        )
 
 
 @click.command()
@@ -311,9 +289,10 @@ def switch(ctx, create, force_create, discard_changes, do_guess, refish):
 
         head_ref = branch.name
 
-    reset_wc_if_needed(repo, commit, discard_changes=discard_changes)
-
     repo.set_head(head_ref)
+
+    if do_switch_commit or discard_changes:
+        repo.working_copy.reset_to_head()
 
 
 def _find_remote_branch_by_name(repo, name):
@@ -359,10 +338,8 @@ def restore(ctx, source, filters):
     """
     repo = ctx.obj.repo
 
-    # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.working_copy.tabular
-    if not table_wc:
-        raise NotFound("You don't have a working copy", exit_code=NO_WORKING_COPY)
+    repo.working_copy.assert_exists()
+    repo.working_copy.assert_matches_head_tree()
 
     try:
         commit_or_tree, ref = repo.resolve_refish(source)
@@ -372,9 +349,8 @@ def restore(ctx, source, filters):
 
     repo_key_filter = RepoKeyFilter.build_from_user_patterns(filters)
 
-    table_wc.reset(
+    repo.working_copy.reset(
         commit_or_tree,
-        force=True,
         track_changes_as_dirty=True,
         repo_key_filter=repo_key_filter,
     )
@@ -419,7 +395,7 @@ def reset(ctx, discard_changes, refish):
     else:
         repo.set_head(commit.id)
 
-    reset_wc_if_needed(repo, repo.head_commit, discard_changes=discard_changes)
+    repo.working_copy.reset_to_head()
 
 
 @click.command("create-workingcopy")
@@ -538,7 +514,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
                 old_wc.delete(keep_db_schema_if_possible=keep_db_schema_if_possible)
 
     TableWorkingCopy.write_config(repo, new_wc_loc)
-    reset_wc_if_needed(repo, repo.head_commit)
+    repo.working_copy.reset_to_head(create_parts_if_missing=["tabular"])
 
     # This command is used in tests and by other commands, so we have to be extra careful to
     # tidy up properly - otherwise, tests can fail (on Windows especially) due to PermissionError.

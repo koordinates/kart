@@ -37,7 +37,7 @@ def test_checkout_workingcopy(
         r = cli_runner.invoke(["checkout"])
         wc_path = Path(repo.config["kart.workingcopy.location"])
         assert r.exit_code == 0, r
-        assert r.stdout.splitlines() == [f"Creating working copy at {wc_path} ..."]
+        assert r.stdout.splitlines() == [f"Creating GPKG working copy at {wc_path} ..."]
         assert wc_path.exists()
         table_wc = repo.working_copy.tabular
 

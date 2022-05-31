@@ -229,6 +229,7 @@ def apply_patch(
 
     rs = repo.structure(ref)
     # TODO: this code shouldn't special-case tabular working copies
+    # Specifically, we need to check if those part(s) of the WC exists which the patch applies to.
     table_wc = repo.working_copy.tabular
     if not do_commit and not table_wc:
         # TODO: might it be useful to apply without committing just to *check* if the patch applies?
@@ -301,10 +302,8 @@ def apply_patch(
             resolve_missing_values_from_rs=resolve_missing_values_from_rs,
         )
 
-    if table_wc and new_wc_target:
-        # oid refers to either a commit or tree
-        click.echo(f"Updating {table_wc} ...")
-        table_wc.reset(new_wc_target, track_changes_as_dirty=not do_commit)
+    if new_wc_target:
+        repo.working_copy.reset(new_wc_target, track_changes_as_dirty=not do_commit)
 
 
 @click.command()

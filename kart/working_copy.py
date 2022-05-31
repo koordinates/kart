@@ -1,3 +1,4 @@
+import click
 import pygit2
 
 from kart.exceptions import (
@@ -7,6 +8,7 @@ from kart.exceptions import (
     NO_DATA,
     NO_WORKING_COPY,
 )
+from kart.key_filters import RepoKeyFilter
 
 # General code for working copies.
 # Nothing specific to tabular working copies, nor file-based working copies.
@@ -34,6 +36,8 @@ class WorkingCopy:
     Interface through which the various working copy types are accessed.
     Currently only the tabular working copy is accessible here.
     """
+
+    DONT_RESET = object()
 
     def __init__(self, repo):
         self.repo = repo
@@ -124,6 +128,41 @@ class WorkingCopy:
             allow_unconnectable=allow_unconnectable,
         )
 
+    def create_parts_if_missing(self, parts_to_create, reset_to=DONT_RESET):
+        """
+        Creates the named parts if they are missing and can be created. Returns any created parts themselves.
+        Supported parts:
+        tabular
+        """
+        # TODO - support more parts here. Next part to be added is the file-based working copy for point clouds.
+        created_parts = []
+
+        for part_type in parts_to_create:
+            assert part_type == "tabular"
+            if self.create_and_initialise_tabular():
+                created_parts.append(self.tabular)
+
+        if reset_to != self.DONT_RESET:
+            for p in created_parts:
+                p.reset(reset_to)
+
+        return created_parts
+
+    def create_and_initialise_tabular(self):
+        """
+        Create the tabular part of the working copy if it currently doesn't exist
+        but is configured so that we know where to put it. Otherwise, this has no effect.
+        """
+        from kart.tabular.working_copy import TableWorkingCopyStatus
+
+        t = self.get_tabular(allow_uncreated=True)
+        if t and not (t.status() & TableWorkingCopyStatus.INITIALISED):
+            click.echo(f"Creating {t.WORKING_COPY_TYPE_NAME} working copy at {t} ...")
+            t.create_and_initialise()
+            self._tabular = t
+            return True
+        return False
+
     def delete_tabular(self):
         """
         Deletes the tabular working copy - from disk or from a server - and removes the cached reference to it.
@@ -133,6 +172,73 @@ class WorkingCopy:
         if t:
             t.delete()
         del self._tabular
+
+    def reset_to_head(
+        self,
+        *,
+        create_parts_if_missing=(),
+        quiet=False,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
+        rewrite_full=False,
+    ):
+        """Reset all working copy parts to the head commit. See reset() below."""
+        self.reset(
+            self.repo.head_commit,
+            create_parts_if_missing=create_parts_if_missing,
+            quiet=quiet,
+            repo_key_filter=repo_key_filter,
+            track_changes_as_dirty=track_changes_as_dirty,
+            rewrite_full=rewrite_full,
+        )
+
+    def reset(
+        self,
+        commit_or_tree,
+        *,
+        create_parts_if_missing=(),
+        quiet=False,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
+        rewrite_full=False,
+    ):
+        """
+        Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
+
+        Any existing changes which match the repo_key_filter will be discarded. Existing changes which do not
+        math the repo_key_filter will be kept.
+
+        If track_changes_as_dirty=False (the default) the tree ID in the kart_state table gets set to the
+        new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
+        tracking table is used to record all the changes, so that they can be committed later.
+
+        If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
+        present at target_tree_or_commit will be written from scratch using write_full.
+        Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
+        filter is up to date.
+        """
+        created_parts = ()
+        if create_parts_if_missing:
+            # Even we're only partially resetting the WC, we still need to do a full reset on anything that
+            # is newly created since it won't otherwise contain any data yet. The extra parameters (repo_key_filter
+            # and track_changes_as_dirty) don't have any effect for a WC part that is newly created.
+            created_parts = self.create_parts_if_missing(
+                create_parts_if_missing, reset_to=commit_or_tree
+            )
+
+        for p in self.parts():
+            if p in created_parts:
+                # This part was already handled above.
+                continue
+
+            if not quiet:
+                click.echo(f"Updating {p} ...")
+            p.reset(
+                commit_or_tree,
+                repo_key_filter=repo_key_filter,
+                track_changes_as_dirty=track_changes_as_dirty,
+                rewrite_full=rewrite_full,
+            )
 
 
 class WorkingCopyPart:
@@ -177,4 +283,14 @@ class WorkingCopyPart:
 
     def get_kart_state_value(self, table_name, key):
         """Looks up a value from the kart-state table."""
+        raise NotImplementedError()
+
+    def reset(
+        self,
+        commit_or_tree,
+        *,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        track_changes_as_dirty=False,
+        rewrite_full=False,
+    ):
         raise NotImplementedError()

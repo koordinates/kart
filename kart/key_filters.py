@@ -152,6 +152,14 @@ class RepoKeyFilter(KeyFilterDict):
         return groups["dataset_glob"], subdataset, groups["rest"] or None
 
     @classmethod
+    def datasets(cls, dataset_paths):
+        """Returns a RepoKeyFilter that matches everything in all of the given datasets."""
+        result = cls()
+        for dataset_path in dataset_paths:
+            result[dataset_path] = DatasetKeyFilter.MATCH_ALL
+        return result
+
+    @classmethod
     def build_from_user_patterns(cls, user_patterns):
         """
         Given a list of strings like ["datasetA:1", "datasetA:2", "datasetB"],

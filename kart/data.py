@@ -111,13 +111,7 @@ def data_rm(ctx, message, output_format, datasets):
         raise click.UsageError("Aborting commit due to empty commit message.")
 
     new_commit = repo.structure().commit_diff(repo_diff, commit_msg)
-
-    # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.working_copy.tabular
-    if table_wc:
-        if not do_json:
-            click.echo(f"Updating {table_wc} ...")
-        table_wc.reset(new_commit)
+    repo.working_copy.reset_to_head()
 
     jdict = commit_obj_to_json(new_commit, repo, repo_diff)
     if do_json:
