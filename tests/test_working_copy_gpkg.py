@@ -398,39 +398,35 @@ def test_working_copy_discard_changes(
         with table_wc.session() as sess:
             h_after = H.db_table_hash(sess, layer, pk_field)
             if h_before != h_after:
-                r = sess.execute(
+                # Inserted row should disappear again:
+                assert not sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=:pk;",
                     {"pk": rec[pk_field]},
-                )
-                if r.fetchone():
-                    print(
-                        "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
+                ).fetchone()
+                # Deleted rows should be back:
+                assert (
+                    sess.scalar(
+                        f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;",
+                        {"pk": del_pk},
                     )
-                count = sess.scalar(
-                    f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;",
-                    {"pk": del_pk},
+                    == 4
                 )
-                if count != 4:
-                    print("E: Deleted rows {pk_field}<{del_pk} still missing")
-                count = sess.scalar(
-                    f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
-                    {"value": upd_field_value},
+                # Updated row should be back to old value.
+                assert (
+                    sess.scalar(
+                        f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
+                        {"value": upd_field_value},
+                    )
+                    == 0
                 )
-                if count != 0:
-                    print("E: Updated rows not reset")
-                r = sess.execute(
+                # Renamed row should be back where it was
+                assert not sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;"
-                )
-                if r.fetchone():
-                    print(
-                        "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
-                    )
-                r = sess.execute(
+                ).fetchone()
+                assert sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = :pk;",
                     {"pk": id_chg_pk},
-                )
-                if not r.fetchone():
-                    print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
+                ).fetchone()
 
             assert h_before == h_after
 
@@ -729,6 +725,7 @@ def test_restore(source, filters, data_working_copy, cli_runner):
         new_commit = repo.head_commit.hex
         assert new_commit != H.POINTS.HEAD_SHA
         print(f"Original commit={H.POINTS.HEAD_SHA} New commit={new_commit}")
+        new_commit_tree = repo[new_commit].tree.hex
 
         with table_wc.session() as sess:
             r = sess.execute(sql, rec)
@@ -773,9 +770,14 @@ def test_restore(source, filters, data_working_copy, cli_runner):
                 "9999",
             ]
 
+        assert table_wc.get_tree_id() == new_commit_tree
+
         # using `kart restore
         r = cli_runner.invoke(["restore"] + source + filters)
         assert r.exit_code == 0, r
+
+        # A restore doesn't change which tree the WC is based on.
+        assert table_wc.get_tree_id() == new_commit_tree
 
         with table_wc.session() as sess:
             changes_post = [
@@ -784,75 +786,61 @@ def test_restore(source, filters, data_working_copy, cli_runner):
                     'SELECT pk FROM "gpkg_kart_track" ORDER BY CAST(pk AS INTEGER);'
                 )
             ]
-            head_sha = table_wc.get_tree_id()
 
             if filters:
                 # we restore'd paths other than our test dataset, so all the changes should still be there
                 assert changes_post == changes_pre
-
-                if head_sha != new_commit:
-                    print(f"E: Bad Tree? {head_sha}")
-
                 return
 
             if source:
                 assert changes_post == ["300", "30000"]
 
-                if head_sha != H.POINTS.HEAD_SHA:
-                    print(f"E: Bad Tree? {head_sha}")
-
-                r = sess.execute(
+                # Feature rename that was committed has been restored from previous commit:
+                assert not sess.execute(
+                    f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 30000;"
+                ).fetchone()
+                assert sess.execute(
                     f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;"
-                )
-                if not r.fetchone():
-                    print("E: Previous PK bad? ({pk_field}=300)")
+                ).fetchone()
                 return
 
             assert changes_post == []
-
-            if head_sha != new_commit:
-                print(f"E: Bad Tree? {head_sha}")
-
-            head_sha = sess.scalar(
-                """SELECT value FROM "gpkg_kart_state" WHERE key = 'tree' AND table_name='*';"""
-            )
-            if head_sha != new_commit:
-                print(f"E: Bad Tree? {head_sha}")
 
             r = sess.execute(
                 f"SELECT {pk_field} FROM {layer} WHERE {pk_field}=:pk;",
                 {"pk": rec[pk_field]},
             )
-            if r.fetchone():
-                print(
-                    "E: Newly inserted row is still there ({pk_field}={rec[pk_field]})"
-                )
+            assert (
+                not r.fetchone()
+            ), f"Newly inserted row is still there ({pk_field}={rec[pk_field]})"
+
             count = sess.scalar(
                 f"SELECT COUNT(*) FROM {layer} WHERE {pk_field} < :pk;", {"pk": del_pk}
             )
-            if count != 4:
-                print("E: Deleted rows {pk_field}<{del_pk} still missing")
+            assert count == 4, f"Deleted rows {pk_field}<{del_pk} still missing"
+
             count = sess.scalar(
                 f"SELECT COUNT(*) FROM {layer} WHERE {upd_field} = :value;",
                 {"value": upd_field_value},
             )
-            if count != 0:
-                print("E: Updated rows not reset")
-            r = sess.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;")
-            if r.fetchone():
-                print(
-                    "E: Updated pk row is still there ({pk_field}={id_chg_pk} -> 9998)"
-                )
-            r = sess.execute(
+            assert count == 0, "Updated rows not reset"
+
+            # Feature rename that was not yet committed has been restored from HEAD:
+            assert not sess.execute(
+                f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 9998;"
+            ).fetchone()
+            assert sess.execute(
                 f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = :pk;",
                 {"pk": id_chg_pk},
-            )
-            if not r.fetchone():
-                print("E: Updated pk row is missing ({pk_field}={id_chg_pk})")
+            ).fetchone()
 
-            r = sess.execute(f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;")
-            if not r.fetchone():
-                print("E: Previous PK bad? ({pk_field}=300)")
+            # Feature rename that was committed is still present:
+            assert sess.execute(
+                f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 30000;"
+            ).fetchone()
+            assert not sess.execute(
+                f"SELECT {pk_field} FROM {layer} WHERE {pk_field} = 300;"
+            ).fetchone()
 
 
 def test_delete_branch(data_working_copy, cli_runner):
