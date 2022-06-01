@@ -104,7 +104,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {strip_password(sqlserver_url)} ..."
+                == f"Creating SQL Server working copy at {strip_password(sqlserver_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])

@@ -99,8 +99,14 @@ def checkout(
         )
     else:
         # We also allow switching of spatial filter by just writing it to the config and then running
-        # `kart checkout`. TODO this may not be a good idea.
+        # `kart checkout`. Updating the spatial filter by running an explicit command is preferred,
+        # since then we can do the necessary checks and make the change all at once, but since we
+        # store the spatial filter in the config, we need to handle it if the user has changed it.
         do_switch_spatial_filter = not repo.spatial_filter.matches_working_copy(repo)
+        if do_switch_spatial_filter:
+            click.echo(
+                "The spatial filter has been updated in the config and no longer matches the working copy."
+            )
 
     discard_changes = discard_changes or force
     if (do_switch_commit or do_switch_spatial_filter) and not discard_changes:
