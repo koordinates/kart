@@ -146,7 +146,7 @@ def test_branches_empty(tmp_path, cli_runner, chdir):
         assert text_branches(cli_runner) == []
 
         assert json_branches(cli_runner) == {
-            "kart.branch/v1": {"current": None, "branches": {}}
+            "kart.branch/v1": {"current": "main", "branches": {}}
         }
 
 
