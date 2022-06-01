@@ -46,8 +46,16 @@ def branch(ctx, output_format, args):
 
 def list_branches_json(repo):
     output = {"current": None, "branches": {}}
-    if not repo.is_empty and not repo.head_is_detached:
-        output["current"] = repo.head.shorthand
+
+    if not repo.head_is_detached:
+        if not repo.head_is_unborn:
+            output["current"] = repo.head.shorthand
+        else:
+            target = repo.references.get("HEAD").target
+            if target.startswith("refs/heads/"):
+                target_shorthand = target[len("refs/heads/") :]
+                output["current"] = target_shorthand
+
     branches = {}
     for branch_name in repo.listall_branches():
         branches[branch_name] = branch_obj_to_json(repo, repo.branches[branch_name])
