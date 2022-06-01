@@ -50,7 +50,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {strip_password(mysql_url)} ..."
+                == f"Creating MySQL working copy at {strip_password(mysql_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])

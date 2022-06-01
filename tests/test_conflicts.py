@@ -475,10 +475,6 @@ def test_conflicts_geojson_usage(data_archive, cli_runner, tmp_path):
                 r = cli_runner.invoke(["-C", repo_path, "import", src_gpkg_path])
                 assert r.exit_code == 0, r.stderr
 
-        # commit changes and merge again
-        r = cli_runner.invoke(["commit", "-m", "test-commit"])
-        assert r.exit_code == 0, r
-
         r = cli_runner.invoke(["merge", "theirs_branch"])
         assert r.exit_code == 0, r
 

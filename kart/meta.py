@@ -5,7 +5,6 @@ import click
 import pygit2
 
 from .apply import apply_patch
-from .checkout import reset_wc_if_needed
 from .cli_util import (
     OutputFormatType,
     StringFromFile,
@@ -296,4 +295,4 @@ def commit_files(ctx, message, ref, amend, allow_empty, remove_empty_files, item
             repo.references[ref].set_target(new_commit.id)
 
     click.echo(f"Committed as: {new_commit.hex}")
-    reset_wc_if_needed(repo, new_commit)
+    repo.working_copy.reset_to_head()

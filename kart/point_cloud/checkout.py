@@ -12,7 +12,7 @@ from .v1 import PointCloudV1
 # Some of this may move at some point to be part of "filesystem" checkout which will also handle attachments.
 
 
-def reset_wc_if_needed(repo):
+def checkout_point_clouds(repo):
     """Checks out point cloud tiles to working copy directory."""
     if repo.is_bare:
         return

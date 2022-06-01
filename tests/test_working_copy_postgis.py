@@ -52,7 +52,7 @@ def test_checkout_workingcopy(
             assert r.exit_code == 0, r.stderr
             assert (
                 r.stdout.splitlines()[-1]
-                == f"Creating working copy at {strip_password(postgres_url)} ..."
+                == f"Creating PostGIS working copy at {strip_password(postgres_url)} ..."
             )
 
             r = cli_runner.invoke(["status"])

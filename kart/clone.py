@@ -5,7 +5,6 @@ from urllib.parse import urlsplit
 
 import click
 
-from . import checkout
 from .exceptions import InvalidOperation
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
@@ -174,14 +173,15 @@ def clone(
     )
 
     # Create working copy, if needed.
-    head_commit = repo.head_commit
-    if head_commit is not None and do_checkout and not bare:
-        checkout.reset_wc_if_needed(repo, head_commit)
+    # TODO: this shouldn't special case the tabular working copy.
+    parts_to_create = ["tabular"] if do_checkout else []
+    repo.working_copy.reset_to_head(create_parts_if_missing=parts_to_create)
 
     # Experimental point-cloud datasets:
+    # TODO - eventually most of this should be performed in reset_to_head above.
     if os.environ.get("X_KART_POINT_CLOUDS"):
         from kart.lfs_util import install_lfs_hooks
-        from kart.point_cloud.checkout import reset_wc_if_needed
+        from kart.point_cloud.checkout import checkout_point_clouds
 
         lfs_override = os.environ.get("X_KART_SET_LFS_FOR_NEW_REPOS")
         if lfs_override:
@@ -189,4 +189,4 @@ def clone(
 
         install_lfs_hooks(repo)
         repo.invoke_git("lfs", "fetch")
-        reset_wc_if_needed(repo)
+        checkout_point_clouds(repo)

@@ -6,18 +6,17 @@ from osgeo import gdal
 
 from kart import is_windows
 
-from . import checkout
 from .cli_util import JsonFromFile, MutexOption, StringFromFile, call_and_exit_flag
 from .core import check_git_user
 from .dataset_util import validate_dataset_paths
 from .exceptions import InvalidOperation
 from .fast_import import FastImportSettings, ReplaceExisting, fast_import_tables
+from .key_filters import RepoKeyFilter
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .tabular.import_source import TableImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingTableImportSource
-from kart.tabular.working_copy import TableWorkingCopyStatus
 
 
 def list_import_formats(ctx):
@@ -40,24 +39,6 @@ def list_import_formats(ctx):
 
     if "SHP" in ogr_types:
         click.echo("Shapefile: PATH.shp")
-
-
-def _add_datasets_to_working_copy(repo, *datasets, replace_existing=False):
-    wc = repo.working_copy.get_tabular(allow_uncreated=True)
-    if not wc:
-        return
-
-    commit = repo.head_commit
-    if not (wc.status() & TableWorkingCopyStatus.INITIALISED):
-        click.echo(f"Creating working copy at {wc} ...")
-        wc.create_and_initialise()
-    else:
-        click.echo(f"Updating {wc} ...")
-
-    if replace_existing:
-        wc.rewrite_full(commit, *datasets, force=True)
-    else:
-        wc.write_full(commit, *datasets)
 
 
 class GenerateIDsFromFile(StringFromFile):
@@ -338,10 +319,12 @@ def import_(
 
     TableImportSource.check_valid(import_sources, param_hint="tables")
 
-    all_ds_paths = [s.dest_path for s in import_sources]
-    if not replace_existing:
-        all_ds_paths[:0] = [ds.path for ds in repo.datasets()]
-    validate_dataset_paths(all_ds_paths)
+    new_ds_paths = [s.dest_path for s in import_sources]
+    if replace_existing:
+        validate_dataset_paths(new_ds_paths)
+    else:
+        old_ds_paths = [ds.path for ds in repo.datasets()]
+        validate_dataset_paths(old_ds_paths + new_ds_paths)
 
     replace_existing_enum = (
         ReplaceExisting.GIVEN if replace_existing else ReplaceExisting.DONT_REPLACE
@@ -360,12 +343,12 @@ def import_(
         allow_empty=allow_empty,
     )
 
-    if do_checkout:
-        _add_datasets_to_working_copy(
-            repo,
-            *[repo.datasets()[s.dest_path] for s in import_sources],
-            replace_existing=replace_existing,
-        )
+    # During imports we can keep old changes since they won't conflict with newly imported datasets.
+    parts_to_create = ["tabular"] if do_checkout else []
+    repo.working_copy.reset_to_head(
+        repo_key_filter=RepoKeyFilter.datasets(new_ds_paths),
+        create_parts_if_missing=parts_to_create,
+    )
 
 
 @click.command()
@@ -497,9 +480,8 @@ def init(
             from_commit=None,
             message=message,
         )
-        head_commit = repo.head_commit
-        if do_checkout and not bare:
-            checkout.reset_wc_if_needed(repo, head_commit)
+        if do_checkout:
+            repo.working_copy.reset_to_head(create_parts_if_missing=["tabular"])
 
     else:
         click.echo(

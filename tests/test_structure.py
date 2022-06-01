@@ -132,9 +132,11 @@ def test_import(
     """ Import the GeoPackage (eg. `kx-foo-layer.gpkg`) into a Kart repository. """
     param_ids = H.parameter_ids(request)
 
+    from kart.working_copy import WorkingCopy
+
     # wrap the original functions with benchmarking
     orig_import_func = fast_import.fast_import_tables
-    orig_checkout_func = init._add_datasets_to_working_copy
+    orig_reset_func = WorkingCopy.reset
 
     def _benchmark_import(*args, **kwargs):
         # one round/iteration isn't very statistical, but hopefully crude idea
@@ -142,15 +144,15 @@ def test_import(
             orig_import_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
-    def _benchmark_checkout(*args, **kwargs):
+    def _benchmark_reset(*args, **kwargs):
         return benchmark.pedantic(
-            orig_checkout_func, args=args, kwargs=kwargs, rounds=1, iterations=1
+            orig_reset_func, args=args, kwargs=kwargs, rounds=1, iterations=1
         )
 
     if profile == "fast_import":
         monkeypatch.setattr(init, "fast_import_tables", _benchmark_import)
     else:
-        monkeypatch.setattr(init, "_add_datasets_to_working_copy", _benchmark_checkout)
+        monkeypatch.setattr(WorkingCopy, "reset", _benchmark_reset)
 
     with data_archive(archive) as data:
         # list tables

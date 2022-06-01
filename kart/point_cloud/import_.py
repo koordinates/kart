@@ -6,7 +6,6 @@ import sys
 
 import click
 
-from .checkout import reset_wc_if_needed
 from kart.crs_util import normalise_wkt
 from kart.dataset_util import validate_dataset_paths
 from kart.exceptions import (
@@ -22,6 +21,7 @@ from kart.fast_import import (
     write_blob_to_stream,
     write_blobs_to_stream,
 )
+from kart.key_filters import RepoKeyFilter
 from kart.lfs_util import (
     install_lfs_hooks,
     dict_to_pointer_file_bytes,
@@ -161,13 +161,14 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             ensure_bytes(normalise_wkt(first_tile_metadata["crs"])),
         )
 
+    # TODO - this should be merged into the reset_to_head logic below.
     click.echo("Updating working copy...")
-    reset_wc_if_needed(repo)
+    from kart.point_cloud.checkout import checkout_point_clouds
 
-    # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.working_copy.tabular
-    if table_wc is not None:
-        table_wc.reset(repo.head_commit)
+    checkout_point_clouds(repo)
+
+    # During imports we can keep old changes since they won't conflict with newly imported datasets.
+    repo.working_copy.reset_to_head(repo_key_filter=RepoKeyFilter.datasets([ds_path]))
 
 
 def _format_array(array):
