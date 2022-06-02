@@ -157,7 +157,7 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
         wc_diff, commit_msg, allow_empty=allow_empty
     )
 
-    repo.working_copy.set_state_post_commit(
+    repo.working_copy.soft_reset_after_commit(
         new_commit,
         quiet=do_json,
         mark_as_clean=commit_diff_writer.repo_key_filter,

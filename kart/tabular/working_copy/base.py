@@ -1435,7 +1435,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
             self._mark_as_clean_for_table(sess, base_ds.table_name, feature_filter)
 
-    def set_state_post_commit(
+    def soft_reset_after_commit(
         self,
         target_tree_or_commit,
         *,

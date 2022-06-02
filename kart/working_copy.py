@@ -242,7 +242,7 @@ class WorkingCopy:
                 rewrite_full=rewrite_full,
             )
 
-    def set_state_post_commit(
+    def soft_reset_after_commit(
         self,
         commit_or_tree,
         *,
@@ -273,7 +273,7 @@ class WorkingCopy:
             )
 
         for p in self.parts():
-            p.set_state_post_commit(
+            p.soft_reset_after_commit(
                 commit_or_tree,
                 mark_as_clean=mark_as_clean,
                 now_outside_spatial_filter=now_outside_spatial_filter,
@@ -334,7 +334,7 @@ class WorkingCopyPart:
     ):
         raise NotImplementedError()
 
-    def set_state_post_commit(
+    def soft_reset_after_commit(
         self,
         commit_or_tree,
         *,
