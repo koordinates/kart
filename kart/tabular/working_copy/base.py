@@ -734,22 +734,22 @@ class TableWorkingCopy(WorkingCopyPart):
             )
             return (row[0] for row in r)
 
-    def reset_tracking_table(self, repo_key_filter=RepoKeyFilter.MATCH_ALL):
+    def _mark_as_clean(self, sess, repo_key_filter):
         """Delete the rows from the tracking table that match the given filter."""
+        if not repo_key_filter:
+            return
+
         kart_track = self.kart_tables.kart_track
-        with self.session() as sess:
-            if repo_key_filter.match_all:
-                sess.execute(sa.delete(kart_track))
-                return
+        if repo_key_filter.match_all:
+            sess.execute(sa.delete(kart_track))
+            return
 
-            for dataset_path, dataset_filter in repo_key_filter.items():
-                table_name = TableDataset.dataset_path_to_table_name(dataset_path)
-                feature_filter = dataset_filter.get(
-                    "feature", dataset_filter.child_type()
-                )
-                self._reset_tracking_table_for_table(sess, table_name, feature_filter)
+        for dataset_path, dataset_filter in repo_key_filter.items():
+            table_name = TableDataset.dataset_path_to_table_name(dataset_path)
+            feature_filter = dataset_filter.get("feature", dataset_filter.child_type())
+            self._mark_as_clean_for_table(sess, table_name, feature_filter)
 
-    def _reset_tracking_table_for_table(self, sess, table_name, feature_filter):
+    def _mark_as_clean_for_table(self, sess, table_name, feature_filter):
         kart_track = self.kart_tables.kart_track
         if feature_filter.match_all:
             sess.execute(
@@ -977,7 +977,9 @@ class TableWorkingCopy(WorkingCopyPart):
         """Hook for updating the last-modified timestamp stored for a particular dataset, if there is one."""
         pass
 
-    def _write_features(self, sess, dataset, pk_list, *, ignore_missing=False):
+    def _write_features_from_dataset(
+        self, sess, dataset, pk_list, *, ignore_missing=False
+    ):
         """Write the features from the dataset with the given PKs to the table for the dataset."""
         if not pk_list:
             return 0
@@ -998,10 +1000,47 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return feat_count
 
-    def _delete_features(self, sess, dataset, pk_list):
-        """Delete all of the features with the given PKs in the table for the dataset."""
-        if not pk_list:
+    def _delete_features(self, sess, repo_key_filter, track_changes_as_dirty=False):
+        """Deletes the features that match the given repo_key_filter."""
+        if not repo_key_filter:
+            return
+
+        base_tree_id = self.get_tree_id()
+        base_datasets = self.repo.datasets(base_tree_id, "table")
+
+        if repo_key_filter.match_all:
+            for base_ds in base_datasets:
+                with self._suspend_triggers(sess, base_ds):
+                    self._delete_features_from_dataset(
+                        sess,
+                        base_ds,
+                        repo_key_filter.recursive_get(base_ds.path, "feature"),
+                    )
+            return
+
+        for dataset_path, dataset_filter in repo_key_filter.items():
+            base_ds = base_datasets.get(dataset_path)
+            if not base_ds:
+                continue
+            feature_filter = dataset_filter.get("feature", dataset_filter.child_type())
+            with self._suspend_triggers(sess, base_ds):
+                self._delete_features_from_dataset(sess, base_ds, feature_filter)
+
+    def _delete_features_from_dataset(self, sess, dataset, features_to_delete):
+        """
+        Delete all of the features with the given PKs in the table for the dataset.
+        features_to_delete should be a FeatureKeyFilter, or a list of primary key values.
+        """
+        if not features_to_delete:
             return 0
+
+        if isinstance(features_to_delete, FeatureKeyFilter):
+            if features_to_delete.match_all:
+                r = sess.execute(f"DELETE FROM {self.table_identifier(dataset)};")
+                return r.rowcount
+            pk_list = list(features_to_delete)
+        else:
+            pk_list = features_to_delete
 
         pk_column = self.preparer.quote(dataset.primary_key)
         sql = f"""DELETE FROM {self.table_identifier(dataset)} WHERE {pk_column} IN :pks;"""
@@ -1031,17 +1070,6 @@ class TableWorkingCopy(WorkingCopyPart):
                     )
                 )
                 self._drop_sequence(sess, dataset)
-
-    def drop_features(self, pk_lists):
-        """
-        Drop the given features from the given datasets.
-        Doesn't do any further work like modifying the kart_track table in any way.
-        """
-        base_tree_id = self.get_tree_id()
-        base_datasets = self.repo.datasets(base_tree_id, "table")
-        with self.session() as sess:
-            for ds_path, pk_list in pk_lists.items():
-                self._delete_features(sess, base_datasets[ds_path], pk_list)
 
     def _delete_meta(self, sess, dataset):
         """
@@ -1298,8 +1326,8 @@ class TableWorkingCopy(WorkingCopyPart):
             ctx = contextlib.nullcontext()
 
         with ctx:
-            self._delete_features(sess, target_ds, pks)
-            self._write_features(sess, target_ds, pks, ignore_missing=True)
+            self._delete_features_from_dataset(sess, target_ds, pks)
+            self._write_features_from_dataset(sess, target_ds, pks, ignore_missing=True)
 
     def _is_meta_update_supported(self, meta_diff):
         """
@@ -1394,19 +1422,41 @@ class TableWorkingCopy(WorkingCopyPart):
             # todo: suspend/remove spatial index
             L.debug("Cleaning up dirty rows...")
 
-            count = self._delete_features(sess, base_ds, dirty_pk_list)
+            count = self._delete_features_from_dataset(sess, base_ds, dirty_pk_list)
             L.debug(
                 f"_reset_dirty_rows(): removed {count} features, tracking Δ count={track_count}"
             )
-            count = self._write_features(
+            count = self._write_features_from_dataset(
                 sess, base_ds, dirty_pk_list, ignore_missing=True
             )
             L.debug(
                 f"_reset_dirty_rows(): wrote {count} features, tracking Δ count={track_count}"
             )
 
-            self._reset_tracking_table_for_table(
-                sess, base_ds.table_name, feature_filter
+            self._mark_as_clean_for_table(sess, base_ds.table_name, feature_filter)
+
+    def soft_reset_after_commit(
+        self,
+        target_tree_or_commit,
+        *,
+        mark_as_clean=None,
+        now_outside_spatial_filter=None,
+    ):
+        """
+        Marks the working copy as now being based on the given target tree or commit.
+        mark_as_clean - a RepoKeyFilter - deletes these PKs from the tracking table.
+        now_outside_spatial_filter - a RepoKeyFilter - drops any features that match now_outside_spatial_filter altogether.
+        """
+        tree_id = (
+            target_tree_or_commit.peel(pygit2.Tree).hex
+            if target_tree_or_commit
+            else None
+        )
+        with self.session() as sess:
+            self._update_state_table_tree(sess, tree_id)
+            self._mark_as_clean(sess, mark_as_clean)
+            self._delete_features(
+                sess, now_outside_spatial_filter, track_changes_as_dirty=False
             )
 
 

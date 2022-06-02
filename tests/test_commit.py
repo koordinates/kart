@@ -106,7 +106,7 @@ def test_commit(
         else:
             assert (
                 change_count == 0
-            ), f"Changes still listed in {table_wc.TRACKING_TABLE} after full commit"
+            ), f"Changes still listed in {table_wc.KART_TRACK_NAME} after full commit"
 
             r = cli_runner.invoke(["diff", "--exit-code"])
             assert r.exit_code == 0, r
