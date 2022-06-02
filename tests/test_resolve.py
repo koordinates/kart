@@ -114,14 +114,14 @@ def test_resolve_with_file(data_archive, cli_runner):
         r = cli_runner.invoke(["diff", "ancestor_branch..ours_branch", "-o", "geojson"])
         assert r.exit_code == 0, r.stderr
         ours_geojson = json.loads(r.stdout)["features"][0]
-        assert ours_geojson["id"] == "nz_waca_adjustments:feature:98001:I"
+        assert ours_geojson["id"] == "I::98001"
 
         r = cli_runner.invoke(
             ["diff", "ancestor_branch..theirs_branch", "-o", "geojson"]
         )
         assert r.exit_code == 0, r.stderr
         theirs_geojson = json.loads(r.stdout)["features"][0]
-        assert theirs_geojson["id"] == "nz_waca_adjustments:feature:98001:I"
+        assert theirs_geojson["id"] == "I::98001"
 
         r = cli_runner.invoke(["merge", "theirs_branch", "-o", "json"])
         assert r.exit_code == 0, r.stderr

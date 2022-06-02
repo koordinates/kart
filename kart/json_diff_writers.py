@@ -6,7 +6,6 @@ from pathlib import Path
 
 import click
 
-from typing import Union
 from .base_diff_writer import BaseDiffWriter
 from .diff_estimation import (
     ThreadTerminated,
@@ -364,21 +363,15 @@ class JsonLinesDiffWriter(BaseDiffWriter):
 
 
 class GeojsonDiffWriter(BaseDiffWriter):
-    """Writes all feature deltas as a single GeoJSON FeatureCollection of GeoJSON features.
-
+    """
+    Writes all feature deltas as a single GeoJSON FeatureCollection of GeoJSON features.
+    Meta deltas aren't output at all.
     The name of each feature in the collection indicates whether it is the old or new version of the feature,
-    or if it was inserted or deleted.
-
-    Example:
-
-        dataset:feature:123:U-  - old version of feature 123
-        dataset:feature:123:U+  - new version of features 123
-        dataset:feature:123:D   - feature 123 as it was before it was deleted
-        dataset:feature:123:I   - features 123 as it is after it was inserted
-
-    Note:
-
-        Meta deltas aren't output at all.
+    or if it was inserted or deleted. For example:
+    U-::123  - old version of feature 123
+    U+::123  - new version of features 123
+    D::123   - feature 123 as it was before it was deleted
+    I::123   - features 123 as it is after it was inserted
     """
 
     @classmethod
@@ -440,7 +433,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
         self.has_changes = has_changes
         self.write_warnings_footer()
 
-    def _warn_about_any_meta_diffs(self, ds_path: str, ds_diff: DatasetDiff) -> None:
+    def _warn_about_any_meta_diffs(self, ds_path, ds_diff):
         if "meta" in ds_diff:
             meta_changes = ", ".join(ds_diff["meta"].keys())
             click.echo(
@@ -448,9 +441,7 @@ class GeojsonDiffWriter(BaseDiffWriter):
                 err=True,
             )
 
-    def filtered_ds_feature_deltas_as_geojson(
-        self, ds_path: str, ds_diff: DatasetDiff
-    ) -> Union[None, dict]:
+    def filtered_ds_feature_deltas_as_geojson(self, ds_path, ds_diff):
         if "feature" not in ds_diff:
             return
 
@@ -460,18 +451,10 @@ class GeojsonDiffWriter(BaseDiffWriter):
             if delta.old:
                 change_type = "U-" if delta.new else "D"
                 yield feature_as_geojson(
-                    delta.old_value,
-                    delta.old_key,
-                    ds_path,
-                    change_type,
-                    old_transform,
+                    delta.old_value, delta.old_key, change_type, old_transform
                 )
             if delta.new:
                 change_type = "U+" if delta.old else "I"
                 yield feature_as_geojson(
-                    delta.new_value,
-                    delta.new_key,
-                    ds_path,
-                    change_type,
-                    new_transform,
+                    delta.new_value, delta.new_key, change_type, new_transform
                 )

@@ -338,72 +338,72 @@ def check_points_diff_output(r, output_format):
 
         assert r.exit_code == 0, r
         assert r.stdout.splitlines() == [
-            "--- nz_pa_points_topo_150k:meta:schema.json",
-            "+++ nz_pa_points_topo_150k:meta:schema.json",
-            "  [",
-            "    {",
+            '--- nz_pa_points_topo_150k:meta:schema.json',
+            '+++ nz_pa_points_topo_150k:meta:schema.json',
+            '  [',
+            '    {',
             '      "id": "e97b4015-2765-3a33-b174-2ece5c33343b",',
             '      "name": "fid",',
             '      "dataType": "integer",',
             '      "primaryKeyIndex": 0,',
             '      "size": 64',
-            "    },",
-            "    {",
+            '    },',
+            '    {',
             '      "id": "f488ae9b-6e15-1fe3-0bda-e0d5d38ea69e",',
             '      "name": "geom",',
             '      "dataType": "geometry",',
             '      "geometryType": "POINT",',
             '      "geometryCRS": "EPSG:4326"',
-            "    },",
-            "    {",
+            '    },',
+            '    {',
             '      "id": "4a1c7a86-c425-ea77-7f1a-d74321a10edc",',
             '      "name": "t50_fid",',
             '      "dataType": "integer",',
             '      "size": 32',
-            "    },",
-            "    {",
+            '    },',
+            '    {',
             '      "id": "d2a62351-a66d-bde2-ce3e-356fec9641e9",',
             '      "name": "name_ascii",',
             '      "dataType": "text",',
             '      "length": 75',
-            "    },",
-            "    {",
+            '    },',
+            '    {',
             '      "id": "c3389414-a511-5385-7dcd-891c4ead1663",',
             '      "name": "macronated",',
             '      "dataType": "text",',
             '      "length": 1',
-            "    },",
-            "    {",
+            '    },',
+            '    {',
             '      "id": "45b00eaa-5700-662d-8a21-9614e40c437b",',
             '      "name": "name",',
             '      "dataType": "text",',
             '      "length": 75',
-            "    },",
-            "+   {",
+            '    },',
+            '+   {',
             colour_id_line,
             '+     "name": "colour",',
             '+     "dataType": "text",',
             '+     "length": 32',
-            "+   },",
-            "  ]",
-            "--- nz_pa_points_topo_150k:feature:1",
-            "+++ nz_pa_points_topo_150k:feature:1",
-            "-                                     name = ␀",
-            "+                                     name = test",
-            "+                                   colour = ␀",
-            "--- nz_pa_points_topo_150k:feature:2",
-            "+++ nz_pa_points_topo_150k:feature:2",
-            "-                                     name = ␀",
-            "+                                     name = blue house",
-            "+                                   colour = blue",
-            "+++ nz_pa_points_topo_150k:feature:9999",
-            "+                                      fid = 9999",
-            "+                                     geom = POINT(...)",
-            "+                                  t50_fid = 9999999",
-            "+                               name_ascii = Te Motu-a-kore",
-            "+                               macronated = 0",
-            "+                                     name = Te Motu-a-kore",
-            "+                                   colour = red",
+            '+   },',
+            '  ]',
+            '--- nz_pa_points_topo_150k:feature:1',
+            '+++ nz_pa_points_topo_150k:feature:1',
+            '-                                     name = ␀',
+            '+                                     name = test',
+            '+                                   colour = ␀',
+            '--- nz_pa_points_topo_150k:feature:2',
+            '+++ nz_pa_points_topo_150k:feature:2',
+            '-                                     name = ␀',
+            '+                                     name = blue house',
+            '+                                   colour = blue',
+            '+++ nz_pa_points_topo_150k:feature:9999',
+            '+                                      fid = 9999',
+            '+                                     geom = POINT(...)',
+            '+                                  t50_fid = 9999999',
+            '+                               name_ascii = Te Motu-a-kore',
+            '+                               macronated = 0',
+            '+                                     name = Te Motu-a-kore',
+            '+                                   colour = red',
         ]
     elif output_format == "json":
         # New column "colour" has an ID is deterministically generated from the commit hash,
@@ -571,84 +571,84 @@ def check_points_diff_output(r, output_format):
             in r.stderr
         )
         assert json.loads(r.stdout) == {
-            "type": "FeatureCollection",
             "features": [
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "Point",
                         "coordinates": [177.0959629713586, -38.00433803621768],
+                        "type": "Point",
                     },
+                    "id": "U-::1",
                     "properties": {
                         "fid": 1,
-                        "t50_fid": 2426271,
-                        "name_ascii": None,
                         "macronated": "N",
                         "name": None,
+                        "name_ascii": None,
+                        "t50_fid": 2426271,
                     },
-                    "id": "nz_pa_points_topo_150k:feature:1:U-",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "Point",
                         "coordinates": [177.0959629713586, -38.00433803621768],
+                        "type": "Point",
                     },
+                    "id": "U+::1",
                     "properties": {
+                        "colour": None,
                         "fid": 1,
-                        "t50_fid": 2426271,
-                        "name_ascii": None,
                         "macronated": "N",
                         "name": "test",
-                        "colour": None,
+                        "name_ascii": None,
+                        "t50_fid": 2426271,
                     },
-                    "id": "nz_pa_points_topo_150k:feature:1:U+",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "Point",
                         "coordinates": [177.0786628443959, -37.9881848576018],
+                        "type": "Point",
                     },
+                    "id": "U-::2",
                     "properties": {
                         "fid": 2,
-                        "t50_fid": 2426272,
-                        "name_ascii": None,
                         "macronated": "N",
                         "name": None,
+                        "name_ascii": None,
+                        "t50_fid": 2426272,
                     },
-                    "id": "nz_pa_points_topo_150k:feature:2:U-",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "Point",
                         "coordinates": [177.0786628443959, -37.9881848576018],
+                        "type": "Point",
                     },
+                    "id": "U+::2",
                     "properties": {
+                        "colour": "blue",
                         "fid": 2,
-                        "t50_fid": 2426272,
-                        "name_ascii": None,
                         "macronated": "N",
                         "name": "blue house",
-                        "colour": "blue",
+                        "name_ascii": None,
+                        "t50_fid": 2426272,
                     },
-                    "id": "nz_pa_points_topo_150k:feature:2:U+",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
-                    "geometry": {"type": "Point", "coordinates": [0.0, 0.0]},
+                    "geometry": {"coordinates": [0.0, 0.0], "type": "Point"},
+                    "id": "I::9999",
                     "properties": {
+                        "colour": "red",
                         "fid": 9999,
-                        "t50_fid": 9999999,
-                        "name_ascii": "Te Motu-a-kore",
                         "macronated": "0",
                         "name": "Te Motu-a-kore",
-                        "colour": "red",
+                        "name_ascii": "Te Motu-a-kore",
+                        "t50_fid": 9999999,
                     },
-                    "id": "nz_pa_points_topo_150k:feature:9999:I",
+                    "type": "Feature",
                 },
             ],
+            "type": "FeatureCollection",
         }
 
 
@@ -875,12 +875,9 @@ def check_polygons_diff_output(r, output_format):
             in r.stderr
         )
         assert json.loads(r.stdout) == {
-            "type": "FeatureCollection",
             "features": [
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "MultiPolygon",
                         "coordinates": [
                             [
                                 [
@@ -898,19 +895,19 @@ def check_polygons_diff_output(r, output_format):
                                 ]
                             ]
                         ],
+                        "type": "MultiPolygon",
                     },
+                    "id": "U-::1443053",
                     "properties": {
-                        "id": 1443053,
-                        "date_adjusted": "2011-05-10T12:09:10",
-                        "survey_reference": None,
                         "adjusted_nodes": 1238,
+                        "date_adjusted": "2011-05-10T12:09:10",
+                        "id": 1443053,
+                        "survey_reference": None,
                     },
-                    "id": "nz_waca_adjustments:feature:1443053:U-",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "MultiPolygon",
                         "coordinates": [
                             [
                                 [
@@ -928,20 +925,20 @@ def check_polygons_diff_output(r, output_format):
                                 ]
                             ]
                         ],
+                        "type": "MultiPolygon",
                     },
+                    "id": "U+::1443053",
                     "properties": {
-                        "id": 1443053,
-                        "date_adjusted": "2011-05-10T12:09:10",
-                        "surv_ref": "test",
                         "adjusted_nodes": 1238,
                         "colour": None,
+                        "date_adjusted": "2011-05-10T12:09:10",
+                        "id": 1443053,
+                        "surv_ref": "test",
                     },
-                    "id": "nz_waca_adjustments:feature:1443053:U+",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "MultiPolygon",
                         "coordinates": [
                             [
                                 [
@@ -972,19 +969,19 @@ def check_polygons_diff_output(r, output_format):
                                 ]
                             ]
                         ],
+                        "type": "MultiPolygon",
                     },
+                    "id": "U-::1452332",
                     "properties": {
-                        "id": 1452332,
-                        "date_adjusted": "2011-06-07T15:22:58",
-                        "survey_reference": None,
                         "adjusted_nodes": 558,
+                        "date_adjusted": "2011-06-07T15:22:58",
+                        "id": 1452332,
+                        "survey_reference": None,
                     },
-                    "id": "nz_waca_adjustments:feature:1452332:U-",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "MultiPolygon",
                         "coordinates": [
                             [
                                 [
@@ -1015,20 +1012,20 @@ def check_polygons_diff_output(r, output_format):
                                 ]
                             ]
                         ],
+                        "type": "MultiPolygon",
                     },
+                    "id": "U+::1452332",
                     "properties": {
-                        "id": 1452332,
-                        "date_adjusted": "2011-06-07T15:22:58",
-                        "surv_ref": None,
                         "adjusted_nodes": 558,
                         "colour": "yellow",
+                        "date_adjusted": "2011-06-07T15:22:58",
+                        "id": 1452332,
+                        "surv_ref": None,
                     },
-                    "id": "nz_waca_adjustments:feature:1452332:U+",
+                    "type": "Feature",
                 },
                 {
-                    "type": "Feature",
                     "geometry": {
-                        "type": "Polygon",
                         "coordinates": [
                             [
                                 [0.0, 0.0],
@@ -1038,17 +1035,20 @@ def check_polygons_diff_output(r, output_format):
                                 [0.0, 0.0],
                             ]
                         ],
+                        "type": "Polygon",
                     },
+                    "id": "I::9999999",
                     "properties": {
-                        "id": 9999999,
-                        "date_adjusted": "2019-07-05T13:04:00",
-                        "surv_ref": "Null Island™ 🗺",
                         "adjusted_nodes": 123,
                         "colour": None,
+                        "date_adjusted": "2019-07-05T13:04:00",
+                        "id": 9999999,
+                        "surv_ref": "Null Island™ 🗺",
                     },
-                    "id": "nz_waca_adjustments:feature:9999999:I",
+                    "type": "Feature",
                 },
             ],
+            "type": "FeatureCollection",
         }
 
 
