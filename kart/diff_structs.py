@@ -232,6 +232,15 @@ class RichDict(UserDict):
 
     __repr__ = __str__
 
+    def recursive_len(self, max_depth=None):
+        if max_depth == 1:
+            return len(self)
+        total = 0
+        max_depth = max_depth - 1 if max_depth else None
+        for child in self.values():
+            total += child.recursive_len(max_depth)
+        return total
+
     def recursive_get(self, keys, default=None):
         """Given a list of keys ["a", "b", "c"] returns self["a"]["b"]["c"] if it exists, or default."""
         if len(keys) == 0:
@@ -456,6 +465,9 @@ class DeltaDiff(Diff):
                 return (inf, str(k))
 
         return sorted(self.items(), key=key)
+
+    def recursive_len(self, max_depth=None):
+        return len(self)
 
 
 class DatasetDiff(Diff):

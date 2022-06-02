@@ -204,6 +204,8 @@ class WorkingCopy:
     ):
         """
         Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
+        This is called when we want to move content from the Kart repo ODB into the working copy - ie, during
+        create-workingcopy, checkout, switch, restore, reset.
 
         Any existing changes which match the repo_key_filter will be discarded. Existing changes which do not
         math the repo_key_filter will be kept.
@@ -238,6 +240,43 @@ class WorkingCopy:
                 repo_key_filter=repo_key_filter,
                 track_changes_as_dirty=track_changes_as_dirty,
                 rewrite_full=rewrite_full,
+            )
+
+    def set_state_post_commit(
+        self,
+        commit_or_tree,
+        *,
+        quiet=False,
+        mark_as_clean=None,
+        now_outside_spatial_filter=None,
+    ):
+        """
+        Like a reset, this marks the working copy as now being based on the given target-tree (or the tree in the given
+        target-commit). Unlike a reset, this doesn't update the dataset contents - this is called post-commit, so the
+        overall flow of dataset contents is from working copy into the Kart repo ODB. However, we still need to tidy up
+        a few things afterwards:
+        - the working copy is now based on the newly created commit, not the previous commit which is now the parent.
+        - all of the dataset contents that were committed should no longer be tracked as dirty - it can be marked as clean.
+        - newly committed features which are outside the spatial filter should be removed from the working copy, since they
+          are no longer dirty and now no different to anything else outside the spatial filter.
+
+        mark_as_clean - a RepoKeyFilter of what was committed and can be marked as clean. Most commonly, this is simply
+            RepoKeyFilter.MATCH_ALL
+        now_outside_spatial_filter - a RepoKeyFilter of the newly committed features that can simply be dropped since
+            they are outside the spatial filter.
+        """
+        if now_outside_spatial_filter and not quiet:
+            # TODO we currently only check if vector features match the filter - no other dataset types are supported.
+            total_count = now_outside_spatial_filter.recursive_len()
+            click.echo(
+                f"Removing {total_count} features from the working copy that no longer match the spatial filter..."
+            )
+
+        for p in self.parts():
+            p.set_state_post_commit(
+                commit_or_tree,
+                mark_as_clean=mark_as_clean,
+                now_outside_spatial_filter=now_outside_spatial_filter,
             )
 
 
@@ -292,5 +331,14 @@ class WorkingCopyPart:
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
         rewrite_full=False,
+    ):
+        raise NotImplementedError()
+
+    def set_state_post_commit(
+        self,
+        commit_or_tree,
+        *,
+        mark_as_clean=None,
+        now_outside_spatial_filter=None,
     ):
         raise NotImplementedError()

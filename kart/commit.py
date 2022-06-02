@@ -15,13 +15,12 @@ from .cli_util import StringFromFile, tool_environment
 from .core import check_git_user
 from .exceptions import (
     NO_CHANGES,
-    NO_DATA,
-    NO_WORKING_COPY,
     SPATIAL_FILTER_PK_CONFLICT,
     InvalidOperation,
     NotFound,
     SubprocessError,
 )
+from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .repo import KartRepoFiles
 from .status import (
@@ -43,12 +42,12 @@ class CommitDiffWriter(BaseDiffWriter):
 
         if not self.spatial_filter.match_all:
             self.record_spatial_filter_stats = True
-            self.spatial_filter_pk_conflicts = {p: [] for p in self.all_ds_paths}
-            self.remove_from_wc_post_commit = {p: [] for p in self.all_ds_paths}
+            self.spatial_filter_pk_conflicts = RepoKeyFilter()
+            self.now_outside_spatial_filter = RepoKeyFilter()
         else:
             self.record_spatial_filter_stats = False
             self.spatial_filter_pk_conflicts = None
-            self.remove_from_wc_post_commit = None
+            self.now_outside_spatial_filter = None
 
     def get_repo_diff(self):
         repo_diff = super().get_repo_diff()
@@ -70,7 +69,9 @@ class CommitDiffWriter(BaseDiffWriter):
             ds_path, key, delta, old_match_result, new_match_result
         )
         if delta.new is not None and not new_match_result:
-            self.remove_from_wc_post_commit[ds_path].append(key)
+            self.now_outside_spatial_filter.recursive_set(
+                [ds_path, "feature", key], True
+            )
 
 
 @click.command()
@@ -156,19 +157,12 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
         wc_diff, commit_msg, allow_empty=allow_empty
     )
 
-    # TODO: this code shouldn't special-case tabular working copies
-    table_wc = repo.working_copy.tabular
-    table_wc.reset_tracking_table(commit_diff_writer.repo_key_filter)
-    table_wc.update_state_table_tree(new_commit.peel(pygit2.Tree).id.hex)
-
-    remove_from_wc = commit_diff_writer.remove_from_wc_post_commit
-    if remove_from_wc and any(remove_from_wc.values()):
-        if not do_json:
-            total_count = sum(len(l) for l in remove_from_wc.values())
-            click.echo(
-                f"Removing {total_count} features from the working copy that no longer match the spatial filter..."
-            )
-        table_wc.drop_features(remove_from_wc)
+    repo.working_copy.set_state_post_commit(
+        new_commit,
+        quiet=do_json,
+        mark_as_clean=commit_diff_writer.repo_key_filter,
+        now_outside_spatial_filter=commit_diff_writer.now_outside_spatial_filter,
+    )
 
     jdict = commit_obj_to_json(new_commit, repo, wc_diff)
     if do_json:

@@ -22,6 +22,9 @@ class UserStringKeyFilter(set):
         super().__init__(*args, **kwargs)
         self.match_all = match_all
 
+    def __bool__(self):
+        return self.match_all or bool(len(self))
+
     def __contains__(self, key):
         if self.match_all:
             return True
@@ -38,6 +41,25 @@ class UserStringKeyFilter(set):
     def add(self, key):
         if not self.match_all:
             super().add(key)
+
+    def recursive_len(self, max_depth=None):
+        return len(self)
+
+    def recursive_get(self, keys):
+        # Defining this allows us to call recursive_set on the parents in this way:
+        # repo_key_filter.recursive_get([dataset_path, "feature", feature_key]).
+        # This will return True iff dataset_path:feature:feature_key is contained in
+        # the overall repo_key_filter.
+        assert len(keys) == 1
+        return keys[0] in self
+
+    def recursive_set(self, keys, value):
+        # Defining this allows us to call recursive_set on the parents in this way:
+        # repo_key_filter.recursive_set([dataset_path, "feature", feature_key], True)
+        # to add the given dataset_path:feature:feature_key to the overall filter.
+        assert len(keys) == 1
+        assert value is True
+        self.add(keys[0])
 
 
 UserStringKeyFilter.MATCH_ALL = UserStringKeyFilter(match_all=True)
@@ -58,6 +80,9 @@ class KeyFilterDict(RichDict):
     def __init__(self, *args, match_all=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.match_all = match_all
+
+    def __bool__(self):
+        return self.match_all or bool(len(self))
 
     def __contains__(self, key):
         return self.match_all or super().__contains__(key)

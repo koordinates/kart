@@ -616,7 +616,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
         table_wc = KartRepo(repo_path).working_copy.tabular
 
         is_checked = False
-        orig_func = TableWorkingCopy._write_features
+        orig_func = TableWorkingCopy._write_features_from_dataset
 
         def _wrap(*args, **kwargs):
             nonlocal is_checked
@@ -630,7 +630,7 @@ def test_geopackage_locking_edit(data_working_copy, cli_runner, monkeypatch):
 
             return orig_func(*args, **kwargs)
 
-        monkeypatch.setattr(TableWorkingCopy, "_write_features", _wrap)
+        monkeypatch.setattr(TableWorkingCopy, "_write_features_from_dataset", _wrap)
 
         r = cli_runner.invoke(["checkout", H.POINTS.HEAD1_SHA])
         assert r.exit_code == 0, r

@@ -101,7 +101,7 @@ class BaseDiffWriter:
         ):
             # When generating a WC diff with a spatial filter active, we need to keep track of PK conflicts:
             self.record_spatial_filter_stats = True
-            self.spatial_filter_pk_conflicts = {p: [] for p in self.all_ds_paths}
+            self.spatial_filter_pk_conflicts = RepoKeyFilter()
 
         self.output_path = self._check_output_path(
             repo, self._normalize_output_path(output_path)
@@ -195,14 +195,16 @@ class BaseDiffWriter:
     def write_warnings_footer(self):
         """For writing any footer that is not part of the diff itself. Generally just writes warnings to stderr."""
         pk_conflicts = self.spatial_filter_pk_conflicts
-        if pk_conflicts and any(pk_conflicts.values()):
+        if pk_conflicts:
             click.secho(
                 "Warning: Some primary keys of newly-inserted features in the working copy conflict with other features "
                 "outside the spatial filter - if committed, they would overwrite those features.",
                 bold=True,
                 err=True,
             )
-            for ds_path, pk_list in pk_conflicts.items():
+            for ds_path, ds_key_filter in pk_conflicts.items():
+                # So far we only support pk conflicts in vector features:
+                pk_list = ds_key_filter.get("feature")
                 if pk_list:
                     if len(pk_list) <= 100:
                         pk_list = ", ".join(str(pk) for pk in pk_list)
@@ -339,7 +341,9 @@ class BaseDiffWriter:
         """
         if self.spatial_filter_pk_conflicts is not None:
             if not old_match_result and delta.old is not None and delta.new is not None:
-                self.spatial_filter_pk_conflicts[ds_path].append(key)
+                self.spatial_filter_pk_conflicts.recursive_set(
+                    [ds_path, "feature", key], True
+                )
 
     def _get_old_and_new_schema(self, ds_path, ds_diff):
         from kart.tabular.schema import Schema
