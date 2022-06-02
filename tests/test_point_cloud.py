@@ -106,7 +106,7 @@ def test_import_single_las(
                 stdout.splitlines()[0],
             )
 
-            assert (repo_path / "autzen" / "tiles" / "autzen.copc.laz").is_file()
+            assert (repo_path / "autzen" / "autzen.copc.laz").is_file()
 
 
 @pytest.mark.slow
@@ -176,7 +176,7 @@ def test_import_several_las(
             for x in range(4):
                 for y in range(4):
                     assert (
-                        repo_path / "auckland" / "tiles" / f"auckland_{x}_{y}.copc.laz"
+                        repo_path / "auckland" / f"auckland_{x}_{y}.copc.laz"
                     ).is_file()
 
 
@@ -246,7 +246,7 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == []
 
-        tiles_path = repo_path / "auckland" / "tiles"
+        tiles_path = repo_path / "auckland"
         assert tiles_path.is_dir()
 
         shutil.copy(

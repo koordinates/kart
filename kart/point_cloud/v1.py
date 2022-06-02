@@ -71,10 +71,9 @@ class PointCloudV1(BaseDataset):
         return rel_path if relative else self.ensure_full_path(rel_path)
 
     def tilename_to_working_copy_path(self, tilename):
-        tilename = self.tilename_from_path(
-            tilename
-        )  # Just in case it's a whole path, not just a name.
-        return f"{self.path}/tiles/{tilename}"
+        # Just in case it's a whole path, not just a name.
+        tilename = self.tilename_from_path(tilename)
+        return f"{self.path}/{tilename}"
 
     @classmethod
     def tilename_from_path(cls, tile_path):
@@ -131,11 +130,15 @@ class PointCloudV1(BaseDataset):
             self.get_tile_summary_from_pointer_blob, tile_pointer_blob
         )
 
-    def diff_to_working_copy(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
+    def diff_to_working_copy(
+        self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL
+    ):
         """Returns a diff of all changes made to this dataset in the working copy."""
         ds_diff = DatasetDiff()
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
-        ds_diff["tile"] = DeltaDiff(self.diff_tile_to_working_copy(wc_diff_context, tile_filter))
+        ds_diff["tile"] = DeltaDiff(
+            self.diff_tile_to_working_copy(wc_diff_context, tile_filter)
+        )
         return ds_diff
 
     def diff_tile_to_working_copy(self, wc_diff_context, tile_filter):
@@ -146,7 +149,7 @@ class PointCloudV1(BaseDataset):
         def wc_to_ds_path_transform(wc_path):
             return self.tilename_to_blob_path(wc_path, relative=True)
 
-        wc_tiles_path_pattern = re.escape(f"{self.path}/tiles/")
+        wc_tiles_path_pattern = re.escape(f"{self.path}/")
         wc_tile_ext_pattern = re.escape(".laz")
         wc_tiles_pattern = re.compile(
             rf"^{wc_tiles_path_pattern}[^/]+{wc_tile_ext_pattern}$"
@@ -200,7 +203,7 @@ class PointCloudV1(BaseDataset):
             for delta in tile_diff.values():
                 if delta.type in ("insert", "update"):
                     tilename = delta.new_key
-                    path_in_wc = self.repo.workdir_file(f"{self.path}/tiles/{tilename}")
+                    path_in_wc = self.repo.workdir_file(f"{self.path}/{tilename}")
                     assert path_in_wc.is_file()
 
                     oid = delta.new_value["oid"]

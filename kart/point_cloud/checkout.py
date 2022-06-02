@@ -32,7 +32,7 @@ def checkout_point_clouds(repo):
             continue
 
         reset_index_paths.append(dataset.path)
-        wc_tiles_dir = repo.workdir_path / dataset.path / "tiles"
+        wc_tiles_dir = repo.workdir_path / dataset.path
         (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
         for tilename, lfs_path in dataset.tilenames_with_lfs_paths():
