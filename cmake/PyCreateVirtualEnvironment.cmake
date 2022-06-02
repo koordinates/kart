@@ -61,7 +61,7 @@ function(CreateVirtualEnvironment TARGET)
     set(ARG_ENV_NAME ${TARGET})
   endif()
 
-  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_package(Python3 REQUIRED COMPONENTS Development Interpreter)
 
   if(ARG_PREFIX)
     if(IS_ABSOLUTE ${ARG_PREFIX})
@@ -111,6 +111,7 @@ function(CreateVirtualEnvironment TARGET)
   add_custom_command(
     OUTPUT ${CFG_FILE}
     COMMAND ${Python3_EXECUTABLE} -m venv --clear ${VENV}
+    DEPENDS Python3::Python
     COMMENT "${ARG_ENV_NAME}: creating virtualenv at ${VENV}...")
   set(OUTPUT_FILE ${VENV}/.requirements)
   add_custom_command(
