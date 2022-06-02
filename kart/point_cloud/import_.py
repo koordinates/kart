@@ -33,6 +33,8 @@ from kart.tabular.version import (
     SUPPORTED_VERSIONS,
     extra_blobs_for_version,
 )
+from kart.working_copy import PartType
+
 
 L = logging.getLogger(__name__)
 
@@ -48,8 +50,15 @@ L = logging.getLogger(__name__)
 @click.option(
     "--dataset-path", "ds_path", help="The dataset's path once imported", required=True
 )
+@click.option(
+    "--checkout/--no-checkout",
+    "do_checkout",
+    is_flag=True,
+    default=True,
+    help="Whether to create a working copy once the import is finished, if no working copy exists yet.",
+)
 @click.argument("sources", metavar="SOURCES", nargs=-1, required=True)
-def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
+def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
     """
     Experimental command for importing point cloud datasets. Work-in-progress.
     Will eventually be merged with the main `import` command.
@@ -161,14 +170,12 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, sources):
             ensure_bytes(normalise_wkt(first_tile_metadata["crs"])),
         )
 
-    # TODO - this should be merged into the reset_to_head logic below.
-    click.echo("Updating working copy...")
-    from kart.point_cloud.checkout import checkout_point_clouds
-
-    checkout_point_clouds(repo)
-
+    parts_to_create = [PartType.WORKDIR] if do_checkout else []
     # During imports we can keep old changes since they won't conflict with newly imported datasets.
-    repo.working_copy.reset_to_head(repo_key_filter=RepoKeyFilter.datasets([ds_path]))
+    repo.working_copy.reset_to_head(
+        repo_key_filter=RepoKeyFilter.datasets([ds_path]),
+        create_parts_if_missing=parts_to_create,
+    )
 
 
 def _format_array(array):

@@ -17,11 +17,11 @@ class WCDiffContext:
     but it is mostly useful for caching the results of diff operations that could be useful to
     more than a single dataset, but must have a shorter-lived scope than the repository itself.
 
-    The operation of diffing the user's worktree with the worktree index is just such an operation -
+    The operation of diffing the user's workdir with the workdir index is just such an operation -
     - we don't want to run it up front, in case there are no datasets that need this info
     - we want to run it as soon a the first dataset needs this info, then cache the result
     - we want the result to stay cached for the duration of the diff operation, but no longer
-      (in eg a long-running test, there might be several diffs run and the worktree might change)
+      (in eg a long-running test, there might be several diffs run and the workdir might change)
     """
 
     def __init__(self, repo, all_ds_paths=None):
@@ -41,7 +41,7 @@ class WCDiffContext:
 
     @property
     def workdir_index_path(self):
-        return self.repo.gitdir_file("worktree-index")
+        return self.repo.gitdir_file("workdir-index")
 
     @functools.lru_cache(maxsize=1)
     def workdir_diff(self):
@@ -159,7 +159,7 @@ def get_dataset_diff(
     include_wc_diff - if True the diff generated will be from base_rs<>working_copy
         (in which case, target_rs must be the HEAD commit which the working copy is tracking).
     wc_diff_context - reusing the same WCDiffContext for every dataset that is being diffed at one time
-        is more efficient as it can save pygit2.Index.diff_to_worktree being called multiple times
+        is more efficient as it can save pygit2.Index.diff_to_workdir being called multiple times
     ds_filter - controls which PK values match and are included in the diff.
     """
     base_target_diff = None

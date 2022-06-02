@@ -13,7 +13,7 @@ from .output_util import InputMode, get_input_mode
 from .promisor_utils import get_partial_clone_envelope
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .structs import CommitWithReference
-from kart.tabular.working_copy import TableWorkingCopyStatus
+from .working_copy import PartType
 
 _DISCARD_CHANGES_HELP_MESSAGE = (
     "Commit these changes first (`kart commit`) or"
@@ -155,15 +155,16 @@ def checkout(
     TableWorkingCopy.ensure_config_exists(repo)
     repo.set_head(head_ref)
 
-    # TODO - this shouldn't special-case the tabular part of the working copy.
-    parts_to_create = ["tabular"]
+    parts_to_create = (
+        repo.datasets().working_copy_part_types() if not repo.head_is_unborn else ()
+    )
 
     if do_switch_commit or do_switch_spatial_filter or discard_changes:
         repo.working_copy.reset_to_head(
             rewrite_full=do_switch_spatial_filter,
             create_parts_if_missing=parts_to_create,
         )
-    else:
+    elif parts_to_create:
         # Possibly we needn't auto-create any working copy here at all, but lots of tests currently depend on it.
         repo.working_copy.create_parts_if_missing(
             parts_to_create, reset_to=repo.head_commit
@@ -431,6 +432,10 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
     If no location is supplied, the location from the repo config at "kart.workingcopy.location" will be used.
     If no location is configured, a GPKG working copy will be created with a default name based on the repository name.
     """
+
+    # TODO - this deals with just the tabular WC part, which is probably fine, but it means it is now misnamed.
+
+    from kart.tabular.working_copy import TableWorkingCopyStatus
     from kart.tabular.working_copy.base import TableWorkingCopy
 
     repo = ctx.obj.repo
@@ -520,7 +525,7 @@ def create_workingcopy(ctx, delete_existing, discard_changes, new_wc_loc):
                 old_wc.delete(keep_db_schema_if_possible=keep_db_schema_if_possible)
 
     TableWorkingCopy.write_config(repo, new_wc_loc)
-    repo.working_copy.reset_to_head(create_parts_if_missing=["tabular"])
+    repo.working_copy.reset_to_head(create_parts_if_missing=[PartType.TABULAR])
 
     # This command is used in tests and by other commands, so we have to be extra careful to
     # tidy up properly - otherwise, tests can fail (on Windows especially) due to PermissionError.

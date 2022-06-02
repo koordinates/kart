@@ -2,7 +2,6 @@ import logging
 from collections import deque
 import functools
 import re
-import os
 from typing import Optional
 
 import click
@@ -22,6 +21,7 @@ from .tabular.schema import Schema
 from .tabular.version import extra_blobs_for_version, dataset_class_for_version
 from .structs import CommitWithReference
 from .unsupported_dataset import UnsupportedDataset
+from .working_copy import ALL_PART_TYPES
 
 L = logging.getLogger("kart.structure")
 
@@ -367,18 +367,6 @@ class RepoStructure:
                 parents,
             )
 
-        if os.environ.get("X_KART_POINT_CLOUDS"):
-            from kart.point_cloud.v1 import PointCloudV1
-            from kart.point_cloud.checkout import reset_worktree_index
-
-            # Update the worktree-index to match the actual current worktree.
-            # TODO - update that part of the index that was actually changed - don't just assume
-            # we committed all outstanding changes in all point-cloud datasets.
-            reset_index_paths = [
-                ds.path for ds in self.datasets() if isinstance(ds, PointCloudV1)
-            ]
-            reset_worktree_index(self.repo, reset_index_paths)
-
         L.info(f"Commit: {new_commit.id.hex}")
         return new_commit
 
@@ -491,3 +479,16 @@ class Datasets:
                 ds = self._get_for_tree(child, child_path)
                 if ds is not None:
                     yield ds
+
+    def working_copy_part_types(self):
+        """Returns the types of working copy parts that are needed to check out these datasets."""
+        result = set()
+        for ds in self:
+            if ds.WORKING_COPY_PART_TYPE:
+                result.add(ds.WORKING_COPY_PART_TYPE)
+            if result == ALL_PART_TYPES:
+                return ALL_PART_TYPES
+        return result
+
+    def all_paths(self):
+        return (ds.path for ds in self)

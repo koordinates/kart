@@ -17,6 +17,7 @@ from .spatial_filter import SpatialFilterString, spatial_filter_help_text
 from .tabular.import_source import TableImportSource
 from .tabular.ogr_import_source import FORMAT_TO_OGR_MAP
 from .tabular.pk_generation import PkGeneratingTableImportSource
+from .working_copy import PartType
 
 
 def list_import_formats(ctx):
@@ -235,13 +236,6 @@ def import_(
     repo = ctx.obj.repo
     check_git_user(repo)
 
-    if not do_checkout and repo.working_copy is not None:
-        click.echo(
-            "Warning: '--no-checkout' has no effect as a working copy already exists",
-            err=True,
-        )
-        do_checkout = True
-
     base_import_source = TableImportSource.open(source)
     if all_tables:
         tables = base_import_source.get_tables().keys()
@@ -344,7 +338,7 @@ def import_(
     )
 
     # During imports we can keep old changes since they won't conflict with newly imported datasets.
-    parts_to_create = ["tabular"] if do_checkout else []
+    parts_to_create = [PartType.TABULAR] if do_checkout else []
     repo.working_copy.reset_to_head(
         repo_key_filter=RepoKeyFilter.datasets(new_ds_paths),
         create_parts_if_missing=parts_to_create,
@@ -481,7 +475,7 @@ def init(
             message=message,
         )
         if do_checkout:
-            repo.working_copy.reset_to_head(create_parts_if_missing=["tabular"])
+            repo.working_copy.reset_to_head(create_parts_if_missing=[PartType.TABULAR])
 
     else:
         click.echo(

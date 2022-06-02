@@ -4,6 +4,8 @@ import sys
 import click
 import pygit2
 
+from .base_diff_writer import BaseDiffWriter
+from .key_filters import RepoKeyFilter
 from .conflicts_writer import BaseConflictsWriter
 from .crs_util import make_crs
 from .exceptions import CrsError, GeometryError
@@ -12,6 +14,59 @@ from .merge_util import MergeContext, merge_status_to_text
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .spatial_filter import SpatialFilter
+
+
+class StatusDiffWriter(BaseDiffWriter):
+    """
+    Counts inserts, updates, and deletes for each part of each dataset.
+    Updates where the old value of the feature is outside the spatial don't count towards updates - instead, they are
+    considered to be primaryKeyConflicts (that is, the user is probably accidentally reusing existing primary keys
+    of the features outside the filter that they can't see.)
+    """
+
+    def __init__(self, repo):
+        super().__init__(repo)
+
+        if not self.spatial_filter.match_all:
+            self.record_spatial_filter_stats = True
+            self.spatial_filter_pk_conflicts = RepoKeyFilter()
+        else:
+            self.record_spatial_filter_stats = False
+            self.spatial_filter_pk_conflicts = None
+
+    def get_type_counts(self):
+        """
+        Gets a summary of changes - broken down first by dataset, then by dataset-part, then by changetype
+        - one of "insert", "update", "delete" or unusually, "primaryKeyConflict".
+        """
+        repo_type_counts = {}
+
+        for ds_path in self.all_ds_paths:
+            ds_diff = self.get_dataset_diff(ds_path)
+            ds_type_counts = ds_diff.type_counts()
+            if not ds_type_counts:
+                continue
+
+            repo_type_counts[ds_path] = ds_type_counts
+            feature_type_counts = ds_type_counts.get("feature")
+
+            if (
+                self.record_spatial_filter_stats
+                and feature_type_counts
+                and feature_type_counts.get("updates")
+            ):
+                self.record_spatial_filter_stats_for_dataset(ds_path, ds_diff)
+                pk_conflicts = self.spatial_filter_pk_conflicts.recursive_get(
+                    [ds_path, "feature"]
+                )
+                if pk_conflicts:
+                    pk_conflicts_count = len(pk_conflicts)
+                    feature_type_counts["primaryKeyConflicts"] = pk_conflicts_count
+                    feature_type_counts["updates"] -= pk_conflicts_count
+                    if not feature_type_counts["updates"]:
+                        del feature_type_counts["updates"]
+
+        return repo_type_counts
 
 
 @click.command()
@@ -73,62 +128,37 @@ def get_branch_status_json(repo):
 
 
 def get_working_copy_status_json(repo):
-    if repo.is_empty:
+    if repo.is_bare:
         return None
 
-    # TODO: this code shouldn't special-case tabular working copies.
-    # Also, the JSON output should be clear when it is talking about the tabular working copy vs other parts.
+    # TODO: this JSON needs to be updated now that the WC has more than one part.
     table_wc = repo.working_copy.tabular
-    if not table_wc:
-        return None
+    table_wc_path = table_wc.clean_location if table_wc else None
 
-    output = {"path": table_wc.clean_location, "changes": None}
+    result = {"path": table_wc_path, "changes": get_diff_status_json(repo)}
 
-    if os.environ.get("X_KART_POINT_CLOUDS"):
-        from kart import diff_util
-
-        rs = repo.structure()
-        wc_diff = diff_util.get_repo_diff(rs, rs, include_wc_diff=True)
-    else:
-        wc_diff = table_wc.diff_repo_to_working_copy()
-    if wc_diff:
-        output["changes"] = get_diff_status_including_pk_conflicts_json(wc_diff, repo)
-
-    return output
-
-
-def get_diff_status_json(wc_diff):
-    """Returns a structured count of all the inserts, updates, and deletes for meta items / features in each dataset."""
-    return wc_diff.type_counts()
-
-
-def get_diff_status_including_pk_conflicts_json(wc_diff, repo):
-    """
-    Like get_diff_status_json, but update deltas where the old value is outside the repo's spatial filter are *also*
-    considered to be primaryKeyConflicts (that is, the user is probably accidentally reusing existing primary keys
-    of the features outside the filter that they can't see.)
-    """
-    result = get_diff_status_json(wc_diff)
-    if repo.spatial_filter.match_all:
-        # There can be not primaryKeyConflicts if there's no spatial filter.
-        return result
-
-    from kart.base_diff_writer import BaseDiffWriter
-
-    diff_writer = BaseDiffWriter(repo)
-    for ds_path, ds_diff in wc_diff.items():
-        old_filter, new_filter = diff_writer.get_spatial_filters(ds_path, ds_diff)
-        conflicts = 0
-        for d in ds_diff.get("feature", {}).values():
-            if d.type == "update" and not old_filter.matches_delta_value(d.old):
-                conflicts += 1
-        if conflicts:
-            result[ds_path]["feature"]["primaryKeyConflicts"] = conflicts
-            result[ds_path]["feature"]["updates"] -= conflicts
-            if not result[ds_path]["feature"]["updates"]:
-                del result[ds_path]["feature"]["updates"]
+    # If we're not doing experimental point clouds, keep the JSON how it was in Kart 0.11 and earlier...
+    if not os.environ.get("X_KART_POINT_CLOUDS"):
+        # Don't show any WC status at all if there's no "path" for the tabular part.
+        if result["path"] is None:
+            return None
+        # If there are no changes, show changes null rather than an empty dict.
+        if not result["changes"]:
+            result["changes"] = None
 
     return result
+
+
+def get_diff_status_json(repo):
+    """
+    Returns a structured count of all the inserts, updates, and deletes (and primaryKeyConflicts) for meta items
+    or  features in each dataset.
+    """
+    if not repo.working_copy.exists():
+        return {}
+
+    status_diff_writer = StatusDiffWriter(repo)
+    return status_diff_writer.get_type_counts()
 
 
 def status_to_text(jdict):
@@ -247,7 +277,7 @@ def working_copy_status_to_text(jdict):
     if jdict is None:
         return 'No working copy\n  (use "kart checkout" to create a working copy)\n'
 
-    if jdict["changes"] is None:
+    if not jdict["changes"]:
         return "Nothing to commit, working copy clean"
 
     return (
@@ -297,7 +327,7 @@ def get_branch_status_message(repo):
 
 def get_diff_status_message(diff):
     """Given a diff.Diff, return a status message describing it."""
-    return diff_status_to_text(get_diff_status_json(diff))
+    return diff_status_to_text(diff.type_counts())
 
 
 def _pf(count):

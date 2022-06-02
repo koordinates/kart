@@ -1,9 +1,12 @@
 import click
+from enum import Enum, auto
 import pygit2
+import os
 
 from kart.exceptions import (
     InvalidOperation,
     NotFound,
+    NotYetImplemented,
     UNCOMMITTED_CHANGES,
     NO_DATA,
     NO_WORKING_COPY,
@@ -12,6 +15,16 @@ from kart.key_filters import RepoKeyFilter
 
 # General code for working copies.
 # Nothing specific to tabular working copies, nor file-based working copies.
+
+
+class PartType(Enum):
+    """Different types of working copy part currently supported by Kart."""
+
+    TABULAR = auto()  # Table-based / vector eg GPKG or database server.
+    WORKDIR = auto()  # File-based.
+
+
+ALL_PART_TYPES = set(PartType)
 
 
 class WorkingCopyDirty(Exception):
@@ -42,6 +55,10 @@ class WorkingCopy:
     def __init__(self, repo):
         self.repo = repo
 
+    def exists(self):
+        """Returns True if any part of the WC exists - see assert_exists below."""
+        return any(self.parts())
+
     def assert_exists(self, error_message=None):
         """
         Make sure that the working copy exists, print the provided error message if it does not, plus some extra context.
@@ -51,7 +68,7 @@ class WorkingCopy:
         That is what this function is for.
         """
 
-        if any(self.parts()):
+        if self.exists():
             return
 
         error_message = f"{error_message}:\n" if error_message else ""
@@ -98,8 +115,9 @@ class WorkingCopy:
                 yield part
 
     def _all_parts_inluding_nones(self):
-        # TODO - add more parts here. Next part to be added is the file-based working copy for point clouds.
         yield self.tabular
+        if os.environ.get("X_KART_POINT_CLOUDS"):
+            yield self.workdir
 
     @property
     def tabular(self):
@@ -107,6 +125,13 @@ class WorkingCopy:
         if not hasattr(self, "_tabular"):
             self._tabular = self.get_tabular()
         return self._tabular
+
+    @property
+    def workdir(self):
+        """Return the tabular working copy of the Kart repository, or None if it does not exist."""
+        if not hasattr(self, "_workdir"):
+            self._workdir = self.get_workdir()
+        return self._workdir
 
     def get_tabular(
         self,
@@ -128,6 +153,15 @@ class WorkingCopy:
             allow_unconnectable=allow_unconnectable,
         )
 
+    def get_workdir(self, allow_uncreated=False, allow_invalid_state=False):
+        from kart.workdir import FileSystemWorkingCopy
+
+        return FileSystemWorkingCopy.get(
+            self.repo,
+            allow_uncreated=allow_uncreated,
+            allow_invalid_state=allow_invalid_state,
+        )
+
     def create_parts_if_missing(self, parts_to_create, reset_to=DONT_RESET):
         """
         Creates the named parts if they are missing and can be created. Returns any created parts themselves.
@@ -138,9 +172,13 @@ class WorkingCopy:
         created_parts = []
 
         for part_type in parts_to_create:
-            assert part_type == "tabular"
-            if self.create_and_initialise_tabular():
-                created_parts.append(self.tabular)
+            assert part_type in PartType
+            if part_type == PartType.TABULAR:
+                if self.create_and_initialise_tabular():
+                    created_parts.append(self.tabular)
+            elif part_type == PartType.WORKDIR:
+                if self.create_and_initialise_workdir():
+                    created_parts.append(self.workdir)
 
         if reset_to != self.DONT_RESET:
             for p in created_parts:
@@ -163,6 +201,20 @@ class WorkingCopy:
             return True
         return False
 
+    def create_and_initialise_workdir(self):
+        """Create the workdir part of the working copy if it currently doesn't exist."""
+        from kart.workdir import FileSystemWorkingCopyStatus
+
+        w = self.get_workdir(allow_uncreated=True)
+        if w and not (w.status() == FileSystemWorkingCopyStatus.CREATED):
+            click.echo(
+                f"Creating {w.WORKING_COPY_TYPE_NAME} working copy in {w.path.stem} folder"
+            )
+            w.create_and_initialise()
+            self._workdir = w
+            return True
+        return False
+
     def delete_tabular(self):
         """
         Deletes the tabular working copy - from disk or from a server - and removes the cached reference to it.
@@ -171,7 +223,17 @@ class WorkingCopy:
         t = self.get_tabular(allow_invalid_state=True)
         if t:
             t.delete()
-        del self._tabular
+        self._safe_delattr("_tabular")
+
+    def delete_workdir(self):
+        w = self.get_workdir(allow_invalid_state=True)
+        if w:
+            w.delete()
+        self._safe_delattr("_workdir")
+
+    def _safe_delattr(self, name):
+        if hasattr(self, name):
+            delattr(self, name)
 
     def reset_to_head(
         self,
@@ -342,3 +404,38 @@ class WorkingCopyPart:
         now_outside_spatial_filter=None,
     ):
         raise NotImplementedError()
+
+    def _check_for_unsupported_structural_changes(
+        self,
+        structural_changes,
+        is_new_target_tree,
+        track_changes_as_dirty,
+        repo_key_filter,
+    ):
+        """
+        Because we have a mixed strategy for keeping track of changes - sometimes we compare the working-copy
+        directly to the original (generally for meta changes) and sometimes we maintain an index file or a
+        list of dirty features - we don't currently support every possible combination of resets.
+        """
+        # TODO - the problem is that the tracking table is no longer accurate if we destroy and recreate the
+        # whole table, but with enough extra logic, we could actually update it to be accurate.
+        if track_changes_as_dirty and structural_changes and is_new_target_tree:
+            # We don't yet support tracking changes as dirty if we delete, create, or rewrite an entire table.
+            structural_changes_text = "\n".join(structural_changes)
+            raise NotYetImplemented(
+                "Sorry, this operation is not yet supported when there are structural changes."
+                f" Structural changes are affecting:\n{structural_changes_text}"
+            )
+
+        unsupported_filters = set()
+        for ds_path in structural_changes:
+            ds_filter = repo_key_filter[ds_path]
+            feature_filter = ds_filter.get("feature", ds_filter.child_type())
+            if not ds_filter.match_all and not feature_filter.match_all:
+                unsupported_filters.add(ds_path)
+
+        if unsupported_filters:
+            raise NotYetImplemented(
+                "Sorry, this type of filter is not yet supported when there are structural changes."
+                f" Unfilterable structural changes are affecting:\n{unsupported_filters}"
+            )
