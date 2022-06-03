@@ -40,6 +40,7 @@ try {
                 --azure-key-vault-client-id="$Env:SIGN_AZURE_CLIENTID" `
                 --azure-key-vault-client-secret="$Env:SIGN_AZURE_CLIENTSECRET" `
                 --azure-key-vault-certificate="$Env:SIGN_AZURE_CERTIFICATE" `
+                --azure-key-vault-tenant-id="$Env:SIGN_AZURE_TENANTID" `
                 --description-url="https://kartproject.org" `
                 --description="Kart CLI" `
                 --timestamp-rfc3161="$TS" `
