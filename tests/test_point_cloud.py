@@ -344,6 +344,12 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_
             '+                                     size = 2319',
         ]
 
+        r = cli_runner.invoke(["show", "-ojson"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["show", "-ojson-lines"])
+        assert r.exit_code == 0, r.stderr
+
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == []

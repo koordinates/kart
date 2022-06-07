@@ -308,7 +308,7 @@ class JsonLinesDiffWriter(BaseDiffWriter):
                     "type": "metaInfo",
                     "dataset": ds_path,
                     "key": "schema.json",
-                    "value": dataset.schema.to_column_dicts(),
+                    "value": dataset.get_meta_item("schema.json"),
                 }
             )
 
