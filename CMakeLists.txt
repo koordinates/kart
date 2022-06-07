@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
   KART
-  VERSION 0.11.2
+  VERSION 0.11.4
   DESCRIPTION "Version control for geospatial data"
   HOMEPAGE_URL "https://kartproject.org"
   LANGUAGES C CXX)

@@ -4,9 +4,12 @@ Please note that compatibility for 0.x releases (software or repositories) isn't
 
 _When adding new entries to the changelog, please include issue/PR numbers wherever possible._
 
-## 0.11.2 (UNRELEASED)
+## 0.11.4 (UNRELEASED)
 
 - Changed format of feature IDs in GeoJSON output to be more informative and consistent. [#135](https://github.com/koordinates/kart/issues/135)
+
+## 0.11.3
+
 - Added support for `--output` option to `kart conflicts`. [#135](https://github.com/koordinates/kart/issues/135)
 - Bugfix: Better error message on using `kart conflicts -ogeojson` for `meta-item` conflicts. [#515](https://github.com/koordinates/kart/issues/515)
 - Removed the older `upgrade-to-tidy` and `upgrade-to-kart` features which were only relevant to Sno (predecessor of Kart). [[#585](https://github.com/koordinates/kart/issues/585]]

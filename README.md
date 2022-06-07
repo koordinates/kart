@@ -7,27 +7,27 @@
 
 ## Installing
 
-### Upgrading to v0.11.1
+### Upgrading to v0.11.3
 
-See the [v0.11.1 release notes](https://github.com/koordinates/kart/releases/tag/v0.11.1) for changes, upgrading, and compatibility notes.
+See the [v0.11.3 release notes](https://github.com/koordinates/kart/releases/tag/v0.11.3) for changes, upgrading, and compatibility notes.
 
 ### Windows
 
-Download the .msi installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.1).
+Download the .msi installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.3).
 
 > 💡 If Windows Defender SmartScreen says "it prevented an unrecognized app from starting" after downloading, you'll need to click "Run anyway".
 
 ### macOS
 
-Download the .pkg installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.1);
+Download the .pkg installer from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.3);
 
 Or use [Homebrew](https://brew.sh) to install: `brew install koordinates/kart/kart`
 
 ### Linux
 
-For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.1) and install via `dpkg -i kart_*.deb`.
+For Debian/Ubuntu-based distributions, download the .deb package from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.3) and install via `dpkg -i kart_*.deb`.
 
-For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.1) and install via `rpm -i kart-*.rpm`.
+For RPM-based distributions, download the .rpm package from the [release page](https://github.com/koordinates/kart/releases/tag/v0.11.3) and install via `rpm -i kart-*.rpm`.
 
 ### Source
 
