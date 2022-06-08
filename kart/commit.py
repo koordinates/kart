@@ -7,7 +7,6 @@ import sys
 from datetime import datetime, timedelta, timezone
 
 import click
-import pygit2
 
 from . import is_windows
 from .base_diff_writer import BaseDiffWriter
@@ -26,7 +25,6 @@ from .repo import KartRepoFiles
 from .status import (
     diff_status_to_text,
     get_branch_status_message,
-    get_diff_status_json,
     get_diff_status_message,
 )
 from .timestamps import (
@@ -52,13 +50,9 @@ class CommitDiffWriter(BaseDiffWriter):
     def get_repo_diff(self):
         repo_diff = super().get_repo_diff()
 
-        if not self.record_spatial_filter_stats:
-            return repo_diff
-
-        for ds_path, ds_diff in repo_diff.items():
-            # Applies the spatial filter but ignores the result, just so that spatial_filter_stats are recorded.
-            for _ in self.filtered_ds_feature_deltas(ds_path, ds_diff):
-                pass
+        if self.record_spatial_filter_stats:
+            for ds_path, ds_diff in repo_diff.items():
+                self.record_spatial_filter_stats_for_dataset(ds_path, ds_diff)
 
         return repo_diff
 
@@ -258,7 +252,7 @@ def commit_obj_to_json(commit, repo, wc_diff):
             "committer": commit.committer.email,
             "branch": branch,
             "message": commit.message,
-            "changes": get_diff_status_json(wc_diff),
+            "changes": wc_diff.type_counts(),
             "commitTime": datetime_to_iso8601_utc(commit_time),
             "commitTimeOffset": timedelta_to_iso8601_tz(commit_time_offset),
         }

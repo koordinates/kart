@@ -280,6 +280,15 @@ class BaseDiffWriter:
 
         yield from ds_diff["feature"].sorted_items()
 
+    def record_spatial_filter_stats_for_dataset(self, ds_path, ds_diff):
+        """
+        Goes through the given dataset-diff and checks which features match the spatial filter by calling
+        record_spatial_filter_stat on each one.
+        No need to call this if filtered_ds_feature_deltas is called, which does this as a side effect.
+        """
+        for _ in self.filtered_ds_feature_deltas(ds_path, ds_diff):
+            pass
+
     def filtered_ds_feature_deltas(self, ds_path, ds_diff):
         """
         Yields the key, delta for only those feature-deltas from the given dataset diff that match

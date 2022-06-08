@@ -4,6 +4,7 @@ import time
 
 from kart.base_dataset import BaseDataset
 from kart.spatial_filter import SpatialFilter
+from kart.working_copy import PartType
 
 from .import_source import TableImportSource
 
@@ -34,6 +35,8 @@ class TableDataset(BaseDataset, TableImportSource):
 
     # Paths are all defined relative to the inner path:
     FEATURE_PATH = "feature/"
+
+    WORKING_COPY_PART_TYPE = PartType.TABULAR
 
     NUM_FEATURES_PER_PROGRESS_LOG = 10_000
 

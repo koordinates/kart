@@ -314,14 +314,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     if not no_op and not conflicts:
         # Update working copy.
         # TODO - maybe lock the working copy during a merge?
-        # TODO: this code shouldn't special-case tabular working copies.
         repo.working_copy.reset(repo[jdict["commit"]], quiet=do_json)
-
-        # TODO: this code shouldn't special-case tabular working copies.
-        if os.environ.get("X_KART_POINT_CLOUDS"):
-            from kart.point_cloud.checkout import checkout_point_clouds
-
-            checkout_point_clouds(repo)
 
     if do_json:
         dump_json_output({"kart.merge/v1": jdict}, sys.stdout)

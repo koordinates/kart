@@ -39,7 +39,9 @@ class DatasetDiffMixin:
         )
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
-    def diff_to_working_copy(self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL):
+    def diff_to_working_copy(
+        self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL
+    ):
         """
         Generates a diff from self to the working-copy.
         It may be the case that only the dataset-revision used to write the working
@@ -135,7 +137,7 @@ class DatasetDiffMixin:
             new_value_transform=get_decoder(new, value_decoder_method),
         )
 
-    def generate_wc_diff_from_worktree_index(
+    def generate_wc_diff_from_workdir_index(
         self,
         wc_diff_context,
         key_filter=UserStringKeyFilter.MATCH_ALL,
@@ -149,7 +151,7 @@ class DatasetDiffMixin:
     ):
         """
         A pattern for datasets to use for diffing their contents against the working copy.
-        1. Uses the worktree-index in wc_diff_context to get a list of changes made to the working copy,
+        1. Uses the workdir-index in wc_diff_context to get a list of changes made to the working copy,
            as a pygit2.Diff object.
         2. Go through all the resulting (insert, update, delete) deltas
         3. For each path in the working copy, find the associated path in the dataset (dataset paths are always

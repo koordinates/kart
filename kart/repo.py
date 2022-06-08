@@ -146,7 +146,7 @@ class KartRepo(pygit2.Repository):
     """
     A valid pygit2.Repository, since all Kart repos are also git repos - but with some added functionality.
     Ensures the git directory structure is one of the two styles supported by Kart - "bare-style" or "tidy-style".
-    For tidy-style, prevents worktree-related git commands from working by using a "locked git index".
+    For tidy-style, prevents workdir-related git commands from working by using a "locked git index".
     Helps set up Kart specific config, and adds support for pathlib Paths.
 
     The two styles of Kart repos:

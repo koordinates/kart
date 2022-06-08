@@ -15,6 +15,7 @@ from kart.lfs_util import (
     dict_to_pointer_file_bytes,
 )
 from kart.serialise_util import hexhash
+from kart.working_copy import PartType
 
 
 class PointCloudV1(BaseDataset):
@@ -23,6 +24,8 @@ class PointCloudV1(BaseDataset):
     VERSION = 1
     DATASET_TYPE = "point-cloud"
     DATASET_DIRNAME = ".point-cloud-dataset.v1"
+
+    WORKING_COPY_PART_TYPE = PartType.WORKDIR
 
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
     TILE_PATH = "tile/"
@@ -144,7 +147,7 @@ class PointCloudV1(BaseDataset):
     def diff_tile_to_working_copy(self, wc_diff_context, tile_filter):
         """Yields deltas of all the changes the user has made to tiles in the working copy."""
 
-        # Dataset-paths have a different structure to worktree paths - the worktree index will have only worktree paths,
+        # Dataset-paths have a different structure to workdir paths - the workdir index will have only workdir paths,
         # and we need to find the related dataset paths.
         def wc_to_ds_path_transform(wc_path):
             return self.tilename_to_blob_path(wc_path, relative=True)
@@ -155,7 +158,7 @@ class PointCloudV1(BaseDataset):
             rf"^{wc_tiles_path_pattern}[^/]+{wc_tile_ext_pattern}$"
         )
 
-        yield from self.generate_wc_diff_from_worktree_index(
+        yield from self.generate_wc_diff_from_workdir_index(
             wc_diff_context,
             wc_path_filter_pattern=wc_tiles_pattern,
             key_filter=tile_filter,

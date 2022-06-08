@@ -41,7 +41,6 @@ MODULE_COMMANDS = {
     "query": {"query"},
     "upgrade": {"upgrade"},
     "point_cloud.import_": {"point-cloud-import"},
-    "point_cloud.checkout": {"point-cloud-checkout"},
 }
 
 

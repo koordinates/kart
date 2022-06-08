@@ -183,6 +183,8 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
     DATASET_DIRNAME = None  # Example: ".hologram-dataset.v1".
     # (This should match the pattern DATASET_DIRNAME_PATTERN in kart.structure.)
 
+    WORKING_COPY_PART_TYPE = None  # Example: working_copy.PartType.TABULAR
+
     # Paths are generally relative to self.inner_tree, but datasets may choose to put extra data in the outer
     # tree also where it will eventually be user-visible (once attachments are fully supported).
 

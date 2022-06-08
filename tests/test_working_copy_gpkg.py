@@ -995,7 +995,8 @@ def test_edit_string_pks(data_working_copy, cli_runner):
 
 def test_reset_transaction(data_working_copy, cli_runner, edit_points):
     with data_working_copy("points") as (repo_path, wc_path):
-        table_wc = KartRepo(repo_path).working_copy.tabular
+        repo = KartRepo(repo_path)
+        table_wc = repo.working_copy.tabular
         with table_wc.session() as sess:
             edit_points(sess)
 
@@ -1036,6 +1037,10 @@ def test_reset_transaction(data_working_copy, cli_runner, edit_points):
             sess.execute(
                 """ALTER TABLE "gpkg_kart_state_backup" RENAME TO "gpkg_kart_state";"""
             )
+
+        # FIXME - although we roll-back the WC transaction on failure, we don't roll back any other WC parts
+        # or the change to HEAD, so the Kart repo still ends up in an inconsistent state. Fix that now:
+        repo.set_head("refs/heads/main")
 
         r = cli_runner.invoke(["status", "--output-format=json"])
         assert r.exit_code == 0, r.stderr

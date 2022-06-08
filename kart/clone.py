@@ -8,6 +8,7 @@ import click
 from .exceptions import InvalidOperation
 from .repo import KartRepo, PotentialRepo
 from .spatial_filter import SpatialFilterString, spatial_filter_help_text
+from .working_copy import PartType
 
 
 def get_directory_from_url(url, is_bare):
@@ -172,16 +173,9 @@ def clone(
         spatial_filter_after_clone=spatial_filter_after_clone,
     )
 
-    # Create working copy, if needed.
-    # TODO: this shouldn't special case the tabular working copy.
-    parts_to_create = ["tabular"] if do_checkout else []
-    repo.working_copy.reset_to_head(create_parts_if_missing=parts_to_create)
-
     # Experimental point-cloud datasets:
-    # TODO - eventually most of this should be performed in reset_to_head above.
     if os.environ.get("X_KART_POINT_CLOUDS"):
         from kart.lfs_util import install_lfs_hooks
-        from kart.point_cloud.checkout import checkout_point_clouds
 
         lfs_override = os.environ.get("X_KART_SET_LFS_FOR_NEW_REPOS")
         if lfs_override:
@@ -189,4 +183,11 @@ def clone(
 
         install_lfs_hooks(repo)
         repo.invoke_git("lfs", "fetch")
-        checkout_point_clouds(repo)
+
+    # Create working copy, if needed.
+    parts_to_create = (
+        repo.datasets().working_copy_part_types()
+        if do_checkout and not repo.head_is_unborn
+        else ()
+    )
+    repo.working_copy.reset_to_head(create_parts_if_missing=parts_to_create)

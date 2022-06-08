@@ -1094,7 +1094,7 @@ class TableWorkingCopy(WorkingCopyPart):
         Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
 
         Any existing changes which match the repo_key_filter will be discarded. Existing changes which do not
-        math the repo_key_filter will be kept.
+        match the repo_key_filter will be kept.
 
         If track_changes_as_dirty=False (the default) the tree ID in the kart_state table gets set to the
         new tree ID and the tracking table is left empty. If it is True, the old tree ID is kept and the
@@ -1196,27 +1196,13 @@ class TableWorkingCopy(WorkingCopyPart):
         )
 
         structural_changes = ds_inserts | ds_deletes
-        if track_changes_as_dirty and structural_changes and base_tree != target_tree:
-            # We don't yet support tracking changes as dirty if we delete, create, or rewrite an entire table.
-            # TODO - could reasonably easily support this in the case that rev_rev_meta_diff is empty (see above).
-            structural_changes_text = "\n".join(structural_changes)
-            raise NotYetImplemented(
-                "Sorry, this operation is not yet supported when there are structural changes."
-                f" Structural changes are affecting:\n{structural_changes_text}"
-            )
-
-        unsupported_filters = set()
-        for ds_path in structural_changes:
-            ds_filter = repo_key_filter[ds_path]
-            feature_filter = ds_filter.get("feature", ds_filter.child_type())
-            if not ds_filter.match_all and not feature_filter.match_all:
-                unsupported_filters.add(ds_path)
-
-        if unsupported_filters:
-            raise NotYetImplemented(
-                "Sorry, this type of filter is not yet supported when there are structural changes."
-                f" Unfilterable structural changes are affecting:\n{unsupported_filters}"
-            )
+        is_new_target_tree = base_tree != target_tree
+        self._check_for_unsupported_structural_changes(
+            structural_changes,
+            is_new_target_tree,
+            track_changes_as_dirty,
+            repo_key_filter,
+        )
 
         with self.session() as sess:
             # Delete old tables
