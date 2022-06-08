@@ -5,6 +5,8 @@ from pathlib import Path
 import click
 import pygit2
 
+from kart.completion_shared import conflict_completer
+
 from .cli_util import MutexOption
 from .exceptions import NO_CONFLICT, InvalidOperation, NotFound, NotYetImplemented
 from .geometry import geojson_to_gpkg_geom
@@ -87,7 +89,9 @@ def ensure_geojson_resolve_supported(rich_conflict):
     cls=MutexOption,
     exclusive_with=["with_version"],
 )
-@click.argument("conflict_label", default=None, required=True)
+@click.argument(
+    "conflict_label", default=None, required=True, shell_complete=conflict_completer
+)
 def resolve(ctx, with_version, file_path, conflict_label):
     """Resolve a merge conflict. So far only supports resolving to any of the three existing versions."""
 

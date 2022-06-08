@@ -6,9 +6,10 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.11.4 (UNRELEASED)
 
+- Add tab completion for kart commands and user-specific data. [#643](https://github.com/koordinates/kart/issues/643)
 - Changed format of feature IDs in GeoJSON output to be more informative and consistent. [#135](https://github.com/koordinates/kart/issues/135)
 - Fixed primary key issues for shapefile import - now generates an `auto_pk` by default, but uses an existing field if specified (doesn't use the FID). [#646](https://github.com/koordinates/kart/pull/646)
-- Add `--with-dataset-types` option to `kart meta get` which is informative now that there is more than one type of dataset. [#649](https://github.com/koordinates/kart/pull/649) 
+- Add `--with-dataset-types` option to `kart meta get` which is informative now that there is more than one type of dataset. [#649](https://github.com/koordinates/kart/pull/649)
 
 ## 0.11.3
 

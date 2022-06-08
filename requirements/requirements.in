@@ -1,5 +1,5 @@
 certifi
-Click~=7.0
+Click~=8.1
 cryptography
 msgpack~=0.6.1
 pymysql

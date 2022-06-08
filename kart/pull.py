@@ -4,6 +4,8 @@ import subprocess
 
 import click
 
+from kart.completion_shared import ref_completer
+
 from . import merge
 from .cli_util import tool_environment
 from .exceptions import NO_BRANCH, NotFound
@@ -36,10 +38,12 @@ L = logging.getLogger("kart.pull")
     help="Whether to report progress to stderr",
 )
 @click.argument("repository", required=False, metavar="REMOTE")
-@click.argument("refspecs", nargs=-1, required=False, metavar="REFISH")
+@click.argument(
+    "refspecs", nargs=-1, required=False, metavar="REFISH", shell_complete=ref_completer
+)
 @click.pass_context
 def pull(ctx, ff, ff_only, do_progress, repository, refspecs):
-    """ Fetch from and integrate with another repository or a local branch """
+    """Fetch from and integrate with another repository or a local branch"""
     repo = ctx.obj.repo
 
     if repository is None:

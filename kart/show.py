@@ -1,5 +1,7 @@
 import click
 
+from kart.completion_shared import ref_completer
+
 from . import diff_estimation
 from .cli_util import OutputFormatType, parse_output_format
 from .crs_util import CoordinateReferenceString
@@ -144,7 +146,7 @@ def show(
 )
 # NOTE: this is *required* for now.
 # A future version might create patches from working-copy changes.
-@click.argument("refish")
+@click.argument("refish", shell_complete=ref_completer)
 def create_patch(ctx, *, refish, json_style, output_path, patch_type, **kwargs):
     """
     Creates a JSON patch from the given ref.

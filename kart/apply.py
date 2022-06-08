@@ -6,6 +6,8 @@ from enum import Enum, auto
 import click
 import pygit2
 
+from kart.completion_shared import ref_completer
+
 from .diff_structs import Delta, DeltaDiff, KeyValue, RepoDiff
 from .exceptions import (
     NO_TABLE,
@@ -324,7 +326,12 @@ def apply_patch(
         "such a commit. This option bypasses the safety"
     ),
 )
-@click.option("--ref", default="HEAD", help="Which ref to apply the patch onto.")
+@click.option(
+    "--ref",
+    default="HEAD",
+    help="Which ref to apply the patch onto.",
+    shell_complete=ref_completer,
+)
 @click.argument("patch_file", type=click.File("r", encoding="utf-8"))
 def apply(ctx, **kwargs):
     """

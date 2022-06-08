@@ -8,6 +8,7 @@ from .diff_structs import DatasetDiff, Delta, DeltaDiff, RepoDiff
 from .exceptions import NO_TABLE, NotFound
 from .output_util import dump_json_output
 from .repo import KartRepoState
+from .completion_shared import ref_completer
 
 # Changing these items would generally break the repo;
 # we disallow that.
@@ -27,7 +28,7 @@ def data(ctx, **kwargs):
     type=click.Choice(["text", "json"]),
     default="text",
 )
-@click.argument("refish", required=False, default="HEAD")
+@click.argument("refish", required=False, default="HEAD", shell_complete=ref_completer)
 @click.pass_context
 def data_ls(ctx, output_format, refish):
     """List all of the datasets in the Kart repository"""

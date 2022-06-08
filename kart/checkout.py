@@ -1,5 +1,6 @@
 import click
 import pygit2
+from .completion_shared import ref_completer
 
 from .exceptions import (
     NO_BRANCH,
@@ -47,11 +48,17 @@ _DISCARD_CHANGES_HELP_MESSAGE = (
     type=SpatialFilterString(encoding="utf-8"),
     help=spatial_filter_help_text(),
 )
-@click.argument("refish", default=None, required=False)
+@click.argument("refish", default=None, required=False, shell_complete=ref_completer)
 def checkout(
-    ctx, new_branch, force, discard_changes, do_guess, spatial_filter_spec, refish
+    ctx,
+    new_branch,
+    force,
+    discard_changes,
+    do_guess,
+    spatial_filter_spec,
+    refish,
 ):
-    """ Switch branches or restore working tree files """
+    """Switch branches or restore working tree files"""
     repo = ctx.obj.repo
 
     # refish could be:
@@ -188,7 +195,7 @@ def checkout(
     help="If a local branch of given name doesn't exist, but a remote does, "
     "this option guesses that the user wants to create a local to track the remote",
 )
-@click.argument("refish", default=None, required=False)
+@click.argument("refish", default=None, required=False, shell_complete=ref_completer)
 def switch(ctx, create, force_create, discard_changes, do_guess, refish):
     """
     Switch branches
@@ -336,6 +343,7 @@ def _is_in_branches(branch_name, branches):
         "tag associated with it. "
     ),
     default="HEAD",
+    shell_complete=ref_completer,
 )
 @click.argument("filters", nargs=-1)
 def restore(ctx, source, filters):
@@ -372,7 +380,7 @@ def restore(ctx, source, filters):
     is_flag=True,
     help="Discard local changes in working copy if necessary",
 )
-@click.argument("refish", default="HEAD")
+@click.argument("refish", default="HEAD", shell_complete=ref_completer)
 def reset(ctx, discard_changes, refish):
     """
     Reset the branch head to point to a particular commit.
