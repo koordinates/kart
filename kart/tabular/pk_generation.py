@@ -3,7 +3,7 @@ import pygit2
 from .v2 import TableV2
 from .v3 import TableV3
 from .import_source import TableImportSource
-from .schema import ColumnSchema
+from .schema import Schema, ColumnSchema
 
 
 class PkGeneratingTableImportSource(TableImportSource):
@@ -95,8 +95,9 @@ class PkGeneratingTableImportSource(TableImportSource):
         self.similarity_detection_limit = similarity_detection_limit
 
         self.load_data_from_repo()
-        overridden_schema = [self.pk_col] + self.delegate.schema.to_column_dicts()
-        self.delegate.meta_overrides["schema.json"] = overridden_schema
+        self._schema_with_pk = Schema.from_column_dicts(
+            [self.pk_col] + self.delegate.schema.to_column_dicts()
+        )
 
     def load_data_from_repo(self):
         self.repo.ensure_supported_version()
@@ -406,14 +407,24 @@ class PkGeneratingTableImportSource(TableImportSource):
     def dest_path(self, dest_path):
         self.delegate.dest_path = dest_path
 
+    def get_meta_item(self, name, missing_ok=True):
+        if name == "schema.json":
+            return self._schema_with_pk.to_column_dicts()
+        elif name == self.GENERATED_PKS_ITEM:
+            return self.to_dict()
+        else:
+            return self.delegate.get_meta_item(name, missing_ok=missing_ok)
+
     def meta_items(self):
         return {
             **self.delegate.meta_items(),
+            "schema.json": self._schema_with_pk.to_column_dicts(),
             self.GENERATED_PKS_ITEM: self.to_dict(),
         }
 
     def align_schema_to_existing_schema(self, existing_schema):
-        return self.delegate.align_schema_to_existing_schema(existing_schema)
+        existing_schema_without_pk = Schema(existing_schema.non_pk_columns)
+        return self.delegate.align_schema_to_existing_schema(existing_schema_without_pk)
 
     def crs_definitions(self):
         return self.delegate.crs_definitions()

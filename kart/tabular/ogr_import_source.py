@@ -297,14 +297,13 @@ class OgrTableImportSource(TableImportSource):
     @property
     @functools.lru_cache(maxsize=1)
     def primary_key(self):
-        # NOTE: for many OGR drivers, FID column is always 'FID'.
-        # For some drivers (databases), OGR will instead use the primary key
-        # of the given table, BUT only if it is an integer.
-        # For tables with non-integer PKS, ogrlayer.GetFIDColumn() returns ''.
-        # In that case, we would have no choice but to get the PK name outside of OGR.
-        # For that reason we don't use ogrlayer.GetFIDColumn() here,
-        # and instead we have to implement custom PK behaviour in driver-specific subclasses.
-        return self._primary_key or "FID"
+        # NOTE: We don't call ogrlayer.GetFIDColumn() here, for a few reasons:
+        # - Sometimes OGR promotes the record-offset to a primary-key field (ie, the FID of a .SHP is treated as such).
+        # We don't want to treat something as a PK unless it genuinely identifies the record across versions, which
+        # the record-offset generally would not do.
+        # - Sometimes OGR fails to report any primary key column if it has an unexpected type (eg non-integer).
+        # So, instead we have to implement custom PK behaviour in driver-specific subclasses.
+        return self._primary_key
 
     @property
     def layer_defn(self):
@@ -316,20 +315,23 @@ class OgrTableImportSource(TableImportSource):
         return bool(self.layer_defn.GetGeomFieldCount())
 
     def _check_primary_key_option(self, primary_key_name):
+        self.use_ogc_fid_as_pk = False
         if primary_key_name is None:
             return None
         if primary_key_name:
             ld = self.layer_defn
 
-            if primary_key_name == self.ogrlayer.GetFIDColumn():
-                # OGR automatically turns 'ogc_fid' column in postgres into an FID,
-                # and removes it from the list of fields below.
-                return primary_key_name
-
             for i in range(ld.GetFieldCount()):
                 field = ld.GetFieldDefn(i)
                 if primary_key_name == field.GetName():
                     return primary_key_name
+
+            if primary_key_name == self.ogrlayer.GetFIDColumn():
+                # OGR automatically turns 'ogc_fid' column in postgres into an FID,
+                # and removes it from the list of fields below.
+                self.use_ogc_fid_as_pk = True
+                return primary_key_name
+
         raise InvalidOperation(
             f"'{primary_key_name}' was not found in the dataset",
             param_hint="--primary-key",
@@ -352,8 +354,8 @@ class OgrTableImportSource(TableImportSource):
     @ungenerator(dict)
     def _ogr_feature_to_kart_feature(self, ogr_feature):
         for name, adapter in self.field_adapter_map.items():
-            if name == self.primary_key:
-                value = self._get_primary_key_value(ogr_feature, name)
+            if name == self.primary_key and self.use_ogc_fid_as_pk:
+                value = ogr_feature.GetFID()
             elif name in self.geometry_column_names:
                 value = ogr_feature.GetGeometryRef()
             else:

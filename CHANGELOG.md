@@ -7,12 +7,13 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 ## 0.11.4 (UNRELEASED)
 
 - Changed format of feature IDs in GeoJSON output to be more informative and consistent. [#135](https://github.com/koordinates/kart/issues/135)
+- Fixed primary key issues for shapefile import - now generates an `auto_pk` by default, but uses an existing field if specified (doesn't use the FID). [#646](https://github.com/koordinates/kart/pull/646)
 
 ## 0.11.3
 
 - Added support for `--output` option to `kart conflicts`. [#135](https://github.com/koordinates/kart/issues/135)
 - Bugfix: Better error message on using `kart conflicts -ogeojson` for `meta-item` conflicts. [#515](https://github.com/koordinates/kart/issues/515)
-- Removed the older `upgrade-to-tidy` and `upgrade-to-kart` features which were only relevant to Sno (predecessor of Kart). [[#585](https://github.com/koordinates/kart/issues/585]]
+- Removed the older `upgrade-to-tidy` and `upgrade-to-kart` features which were only relevant to Sno (predecessor of Kart). [#585](https://github.com/koordinates/kart/issues/585)
 - Added support for `--decorate` and `--no-decorate` in `kart log`. [#586](https://github.com/koordinates/kart/issues/586)
 - Bugfix: Fixed a bug where creating a MSSQL working copy fails when there are large (~10KB) geometries. [#617](https://github.com/koordinates/kart/issues/617)
 - Bugfix: Fixed `kart diff <commit-id>` for a commit containing a dataset that has since been deleted using `kart data rm`. [#611](https://github.com/koordinates/kart/issues/611)

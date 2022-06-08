@@ -150,7 +150,7 @@ class TableImportSource:
     @property
     def schema(self):
         """
-        The TableImportSource implemenation must return the schema as a meta-item called "schema.json", so this accessor
+        The TableImportSource implementation must return the schema as a meta-item called "schema.json", so this accessor
         simply delegates to that. Calling self.align_schema_to_existing_schema(...) should modify the schema returned by
         self.meta_items()
         """
