@@ -228,6 +228,9 @@ class TableImportSource:
     def prompt_for_table(self, prompt):
         table_list = list(self.get_tables().keys())
 
+        if not table_list:
+            raise NotFound(f"No tables found in {self}", exit_code=NO_TABLE)
+
         if len(table_list) == 1:
             return table_list[0]
         else:

@@ -249,10 +249,10 @@ def import_(
             if not dest_path:
                 raise click.BadParameter("Invalid table name", param_hint="tables")
         else:
-            dest_path = table
+            dest_path = None
 
-        meta_overrides = table_info.get(dest_path, {})
-        if is_windows:
+        meta_overrides = table_info.get(dest_path or table, {})
+        if is_windows and dest_path:
             dest_path = dest_path.replace("\\", "/")  # git paths use / as a delimiter
 
         if "xmlMetadata" in meta_overrides:
@@ -284,7 +284,7 @@ def import_(
                     f"--replace-existing is not supported for V{repo.table_dataset_version} datasets"
                 )
             try:
-                existing_ds = repo.datasets()[dest_path]
+                existing_ds = repo.datasets()[import_source.dest_path]
             except KeyError:
                 # no such existing dataset. no problems
                 pass
@@ -297,7 +297,6 @@ def import_(
                 import_source = PkGeneratingTableImportSource.wrap_source_if_needed(
                     import_source,
                     repo,
-                    dest_path=dest_path,
                     similarity_detection_limit=similarity_detection_limit,
                 )
                 import_source.align_schema_to_existing_schema(existing_ds.schema)

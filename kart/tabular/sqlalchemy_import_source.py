@@ -153,7 +153,6 @@ class SqlAlchemyTableImportSource(TableImportSource):
     @functools.lru_cache(maxsize=1)
     def get_tables(self):
         with self.engine.connect() as conn:
-            # TODO - this only works for GPKG
             tables = self.db_class.list_tables(conn, self.db_schema)
 
         if self.table is not None:

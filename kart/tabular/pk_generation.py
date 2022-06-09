@@ -84,11 +84,9 @@ class PkGeneratingTableImportSource(TableImportSource):
         """Wraps any of the given TableImportSources that lack a primary key, returns the result as a new list."""
         return [cls.wrap_source_if_needed(source, repo, **kwargs) for source in sources]
 
-    def __init__(self, delegate, repo, *, dest_path=None, similarity_detection_limit=0):
+    def __init__(self, delegate, repo, *, similarity_detection_limit=0):
         self.repo = repo
         self.delegate = delegate
-        if dest_path is not None:
-            self.dest_path = dest_path
 
         # Similarity detection limit - the maximum number of (inserts + deletes) we will look through
         # to see if some of them can be paired up to make edits.
