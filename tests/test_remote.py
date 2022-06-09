@@ -125,7 +125,7 @@ def test_clone(
         print("git config file:", r.decode("utf-8").splitlines())
 
         repo = KartRepo(repo_path)
-        assert not repo.is_empty
+        assert not repo.head_is_unborn
         assert repo.head.name == f"refs/heads/{branch_name}"
 
         if branch_ref == "HEAD^":

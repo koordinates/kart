@@ -32,10 +32,7 @@ def data(ctx, **kwargs):
 def data_ls(ctx, output_format, refish):
     """List all of the datasets in the Kart repository"""
     repo = ctx.obj.get_repo(allowed_states=KartRepoState.ALL_STATES)
-    if repo.is_empty:
-        ds_paths = []
-    else:
-        ds_paths = [ds.path for ds in repo.datasets(refish)]
+    ds_paths = list(repo.datasets(refish).all_paths())
 
     if output_format == "text":
         if ds_paths:
@@ -79,10 +76,7 @@ def data_rm(ctx, message, output_format, datasets):
         raise click.UsageError("Specify a dataset to delete: eg `kart data rm DATASET`")
 
     repo = ctx.obj.get_repo()
-    if repo.is_empty:
-        existing_ds_paths = set()
-    else:
-        existing_ds_paths = set(ds.path for ds in repo.datasets())
+    existing_ds_paths = set(repo.datasets().all_paths())
 
     for ds_path in datasets:
         if ds_path not in existing_ds_paths:

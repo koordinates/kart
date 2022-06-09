@@ -650,7 +650,7 @@ def test_init_import(
 
         repo = KartRepo(repo_path)
         assert not repo.is_bare
-        assert not repo.is_empty
+        assert not repo.head_is_unborn
 
         assert repo.head.name == "refs/heads/main"
         assert repo.head.shorthand == "main"
@@ -772,7 +772,7 @@ def test_init_import_name_clash(data_archive, cli_runner):
 
         repo = KartRepo(repo_path)
         assert not repo.is_bare
-        assert not repo.is_empty
+        assert not repo.head_is_unborn
 
         # working copy exists
         wc = repo_path / "editing.gpkg"

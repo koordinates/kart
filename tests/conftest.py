@@ -348,7 +348,7 @@ def data_imported(cli_runner, data_archive, chdir, request, tmp_path_factory):
                 assert r.exit_code == 0, r.stderr
 
                 repo = KartRepo(import_path)
-                assert repo.is_empty
+                assert repo.head_is_unborn
                 repo.free()
                 del repo
 

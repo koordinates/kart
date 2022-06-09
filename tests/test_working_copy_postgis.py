@@ -258,7 +258,7 @@ def test_postgis_wc_with_long_index_name(
 
             repo = KartRepo(repo_path)
             assert not repo.is_bare
-            assert not repo.is_empty
+            assert not repo.head_is_unborn
 
             table_wc = repo.working_copy.tabular
             insp = inspect(table_wc.engine)

@@ -175,12 +175,12 @@ def test_import(
             assert r.exit_code == 0, r
 
             repo = KartRepo(repo_path)
-            assert repo.is_empty
+            assert repo.head_is_unborn
 
             r = cli_runner.invoke(["import", str(data / source_gpkg), table])
             assert r.exit_code == 0, r
 
-            assert not repo.is_empty
+            assert not repo.head_is_unborn
             assert repo.head.name == "refs/heads/main"
             assert repo.head.shorthand == "main"
 
@@ -889,7 +889,7 @@ def test_import_multiple(data_archive, chdir, cli_runner, tmp_path):
         assert r.exit_code == 0, r
 
     repo = KartRepo(repo_path)
-    assert repo.is_empty
+    assert repo.head_is_unborn
 
     LAYERS = (
         ("gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER),
@@ -1033,7 +1033,7 @@ def test_fast_import(data_archive, tmp_path, cli_runner, chdir):
 
             fast_import.fast_import_tables(repo, [source], from_commit=None)
 
-            assert not repo.is_empty
+            assert not repo.head_is_unborn
             assert repo.head.name == "refs/heads/main"
             assert repo.head.shorthand == "main"
 
