@@ -45,6 +45,8 @@ pyrsistent==0.18.1
     # via jsonschema
 rtree==0.9.7
     # via -r requirements/requirements.in
+shellingham==1.4.0
+    # via -r requirements/requirements.in
 sqlalchemy==1.4.37
     # via -r requirements/requirements.in
 typing-extensions==4.2.0

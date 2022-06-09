@@ -6,6 +6,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 ## 0.11.4 (UNRELEASED)
 
+- Add `--install-tab-completion` option for installing shell completion. [#643](https://github.com/koordinates/kart/issues/643)
 - Add tab completion for kart commands and user-specific data. [#643](https://github.com/koordinates/kart/issues/643)
 - Changed format of feature IDs in GeoJSON output to be more informative and consistent. [#135](https://github.com/koordinates/kart/issues/135)
 - Fixed primary key issues for shapefile import - now generates an `auto_pk` by default, but uses an existing field if specified (doesn't use the FID). [#646](https://github.com/koordinates/kart/pull/646)
@@ -27,6 +28,7 @@ _When adding new entries to the changelog, please include issue/PR numbers where
 
 - Improve performance when creating a working copy in a spatially filtered repository (this was previously slower than in a non-filtered repository; now it is much faster) [#561](https://github.com/koordinates/kart/issues/561)
 - Added Sphinx [documentation](https://docs.kartproject.org/en/latest/), built from the `docs` directory. [#220](https://github.com/koordinates/kart/issues/220)
+
 ## 0.11.0
 
 ### Major changes
