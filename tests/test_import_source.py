@@ -113,7 +113,7 @@ def test_import_various_field_types(tmp_path, postgres_table_with_types, cli_run
 
     cols = _dataset_col_types(dataset)
     assert cols == {
-        "FID": {"dataType": "integer", "primaryKeyIndex": 0, "size": 64},
+        "auto_pk": {"dataType": "integer", "primaryKeyIndex": 0, "size": 64},
         "bigant": {"dataType": "integer", "size": 64},
         "regularant": {"dataType": "integer", "size": 32},
         "smallant": {"dataType": "integer", "size": 32},

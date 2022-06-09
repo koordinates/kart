@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from osgeo import gdal, ogr
+from osgeo import gdal
 
 import pygit2
 import pytest
@@ -233,10 +233,10 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
     ds_schema = without_ids(dataset.get_meta_item("schema.json"))
     gpkg_schema = without_ids(gpkg_dataset.get_meta_item("schema.json"))
 
-    # SHP/TAB always call the primary key "FID"
+    # SHP/TAB always call the primary key "FID" # FIXME
     for col in gpkg_schema:
         if col["name"] == gpkg_dataset.primary_key:
-            col["name"] = "FID"
+            col["name"] = "auto_pk"
 
     # Check the fields are in the right order. Ignore truncation and capitalisation
     ds_names = [col["name"][:8] for col in ds_schema]
@@ -269,196 +269,98 @@ def _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset):
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "archive,source_gpkg,table",
+    "archive,source_shp,layer",
     [
+        pytest.param("shp-points", "nz_pa_points_topo_150k.shp", H.POINTS, id="points"),
         pytest.param(
-            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="points"
-        ),
-        pytest.param(
-            "gpkg-polygons",
-            "nz-waca-adjustments.gpkg",
-            H.POLYGONS.LAYER,
-            id="polygons",
-        ),
-        pytest.param(
-            "gpkg-points", "nz-pa-points-topo-150k.gpkg", H.POINTS.LAYER, id="empty"
+            "shp-polygons", "nz_waca_adjustments.shp", H.POLYGONS, id="polygons"
         ),
     ],
 )
-@pytest.mark.parametrize(
-    "source_format,source_ogr_driver",
-    [
-        ("SHP", "ESRI Shapefile"),
-        # https://github.com/koordinates/kart/issues/86
-        # This test starts by converting a GPKG into a TAB, and then imports then TAB.
-        # But the TAB ended up with very broken SRS info, and then during import GDAL
-        # failed to find an EPSG code for the projection.
-        # We can't currently work around this so we're disabling it.
-        # A future release might add handling via an option (--srs=epsg:4167 for example)
-        # ('TAB', 'MapInfo File')
-    ],
-    ids=["SHP"],
-)
-def test_import_from_non_gpkg(
+@pytest.mark.parametrize("use_existing_col_as_pk", [False, True])
+def test_import_from_shp(
     archive,
-    source_gpkg,
-    table,
+    source_shp,
+    layer,
+    use_existing_col_as_pk,
     data_archive,
     tmp_path,
     cli_runner,
     chdir,
     request,
-    source_format,
-    source_ogr_driver,
 ):
-    """
-    Import something else into a Kart repository.
-    """
-    param_ids = H.parameter_ids(request)
-
-    with data_archive(archive) as data:
-        with Db_GPKG.create_engine(data / source_gpkg).connect() as conn:
-            if param_ids[-1] == "empty":
-                print(f"emptying table {table}...")
-                conn.execute(f"DELETE FROM {table};")
-
-            num_rows = conn.execute(f"SELECT COUNT(*) FROM {table};").fetchone()[0]
-
-        if param_ids[-1] == "empty":
-            assert num_rows == 0
-
-        # First, import the original GPKG to one repo
-        gpkg_repo_path = tmp_path / "gpkg"
-        gpkg_repo_path.mkdir()
-        with chdir(gpkg_repo_path):
-            r = cli_runner.invoke(["init"])
-            assert r.exit_code == 0, r
-            r = cli_runner.invoke(["import", data / source_gpkg, table])
-            assert r.exit_code == 0, r
-
-        gpkg_repo = KartRepo(gpkg_repo_path)
-        gpkg_dataset = gpkg_repo.datasets()[table]
-
-        # convert to a new format using OGR
-        source_filename = tmp_path / f"data.{source_format.lower()}"
-        gdal.VectorTranslate(
-            str(source_filename),
-            gdal.OpenEx(str(data / source_gpkg)),
-            format=source_ogr_driver,
-            layers=[table],
-        )
-        repo_path = tmp_path / "non-gpkg"
+    with data_archive(f"shapefiles/{archive}.tgz") as data:
+        repo_path = tmp_path / "repo"
         repo_path.mkdir()
         with chdir(repo_path):
             r = cli_runner.invoke(["init"])
             assert r.exit_code == 0, r
 
-            repo = KartRepo(repo_path)
-            assert repo.is_empty
+            cmd = ["import", data / source_shp]
+            if use_existing_col_as_pk:
+                cmd += [f"--primary-key={layer.LAYER_PK}"]
+            r = cli_runner.invoke(cmd)
+            assert r.exit_code == 0, r.stderr
 
-            # Import from SHP/TAB/something into Kart
-            r = cli_runner.invoke(
-                [
-                    "import",
-                    str(source_filename),
-                    f"data:{table}",
-                ]
-            )
-            assert r.exit_code == 0, r
-
-            assert not repo.is_empty
-            assert repo.head.name == "refs/heads/main"
-            assert repo.head.shorthand == "main"
-
-            # has a single commit
-            assert len([c for c in repo.walk(repo.head.target)]) == 1
-
-            dataset = _import_check(repo_path, table, f"{data / source_gpkg}")
-
-            # Compare the meta items to the GPKG-imported ones
-            repo = KartRepo(repo_path)
-            dataset = repo.datasets()[table]
-
-            _compare_ogr_and_gpkg_meta_items(dataset, gpkg_dataset)
-
-            if num_rows > 0:
-                # compare the first feature in the repo against the source DB
-                got_feature = next(dataset.features())
-                pk = got_feature[dataset.primary_key]
-
-                src_ds = ogr.Open(str(source_filename))
-                src_layer = src_ds.GetLayer(0)
-                assert src_layer.GetFeatureCount() == num_rows
-
-                f = src_layer.GetFeature(pk)
-                expected_feature = {
-                    f.GetFieldDefnRef(i).GetName(): f.GetField(i)
-                    for i in range(f.GetFieldCount())
-                }
-                if "date_adjus" in expected_feature:
-                    expected_feature["date_adjus"] = expected_feature[
-                        "date_adjus"
-                    ].replace("/", "-")
-                expected_feature["FID"] = f.GetFID()
-                if src_layer.GetGeomType() != ogr.wkbNone:
-                    g = f.GetGeometryRef()
-                    if g:
-                        g.AssignSpatialReference(src_layer.GetSpatialRef())
-                        if table == H.POLYGONS.LAYER:
-                            g = ogr.ForceToMultiPolygon(g)
-                    expected_feature["geom"] = ogr_to_gpkg_geom(g)
-
-                assert normalise_feature(got_feature) == expected_feature
-
-
-def test_shp_import_meta(
-    data_archive,
-    tmp_path,
-    cli_runner,
-    request,
-):
-    with data_archive("gpkg-polygons") as data:
-        # convert to SHP using OGR
-        source_filename = tmp_path / "nz_waca_adjustments.shp"
-        gdal.VectorTranslate(
-            str(source_filename),
-            gdal.OpenEx(str(data / "nz-waca-adjustments.gpkg")),
-            format="ESRI Shapefile",
-            layers=["nz_waca_adjustments"],
-        )
-
-        # now import the SHP
-        repo_path = tmp_path / "repo"
-        r = cli_runner.invoke(["init", "--import", source_filename, str(repo_path)])
-        assert r.exit_code == 0, r
-
-        # now check metadata
-        path = "nz_waca_adjustments"
         repo = KartRepo(repo_path)
-        dataset = repo.datasets()[path]
+        dataset = repo.datasets()[layer.LAYER]
 
+        expected_crs = 4326 if archive == "shp-points" else 4167
         meta_items = dict(dataset.meta_items())
         assert set(meta_items) == {
             "schema.json",
-            "crs/EPSG:4167.wkt",
+            f"crs/EPSG:{expected_crs}.wkt",
         }
         schema = without_ids(dataset.get_meta_item("schema.json"))
-        assert schema == [
-            {"name": "FID", "dataType": "integer", "primaryKeyIndex": 0, "size": 64},
-            {
-                "name": "geom",
-                "dataType": "geometry",
-                "geometryType": "MULTIPOLYGON",
-                "geometryCRS": "EPSG:4167",
-            },
-            {"name": "date_adjus", "dataType": "date"},
-            {"name": "survey_ref", "dataType": "text", "length": 50},
-            {
-                "name": "adjusted_n",
-                "dataType": "integer",
-                "size": 32,
-            },
-        ]
+        if archive == "shp-points":
+            geom_col = {
+                'name': 'geom',
+                'dataType': 'geometry',
+                'geometryType': 'POINT',
+                'geometryCRS': 'EPSG:4326',
+            }
+            other_cols = [
+                {'name': 'fid', 'dataType': 'integer', 'size': 64},
+                {'name': 't50_fid', 'dataType': 'integer', 'size': 32},
+                {'name': 'name_ascii', 'dataType': 'text', 'length': 75},
+                {'name': 'macronated', 'dataType': 'text', 'length': 1},
+                {'name': 'name', 'dataType': 'text', 'length': 75},
+            ]
+        else:
+            geom_col = {
+                'name': 'geom',
+                'dataType': 'geometry',
+                'geometryType': 'MULTIPOLYGON',
+                'geometryCRS': 'EPSG:4167',
+            }
+            other_cols = [
+                {'name': 'id', 'dataType': 'integer', 'size': 64},
+                {'name': 'date_adjus', 'dataType': 'date'},
+                {'name': 'survey_ref', 'dataType': 'text', 'length': 50},
+                {'name': 'adjusted_n', 'dataType': 'integer', 'size': 32},
+            ]
+
+        auto_pk_col = {
+            'name': 'auto_pk',
+            'dataType': 'integer',
+            'primaryKeyIndex': 0,
+            'size': 64,
+        }
+
+        if use_existing_col_as_pk:
+            other_cols[0]["primaryKeyIndex"] = 0
+            expected_schema = [other_cols[0], geom_col, *other_cols[1:]]
+        else:
+            expected_schema = [auto_pk_col, geom_col, *other_cols]
+
+        assert schema == expected_schema
+
+        assert dataset.feature_count == layer.ROWCOUNT
+        if archive == "shp-points":
+            assert dataset.get_feature(3)["name"] == "Tauwhare Pa"
+        else:
+            first_pk = 1424927 if use_existing_col_as_pk else 1
+            assert dataset.get_feature(first_pk)["adjusted_n"] == 1122
 
 
 def quote_ident(part):
@@ -765,7 +667,7 @@ def test_postgis_import_from_view_no_pk(
         ]
 
 
-def test_import_no_pk_performance(data_archive_readonly, benchmark):
+def test_generated_pk_feature_matching_performance(data_archive_readonly, benchmark):
     with data_archive_readonly("points") as repo_path:
         repo = KartRepo(repo_path)
         dataset = repo.datasets()["nz_pa_points_topo_150k"]
@@ -776,7 +678,8 @@ def test_import_no_pk_performance(data_archive_readonly, benchmark):
         old_features = features[0:1000]
         new_features = features[1000:2143]
 
-        pkis = PkGeneratingTableImportSource(dataset, repo)
+        pkis = PkGeneratingTableImportSource.__new__(PkGeneratingTableImportSource)
+        pkis._schema_with_pk = dataset.schema
         pkis.prev_dest_schema = dataset.schema
         pkis.primary_key = dataset.primary_key
 
