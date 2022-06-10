@@ -162,6 +162,11 @@ class WorkingCopy:
             allow_invalid_state=allow_invalid_state,
         )
 
+    def workdir_diff_cache(self):
+        """Returns a WorkdirDiffCache for caching the results of certain workdir operations over the course of a single diff."""
+        w = self.workdir
+        return w.workdir_diff_cache() if w else None
+
     def create_parts_if_missing(self, parts_to_create, reset_to=DONT_RESET):
         """
         Creates the named parts if they are missing and can be created. Returns any created parts themselves.

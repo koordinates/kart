@@ -40,7 +40,7 @@ class DatasetDiffMixin:
         return DeltaDiff.diff_dicts(meta_old, meta_new)
 
     def diff_to_working_copy(
-        self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL
+        self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
     ):
         """
         Generates a diff from self to the working-copy.
@@ -139,7 +139,7 @@ class DatasetDiffMixin:
 
     def generate_wc_diff_from_workdir_index(
         self,
-        wc_diff_context,
+        workdir_diff_cache,
         key_filter=UserStringKeyFilter.MATCH_ALL,
         *,
         wc_path_filter_pattern=None,
@@ -151,7 +151,7 @@ class DatasetDiffMixin:
     ):
         """
         A pattern for datasets to use for diffing their contents against the working copy.
-        1. Uses the workdir-index in wc_diff_context to get a list of changes made to the working copy,
+        1. Uses the workdir-index in workdir_diff_cache to get a list of changes made to the working copy,
            as a pygit2.Diff object.
         2. Go through all the resulting (insert, update, delete) deltas
         3. For each path in the working copy, find the associated path in the dataset (dataset paths are always
@@ -161,7 +161,7 @@ class DatasetDiffMixin:
         5. Run some transform on each path to load the content of each item (eg, read and decode feature)
 
         Args:
-        wc_diff_context - a WCDiffContext object, from which the raw diff is generated.
+        workdir_diff_cache - a WorkdirDiffCache object, through which the raw diff is generated.
         key_filter - deltas are only yielded if they involve at least one key that matches the key filter.
         wc_path_filter_pattern - if unset, then all deltas that involve the dataset's path will be considered. If set, then
             only those deltas involving paths that match the given pattern will be considered.
@@ -175,7 +175,7 @@ class DatasetDiffMixin:
 
         # Note that this operation returns changes that the user made to the working copy.
         # As such, all paths in it will be working-copy paths.
-        deltas = wc_diff_context.workdir_deltas_by_ds_path().get(self.path)
+        deltas = workdir_diff_cache.workdir_deltas_for_dataset(self)
 
         if not deltas:
             return

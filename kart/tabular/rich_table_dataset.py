@@ -175,9 +175,9 @@ class RichTableDataset(TableDataset):
         return ds_diff
 
     def diff_to_working_copy(
-        self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL
+        self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
     ):
-        table_wc = wc_diff_context.working_copy.tabular
+        table_wc = self.repo.working_copy.tabular
         if table_wc is None:
             return DatasetDiff()
         return table_wc.diff_dataset_to_working_copy(self, ds_filter)

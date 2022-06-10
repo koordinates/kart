@@ -2,6 +2,7 @@ import contextlib
 import click
 import logging
 from enum import Enum, auto
+import functools
 import shutil
 import subprocess
 import sys
@@ -15,7 +16,6 @@ from sqlalchemy.schema import CreateTable
 
 
 from kart.cli_util import tool_environment
-from kart.diff_util import WCDiffContext
 from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit_code
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
@@ -194,9 +194,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             return False
 
         datasets = self.repo.datasets(self.get_tree_id(), "point-cloud")
-        wc_diff_context = WCDiffContext(self.repo, datasets.all_paths())
+        workdir_diff_cache = self.workdir_diff_cache()
         for dataset in datasets:
-            ds_diff = dataset.diff_to_working_copy(wc_diff_context)
+            ds_diff = dataset.diff_to_working_copy(workdir_diff_cache)
             ds_diff.prune()
             if ds_diff:
                 return True
@@ -281,7 +281,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         ds_deletes = base_datasets.keys() - target_datasets.keys()
         ds_updates = base_datasets.keys() & target_datasets.keys()
 
-        # FIXME: Right now everything is performed as a full-rewrite,
+        # FIXME: Right now everything is performed as a fullrewrite,
         # which is slower and doesn't allow for partial resets.
         for ds_path in ds_updates:
             ds_inserts.add(ds_path)
@@ -390,3 +390,79 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         self._reset_workdir_index(reset_index_paths)
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
+
+    def raw_diff_from_index(self):
+        """Uses the index self.index_path to generate a pygit2 Diff of what's changed in the workdir."""
+        index = pygit2.Index(str(self.index_path))
+        index._repo = self.repo
+        return index.diff_to_workdir(
+            pygit2.GIT_DIFF_INCLUDE_UNTRACKED
+            | pygit2.GIT_DIFF_UPDATE_INDEX
+            # GIT_DIFF_UPDATE_INDEX just updates timestamps in the index to make the diff quicker next time
+            # none of the paths or hashes change, and the end result stays the same.
+        )
+
+    def workdir_deltas_by_dataset_path(self, raw_diff_from_index=None):
+        """Returns all the deltas from self.raw_diff_from_index() but grouped by dataset path."""
+        if raw_diff_from_index is None:
+            raw_diff_from_index = self.raw_diff_from_index()
+
+        all_ds_paths = self.repo.datasets(self.get_tree_id()).all_paths()
+
+        with_and_without_slash = [
+            (p.rstrip("/") + "/", p.rstrip("/")) for p in all_ds_paths
+        ]
+
+        def find_ds_path(delta):
+            path = delta.old_file.path if delta.old_file else delta.new_file.path
+            for with_slash, without_slash in with_and_without_slash:
+                if path.startswith(with_slash):
+                    return without_slash
+
+        deltas_by_ds_path = {}
+        for delta in raw_diff_from_index.deltas:
+            ds_path = find_ds_path(delta)
+            deltas_by_ds_path.setdefault(ds_path, []).append(delta)
+
+        return deltas_by_ds_path
+
+    def workdir_diff_cache(self):
+        """
+        Returns a WorkdirDiffCache that acts as a caching layer for this working copy -
+        the results of certain operations such as raw_diff_from_index can be cached for the
+        duration of a diff.
+        """
+        return WorkdirDiffCache(self)
+
+
+class WorkdirDiffCache:
+    """
+    When we do use the index to diff the workdir, we get a diff for the entire workdir.
+    The diffing code otherwise performs diffs per-dataset, so we use this class to cache
+    the result of that diff so we can reuse it for the next dataset diff.
+
+    - We don't want to run it up front, in case there are no datasets that need this info
+    - We want to run it as soon a the first dataset needs this info, then cache the result
+    - We want the result to stay cached for the duration of the diff operation, but no longer
+      (in eg a long-running test, there might be several diffs run and the workdir might change)
+    """
+
+    def __init__(self, delegate):
+        self.delegate = delegate
+
+    @functools.lru_cache(maxsize=1)
+    def raw_diff_from_index(self):
+        return self.delegate.raw_diff_from_index()
+
+    @functools.lru_cache(maxsize=1)
+    def workdir_deltas_by_dataset_path(self):
+        # Make sure the raw diff gets cached too:
+        raw_diff_from_index = self.raw_diff_from_index()
+        return self.delegate.workdir_deltas_by_dataset_path(raw_diff_from_index)
+
+    def workdir_deltas_for_dataset(self, dataset):
+        if isinstance(dataset, str):
+            path = dataset
+        else:
+            path = dataset.path
+        return self.workdir_deltas_by_dataset_path().get(path)

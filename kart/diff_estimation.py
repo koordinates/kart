@@ -3,7 +3,7 @@ import threading
 
 import pygit2
 
-from kart.diff_util import get_dataset_diff, WCDiffContext
+from kart.diff_util import get_dataset_diff
 from kart.exceptions import SubprocessError
 
 ACCURACY_SUBTREE_SAMPLES = {
@@ -107,7 +107,7 @@ def estimate_diff_feature_counts(
     base_ds_paths = {ds.path for ds in base_rs.datasets()}
     target_ds_paths = {ds.path for ds in target_rs.datasets()}
     all_ds_paths = base_ds_paths | target_ds_paths
-    wc_diff_context = WCDiffContext(repo, all_ds_paths)
+    workdir_diff_cache = repo.working_copy.workdir_diff_cache
 
     dataset_change_counts = {}
     for dataset_path in all_ds_paths:
@@ -130,7 +130,7 @@ def estimate_diff_feature_counts(
                 base_rs.datasets(),
                 target_rs.datasets(),
                 include_wc_diff=include_wc_diff,
-                wc_diff_context=wc_diff_context,
+                workdir_diff_cache=workdir_diff_cache,
             )
             ds_total = len(ds_diff.get("feature", []))
 

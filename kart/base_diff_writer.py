@@ -91,7 +91,7 @@ class BaseDiffWriter:
         self.all_ds_paths = diff_util.get_all_ds_paths(
             self.base_rs, self.target_rs, self.repo_key_filter
         )
-        self.wc_diff_context = diff_util.WCDiffContext(repo, self.all_ds_paths)
+        self.workdir_diff_cache = self.repo.working_copy.workdir_diff_cache()
 
         self.spatial_filter_pk_conflicts = None
         if (
@@ -249,7 +249,7 @@ class BaseDiffWriter:
             self.base_rs,
             self.target_rs,
             include_wc_diff=self.include_wc_diff,
-            wc_diff_context=self.wc_diff_context,
+            workdir_diff_cache=self.workdir_diff_cache,
             repo_key_filter=self.repo_key_filter,
         )
 
@@ -270,7 +270,7 @@ class BaseDiffWriter:
             self.base_rs.datasets(),
             self.target_rs.datasets(),
             include_wc_diff=self.include_wc_diff,
-            wc_diff_context=self.wc_diff_context,
+            workdir_diff_cache=self.workdir_diff_cache,
             ds_filter=self.repo_key_filter[ds_path],
         )
 

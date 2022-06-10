@@ -134,17 +134,17 @@ class PointCloudV1(BaseDataset):
         )
 
     def diff_to_working_copy(
-        self, wc_diff_context, ds_filter=DatasetKeyFilter.MATCH_ALL
+        self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
     ):
         """Returns a diff of all changes made to this dataset in the working copy."""
         ds_diff = DatasetDiff()
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
         ds_diff["tile"] = DeltaDiff(
-            self.diff_tile_to_working_copy(wc_diff_context, tile_filter)
+            self.diff_tile_to_working_copy(workdir_diff_cache, tile_filter)
         )
         return ds_diff
 
-    def diff_tile_to_working_copy(self, wc_diff_context, tile_filter):
+    def diff_tile_to_working_copy(self, workdir_diff_cache, tile_filter):
         """Yields deltas of all the changes the user has made to tiles in the working copy."""
 
         # Dataset-paths have a different structure to workdir paths - the workdir index will have only workdir paths,
@@ -159,7 +159,7 @@ class PointCloudV1(BaseDataset):
         )
 
         yield from self.generate_wc_diff_from_workdir_index(
-            wc_diff_context,
+            workdir_diff_cache,
             wc_path_filter_pattern=wc_tiles_pattern,
             key_filter=tile_filter,
             wc_to_ds_path_transform=wc_to_ds_path_transform,
