@@ -22,9 +22,6 @@ class TestMetaGet:
 
     @pytest.mark.parametrize("output_format", ("text", "json"))
     def test_all(self, output_format, data_archive_readonly, cli_runner):
-        # All datasets now support getting metadata in either V1 or V2 format,
-        # but if you don't specify a particular item, they will show all V2 items -
-        # these are more self-explanatory to an end-user.
         with data_archive_readonly("points"):
             r = cli_runner.invoke(
                 ["meta", "get", "nz_pa_points_topo_150k", "-o", output_format]
@@ -39,6 +36,38 @@ class TestMetaGet:
             else:
                 output = json.loads(r.stdout)
                 output = output["nz_pa_points_topo_150k"]
+                assert output["title"] == EXPECTED_TITLE
+                assert output["description"]
+                assert output["schema.json"]
+                assert output["crs/EPSG:4326.wkt"]
+
+    @pytest.mark.parametrize("output_format", ("text", "json"))
+    def test_with_dataset_types(self, output_format, data_archive_readonly, cli_runner):
+        with data_archive_readonly("points"):
+            r = cli_runner.invoke(
+                [
+                    "meta",
+                    "get",
+                    "nz_pa_points_topo_150k",
+                    "--with-dataset-types",
+                    "-o",
+                    output_format,
+                ]
+            )
+            assert r.exit_code == 0, r
+            if output_format == "text":
+                assert "datasetType" in r.stdout
+                assert "version" in r.stdout
+                assert "title" in r.stdout
+                assert EXPECTED_TITLE in r.stdout
+                assert "description" in r.stdout
+                assert "schema.json" in r.stdout
+                assert "crs/EPSG:4326.wkt" in r.stdout
+            else:
+                output = json.loads(r.stdout)
+                output = output["nz_pa_points_topo_150k"]
+                assert output["datasetType"] == "table"
+                assert output["version"] == 3
                 assert output["title"] == EXPECTED_TITLE
                 assert output["description"]
                 assert output["schema.json"]

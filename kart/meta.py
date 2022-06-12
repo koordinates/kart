@@ -53,10 +53,15 @@ def meta(ctx, **kwargs):
     help="[deprecated] How to format the JSON output. Only used with -o json",
 )
 @click.option("--ref", default="HEAD")
+@click.option(
+    "--with-dataset-types",
+    is_flag=True,
+    help="When set, includes the dataset type and version as pseudo meta-items (these cannot be updated).",
+)
 @click.argument("dataset", required=False)
 @click.argument("keys", required=False, nargs=-1)
 @click.pass_context
-def meta_get(ctx, output_format, json_style, ref, dataset, keys):
+def meta_get(ctx, output_format, json_style, ref, with_dataset_types, dataset, keys):
     """
     Prints the value of meta keys.
 
@@ -80,6 +85,12 @@ def meta_get(ctx, output_format, json_style, ref, dataset, keys):
             all_items[ds.path] = get_meta_items(ds, keys)
         else:
             all_items[ds.path] = ds.meta_items()
+        if with_dataset_types:
+            all_items[ds.path] = {
+                "datasetType": ds.DATASET_TYPE,
+                "version": ds.VERSION,
+                **all_items[ds.path],
+            }
 
     output_type, fmt = parse_output_format(output_format, json_style)
 
