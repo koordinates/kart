@@ -56,7 +56,7 @@ def get_repo_diff(
     all_ds_paths = get_all_ds_paths(base_rs, target_rs, repo_key_filter)
 
     if include_wc_diff and workdir_diff_cache is None:
-        workdir_diff_cache = target_rs.repo.working_copy.workdir_diff_cache
+        workdir_diff_cache = target_rs.repo.working_copy.workdir_diff_cache()
 
     repo_diff = RepoDiff()
     for ds_path in all_ds_paths:
@@ -116,7 +116,7 @@ def get_dataset_diff(
     if include_wc_diff:
         # diff += target_ds<>working_copy
         if workdir_diff_cache is None:
-            workdir_diff_cache = target_ds.repo.working_copy.workdir_diff_cache
+            workdir_diff_cache = target_ds.repo.working_copy.workdir_diff_cache()
 
         if target_ds is not None:
             target_wc_diff = target_ds.diff_to_working_copy(

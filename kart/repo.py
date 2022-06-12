@@ -21,6 +21,7 @@ from .exceptions import (
     SubprocessError,
     translate_subprocess_exit_code,
 )
+from .key_filters import RepoKeyFilter
 from kart.tabular.version import (
     DEFAULT_NEW_REPO_VERSION,
     dataset_class_for_version,
@@ -626,12 +627,20 @@ class KartRepo(pygit2.Repository):
         self.ensure_supported_version()
         return RepoStructure(self, refish)
 
-    def datasets(self, refish="HEAD", filter_dataset_type=None):
+    def datasets(
+        self,
+        refish="HEAD",
+        *,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        filter_dataset_type=None,
+    ):
         """
         Get the datasets of this Kart repository at a particular revision.
-        Equivalent to: self.structure(refish).datasets
+        Equivalent to: self.structure(refish).datasets(**kwargs)
         """
-        return self.structure(refish).datasets(filter_dataset_type=filter_dataset_type)
+        return self.structure(refish).datasets(
+            repo_key_filter=repo_key_filter, filter_dataset_type=filter_dataset_type
+        )
 
     @property
     def dataset_class(self):

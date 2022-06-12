@@ -16,6 +16,7 @@ from .exceptions import (
     NotFound,
     NotYetImplemented,
 )
+from .key_filters import RepoKeyFilter
 from .pack_util import packfile_object_builder
 from .tabular.schema import Schema
 from .tabular.version import extra_blobs_for_version, dataset_class_for_version
@@ -46,12 +47,14 @@ class RepoStructure:
     """
 
     @staticmethod
-    def resolve_refish(repo, refish):
+    def resolve_refish(repo, refish="HEAD"):
         """
         Given a ref / refish / commit / tree / OID, returns as many as possible of the following:
         >>> (ref, commit, tree)
         """
-        if refish is None or refish == "HEAD":
+        if refish is None:
+            refish = "[EMPTY]"
+        if refish == "HEAD":
             return "HEAD", repo.head_commit, repo.head_tree
 
         # We support X^?  - meaning X^ if X^ exists otherwise [EMPTY]
@@ -129,7 +132,7 @@ class RepoStructure:
             pass
         return commit, tree
 
-    def __init__(self, repo, refish):
+    def __init__(self, repo, refish="HEAD"):
         self.L = logging.getLogger(self.__class__.__qualname__)
         self.repo = repo
 
@@ -156,10 +159,17 @@ class RepoStructure:
         return f"RepoStructure<{self.repo.path}{at_desc}>"
 
     @functools.lru_cache()
-    def datasets(self, filter_dataset_type=None, force_dataset_class=None):
+    def datasets(
+        self,
+        *,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        filter_dataset_type=None,
+        force_dataset_class=None,
+    ):
         return Datasets(
             self.repo,
             self.tree,
+            repo_key_filter=repo_key_filter,
             filter_dataset_type=filter_dataset_type,
             force_dataset_class=force_dataset_class,
         )
@@ -382,11 +392,21 @@ class Datasets:
     >>> structure.datasets().get(path_to_dataset)
     """
 
-    def __init__(self, repo, tree, filter_dataset_type=None, force_dataset_class=None):
+    def __init__(
+        self,
+        repo,
+        tree,
+        *,
+        repo_key_filter=RepoKeyFilter.MATCH_ALL,
+        filter_dataset_type=None,
+        force_dataset_class=None,
+    ):
         assert filter_dataset_type is None or force_dataset_class is None
 
         self.repo = repo
         self.tree = tree
+
+        self.repo_key_filter = repo_key_filter
         self.filter_dataset_type = filter_dataset_type
         self.force_dataset_class = force_dataset_class
 
@@ -429,6 +449,8 @@ class Datasets:
         For instance, this succeeds when given the tree at a/b/c, if there is a child tree a/b/c/.table-dataset/ -
         It will return a dataset with path "a/b/c".
         """
+        if ds_path not in self.repo_key_filter:
+            return None
         if self.force_dataset_class is not None:
             if self.force_dataset_class.is_dataset_tree(ds_tree):
                 return self.force_dataset_class(ds_tree, ds_path, self.repo)
@@ -490,5 +512,8 @@ class Datasets:
                 return ALL_PART_TYPES
         return result
 
-    def all_paths(self):
+    def paths(self):
         return (ds.path for ds in self)
+
+    def datasets_by_path(self):
+        return {ds.path: ds for ds in self}

@@ -255,27 +255,19 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         )
         L.debug("reset(): track_changes_as_dirty=%s", track_changes_as_dirty)
 
-        base_datasets = (
-            {
-                ds.path: ds
-                for ds in self.repo.datasets(base_tree, "point-cloud")
-                if ds.path in repo_key_filter
-            }
-            if base_tree
-            else {}
-        )
+        base_datasets = self.repo.datasets(
+            base_tree,
+            repo_key_filter=repo_key_filter,
+            filter_dataset_type="point-cloud",
+        ).datasets_by_path()
         if base_tree == target_tree:
             target_datasets = base_datasets
         else:
-            target_datasets = (
-                {
-                    ds.path: ds
-                    for ds in self.repo.datasets(target_tree, "point-cloud")
-                    if ds.path in repo_key_filter
-                }
-                if target_tree
-                else {}
-            )
+            target_datasets = self.repo.datasets(
+                target_tree,
+                repo_key_filter=repo_key_filter,
+                filter_dataset_type="point-cloud",
+            ).datasets_by_path()
 
         ds_inserts = target_datasets.keys() - base_datasets.keys()
         ds_deletes = base_datasets.keys() - target_datasets.keys()
@@ -342,11 +334,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             assert isinstance(dataset, PointCloudV1)
 
             reset_index_paths.append(dataset.path)
-            wc_tiles_dir = self.path / dataset.path
+            ds_tiles_dir = self.path / dataset.path
             # Sanity check to make sure we're not deleting something we shouldn't.
-            assert self.path in wc_tiles_dir.parents
-            assert self.repo.workdir_path in wc_tiles_dir.parents
-            shutil.rmtree(wc_tiles_dir)
+            assert self.path in ds_tiles_dir.parents
+            assert self.repo.workdir_path in ds_tiles_dir.parents
+            if ds_tiles_dir.is_dir():
+                shutil.rmtree(ds_tiles_dir)
 
         self._reset_workdir_index(reset_index_paths)
 
@@ -366,8 +359,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
         for path in reset_index_paths:
+            cmd = "add" if (self.path / path).exists() else "reset"
             try:
-                args = ["git", "add", path]
+                args = ["git", cmd, "--", path]
                 subprocess.check_call(
                     args, env=env, cwd=self.path, stdout=subprocess.DEVNULL
                 )
@@ -378,14 +372,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self, commit_or_tree, *, mark_as_clean=None, now_outside_spatial_filter=None
     ):
         # TODO - handle finer-grained soft-resets than entire datasets
-        reset_index_paths = (
-            [
-                ds.path
-                for ds in self.repo.datasets(commit_or_tree, "point-cloud")
-                if ds.path in mark_as_clean
-            ]
-            if commit_or_tree
-            else []
+        reset_index_paths = list(
+            self.repo.datasets(
+                commit_or_tree,
+                repo_key_filter=mark_as_clean,
+                filter_dataset_type="point-cloud",
+            ).paths()
         )
 
         self._reset_workdir_index(reset_index_paths)
@@ -407,7 +399,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if raw_diff_from_index is None:
             raw_diff_from_index = self.raw_diff_from_index()
 
-        all_ds_paths = self.repo.datasets(self.get_tree_id()).all_paths()
+        all_ds_paths = self.repo.datasets(self.get_tree_id()).paths()
 
         with_and_without_slash = [
             (p.rstrip("/") + "/", p.rstrip("/")) for p in all_ds_paths

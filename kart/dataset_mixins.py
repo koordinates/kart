@@ -175,8 +175,9 @@ class DatasetDiffMixin:
 
         # Note that this operation returns changes that the user made to the working copy.
         # As such, all paths in it will be working-copy paths.
+        if not workdir_diff_cache:
+            return
         deltas = workdir_diff_cache.workdir_deltas_for_dataset(self)
-
         if not deltas:
             return
 

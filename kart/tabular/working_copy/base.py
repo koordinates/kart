@@ -431,9 +431,11 @@ class TableWorkingCopy(WorkingCopyPart):
         """
         with self.session():
             repo_diff = RepoDiff()
-            for dataset in self.repo.datasets(self.get_tree_id(), "table"):
-                if dataset.path not in repo_filter:
-                    continue
+            for dataset in self.repo.datasets(
+                self.get_tree_id(),
+                repo_key_filter=repo_filter,
+                filter_dataset_type="table",
+            ):
                 if not self._is_dataset_supported(dataset):
                     continue
                 ds_diff = self.diff_dataset_to_working_copy(
@@ -1006,7 +1008,7 @@ class TableWorkingCopy(WorkingCopyPart):
             return
 
         base_tree_id = self.get_tree_id()
-        base_datasets = self.repo.datasets(base_tree_id, "table")
+        base_datasets = self.repo.datasets(base_tree_id, filter_dataset_type="table")
 
         if repo_key_filter.match_all:
             for base_ds in base_datasets:
@@ -1133,27 +1135,19 @@ class TableWorkingCopy(WorkingCopyPart):
         )
         L.debug("reset(): track_changes_as_dirty=%s", track_changes_as_dirty)
 
-        base_datasets = (
-            {
-                ds.path: ds
-                for ds in self.repo.datasets(base_tree, "table")
-                if ds.path in repo_key_filter
-            }
-            if base_tree
-            else {}
-        )
+        base_datasets = self.repo.datasets(
+            base_tree,
+            repo_key_filter=repo_key_filter,
+            filter_dataset_type="table",
+        ).datasets_by_path()
         if base_tree == target_tree:
             target_datasets = base_datasets
         else:
-            target_datasets = (
-                {
-                    ds.path: ds
-                    for ds in self.repo.datasets(target_tree, "table")
-                    if ds.path in repo_key_filter
-                }
-                if target_tree
-                else {}
-            )
+            target_datasets = self.repo.datasets(
+                target_tree,
+                repo_key_filter=repo_key_filter,
+                filter_dataset_type="table",
+            ).datasets_by_path()
 
         ds_inserts = target_datasets.keys() - base_datasets.keys()
         ds_deletes = base_datasets.keys() - target_datasets.keys()

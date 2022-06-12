@@ -38,6 +38,9 @@ class UserStringKeyFilter(set):
             key = str(key)
         return super().__contains__(key)
 
+    def __hash__(self):
+        return id(self)
+
     def add(self, key):
         if not self.match_all:
             super().add(key)
@@ -91,6 +94,9 @@ class KeyFilterDict(RichDict):
         return (
             self.child_that_matches_all if self.match_all else super().__getitem__(key)
         )
+
+    def __hash__(self):
+        return id(self)
 
     def get(self, key, default_value=None):
         return (

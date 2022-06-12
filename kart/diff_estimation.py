@@ -107,7 +107,7 @@ def estimate_diff_feature_counts(
     base_ds_paths = {ds.path for ds in base_rs.datasets()}
     target_ds_paths = {ds.path for ds in target_rs.datasets()}
     all_ds_paths = base_ds_paths | target_ds_paths
-    workdir_diff_cache = repo.working_copy.workdir_diff_cache
+    workdir_diff_cache = repo.working_copy.workdir_diff_cache()
 
     dataset_change_counts = {}
     for dataset_path in all_ds_paths:
