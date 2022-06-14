@@ -237,11 +237,10 @@ def test_import_mismatched_las(
                 assert "Non-homogenous" in r.stderr
 
 
-def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_pdal):
+def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal):
     monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
 
-    # TODO - remove Kart's requirement for a GPKG working copy
-    with data_working_copy("point-cloud/auckland.tgz") as (repo_path, wc_path):
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == []
@@ -353,3 +352,77 @@ def test_working_copy_edit(cli_runner, data_working_copy, monkeypatch, requires_
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == []
+
+
+def test_working_copy_restore_reset(
+    cli_runner, data_archive, monkeypatch, requires_pdal
+):
+    monkeypatch.setenv("X_KART_POINT_CLOUDS", "1")
+
+    def file_count(path):
+        return len(list(path.iterdir()))
+
+    with data_archive("point-cloud/auckland.tgz") as repo_path:
+        repo = KartRepo(repo_path)
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+
+        tiles_path = repo_path / "auckland"
+        assert tiles_path.is_dir()
+        assert file_count(tiles_path) == 16
+
+        for tile in tiles_path.glob("auckland_0_*.copc.laz"):
+            tile.unlink()
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "4 deletes" in r.stdout.splitlines()[-1]
+
+        r = cli_runner.invoke(["commit", "-m", "4 deletes"])
+        assert r.exit_code == 0, r.stderr
+        assert file_count(tiles_path) == 12
+        edit_commit = repo.head_commit.hex
+
+        r = cli_runner.invoke(
+            ["restore", "-s", "HEAD^", "auckland:tile:auckland_0_0.copc.laz"]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "1 insert" in r.stdout.splitlines()[-1]
+        assert file_count(tiles_path) == 13
+
+        r = cli_runner.invoke(["reset", "HEAD^", "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+        assert file_count(tiles_path) == 16
+
+        r = cli_runner.invoke(
+            [
+                "restore",
+                "-s",
+                edit_commit,
+                "auckland:tile:auckland_0_1.copc.laz",
+                "auckland:tile:auckland_0_2.copc.laz",
+            ]
+        )
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert "2 deletes" in r.stdout.splitlines()[-1]
+        assert file_count(tiles_path) == 14
+
+        r = cli_runner.invoke(["reset", edit_commit, "--discard-changes"])
+        assert r.exit_code == 0, r.stderr
+
+        r = cli_runner.invoke(["status"])
+        assert r.exit_code == 0, r.stderr
+        assert r.stdout.splitlines()[-1] == "Nothing to commit, working copy clean"
+        assert file_count(tiles_path) == 12

@@ -121,6 +121,9 @@ class Delta:
     def new_key(self):
         return self.new.key if self.new is not None else None
 
+    def is_rename(self):
+        return self.type == "update" and self.old_key != self.new_key
+
     @property
     def old_value(self):
         if self.old is not None:

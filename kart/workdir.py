@@ -16,7 +16,9 @@ from sqlalchemy.schema import CreateTable
 
 
 from kart.cli_util import tool_environment
+from kart import diff_util
 from kart.exceptions import NotFound, NO_WORKING_COPY, translate_subprocess_exit_code
+from kart.lfs_util import get_local_path_from_lfs_hash
 from kart.key_filters import RepoKeyFilter
 from kart.point_cloud.v1 import PointCloudV1
 from kart.sqlalchemy.sqlite import sqlite_engine
@@ -193,7 +195,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         if self.get_tree_id() is None:
             return False
 
-        datasets = self.repo.datasets(self.get_tree_id(), "point-cloud")
+        datasets = self.repo.datasets(
+            self.get_tree_id(), filter_dataset_type="point-cloud"
+        )
         workdir_diff_cache = self.workdir_diff_cache()
         for dataset in datasets:
             ds_diff = dataset.diff_to_working_copy(workdir_diff_cache)
@@ -273,12 +277,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         ds_deletes = base_datasets.keys() - target_datasets.keys()
         ds_updates = base_datasets.keys() & target_datasets.keys()
 
-        # FIXME: Right now everything is performed as a fullrewrite,
-        # which is slower and doesn't allow for partial resets.
-        for ds_path in ds_updates:
-            ds_inserts.add(ds_path)
-            ds_deletes.add(ds_path)
-        ds_updates.clear()
+        if rewrite_full:
+            for ds_path in ds_updates:
+                ds_inserts.add(ds_path)
+                ds_deletes.add(ds_path)
+            ds_updates.clear()
 
         structural_changes = ds_inserts | ds_deletes
         is_new_target_tree = base_tree != target_tree
@@ -296,12 +299,24 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 [target_datasets[d] for d in ds_inserts]
             )
 
+        workdir_diff_cache = self.workdir_diff_cache()
         for ds_path in ds_updates:
-            base_ds = base_datasets[ds_path]
-            target_ds = target_datasets[ds_path]
+            # The diffing code can diff from any arbitrary commit, but not from the working copy -
+            # it can only diff *to* the working copy.
+            # So, we need to diff from: target commit to: working copy then take the inverse.
+            # TODO: Make this less confusing.
+            diff_to_apply = ~diff_util.get_dataset_diff(
+                ds_path,
+                target_datasets,
+                base_datasets,
+                include_wc_diff=True,
+                workdir_diff_cache=workdir_diff_cache,
+                ds_filter=repo_key_filter[ds_path],
+            )
+
             self._update_dataset_in_workdir(
-                base_ds,
-                target_ds,
+                ds_path,
+                diff_to_apply,
                 ds_filter=repo_key_filter[ds_path],
                 track_changes_as_dirty=track_changes_as_dirty,
             )
@@ -344,10 +359,48 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self._reset_workdir_index(reset_index_paths)
 
     def _update_dataset_in_workdir(
-        self, base_ds, target_ds, ds_filter, track_changes_as_dirty
+        self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
     ):
-        # TODO - implement this.
-        raise NotImplementedError()
+        ds_tiles_dir = self.path / ds_path
+        # Sanity check to make sure we're not messing with files we shouldn't:
+        assert self.path in ds_tiles_dir.parents
+        assert self.repo.workdir_path in ds_tiles_dir.parents
+        assert ds_tiles_dir.is_dir()
+
+        do_update_all = ds_filter.match_all
+        reset_index_paths = []
+
+        tile_diff = diff_to_apply.get("tile")
+        if not tile_diff:
+            return
+        for tile_delta in tile_diff.values():
+            if tile_delta.type == "delete" or tile_delta.is_rename():
+                tilename = tile_delta.old_key
+                tile_path = ds_tiles_dir / tilename
+                if tile_path.is_file():
+                    tile_path.unlink()
+                if not do_update_all:
+                    reset_index_paths.append(f"{ds_path}/{tilename}")
+
+            if tile_delta.type in ("update", "insert"):
+                tilename = tile_delta.new_key
+                lfs_path = get_local_path_from_lfs_hash(
+                    self.repo, tile_delta.new_value["oid"]
+                )
+                if not lfs_path.is_file():
+                    click.echo(
+                        f"Couldn't find tile {tilename} locally - skipping...", err=True
+                    )
+                    continue
+                shutil.copy(lfs_path, ds_tiles_dir / tilename)
+                if not do_update_all:
+                    reset_index_paths.append(f"{ds_path}/{tilename}")
+
+        if not track_changes_as_dirty:
+            if do_update_all:
+                self._reset_workdir_index([ds_path])
+            else:
+                self._reset_workdir_index(reset_index_paths)
 
     def _reset_workdir_index(self, reset_index_paths):
         """
@@ -389,6 +442,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         index._repo = self.repo
         return index.diff_to_workdir(
             pygit2.GIT_DIFF_INCLUDE_UNTRACKED
+            | pygit2.GIT_DIFF_RECURSE_UNTRACKED_DIRS
             | pygit2.GIT_DIFF_UPDATE_INDEX
             # GIT_DIFF_UPDATE_INDEX just updates timestamps in the index to make the diff quicker next time
             # none of the paths or hashes change, and the end result stays the same.
