@@ -2,6 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import re
 import sys
 
 import click
@@ -152,7 +153,7 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
             )
             pointer_dict["format"] = import_format
             # TODO - is this the right prefix and name?
-            tilename = os.path.splitext(os.path.basename(source))[0] + import_ext
+            tilename = _remove_las_ext(os.path.basename(source)) + import_ext
             tile_prefix = hexhash(tilename)[0:2]
             blob_path = f"{ds_inner_path}/tile/{tile_prefix}/{tilename}"
             write_blob_to_stream(
@@ -176,6 +177,13 @@ def point_cloud_import(ctx, convert_to_copc, ds_path, do_checkout, sources):
         repo_key_filter=RepoKeyFilter.datasets([ds_path]),
         create_parts_if_missing=parts_to_create,
     )
+
+
+def _remove_las_ext(filename):
+    match = re.fullmatch(r"(.+?)(\.copc)*\.la[sz]", filename, re.IGNORECASE)
+    if match:
+        return match.group(1)
+    return filename
 
 
 def _format_array(array):
@@ -221,7 +229,7 @@ def check_for_non_homogenous_metadata(m1, m2):
         m1, m2, "point-data-record-format", "Point Data Record Format (PDRF)"
     )
     _check_for_non_homogenous_field(
-        m1, m2, "point-data-record-length", "Point Data Record Format (PDRF)"
+        m1, m2, "point-data-record-length", "Point Data Record Length"
     )
     # Do CRS a bit differently so we can format the output.
     if m1["crs"] != m2["crs"]:
