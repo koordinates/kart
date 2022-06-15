@@ -349,7 +349,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             assert isinstance(dataset, PointCloudV1)
 
             reset_index_paths.append(dataset.path)
-            ds_tiles_dir = self.path / dataset.path
+            ds_tiles_dir = (self.path / dataset.path).resolve()
             # Sanity check to make sure we're not deleting something we shouldn't.
             assert self.path in ds_tiles_dir.parents
             assert self.repo.workdir_path in ds_tiles_dir.parents
@@ -361,7 +361,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
     def _update_dataset_in_workdir(
         self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
     ):
-        ds_tiles_dir = self.path / ds_path
+        ds_tiles_dir = (self.path / ds_path).resolve()
         # Sanity check to make sure we're not messing with files we shouldn't:
         assert self.path in ds_tiles_dir.parents
         assert self.repo.workdir_path in ds_tiles_dir.parents
