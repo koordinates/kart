@@ -29,7 +29,7 @@ MODULE_COMMANDS = {
     "data": {"data"},
     "diff": {"diff"},
     "fsck": {"fsck"},
-    "init": {"import", "init"},
+    "init": {"init"},
     "log": {"log"},
     "merge": {"merge"},
     "meta": {"commit-files", "meta"},
@@ -40,6 +40,7 @@ MODULE_COMMANDS = {
     "status": {"status"},
     "query": {"query"},
     "upgrade": {"upgrade"},
+    "tabular.import_": {"import"},
     "point_cloud.import_": {"point-cloud-import"},
 }
 
