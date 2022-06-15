@@ -328,14 +328,15 @@ def extract_pc_tile_metadata(
     info = metadata["readers.las"]
 
     native_extent = get_native_extent(info)
-    native_crs = info["srs"]["wkt"]
+    compound_crs = info["srs"].get("compoundwkt")
+    horizontal_crs = info["srs"].get("wkt")
     result = {
         "compressed": info["compressed"],
         "version": f"{info['major_version']}.{info['minor_version']}",
         "copc-version": get_copc_version(info),
         "point-data-record-format": info["dataformat_id"],
         "point-data-record-length": info["point_length"],
-        "crs": native_crs,
+        "crs": compound_crs or horizontal_crs,
         "native-extent": native_extent,
         "count": info["count"],
     }
@@ -344,7 +345,8 @@ def extract_pc_tile_metadata(
             metadata["filters.info"]["schema"]
         )
     if calc_crs84_extent:
-        crs84_extent = _calc_crs84_extent(native_extent, native_crs)
+        # PDAL seems to work best if we give it only the horizontal CRS here:
+        crs84_extent = _calc_crs84_extent(native_extent, horizontal_crs or compound_crs)
         if crs84_extent is not None:
             result["crs84-extent"] = crs84_extent
     return result
