@@ -201,7 +201,9 @@ class BaseDataset(DatasetDiffMixin, metaclass=BaseDatasetMetaClass):
     SCHEMA_JSON = MetaItemDefinition("schema.json", MetaItemFileType.JSON)
     # Any XML metadata about the dataset.
     METADATA_XML = MetaItemDefinition("metadata.xml", MetaItemFileType.XML)
-    # CRS definitions in well-known-text:
+    # No more than one unnamed CRS definition in a single file named "crs.wkt":
+    CRS_WKT = MetaItemDefinition("crs.wkt", MetaItemFileType.WKT)
+    # Any number of named CRS definitions in well-known-text in a folder called "crs":
     CRS_DEFINITIONS = MetaItemDefinition(
         re.compile(r"crs/(.*)\.wkt"), MetaItemFileType.WKT
     )
