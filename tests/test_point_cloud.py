@@ -57,6 +57,21 @@ def test_import_single_las(
             assert r.exit_code == 0, r.stderr
             assert r.stdout.splitlines() == ["autzen"]
 
+            r = cli_runner.invoke(["meta", "get", "autzen", "format.json", "-ojson"])
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "autzen": {
+                    "format.json": {
+                        "compression": "laz",
+                        "lasVersion": "1.4",
+                        "optimization": "copc",
+                        "optimizationVersion": "1.0",
+                        "pointDataRecordFormat": 6,
+                        "pointDataRecordLength": 30,
+                    }
+                }
+            }
+
             r = cli_runner.invoke(["meta", "get", "autzen", "schema.json", "-ojson"])
             assert r.exit_code == 0, r.stderr
             assert json.loads(r.stdout) == {
@@ -75,6 +90,8 @@ def test_import_single_las(
                         {"name": "UserData", "dataType": "integer", "size": 8},
                         {"name": "PointSourceId", "dataType": "integer", "size": 16},
                         {"name": "GpsTime", "dataType": "float", "size": 64},
+                        {"name": "ScanChannel", "dataType": "integer", "size": 8},
+                        {"name": "ClassFlags", "dataType": "integer", "size": 8},
                     ]
                 }
             }
@@ -86,10 +103,10 @@ def test_import_single_las(
                 "",
                 "+++ autzen:tile:autzen.copc.laz",
                 "+                                     name = autzen.copc.laz",
-                "+                             extent.crs84 = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84",
-                "+                            extent.native = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
-                "+                                   format = pc:v1/copc-1.0",
-                "+                             points.count = 106",
+                "+                              crs84Extent = -123.075389,-123.0625145,44.04998981,44.06229306,407.35,536.84",
+                "+                                   format = laz-1.4/copc-1.0",
+                "+                             nativeExtent = 635616.31,638864.6,848977.79,853362.37,407.35,536.84",
+                "+                               pointCount = 106",
                 "+                                      oid = sha256:213ef4211ba375e2eec60aa61b6c230d1a3d1498b8fcc39150fd3040ee8f0512",
                 "+                                     size = 3607",
             ]
@@ -152,6 +169,8 @@ def test_import_several_las(
                         {"name": "UserData", "dataType": "integer", "size": 8},
                         {"name": "PointSourceId", "dataType": "integer", "size": 16},
                         {"name": "GpsTime", "dataType": "float", "size": 64},
+                        {"name": "ScanChannel", "dataType": "integer", "size": 8},
+                        {"name": "ClassFlags", "dataType": "integer", "size": 8},
                         {"name": "Red", "dataType": "integer", "size": 16},
                         {"name": "Green", "dataType": "integer", "size": 16},
                         {"name": "Blue", "dataType": "integer", "size": 16},
@@ -194,10 +213,23 @@ def test_import_no_convert(
                     "point-cloud-import",
                     *glob(f"{auckland}/auckland_0_0.laz"),
                     "--dataset-path=auckland",
-                    "--no-convert-to-copc",
+                    "--preserve-format",
                 ]
             )
             assert r.exit_code == 0, r.stderr
+
+            r = cli_runner.invoke(["meta", "get", "auckland", "format.json", "-ojson"])
+            assert r.exit_code == 0, r.stderr
+            assert json.loads(r.stdout) == {
+                "auckland": {
+                    "format.json": {
+                        "compression": "laz",
+                        "lasVersion": "1.2",
+                        "pointDataRecordFormat": 3,
+                        "pointDataRecordLength": 34,
+                    }
+                }
+            }
 
             r = cli_runner.invoke(["show", "HEAD", "auckland:tile:auckland_0_0.laz"])
             assert r.exit_code == 0, r.stderr
@@ -206,10 +238,10 @@ def test_import_no_convert(
                 "",
                 "+++ auckland:tile:auckland_0_0.laz",
                 "+                                     name = auckland_0_0.laz",
-                "+                             extent.crs84 = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
-                "+                            extent.native = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
-                "+                                   format = pc:v1/laz-1.2",
-                "+                             points.count = 4231",
+                "+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
+                "+                                   format = laz-1.2",
+                "+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
+                "+                               pointCount = 4231",
                 "+                                      oid = sha256:6b980ce4d7f4978afd3b01e39670e2071a792fba441aca45be69be81cb48b08c",
                 "+                                     size = 51489",
             ]
@@ -235,6 +267,9 @@ def test_import_mismatched_las(
                 )
                 assert r.exit_code == INVALID_FILE_FORMAT
                 assert "Non-homogenous" in r.stderr
+                # This is disallowed even though we are converting to COPC, since these tiles would have different
+                # schemas even once converted to COPC.
+                assert "schema" in r.stderr
 
 
 def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal):
@@ -275,34 +310,34 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
         r = cli_runner.invoke(["diff"])
         assert r.exit_code == 0, r.stderr
         assert r.stdout.splitlines() == [
-            "--- auckland:tile:auckland_1_1.copc.laz",
-            "+++ auckland:tile:auckland_1_1.copc.laz",
-            "-                             extent.crs84 = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15",
-            "+                             extent.crs84 = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
-            "-                            extent.native = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15",
-            "+                            extent.native = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
-            "-                             points.count = 1558",
-            "+                             points.count = 4231",
-            "-                                      oid = sha256:78d4867cb7256e188fadcff6e2338489fc6e6787a74cc0f7eb9420fa028e190c",
-            "+                                      oid = sha256:e3003c43cd3ab4151da80b12878e179b6f31ebe14db3a8989ba86fc3adf937c7",
-            "-                                     size = 24537",
-            "+                                     size = 69609",
-            "--- auckland:tile:auckland_3_3.copc.laz",
-            "-                                     name = auckland_3_3.copc.laz",
-            "-                             extent.crs84 = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
-            "-                            extent.native = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
-            "-                                   format = pc:v1/copc-1.0",
-            "-                             points.count = 29",
-            "-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
-            "-                                     size = 2319",
-            "+++ auckland:tile:auckland_4_4.copc.laz",
-            "+                                     name = auckland_4_4.copc.laz",
-            "+                             extent.crs84 = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
-            "+                            extent.native = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
-            "+                                   format = pc:v1/copc-1.0",
-            "+                             points.count = 29",
-            "+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
-            "+                                     size = 2319",
+            '--- auckland:tile:auckland_1_1.copc.laz',
+            '+++ auckland:tile:auckland_1_1.copc.laz',
+            '-                              crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15',
+            '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
+            '-                             nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15',
+            '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
+            '-                               pointCount = 1558',
+            '+                               pointCount = 4231',
+            '-                                      oid = sha256:1130618cd78bd1d144dbc467f278405d043fb10b6f19efb2c0cce23a9e24323e',
+            '+                                      oid = sha256:f4bf2dfd3734520a94dea6dc987e892fd2c5b4f4647bb51cb5b8f233e43ada7b',
+            '-                                     size = 24490',
+            '+                                     size = 69545',
+            '--- auckland:tile:auckland_3_3.copc.laz',
+            '-                                     name = auckland_3_3.copc.laz',
+            '-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
+            '-                                   format = laz-1.4/copc-1.0',
+            '-                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
+            '-                               pointCount = 29',
+            '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '-                                     size = 2319',
+            '+++ auckland:tile:auckland_4_4.copc.laz',
+            '+                                     name = auckland_4_4.copc.laz',
+            '+                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
+            '+                                   format = laz-1.4/copc-1.0',
+            '+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
+            '+                               pointCount = 29',
+            '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '+                                     size = 2319',
         ]
 
         r = cli_runner.invoke(["commit", "-m", "Edit point cloud tiles"])
@@ -313,34 +348,34 @@ def test_working_copy_edit(cli_runner, data_archive, monkeypatch, requires_pdal)
         assert r.stdout.splitlines()[4:] == [
             "    Edit point cloud tiles",
             "",
-            "--- auckland:tile:auckland_1_1.copc.laz",
-            "+++ auckland:tile:auckland_1_1.copc.laz",
-            "-                             extent.crs84 = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15",
-            "+                             extent.crs84 = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83",
-            "-                            extent.native = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15",
-            "+                            extent.native = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83",
-            "-                             points.count = 1558",
-            "+                             points.count = 4231",
-            "-                                      oid = sha256:78d4867cb7256e188fadcff6e2338489fc6e6787a74cc0f7eb9420fa028e190c",
-            "+                                      oid = sha256:e3003c43cd3ab4151da80b12878e179b6f31ebe14db3a8989ba86fc3adf937c7",
-            "-                                     size = 24537",
-            "+                                     size = 69609",
-            "--- auckland:tile:auckland_3_3.copc.laz",
-            "-                                     name = auckland_3_3.copc.laz",
-            "-                             extent.crs84 = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
-            "-                            extent.native = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
-            "-                                   format = pc:v1/copc-1.0",
-            "-                             points.count = 29",
-            "-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
-            "-                                     size = 2319",
-            "+++ auckland:tile:auckland_4_4.copc.laz",
-            "+                                     name = auckland_4_4.copc.laz",
-            "+                             extent.crs84 = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8",
-            "+                            extent.native = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8",
-            "+                                   format = pc:v1/copc-1.0",
-            "+                             points.count = 29",
-            "+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3",
-            "+                                     size = 2319",
+            '--- auckland:tile:auckland_1_1.copc.laz',
+            '+++ auckland:tile:auckland_1_1.copc.laz',
+            '-                              crs84Extent = 174.7492629,174.7606572,-36.84205419,-36.83288872,-1.48,35.15',
+            '+                              crs84Extent = 174.7382443,174.7496594,-36.85123712,-36.84206322,-1.66,99.83',
+            '-                             nativeExtent = 1755989.03,1756987.13,5921220.62,5922219.49,-1.48,35.15',
+            '+                             nativeExtent = 1754987.85,1755987.77,5920219.76,5921219.64,-1.66,99.83',
+            '-                               pointCount = 1558',
+            '+                               pointCount = 4231',
+            '-                                      oid = sha256:1130618cd78bd1d144dbc467f278405d043fb10b6f19efb2c0cce23a9e24323e',
+            '+                                      oid = sha256:f4bf2dfd3734520a94dea6dc987e892fd2c5b4f4647bb51cb5b8f233e43ada7b',
+            '-                                     size = 24490',
+            '+                                     size = 69545',
+            '--- auckland:tile:auckland_3_3.copc.laz',
+            '-                                     name = auckland_3_3.copc.laz',
+            '-                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
+            '-                                   format = laz-1.4/copc-1.0',
+            '-                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
+            '-                               pointCount = 29',
+            '-                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '-                                     size = 2319',
+            '+++ auckland:tile:auckland_4_4.copc.laz',
+            '+                                     name = auckland_4_4.copc.laz',
+            '+                              crs84Extent = 174.7726418,174.7819673,-36.82369125,-36.82346553,-1.28,9.8',
+            '+                                   format = laz-1.4/copc-1.0',
+            '+                             nativeExtent = 1758093.46,1758925.34,5923219.8,5923229.38,-1.28,9.8',
+            '+                               pointCount = 29',
+            '+                                      oid = sha256:64895828ea03ce9cafaef4f387338aab8d498c8eccaef1503b8b3bd97e57c5a3',
+            '+                                     size = 2319',
         ]
 
         r = cli_runner.invoke(["show", "-ojson"])
