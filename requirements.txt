@@ -8,20 +8,21 @@ attrs==21.4.0
     # via jsonschema
 cached-property==1.5.2
     # via pygit2
-certifi==2021.10.8
+certifi==2022.5.18.1
     # via -r requirements/requirements.in
 cffi==1.15.0
     # via
     #   cryptography
     #   pygit2
-click==7.1.2
+click==8.1.3
     # via -r requirements/requirements.in
 cryptography==37.0.2
     # via -r requirements/requirements.in
 greenlet==1.1.2
     # via sqlalchemy
-importlib-metadata==4.11.3
+importlib-metadata==4.11.4
     # via
+    #   click
     #   jsonschema
     #   sqlalchemy
 jsonschema==4.1.2
@@ -44,7 +45,7 @@ pyrsistent==0.18.1
     # via jsonschema
 rtree==0.9.7
     # via -r requirements/requirements.in
-sqlalchemy==1.4.36
+sqlalchemy==1.4.37
     # via -r requirements/requirements.in
 typing-extensions==4.2.0
     # via importlib-metadata

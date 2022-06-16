@@ -395,9 +395,9 @@ def _calc_crs84_extent(src_extent, src_crs):
     src_points = np.array(
         [src_extent[0::2], src_extent[1::2]],
         dtype=[
-            ('X', np.dtype(float)),
-            ('Y', np.dtype(float)),
-            ('Z', np.dtype(float)),
+            ("X", np.dtype(float)),
+            ("Y", np.dtype(float)),
+            ("Z", np.dtype(float)),
         ],
     )
 
@@ -416,7 +416,7 @@ def _calc_crs84_extent(src_extent, src_crs):
         L.warning("Couldn't convert tile CRS to EPGS:4326")
         return None
     metadata = _unwrap_metadata(pipeline.metadata)
-    b = metadata['filters.stats']['bbox']['EPSG:4326']['bbox']
+    b = metadata["filters.stats"]["bbox"]["EPSG:4326"]["bbox"]
     return b["minx"], b["maxx"], b["miny"], b["maxy"], b["minz"], b["maxz"]
 
 

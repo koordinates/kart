@@ -136,7 +136,7 @@ def clone(
     url,
     directory,
 ):
-    """ Clone a repository into a new directory """
+    """Clone a repository into a new directory"""
     repo_path = Path(directory or get_directory_from_url(url, is_bare=bare)).resolve()
 
     if repo_path.exists() and any(repo_path.iterdir()):

@@ -26,7 +26,7 @@ H = pytest.helpers.helpers()
 def test_checkout_workingcopy(
     archive, table, commit_sha, data_archive, tmp_path, cli_runner
 ):
-    """ Checkout a working copy to edit """
+    """Checkout a working copy to edit"""
     with data_archive(archive) as repo_path:
         H.clear_working_copy()
 
@@ -58,7 +58,7 @@ def test_checkout_workingcopy(
 
 
 def test_checkout_detached(data_working_copy, cli_runner):
-    """ Checkout a working copy to edit """
+    """Checkout a working copy to edit"""
     with data_working_copy("points") as (repo_dir, wc):
         repo = KartRepo(repo_dir)
         with repo.working_copy.tabular.session() as sess:

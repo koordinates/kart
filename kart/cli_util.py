@@ -10,6 +10,7 @@ import click
 import jsonschema
 import pygit2
 from click.core import Argument
+from click.shell_completion import CompletionItem
 
 
 def _pygit2_configs():
@@ -346,6 +347,13 @@ class OutputFormatType(click.ParamType):
                 ctx=ctx,
                 param=param,
             )
+
+    def shell_complete(self, ctx=None, param=None, incomplete=""):
+        return [
+            CompletionItem(type)
+            for type in self.output_types
+            if type.startswith(incomplete)
+        ]
 
 
 def parse_output_format(output_format, json_style):

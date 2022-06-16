@@ -21,6 +21,7 @@ from .key_filters import RepoKeyFilter
 from .output_util import dump_json_output
 from .repo import KartRepoState
 from .timestamps import datetime_to_iso8601_utc, timedelta_to_iso8601_tz
+from kart.completion_shared import path_completer
 
 
 class PreserveDoubleDash(click.Command):
@@ -347,7 +348,11 @@ def convert_user_patterns_to_raw_paths(paths, repo, commits):
     help="Doesn't print out the ref names of any commits that are shown. The option --no-decorate is short-hand for --decorate=no.",
 )
 @click.argument(
-    "args", metavar="[REVISION RANGE] [--] [FEATURES]", nargs=-1, type=click.UNPROCESSED
+    "args",
+    metavar="[REVISION RANGE] [--] [FEATURES]",
+    nargs=-1,
+    type=click.UNPROCESSED,
+    shell_complete=path_completer,
 )
 def log(
     ctx,

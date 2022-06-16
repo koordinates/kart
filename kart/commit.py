@@ -168,7 +168,7 @@ def commit(ctx, message, allow_empty, allow_pk_conflicts, output_format, filters
 
 
 def get_commit_message(repo, diff, draft_message="", quiet=False):
-    """ Launches the system editor to get a commit message """
+    """Launches the system editor to get a commit message"""
     initial_message = [
         draft_message,
         "# Please enter the commit message for your changes. Lines starting",
