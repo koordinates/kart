@@ -391,7 +391,7 @@ def fast_import_tables(
                     for ds in datasets:
                         try:
                             feature_tree = ds.feature_tree
-                        except KeyError:
+                        except (KeyError, AttributeError):
                             pass
                         else:
                             for subtree in feature_tree:
