@@ -6,15 +6,15 @@
 #
 alabaster==0.7.12
     # via sphinx
-babel==2.10.2
+babel==2.10.3
     # via sphinx
-certifi==2022.5.18.1
+certifi==2022.6.15
     # via
     #   -c requirements/../requirements.txt
     #   requests
 charset-normalizer==2.0.12
     # via requests
-colorama==0.4.4
+colorama==0.4.5
     # via
     #   -c requirements/test.txt
     #   sphinx-autobuild
@@ -63,7 +63,7 @@ sphinx-autobuild==2021.3.14
     # via -r requirements/docs.in
 sphinx-rtd-theme==1.0.0
     # via -r requirements/docs.in
-sphinx==5.0.1
+sphinx==5.0.2
     # via
     #   sphinx-autobuild
     #   sphinx-rtd-theme
