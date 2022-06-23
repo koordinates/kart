@@ -251,12 +251,6 @@ class WorkingCopy:
     ):
         """Reset all working copy parts to the head commit. See reset() below."""
 
-        # FIXME - this should also work for a regular reset, not just reset_to_head.
-        # FIXME - this features missing+promised features somehow, which messes with the spatial filter.
-        if PartType.WORKDIR in create_parts_if_missing or self.workdir is not None:
-            self.repo.invoke_git("lfs", "fetch")
-            click.echo()  # LFS fetch leaves the cursor at the start of a line that already has text - scroll past that.
-
         self.reset(
             self.repo.head_commit,
             create_parts_if_missing=create_parts_if_missing,
@@ -293,6 +287,13 @@ class WorkingCopy:
         Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
         filter is up to date.
         """
+
+        # FIXME - this currently only fetches LFS tiles at HEAD - need to make it work for arbitrary commits.
+        # FIXME - this features missing+promised features somehow, which messes with the spatial filter.
+        if PartType.WORKDIR in create_parts_if_missing or self.workdir is not None:
+            self.repo.invoke_git("lfs", "fetch")
+            click.echo()  # LFS fetch leaves the cursor at the start of a line that already has text - scroll past that.
+
         created_parts = ()
         if create_parts_if_missing:
             # Even we're only partially resetting the WC, we still need to do a full reset on anything that
