@@ -325,11 +325,11 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self.update_state_table_tree(target_tree_id)
 
     def write_full_datasets_to_workdir(self, datasets):
-        reset_index_paths = []
+        dataset_paths = []
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
-            reset_index_paths.append(dataset.path)
+            dataset_paths.append(dataset.path)
             wc_tiles_dir = self.path / dataset.path
             (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
@@ -341,14 +341,14 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     continue
                 shutil.copy(lfs_path, wc_tiles_dir / tilename)
 
-        self._reset_workdir_index(reset_index_paths)
+        self._reset_workdir_index_for_directories(dataset_paths)
 
     def delete_datasets_from_workdir(self, datasets):
-        reset_index_paths = []
+        dataset_paths = []
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
-            reset_index_paths.append(dataset.path)
+            dataset_paths.append(dataset.path)
             ds_tiles_dir = (self.path / dataset.path).resolve()
             # Sanity check to make sure we're not deleting something we shouldn't.
             assert self.path in ds_tiles_dir.parents
@@ -356,7 +356,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if ds_tiles_dir.is_dir():
                 shutil.rmtree(ds_tiles_dir)
 
-        self._reset_workdir_index(reset_index_paths)
+        self._reset_workdir_index_for_directories(dataset_paths)
 
     def _update_dataset_in_workdir(
         self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
@@ -398,28 +398,69 @@ class FileSystemWorkingCopy(WorkingCopyPart):
 
         if not track_changes_as_dirty:
             if do_update_all:
-                self._reset_workdir_index([ds_path])
+                self._reset_workdir_index_for_directories([ds_path])
             else:
-                self._reset_workdir_index(reset_index_paths)
+                self._reset_workdir_index_for_files(reset_index_paths)
 
-    def _reset_workdir_index(self, reset_index_paths):
+    def _reset_workdir_index_for_directories(self, directory_paths):
+        env = tool_environment()
+        env["GIT_INDEX_FILE"] = str(self.index_path)
+
+        try:
+            # Use Git to figure out which files in the in the index need to be updated.
+            cmd = [
+                "git",
+                "add",
+                "--all",
+                "--intent-to-add",
+                "--dry-run",
+                "--",
+                *directory_paths,
+            ]
+            output = subprocess.check_output(
+                cmd, env=env, encoding="utf-8", cwd=self.path
+            ).strip()
+        except subprocess.CalledProcessError as e:
+            sys.exit(translate_subprocess_exit_code(e.returncode))
+
+        if not output:
+            # Nothing to be done.
+            return
+
+        def parse_path(line):
+            path = line.strip().split(maxsplit=1)[1]
+            if path.startswith("'") or path.startswith('"'):
+                path = path[1:-1]
+            return path
+
+        # Use git update-index to reset these paths - we can't use git add directly since
+        # that is for staging files which involves also writing them to the ODB, which we don't want.
+        file_paths = [parse_path(line) for line in output.splitlines()]
+        self._reset_workdir_index_for_files(file_paths)
+
+    def _reset_workdir_index_for_files(self, file_paths):
         """
         Creates a file <GIT-DIR>/workdir-index that is an index of that part of the contents of the workdir
         that is contained within the given update_index_paths (which can be files or folders).
         """
         # NOTE - we could also use pygit2.Index to do this, but this has been easier to get working so far.
+
         env = tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
-        for path in reset_index_paths:
-            cmd = "add" if (self.path / path).exists() else "reset"
-            try:
-                args = ["git", cmd, "--", path]
-                subprocess.check_call(
-                    args, env=env, cwd=self.path, stdout=subprocess.DEVNULL
-                )
-            except subprocess.CalledProcessError as e:
-                sys.exit(translate_subprocess_exit_code(e.returncode))
+        try:
+            # --info-only means don't write the file to the ODB - we only want to update the index.
+            cmd = ["git", "update-index", "--add", "--remove", "--info-only", "--stdin"]
+            subprocess.run(
+                cmd,
+                check=True,
+                env=env,
+                cwd=self.path,
+                input="\n".join(file_paths),
+                encoding="utf-8",
+            )
+        except subprocess.CalledProcessError as e:
+            sys.exit(translate_subprocess_exit_code(e.returncode))
 
     def soft_reset_after_commit(
         self, commit_or_tree, *, mark_as_clean=None, now_outside_spatial_filter=None
@@ -433,7 +474,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             ).paths()
         )
 
-        self._reset_workdir_index(reset_index_paths)
+        self._reset_workdir_index_for_directories(reset_index_paths)
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 
     def raw_diff_from_index(self):
