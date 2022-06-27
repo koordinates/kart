@@ -136,6 +136,8 @@ def pointer_file_bytes_to_dict(pointer_file_bytes, result=None):
         key, value = parts
         if key.startswith("ext-0-kart-encoded."):
             result.update(_decode_extra_values(key[len("ext-0-kart-encoded.") :]))
+        elif key == "size":
+            result[key] = int(value)
         else:
             result[key] = value
     return result

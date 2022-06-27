@@ -3,6 +3,7 @@ import click
 import logging
 from enum import Enum, auto
 import functools
+from pathlib import Path
 import shutil
 import subprocess
 import sys
@@ -325,11 +326,9 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             self.update_state_table_tree(target_tree_id)
 
     def write_full_datasets_to_workdir(self, datasets):
-        dataset_paths = []
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
-            dataset_paths.append(dataset.path)
             wc_tiles_dir = self.path / dataset.path
             (wc_tiles_dir).mkdir(parents=True, exist_ok=True)
 
@@ -341,14 +340,12 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     continue
                 shutil.copy(lfs_path, wc_tiles_dir / tilename)
 
-        self._reset_workdir_index_for_directories(dataset_paths)
+        self._reset_workdir_index_for_datasets(datasets)
 
     def delete_datasets_from_workdir(self, datasets):
-        dataset_paths = []
         for dataset in datasets:
             assert isinstance(dataset, PointCloudV1)
 
-            dataset_paths.append(dataset.path)
             ds_tiles_dir = (self.path / dataset.path).resolve()
             # Sanity check to make sure we're not deleting something we shouldn't.
             assert self.path in ds_tiles_dir.parents
@@ -356,7 +353,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
             if ds_tiles_dir.is_dir():
                 shutil.rmtree(ds_tiles_dir)
 
-        self._reset_workdir_index_for_directories(dataset_paths)
+        self._reset_workdir_index_for_datasets(datasets)
 
     def _update_dataset_in_workdir(
         self, ds_path, diff_to_apply, ds_filter, track_changes_as_dirty
@@ -368,7 +365,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         assert ds_tiles_dir.is_dir()
 
         do_update_all = ds_filter.match_all
-        reset_index_paths = []
+        reset_index_files = []
 
         tile_diff = diff_to_apply.get("tile")
         if not tile_diff:
@@ -380,7 +377,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 if tile_path.is_file():
                     tile_path.unlink()
                 if not do_update_all:
-                    reset_index_paths.append(f"{ds_path}/{tilename}")
+                    reset_index_files.append(f"{ds_path}/{tilename}")
 
             if tile_delta.type in ("update", "insert"):
                 tilename = tile_delta.new_key
@@ -394,15 +391,22 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                     continue
                 shutil.copy(lfs_path, ds_tiles_dir / tilename)
                 if not do_update_all:
-                    reset_index_paths.append(f"{ds_path}/{tilename}")
+                    reset_index_files.append(f"{ds_path}/{tilename}")
 
         if not track_changes_as_dirty:
             if do_update_all:
-                self._reset_workdir_index_for_directories([ds_path])
+                self._reset_workdir_index_for_datasets([ds_path])
             else:
-                self._reset_workdir_index_for_files(reset_index_paths)
+                self._reset_workdir_index_for_files(reset_index_files)
 
-    def _reset_workdir_index_for_directories(self, directory_paths):
+    def _reset_workdir_index_for_datasets(
+        self, datasets, repo_key_filter=RepoKeyFilter.MATCH_ALL
+    ):
+        def path(ds_or_path):
+            return ds_or_path.path if hasattr(ds_or_path, "path") else ds_or_path
+
+        paths = [path(d) for d in datasets]
+
         env = tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
 
@@ -415,7 +419,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 "--intent-to-add",
                 "--dry-run",
                 "--",
-                *directory_paths,
+                *paths,
             ]
             output = subprocess.check_output(
                 cmd, env=env, encoding="utf-8", cwd=self.path
@@ -433,9 +437,17 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 path = path[1:-1]
             return path
 
+        def matches_repo_key_filter(path):
+            path = Path(path.replace("\\", "/"))
+            ds_path = str(path.parents[0])
+            tile_name = path.name
+            return repo_key_filter.recursive_get([ds_path, "tile", tile_name])
+
         # Use git update-index to reset these paths - we can't use git add directly since
         # that is for staging files which involves also writing them to the ODB, which we don't want.
         file_paths = [parse_path(line) for line in output.splitlines()]
+        if not repo_key_filter.match_all:
+            file_paths = [p for p in file_paths if matches_repo_key_filter(p)]
         self._reset_workdir_index_for_files(file_paths)
 
     def _reset_workdir_index_for_files(self, file_paths):
@@ -443,7 +455,10 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         Creates a file <GIT-DIR>/workdir-index that is an index of that part of the contents of the workdir
         that is contained within the given update_index_paths (which can be files or folders).
         """
-        # NOTE - we could also use pygit2.Index to do this, but this has been easier to get working so far.
+        # NOTE - we could also try to use a pygit2.Index to do this - but however we do this, it is
+        # important that we don't store just (path, OID, mode) for each entry, but that we also store
+        # the file's `stat` information - this allows for an optimisation where diffs can be generated
+        # without hashing the working copy files. pygit2.Index doesn't give easy access to this info.
 
         env = tool_environment()
         env["GIT_INDEX_FILE"] = str(self.index_path)
@@ -466,15 +481,13 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         self, commit_or_tree, *, mark_as_clean=None, now_outside_spatial_filter=None
     ):
         # TODO - handle finer-grained soft-resets than entire datasets
-        reset_index_paths = list(
-            self.repo.datasets(
-                commit_or_tree,
-                repo_key_filter=mark_as_clean,
-                filter_dataset_type="point-cloud",
-            ).paths()
+        datasets = self.repo.datasets(
+            commit_or_tree,
+            repo_key_filter=mark_as_clean,
+            filter_dataset_type="point-cloud",
         )
 
-        self._reset_workdir_index_for_directories(reset_index_paths)
+        self._reset_workdir_index_for_datasets(datasets, repo_key_filter=mark_as_clean)
         self.update_state_table_tree(commit_or_tree.peel(pygit2.Tree))
 
     def raw_diff_from_index(self):
