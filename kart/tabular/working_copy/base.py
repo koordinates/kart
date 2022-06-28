@@ -1055,7 +1055,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
         return feat_count
 
-    def drop_tables(self, target_tree_or_commit, *datasets):
+    def drop_tables(self, commit_or_tree, *datasets):
         """Drop the tables for all the given datasets."""
         with self.session() as sess:
             for dataset in datasets:
@@ -1086,7 +1086,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
     def reset(
         self,
-        target_tree_or_commit,
+        commit_or_tree,
         *,
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
@@ -1103,7 +1103,7 @@ class TableWorkingCopy(WorkingCopyPart):
         tracking table is used to record all the changes, so that they can be committed later.
 
         If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
-        present at target_tree_or_commit will be written from scratch using write_full.
+        present at commit_or_tree will be written from scratch using write_full.
         Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
         filter is up to date.
         """
@@ -1112,14 +1112,14 @@ class TableWorkingCopy(WorkingCopyPart):
             assert repo_key_filter.match_all and not track_changes_as_dirty
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        commit = None
-        if isinstance(target_tree_or_commit, pygit2.Commit):
-            commit = target_tree_or_commit
-            target_tree = commit.tree
+        if commit_or_tree is not None:
+            target_commit = (
+                commit_or_tree if isinstance(commit_or_tree, pygit2.Commit) else None
+            )
+            target_tree = commit_or_tree.peel(pygit2.Tree)
+            target_tree_id = target_tree.id.hex
         else:
-            commit = None
-            target_tree = target_tree_or_commit
-        target_tree_id = target_tree.id.hex if target_tree else None
+            target_tree_id = target_tree = target_commit = None
 
         # base_tree is the tree the working copy is based on.
         # If the working copy exactly matches base_tree, it is clean and has an empty tracking table.
@@ -1202,12 +1202,12 @@ class TableWorkingCopy(WorkingCopyPart):
             # Delete old tables
             if ds_deletes:
                 self.drop_tables(
-                    target_tree_or_commit, *[base_datasets[d] for d in ds_deletes]
+                    commit_or_tree, *[base_datasets[d] for d in ds_deletes]
                 )
             # Write new tables
             if ds_inserts:
                 self.write_full(
-                    target_tree_or_commit, *[target_datasets[d] for d in ds_inserts]
+                    commit_or_tree, *[target_datasets[d] for d in ds_inserts]
                 )
 
             # Update tables that can be updated in place.
@@ -1218,7 +1218,7 @@ class TableWorkingCopy(WorkingCopyPart):
                     sess,
                     base_ds,
                     target_ds,
-                    commit,
+                    target_commit,
                     ds_filter=repo_key_filter[ds_path],
                     track_changes_as_dirty=track_changes_as_dirty,
                 )
@@ -1417,7 +1417,7 @@ class TableWorkingCopy(WorkingCopyPart):
 
     def soft_reset_after_commit(
         self,
-        target_tree_or_commit,
+        commit_or_tree,
         *,
         mark_as_clean=None,
         now_outside_spatial_filter=None,
@@ -1427,11 +1427,7 @@ class TableWorkingCopy(WorkingCopyPart):
         mark_as_clean - a RepoKeyFilter - deletes these PKs from the tracking table.
         now_outside_spatial_filter - a RepoKeyFilter - drops any features that match now_outside_spatial_filter altogether.
         """
-        tree_id = (
-            target_tree_or_commit.peel(pygit2.Tree).hex
-            if target_tree_or_commit
-            else None
-        )
+        tree_id = commit_or_tree.peel(pygit2.Tree).hex if commit_or_tree else None
         with self.session() as sess:
             self._update_state_table_tree(sess, tree_id)
             self._mark_as_clean(sess, mark_as_clean)

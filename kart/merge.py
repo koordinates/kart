@@ -235,7 +235,7 @@ def complete_merging_state(ctx):
 
     # FIXME - this blows away any WC changes the user has, but unfortunately,
     # we don't have any way of preserving them right now.
-    repo.working_copy.reset(repo[merge_commit_id])
+    repo.working_copy.reset_to_head()
 
     for filename in ALL_MERGE_FILES:
         repo.remove_gitdir_file(filename)
@@ -314,7 +314,7 @@ def merge(ctx, ff, ff_only, dry_run, message, output_format, commit):
     if not no_op and not conflicts:
         # Update working copy.
         # TODO - maybe lock the working copy during a merge?
-        repo.working_copy.reset(repo[jdict["commit"]], quiet=do_json)
+        repo.working_copy.reset_to_head(quiet=do_json)
 
     if do_json:
         dump_json_output({"kart.merge/v1": jdict}, sys.stdout)

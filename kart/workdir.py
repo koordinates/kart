@@ -207,9 +207,30 @@ class FileSystemWorkingCopy(WorkingCopyPart):
                 return True
         return False
 
+    def _is_head(self, commit_or_tree):
+        return commit_or_tree.peel(pygit2.Tree) == self.repo.head_tree
+
+    def fetch_lfs_blobs(self, commit_or_tree):
+        if commit_or_tree is None:
+            return  # Nothing to do.
+
+        extra_args = []
+        if isinstance(commit_or_tree, pygit2.Commit) and not self._is_head(
+            commit_or_tree
+        ):
+            # Generally, `lfs fetch` does exactly what we need or at least the best we can do.
+            # The exception is resetting to a commit that is not HEAD - then we can tell lfs to fetch that commit.
+            remote_name = self.repo.head_remote_name_or_default
+            if remote_name:
+                extra_args = [remote_name, commit_or_tree.id.hex]
+
+        click.echo("LFS: ", nl=False)
+        self.repo.invoke_git("lfs", "fetch", *extra_args)
+        click.echo()  # LFS fetch sometimes leaves the cursor at the start of a line that already has text - scroll past that.
+
     def reset(
         self,
-        target_tree_or_commit,
+        commit_or_tree,
         *,
         repo_key_filter=RepoKeyFilter.MATCH_ALL,
         track_changes_as_dirty=False,
@@ -226,23 +247,24 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         tracking table is used to record all the changes, so that they can be committed later.
 
         If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
-        present at target_tree_or_commit will be written from scratch using write_full.
+        present at commit_or_tree will be written from scratch using write_full.
         Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
         filter is up to date.
         """
+
+        # We fetch the LFS tiles immediately before writing them to the working copy - unlike ODB objects that are already fetched.
+        self.fetch_lfs_blobs(commit_or_tree)
+
         if rewrite_full:
             # These aren't supported when we're doing a full rewrite.
             assert repo_key_filter.match_all and not track_changes_as_dirty
 
         L = logging.getLogger(f"{self.__class__.__qualname__}.reset")
-        commit = None
-        if isinstance(target_tree_or_commit, pygit2.Commit):
-            commit = target_tree_or_commit
-            target_tree = commit.tree
+        if commit_or_tree is not None:
+            target_tree = commit_or_tree.peel(pygit2.Tree)
+            target_tree_id = target_tree.id.hex
         else:
-            commit = None
-            target_tree = target_tree_or_commit
-        target_tree_id = target_tree.id.hex if target_tree else None
+            target_tree_id = target_tree = None
 
         # base_tree is the tree the working copy is based on.
         # If the working copy exactly matches base_tree, then it is clean,
@@ -304,7 +326,7 @@ class FileSystemWorkingCopy(WorkingCopyPart):
         for ds_path in ds_updates:
             # The diffing code can diff from any arbitrary commit, but not from the working copy -
             # it can only diff *to* the working copy.
-            # So, we need to diff from: target commit to: working copy then take the inverse.
+            # So, we need to diff from=target to=working copy then take the inverse.
             # TODO: Make this less confusing.
             diff_to_apply = ~diff_util.get_dataset_diff(
                 ds_path,

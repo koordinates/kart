@@ -30,11 +30,14 @@ def object_is_promised(object_error):
 
 def get_promisor_remote(repo):
     """Returns the name of the remote from which promised objects should be fetched."""
+    head_remote_name = repo.head_remote_name
+    all_remote_names = (r.name for r in repo.remotes)
+
     config = repo.config
-    for r in repo.remotes:
-        key = f"remote.{r.name}.promisor"
+    for name in sorted(all_remote_names, key=lambda name: name != head_remote_name):
+        key = f"remote.{name}.promisor"
         if key in config and config.get_bool(key):
-            return r.name
+            return name
     raise NotFound(
         "Some objects are missing+promised, but no promisor remote is configured"
     )

@@ -271,7 +271,7 @@ class WorkingCopy:
         rewrite_full=False,
     ):
         """
-        Resets the working copy to the given target-tree (or the tree pointed to by the given target-commit).
+        Resets the working copy to the given target-commit (or target-tree).
         This is called when we want to move content from the Kart repo ODB into the working copy - ie, during
         create-workingcopy, checkout, switch, restore, reset.
 
@@ -283,16 +283,10 @@ class WorkingCopy:
         tracking table is used to record all the changes, so that they can be committed later.
 
         If rewrite_full is True, then every dataset currently being tracked will be dropped, and all datasets
-        present at target_tree_or_commit will be written from scratch using write_full.
+        present at commit_or_tree will be written from scratch using write_full.
         Since write_full honours the current repo spatial filter, this also ensures that the working copy spatial
         filter is up to date.
         """
-
-        # FIXME - this currently only fetches LFS tiles at HEAD - need to make it work for arbitrary commits.
-        # FIXME - this features missing+promised features somehow, which messes with the spatial filter.
-        if PartType.WORKDIR in create_parts_if_missing or self.workdir is not None:
-            self.repo.invoke_git("lfs", "fetch")
-            click.echo()  # LFS fetch leaves the cursor at the start of a line that already has text - scroll past that.
 
         created_parts = ()
         if create_parts_if_missing:

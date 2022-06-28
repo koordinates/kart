@@ -690,21 +690,67 @@ class KartRepo(pygit2.Repository):
         return self[EMPTY_TREE_SHA]
 
     @property
-    def head_branch(repo):
+    def head_branch(self):
         """
         Returns the branch that HEAD is currently on. Returns None if head is not on a branch - ie, head_is_detached.
         """
-        return None if repo.head_is_detached else repo.references["HEAD"].target
+        return None if self.head_is_detached else self.references["HEAD"].target
 
     @property
-    def head_branch_shorthand(repo):
+    def head_branch_shorthand(self):
         """
         Returns the shorthand for the branch that HEAD is currently on.
         Returns None if head is not on a branch - ie, head_is_detached.
         """
-        if repo.head_is_detached:
+        if self.head_is_detached:
             return None
-        return repo.references["HEAD"].target.rsplit("/", 1)[-1]
+        return self.references["HEAD"].target.rsplit("/", 1)[-1]
+
+    @property
+    def head_remote_name(self):
+        """
+        Returns the name of the remote that the HEAD branch is currently tracking.
+        Returns None if HEAD is not currently on a branch that is tracking a remote.
+        """
+        if self.head_is_detached or self.head_is_unborn:
+            return None
+        head_branch_shorthand = self.head_branch_shorthand
+        if not head_branch_shorthand:
+            return None
+        branch = self.branches.get(head_branch_shorthand)
+        if not branch or not branch.upstream:
+            return None
+        return branch.upstream.remote_name
+
+    @property
+    def head_remote(self):
+        """
+        Returns the pygit2.Remote object that the HEAD branch is currently tracking.
+        Returns None if HEAD is not currently on a branch that is tracking a remote.
+        """
+        head_remote_name = self.head_remote_name
+        if not head_remote_name:
+            return None
+        try:
+            return self.remotes[head_remote_name]
+        except KeyError:
+            return None
+
+    @property
+    def head_remote_name_or_default(self):
+        """
+        Returns the name of the remote that the HEAD branch is currently tracking.
+        Returns "origin" if HEAD is not currently on a branch that is tracking a remote,
+        as long as origin is the name of a remote. Otherwise, returns None.
+        """
+        remote_name = self.head_remote_name
+        if remote_name:
+            return remote_name
+        try:
+            if self.remotes["origin"]:
+                return "origin"
+        except KeyError:
+            return None
 
     _GIT_VAR_OUTPUT_RE = re.compile(
         r"^(?P<name>.*) <(?P<email>[^>]*)> (?P<time>\d+) (?P<offset>[+-]?\d+)$"
