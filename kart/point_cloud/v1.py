@@ -3,7 +3,7 @@ import re
 import shutil
 
 from kart.core import find_blobs_in_tree
-from kart.base_dataset import BaseDataset
+from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
 from kart.diff_structs import DatasetDiff, DeltaDiff
 from kart.exceptions import NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
@@ -30,12 +30,15 @@ class PointCloudV1(BaseDataset):
     # All relative paths should be relative to self.inner_tree - that is, to the tree named DATASET_DIRNAME.
     TILE_PATH = "tile/"
 
+    FORMAT_JSON = MetaItemDefinition("format.json", MetaItemFileType.JSON)
+
     META_ITEMS = (
         BaseDataset.TITLE,
         BaseDataset.DESCRIPTION,
         BaseDataset.METADATA_XML,
+        FORMAT_JSON,
         BaseDataset.SCHEMA_JSON,
-        BaseDataset.CRS_DEFINITIONS,
+        BaseDataset.CRS_WKT,
     )
 
     @property
@@ -93,11 +96,11 @@ class PointCloudV1(BaseDataset):
     def get_tile_summary_from_wc_path(self, wc_path):
         from kart.point_cloud.import_ import (
             extract_pc_tile_metadata,
-            pc_tile_metadata_to_pointer_metadata,
+            format_tile_info_for_pointer_file,
         )
 
-        metadata = pc_tile_metadata_to_pointer_metadata(
-            extract_pc_tile_metadata(wc_path)
+        metadata = format_tile_info_for_pointer_file(
+            extract_pc_tile_metadata(wc_path)["tile"]
         )
 
         oid, size = get_hash_and_size_of_file(wc_path)
