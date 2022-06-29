@@ -56,3 +56,35 @@ def equivalent_copc_pdrf(pdrf):
         return 7
     else:
         return 6
+
+
+def pdal_schema_to_kart_schema(pdal_schema):
+    """
+    Given the JSON schema as PDAL loaded it, format it as a Kart compatiblie schema.json item.
+    Eg "type" -> "dataType", size is measured in bits.
+    """
+    return [
+        _pdal_col_schema_to_kart_col_schema(col) for col in pdal_schema["dimensions"]
+    ]
+
+
+def _pdal_col_schema_to_kart_col_schema(pdal_col_schema):
+    return {
+        "name": pdal_col_schema["name"],
+        "dataType": _pdal_type_to_kart_type(pdal_col_schema["type"]),
+        # Kart measures data-sizes in bits, PDAL in bytes.
+        "size": pdal_col_schema["size"] * 8,
+    }
+
+
+# TODO - investigate what types PDAL can actually return - it's not the same as the LAZ spec.
+# TODO - our dataset types don't have any notion of signed vs unsigned.
+_PDAL_TYPE_TO_KART_TYPE = {
+    "floating": "float",
+    "unsigned": "integer",
+    "string": "text",
+}
+
+
+def _pdal_type_to_kart_type(pdal_type):
+    return _PDAL_TYPE_TO_KART_TYPE.get(pdal_type) or pdal_type
