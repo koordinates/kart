@@ -25,22 +25,35 @@ message(VERBOSE "Using CXX=${CMAKE_CXX_COMPILER} CC=${CMAKE_C_COMPILER} for exte
 
 # Prefer HomeBrew packages first, since the MacOS builtin ones can be ancient and weird.
 if(MACOS)
-  set(CMAKE_FIND_FRAMEWORK LAST)
+  execute_process(
+    COMMAND brew --prefix
+    RESULT_VARIABLE BREW_PREFIX_RETURN
+    OUTPUT_VARIABLE BREW_PREFIX
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(BREW_PREFIX_RETURN EQUAL 0)
+    message(STATUS "Found Homebrew at: ${BREW_PREFIX}")
+  endif()
 
-  if(NOT SQLite3_ROOT AND EXISTS /usr/local/opt/sqlite3)
-    set(SQLite3_ROOT /usr/local/opt/sqlite3)
-    list(APPEND pkgConfigPath /usr/local/opt/sqlite3/lib/pkgconfig)
-    message(STATUS "Preferring Homebrew SQLite3 over macOS: ${SQLite3_ROOT}")
-  endif()
-  if(NOT OpenSSL_ROOT AND EXISTS /usr/local/opt/openssl@1.1)
-    set(OpenSSL_ROOT /usr/local/opt/openssl@1.1)
-    list(APPEND pkgConfigPath /usr/local/opt/openssl@1.1/lib/pkgconfig)
-    message(STATUS "Preferring Homebrew OpenSSL over macOS: ${OpenSSL_ROOT}")
-  endif()
-  if(NOT CURL_ROOT AND EXISTS /usr/local/opt/curl)
-    set(CURL_ROOT /usr/local/opt/curl)
-    list(APPEND pkgConfigPath /usr/local/opt/curl/lib/pkgconfig)
-    message(STATUS "Preferring Homebrew CURL over macOS: ${CURL_ROOT}")
+  if(BREW_PREFIX)
+    set(CMAKE_FIND_FRAMEWORK LAST)
+
+    if(NOT SQLite3_ROOT AND EXISTS "${BREW_PREFIX}/opt/sqlite3")
+      set(SQLite3_ROOT "${BREW_PREFIX}/opt/sqlite3")
+      list(APPEND pkgConfigPath "${BREW_PREFIX}/opt/sqlite3/lib/pkgconfig")
+      message(STATUS "Preferring Homebrew SQLite3 over macOS: ${SQLite3_ROOT}")
+    endif()
+
+    if(NOT OpenSSL_ROOT AND EXISTS "${BREW_PREFIX}/opt/openssl@1.1")
+      set(OpenSSL_ROOT "${BREW_PREFIX}/opt/openssl@1.1")
+      list(APPEND pkgConfigPath "${BREW_PREFIX}/opt/openssl@1.1/lib/pkgconfig")
+      message(STATUS "Preferring Homebrew OpenSSL over macOS: ${OpenSSL_ROOT}")
+    endif()
+
+    if(NOT CURL_ROOT AND EXISTS "${BREW_PREFIX}/opt/curl")
+      set(CURL_ROOT "${BREW_PREFIX}/opt/curl")
+      list(APPEND pkgConfigPath "${BREW_PREFIX}/opt/curl/lib/pkgconfig")
+      message(STATUS "Preferring Homebrew CURL over macOS: ${CURL_ROOT}")
+    endif()
   endif()
 endif()
 
