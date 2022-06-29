@@ -182,7 +182,6 @@ def clone(
             repo.config["lfs.url"] = lfs_override
 
         install_lfs_hooks(repo)
-        repo.invoke_git("lfs", "fetch")
 
     # Create working copy, if needed.
     parts_to_create = (

@@ -110,6 +110,8 @@ class WorkingCopy:
 
     def parts(self):
         """Yields extant working-copy parts. Raises an error if a corrupt or uncontactable part is encountered."""
+        if self.repo.is_bare:
+            return
         for part in self._all_parts_inluding_nones():
             if part is not None:
                 yield part
@@ -169,12 +171,12 @@ class WorkingCopy:
 
     def create_parts_if_missing(self, parts_to_create, reset_to=DONT_RESET):
         """
-        Creates the named parts if they are missing and can be created. Returns any created parts themselves.
-        Supported parts:
-        tabular
+        Creates the given parts if they are missing and can be created. Returns any created parts themselves.
+        parts_to_create is a collection of PartType enum values.
         """
-        # TODO - support more parts here. Next part to be added is the file-based working copy for point clouds.
         created_parts = []
+        if self.repo.is_bare:
+            return created_parts
 
         for part_type in parts_to_create:
             assert part_type in PartType
