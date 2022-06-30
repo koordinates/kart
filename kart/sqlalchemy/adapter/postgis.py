@@ -13,7 +13,7 @@ from kart.sqlalchemy.adapter.base import (
     aliased_converter_type,
 )
 from kart.sqlalchemy.postgis import Db_Postgis
-from kart.tabular.schema import ColumnSchema, Schema
+from kart.schema import ColumnSchema, Schema
 from kart.utils import ungenerator
 from sqlalchemy.sql.functions import Function
 from sqlalchemy.types import TEXT

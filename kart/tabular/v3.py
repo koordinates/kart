@@ -16,6 +16,7 @@ from kart.exceptions import (
     InvalidOperation,
     NotYetImplemented,
 )
+from kart.schema import Legend, Schema
 from kart.serialise_util import (
     b64decode_str,
     ensure_bytes,
@@ -27,7 +28,6 @@ from kart.serialise_util import (
 )
 from .v3_paths import PathEncoder
 from .rich_table_dataset import RichTableDataset
-from .schema import Legend, Schema
 
 
 class SchemaJsonFileType:

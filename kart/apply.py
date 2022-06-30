@@ -18,7 +18,7 @@ from .exceptions import (
     NotYetImplemented,
 )
 from .geometry import hex_wkb_to_gpkg_geom
-from .tabular.schema import Schema
+from .schema import Schema
 from .timestamps import iso8601_tz_to_timedelta, iso8601_utc_to_datetime
 
 V1_NO_META_UPDATE = (

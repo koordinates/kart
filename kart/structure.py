@@ -18,7 +18,7 @@ from .exceptions import (
 )
 from .key_filters import RepoKeyFilter
 from .pack_util import packfile_object_builder
-from .tabular.schema import Schema
+from .schema import Schema
 from .tabular.version import extra_blobs_for_version, dataset_class_for_version
 from .structs import CommitWithReference
 from .unsupported_dataset import UnsupportedDataset

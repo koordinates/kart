@@ -18,10 +18,10 @@ from kart.exceptions import (
 )
 from kart.geometry import ogr_to_gpkg_geom
 from kart.output_util import dump_json_output
+from kart.schema import ColumnSchema, Schema
 from kart.utils import chunk, ungenerator
 
 from .import_source import TableImportSource
-from .schema import ColumnSchema, Schema
 
 # This defines what formats are allowed, as well as mapping
 # Kart prefixes onto an OGR format shortname.

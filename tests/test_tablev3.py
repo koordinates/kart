@@ -1,7 +1,7 @@
 from memory_repo import MemoryTree, MemoryRepo
 
 from kart.tabular.v3 import TableV3
-from kart.tabular.schema import Legend, ColumnSchema, Schema
+from kart.schema import Legend, ColumnSchema, Schema
 
 
 DATASET_PATH = "path/to/dataset"

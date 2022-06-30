@@ -31,7 +31,7 @@ class BaseKartAdapter:
         The SQL dialect and types will be conformant to the sqlalchemy database that this adapter supports.
         Some type information will be approximated if it is not fully supported by the database.
 
-        schema - a kart.tabular.schema.Schema object.
+        schema - a kart.schema.Schema object.
         v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
         has_int_pk = cls._schema_has_int_pk(schema)
@@ -60,7 +60,7 @@ class BaseKartAdapter:
         For example: 'fid INTEGER NOT NULL' or 'geom GEOMETRY(POINT,2136)'.
         Doesn't include the primary key specification - this is handled by v2_schema_to_sql_spec.
 
-        schema - a kart.tabular.schema.ColumnSchema object.
+        schema - a kart.schema.ColumnSchema object.
         v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
         col_name = cls.quote(col.name)
@@ -74,7 +74,7 @@ class BaseKartAdapter:
         For example: "INTEGER" or "GEOMETRY(POINT,2136)".
         Doesn't include column name or any other constraints eg non-null, unique.
 
-        schema - a kart.tabular.schema.ColumnSchema object.
+        schema - a kart.schema.ColumnSchema object.
         v2_obj - the V2 object (eg a dataset) with this schema - used for looking up CRS definitions (if needed).
         """
         v2_type = col.data_type
@@ -177,7 +177,7 @@ class BaseKartAdapter:
         Returns a sqlalchemy table definition with conversion-logic for reading or writing data with the given schema
         to or from the given table.
 
-        schema - a kart.tabular.schema.Schema
+        schema - a kart.schema.Schema
         table_name - the name of the table.
         db_schema - the database schema containing the table, if any.
         dataset - this is used to look up CRS definitions referred to by the schema (if  needed for type conversion).
@@ -195,7 +195,7 @@ class BaseKartAdapter:
         Returns a sqlalchemy column definition with conversion-logic for reading or writing data with the given
         column-schema to or from the given dataset.
 
-        col - a kart.tabular.schema.ColumnSchema
+        col - a kart.schema.ColumnSchema
         dataset - this is used to look up CRS definitions referred to by the schema (if  needed for type conversion).
         """
         return sqlalchemy.Column(
@@ -213,7 +213,7 @@ class BaseKartAdapter:
         If a value read from the DB cannot be converted to the equivalent Kart type, it can be left as-is - this will
         be uncommittable, but the resulting error message gives the user a chance to find and fix the schema-violation.
 
-        col - a kart.tabular.schema.ColumnSchema
+        col - a kart.schema.ColumnSchema
         dataset - this is used to look up CRS definitions referred to by the schema (if  needed for type conversion).
         """
         raise NotImplementedError()

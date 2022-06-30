@@ -3,7 +3,7 @@ import pygit2
 from .v2 import TableV2
 from .v3 import TableV3
 from .import_source import TableImportSource
-from .schema import Schema, ColumnSchema
+from kart.schema import Schema, ColumnSchema
 
 
 class PkGeneratingTableImportSource(TableImportSource):

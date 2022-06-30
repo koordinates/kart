@@ -17,7 +17,7 @@ from kart.tabular.v3 import TableV3
 from kart.tabular.v3_paths import IntPathEncoder, MsgpackHashPathEncoder
 from kart.exceptions import INVALID_OPERATION
 from kart.sqlalchemy.gpkg import Db_GPKG
-from kart.tabular.schema import Schema
+from kart.schema import Schema
 from kart.geometry import ogr_to_gpkg_geom, gpkg_geom_to_ogr
 from kart.tabular.import_source import TableImportSource
 from kart.tabular.ogr_import_source import postgres_url_to_ogr_conn_str

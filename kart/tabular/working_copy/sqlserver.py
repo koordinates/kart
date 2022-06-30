@@ -5,7 +5,7 @@ import time
 from kart import crs_util
 from kart.sqlalchemy import separate_last_path_part, text_with_inlined_params
 from kart.sqlalchemy.adapter.sqlserver import KartAdapter_SqlServer
-from kart.tabular.schema import Schema
+from kart.schema import Schema
 from sqlalchemy.dialects.mssql.base import MSIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 

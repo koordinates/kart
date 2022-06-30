@@ -1,9 +1,8 @@
 import click
 
 from kart.exceptions import NO_TABLE, NotFound
+from kart.schema import Schema
 from kart.output_util import InputMode, get_input_mode
-
-from .schema import Schema
 
 
 class TableImportSource:

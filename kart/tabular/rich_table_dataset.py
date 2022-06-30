@@ -9,10 +9,10 @@ from kart.diff_structs import Delta, DeltaDiff, DatasetDiff
 from kart.exceptions import PATCH_DOES_NOT_APPLY, InvalidOperation, NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.promisor_utils import fetch_promised_blobs, object_is_promised
+from kart.schema import Schema
 from kart.spatial_filter import SpatialFilter
 
 from .table_dataset import TableDataset
-from .schema import Schema
 
 
 class RichTableDataset(TableDataset):

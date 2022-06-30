@@ -9,7 +9,7 @@ from kart.sqlalchemy.adapter.base import (
     aliased_converter_type,
 )
 from kart.sqlalchemy.sqlserver import Db_SqlServer
-from kart.tabular.schema import ColumnSchema, Schema
+from kart.schema import ColumnSchema, Schema
 from kart.utils import ungenerator
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.sql import quoted_name

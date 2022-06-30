@@ -13,7 +13,7 @@ from kart import crs_util
 from kart.exceptions import InvalidOperation
 from kart.sqlalchemy import text_with_inlined_params
 from kart.sqlalchemy.adapter.gpkg import KartAdapter_GPKG
-from kart.tabular.schema import Schema
+from kart.schema import Schema
 from sqlalchemy.dialects.sqlite.base import SQLiteIdentifierPreparer
 from sqlalchemy.orm import sessionmaker
 
