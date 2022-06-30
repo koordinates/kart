@@ -5,6 +5,8 @@ import sys
 
 import click
 
+from kart.crs_util import normalise_wkt
+from kart.list_of_conflicts import ListOfConflicts
 from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
 from kart.output_util import format_json_for_output, format_wkt_for_output
 from kart.point_cloud.schema_util import (
@@ -15,15 +17,6 @@ from kart.point_cloud.schema_util import (
 
 
 L = logging.getLogger(__name__)
-
-
-class ListOfConflicts(list):
-    """
-    A list of conflicting possibilities.
-    Having one of these in a merged_metadata means that the metadata couldn't be fully merged.
-    """
-
-    pass
 
 
 class RewriteMetadata(Enum):
@@ -243,7 +236,7 @@ def extract_pc_tile_metadata(
     result = {
         "format": format_info,
         "tile": tile_info,
-        "crs": compound_crs or horizontal_crs,
+        "crs": normalise_wkt(compound_crs or horizontal_crs),
     }
     if extract_schema:
         result["schema"] = pdal_schema_to_kart_schema(

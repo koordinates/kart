@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 
 from kart import crs_util
+from kart.list_of_conflicts import ListOfConflicts
 from kart.geometry import normalise_gpkg_geom
 from kart.sqlalchemy.adapter.base import (
     BaseKartAdapter,
@@ -518,7 +519,7 @@ class KartAdapter_GPKG(BaseKartAdapter, Db_GPKG):
         # We can't actually commit a whole list of XML, but we need to return something that makes sense.
         # Simply throwing an error here stops dirty-detection working, and stops commands that would fix the situation
         # from working, like `kart reset --discard-changes` or `kart create-workingcopy --discard-changes`.
-        return xml_list
+        return ListOfConflicts(xml_list)
 
     METADATA_QUERY = """
         SELECT {select}

@@ -4,7 +4,7 @@ import shutil
 
 from kart.core import find_blobs_in_tree
 from kart.base_dataset import BaseDataset, MetaItemDefinition, MetaItemFileType
-from kart.diff_structs import DatasetDiff, DeltaDiff
+from kart.diff_structs import DatasetDiff, DeltaDiff, Delta, KeyValue
 from kart.exceptions import NotYetImplemented
 from kart.key_filters import DatasetKeyFilter, FeatureKeyFilter
 from kart.lfs_util import (
@@ -13,6 +13,11 @@ from kart.lfs_util import (
     get_local_path_from_lfs_hash,
     pointer_file_bytes_to_dict,
     dict_to_pointer_file_bytes,
+)
+from kart.point_cloud.metadata_util import (
+    extract_pc_tile_metadata,
+    rewrite_and_merge_metadata,
+    format_tile_info_for_pointer_file,
 )
 from kart.serialise_util import hexhash
 from kart.working_copy import PartType
@@ -50,6 +55,11 @@ class PointCloudV1(BaseDataset):
         tile_tree = self.tile_tree
         if tile_tree:
             yield from find_blobs_in_tree(tile_tree)
+
+    @property
+    def tile_count(self):
+        """The total number of features in this dataset."""
+        return sum(1 for blob in self.tile_pointer_blobs())
 
     def tilenames_with_lfs_hashes(self):
         """Returns a generator that yields every tilename along with its LFS hash."""
@@ -93,18 +103,28 @@ class PointCloudV1(BaseDataset):
             del result["version"]
         return result
 
+    def _workdir_path(self, wc_path):
+        if isinstance(wc_path, str):
+            return self.repo.workdir_file(wc_path)
+        else:
+            return wc_path
+
     def get_tile_summary_from_wc_path(self, wc_path):
-        from kart.point_cloud.import_ import (
-            extract_pc_tile_metadata,
-            format_tile_info_for_pointer_file,
+        wc_path = self._workdir_path(wc_path)
+
+        return self.get_tile_summary_from_pc_tile_metadata(
+            wc_path, extract_pc_tile_metadata(wc_path)
         )
 
-        metadata = format_tile_info_for_pointer_file(
-            extract_pc_tile_metadata(wc_path)["tile"]
-        )
+    def get_tile_summary_promise_from_wc_path(self, wc_path):
+        return functools.partial(self.get_tile_summary_from_wc_path, wc_path)
 
+    def get_tile_summary_from_pc_tile_metadata(self, wc_path, tile_metadata):
+        wc_path = self._workdir_path(wc_path)
+
+        tile_info = format_tile_info_for_pointer_file(tile_metadata["tile"])
         oid, size = get_hash_and_size_of_file(wc_path)
-        return {"name": wc_path.name, **metadata, "oid": f"sha256:{oid}", "size": size}
+        return {"name": wc_path.name, **tile_info, "oid": f"sha256:{oid}", "size": size}
 
     def diff(self, other, ds_filter=DatasetKeyFilter.MATCH_ALL, reverse=False):
         """
@@ -140,28 +160,26 @@ class PointCloudV1(BaseDataset):
         self, workdir_diff_cache, ds_filter=DatasetKeyFilter.MATCH_ALL
     ):
         """Returns a diff of all changes made to this dataset in the working copy."""
-        ds_diff = DatasetDiff()
         tile_filter = ds_filter.get("tile", ds_filter.child_type())
-        ds_diff["tile"] = DeltaDiff(
-            self.diff_tile_to_working_copy(workdir_diff_cache, tile_filter)
-        )
-        return ds_diff
-
-    def diff_tile_to_working_copy(self, workdir_diff_cache, tile_filter):
-        """Yields deltas of all the changes the user has made to tiles in the working copy."""
-
-        # Dataset-paths have a different structure to workdir paths - the workdir index will have only workdir paths,
-        # and we need to find the related dataset paths.
-        def wc_to_ds_path_transform(wc_path):
-            return self.tilename_to_blob_path(wc_path, relative=True)
 
         wc_tiles_path_pattern = re.escape(f"{self.path}/")
-        wc_tile_ext_pattern = re.escape(".laz")
+        wc_tile_ext_pattern = r"\.[Ll][Aa][SsZz]"
         wc_tiles_pattern = re.compile(
             rf"^{wc_tiles_path_pattern}[^/]+{wc_tile_ext_pattern}$"
         )
 
-        yield from self.generate_wc_diff_from_workdir_index(
+        def wc_to_ds_path_transform(wc_path):
+            return self.tilename_to_blob_path(wc_path, relative=True)
+
+        tilename_to_metadata = {}
+
+        def tile_summary_from_wc_path(wc_path):
+            wc_path = self._workdir_path(wc_path)
+            tile_metadata = extract_pc_tile_metadata(wc_path)
+            tilename_to_metadata[wc_path.name] = tile_metadata
+            return self.get_tile_summary_from_pc_tile_metadata(wc_path, tile_metadata)
+
+        tile_diff_deltas = self.generate_wc_diff_from_workdir_index(
             workdir_diff_cache,
             wc_path_filter_pattern=wc_tiles_pattern,
             key_filter=tile_filter,
@@ -169,12 +187,43 @@ class PointCloudV1(BaseDataset):
             ds_key_decoder=self.tilename_from_path,
             wc_key_decoder=self.tilename_from_path,
             ds_value_decoder=self.get_tile_summary_promise_from_path,
-            wc_value_decoder=self.get_tile_summary_promise_from_wc_path,
+            wc_value_decoder=tile_summary_from_wc_path,
         )
+        tile_diff = DeltaDiff(tile_diff_deltas)
 
-    def get_tile_summary_promise_from_wc_path(self, wc_path):
-        wc_path = self.repo.workdir_file(wc_path)
-        return functools.partial(self.get_tile_summary_from_wc_path, wc_path)
+        if not tile_diff:
+            return DatasetDiff()
+
+        is_clean_slate = self.is_clean_slate(tile_diff)
+        metadata_list = list(tilename_to_metadata.values())
+
+        current_metadata = self.tile_metadata
+        if not is_clean_slate:
+            metadata_list.insert(0, current_metadata)
+
+        merged_metadata = rewrite_and_merge_metadata(metadata_list)
+        meta_diff = DeltaDiff()
+
+        for key, ext in (("format", "json"), ("schema", "json"), ("crs", "wkt")):
+            if current_metadata[key] != merged_metadata[key]:
+                item_name = f"{key}.{ext}"
+                meta_diff[item_name] = Delta.update(
+                    KeyValue.of((item_name, current_metadata[key])),
+                    KeyValue.of((item_name, merged_metadata[key])),
+                )
+
+        ds_diff = DatasetDiff()
+        ds_diff["meta"] = meta_diff
+        ds_diff["tile"] = tile_diff
+
+        return ds_diff
+
+    def is_clean_slate(self, tile_diff):
+        num_existing_tiles_kept = self.tile_count
+        for tile_delta in tile_diff.values():
+            if tile_delta.type != "insert":
+                num_existing_tiles_kept -= 1
+        return num_existing_tiles_kept == 0
 
     def apply_diff(
         self, dataset_diff, object_builder, *, resolve_missing_values_from_ds=None
@@ -227,3 +276,11 @@ class PointCloudV1(BaseDataset):
                     object_builder.remove(
                         self.tilename_to_blob_path(tilename, relative=True)
                     )
+
+    @property
+    def tile_metadata(self):
+        return {
+            "format": self.get_meta_item("format.json"),
+            "schema": self.get_meta_item("schema.json"),
+            "crs": self.get_meta_item("crs.wkt"),
+        }
