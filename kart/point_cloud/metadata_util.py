@@ -7,7 +7,11 @@ import click
 
 from kart.crs_util import normalise_wkt
 from kart.list_of_conflicts import ListOfConflicts
-from kart.exceptions import InvalidOperation, INVALID_FILE_FORMAT
+from kart.exceptions import (
+    InvalidOperation,
+    INVALID_FILE_FORMAT,
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+)
 from kart.output_util import format_json_for_output, format_wkt_for_output
 from kart.point_cloud.schema_util import (
     get_schema_from_pdrf,
@@ -120,7 +124,7 @@ def _check_for_non_homogenous_meta_item(
             click.echo(f"The input files have more than one {output_name}:", err=True)
         click.echo(disparity, err=True)
         raise InvalidOperation(
-            "Non-homogenous dataset supplied", exit_code=INVALID_FILE_FORMAT
+            "Non-homogenous dataset supplied", exit_code=WORKING_COPY_OR_IMPORT_CONFLICT
         )
 
 

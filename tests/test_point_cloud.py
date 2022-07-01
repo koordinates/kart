@@ -5,7 +5,10 @@ import shutil
 import subprocess
 import pytest
 
-from kart.exceptions import INVALID_FILE_FORMAT
+from kart.exceptions import (
+    WORKING_COPY_OR_IMPORT_CONFLICT,
+    NOT_YET_IMPLEMENTED,
+)
 from kart.repo import KartRepo
 
 DUMMY_REPO = "git@example.com/example.git"
@@ -265,7 +268,7 @@ def test_import_mismatched_las(
                         "--dataset-path=mixed",
                     ]
                 )
-                assert r.exit_code == INVALID_FILE_FORMAT
+                assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
                 assert "Non-homogenous" in r.stderr
                 # This is disallowed even though we are converting to COPC, since these tiles would have different
                 # schemas even once converted to COPC.
@@ -888,9 +891,9 @@ def test_working_copy_meta_edit(
             ]
 
             r = cli_runner.invoke(["commit", "-m", "conflicts"])
-            assert r.exit_code == 31
+            assert r.exit_code == WORKING_COPY_OR_IMPORT_CONFLICT
             assert (
-                "Sorry, committing more than one format.json for a single dataset (auckland) is not supported"
+                "Committing more than one 'format.json' for 'auckland' is not supported"
                 in r.stderr
             )
 
@@ -1090,7 +1093,7 @@ def test_working_copy_meta_edit(
             ]
 
             r = cli_runner.invoke(["commit", "-m", "meta-update"])
-            assert r.exit_code == 30
+            assert r.exit_code == NOT_YET_IMPLEMENTED
             assert (
                 "Sorry, committing meta diffs for point cloud datasets is not yet supported"
                 in r.stderr

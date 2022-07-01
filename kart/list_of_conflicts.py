@@ -1,6 +1,6 @@
 import click
 
-from kart.exceptions import CONFLICTING_POSSIBILITIES, InvalidOperation
+from kart.exceptions import WORKING_COPY_OR_IMPORT_CONFLICT, InvalidOperation
 
 
 class ListOfConflicts(list):
@@ -42,8 +42,6 @@ class ListOfConflicts(list):
     - can be resolved by the user selecting which version will be the winner, by name eg ancestor, ours or theirs.
     """
 
-    pass
-
 
 def check_diff_is_committable(repo_diff):
     has_conflicts = False
@@ -55,13 +53,14 @@ def check_diff_is_committable(repo_diff):
             if isinstance(item.new_value, ListOfConflicts):
                 # TODO - make this output a bit more informative.
                 click.echo(
-                    f"Sorry, committing more than one {key} for a single dataset ({ds_path}) is not supported",
+                    f"Committing more than one {key!r} for {ds_path!r} is not supported",
                     err=True,
                 )
                 has_conflicts = True
     if has_conflicts:
         raise InvalidOperation(
-            "Failed to commit changes into Kart", exit_code=CONFLICTING_POSSIBILITIES
+            "Failed to commit changes",
+            exit_code=WORKING_COPY_OR_IMPORT_CONFLICT,
         )
 
 
@@ -71,11 +70,11 @@ def check_sources_are_importable(sources):
         for key, item in source.meta_items().items():
             if isinstance(item, ListOfConflicts):
                 click.echo(
-                    f"Sorry, importing more than one {key} for a single dataset ({source.dest_path}) is not supported",
+                    f"Importing more than one {key!r} for {source.dest_path!r} is not supported",
                     err=True,
                 )
                 has_conflicts = True
     if has_conflicts:
         raise InvalidOperation(
-            "Failed to import into the Kart", exit_code=CONFLICTING_POSSIBILITIES
+            "Failed to import", exit_code=WORKING_COPY_OR_IMPORT_CONFLICT
         )
